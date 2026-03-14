@@ -1,0 +1,21 @@
+{
+  "name": "02_reddit_global",
+  "version": "1.0.0",
+  "description": "",
+  "main": "fetch_reddit.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "msedge-tts": "^2.0.4",
+    "puppeteer": "^24.38.0",
+    "twitter-api-v2": "^1.29.0"
+  }
+}

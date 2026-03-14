@@ -1,0 +1,29 @@
+# APIキー・環境変数（絶対にコミットしない）
+.env
+*.env
+
+# 依存パッケージ
+node_modules/
+
+# ローカル生成メディアファイル（サイズが大きい）
+02_reddit_global/images/
+02_reddit_global/videos/
+02_reddit_global/thumbnails/
+02_reddit_global/shorts/
+02_reddit_global/shorts_slides/
+02_reddit_global/bgm.mp3
+
+# Claude Code設定（ローカル専用）
+.claude/
+
+# ランチャーHTML・テキストログ（ローカル専用）
+02_reddit_global/posts/
+
+# Shortsコンテンツ（ローカル専用）
+02_reddit_global/temp/shorts_content_*.json
+
+# temp/generated_*.json はコミットする（GitHub Actionsが使うため）
+
+# OS・エディタ
+.DS_Store
+Thumbs.db
