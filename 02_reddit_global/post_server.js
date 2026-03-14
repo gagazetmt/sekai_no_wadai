@@ -43,6 +43,24 @@ app.post("/api/schedule", async (req, res) => {
   const msUntil = scheduledDate - now;
   const scheduledStr = scheduledDate.toLocaleString("ja-JP");
 
+  // 承認済みJSONに保存（GitHub Actions用）
+  const today = new Date().toISOString().slice(0, 10);
+  const approvedPath = path.join(__dirname, "temp", `approved_${today}.json`);
+  let approved = { date: today, posts: [] };
+  if (fs.existsSync(approvedPath)) {
+    approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
+  }
+  const idx = approved.posts.findIndex(p => p.postNum === postNum);
+  const entry = { postNum, scheduleTime, text, sourceUrl, thumbPath: thumbPath || null };
+  if (idx >= 0) {
+    approved.posts[idx] = entry;
+  } else {
+    approved.posts.push(entry);
+  }
+  approved.posts.sort((a, b) => a.postNum - b.postNum);
+  fs.writeFileSync(approvedPath, JSON.stringify(approved, null, 2), "utf8");
+  console.log(`💾 approved_${today}.json に保存 (投稿${postNum})`);
+
   console.log(`📅 投稿${postNum} を ${scheduledStr} に予約しました（${Math.round(msUntil/1000/60)}分後）`);
 
   // 既存の予約があればキャンセル
@@ -92,6 +110,14 @@ app.post("/api/cancel", (req, res) => {
   if (scheduledJobs[postNum]) {
     clearTimeout(scheduledJobs[postNum]);
     delete scheduledJobs[postNum];
+    // 承認済みJSONからも削除
+    const today = new Date().toISOString().slice(0, 10);
+    const approvedPath = path.join(__dirname, "temp", `approved_${today}.json`);
+    if (fs.existsSync(approvedPath)) {
+      const approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
+      approved.posts = approved.posts.filter(p => p.postNum !== postNum);
+      fs.writeFileSync(approvedPath, JSON.stringify(approved, null, 2), "utf8");
+    }
     console.log(`🚫 投稿${postNum} 予約キャンセル`);
     res.json({ success: true });
   } else {

@@ -50,25 +50,27 @@ async function main() {
   const scheduledTime = SCHEDULE_TIMES[postIndex];
   console.log(`→ 投稿${postIndex + 1} (予定: ${scheduledTime}) にマッチしました`);
 
-  // 今日のJSONファイルを読む
+  // 今日の承認済みJSONファイルを読む
   const TEMP_DIR = path.join(__dirname, "temp");
-  const jsonPath = path.join(TEMP_DIR, `generated_${jstDateStr}.json`);
+  const jsonPath = path.join(TEMP_DIR, `approved_${jstDateStr}.json`);
 
   if (!fs.existsSync(jsonPath)) {
-    console.error(`❌ JSONファイルが見つかりません: ${jsonPath}`);
-    console.error("generate_post.js を先に実行してJSONをpushしてください。");
+    console.error(`❌ 承認済みJSONが見つかりません: ${jsonPath}`);
+    console.error("ランチャーで「予約投稿」を押してからgit pushしてください。");
     process.exit(1);
   }
 
   const { posts } = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
-  const post = posts[postIndex];
+
+  // scheduleTime で照合
+  const post = posts.find(p => p.scheduleTime === scheduledTime);
 
   if (!post) {
-    console.error(`❌ 投稿${postIndex + 1}のデータが見つかりません`);
-    process.exit(1);
+    console.log(`JST ${jstTimeStr} (${scheduledTime}) の承認済み投稿はありません。スキップします。`);
+    process.exit(0);
   }
 
-  console.log(`\n投稿文:\n${post.postText}`);
+  console.log(`\n投稿文:\n${post.text}`);
   console.log(`元ネタURL: ${post.sourceUrl}`);
 
   // X APIクライアント初期化
@@ -80,7 +82,7 @@ async function main() {
   });
 
   // ツイート投稿
-  const tweet = await xClient.v2.tweet({ text: post.postText });
+  const tweet = await xClient.v2.tweet({ text: post.text });
   const tweetId = tweet.data.id;
   console.log(`\n✅ ツイート送信完了 (ID: ${tweetId})`);
 

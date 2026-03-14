@@ -19,10 +19,11 @@ node_modules/
 # ランチャーHTML・テキストログ（ローカル専用）
 02_reddit_global/posts/
 
-# Shortsコンテンツ（ローカル専用）
+# Shortsコンテンツ・生成済みデータ（ローカル専用）
 02_reddit_global/temp/shorts_content_*.json
+02_reddit_global/temp/generated_*.json
 
-# temp/generated_*.json はコミットする（GitHub Actionsが使うため）
+# temp/approved_*.json はコミットする（ランチャーで承認したものだけ）
 
 # OS・エディタ
 .DS_Store
