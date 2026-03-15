@@ -101,5 +101,7 @@ async function main() {
 
 main().catch((e) => {
   console.error("❌ エラー:", e.message);
+  if (e.data) console.error("詳細:", JSON.stringify(e.data, null, 2));
+  if (e.code) console.error("コード:", e.code);
   process.exit(1);
 });
