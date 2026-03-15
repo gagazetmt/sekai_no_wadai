@@ -150,6 +150,12 @@ function fetchSubreddit(subreddit) {
             let videoUrl = null;
             if (!isVideo && d.post_hint === "image" && d.url) {
               imageUrl = d.url;
+            } else if (d.is_gallery && d.gallery_data?.items?.length > 0) {
+              // ギャラリー投稿（複数画像）→ 1枚目を取得
+              const firstId = d.gallery_data.items[0].media_id;
+              const meta = d.media_metadata?.[firstId];
+              if (meta?.s?.u) imageUrl = meta.s.u.replace(/&amp;/g, "&");
+              else if (meta?.s?.gif) imageUrl = meta.s.gif.replace(/&amp;/g, "&");
             } else if (d.preview?.images?.[0]?.source?.url) {
               imageUrl = d.preview.images[0].source.url.replace(/&amp;/g, "&");
             }
@@ -212,6 +218,16 @@ ${postList}
   return json;
 }
 
+// 140文字超えた場合に短縮
+async function trimPost(text) {
+  const msg = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 300,
+    messages: [{ role: "user", content: `以下のX投稿文を130文字以内に短縮してください。フック・驚き・問いかけの構成は保つこと。絵文字もそのまま。投稿文のみ出力。\n\n${text}` }],
+  });
+  return msg.content[0].text.trim();
+}
+
 // Claudeに日本語投稿文を生成させる
 async function generatePost(post) {
   const prompt = `
@@ -223,7 +239,7 @@ ${post.title}
 【絶対に守るルール】
 - ハッシュタグは一切つけないこと（アルゴリズムに不利なため）
 - URLは含めないこと
-- 140文字以内に収めること
+- 必ず130文字以内に収めること（超えた場合は文章を削ること。絵文字・問いかけは残す）
 
 【構成テンプレート（この順番で書くこと）】
 ① 1行目：【衝撃】【驚愕】【速報】【朗報】【やばい】などのフックワード＋核心を1行で
@@ -363,48 +379,107 @@ async function generateThumbnail(browser, imagePath, outputPath, catchCopy) {
 // HTML投稿ランチャーを生成
 function generateHtml(today, posts) {
   const cards = posts.map((item, idx) => {
-    const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedVideoPath, thumbPath, isVideo, finalPost, sourceUrl } = item;
-    const intentUrl = "https://x.com/intent/tweet?text=" + encodeURIComponent(finalPost);
-    const imgTag = isVideo
-      ? `<div class="no-image video">🎬 動画投稿</div>`
-      : thumbPath
-        ? `<img src="/thumbnails/${path.basename(thumbPath)}" alt="サムネイル">`
-        : `<div class="no-image">画像なし</div>`;
-    const imgNote = isVideo && savedVideoPath
-      ? `<div class="img-note video-note">🎬 添付動画: <code>videos/${path.basename(savedVideoPath)}</code></div>`
-      : isVideo
-        ? `<div class="img-note warn">⚠️ 動画DL失敗 — Redditから直接保存してください</div>`
-        : thumbPath
-          ? `<div class="img-note">📎 添付画像: <code>thumbnails/${path.basename(thumbPath)}</code></div>`
-          : `<div class="img-note warn">⚠️ サムネイルなし</div>`;
+    const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedVideoPath, thumbPath, isVideo, finalPost, sourceUrl, videoDuration = 0 } = item;
     const thumbAbsPath = thumbPath ? thumbPath.replace(/\\/g, "\\\\") : "";
     const safeSourceUrl = sourceUrl.replace(/'/g, "\\'");
+    const charCount = finalPost.length;
+    const videoOverLimit = isVideo && videoDuration > 140;
+    const durationStr = videoDuration > 0
+      ? `${Math.floor(videoDuration/60)}:${String(videoDuration%60).padStart(2,'0')}`
+      : "";
+
+    const mediaBlock = isVideo && savedVideoPath
+      ? `<video src="/videos/${path.basename(savedVideoPath)}" controls muted playsinline
+           style="width:100%;max-height:320px;border-radius:16px;object-fit:cover;background:#000;display:block;margin-top:12px;"></video>`
+      : isVideo
+        ? `<div class="media-placeholder">🎬 動画（DL失敗）</div>`
+        : thumbPath
+          ? `<img src="/thumbnails/${path.basename(thumbPath)}" alt="サムネイル"
+               style="width:100%;max-height:320px;object-fit:cover;border-radius:16px;display:block;margin-top:12px;border:1px solid #eff3f4;">`
+          : "";
+
+    const sourcePreview = `
+      <div class="source-preview">
+        <span class="source-label">r/${subreddit}</span>
+        <span class="source-score">👍 ${score.toLocaleString()}</span>
+        <span class="source-title">${title.length > 60 ? title.slice(0, 60) + "…" : title}</span>
+      </div>`;
 
     return `
-    <div class="card" id="card-${postNum}">
-      <div class="card-header">
-        <span class="post-num">投稿 ${postNum}</span>
-        <span class="source">r/${subreddit} 👍${score.toLocaleString()}</span>
-        <span class="status-badge" id="status-${postNum}">未予約</span>
-      </div>
-      <div class="card-body">
-        <div class="image-box">${imgTag}</div>
-        <div class="content">
-          <textarea class="post-textarea" id="text-${postNum}" rows="5">${finalPost}</textarea>
-          ${imgNote}
-          <div class="btn-row">
-            <label class="time-label">🕐 投稿時間</label>
-            <input type="time" class="time-input" id="time-${postNum}" value="${scheduleTime}">
-            <button class="btn-schedule" id="btn-${postNum}"
-              onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}')">
-              📅 投稿予約
-            </button>
-            <button class="btn-cancel" id="cancel-${postNum}" style="display:none"
-              onclick="cancelPost(${postNum})">
-              🚫 キャンセル
-            </button>
+    <div class="x-card" id="card-${postNum}">
+      <div class="x-card-inner">
+
+        <!-- 左：ツイート編集ボックス -->
+        <div class="compose-box">
+          <div class="compose-header">
+            <div class="x-avatar">世</div>
+            <div>
+              <span class="x-name">【速報】世界の話題</span>
+              <span class="x-handle">@sekai_no_wadai</span>
+            </div>
+            <div class="compose-header-right">
+              ${videoOverLimit ? `<span class="x-over-badge">⚠️ 時間超過 ${durationStr}</span>` : ""}
+              <span class="x-status-badge" id="status-${postNum}">未予約 #${postNum}</span>
+            </div>
+          </div>
+          <textarea class="x-textarea" id="text-${postNum}"
+            oninput="updateCount(${postNum})">${finalPost}</textarea>
+          ${mediaBlock}
+          ${sourcePreview}
+          <div class="x-actions">
+            <div class="x-left-actions">
+              <div class="x-time-wrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d9bf0" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <select class="x-time-input" id="time-${postNum}">
+                  ${["06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","21:30","22:00","22:30","23:00","23:30"]
+                    .map(t => `<option value="${t}"${t === scheduleTime ? " selected" : ""}>${t}</option>`)
+                    .join("")}
+                </select>
+              </div>
+            </div>
+            <div class="x-right-actions">
+              <span class="x-char-count" id="count-${postNum}"
+                style="color:${charCount > 120 ? (charCount > 140 ? '#f4212e' : '#ffd400') : '#536471'}">
+                ${charCount}/140
+              </span>
+              <button class="x-post-btn" id="btn-${postNum}"
+                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}')">
+                予約投稿
+              </button>
+              <button class="x-cancel-btn" id="cancel-${postNum}" style="display:none"
+                onclick="cancelPost(${postNum})">
+                キャンセル
+              </button>
+            </div>
           </div>
         </div>
+
+        <!-- コネクター -->
+        <div class="reply-connector">
+          <div class="connector-dot"></div>
+          <div class="connector-line"></div>
+          <div class="connector-dot"></div>
+        </div>
+
+        <!-- 右：リプライボックス（80%サイズ） -->
+        <div class="reply-box">
+          <div class="compose-header">
+            <div class="x-avatar x-avatar-sm">世</div>
+            <div>
+              <span class="x-name" style="font-size:0.88em;">【速報】世界の話題</span>
+              <span class="x-handle">@sekai_no_wadai</span>
+            </div>
+          </div>
+          <div class="reply-to-label">
+            <span class="reply-mention">@sekai_no_wadai</span> への返信
+          </div>
+          <a class="reply-url" href="${sourceUrl}" target="_blank">${sourceUrl}</a>
+          <div class="reply-source-tag">
+            <span class="source-label">r/${subreddit}</span>
+            <span style="color:#536471;font-size:0.82em;">👍 ${score.toLocaleString()}</span>
+          </div>
+        </div>
+
       </div>
     </div>`;
   }).join("\n");
@@ -413,46 +488,396 @@ function generateHtml(today, posts) {
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>【速報】世界の話題 投稿ランチャー ${today}</title>
   <style>
-    body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
-    h1 { color: #1da1f2; font-size: 1.3em; margin-bottom: 4px; }
-    .subtitle { color: #666; font-size: 0.9em; margin-bottom: 24px; }
-    .card { background: #fff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px; overflow: hidden; }
-    .card.scheduled { border: 2px solid #f39c12; }
-    .card.posted { border: 2px solid #27ae60; opacity: 0.75; }
-    .card-header { background: #1da1f2; color: #fff; padding: 10px 16px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-    .post-num { font-weight: bold; font-size: 1.1em; }
-    .schedule-time { font-size: 1em; }
-    .source { margin-left: auto; font-size: 0.85em; opacity: 0.85; }
-    .status-badge { background: rgba(0,0,0,0.25); color: #fff; font-size: 0.8em; font-weight: bold; padding: 3px 10px; border-radius: 12px; }
-    .status-badge.scheduled { background: #f39c12; }
-    .status-badge.posted { background: #27ae60; }
-    .card-body { display: flex; gap: 16px; padding: 16px; }
-    .image-box { flex: 0 0 220px; }
-    .image-box img { width: 220px; height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; }
-    .no-image { width: 220px; height: 160px; background: #eee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 0.85em; }
-    .no-image.video { background: #1a1a2e; color: #fff; font-size: 1em; }
-    .video-note { color: #8e44ad; font-weight: bold; }
-    .content { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-    .post-textarea { width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 0.95em; line-height: 1.7; font-family: sans-serif; resize: vertical; box-sizing: border-box; }
-    .post-textarea:focus { outline: none; border-color: #1da1f2; }
-    .img-note { font-size: 0.82em; color: #555; }
-    .img-note.warn { color: #e67e22; }
-    .img-note code { background: #eee; padding: 2px 6px; border-radius: 4px; }
-    .btn-row { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
-    .time-label { font-size: 0.9em; font-weight: bold; color: #555; align-self: center; }
-    .time-input { padding: 8px 12px; border: 2px solid #1da1f2; border-radius: 8px; font-size: 1em; font-weight: bold; color: #333; cursor: pointer; }
-    .time-input:focus { outline: none; border-color: #0d8ecf; }
-    .btn-schedule { background: #1da1f2; color: #fff; border: none; padding: 10px 24px; border-radius: 24px; font-weight: bold; font-size: 1em; cursor: pointer; transition: background 0.2s; }
-    .btn-schedule:hover { background: #0d8ecf; }
-    .btn-schedule:disabled { background: #aaa; cursor: default; }
-    .btn-cancel { background: #e74c3c; color: #fff; border: none; padding: 10px 20px; border-radius: 24px; font-weight: bold; font-size: 0.9em; cursor: pointer; }
-    .btn-cancel:hover { background: #c0392b; }
-    .steps { background: #e8f4fd; border: 1px solid #1da1f2; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px; font-size: 0.9em; line-height: 1.9; }
-    .steps .note { color: #c0392b; font-size: 0.88em; margin-top: 6px; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", sans-serif;
+      background: #f7f9f9;
+      color: #0f1419;
+      min-height: 100vh;
+    }
+
+    /* ── トップバー ── */
+    .top-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
+      border-bottom: 1px solid #eff3f4;
+      padding: 12px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .top-bar-left { display: flex; align-items: center; gap: 12px; }
+    .x-logo { font-size: 22px; font-weight: 900; color: #0f1419; }
+    .top-title { font-size: 1em; font-weight: 700; color: #0f1419; }
+    .top-date { font-size: 0.82em; color: #536471; margin-left: 8px; }
+    .top-bar-right { display: flex; gap: 10px; align-items: center; }
+    .nav-btn {
+      padding: 7px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 700;
+      text-decoration: none; border: 1px solid #cfd9de; cursor: pointer;
+      background: transparent; color: #0f1419; transition: background 0.15s;
+    }
+    .nav-btn:hover { background: #e7e9ea; }
+    .nav-btn.yt { border-color: #ff0000; color: #ff0000; }
+    .nav-btn.yt:hover { background: rgba(255,0,0,0.07); }
+    .nav-btn.shutdown { border-color: #f4212e; color: #f4212e; }
+    .nav-btn.shutdown:hover { background: rgba(244,33,46,0.07); }
+    .nav-btn.github { background: #0f1419; color: #fff; border-color: #0f1419; }
+    .nav-btn.github:hover { background: #272c30; }
+    .nav-btn.github.pushed { background: #00ba7c; border-color: #00ba7c; }
+
+    /* ── トースト通知 ── */
+    #toast {
+      position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+      background: #0f1419; color: #fff;
+      padding: 12px 28px; border-radius: 24px;
+      font-size: 0.95em; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 999; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── メインコンテナ ── */
+    .container {
+      max-width: 1100px; margin: 0 auto; padding: 16px 0 60px;
+      border-left: 1px solid #eff3f4; border-right: 1px solid #eff3f4;
+      background: #fff; min-height: 100vh;
+    }
+
+    /* ── ヘッダー情報 ── */
+    .info-bar {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eff3f4;
+      font-size: 0.82em; color: #536471;
+    }
+    .info-bar strong { color: #0f1419; }
+
+    /* ── Xカード ── */
+    .x-card {
+      border-bottom: 1px solid #eff3f4;
+      padding: 20px 16px;
+      transition: background 0.15s;
+    }
+    .x-card:hover { background: rgba(0,0,0,0.01); }
+    .x-card.scheduled { background: #fffbea; border-left: 3px solid #ffd400; }
+    .x-card-inner {
+      display: flex; align-items: flex-start; gap: 0;
+    }
+
+    /* ── ツイート編集ボックス（左） ── */
+    .compose-box {
+      flex: 5; min-width: 0;
+      border: 1.5px solid #cfd9de; border-radius: 16px;
+      padding: 16px; background: #fff;
+    }
+    .compose-header {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .compose-header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+    /* ── コネクター ── */
+    .reply-connector {
+      flex: 0 0 36px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding-top: 28px; gap: 3px;
+    }
+    .connector-dot {
+      width: 5px; height: 5px; border-radius: 50%; background: #cfd9de;
+    }
+    .connector-line { width: 2px; height: 28px; background: #cfd9de; }
+
+    /* ── リプライボックス（右・80%） ── */
+    .reply-box {
+      flex: 4; min-width: 0;
+      border: 1.5px solid #eff3f4; border-radius: 16px;
+      padding: 14px; background: #f7f9f9;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .reply-to-label {
+      font-size: 0.82em; color: #536471;
+    }
+    .reply-mention { color: #1d9bf0; }
+    .reply-url {
+      font-size: 0.82em; color: #1d9bf0; word-break: break-all;
+      text-decoration: none; line-height: 1.5;
+    }
+    .reply-url:hover { text-decoration: underline; }
+    .reply-source-tag { display: flex; align-items: center; gap: 8px; }
+
+    /* ── アバター ── */
+    .x-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, #1d9bf0, #0d6eac);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1em; font-weight: 900; color: #fff; flex-shrink: 0;
+    }
+    .x-avatar-sm { width: 32px; height: 32px; font-size: 0.9em; }
+    .x-user-row {
+      display: flex; align-items: center; gap: 6px;
+      margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .x-name { font-weight: 700; font-size: 0.95em; color: #0f1419; }
+    .x-handle { font-size: 0.88em; color: #536471; }
+    .x-post-num { font-size: 0.78em; color: #536471; margin-left: auto; }
+    .x-status-badge {
+      font-size: 0.75em; font-weight: 700; padding: 2px 10px;
+      border-radius: 20px; background: #eff3f4; color: #536471;
+    }
+    .x-status-badge.scheduled { background: #fff3cd; color: #856404; }
+
+    /* ── テキストエリア ── */
+    .x-textarea {
+      width: 100%; background: transparent; border: none; outline: none;
+      color: #0f1419; font-size: 1.05em; line-height: 1.65;
+      font-family: inherit; resize: vertical;
+      min-height: 220px;
+      border-bottom: 1px solid #eff3f4;
+      padding-bottom: 12px; margin-bottom: 4px;
+      display: block;
+    }
+    .x-textarea:focus { border-bottom-color: #1d9bf0; }
+    .x-textarea::placeholder { color: #536471; }
+
+    /* ── 時間超過バッジ ── */
+    .x-over-badge {
+      font-size: 0.75em; font-weight: 700; padding: 2px 10px;
+      border-radius: 20px; background: #fef0f0; color: #f4212e;
+      border: 1px solid #f4212e;
+    }
+
+    /* ── 元ネタプレビュー ── */
+    .source-preview {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 8px 12px; border: 1px solid #eff3f4; border-radius: 12px;
+      margin-top: 10px; font-size: 0.82em; color: #536471;
+      background: #f7f9f9;
+    }
+    .source-label {
+      background: #ff4500; color: #fff; padding: 2px 8px;
+      border-radius: 4px; font-weight: 700; font-size: 0.9em;
+    }
+    .source-score { color: #536471; }
+    .source-title { color: #536471; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── アクションバー ── */
+    .x-actions {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 12px; padding-top: 8px; border-top: 1px solid #eff3f4;
+      gap: 8px; flex-wrap: wrap;
+    }
+    .x-left-actions { display: flex; align-items: center; gap: 8px; }
+    .x-right-actions { display: flex; align-items: center; gap: 10px; }
+
+    /* ── 時間インプット ── */
+    .x-time-wrap {
+      display: flex; align-items: center; gap: 6px;
+      background: #eff3f4; border-radius: 20px; padding: 5px 12px;
+    }
+    .x-time-input {
+      background: transparent; border: none; outline: none;
+      color: #1d9bf0; font-size: 0.9em; font-weight: 700; cursor: pointer;
+    }
+
+    /* ── 文字数カウント ── */
+    .x-char-count { font-size: 0.88em; font-weight: 700; }
+
+    /* ── 予約投稿ボタン ── */
+    .x-post-btn {
+      background: #0f1419; color: #fff; border: none;
+      padding: 8px 20px; border-radius: 20px;
+      font-weight: 700; font-size: 0.92em; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .x-post-btn:hover { background: #272c30; }
+    .x-post-btn:disabled { background: #cfd9de; color: #fff; cursor: default; }
+    .x-post-btn.done { background: #00ba7c; }
+
+    /* ── キャンセルボタン ── */
+    .x-cancel-btn {
+      background: transparent; color: #f4212e;
+      border: 1px solid #f4212e; padding: 7px 16px;
+      border-radius: 20px; font-weight: 700; font-size: 0.88em;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .x-cancel-btn:hover { background: rgba(244,33,46,0.07); }
+
+    /* ── 素材なし ── */
+    .media-placeholder {
+      width: 100%; height: 120px; background: #f7f9f9; border-radius: 16px;
+      border: 1px solid #eff3f4;
+      display: flex; align-items: center; justify-content: center;
+      color: #536471; font-size: 0.9em; margin-top: 12px;
+    }
+
+    /* ── GitHub予約済み投稿セクション ── */
+    .approved-section { border-bottom: 2px solid #eff3f4; }
+    .approved-header {
+      padding: 12px 16px; display: flex; align-items: center; gap: 8px;
+      cursor: pointer; user-select: none; font-weight: 700; font-size: 0.9em;
+      color: #0f1419; background: #f7f9f9;
+    }
+    .approved-header:hover { background: #edf0f1; }
+    .approved-badge {
+      background: #1d9bf0; color: #fff; font-size: 0.75em; font-weight: 700;
+      padding: 2px 10px; border-radius: 20px;
+    }
+    .approved-body { padding: 12px 16px; }
+    .approved-day { margin-bottom: 10px; border: 1px solid #eff3f4; border-radius: 10px; overflow: hidden; }
+    .approved-day-header {
+      background: #e7e9ea; padding: 8px 12px; display: flex; align-items: center; gap: 8px;
+      font-size: 0.85em; font-weight: 700;
+    }
+    .approved-date { color: #0f1419; }
+    .approved-count { color: #536471; font-weight: normal; }
+    .btn-del-day {
+      margin-left: auto; padding: 3px 10px; border-radius: 14px; border: none;
+      font-size: 0.78em; font-weight: 700; cursor: pointer; background: #f4212e; color: #fff;
+    }
+    .btn-del-day:hover { background: #cc1a27; }
+    .btn-push-after {
+      padding: 3px 10px; border-radius: 14px; border: none;
+      font-size: 0.78em; font-weight: 700; cursor: pointer; background: #0f1419; color: #fff;
+    }
+    .btn-push-after:hover { background: #272c30; }
+    .approved-posts { background: #fff; }
+    .approved-post {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      border-bottom: 1px solid #f7f9f9; font-size: 0.83em;
+    }
+    .approved-post:last-child { border-bottom: none; }
+    .ap-time { font-weight: 700; color: #1d9bf0; flex-shrink: 0; width: 46px; }
+    .ap-text { flex: 1; color: #536471; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-del-post {
+      background: none; border: 1px solid #cfd9de; color: #536471;
+      width: 24px; height: 24px; border-radius: 50%; font-size: 0.75em; cursor: pointer;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    }
+    .btn-del-post:hover { border-color: #f4212e; color: #f4212e; }
+    .approved-empty { color: #536471; font-size: 0.85em; text-align: center; padding: 16px; }
   </style>
   <script>
+    let toastTimer;
+    function showToast(msg, color) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.background = color || '#0f1419';
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    async function pushGitHub() {
+      const btn = document.getElementById('push-btn');
+      btn.textContent = '送信中...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('http://localhost:3000/api/push-github', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          btn.textContent = '✅ Push済み';
+          btn.classList.add('pushed');
+          showToast('✅ GitHubにPush完了！自動投稿が有効になりました', '#00ba7c');
+        } else {
+          btn.textContent = '↑ GitHubにPush';
+          btn.disabled = false;
+          showToast('❌ Push失敗: ' + data.message, '#f4212e');
+        }
+      } catch(e) {
+        btn.textContent = '↑ GitHubにPush';
+        btn.disabled = false;
+        showToast('❌ サーバーに接続できません', '#f4212e');
+      }
+    }
+
+    function autoResize(el) {
+      el.style.height = '0px';
+      el.style.height = el.scrollHeight + 'px';
+    }
+    async function loadApproved() {
+      try {
+        const res = await fetch('http://localhost:3000/api/approved-posts');
+        const data = await res.json();
+        renderApproved(data.days);
+      } catch(e) {
+        document.getElementById('approvedBadge').textContent = '取得失敗（サーバー未起動？）';
+      }
+    }
+
+    function renderApproved(days) {
+      const badge = document.getElementById('approvedBadge');
+      const body = document.getElementById('approvedBody');
+      const total = days.reduce((s, d) => s + d.posts.length, 0);
+      badge.textContent = days.length + '日分 / ' + total + '件';
+      if (total === 0) {
+        body.innerHTML = '<div class="approved-empty">予約済み投稿はありません</div>';
+        return;
+      }
+      body.innerHTML = days.map(day =>
+        '<div class="approved-day">'
+        + '<div class="approved-day-header">'
+        + '<span class="approved-date">' + day.date + '</span>'
+        + '<span class="approved-count">（' + day.posts.length + '件）</span>'
+        + '<button class="btn-del-day" onclick="deleteDay(\'' + day.date + '\')">🗑️ 全削除</button>'
+        + '<button class="btn-push-after" onclick="pushGitHub()">↑ Push</button>'
+        + '</div>'
+        + '<div class="approved-posts">'
+        + day.posts.map(p =>
+          '<div class="approved-post">'
+          + '<span class="ap-time">' + p.scheduleTime + '</span>'
+          + '<span class="ap-text">' + p.text.replace(/\n/g, ' ').replace(/</g, '&lt;').slice(0, 60) + '…</span>'
+          + '<button class="btn-del-post" onclick="deletePost(\'' + day.date + '\',' + p.postNum + ')">✕</button>'
+          + '</div>'
+        ).join('')
+        + '</div></div>'
+      ).join('');
+    }
+
+    function toggleApproved() {
+      const body = document.getElementById('approvedBody');
+      const icon = document.getElementById('approvedToggleIcon');
+      const visible = body.style.display === 'block';
+      body.style.display = visible ? 'none' : 'block';
+      icon.textContent = visible ? '▶' : '▼';
+    }
+
+    async function deleteDay(date) {
+      if (!confirm(date + ' の投稿を全て削除しますか？\n削除後「↑ Push」を押してGitHubに反映してください。')) return;
+      const res = await fetch('http://localhost:3000/api/delete-approved', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ date })
+      });
+      const data = await res.json();
+      if (data.success) { showToast('✅ ' + date + ' の投稿を削除しました'); await loadApproved(); }
+      else showToast('❌ 削除失敗: ' + data.message, '#f4212e');
+    }
+
+    async function deletePost(date, postNum) {
+      const res = await fetch('http://localhost:3000/api/delete-approved', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ date, postNum })
+      });
+      const data = await res.json();
+      if (data.success) { showToast('✅ 削除しました'); await loadApproved(); }
+      else showToast('❌ 削除失敗: ' + data.message, '#f4212e');
+    }
+
+    window.addEventListener('load', () => {
+      loadApproved();
+      document.querySelectorAll('.x-textarea').forEach(ta => autoResize(ta));
+    });
+
+    function updateCount(postNum) {
+      const ta = document.getElementById('text-' + postNum);
+      autoResize(ta);
+      const len = ta.value.length;
+      const el = document.getElementById('count-' + postNum);
+      el.textContent = len + '/140';
+      el.style.color = len > 140 ? '#f4212e' : len > 120 ? '#ffd400' : '#536471';
+    }
+
     async function schedulePost(postNum, sourceUrl, thumbPath) {
       const text = document.getElementById('text-' + postNum).value.trim();
       const scheduleTime = document.getElementById('time-' + postNum).value;
@@ -473,30 +898,31 @@ function generateHtml(today, posts) {
 
         if (data.success) {
           const badge = document.getElementById('status-' + postNum);
-          badge.textContent = '予約済み ✓';
-          badge.className = 'status-badge scheduled';
-          btn.textContent = '✅ ' + data.scheduledAt + ' に予約済み';
-          btn.style.background = '#f39c12';
+          badge.textContent = scheduleTime + ' 予約済み ✓';
+          badge.className = 'x-status-badge scheduled';
+          btn.textContent = '✓ ' + scheduleTime;
+          btn.classList.add('done');
           document.getElementById('card-' + postNum).classList.add('scheduled');
           document.getElementById('cancel-' + postNum).style.display = 'inline-block';
+          showToast('✅ 投稿' + postNum + ' を ' + scheduleTime + ' に予約しました！GitHubにPushを忘れずに↑');
         } else {
           btn.disabled = false;
-          btn.textContent = '📅 ' + scheduleTime + ' に投稿予約';
+          btn.textContent = '予約投稿';
           alert('予約失敗: サーバーに接続できません。node post_server.js を起動してください。');
         }
       } catch(e) {
         btn.disabled = false;
-        btn.textContent = '📅 ' + scheduleTime + ' に投稿予約';
-        alert('サーバーに接続できません。\nターミナルで: node post_server.js を実行してください。');
+        btn.textContent = '予約投稿';
+        alert('サーバーに接続できません。\\nターミナルで: node post_server.js を実行してください。');
       }
     }
 
     async function shutdownServer() {
-      if (!confirm('サーバーを停止しますか？\n⚠️ 予約済みの投稿もすべてキャンセルされます。')) return;
+      if (!confirm('サーバーを停止しますか？\\n⚠️ 予約済みの投稿もすべてキャンセルされます。')) return;
       try {
         await fetch('http://localhost:3000/api/shutdown', { method: 'POST' });
       } catch(e) {}
-      window.close();
+      document.body.innerHTML = '<div style="font-family:sans-serif;text-align:center;padding:80px;color:#e7e9ea;background:#000;min-height:100vh;"><h2>✅ サーバーを停止しました</h2><p style="color:#71767b;margin-top:12px;">このタブは閉じてください。</p></div>';
     }
 
     async function cancelPost(postNum) {
@@ -510,11 +936,11 @@ function generateHtml(today, posts) {
       if (data.success) {
         const badge = document.getElementById('status-' + postNum);
         badge.textContent = '未予約';
-        badge.className = 'status-badge';
+        badge.className = 'x-status-badge';
         const btn = document.getElementById('btn-' + postNum);
         btn.disabled = false;
-        btn.textContent = '📅 に投稿予約';
-        btn.style.background = '';
+        btn.textContent = '予約投稿';
+        btn.classList.remove('done');
         document.getElementById('card-' + postNum).classList.remove('scheduled');
         document.getElementById('cancel-' + postNum).style.display = 'none';
       }
@@ -522,27 +948,35 @@ function generateHtml(today, posts) {
   </script>
 </head>
 <body>
-  <h1>【速報】世界の話題 投稿ランチャー</h1>
-  <div class="subtitle">${today} ／ 全10件</div>
-  <div style="display:flex;gap:12px;margin-bottom:16px;">
-    <span style="background:#1da1f2;color:#fff;padding:8px 20px;border-radius:20px;font-weight:bold;font-size:0.9em;">𝕏 X投稿ランチャー（現在）</span>
-    <a href="http://localhost:3000/youtube" target="_blank" style="background:#ff0000;color:#fff;padding:8px 20px;border-radius:20px;text-decoration:none;font-weight:bold;font-size:0.9em;">▶ YouTube Shortsランチャーへ</a>
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <span class="x-logo">𝕏</span>
+      <span class="top-title">投稿ランチャー</span>
+      <span class="top-date">${today}</span>
+    </div>
+    <div class="top-bar-right">
+      <a href="http://localhost:3000/youtube" target="_blank" class="nav-btn yt">▶ YouTube</a>
+      <button id="push-btn" onclick="pushGitHub()" class="nav-btn github">↑ GitHubにPush</button>
+      <button onclick="shutdownServer()" class="nav-btn shutdown">停止</button>
+    </div>
   </div>
-  <div class="steps">
-    <strong>🚀 自動投稿の手順</strong><br>
-    ① ターミナルで <code>node post_server.js</code> を起動したまま、このページを開く<br>
-    ② 必要なら投稿文を編集（テキストボックスは直接編集OK）<br>
-    ③ 「📅 HH:MM に投稿予約」ボタンを押す → サーバーが指定時刻に自動投稿<br>
-    ④ 投稿完了後、元ネタURLは<strong>自動でリプ欄に送信</strong>される<br>
-    <div class="note">⚠️ post_server.js を停止するとスケジュールがキャンセルされます。投稿完了まで起動したままにしてください。</div>
-  </div>
-  ${cards}
-  <div style="text-align:center;margin-top:32px;padding-bottom:40px;">
-    <button onclick="shutdownServer()" style="background:#e74c3c;color:#fff;border:none;padding:12px 36px;border-radius:24px;font-weight:bold;font-size:1em;cursor:pointer;">🔌 ランチャーを閉じる（サーバー停止）</button>
+  <div id="toast"></div>
+  <div class="container">
+    <div class="info-bar">
+      <strong>全${posts.length}件</strong>　予約した投稿は GitHub Actions が自動でXに投稿します
+    </div>
+    <div class="approved-section" id="approvedSection">
+      <div class="approved-header" onclick="toggleApproved()">
+        <span id="approvedToggleIcon">▶</span> 📋 GitHub予約済み投稿
+        <span class="approved-badge" id="approvedBadge">読込中…</span>
+      </div>
+      <div class="approved-body" id="approvedBody" style="display:none"></div>
+    </div>
+    ${cards}
   </div>
 </body>
-</html>`;
-}
+</html>`;}
+
 
 // メイン処理
 async function main() {
@@ -630,8 +1064,10 @@ async function main() {
       console.log(`⚠️  画像なし`);
     }
 
-    const generatedPost = await generatePost(post);
-    const finalPost = generatedPost.trim();
+    let generatedPost = await generatePost(post);
+    generatedPost = generatedPost.trim();
+    const finalPost = generatedPost.length > 140 ? await trimPost(generatedPost) : generatedPost;
+    if (generatedPost.length > 140) console.log(`✂️  投稿${postNum} 短縮: ${generatedPost.length}→${finalPost.length}文字`);
     const sourceUrl = post.url;
 
     // 動画の場合はサムネイル生成スキップ
@@ -662,7 +1098,19 @@ async function main() {
     lines.push(`\n▼ 投稿文（コピペ用）:\n${finalPost}\n`);
     lines.push(`▼ リプ欄に貼るURL:\n${sourceUrl}\n`);
 
-    htmlItems.push({ postNum, scheduleTime, subreddit: post.subreddit, title: post.title, score: post.score, savedImagePath, savedVideoPath, thumbPath, isVideo: post.isVideo, finalPost, sourceUrl });
+    // 動画の秒数を取得（X無料版は140秒まで）
+    let videoDuration = 0;
+    if (savedVideoPath) {
+      try {
+        const ffprobeResult = execSync(
+          `"C:\\ffmpeg\\bin\\ffprobe.exe" -v quiet -print_format json -show_format "${savedVideoPath}"`,
+          { stdio: "pipe" }
+        ).toString();
+        videoDuration = Math.round(parseFloat(JSON.parse(ffprobeResult).format.duration) || 0);
+      } catch (e) { /* 取得失敗時は0のまま */ }
+    }
+
+    htmlItems.push({ postNum, scheduleTime, subreddit: post.subreddit, title: post.title, score: post.score, savedImagePath, savedVideoPath, thumbPath, isVideo: post.isVideo, finalPost, sourceUrl, videoDuration });
   }
 
   // テキストファイル保存
@@ -671,10 +1119,9 @@ async function main() {
   fs.writeFileSync(saveFile, lines.join("\n"), "utf8");
   console.log(`\n✅ 投稿文を保存しました: ${saveFile}`);
 
-  // HTMLランチャー生成・保存
+  // ランチャーHTML保存（post_server.js の /launcher が参照する）
   const htmlFile = path.join(POSTS_DIR, `${today}.html`);
   fs.writeFileSync(htmlFile, generateHtml(today, htmlItems), "utf8");
-  console.log(`✅ 投稿ランチャーを保存しました: ${htmlFile}`);
 
   // generate_shorts.js 用の JSON を保存
   const genJson = {

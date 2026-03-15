@@ -2,8 +2,8 @@
 cd /d "%~dp0"
 echo.
 echo  ====================================
-echo   X投稿ランチャー 起動中...
+echo   投稿管理センター 起動中...
 echo  ====================================
 echo.
-start "" "http://localhost:3000/launcher"
+start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" "http://localhost:3000/app"
 node post_server.js
