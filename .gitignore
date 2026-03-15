@@ -19,9 +19,9 @@ node_modules/
 # ランチャーHTML・テキストログ（ローカル専用）
 02_reddit_global/posts/
 
-# Shortsコンテンツ・生成済みデータ（ローカル専用）
+# Shortsコンテンツ（スクリプト内で自動生成するので不要）
 02_reddit_global/temp/shorts_content_*.json
-02_reddit_global/temp/generated_*.json
+# generated_*.json はGitHub Actionsが必要なのでコミット対象
 
 # temp/approved_*.json はコミットする（ランチャーで承認したものだけ）
 
