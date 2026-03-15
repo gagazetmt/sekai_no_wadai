@@ -1,0 +1,82 @@
+name: YouTube Shorts動画生成
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '日付 (YYYY-MM-DD、省略時=JST今日)'
+        required: false
+        default: ''
+      count:
+        description: '生成件数 (省略時=全件)'
+        required: false
+        default: ''
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 02_reddit_global
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+
+      - name: 日本語フォントをインストール
+        run: sudo apt-get install -y fonts-noto-cjk
+
+      - name: ffmpeg をインストール
+        run: sudo apt-get install -y ffmpeg
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 02_reddit_global/package-lock.json
+
+      - name: 依存パッケージをインストール
+        run: npm install --omit=dev
+
+      - name: 日付・件数を決定
+        id: vars
+        run: |
+          if [ -z "${{ github.event.inputs.date }}" ]; then
+            DATE=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          else
+            DATE="${{ github.event.inputs.date }}"
+          fi
+          COUNT="${{ github.event.inputs.count }}"
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+          echo "count=$COUNT" >> $GITHUB_OUTPUT
+          echo "→ 日付: $DATE / 件数: ${COUNT:-全件}"
+
+      - name: 投稿データの存在確認
+        run: |
+          FILE="temp/generated_${{ steps.vars.outputs.date }}.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ $FILE が見つかりません"
+            echo "   ランチャーで「GitHubにPush」を実行してからワークフローを起動してください"
+            exit 1
+          fi
+          echo "✅ $FILE を確認しました"
+
+      - name: YouTube Shorts を生成
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          ARGS="${{ steps.vars.outputs.date }}"
+          if [ -n "${{ steps.vars.outputs.count }}" ]; then
+            ARGS="$ARGS ${{ steps.vars.outputs.count }}"
+          fi
+          node generate_shorts.js $ARGS
+
+      - name: 生成された動画をアップロード
+        uses: actions/upload-artifact@v4
+        with:
+          name: shorts-${{ steps.vars.outputs.date }}
+          path: 02_reddit_global/shorts/*.mp4
+          retention-days: 7
+          if-no-files-found: error

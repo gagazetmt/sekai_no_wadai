@@ -9,10 +9,13 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const Anthropic = require("@anthropic-ai/sdk");
 const VOICEVOX_URL = "http://localhost:50021";
 
-const FFMPEG       = "C:\\ffmpeg\\bin\\ffmpeg.exe";
-const FFPROBE      = "C:\\ffmpeg\\bin\\ffprobe.exe";
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const FFMPEG       = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
+const FFPROBE      = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffprobe.exe" : "ffprobe";
 const SHORTS_DIR   = path.join(__dirname, "shorts");
 const SLIDES_DIR   = path.join(__dirname, "shorts_slides");
 const EMOTIONS_DIR = path.join(__dirname, "assets", "emotions");
@@ -34,12 +37,7 @@ const genFile     = path.join(TEMP_DIR, `generated_${today}.json`);
 const contentFile = path.join(TEMP_DIR, `shorts_content_${today}.json`);
 if (!fs.existsSync(genFile)) {
   console.error(`❌ Not found: ${genFile}`);
-  console.error("先に「今日の投稿を生成して」→ make_launcher.js を実行してください");
-  process.exit(1);
-}
-if (!fs.existsSync(contentFile)) {
-  console.error(`❌ Not found: ${contentFile}`);
-  console.error("Claude Code に「今日のShortsコンテンツを生成して」と伝えてください");
+  console.error("先に generate_post.js を実行してください");
   process.exit(1);
 }
 
@@ -229,31 +227,53 @@ async function renderSlide(page, html, outputPath) {
   await page.screenshot({ path: outputPath, type: "png" });
 }
 
-// ─── ナレーション生成（VoiceVox HTTP API） ───────────────────────────────
-async function generateNarration(text, outputPath) {
-  const wavPath = outputPath.replace(/\.mp3$/, ".wav");
-  const safeText = text.replace(/\n/g, "　").trim();
+// ─── TTS: OpenAI ─────────────────────────────────────────────────────────
+async function narrationOpenAI(text, outputPath) {
+  const res = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type":  "application/json",
+    },
+    body: JSON.stringify({
+      model:           "tts-1",
+      voice:           "nova",   // nova=女性 / onyx=男性 / shimmer=落ち着いた女性
+      input:           text,
+      response_format: "mp3",
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI TTS: ${res.status} ${await res.text()}`);
+  const mp3 = outputPath.replace(/\.wav$/, ".mp3");
+  fs.writeFileSync(mp3, Buffer.from(await res.arrayBuffer()));
+  execSync(`"${FFMPEG}" -y -i "${mp3}" "${outputPath}"`, { stdio: "pipe" });
+  fs.unlinkSync(mp3);
+  return outputPath;
+}
 
-  // 1. audio_query取得
+// ─── TTS: VoiceVox (fallback) ────────────────────────────────────────────
+async function narrationVoiceVox(text, outputPath) {
+  const safeText = text.replace(/\n/g, "　").trim();
   const queryRes = await fetch(
     `${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(safeText)}&speaker=${VOICEVOX_SPEAKER}`,
     { method: "POST" }
   );
   if (!queryRes.ok) throw new Error(`audio_query failed: ${queryRes.status}`);
   const query = await queryRes.json();
-
   query.speedScale = SPEED_SCALE;
-
-  // 2. 音声合成
   const synthRes = await fetch(
     `${VOICEVOX_URL}/synthesis?speaker=${VOICEVOX_SPEAKER}`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query) }
   );
   if (!synthRes.ok) throw new Error(`synthesis failed: ${synthRes.status}`);
+  fs.writeFileSync(outputPath, Buffer.from(await synthRes.arrayBuffer()));
+  return outputPath;
+}
 
-  const wavBuffer = Buffer.from(await synthRes.arrayBuffer());
-  fs.writeFileSync(wavPath, wavBuffer);
-  return wavPath;
+// ─── ナレーション生成（OpenAI優先 / VoiceVox fallback） ──────────────────
+async function generateNarration(text, outputPath) {
+  return process.env.OPENAI_API_KEY
+    ? narrationOpenAI(text, outputPath)
+    : narrationVoiceVox(text, outputPath);
 }
 
 // ─── 音声ファイルの実際の長さを取得（ms単位） ───────────────────────────
@@ -497,6 +517,84 @@ function concatAndMix(videoPaths, audioPath, totalMs, outputPath) {
   fs.unlinkSync(listFile);
 }
 
+// ─── Claude API でショートコンテンツ自動生成 ─────────────────────────────
+async function generateShortsContent(genPosts, date) {
+  console.log(`\n🤖 Claude でショートコンテンツを自動生成中...`);
+  const posts = [];
+
+  for (let i = 0; i < genPosts.length; i++) {
+    const p = genPosts[i];
+    console.log(`  📝 投稿${i + 1}「${p.title.slice(0, 50)}」`);
+
+    const prompt = `以下のX投稿ネタをYouTube Shortsの5スライド動画コンテンツに変換してください。
+
+## 元データ
+- タイトル(英語): ${p.title}
+- X投稿文: ${p.postText}
+- subreddit: r/${p.subreddit}
+
+## 出力形式（JSONのみ返答）
+{
+  "catchLine1": "キャッチコピー1行目（8〜12文字、インパクト重視）",
+  "catchLine2": "キャッチコピー2行目（8〜12文字、補足・結末）",
+  "slide1": {
+    "narration": "導入ナレーション（1〜2文、50文字以内、驚きで引き込む）",
+    "subtitle": "字幕テキスト（15文字以内、改行は\\n）",
+    "emotion": "SURPRISE"
+  },
+  "slide2": {
+    "narration": "背景・理由ナレーション（1〜2文、50文字以内）",
+    "subtitle": "字幕テキスト（15文字以内）",
+    "emotion": "THINK"
+  },
+  "slide3": {
+    "narration": "衝撃事実ナレーション（1〜2文、50文字以内）",
+    "subtitle": "字幕テキスト（15文字以内）",
+    "emotion": "HAPPY または SAD または ANGRY"
+  },
+  "slide4": {
+    "narration": "視聴者への問いかけ（1文）",
+    "subtitle": "問いかけテキスト（15文字以内）"
+  }
+}
+
+## 条件
+- catchLine1/2はタイトルカードに表示する2行キャッチコピー
+- emotionは SURPRISE / HAPPY / SAD / ANGRY / THINK のいずれか
+- slide4のemotionは不要
+- 全文日本語
+- JSONのみ出力（説明文不要）`;
+
+    try {
+      const msg = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 800,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const raw = msg.content[0].text;
+      const json = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+      posts.push(json);
+      console.log(`  ✅ 投稿${i + 1} 完了: 「${json.catchLine1}」`);
+    } catch (e) {
+      console.error(`  ❌ 投稿${i + 1} 失敗: ${e.message} → フォールバック使用`);
+      const fallbackText = p.postText.replace(/【.*?】/g, "").trim();
+      posts.push({
+        catchLine1: fallbackText.slice(0, 12),
+        catchLine2: "海外で話題",
+        slide1: { narration: fallbackText.slice(0, 60), subtitle: "注目の話題", emotion: "SURPRISE" },
+        slide2: { narration: "詳細はこちら。", subtitle: "詳しく見ると…", emotion: "THINK" },
+        slide3: { narration: "世界が注目しています。", subtitle: "世界も驚いた！", emotion: "HAPPY" },
+        slide4: { narration: "あなたはどう思いますか？", subtitle: "あなたは\nどう思う？" },
+      });
+    }
+  }
+
+  const content = { date, posts };
+  fs.writeFileSync(contentFile, JSON.stringify(content, null, 2), "utf8");
+  console.log(`✅ shorts_content_${date}.json を生成しました\n`);
+  return content;
+}
+
 // ─── メイン ──────────────────────────────────────────────────────────────
 async function main() {
   const speakerNames = { 3: "ずんだもん", 8: "春日部つむぎ", 2: "四国めたん", 9: "波音リツ" };
@@ -505,17 +603,29 @@ async function main() {
   console.log(`=== YouTube Shorts v5 生成 ${today}${suffixLabel} ===`);
   console.log(`🎙️  声: ${speakerLabel} (ID:${VOICEVOX_SPEAKER}) / 速度: ${SPEED_SCALE}\n`);
 
-  // ── VoiceVox 起動確認（未起動なら即終了） ───────────────────────────────
-  try {
-    const vvRes = await fetch(`${VOICEVOX_URL}/version`);
-    if (!vvRes.ok) throw new Error();
-    const vvVer = await vvRes.json();
-    console.log(`✅ VoiceVox v${vvVer} 接続確認`);
-  } catch {
-    console.error(`\n❌ VoiceVox に接続できません（${VOICEVOX_URL}）`);
-    console.error(`   VoiceVox を起動してから再実行してください`);
-    console.error(`   起動確認: http://localhost:50021/version\n`);
-    process.exit(1);
+  // ── shorts_content がなければ Claude API で自動生成 ───────────────────────
+  if (!fs.existsSync(contentFile)) {
+    const { posts: genPosts } = JSON.parse(fs.readFileSync(genFile, "utf8"));
+    await generateShortsContent(genPosts, today);
+  } else {
+    console.log(`✅ shorts_content_${today}.json を読み込みます`);
+  }
+
+  // ── TTS 確認 ─────────────────────────────────────────────────────────────
+  if (process.env.OPENAI_API_KEY) {
+    console.log(`🎙️  TTS: OpenAI TTS (nova)`);
+  } else {
+    console.log(`🎙️  TTS: VoiceVox (fallback) / 声: ${speakerLabel} / 速度: ${SPEED_SCALE}`);
+    try {
+      const vvRes = await fetch(`${VOICEVOX_URL}/version`);
+      if (!vvRes.ok) throw new Error();
+      const vvVer = await vvRes.json();
+      console.log(`✅ VoiceVox v${vvVer} 接続確認`);
+    } catch {
+      console.error(`\n❌ VoiceVox に接続できません（${VOICEVOX_URL}）`);
+      console.error(`   VoiceVox を起動するか .env に OPENAI_API_KEY を設定してください\n`);
+      process.exit(1);
+    }
   }
 
   ensureBeep();
@@ -534,7 +644,10 @@ async function main() {
   const posts = allPosts.slice(0, limit);
   console.log(`📄 ${posts.length}件を処理します（全${allPosts.length}件中）\n`);
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: process.platform !== "win32" ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
+  });
   const page    = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1920 });
 
