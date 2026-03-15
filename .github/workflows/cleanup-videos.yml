@@ -1,0 +1,47 @@
+name: 動画クリーンアップ
+
+on:
+  schedule:
+    - cron: '0 15 * * *'  # 00:00 JST
+  workflow_dispatch:       # 手動実行用
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 前日以前の動画を削除
+        run: |
+          # videosブランチが存在するか確認
+          if ! git ls-remote --heads origin videos | grep -q videos; then
+            echo "videosブランチが存在しません。スキップします。"
+            exit 0
+          fi
+
+          git checkout videos
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+
+          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          DELETED=0
+
+          while IFS= read -r -d '' f; do
+            FNAME=$(basename "$f")
+            FILE_DATE="${FNAME:0:10}"
+            if [ "$FILE_DATE" \< "$TODAY" ]; then
+              git rm -f "$f" 2>/dev/null && DELETED=$((DELETED + 1))
+            fi
+          done < <(find . -name "*.mp4" -print0 2>/dev/null)
+
+          if [ $DELETED -gt 0 ]; then
+            git commit -m "cleanup: ${DELETED}件の動画を削除 (${TODAY})"
+            git push
+            echo "🗑️ ${DELETED}件の動画を削除しました"
+          else
+            echo "削除対象なし"
+          fi

@@ -85,8 +85,22 @@ async function main() {
     accessSecret: process.env.X_ACCESS_TOKEN_SECRET,
   });
 
+  // 動画ファイルの確認・アップロード
+  let tweetParams = { text: post.text };
+  const videoPath = path.join(__dirname, "videos", `${jstDateStr}_${post.postNum}.mp4`);
+  if (fs.existsSync(videoPath)) {
+    console.log(`\n🎬 動画をアップロード中: ${videoPath}`);
+    try {
+      const mediaId = await xClient.v1.uploadMedia(videoPath, { mimeType: "video/mp4" });
+      tweetParams.media = { media_ids: [mediaId] };
+      console.log(`✅ 動画アップロード完了 (mediaId: ${mediaId})`);
+    } catch (mediaErr) {
+      console.log(`⚠️ 動画アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+    }
+  }
+
   // ツイート投稿
-  const tweet = await xClient.v2.tweet({ text: post.text });
+  const tweet = await xClient.v2.tweet(tweetParams);
   const tweetId = tweet.data.id;
   console.log(`\n✅ ツイート送信完了 (ID: ${tweetId})`);
 

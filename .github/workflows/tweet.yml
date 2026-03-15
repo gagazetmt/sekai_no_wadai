@@ -60,6 +60,12 @@ jobs:
       - name: 依存パッケージをインストール
         run: npm install --omit=dev
 
+      - name: 動画ファイルを取得
+        working-directory: ${{ github.workspace }}
+        run: |
+          git fetch origin videos 2>/dev/null || true
+          git checkout origin/videos -- 02_reddit_global/videos/ 2>/dev/null || echo "動画なし（テキストのみ投稿）"
+
       - name: X に投稿
         env:
           X_API_KEY: ${{ secrets.X_API_KEY }}

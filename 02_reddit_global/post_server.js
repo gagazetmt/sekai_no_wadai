@@ -10,6 +10,7 @@ const Anthropic = require("@anthropic-ai/sdk");
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const REPO_ROOT = path.join(__dirname, "..");
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -172,23 +173,72 @@ app.get("/api/status", (req, res) => {
 
 // ── GitHub Push API ──────────────────────────────────────────────────────
 app.post("/api/push-github", (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // ① mainブランチへの投稿データpush
   try {
-    const today = new Date().toISOString().slice(0, 10);
     execSync(
       `git -C "${REPO_ROOT}" add -A 02_reddit_global/temp/ && git -C "${REPO_ROOT}" commit -m "posts ${today}" && git -C "${REPO_ROOT}" push`,
       { stdio: "pipe" }
     );
     console.log(`✅ GitHub push 完了 (${today})`);
-    res.json({ success: true });
   } catch (e) {
     const msg = e.stderr ? e.stderr.toString() : e.message;
-    // "nothing to commit" は正常
-    if (msg.includes("nothing to commit")) {
-      res.json({ success: true, message: "変更なし（既にpush済み）" });
-    } else {
+    if (!msg.includes("nothing to commit")) {
       console.error("❌ GitHub push 失敗:", msg);
-      res.json({ success: false, message: msg });
+      return res.json({ success: false, message: msg });
     }
+    console.log("変更なし（既にpush済み）");
+  }
+
+  // ② videosブランチへの動画push
+  const srcVideosDir = path.join(__dirname, "videos");
+  const videoFiles = fs.existsSync(srcVideosDir)
+    ? fs.readdirSync(srcVideosDir).filter(f => f.startsWith(today) && f.endsWith(".mp4"))
+    : [];
+
+  if (videoFiles.length === 0) {
+    console.log("🎬 今日の動画ファイルなし（動画pushスキップ）");
+    return res.json({ success: true });
+  }
+
+  const worktreePath = path.join(os.tmpdir(), `vp_${Date.now()}`);
+  try {
+    // videosブランチの存在確認
+    let branchExists = false;
+    try {
+      const lsResult = execSync(`git -C "${REPO_ROOT}" ls-remote --heads origin videos`, { stdio: "pipe" }).toString();
+      branchExists = lsResult.includes("refs/heads/videos");
+    } catch {}
+
+    if (branchExists) {
+      execSync(`git -C "${REPO_ROOT}" fetch origin videos`, { stdio: "pipe" });
+      execSync(`git -C "${REPO_ROOT}" worktree add "${worktreePath}" videos`, { stdio: "pipe" });
+    } else {
+      execSync(`git -C "${REPO_ROOT}" worktree add --orphan -b videos "${worktreePath}"`, { stdio: "pipe" });
+    }
+
+    // 動画ファイルをコピー
+    const destDir = path.join(worktreePath, "02_reddit_global", "videos");
+    fs.mkdirSync(destDir, { recursive: true });
+    videoFiles.forEach(f => {
+      fs.copyFileSync(path.join(srcVideosDir, f), path.join(destDir, f));
+    });
+
+    // コミット＆プッシュ
+    execSync(`git -C "${worktreePath}" add -A`, { stdio: "pipe" });
+    execSync(`git -C "${worktreePath}" -c user.email="launcher@local" -c user.name="Launcher" commit -m "videos ${today}"`, { stdio: "pipe" });
+    execSync(`git -C "${worktreePath}" push origin videos`, { stdio: "pipe" });
+    console.log(`🎬 動画 ${videoFiles.length}件 を videos ブランチにpush完了`);
+
+    res.json({ success: true, videosCount: videoFiles.length });
+  } catch (e) {
+    console.error("❌ 動画push失敗:", e.message);
+    res.json({ success: true, videoWarning: e.message }); // メインpushは成功
+  } finally {
+    try {
+      execSync(`git -C "${REPO_ROOT}" worktree remove "${worktreePath}" --force`, { stdio: "pipe" });
+    } catch {}
   }
 });
 
@@ -235,31 +285,50 @@ app.post("/api/delete-approved", (req, res) => {
   }
 });
 
-// ── Engagement: プロフィール + 最新ツイート取得 ──────────────────────────
-app.post("/api/engagement/profile", async (req, res) => {
-  const { username } = req.body;
+// ── Engagement: TwitterAPI.io でツイート取得（v3） ────────────────────────
+// GET https://api.twitterapi.io/twitter/tweet/advanced_search
+//   query=from:{username}&queryType=Latest
+// コスト: $0.15/1,000ツイート（10件取得 ≈ $0.0015 ≈ 0.2円）
+app.post("/api/engagement/tweets", async (req, res) => {
+  const { username, count = 10 } = req.body;
+  const API_KEY = process.env.TWITTER_API_IO_KEY;
+
+  if (!API_KEY) {
+    return res.json({ success: false, fallback: true, message: "TWITTER_API_IO_KEY 未設定" });
+  }
+
   try {
-    const userRes = await xClient.v2.userByUsername(username, {
-      "user.fields": "public_metrics,description,profile_image_url",
+    const url = `https://api.twitterapi.io/twitter/tweet/advanced_search?` +
+      `query=${encodeURIComponent(`from:${username} -is:reply`)}&queryType=Latest`;
+
+    const r = await fetch(url, {
+      headers: { "X-API-Key": API_KEY },
     });
-    if (!userRes.data) return res.json({ success: false, message: "ユーザーが見つかりません" });
+    if (!r.ok) throw new Error(`TwitterAPI.io: ${r.status} ${await r.text()}`);
 
-    let tweets = [];
-    try {
-      const tweetsRes = await xClient.v2.userTimeline(userRes.data.id, {
-        max_results: 5,
-        "tweet.fields": "created_at,public_metrics",
-      });
-      tweets = tweetsRes.data?.data || [];
-    } catch (te) {
-      // ツイート取得失敗はプロフィールだけ返す（レートリミット等）
-      console.warn(`⚠️ ツイート取得失敗 (@${username}): ${te.message}`);
-    }
+    const data = await r.json();
+    const tweets = (data.tweets || []).slice(0, count).map(t => ({
+      id:        t.id,
+      text:      t.text,
+      url:       t.url || `https://twitter.com/${username}/status/${t.id}`,
+      createdAt: t.createdAt,
+      likes:     t.likeCount    || 0,
+      retweets:  t.retweetCount || 0,
+      replies:   t.replyCount   || 0,
+      views:     t.viewCount    || 0,
+    }));
 
-    res.json({ success: true, user: userRes.data, tweets });
+    console.log(`📡 @${username} のツイート ${tweets.length}件取得`);
+    res.json({ success: true, tweets });
   } catch (e) {
+    console.error(`❌ TwitterAPI.io 取得失敗: ${e.message}`);
     res.json({ success: false, message: e.message });
   }
+});
+
+// ── Engagement: プロフィール取得（旧：公式API / 互換性のため残す） ─────────
+app.post("/api/engagement/profile", async (req, res) => {
+  res.json({ success: false, message: "公式X APIのFree tierは廃止済みです。TwitterAPI.ioをご利用ください。" });
 });
 
 // ── Engagement: Claudeリプライ提案 ─────────────────────────────────────
@@ -304,6 +373,57 @@ app.post("/api/engagement/reply", async (req, res) => {
     res.json({ success: true, id: result.data.id });
   } catch (e) {
     console.error("❌ リプライ送信失敗:", e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// ── Engagement: いいね ──────────────────────────────────────────────────
+let _myUserId = null;
+async function getMyUserId() {
+  if (!_myUserId) {
+    const me = await xClient.v2.me();
+    _myUserId = me.data.id;
+  }
+  return _myUserId;
+}
+
+app.post("/api/engagement/like", async (req, res) => {
+  const { tweetId } = req.body;
+  try {
+    const uid = await getMyUserId();
+    await xClient.v2.like(uid, tweetId);
+    console.log(`♥ いいね送信: tweetId:${tweetId}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("❌ いいね失敗:", e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// ── Engagement: フォロー中一覧 ──────────────────────────────────────────
+app.get("/api/engagement/following", async (req, res) => {
+  try {
+    const uid = await getMyUserId();
+    const result = await xClient.v2.following(uid, { max_results: 1000, "user.fields": ["username"] });
+    const usernames = (result.data || []).map(u => u.username.toLowerCase());
+    console.log(`👥 フォロー中: ${usernames.length}件取得`);
+    res.json({ success: true, usernames });
+  } catch (e) {
+    console.error("❌ フォロー中取得失敗:", e.message);
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// ── Engagement: リツイート ──────────────────────────────────────────────
+app.post("/api/engagement/retweet", async (req, res) => {
+  const { tweetId } = req.body;
+  try {
+    const uid = await getMyUserId();
+    await xClient.v2.retweet(uid, tweetId);
+    console.log(`🔁 RT送信: tweetId:${tweetId}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("❌ RT失敗:", e.message);
     res.json({ success: false, message: e.message });
   }
 });
@@ -552,8 +672,9 @@ function buildEngagementHtml() {
     .acc-hint{font-size:0.73em;color:#888;line-height:1.4;}
     .btn-follow{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:10px;border:1px solid #1da1f2;color:#1da1f2;background:#fff;font-size:0.74em;cursor:pointer;text-decoration:none;transition:all 0.12s;}
     .btn-follow:hover{background:#1da1f2;color:#fff;}
+    .btn-following{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:10px;font-size:0.74em;font-weight:bold;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;cursor:default;}
     /* 中央カラム */
-    .col-center{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+    .col-center{flex:0 0 840px;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
     .center-header{padding:14px 16px;background:#fff;border-bottom:1px solid #e0e0e0;flex-shrink:0;}
     .profile-box{display:flex;gap:12px;align-items:flex-start;}
     .profile-img{width:50px;height:50px;border-radius:50%;background:#dde;object-fit:cover;flex-shrink:0;}
@@ -572,16 +693,22 @@ function buildEngagementHtml() {
     .tweet-actions{display:flex;gap:6px;margin-top:8px;}
     .btn-action{padding:3px 10px;border-radius:10px;border:1px solid #ddd;color:#555;background:#fff;font-size:0.74em;cursor:pointer;text-decoration:none;transition:all 0.12s;}
     .btn-action:hover{background:#f0f0f0;}
+    .btn-like{padding:3px 10px;border-radius:10px;border:1px solid #f4b8c8;color:#e0245e;background:#fff;font-size:0.74em;cursor:pointer;transition:all 0.12s;}
+    .btn-like:hover{background:#fce8ed;}
+    .btn-like.done{background:#e0245e;color:#fff;border-color:#e0245e;cursor:default;}
+    .btn-rt{padding:3px 10px;border-radius:10px;border:1px solid #b2dfc2;color:#17bf63;background:#fff;font-size:0.74em;cursor:pointer;transition:all 0.12s;}
+    .btn-rt:hover{background:#e6f9ed;}
+    .btn-rt.done{background:#17bf63;color:#fff;border-color:#17bf63;cursor:default;}
     .placeholder{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#ccc;font-size:0.95em;}
     /* 右カラム */
-    .col-right{width:310px;background:#fff;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+    .col-right{flex:0 0 640px;background:#fff;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;overflow:hidden;}
     .col-right-head{padding:10px 14px;font-size:0.88em;font-weight:bold;color:#555;background:#fafafa;border-bottom:1px solid #f0f0f0;flex-shrink:0;}
     .reply-panel{flex:1;overflow-y:auto;padding:12px;}
     .reply-placeholder{color:#ccc;font-size:0.84em;text-align:center;padding:40px 10px;line-height:1.8;}
     .tweet-preview{background:#f0f7ff;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:0.78em;color:#555;border-left:3px solid #1da1f2;line-height:1.5;}
     .sug-box{margin-bottom:12px;}
     .sug-label{font-size:0.76em;font-weight:bold;color:#888;margin-bottom:4px;}
-    .sug-ta{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:8px;font-size:0.83em;line-height:1.5;resize:vertical;font-family:inherit;min-height:72px;transition:border-color 0.15s;}
+    .sug-ta{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:8px;font-size:0.83em;line-height:1.5;resize:vertical;font-family:inherit;min-height:130px;transition:border-color 0.15s;}
     .sug-ta:focus{outline:none;border-color:#1da1f2;}
     .char-cnt{font-size:0.7em;color:#aaa;text-align:right;margin:2px 0 4px;}
     .char-cnt.over{color:#e53935;font-weight:bold;}
@@ -600,7 +727,7 @@ function buildEngagementHtml() {
     .manual-label{font-size:0.82em;font-weight:bold;color:#444;margin-bottom:4px;margin-top:12px;}
     .manual-input{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:8px;font-size:0.84em;font-family:inherit;box-sizing:border-box;}
     .manual-input:focus{outline:none;border-color:#1da1f2;}
-    .manual-ta{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:8px;font-size:0.84em;line-height:1.5;resize:vertical;font-family:inherit;min-height:80px;box-sizing:border-box;}
+    .manual-ta{width:100%;padding:8px 10px;border:2px solid #e0e0e0;border-radius:8px;font-size:0.84em;line-height:1.5;resize:vertical;font-family:inherit;min-height:144px;box-sizing:border-box;}
     .manual-ta:focus{outline:none;border-color:#1da1f2;}
     .btn-generate{margin-top:12px;width:100%;background:#1da1f2;color:#fff;border:none;padding:10px;border-radius:10px;font-size:0.88em;font-weight:bold;cursor:pointer;transition:background 0.15s;}
     .btn-generate:hover{background:#0d8ecf;}
@@ -654,6 +781,7 @@ const CAT_COLORS = ${colorsJson};
 let currentCat = "すべて";
 let selectedAccId = null;
 let selectedTweetId = null;
+let followingSet = new Set();
 
 const cats = ["すべて", ...new Set(TARGETS.map(t => t.cat))];
 const catFilter = document.getElementById("catFilter");
@@ -680,13 +808,25 @@ function renderList() {
       + '<div class="acc-id">@' + t.id + '</div>'
       + '<span class="acc-cat" style="background:' + color + '">' + t.cat + '</span>'
       + '<div class="acc-hint">' + t.hint + '</div>'
-      + '<a class="btn-follow" href="https://twitter.com/intent/follow?screen_name=' + t.id + '" target="_blank" onclick="event.stopPropagation()">＋ フォロー ↗</a>'
+      + (followingSet.has(t.id.toLowerCase())
+          ? '<span class="btn-following" onclick="event.stopPropagation()">✓ フォロー中</span>'
+          : '<a class="btn-follow" href="https://twitter.com/intent/follow?screen_name=' + t.id + '" target="_blank" onclick="event.stopPropagation()">＋ フォロー ↗</a>')
       + '</div>';
   }).join("");
 }
 renderList();
 
-function selectAccount(id) {
+fetch("/api/engagement/following")
+  .then(r => r.json())
+  .then(data => {
+    if (data.success && data.usernames.length) {
+      followingSet = new Set(data.usernames);
+      renderList();
+    }
+  })
+  .catch(() => {});
+
+async function selectAccount(id) {
   selectedAccId = id;
   selectedTweetId = null;
   renderList();
@@ -695,6 +835,7 @@ function selectAccount(id) {
   if (!t) return;
   const color = CAT_COLORS[t.cat] || "#546e7a";
 
+  // ── ヘッダー描画 ──
   document.getElementById("centerHeader").innerHTML =
     '<div class="acc-profile-box">'
     + '<div class="acc-profile-name">' + t.name + '</div>'
@@ -704,26 +845,118 @@ function selectAccount(id) {
     + '<a class="btn-open-x" href="https://twitter.com/' + id + '" target="_blank">𝕏 タイムラインを開く ↗</a>'
     + '</div>';
 
-  document.getElementById("tweetsList").innerHTML =
-    '<div class="manual-box">'
-    + '<div class="manual-hint">💡 <a href="https://twitter.com/' + id + '" target="_blank">@' + id + ' のタイムライン</a> を開き、リプライしたいツイートの<br>① URL と ② 本文をコピーして貼り付けてください</div>'
-    + '<div class="manual-label">① ツイートURL <small style="color:#aaa;">（送信ボタンに必要）</small></div>'
-    + '<input class="manual-input" id="tweetUrlInput" placeholder="https://twitter.com/.../status/12345..." />'
-    + '<div class="manual-label">② ツイート本文 <small style="color:#aaa;">（Claudeがリプライを生成）</small></div>'
-    + '<textarea class="manual-ta" id="tweetTextInput" placeholder="ここにツイートの本文を貼り付け..."></textarea>'
-    + '<button class="btn-generate" onclick="generateReplies()">🤖 リプライ案を生成</button>'
-    + '</div>';
-
   document.getElementById("replyPanel").innerHTML =
-    '<div class="reply-placeholder">② 本文を貼り付けて<br>「リプライ案を生成」を押してください</div>';
+    '<div class="reply-placeholder">ツイートをクリックすると<br>リプライ案を生成します</div>';
+
+  // ── ツイート自動取得（TwitterAPI.io） ──
+  document.getElementById("tweetsList").innerHTML =
+    '<div class="loading">📡 @' + id + ' のツイートを取得中…</div>';
+
+  const res = await fetch("/api/engagement/tweets", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: id, count: 10 }),
+  });
+  const data = await res.json();
+
+  // ── TWITTER_API_IO_KEY 未設定 → 手動入力フォームにフォールバック ──
+  if (!data.success && data.fallback) {
+    document.getElementById("tweetsList").innerHTML =
+      '<div class="manual-box">'
+      + '<div class="manual-hint" style="background:#fff8e1;border-color:#f9a825;">⚠️ <strong>TWITTER_API_IO_KEY</strong> が未設定のため手動入力モードです。<br>'
+      + '.env に設定すると自動取得できます。<br><br>'
+      + '💡 <a href="https://twitter.com/' + id + '" target="_blank">@' + id + ' のタイムライン</a> を開き、リプライしたいツイートの URL と本文を貼り付けてください</div>'
+      + '<div class="manual-label">① ツイートURL</div>'
+      + '<input class="manual-input" id="tweetUrlInput" placeholder="https://twitter.com/.../status/12345..." />'
+      + '<div class="manual-label">② ツイート本文</div>'
+      + '<textarea class="manual-ta" id="tweetTextInput" placeholder="ここにツイートの本文を貼り付け..."></textarea>'
+      + '<button class="btn-generate" onclick="generateReplies()">🤖 リプライ案を生成</button>'
+      + '</div>';
+    return;
+  }
+
+  // ── 取得失敗 ──
+  if (!data.success) {
+    document.getElementById("tweetsList").innerHTML =
+      '<div style="padding:20px;color:#e53935;font-size:0.85em;">❌ 取得失敗: ' + data.message + '<br><br>'
+      + '<a href="https://twitter.com/' + id + '" target="_blank" style="color:#1da1f2">𝕏 手動で確認する ↗</a></div>';
+    return;
+  }
+
+  // ── ツイートカード描画 ──
+  if (!data.tweets.length) {
+    document.getElementById("tweetsList").innerHTML =
+      '<div style="padding:20px;color:#aaa;font-size:0.85em;">ツイートが見つかりませんでした</div>';
+    return;
+  }
+
+  document.getElementById("tweetsList").innerHTML = data.tweets.map((tw, i) => {
+    const textEsc = tw.text.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+    const date    = tw.createdAt ? new Date(tw.createdAt).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "";
+    return '<div class="tweet-card" id="twcard-' + i + '" onclick="selectTweet(' + JSON.stringify(tw).replace(/"/g,"&quot;") + ', this)">'
+      + '<div class="tweet-text">' + textEsc + '</div>'
+      + '<div class="tweet-meta">'
+      + '<span class="like-c">♥ ' + tw.likes.toLocaleString() + '</span>'
+      + '<span class="rt-c">🔁 ' + tw.retweets.toLocaleString() + '</span>'
+      + '<span>💬 ' + tw.replies.toLocaleString() + '</span>'
+      + (tw.views ? '<span>👁 ' + tw.views.toLocaleString() + '</span>' : '')
+      + (date ? '<span>' + date + '</span>' : '')
+      + '</div>'
+      + '<div class="tweet-actions">'
+      + '<button class="btn-like" data-id="' + tw.id + '" data-idx="' + i + '" onclick="likeTweet(this,event)">♥ いいね</button>'
+      + '<button class="btn-rt" data-id="' + tw.id + '" data-idx="' + i + '" onclick="retweetTweet(this,event)">🔁 RT</button>'
+      + '<a class="btn-action" href="' + tw.url + '" target="_blank">𝕏 開く ↗</a>'
+      + '</div>'
+      + '</div>';
+  }).join("");
 }
 
+function selectTweet(tw, el) {
+  // カード選択状態を更新
+  document.querySelectorAll(".tweet-card").forEach(c => c.classList.remove("selected"));
+  el.classList.add("selected");
+  selectedTweetId = tw.id;
+
+  // リプライ生成パネルにプレビューを表示して即生成
+  const prevEsc = tw.text.slice(0, 80).replace(/&/g,"&amp;").replace(/</g,"&lt;") + (tw.text.length > 80 ? "…" : "");
+  document.getElementById("replyPanel").innerHTML =
+    '<div class="tweet-preview">📌 ' + prevEsc + '</div>'
+    + '<div class="loading">🤖 Claude がリプライ案を生成中…</div>';
+
+  fetch("/api/engagement/suggest", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tweetText: tw.text, authorName: selectedAccId || "unknown" }),
+  }).then(r => r.json()).then(data => {
+    if (!data.success) {
+      document.getElementById("replyPanel").innerHTML =
+        '<div class="tweet-preview">📌 ' + prevEsc + '</div>'
+        + '<div class="err-msg">❌ 生成失敗: ' + data.message + '</div>';
+      return;
+    }
+    const labels = ["① 共感・補足", "② 驚き・問いかけ", "③ 別視点"];
+    document.getElementById("replyPanel").innerHTML =
+      '<div class="tweet-preview">📌 ' + prevEsc + '</div>'
+      + data.replies.map((r, i) => {
+        const rEsc = r.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+        const tweetId = tw.id;
+        return '<div class="sug-box">'
+          + '<div class="sug-label">' + (labels[i] || "パターン" + (i+1)) + '</div>'
+          + '<textarea class="sug-ta" id="sug-' + i + '" oninput="updCnt(' + i + ')">' + rEsc + '</textarea>'
+          + '<div class="char-cnt" id="cnt-' + i + '">' + r.length + ' / 140</div>'
+          + '<div class="sug-btns">'
+          + '<button class="btn-send" id="send-' + i + '" data-idx="' + i + '" data-tweet="' + tweetId + '" onclick="sendReply(+this.dataset.idx,this.dataset.tweet)">📤 送信</button>'
+          + '<button class="btn-copy-s" onclick="copySug(' + i + ')">📋</button>'
+          + '</div></div>';
+      }).join("");
+  });
+}
+
+// 手動フォールバック用（TWITTER_API_IO_KEY 未設定時）
 async function generateReplies() {
   const tweetUrl  = (document.getElementById("tweetUrlInput")?.value || "").trim();
   const tweetText = (document.getElementById("tweetTextInput")?.value || "").trim();
   if (!tweetText) { showToast("❌ ツイート本文を入力してください"); return; }
 
-  const urlMatch = tweetUrl.match(/status\\/(\d+)/);
+  const urlMatch = tweetUrl.match(/status\\/(\\d+)/);
   selectedTweetId = urlMatch ? urlMatch[1] : null;
 
   const prevEsc = tweetText.slice(0, 70).replace(/&/g,"&amp;").replace(/</g,"&lt;") + (tweetText.length > 70 ? "…" : "");
@@ -792,6 +1025,44 @@ async function sendReply(i, tweetId) {
 function copySug(i) {
   navigator.clipboard.writeText(document.getElementById("sug-" + i).value)
     .then(() => showToast("📋 コピーしました！"));
+}
+
+async function likeTweet(btn, e) {
+  e.stopPropagation();
+  if (btn.classList.contains("done")) return;
+  const tweetId = btn.dataset.id;
+  btn.textContent = "…"; btn.disabled = true;
+  const res = await fetch("/api/engagement/like", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tweetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.textContent = "♥ 済"; btn.classList.add("done");
+    showToast("♥ いいねしました！");
+  } else {
+    btn.textContent = "♥ いいね"; btn.disabled = false;
+    showToast("❌ いいね失敗: " + data.message);
+  }
+}
+
+async function retweetTweet(btn, e) {
+  e.stopPropagation();
+  if (btn.classList.contains("done")) return;
+  const tweetId = btn.dataset.id;
+  btn.textContent = "…"; btn.disabled = true;
+  const res = await fetch("/api/engagement/retweet", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tweetId })
+  });
+  const data = await res.json();
+  if (data.success) {
+    btn.textContent = "🔁 済"; btn.classList.add("done");
+    showToast("🔁 リツイートしました！");
+  } else {
+    btn.textContent = "🔁 RT"; btn.disabled = false;
+    showToast("❌ RT失敗: " + data.message);
+  }
 }
 
 function showToast(msg) {
