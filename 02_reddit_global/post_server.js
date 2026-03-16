@@ -221,7 +221,16 @@ app.post("/api/push-github", (req, res) => {
 
     // コミット＆プッシュ
     execSync(`git -C "${worktreePath}" add -A`, { stdio: "pipe" });
-    execSync(`git -C "${worktreePath}" -c user.email="launcher@local" -c user.name="Launcher" commit -m "videos ${today}"`, { stdio: "pipe" });
+    try {
+      execSync(`git -C "${worktreePath}" -c user.email="launcher@local" -c user.name="Launcher" commit -m "videos ${today}"`, { stdio: "pipe" });
+    } catch (commitErr) {
+      const commitMsg = commitErr.stderr ? commitErr.stderr.toString() : commitErr.message;
+      if (commitMsg.includes("nothing to commit")) {
+        console.log("🎬 動画は既にpush済み（変更なし）");
+        return res.json({ success: true });
+      }
+      throw commitErr;
+    }
     execSync(`git -C "${worktreePath}" push origin videos`, { stdio: "pipe" });
     console.log(`🎬 動画 ${videoFiles.length}件 を videos ブランチにpush完了`);
 
