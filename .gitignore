@@ -8,7 +8,6 @@ node_modules/
 # ローカル生成メディアファイル（サイズが大きい）
 02_reddit_global/images/
 02_reddit_global/videos/
-02_reddit_global/thumbnails/
 02_reddit_global/shorts/
 02_reddit_global/shorts_slides/
 02_reddit_global/bgm.mp3
@@ -19,9 +18,8 @@ node_modules/
 # ランチャーHTML・テキストログ（ローカル専用）
 02_reddit_global/posts/
 
-# Shortsコンテンツ（スクリプト内で自動生成するので不要）
-02_reddit_global/temp/shorts_content_*.json
 # generated_*.json はGitHub Actionsが必要なのでコミット対象
+# shorts_content_*.json もGitHub Actionsが必要なのでコミット対象
 
 # temp/approved_*.json はコミットする（ランチャーで承認したものだけ）
 

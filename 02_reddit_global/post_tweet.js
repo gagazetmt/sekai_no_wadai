@@ -16,7 +16,7 @@ const SCHEDULE_TIMES = [
 ];
 
 // 時間の許容誤差（分）: GitHub Actionsのcronは数分遅れることがある
-const TOLERANCE_MINUTES = 12;
+const TOLERANCE_MINUTES = 5;
 
 async function main() {
   // 現在のJST時刻を取得
@@ -85,11 +85,20 @@ async function main() {
     accessSecret: process.env.X_ACCESS_TOKEN_SECRET,
   });
 
-  // 動画ファイルの確認・アップロード（videoPathフィールド優先、なければ日付+番号で構築）
+  // メディア（動画 or 画像）アップロード
   let tweetParams = { text: post.text };
+
+  // 動画: videoPathフィールド優先、なければ videos/ フォルダから構築
   const videoPath = post.videoPath && fs.existsSync(post.videoPath)
     ? post.videoPath
     : path.join(__dirname, "videos", `${jstDateStr}_${post.postNum}.mp4`);
+
+  // 画像: thumbPathからファイル名のみ取り出してリポジトリ内の thumbnails/ を参照
+  const thumbFile = post.thumbPath ? path.basename(post.thumbPath) : null;
+  const thumbRepoPath = thumbFile
+    ? path.join(__dirname, "thumbnails", thumbFile)
+    : null;
+
   if (fs.existsSync(videoPath)) {
     console.log(`\n🎬 動画をアップロード中: ${videoPath}`);
     try {
@@ -97,8 +106,21 @@ async function main() {
       tweetParams.media = { media_ids: [mediaId] };
       console.log(`✅ 動画アップロード完了 (mediaId: ${mediaId})`);
     } catch (mediaErr) {
-      console.log(`⚠️ 動画アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+      console.log(`⚠️ 動画アップロード失敗: ${mediaErr.message}`);
     }
+  } else if (thumbRepoPath && fs.existsSync(thumbRepoPath)) {
+    console.log(`\n🖼️  画像をアップロード中: ${thumbRepoPath}`);
+    try {
+      const mediaId = await xClient.v1.uploadMedia(thumbRepoPath, { mimeType: "image/png" });
+      tweetParams.media = { media_ids: [mediaId] };
+      console.log(`✅ 画像アップロード完了 (mediaId: ${mediaId})`);
+    } catch (mediaErr) {
+      console.log(`⚠️ 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+    }
+  } else {
+    console.log(`\n📝 メディアなし（テキストのみ）`);
+    console.log(`   動画パス: ${videoPath}`);
+    console.log(`   画像パス: ${thumbRepoPath || "なし"}`);
   }
 
   // ツイート投稿

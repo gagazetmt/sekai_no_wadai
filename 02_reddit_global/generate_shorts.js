@@ -8,9 +8,11 @@ require("dotenv").config();
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const Anthropic = require("@anthropic-ai/sdk");
 const VOICEVOX_URL = "http://localhost:50021";
+const VOICEVOX_EXE = process.env.VOICEVOX_EXE
+  || "C:\\Users\\USER\\AppData\\Local\\Programs\\VOICEVOX\\VOICEVOX.exe";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -595,6 +597,44 @@ async function generateShortsContent(genPosts, date) {
   return content;
 }
 
+// ─── VoiceVox 自動起動・終了 ───────────────────────────────────────────────
+async function startVoiceVoxIfNeeded() {
+  // 既に起動しているか確認
+  try {
+    const res = await fetch(`${VOICEVOX_URL}/version`);
+    if (res.ok) { console.log("✅ VoiceVox は起動済みです"); return false; }
+  } catch {}
+
+  // 実行ファイルが存在するか確認
+  if (!fs.existsSync(VOICEVOX_EXE)) {
+    throw new Error(`VoiceVox が見つかりません: ${VOICEVOX_EXE}\n.env に VOICEVOX_EXE を設定してください`);
+  }
+
+  console.log(`🚀 VoiceVox を起動中...`);
+  spawn(VOICEVOX_EXE, [], { detached: false, stdio: "ignore" });
+
+  // 起動待機（最大40秒）
+  process.stdout.write("  待機中");
+  for (let i = 0; i < 80; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    try {
+      const res = await fetch(`${VOICEVOX_URL}/version`);
+      if (res.ok) { console.log("\n✅ VoiceVox 起動完了"); return true; }
+    } catch {}
+    if (i % 4 === 0) process.stdout.write(".");
+  }
+  throw new Error("VoiceVox の起動がタイムアウトしました（40秒）");
+}
+
+function stopVoiceVox() {
+  try {
+    execSync("taskkill /IM VOICEVOX.exe /F", { stdio: "ignore" });
+    console.log("🔴 VoiceVox を終了しました");
+  } catch {
+    console.log("⚠️  VoiceVox の終了に失敗しました（既に終了済みかもしれません）");
+  }
+}
+
 // ─── メイン ──────────────────────────────────────────────────────────────
 async function main() {
   const speakerNames = { 3: "ずんだもん", 8: "春日部つむぎ", 2: "四国めたん", 9: "波音リツ" };
@@ -611,21 +651,13 @@ async function main() {
     console.log(`✅ shorts_content_${today}.json を読み込みます`);
   }
 
-  // ── TTS 確認 ─────────────────────────────────────────────────────────────
+  // ── TTS 確認 / VoiceVox 自動起動 ────────────────────────────────────────
+  let voiceVoxLaunchedByUs = false;
   if (process.env.OPENAI_API_KEY) {
     console.log(`🎙️  TTS: OpenAI TTS (nova)`);
   } else {
-    console.log(`🎙️  TTS: VoiceVox (fallback) / 声: ${speakerLabel} / 速度: ${SPEED_SCALE}`);
-    try {
-      const vvRes = await fetch(`${VOICEVOX_URL}/version`);
-      if (!vvRes.ok) throw new Error();
-      const vvVer = await vvRes.json();
-      console.log(`✅ VoiceVox v${vvVer} 接続確認`);
-    } catch {
-      console.error(`\n❌ VoiceVox に接続できません（${VOICEVOX_URL}）`);
-      console.error(`   VoiceVox を起動するか .env に OPENAI_API_KEY を設定してください\n`);
-      process.exit(1);
-    }
+    console.log(`🎙️  TTS: VoiceVox / 声: ${speakerLabel} / 速度: ${SPEED_SCALE}`);
+    voiceVoxLaunchedByUs = await startVoiceVoxIfNeeded();
   }
 
   ensureBeep();
@@ -804,6 +836,7 @@ async function main() {
   await browser.close();
   console.log(`\n🎉 全${posts.length}本の動画生成完了！`);
   console.log(`📁 保存先: ${SHORTS_DIR}`);
+  if (voiceVoxLaunchedByUs) stopVoiceVox();
   if (!fs.existsSync(BGM_PATH)) {
     console.log(`\n💡 BGMを追加するには "${BGM_PATH}" にMP3ファイルを置いてください！`);
   }

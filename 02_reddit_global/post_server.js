@@ -56,6 +56,7 @@ app.use("/shorts",        express.static(path.join(__dirname, "shorts")));
 app.use("/shorts_slides", express.static(path.join(__dirname, "shorts_slides")));
 app.use("/thumbnails",    express.static(path.join(__dirname, "thumbnails")));
 app.use("/videos",        express.static(path.join(__dirname, "videos")));
+app.use("/emotions",      express.static(path.join(__dirname, "assets", "emotions")));
 
 const xClient = new TwitterApi({
   appKey:        process.env.X_API_KEY,
@@ -718,7 +719,11 @@ app.get("/api/shorts-content", async (req, res) => {
   const contentPath = path.join(TEMP_DIR, `shorts_content_${date}.json`);
   if (fs.existsSync(contentPath)) {
     const content = JSON.parse(fs.readFileSync(contentPath, "utf8"));
-    return res.json({ success: true, date, content, generated: false });
+    const slidesDir = path.join(__dirname, "shorts_slides");
+    const slidesExists = (content.posts || []).map((_, i) =>
+      fs.existsSync(path.join(slidesDir, `${date}_${i + 1}`))
+    );
+    return res.json({ success: true, date, content, generated: false, slidesExists });
   }
 
   const genPath = path.join(TEMP_DIR, `generated_${date}.json`);
@@ -730,7 +735,11 @@ app.get("/api/shorts-content", async (req, res) => {
     const { posts: genPosts } = JSON.parse(fs.readFileSync(genPath, "utf8"));
     console.log(`🤖 shorts_content_${date}.json を自動生成中 (${genPosts.length}件)...`);
     const content = await generateShortsContentServer(genPosts, date);
-    res.json({ success: true, date, content, generated: true });
+    const slidesDir = path.join(__dirname, "shorts_slides");
+    const slidesExists = (content.posts || []).map((_, i) =>
+      fs.existsSync(path.join(slidesDir, `${date}_${i + 1}`))
+    );
+    res.json({ success: true, date, content, generated: true, slidesExists });
   } catch (e) {
     res.json({ success: false, message: e.message });
   }
@@ -784,59 +793,83 @@ function buildShortsLauncherHtml() {
   <title>Shorts制作ランチャー</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #0d0d1a; color: #e0e0e0; min-height: 100vh; }
-    .topbar { background: #1a1a2e; border-bottom: 1px solid #333; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
+    html, body { height: 100%; overflow: hidden; font-family: -apple-system, "Segoe UI", sans-serif; background: #0d0d1a; color: #e0e0e0; }
+    .topbar { background: #1a1a2e; border-bottom: 1px solid #333; padding: 10px 20px; display: flex; align-items: center; gap: 16px; height: 48px; flex-shrink: 0; }
     .topbar h1 { font-size: 1.1em; font-weight: 900; color: #ff6b6b; white-space: nowrap; }
     .nav { display: flex; gap: 8px; margin-left: auto; }
     .nav a { padding: 6px 14px; border-radius: 16px; text-decoration: none; font-size: 0.82em; font-weight: bold; color: #999; border: 1px solid #333; }
     .nav a:hover { color: #fff; border-color: #666; }
     .nav a.active { background: #ff4444; color: #fff; border-color: #ff4444; }
-    .toolbar { background: #16213e; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #333; flex-wrap: wrap; }
+    .toolbar { background: #16213e; padding: 10px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #333; height: 52px; flex-shrink: 0; }
     .date-badge { background: #0f3460; color: #4fc3f7; padding: 5px 14px; border-radius: 12px; font-size: 0.9em; font-weight: bold; }
     .status-msg { font-size: 0.85em; color: #aaa; flex: 1; }
-    .btn-push { background: linear-gradient(135deg, #ff4444, #ff6b6b); color: #fff; border: none; padding: 10px 24px; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; transition: all 0.2s; }
-    .btn-push:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,68,68,0.4); }
-    .btn-push:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
-    .content { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .btn-push { background: linear-gradient(135deg, #ff4444, #ff6b6b); color: #fff; border: none; padding: 8px 20px; border-radius: 20px; font-size: 0.9em; font-weight: bold; cursor: pointer; }
+    .btn-push:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* フルスクリーンスクロールコンテナ */
+    .content { height: calc(100vh - 100px); overflow-y: scroll; scroll-snap-type: y mandatory; }
     .loading { text-align: center; padding: 60px 20px; color: #4fc3f7; font-size: 1.1em; }
     .loading .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #4fc3f7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .error-box { background: #2a1a1a; border: 1px solid #ff4444; border-radius: 8px; padding: 20px; color: #ff8888; text-align: center; }
-    .post-card { background: #16213e; border: 1px solid #2a3a5e; border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
-    .post-header { background: linear-gradient(135deg, #1a1a2e, #0f3460); padding: 12px 18px; display: flex; align-items: center; gap: 12px; }
+
+    /* 1件=画面全体 */
+    .post-card { height: calc(100vh - 100px); scroll-snap-align: start; display: flex; flex-direction: column; background: #16213e; border-bottom: 3px solid #0d0d1a; overflow: hidden; }
+    .post-header { background: linear-gradient(135deg, #1a1a2e, #0f3460); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; height: 52px; }
     .post-num { background: #ff4444; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9em; flex-shrink: 0; }
     .catch-row { display: flex; gap: 8px; flex: 1; }
     .catch-input { flex: 1; background: #0d1b3e; border: 1px solid #3a4a6e; border-radius: 8px; padding: 6px 10px; color: #fff; font-size: 0.9em; font-weight: bold; }
     .catch-input:focus { outline: none; border-color: #4fc3f7; }
-    .catch-label { font-size: 0.72em; color: #4fc3f7; align-self: flex-end; padding-bottom: 6px; white-space: nowrap; }
-    .slides-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px; }
-    @media (max-width: 900px) { .slides-grid { grid-template-columns: repeat(2, 1fr); } }
-    .slide-card { background: #0d1b3e; border: 1px solid #2a3a5e; border-radius: 10px; overflow: hidden; }
-    .slide-preview { background: linear-gradient(180deg, #0a0a1a 0%, #1a0a2e 100%); aspect-ratio: 9/16; max-height: 200px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; text-align: center; }
-    .slide-preview img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; border-radius: 0; }
-    .slide-num-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #4fc3f7; font-size: 0.65em; font-weight: bold; padding: 2px 7px; border-radius: 8px; z-index: 1; }
-    .slide-subtitle-preview { font-size: 0.75em; font-weight: bold; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); white-space: pre-line; line-height: 1.4; z-index: 1; }
-    .emotion-badge-preview { position: absolute; bottom: 6px; right: 6px; font-size: 0.6em; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 1; }
+    .catch-label { font-size: 0.72em; color: #4fc3f7; align-self: center; white-space: nowrap; }
+
+    /* スライドグリッド（横並び・スクロール可） */
+    .slides-grid { display: flex; gap: 8px; padding: 8px 10px; flex: 1; min-height: 0; overflow-x: auto; }
+    .slide-card { flex: 1; min-width: 0; background: #0d1b3e; border: 1px solid #2a3a5e; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* スライドトップ（サムネ＋感情img横並び） */
+    .slide-top { display: flex; gap: 5px; padding: 6px; flex-shrink: 0; align-items: flex-start; flex: 1; min-height: 0; overflow: hidden; }
+
+    /* サムネイルプレビュー */
+    .slide-preview-wrap { position: relative; flex-shrink: 0; aspect-ratio: 9/16; height: calc(100vh - 410px); background: linear-gradient(180deg, #0a0a1a 0%, #1a0a2e 100%); border-radius: 8px; overflow: hidden; cursor: pointer; }
+    .slide-preview-img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
+    .slide-preview-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #444; font-size: 0.65em; text-align: center; pointer-events: none; line-height: 1.8; }
+    .slide-num-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.75); color: #4fc3f7; font-size: 0.65em; font-weight: bold; padding: 2px 7px; border-radius: 8px; z-index: 2; pointer-events: none; }
+    .slide-subtitle-preview { position: absolute; bottom: 32px; left: 0; right: 0; font-size: 0.75em; font-weight: bold; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.9); white-space: pre-line; line-height: 1.4; z-index: 2; text-align: center; padding: 0 6px; pointer-events: none; }
+    .emotion-badge-preview { position: absolute; bottom: 6px; right: 6px; font-size: 0.6em; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 2; pointer-events: none; }
     .em-SURPRISE { background: #ff6b6b; color: #fff; }
-    .em-HAPPY { background: #ffd93d; color: #333; }
-    .em-THINK { background: #4fc3f7; color: #000; }
-    .em-SHOCK { background: #ff4444; color: #fff; }
-    .em-SAD { background: #7986cb; color: #fff; }
-    .em-EXCITED { background: #ff9800; color: #fff; }
-    .slide-fields { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .field-label { font-size: 0.7em; color: #888; font-weight: bold; margin-bottom: 2px; }
-    .field-ta { width: 100%; background: #0a0a1a; border: 1px solid #2a3a5e; border-radius: 6px; padding: 6px 8px; color: #e0e0e0; font-size: 0.78em; line-height: 1.5; resize: vertical; font-family: inherit; }
+    .em-HAPPY    { background: #ffd93d; color: #333; }
+    .em-THINK    { background: #4fc3f7; color: #000; }
+    .em-SHOCK    { background: #ff4444; color: #fff; }
+    .em-SAD      { background: #7986cb; color: #fff; }
+    .em-EXCITED  { background: #ff9800; color: #fff; }
+
+    /* 動画再生オーバーレイ */
+    .play-btn-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 36px; height: 36px; background: rgba(0,0,0,0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1em; z-index: 3; transition: background 0.2s; user-select: none; }
+    .play-btn-overlay:hover { background: rgba(255,255,255,0.25); }
+    .slide-preview-wrap video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 4; }
+
+    /* 感情画像サイドパネル */
+    .emotion-side { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; width: 58px; }
+    .emotion-side-label { font-size: 0.58em; color: #666; text-align: center; }
+    .emotion-img { width: 54px; height: 54px; object-fit: contain; border-radius: 6px; border: 1px solid #2a3a5e; background: #0a0a1a; }
+    .emotion-narr { width: 54px; height: 24px; margin-top: 2px; }
+
+    /* スライドフィールド */
+    .slide-fields { padding: 6px 8px; display: flex; flex-direction: column; gap: 5px; border-top: 1px solid #2a3a5e; flex-shrink: 0; max-height: 280px; overflow-y: auto; }
+    .field-label { font-size: 0.68em; color: #888; font-weight: bold; }
+    .field-ta { width: 100%; background: #0a0a1a; border: 1px solid #2a3a5e; border-radius: 6px; padding: 5px 7px; color: #e0e0e0; font-size: 0.75em; line-height: 1.4; resize: vertical; font-family: inherit; }
     .field-ta:focus { outline: none; border-color: #4fc3f7; }
-    .field-select { width: 100%; background: #0a0a1a; border: 1px solid #2a3a5e; border-radius: 6px; padding: 5px 8px; color: #e0e0e0; font-size: 0.78em; }
+    .field-select { width: 100%; background: #0a0a1a; border: 1px solid #2a3a5e; border-radius: 6px; padding: 4px 7px; color: #e0e0e0; font-size: 0.75em; }
     .field-select:focus { outline: none; border-color: #4fc3f7; }
+    .narr-audio { width: 100%; height: 26px; margin-top: 2px; }
+
+    .actions-bar { padding: 8px 14px; background: #0f0f1a; border-top: 1px solid #2a3a5e; display: flex; gap: 10px; align-items: center; flex-shrink: 0; height: 46px; }
+    .btn-save-local { background: #333; color: #ccc; border: 1px solid #555; padding: 5px 14px; border-radius: 14px; font-size: 0.8em; cursor: pointer; }
+    .btn-save-local:hover { background: #444; }
     .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 24px; border-radius: 20px; font-size: 0.88em; z-index: 999; display: none; }
     .toast.ok { background: #27ae60; }
     .toast.err { background: #e74c3c; }
-    .actions-bar { padding: 12px 16px; background: #0f0f1a; border-top: 1px solid #2a3a5e; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .btn-regen { background: #0f3460; color: #4fc3f7; border: 1px solid #4fc3f7; padding: 7px 14px; border-radius: 14px; font-size: 0.8em; cursor: pointer; }
-    .btn-regen:hover { background: #1a4a80; }
-    .btn-save-local { background: #333; color: #ccc; border: 1px solid #555; padding: 7px 14px; border-radius: 14px; font-size: 0.8em; cursor: pointer; }
-    .btn-save-local:hover { background: #444; }
+    .scroll-hint { position: fixed; bottom: 70px; right: 20px; background: rgba(79,195,247,0.12); border: 1px solid #4fc3f7; color: #4fc3f7; padding: 5px 12px; border-radius: 14px; font-size: 0.75em; pointer-events: none; z-index: 100; transition: opacity 0.5s; }
   </style>
 </head>
 <body>
@@ -857,98 +890,163 @@ function buildShortsLauncherHtml() {
   <div class="loading"><div class="spinner"></div>コンテンツを準備しています...<br><small style="color:#666;margin-top:8px;display:block">初回はClaudeがコンテンツを自動生成します（30秒〜1分）</small></div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="scroll-hint" id="scrollHint">↑↓ スクロールで切り替え</div>
 
 <script>
 const EMOTION_OPTIONS = ${JSON.stringify(EMOTION_OPTIONS)};
+// 感情タグ → emotions/ フォルダの画像ファイル名マッピング（小文字）
+const EMOTION_IMG_MAP = { SURPRISE:"surprise", HAPPY:"happy", THINK:"think", SHOCK:"surprise", SAD:"sad", EXCITED:"happy", ANGRY:"angry" };
+// スライドインデックス → narr ファイル番号（s03_emotionがnarr_3のためsi=3はnarr_4）
+const NARR_IDX = [0, 1, 2, 4];
 let currentDate = null;
 let currentPosts = null;
+let currentSlidesExists = [];
 
 async function loadContent() {
   const res = await fetch("/api/shorts-content");
   const data = await res.json();
   if (!data.success) {
-    document.getElementById("mainContent").innerHTML =
-      '<div class="error-box">❌ ' + data.message + '</div>';
+    document.getElementById("mainContent").innerHTML = '<div class="error-box">❌ ' + data.message + '</div>';
     document.getElementById("statusMsg").textContent = "エラー";
     return;
   }
   currentDate = data.date;
   currentPosts = data.content.posts;
+  currentSlidesExists = data.slidesExists || [];
   document.getElementById("dateBadge").textContent = data.date;
   document.getElementById("statusMsg").textContent =
     data.generated ? "✨ Claude が自動生成しました。内容を確認・編集してPushしてください" :
     "✅ 保存済みコンテンツを読み込みました。編集後にPushしてください";
   document.getElementById("btnPush").disabled = false;
   renderPosts();
+  setTimeout(() => { const h = document.getElementById("scrollHint"); if (h) h.style.opacity = "0"; }, 4000);
 }
 
 function renderPosts() {
-  const html = currentPosts.map((post, idx) => renderPostCard(post, idx)).join("");
-  document.getElementById("mainContent").innerHTML = html;
+  document.getElementById("mainContent").innerHTML = currentPosts.map((post, idx) => renderPostCard(post, idx)).join("");
 }
 
 function renderPostCard(post, idx) {
   const num = idx + 1;
-  const slides = ["slide1","slide2","slide3","slide4"];
+  const slideKeys  = ["slide1","slide2","slide3","slide4"];
   const slideNames = ["①導入","②詳細","③反応","④締め"];
   const slideCodes = ["s00_title","s01_content1","s02_content2","s04_cta"];
+  const hasEmotion = [true, true, true, false];
 
-  const slideCards = slides.map((sk, si) => {
-    const slide = post[sk] || {};
-    const imgPath = "/shorts_slides/" + currentDate + "_" + num + "/" + slideCodes[si] + ".png";
-    const emotion = slide.emotion || "";
-    const emClass = emotion ? "em-" + emotion : "";
+  const slideCards = slideKeys.map((sk, si) => {
+    const slide    = post[sk] || {};
+    const emotion  = slide.emotion || "";
+    const emClass  = emotion ? "em-" + emotion : "";
+    const baseDir  = "/shorts_slides/" + currentDate + "_" + num + "/";
+    const imgPath  = baseDir + slideCodes[si] + ".png";
+    const vidPath  = baseDir + slideCodes[si] + ".mp4";
+    const narrPath = baseDir + "narr_" + NARR_IDX[si] + ".wav";
+    const emotNarrPath = baseDir + "narr_3.wav";
+    const emotImgFile  = EMOTION_IMG_MAP[emotion] || "think";
+    const emotImgPath  = "/emotions/" + emotImgFile + ".png";
+
+    const slidesReady  = !!currentSlidesExists[idx];
     const emotionBadge = emotion ? '<span class="emotion-badge-preview ' + emClass + '">' + emotion + '</span>' : "";
-    const emotionSelect = si < 3
-      ? '<div class="field-label">感情</div><select class="field-select" id="post' + idx + '_' + sk + '_emotion" onchange="syncPreview(' + idx + ',' + si + ')">' +
-        EMOTION_OPTIONS.map(e => '<option value="' + e + '"' + (e === emotion ? " selected" : "") + '>' + e + '</option>').join("") +
-        '</select>'
+
+    const emotionSide = hasEmotion[si]
+      ? '<div class="emotion-side" id="emotSide_' + idx + '_' + si + '">'
+          + '<div class="emotion-side-label">感情img</div>'
+          + '<img class="emotion-img" id="emotImg_' + idx + '_' + si + '" src="' + emotImgPath + '" title="' + emotion + '" onerror="this.style.opacity=0.2">'
+          + (si === 2
+            ? '<div class="emotion-side-label" style="margin-top:4px">感情音声</div>'
+              + '<audio class="emotion-narr" controls src="' + emotNarrPath + '" onerror="this.remove()"></audio>'
+            : '')
+        + '</div>'
+      : '';
+
+    const emotionSelect = hasEmotion[si]
+      ? '<div class="field-label">感情</div><select class="field-select" id="post' + idx + '_' + sk + '_emotion" onchange="syncPreview(' + idx + ',' + si + ')">'
+          + EMOTION_OPTIONS.map(e => '<option value="' + e + '"' + (e === emotion ? " selected" : "") + '>' + e + '</option>').join("")
+          + '</select>'
       : "";
 
-    const subtitleDisplay = (slide.subtitle || "").replace(/\\n/g, "\\n");
-
     return '<div class="slide-card">'
-      + '<div class="slide-preview" id="preview_' + idx + '_' + si + '">'
-      + '<img src="' + imgPath + '" onerror="this.remove()">'
-      + '<span class="slide-num-badge">' + slideNames[si] + '</span>'
-      + '<div class="slide-subtitle-preview" id="subtitlePrev_' + idx + '_' + si + '">' + (slide.subtitle || "").replace(/</g,"&lt;") + '</div>'
-      + emotionBadge
+      + '<div class="slide-top">'
+        + '<div class="slide-preview-wrap" id="previewWrap_' + idx + '_' + si + '">'
+          + (slidesReady ? '<img class="slide-preview-img" src="' + imgPath + '">' : '')
+          + '<div class="slide-preview-placeholder">' + (slidesReady ? '' : '📸<br>未生成') + '</div>'
+          + '<span class="slide-num-badge">' + slideNames[si] + '</span>'
+          + '<div class="slide-subtitle-preview" id="subtitlePrev_' + idx + '_' + si + '">' + (slide.subtitle || "").replace(/</g,"&lt;") + '</div>'
+          + emotionBadge
+          + '<div class="play-btn-overlay" data-idx="' + idx + '" data-si="' + si + '" data-vid="' + vidPath + '" onclick="toggleVideo(this)">▶</div>'
+        + '</div>'
+        + emotionSide
       + '</div>'
       + '<div class="slide-fields">'
-      + '<div class="field-label">字幕（改行=\\n）</div>'
-      + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_subtitle" rows="2" oninput="syncPreview(' + idx + ',' + si + ')">' + (slide.subtitle || "") + '</textarea>'
-      + '<div class="field-label">ナレーション</div>'
-      + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_narration" rows="3">' + (slide.narration || "") + '</textarea>'
-      + emotionSelect
-      + '</div></div>';
+        + '<div class="field-label">字幕（改行=\\n）</div>'
+        + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_subtitle" rows="4" oninput="syncPreview(' + idx + ',' + si + ')">' + (slide.subtitle || "") + '</textarea>'
+        + '<div class="field-label">ナレーション</div>'
+        + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_narration" rows="4">' + (slide.narration || "") + '</textarea>'
+        + '<audio class="narr-audio" controls src="' + narrPath + '" onerror="this.remove()"></audio>'
+        + emotionSelect
+      + '</div>'
+      + '</div>';
   }).join("");
 
   return '<div class="post-card" id="postcard_' + idx + '">'
     + '<div class="post-header">'
-    + '<div class="post-num">' + num + '</div>'
-    + '<div class="catch-row">'
-    + '<span class="catch-label">キャッチ①</span>'
-    + '<input class="catch-input" id="post' + idx + '_catchLine1" value="' + (post.catchLine1 || "").replace(/"/g,"&quot;") + '">'
-    + '<span class="catch-label">キャッチ②</span>'
-    + '<input class="catch-input" id="post' + idx + '_catchLine2" value="' + (post.catchLine2 || "").replace(/"/g,"&quot;") + '">'
-    + '</div>'
+      + '<div class="post-num">' + num + '</div>'
+      + '<div class="catch-row">'
+        + '<span class="catch-label">キャッチ①</span>'
+        + '<input class="catch-input" id="post' + idx + '_catchLine1" value="' + (post.catchLine1 || "").replace(/"/g,"&quot;") + '">'
+        + '<span class="catch-label">キャッチ②</span>'
+        + '<input class="catch-input" id="post' + idx + '_catchLine2" value="' + (post.catchLine2 || "").replace(/"/g,"&quot;") + '">'
+      + '</div>'
     + '</div>'
     + '<div class="slides-grid">' + slideCards + '</div>'
     + '<div class="actions-bar">'
-    + '<button class="btn-save-local" onclick="savePost(' + idx + ')">💾 この投稿を保存</button>'
+      + '<button class="btn-save-local" onclick="savePost(' + idx + ')">💾 この投稿を保存</button>'
     + '</div>'
     + '</div>';
 }
 
 function syncPreview(idx, si) {
-  const sk = "slide" + (si + 1);
+  const sk       = "slide" + (si + 1);
   const subtitle = document.getElementById("post" + idx + "_" + sk + "_subtitle")?.value || "";
+  const emotion  = document.getElementById("post" + idx + "_" + sk + "_emotion")?.value || "";
+
+  // 字幕プレビュー更新
   const prev = document.getElementById("subtitlePrev_" + idx + "_" + si);
   if (prev) prev.textContent = subtitle;
+
+  // 感情バッジ更新
+  const wrap = document.getElementById("previewWrap_" + idx + "_" + si);
+  if (wrap) {
+    let badge = wrap.querySelector(".emotion-badge-preview");
+    if (!badge && emotion) { badge = document.createElement("span"); wrap.appendChild(badge); }
+    if (badge) { badge.textContent = emotion; badge.className = "emotion-badge-preview em-" + emotion; }
+  }
+
+  // 感情img更新
+  const img = document.getElementById("emotImg_" + idx + "_" + si);
+  if (img && emotion) {
+    img.src = "/emotions/" + (EMOTION_IMG_MAP[emotion] || "think") + ".png";
+    img.title = emotion;
+    img.style.opacity = "";
+  }
+}
+
+function toggleVideo(btn) {
+  const idx     = btn.dataset.idx;
+  const si      = btn.dataset.si;
+  const vidPath = btn.dataset.vid;
+  const wrap    = document.getElementById("previewWrap_" + idx + "_" + si);
+  const existing = wrap.querySelector("video");
+  if (existing) { existing.remove(); btn.textContent = "▶"; return; }
+  const video = document.createElement("video");
+  video.src = vidPath; video.autoplay = true; video.loop = true; video.controls = true; video.playsInline = true;
+  video.onerror = () => { video.remove(); btn.textContent = "▶(未生成)"; };
+  wrap.appendChild(video);
+  btn.textContent = "⏹";
 }
 
 function collectAll() {
-  const posts = currentPosts.map((_, idx) => {
+  return currentPosts.map((_, idx) => {
     const slides = {};
     ["slide1","slide2","slide3","slide4"].forEach((sk, si) => {
       slides[sk] = {
@@ -964,15 +1062,11 @@ function collectAll() {
       ...slides,
     };
   });
-  return posts;
 }
 
 async function savePost(idx) {
   currentPosts = collectAll();
-  const res = await fetch("/api/shorts-content", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date: currentDate, posts: currentPosts }),
-  });
+  const res  = await fetch("/api/shorts-content", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: currentDate, posts: currentPosts }) });
   const data = await res.json();
   showToast(data.success ? "💾 保存しました" : "❌ " + data.message, data.success);
 }
@@ -980,25 +1074,13 @@ async function savePost(idx) {
 async function pushToGitHub() {
   const btn = document.getElementById("btnPush");
   btn.disabled = true; btn.textContent = "⏳ 保存 & Push中...";
-  // まずローカル保存
   currentPosts = collectAll();
-  const saveRes = await fetch("/api/shorts-content", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date: currentDate, posts: currentPosts }),
-  });
-  if (!(await saveRes.json()).success) {
-    btn.disabled = false; btn.textContent = "🚀 GitHubにPush → 動画生成開始";
-    showToast("❌ 保存に失敗しました", false); return;
-  }
-  // Push
-  const pushRes = await fetch("/api/push-shorts", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date: currentDate }),
-  });
+  const saveRes = await fetch("/api/shorts-content", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: currentDate, posts: currentPosts }) });
+  if (!(await saveRes.json()).success) { btn.disabled = false; btn.textContent = "🚀 GitHubにPush → 動画生成開始"; showToast("❌ 保存に失敗しました", false); return; }
+  const pushRes  = await fetch("/api/push-shorts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: currentDate }) });
   const pushData = await pushRes.json();
   if (pushData.success) {
-    document.getElementById("statusMsg").innerHTML =
-      '✅ Push完了！<a href="https://github.com/gagazetmt/sekai_no_wadai/actions" target="_blank" style="color:#4fc3f7">GitHub Actions で動画生成 →</a>';
+    document.getElementById("statusMsg").innerHTML = '✅ Push完了！<a href="https://github.com/gagazetmt/sekai_no_wadai/actions" target="_blank" style="color:#4fc3f7">GitHub Actions で動画生成 →</a>';
     btn.textContent = "✅ Push完了";
     showToast("🚀 GitHubにPushしました！", true);
   } else {
