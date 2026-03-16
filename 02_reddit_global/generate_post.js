@@ -522,9 +522,7 @@ function generateHtml(today, posts) {
       background: transparent; color: #0f1419; transition: background 0.15s;
     }
     .nav-btn:hover { background: #e7e9ea; }
-    .nav-btn.yt { border-color: #ff0000; color: #ff0000; }
-    .nav-btn.yt:hover { background: rgba(255,0,0,0.07); }
-    .nav-btn.shutdown { border-color: #f4212e; color: #f4212e; }
+.nav-btn.shutdown { border-color: #f4212e; color: #f4212e; }
     .nav-btn.shutdown:hover { background: rgba(244,33,46,0.07); }
     .nav-btn.github { background: #0f1419; color: #fff; border-color: #0f1419; }
     .nav-btn.github:hover { background: #272c30; }
@@ -1012,7 +1010,6 @@ function generateHtml(today, posts) {
       <span class="top-date">${today}</span>
     </div>
     <div class="top-bar-right">
-      <a href="http://localhost:3000/youtube" target="_blank" class="nav-btn yt">▶ YouTube</a>
       <button id="push-btn" onclick="pushGitHub()" class="nav-btn github">↑ GitHubにPush</button>
       <button onclick="shutdownServer()" class="nav-btn shutdown">停止</button>
     </div>
