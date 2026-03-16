@@ -820,7 +820,7 @@ function generateHtml(today, posts) {
         + '<div class="approved-day-header">'
         + '<span class="approved-date">' + day.date + '</span>'
         + '<span class="approved-count">（' + day.posts.length + '件）</span>'
-        + '<button class="btn-del-day" onclick="deleteDay(\'' + day.date + '\')">🗑️ 全削除</button>'
+        + '<button class="btn-del-day" data-date="' + day.date + '" onclick="deleteDay(this.dataset.date)">🗑️ 全削除</button>'
         + '<button class="btn-push-after" onclick="pushGitHub()">↑ Push</button>'
         + '</div>'
         + '<div class="approved-posts">'
@@ -828,7 +828,7 @@ function generateHtml(today, posts) {
           '<div class="approved-post">'
           + '<span class="ap-time">' + p.scheduleTime + '</span>'
           + '<span class="ap-text">' + p.text.replace(/\n/g, ' ').replace(/</g, '&lt;').slice(0, 60) + '…</span>'
-          + '<button class="btn-del-post" onclick="deletePost(\'' + day.date + '\',' + p.postNum + ')">✕</button>'
+          + '<button class="btn-del-post" data-date="' + day.date + '" data-num="' + p.postNum + '" onclick="deletePost(this.dataset.date, +this.dataset.num)">✕</button>'
           + '</div>'
         ).join('')
         + '</div></div>'
@@ -844,7 +844,7 @@ function generateHtml(today, posts) {
     }
 
     async function deleteDay(date) {
-      if (!confirm(date + ' の投稿を全て削除しますか？\n削除後「↑ Push」を押してGitHubに反映してください。')) return;
+      if (!confirm(date + ' の投稿を全て削除しますか？\\n削除後「↑ Push」を押してGitHubに反映してください。')) return;
       const res = await fetch('http://localhost:3000/api/delete-approved', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ date })
@@ -1012,7 +1012,7 @@ async function main() {
   console.log("━".repeat(50));
 
   // 保存ファイルの準備
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); // JST
   const browser = await puppeteer.launch({ headless: true });
   const saveFile = path.join(POSTS_DIR, `${today}.txt`);
   const lines = [
@@ -1140,6 +1140,22 @@ async function main() {
   const genFile = path.join(TEMP_DIR, `generated_${today}.json`);
   fs.writeFileSync(genFile, JSON.stringify(genJson, null, 2), "utf8");
   console.log(`✅ Shortsデータを保存しました: ${genFile}`);
+
+  // generated JSONをすぐにGitHubへ自動push（承認・push忘れでも投稿できるようにフォールバック用）
+  try {
+    const repoRoot = path.join(__dirname, "..");
+    execSync(`git -C "${repoRoot}" add 02_reddit_global/temp/generated_${today}.json`, { stdio: "pipe" });
+    execSync(`git -C "${repoRoot}" commit -m "auto: generated_${today}.json"`, { stdio: "pipe" });
+    execSync(`git -C "${repoRoot}" push origin main`, { stdio: "pipe" });
+    console.log(`✅ generated_${today}.json を GitHub に自動push完了`);
+  } catch (e) {
+    const msg = e.stderr ? e.stderr.toString() : e.message;
+    if (msg.includes("nothing to commit")) {
+      console.log("GitHub: 変更なし（既にpush済み）");
+    } else {
+      console.log(`⚠️ GitHub auto-push 失敗（ランチャーから手動pushしてください）: ${msg}`);
+    }
+  }
 
   console.log("\n👉 HTMLファイルをブラウザで開いて「Xで開く」ボタンを押してください！");
 }

@@ -54,23 +54,36 @@ async function main() {
   const scheduledTime = SCHEDULE_TIMES[postIndex];
   console.log(`→ 投稿${postIndex + 1} (予定: ${scheduledTime}) にマッチしました`);
 
-  // 今日の承認済みJSONファイルを読む
+  // 今日の承認済みJSONファイルを読む（なければ生成済みJSONにフォールバック）
   const TEMP_DIR = path.join(__dirname, "temp");
-  const jsonPath = path.join(TEMP_DIR, `approved_${jstDateStr}.json`);
+  const approvedPath = path.join(TEMP_DIR, `approved_${jstDateStr}.json`);
+  const generatedPath = path.join(TEMP_DIR, `generated_${jstDateStr}.json`);
 
-  if (!fs.existsSync(jsonPath)) {
-    console.log(`⏭️ 承認済みJSONが見つかりません: ${jsonPath}`);
-    console.log("今日の投稿はスキップします。");
+  let posts;
+  if (fs.existsSync(approvedPath)) {
+    console.log(`✅ 承認済みJSON を使用: approved_${jstDateStr}.json`);
+    posts = JSON.parse(fs.readFileSync(approvedPath, "utf8")).posts;
+  } else if (fs.existsSync(generatedPath)) {
+    console.log(`⚠️ 承認済みJSONなし → 生成済みJSON にフォールバック: generated_${jstDateStr}.json`);
+    const raw = JSON.parse(fs.readFileSync(generatedPath, "utf8")).posts;
+    // generated形式(postText) → approved形式(text) に変換
+    posts = raw.map((p, i) => ({
+      postNum: i + 1,
+      scheduleTime: p.scheduleTime,
+      text: p.postText,
+      sourceUrl: p.sourceUrl,
+      thumbPath: p.savedImagePath || null,
+    }));
+  } else {
+    console.log(`⏭️ 今日の投稿データが見つかりません（approved/generated どちらもなし）。スキップします。`);
     process.exit(0);
   }
-
-  const { posts } = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
 
   // scheduleTime で照合
   const post = posts.find(p => p.scheduleTime === scheduledTime);
 
   if (!post) {
-    console.log(`JST ${jstTimeStr} (${scheduledTime}) の承認済み投稿はありません。スキップします。`);
+    console.log(`JST ${jstTimeStr} (${scheduledTime}) の投稿はありません。スキップします。`);
     process.exit(0);
   }
 
