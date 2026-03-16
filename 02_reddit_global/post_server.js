@@ -844,7 +844,6 @@ function buildShortsLauncherHtml() {
   <h1>🎬 Shorts制作ランチャー</h1>
   <nav class="nav">
     <a href="/launcher">𝕏 X投稿</a>
-    <a href="/youtube">▶ YouTube</a>
     <a href="/shorts-launcher" class="active">🎬 Shorts</a>
     <a href="/engagement">🎯 交流</a>
   </nav>
@@ -1145,7 +1144,6 @@ function buildEngagementHtml() {
   <div class="sub">大手アカウントのツイートにリプライしてインプレを獲得</div>
   <nav class="nav">
     <a href="/launcher" class="x">𝕏 X投稿</a>
-    <a href="/youtube" class="yt">▶ YouTube</a>
     <a href="/engagement" class="eng">🎯 交流</a>
   </nav>
 </div>
