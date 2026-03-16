@@ -1141,22 +1141,6 @@ async function main() {
   fs.writeFileSync(genFile, JSON.stringify(genJson, null, 2), "utf8");
   console.log(`✅ Shortsデータを保存しました: ${genFile}`);
 
-  // generated JSONをすぐにGitHubへ自動push（承認・push忘れでも投稿できるようにフォールバック用）
-  try {
-    const repoRoot = path.join(__dirname, "..");
-    execSync(`git -C "${repoRoot}" add 02_reddit_global/temp/generated_${today}.json`, { stdio: "pipe" });
-    execSync(`git -C "${repoRoot}" commit -m "auto: generated_${today}.json"`, { stdio: "pipe" });
-    execSync(`git -C "${repoRoot}" push origin main`, { stdio: "pipe" });
-    console.log(`✅ generated_${today}.json を GitHub に自動push完了`);
-  } catch (e) {
-    const msg = e.stderr ? e.stderr.toString() : e.message;
-    if (msg.includes("nothing to commit")) {
-      console.log("GitHub: 変更なし（既にpush済み）");
-    } else {
-      console.log(`⚠️ GitHub auto-push 失敗（ランチャーから手動pushしてください）: ${msg}`);
-    }
-  }
-
   console.log("\n👉 HTMLファイルをブラウザで開いて「Xで開く」ボタンを押してください！");
 }
 
