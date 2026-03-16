@@ -59,9 +59,9 @@ async function main() {
   const jsonPath = path.join(TEMP_DIR, `approved_${jstDateStr}.json`);
 
   if (!fs.existsSync(jsonPath)) {
-    console.error(`❌ 承認済みJSONが見つかりません: ${jsonPath}`);
-    console.error("ランチャーで「予約投稿」を押してからgit pushしてください。");
-    process.exit(1);
+    console.log(`⏭️ 承認済みJSONが見つかりません: ${jsonPath}`);
+    console.log("今日の投稿はスキップします。");
+    process.exit(0);
   }
 
   const { posts } = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
