@@ -88,10 +88,12 @@ async function main() {
   // メディア（動画 or 画像）アップロード
   let tweetParams = { text: post.text };
 
-  // 動画: videoPathフィールド優先、なければ videos/ フォルダから構築
-  const videoPath = post.videoPath && fs.existsSync(post.videoPath)
-    ? post.videoPath
-    : path.join(__dirname, "videos", `${jstDateStr}_${post.postNum}.mp4`);
+  // 動画: videoPathからファイル名を取り出してリポジトリ内のvideos/を参照
+  // （WindowsフルパスはGitHub Actionsで使えないため basename のみ使用）
+  const videoFile = post.videoPath
+    ? path.basename(post.videoPath)
+    : `${jstDateStr}_${post.postNum}.mp4`;
+  const videoPath = path.join(__dirname, "videos", videoFile);
 
   // 画像: thumbPathからファイル名のみ取り出してリポジトリ内の thumbnails/ を参照
   const thumbFile = post.thumbPath ? path.basename(post.thumbPath) : null;
