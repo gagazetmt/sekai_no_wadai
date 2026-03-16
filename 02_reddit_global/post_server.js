@@ -717,16 +717,27 @@ app.get("/api/shorts-content", async (req, res) => {
   }
 
   const contentPath = path.join(TEMP_DIR, `shorts_content_${date}.json`);
+  const genPath = path.join(TEMP_DIR, `generated_${date}.json`);
+
+  // generated JSON から画像WebPathを取得するヘルパー
+  function getImageWebPaths(count) {
+    if (!fs.existsSync(genPath)) return new Array(count).fill(null);
+    try {
+      const { posts: gp } = JSON.parse(fs.readFileSync(genPath, "utf8"));
+      return gp.map(p => p.savedImagePath ? "/images/" + path.basename(p.savedImagePath) : null);
+    } catch { return new Array(count).fill(null); }
+  }
+
   if (fs.existsSync(contentPath)) {
     const content = JSON.parse(fs.readFileSync(contentPath, "utf8"));
     const slidesDir = path.join(__dirname, "shorts_slides");
     const slidesExists = (content.posts || []).map((_, i) =>
       fs.existsSync(path.join(slidesDir, `${date}_${i + 1}`))
     );
-    return res.json({ success: true, date, content, generated: false, slidesExists });
+    const imageWebPaths = getImageWebPaths(content.posts.length);
+    return res.json({ success: true, date, content, generated: false, slidesExists, imageWebPaths });
   }
 
-  const genPath = path.join(TEMP_DIR, `generated_${date}.json`);
   if (!fs.existsSync(genPath)) {
     return res.json({ success: false, message: `generated_${date}.json が見つかりません。先にX投稿ランチャーでPushしてください。` });
   }
@@ -739,7 +750,8 @@ app.get("/api/shorts-content", async (req, res) => {
     const slidesExists = (content.posts || []).map((_, i) =>
       fs.existsSync(path.join(slidesDir, `${date}_${i + 1}`))
     );
-    res.json({ success: true, date, content, generated: true, slidesExists });
+    const imageWebPaths = getImageWebPaths(content.posts.length);
+    res.json({ success: true, date, content, generated: true, slidesExists, imageWebPaths });
   } catch (e) {
     res.json({ success: false, message: e.message });
   }
@@ -826,27 +838,59 @@ function buildShortsLauncherHtml() {
     .slides-grid { display: flex; gap: 8px; padding: 8px 10px; flex: 1; min-height: 0; overflow-x: auto; }
     .slide-card { flex: 1; min-width: 0; background: #0d1b3e; border: 1px solid #2a3a5e; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
 
-    /* スライドトップ（サムネ＋感情img横並び） */
+    /* スライドトップ（アニメプレビュー＋感情img横並び） */
     .slide-top { display: flex; gap: 5px; padding: 6px; flex-shrink: 0; align-items: flex-start; flex: 1; min-height: 0; overflow: hidden; }
 
-    /* サムネイルプレビュー */
-    .slide-preview-wrap { position: relative; flex-shrink: 0; aspect-ratio: 9/16; height: calc(100vh - 410px); background: linear-gradient(180deg, #0a0a1a 0%, #1a0a2e 100%); border-radius: 8px; overflow: hidden; cursor: pointer; }
-    .slide-preview-img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; }
-    .slide-preview-placeholder { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #444; font-size: 0.65em; text-align: center; pointer-events: none; line-height: 1.8; }
-    .slide-num-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.75); color: #4fc3f7; font-size: 0.65em; font-weight: bold; padding: 2px 7px; border-radius: 8px; z-index: 2; pointer-events: none; }
-    .slide-subtitle-preview { position: absolute; bottom: 32px; left: 0; right: 0; font-size: 0.75em; font-weight: bold; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.9); white-space: pre-line; line-height: 1.4; z-index: 2; text-align: center; padding: 0 6px; pointer-events: none; }
-    .emotion-badge-preview { position: absolute; bottom: 6px; right: 6px; font-size: 0.6em; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 2; pointer-events: none; }
-    .em-SURPRISE { background: #ff6b6b; color: #fff; }
-    .em-HAPPY    { background: #ffd93d; color: #333; }
-    .em-THINK    { background: #4fc3f7; color: #000; }
-    .em-SHOCK    { background: #ff4444; color: #fff; }
-    .em-SAD      { background: #7986cb; color: #fff; }
-    .em-EXCITED  { background: #ff9800; color: #fff; }
+    /* CSSアニメプレビュー（実際の動画レイアウト再現: 上段黒/中段画像/下段黒） */
+    .slide-anim-wrap { position: relative; flex-shrink: 0; aspect-ratio: 9/16; height: calc(100vh - 410px); border-radius: 8px; overflow: hidden; cursor: pointer; background: #0a0a0a; display: flex; flex-direction: column; }
+    /* 上段：バッジ＋キャッチライン */
+    .anim-top { flex: 0 0 30%; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 8px; gap: 4px; }
+    .anim-badge { background: #dd0000; color: #fff; font-size: 0.62em; font-weight: 900; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.03em; flex-shrink: 0; }
+    .anim-line1 { font-size: 0.78em; font-weight: 900; color: #ffe066; text-align: center; opacity: 0; line-height: 1.3; width: 100%; }
+    .anim-line2 { font-size: 1.0em; font-weight: 900; color: #fff; text-align: center; opacity: 0; line-height: 1.3; width: 100%; }
+    /* 中段：画像ズームパン */
+    .anim-img-strip { flex: 0 0 36%; overflow: hidden; position: relative; }
+    .anim-bg { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; transform: scale(1.15) translateX(-4%); }
+    .anim-bg.rtl { transform: scale(1.15) translateX(4%); }
+    .anim-bg.static { transform: scale(1.0); }
+    /* 下段：字幕＋感情img＋ウォーターマーク */
+    .anim-bottom { flex: 1; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 10px 20px; gap: 6px; position: relative; }
+    .anim-subtitle { font-size: 0.9em; font-weight: 900; color: #fff; text-align: center; opacity: 0; white-space: pre-line; line-height: 1.4; width: 100%; }
+    .anim-handle { font-size: 0.6em; color: #555; letter-spacing: 0.06em; flex-shrink: 0; }
+    /* 感情img: 上段中央 (si≥1) */
+    .anim-emotion-top { width: 62px; height: 62px; object-fit: contain; opacity: 0; flex-shrink: 0; }
+    /* 感情img: 下段 (si=0用・フォールバック) */
+    .anim-emotion-overlay { width: 48px; height: 48px; object-fit: contain; opacity: 0; flex-shrink: 0; }
+    /* ナレーション字幕（時間切り替え） */
+    .anim-narr-display { font-size: 0.85em; font-weight: 900; color: #fff; text-align: center; line-height: 1.5; width: 100%; min-height: 1.5em; transition: opacity 0.2s; }
+    .anim-watermark { position: absolute; bottom: 5px; font-size: 0.52em; color: #555; letter-spacing: 0.06em; }
+    /* スライド番号バッジ */
+    .slide-num-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.75); color: #4fc3f7; font-size: 0.62em; font-weight: bold; padding: 2px 7px; border-radius: 8px; z-index: 6; pointer-events: none; }
+    /* 再生ボタン */
+    .anim-play-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 40px; height: 40px; background: rgba(0,0,0,0.55); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1em; color: #fff; z-index: 5; cursor: pointer; user-select: none; border: none; transition: background 0.2s; }
+    .anim-play-btn:hover { background: rgba(255,255,255,0.3); }
+    /* playing状態のアニメーション */
+    .slide-anim-wrap.playing .anim-bg       { animation: animZoomLTR var(--dur,5s) linear forwards; }
+    .slide-anim-wrap.playing .anim-bg.rtl   { animation: animZoomRTL var(--dur,5s) linear forwards; }
+    .slide-anim-wrap.playing .anim-bg.static{ animation: none; transform: scale(1.0); }
+    .slide-anim-wrap.playing .anim-line1    { animation: animFadeUp 0.5s 0.1s ease-out forwards; }
+    .slide-anim-wrap.playing .anim-line2    { animation: animFadeUp 0.5s 0.25s ease-out forwards; }
+    /* si≥1: 上段感情img → フェードイン+ウォブル継続 */
+    .slide-anim-wrap.playing .anim-emotion-top  { animation: animFadeIn 0.3s 0.2s ease forwards, animWobble 0.8s 1s linear infinite; }
+    /* si=0: 下段感情img → タイトルコール時間だけ表示して消える */
+    .slide-anim-wrap.playing .anim-emotion-overlay { animation: animEmotionFlash 3s 0.2s ease forwards; }
+    .slide-anim-wrap.playing .anim-play-btn { opacity: 0.25; }
+    @keyframes animZoomLTR { from{transform:scale(1.15) translateX(-4%);} to{transform:scale(1.15) translateX(4%);} }
+    @keyframes animZoomRTL { from{transform:scale(1.15) translateX(4%);} to{transform:scale(1.15) translateX(-4%);} }
+    @keyframes animFadeUp        { from{opacity:0;transform:translateY(10px);} to{opacity:1;transform:translateY(0);} }
+    @keyframes animFadeIn        { from{opacity:0;} to{opacity:1;} }
+    @keyframes animWobble        { 0%{transform:translate(0,0) rotate(0deg);} 25%{transform:translate(3px,-2px) rotate(2deg);} 50%{transform:translate(-3px,2px) rotate(-2deg);} 75%{transform:translate(2px,3px) rotate(1deg);} 100%{transform:translate(0,0) rotate(0deg);} }
+    @keyframes animEmotionFlash  { 0%{opacity:0;} 12%{opacity:1;} 65%{opacity:1;} 100%{opacity:0;} }
 
-    /* 動画再生オーバーレイ */
-    .play-btn-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 36px; height: 36px; background: rgba(0,0,0,0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1em; z-index: 3; transition: background 0.2s; user-select: none; }
-    .play-btn-overlay:hover { background: rgba(255,255,255,0.25); }
-    .slide-preview-wrap video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 4; }
+    /* 全再生ボタン */
+    .btn-play-all { background: #1a4a20; color: #4caf50; border: 1px solid #4caf50; padding: 4px 12px; border-radius: 14px; font-size: 0.78em; cursor: pointer; }
+    .btn-play-all:hover { background: #2a6a30; }
+    .btn-play-all.playing { background: #4a1a1a; color: #ff6b6b; border-color: #ff6b6b; }
 
     /* 感情画像サイドパネル */
     .emotion-side { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; width: 58px; }
@@ -901,6 +945,7 @@ const NARR_IDX = [0, 1, 2, 4];
 let currentDate = null;
 let currentPosts = null;
 let currentSlidesExists = [];
+let currentImageWebPaths = [];
 
 async function loadContent() {
   const res = await fetch("/api/shorts-content");
@@ -913,6 +958,7 @@ async function loadContent() {
   currentDate = data.date;
   currentPosts = data.content.posts;
   currentSlidesExists = data.slidesExists || [];
+  currentImageWebPaths = data.imageWebPaths || [];
   document.getElementById("dateBadge").textContent = data.date;
   document.getElementById("statusMsg").textContent =
     data.generated ? "✨ Claude が自動生成しました。内容を確認・編集してPushしてください" :
@@ -936,28 +982,15 @@ function renderPostCard(post, idx) {
   const slideCards = slideKeys.map((sk, si) => {
     const slide    = post[sk] || {};
     const emotion  = slide.emotion || "";
-    const emClass  = emotion ? "em-" + emotion : "";
     const baseDir  = "/shorts_slides/" + currentDate + "_" + num + "/";
-    const imgPath  = baseDir + slideCodes[si] + ".png";
-    const vidPath  = baseDir + slideCodes[si] + ".mp4";
     const narrPath = baseDir + "narr_" + NARR_IDX[si] + ".wav";
     const emotNarrPath = baseDir + "narr_3.wav";
     const emotImgFile  = EMOTION_IMG_MAP[emotion] || "think";
     const emotImgPath  = "/emotions/" + emotImgFile + ".png";
-
-    const slidesReady  = !!currentSlidesExists[idx];
-    const emotionBadge = emotion ? '<span class="emotion-badge-preview ' + emClass + '">' + emotion + '</span>' : "";
-
-    const emotionSide = hasEmotion[si]
-      ? '<div class="emotion-side" id="emotSide_' + idx + '_' + si + '">'
-          + '<div class="emotion-side-label">感情img</div>'
-          + '<img class="emotion-img" id="emotImg_' + idx + '_' + si + '" src="' + emotImgPath + '" title="' + emotion + '" onerror="this.style.opacity=0.2">'
-          + (si === 2
-            ? '<div class="emotion-side-label" style="margin-top:4px">感情音声</div>'
-              + '<audio class="emotion-narr" controls src="' + emotNarrPath + '" onerror="this.remove()"></audio>'
-            : '')
-        + '</div>'
-      : '';
+    // 元投稿画像を背景に使用（レンダリング済みPNGは焼き込みテキスト・暗部があるため不使用）
+    const imgSrc = currentImageWebPaths[idx] || "";
+    const animBgClass = si === 3 ? "static" : (si % 2 === 0 ? "" : "rtl");
+    const animDur  = si === 3 ? "3" : "5";
 
     const emotionSelect = hasEmotion[si]
       ? '<div class="field-label">感情</div><select class="field-select" id="post' + idx + '_' + sk + '_emotion" onchange="syncPreview(' + idx + ',' + si + ')">'
@@ -965,24 +998,49 @@ function renderPostCard(post, idx) {
           + '</select>'
       : "";
 
-    return '<div class="slide-card">'
-      + '<div class="slide-top">'
-        + '<div class="slide-preview-wrap" id="previewWrap_' + idx + '_' + si + '">'
-          + (slidesReady ? '<img class="slide-preview-img" src="' + imgPath + '">' : '')
-          + '<div class="slide-preview-placeholder">' + (slidesReady ? '' : '📸<br>未生成') + '</div>'
-          + '<span class="slide-num-badge">' + slideNames[si] + '</span>'
-          + '<div class="slide-subtitle-preview" id="subtitlePrev_' + idx + '_' + si + '">' + (slide.subtitle || "").replace(/</g,"&lt;") + '</div>'
-          + emotionBadge
-          + '<div class="play-btn-overlay" data-idx="' + idx + '" data-si="' + si + '" data-vid="' + vidPath + '" onclick="toggleVideo(this)">▶</div>'
+    const c1 = (post.catchLine1 || "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+    const c2 = (post.catchLine2 || "").replace(/&/g,"&amp;").replace(/</g,"&lt;");
+    const narrAttr = (slide.narration || "").replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+
+    const animWrap =
+      '<div class="slide-anim-wrap" id="animWrap_' + idx + '_' + si + '" style="--dur:' + animDur + 's;" data-narr="' + narrAttr + '">'
+        // 上段: si=0→赤バッジ+キャッチライン / si≥1→ハンドル+感情img中央
+        + '<div class="anim-top">'
+          + (si === 0
+            ? '<div class="anim-badge">【衝撃】世界の話題</div>'
+              + '<div class="anim-line1" id="animLine1_' + idx + '">' + c1 + '</div>'
+              + '<div class="anim-line2" id="animLine2_' + idx + '">' + c2 + '</div>'
+            : '<div class="anim-handle">@sekai_no_wadai</div>'
+              + (hasEmotion[si]
+                ? '<img class="anim-emotion-top" id="animEmotion_' + idx + '_' + si + '" src="' + emotImgPath + '" onerror="this.style.opacity=0">'
+                : ''))
         + '</div>'
-        + emotionSide
-      + '</div>'
+        // 中段：画像ズームパン
+        + '<div class="anim-img-strip">'
+          + (imgSrc
+            ? '<img class="anim-bg' + (animBgClass ? ' ' + animBgClass : '') + '" src="' + imgSrc + '" onerror="this.style.opacity=0.2">'
+            : '<div style="width:100%;height:100%;background:#1a1a2e;"></div>')
+        + '</div>'
+        // 下段：ナレーション字幕（時間切り替え）＋si=0の感情img＋ウォーターマーク
+        + '<div class="anim-bottom">'
+          + '<div class="anim-narr-display" id="animNarr_' + idx + '_' + si + '"></div>'
+          + (si === 0 && hasEmotion[0]
+            ? '<img class="anim-emotion-overlay" id="animEmotion_' + idx + '_0" src="' + emotImgPath + '" onerror="this.style.opacity=0">'
+            : '')
+          + '<div class="anim-watermark">@sekai_no_wadai</div>'
+        + '</div>'
+        + '<span class="slide-num-badge">' + slideNames[si] + '</span>'
+        + '<audio id="animAudio_' + idx + '_' + si + '" src="' + narrPath + '" preload="none" onerror="this.remove()"></audio>'
+        + '<button class="anim-play-btn" onclick="toggleSlide(' + idx + ',' + si + ')">▶</button>'
+      + '</div>';
+
+    return '<div class="slide-card">'
+      + '<div class="slide-top">' + animWrap + '</div>'
       + '<div class="slide-fields">'
-        + '<div class="field-label">字幕（改行=\\n）</div>'
-        + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_subtitle" rows="4" oninput="syncPreview(' + idx + ',' + si + ')">' + (slide.subtitle || "") + '</textarea>'
-        + '<div class="field-label">ナレーション</div>'
-        + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_narration" rows="4">' + (slide.narration || "") + '</textarea>'
+        + '<div class="field-label">字幕/ナレーション</div>'
+        + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_narration" rows="5" oninput="onNarrInput(' + idx + ',' + si + ')">' + (slide.narration || slide.subtitle || "") + '</textarea>'
         + '<audio class="narr-audio" controls src="' + narrPath + '" onerror="this.remove()"></audio>'
+        + (si === 2 ? '<div class="field-label">感情音声(narr3)</div><audio class="narr-audio" controls src="' + emotNarrPath + '" onerror="this.remove()"></audio>' : '')
         + emotionSelect
       + '</div>'
       + '</div>';
@@ -997,12 +1055,22 @@ function renderPostCard(post, idx) {
         + '<span class="catch-label">キャッチ②</span>'
         + '<input class="catch-input" id="post' + idx + '_catchLine2" value="' + (post.catchLine2 || "").replace(/"/g,"&quot;") + '">'
       + '</div>'
+      + '<button class="btn-play-all" id="btnPlayAll_' + idx + '" onclick="playAllSlides(' + idx + ')">▶ 全再生</button>'
     + '</div>'
     + '<div class="slides-grid">' + slideCards + '</div>'
     + '<div class="actions-bar">'
       + '<button class="btn-save-local" onclick="savePost(' + idx + ')">💾 この投稿を保存</button>'
+      + '<span style="font-size:0.7em;color:#888;">🎧 通しナレーション</span>'
+      + '<audio controls src="/shorts_slides/' + currentDate + '_' + num + '/audio.wav" style="height:26px;flex:1;" onerror="this.parentNode.removeChild(this.previousSibling);this.remove()"></audio>'
     + '</div>'
     + '</div>';
+}
+
+function onNarrInput(postIdx, si) {
+  const sk = "slide" + (si + 1);
+  const val = document.getElementById("post" + postIdx + "_" + sk + "_narration")?.value || "";
+  const wrap = document.getElementById("animWrap_" + postIdx + "_" + si);
+  if (wrap) wrap.dataset.narr = val;
 }
 
 function syncPreview(idx, si) {
@@ -1010,48 +1078,183 @@ function syncPreview(idx, si) {
   const subtitle = document.getElementById("post" + idx + "_" + sk + "_subtitle")?.value || "";
   const emotion  = document.getElementById("post" + idx + "_" + sk + "_emotion")?.value || "";
 
-  // 字幕プレビュー更新
-  const prev = document.getElementById("subtitlePrev_" + idx + "_" + si);
-  if (prev) prev.textContent = subtitle;
-
-  // 感情バッジ更新
-  const wrap = document.getElementById("previewWrap_" + idx + "_" + si);
-  if (wrap) {
-    let badge = wrap.querySelector(".emotion-badge-preview");
-    if (!badge && emotion) { badge = document.createElement("span"); wrap.appendChild(badge); }
-    if (badge) { badge.textContent = emotion; badge.className = "emotion-badge-preview em-" + emotion; }
+  // 字幕テキスト更新（si=0はキャッチライン表示のため対象外）
+  if (si !== 0) {
+    const el = document.getElementById("animSubtitle_" + idx + "_" + si);
+    if (el) el.textContent = subtitle;
   }
 
-  // 感情img更新
-  const img = document.getElementById("emotImg_" + idx + "_" + si);
-  if (img && emotion) {
-    img.src = "/emotions/" + (EMOTION_IMG_MAP[emotion] || "think") + ".png";
-    img.title = emotion;
-    img.style.opacity = "";
+  // 感情img更新（上段 or 下段どちらかに存在）
+  const emotEl = document.getElementById("animEmotion_" + idx + "_" + si);
+  if (emotEl && emotion) {
+    emotEl.src = "/emotions/" + (EMOTION_IMG_MAP[emotion] || "think") + ".png";
+    emotEl.title = emotion;
+    emotEl.style.opacity = "";
   }
 }
 
-function toggleVideo(btn) {
-  const idx     = btn.dataset.idx;
-  const si      = btn.dataset.si;
-  const vidPath = btn.dataset.vid;
-  const wrap    = document.getElementById("previewWrap_" + idx + "_" + si);
-  const existing = wrap.querySelector("video");
-  if (existing) { existing.remove(); btn.textContent = "▶"; return; }
-  const video = document.createElement("video");
-  video.src = vidPath; video.autoplay = true; video.loop = true; video.controls = true; video.playsInline = true;
-  video.onerror = () => { video.remove(); btn.textContent = "▶(未生成)"; };
-  wrap.appendChild(video);
-  btn.textContent = "⏹";
+// ナレーションを自然な区切りでチャンク分割（句読点優先）
+function splitNarration(text) {
+  const raw = (text || "").trim();
+  if (!raw) return [];
+  // 文末（。！？…）で分割
+  const sentences = raw.split(/(?<=[。！？…])/);
+  const result = [];
+  for (const s of sentences) {
+    const t = s.trim();
+    if (!t) continue;
+    if (t.length <= 24) {
+      result.push(t);
+    } else {
+      // 長い場合は読点（、）で分割を試みる
+      const ci = t.indexOf("、");
+      if (ci > 2 && ci < t.length - 2) {
+        result.push(t.slice(0, ci + 1).trim());
+        result.push(t.slice(ci + 1).trim());
+      } else {
+        // 読点なければ中間で分割
+        const mid = Math.ceil(t.length / 2);
+        result.push(t.slice(0, mid));
+        result.push(t.slice(mid));
+      }
+    }
+  }
+  return result.filter(p => p.length > 0);
+}
+
+const narrTimers = {};
+
+function stopSlideAnim(wrap) {
+  wrap.classList.remove("playing");
+  const b = wrap.querySelector(".anim-play-btn"); if (b) b.textContent = "▶";
+  const a = wrap.querySelector("audio[id^='animAudio']"); if (a) { a.onended = null; a.pause(); a.currentTime = 0; }
+  const nd = wrap.querySelector(".anim-narr-display"); if (nd) nd.textContent = "";
+  // キャッチラインの opacity をリセット（si=0 フェーズ移行後の状態を戻す）
+  const l1 = wrap.querySelector(".anim-line1"); if (l1) { l1.style.transition = ""; l1.style.opacity = ""; }
+  const l2 = wrap.querySelector(".anim-line2"); if (l2) { l2.style.transition = ""; l2.style.opacity = ""; }
+  const parts = wrap.id.replace("animWrap_", "").split("_");
+  const k = parts[0] + "_" + parts[1];
+  if (narrTimers[k]) { clearInterval(narrTimers[k]); delete narrTimers[k]; }
+  // si=0 フェーズタイマーもクリア
+  if (narrTimers[k + "_ph"])  { clearTimeout(narrTimers[k + "_ph"]);  delete narrTimers[k + "_ph"];  }
+  if (narrTimers[k + "_ph2"]) { clearTimeout(narrTimers[k + "_ph2"]); delete narrTimers[k + "_ph2"]; }
+}
+
+function startNarrCycle(wrap, postIdx, si) {
+  const narrEl = document.getElementById("animNarr_" + postIdx + "_" + si);
+  const narrText = wrap.dataset.narr || "";
+  if (!narrEl || !narrText) return;
+  const chunks = splitNarration(narrText);
+  if (chunks.length === 0) return;
+  let ci = 0;
+  narrEl.textContent = chunks[0];
+  narrEl.style.opacity = "1";
+  const durMs = (parseFloat(getComputedStyle(wrap).getPropertyValue("--dur")) || 5) * 1000;
+  const stepMs = Math.max(900, durMs / chunks.length);
+  const key = postIdx + "_" + si;
+  narrTimers[key] = setInterval(() => {
+    ci = (ci + 1) % chunks.length;
+    narrEl.style.opacity = "0";
+    setTimeout(() => { narrEl.textContent = chunks[ci]; narrEl.style.opacity = "1"; }, 180);
+  }, stepMs);
+}
+
+function toggleSlide(postIdx, si) {
+  const wrap  = document.getElementById("animWrap_" + postIdx + "_" + si);
+  const btn   = wrap.querySelector(".anim-play-btn");
+  const audio = document.getElementById("animAudio_" + postIdx + "_" + si);
+
+  if (wrap.classList.contains("playing")) {
+    stopSlideAnim(wrap);
+  } else {
+    // 同じ投稿の他スライドを停止
+    document.querySelectorAll("#postcard_" + postIdx + " .slide-anim-wrap.playing").forEach(w => stopSlideAnim(w));
+    void wrap.offsetWidth; // アニメーション再起動のためreflow
+    wrap.classList.add("playing");
+    if (audio) { audio.currentTime = 0; audio.play().catch(() => {}); }
+    btn.textContent = "⏹";
+    if (si === 0) {
+      // Phase1: キャッチライン＋感情img表示（CSS animationが動く）
+      // Phase2: 3秒後にキャッチラインをフェードアウトしてナレーション字幕へ移行
+      const key = postIdx + "_0";
+      narrTimers[key + "_ph"] = setTimeout(() => {
+        if (!wrap.classList.contains("playing")) return;
+        const l1 = wrap.querySelector(".anim-line1");
+        const l2 = wrap.querySelector(".anim-line2");
+        [l1, l2].forEach(el => { if (el) { el.style.transition = "opacity 0.4s"; el.style.opacity = "0"; } });
+        narrTimers[key + "_ph2"] = setTimeout(() => {
+          if (!wrap.classList.contains("playing")) return;
+          startNarrCycle(wrap, postIdx, 0);
+        }, 450);
+      }, 2800);
+    } else {
+      startNarrCycle(wrap, postIdx, si);
+    }
+  }
+}
+
+function playAllSlides(postIdx) {
+  const btn = document.getElementById("btnPlayAll_" + postIdx);
+  if (btn.classList.contains("playing")) {
+    btn.classList.remove("playing");
+    btn.textContent = "▶ 全再生";
+    document.querySelectorAll("#postcard_" + postIdx + " .slide-anim-wrap.playing").forEach(w => stopSlideAnim(w));
+    return;
+  }
+  btn.classList.add("playing");
+  btn.textContent = "⏹ 停止";
+  let si = 0;
+  (function playNext() {
+    if (si >= 4 || !btn.classList.contains("playing")) {
+      btn.classList.remove("playing");
+      btn.textContent = "▶ 全再生";
+      return;
+    }
+    document.querySelectorAll("#postcard_" + postIdx + " .slide-anim-wrap.playing").forEach(w => stopSlideAnim(w));
+    const wrap  = document.getElementById("animWrap_" + postIdx + "_" + si);
+    const audio = document.getElementById("animAudio_" + postIdx + "_" + si);
+    const durS  = parseFloat(getComputedStyle(wrap).getPropertyValue("--dur")) || 5;
+    void wrap.offsetWidth;
+    wrap.classList.add("playing");
+    const pb = wrap.querySelector(".anim-play-btn"); if (pb) pb.textContent = "⏹";
+    if (si === 0) {
+      const key = postIdx + "_0";
+      narrTimers[key + "_ph"] = setTimeout(() => {
+        if (!wrap.classList.contains("playing")) return;
+        const l1 = wrap.querySelector(".anim-line1");
+        const l2 = wrap.querySelector(".anim-line2");
+        [l1, l2].forEach(el => { if (el) { el.style.transition = "opacity 0.4s"; el.style.opacity = "0"; } });
+        narrTimers[key + "_ph2"] = setTimeout(() => {
+          if (!wrap.classList.contains("playing")) return;
+          startNarrCycle(wrap, postIdx, 0);
+        }, 450);
+      }, 2800);
+    } else {
+      startNarrCycle(wrap, postIdx, si);
+    }
+    function next() {
+      stopSlideAnim(wrap);
+      si++;
+      playNext();
+    }
+    if (audio) {
+      audio.currentTime = 0;
+      audio.onended = next;
+      audio.play().catch(() => setTimeout(next, durS * 1000));
+    } else {
+      setTimeout(next, durS * 1000);
+    }
+  })();
 }
 
 function collectAll() {
   return currentPosts.map((_, idx) => {
     const slides = {};
     ["slide1","slide2","slide3","slide4"].forEach((sk, si) => {
+      const narration = document.getElementById("post" + idx + "_" + sk + "_narration")?.value || "";
       slides[sk] = {
-        narration: document.getElementById("post" + idx + "_" + sk + "_narration")?.value || "",
-        subtitle:  document.getElementById("post" + idx + "_" + sk + "_subtitle")?.value || "",
+        narration,
+        subtitle: narration,
       };
       const emotionEl = document.getElementById("post" + idx + "_" + sk + "_emotion");
       if (emotionEl) slides[sk].emotion = emotionEl.value;
