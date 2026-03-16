@@ -1012,7 +1012,18 @@ async function main() {
   console.log("━".repeat(50));
 
   // 保存ファイルの準備
-  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); // JST
+  // 最終スロット(22:00)を過ぎていたら翌日の日付で生成（夜に翌日分を準備するケース対応）
+  const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const jstHour = jstNow.getUTCHours();
+  const jstMin = jstNow.getUTCMinutes();
+  const lastSlot = SCHEDULE_TIMES[SCHEDULE_TIMES.length - 1]; // "22:00"
+  const [lastH, lastM] = lastSlot.split(":").map(Number);
+  const isPastLastSlot = jstHour > lastH || (jstHour === lastH && jstMin >= lastM);
+  if (isPastLastSlot) {
+    jstNow.setUTCDate(jstNow.getUTCDate() + 1);
+    console.log(`⏰ 本日の最終スロット(${lastSlot})を過ぎているため、翌日(${jstNow.toISOString().slice(0, 10)})分として生成します。`);
+  }
+  const today = jstNow.toISOString().slice(0, 10); // JST
   const browser = await puppeteer.launch({ headless: true });
   const saveFile = path.join(POSTS_DIR, `${today}.txt`);
   const lines = [
