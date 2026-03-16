@@ -381,6 +381,7 @@ function generateHtml(today, posts) {
   const cards = posts.map((item, idx) => {
     const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedVideoPath, thumbPath, isVideo, finalPost, sourceUrl, videoDuration = 0 } = item;
     const thumbAbsPath = thumbPath ? thumbPath.replace(/\\/g, "\\\\") : "";
+    const videoAbsPath = savedVideoPath ? savedVideoPath.replace(/\\/g, "\\\\") : "";
     const safeSourceUrl = sourceUrl.replace(/'/g, "\\'");
     const charCount = finalPost.length;
     const videoOverLimit = isVideo && videoDuration > 140;
@@ -446,7 +447,7 @@ function generateHtml(today, posts) {
                 ${charCount}/140
               </span>
               <button class="x-post-btn" id="btn-${postNum}"
-                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}')">
+                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}', '${videoAbsPath}')">
                 予約投稿
               </button>
               <button class="x-cancel-btn" id="cancel-${postNum}" style="display:none"
@@ -931,7 +932,7 @@ function generateHtml(today, posts) {
       if (dateSel && timeSel) _setSmartDateDefault(dateSel, timeSel.value, jstNow, dateOptions);
     }
 
-    async function schedulePost(postNum, sourceUrl, thumbPath) {
+    async function schedulePost(postNum, sourceUrl, thumbPath, videoPath) {
       const text = document.getElementById('text-' + postNum).value.trim();
       const scheduleTime = document.getElementById('time-' + postNum).value;
       const scheduleDate = document.getElementById('date-' + postNum).value;
@@ -946,7 +947,7 @@ function generateHtml(today, posts) {
         const res = await fetch('http://localhost:3000/api/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath })
+          body: JSON.stringify({ postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath: videoPath || null })
         });
         const data = await res.json();
 

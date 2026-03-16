@@ -85,9 +85,11 @@ async function main() {
     accessSecret: process.env.X_ACCESS_TOKEN_SECRET,
   });
 
-  // 動画ファイルの確認・アップロード
+  // 動画ファイルの確認・アップロード（videoPathフィールド優先、なければ日付+番号で構築）
   let tweetParams = { text: post.text };
-  const videoPath = path.join(__dirname, "videos", `${jstDateStr}_${post.postNum}.mp4`);
+  const videoPath = post.videoPath && fs.existsSync(post.videoPath)
+    ? post.videoPath
+    : path.join(__dirname, "videos", `${jstDateStr}_${post.postNum}.mp4`);
   if (fs.existsSync(videoPath)) {
     console.log(`\n🎬 動画をアップロード中: ${videoPath}`);
     try {

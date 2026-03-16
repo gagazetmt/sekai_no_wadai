@@ -114,7 +114,7 @@ function scheduleJob({ postNum, text, sourceUrl, thumbPath, scheduleDate, schedu
 
 // ── 予約投稿API ─────────────────────────────────────────────────────────
 app.post("/api/schedule", async (req, res) => {
-  const { postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath } = req.body;
+  const { postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath } = req.body;
 
   // 承認済みJSONに保存（scheduleDate指定があればその日付、なければJST今日）
   const targetDate = scheduleDate || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -124,7 +124,7 @@ app.post("/api/schedule", async (req, res) => {
     approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
   }
   const idx = approved.posts.findIndex(p => p.postNum === postNum);
-  const entry = { postNum, scheduleTime, text, sourceUrl, thumbPath: thumbPath || null };
+  const entry = { postNum, scheduleTime, text, sourceUrl, thumbPath: thumbPath || null, videoPath: videoPath || null };
   if (idx >= 0) {
     approved.posts[idx] = entry;
   } else {
