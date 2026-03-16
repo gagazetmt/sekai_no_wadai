@@ -16,7 +16,7 @@ const SCHEDULE_TIMES = [
 ];
 
 // 時間の許容誤差（分）: GitHub Actionsのcronは数分遅れることがある
-const TOLERANCE_MINUTES = 5;
+const TOLERANCE_MINUTES = 12;
 
 async function main() {
   // 現在のJST時刻を取得
