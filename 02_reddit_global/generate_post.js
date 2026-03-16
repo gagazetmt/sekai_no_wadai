@@ -430,7 +430,10 @@ function generateHtml(today, posts) {
             <div class="x-left-actions">
               <div class="x-time-wrap">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1d9bf0" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <select class="x-time-input" id="time-${postNum}">
+                <select class="x-date-input" id="date-${postNum}">
+                  <!-- JSで動的に挿入 -->
+                </select>
+                <select class="x-time-input" id="time-${postNum}" onchange="updateDateDefault(${postNum})">
                   ${["06:00","06:30","07:00","07:30","08:00","08:30","09:00","09:30","10:00","10:30","11:00","11:30","12:00","12:30","13:00","13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30","18:00","18:30","19:00","19:30","20:00","20:30","21:00","21:30","22:00","22:30","23:00","23:30"]
                     .map(t => `<option value="${t}"${t === scheduleTime ? " selected" : ""}>${t}</option>`)
                     .join("")}
@@ -676,6 +679,11 @@ function generateHtml(today, posts) {
       display: flex; align-items: center; gap: 6px;
       background: #eff3f4; border-radius: 20px; padding: 5px 12px;
     }
+    .x-date-input {
+      background: transparent; border: none; outline: none;
+      color: #536471; font-size: 0.85em; font-weight: 600; cursor: pointer;
+      border-right: 1px solid #cfd9de; padding-right: 8px; margin-right: 2px;
+    }
     .x-time-input {
       background: transparent; border: none; outline: none;
       color: #1d9bf0; font-size: 0.9em; font-weight: 700; cursor: pointer;
@@ -878,9 +886,55 @@ function generateHtml(today, posts) {
       el.style.color = len > 140 ? '#f4212e' : len > 120 ? '#ffd400' : '#536471';
     }
 
+    // 日付selectを初期化（今日/明日/明後日）
+    (function initDateSelectors() {
+      const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const pad = n => String(n).padStart(2, '0');
+      const toDateStr = d => d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate());
+      const toLabel = (d, i) => ['今日','明日','明後日'][i] + '(' + (d.getUTCMonth()+1) + '/' + d.getUTCDate() + ')';
+      const dateOptions = [0, 1, 2].map(i => {
+        const d = new Date(jstNow);
+        d.setUTCDate(d.getUTCDate() + i);
+        return { value: toDateStr(d), label: toLabel(d, i) };
+      });
+      document.querySelectorAll('.x-date-input').forEach(sel => {
+        dateOptions.forEach(opt => {
+          const el = document.createElement('option');
+          el.value = opt.value; el.textContent = opt.label;
+          sel.appendChild(el);
+        });
+        // デフォルト: 時間selectを見て、その時刻が今日まだ未来なら今日、過ぎてたら明日
+        const postNum = sel.id.replace('date-', '');
+        const timeSel = document.getElementById('time-' + postNum);
+        if (timeSel) _setSmartDateDefault(sel, timeSel.value, jstNow, dateOptions);
+      });
+    })();
+
+    function _setSmartDateDefault(dateSel, timeStr, jstNow, dateOptions) {
+      const [h, m] = timeStr.split(':').map(Number);
+      const todaySlot = new Date(jstNow);
+      todaySlot.setUTCHours(h, m, 0, 0);
+      const defaultIdx = todaySlot > jstNow ? 0 : 1; // 未来なら今日、過ぎてたら明日
+      dateSel.value = dateOptions[defaultIdx].value;
+    }
+
+    function updateDateDefault(postNum) {
+      const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const pad = n => String(n).padStart(2, '0');
+      const toDateStr = d => d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate());
+      const dateOptions = [0, 1, 2].map(i => {
+        const d = new Date(jstNow); d.setUTCDate(d.getUTCDate() + i);
+        return { value: toDateStr(d) };
+      });
+      const dateSel = document.getElementById('date-' + postNum);
+      const timeSel = document.getElementById('time-' + postNum);
+      if (dateSel && timeSel) _setSmartDateDefault(dateSel, timeSel.value, jstNow, dateOptions);
+    }
+
     async function schedulePost(postNum, sourceUrl, thumbPath) {
       const text = document.getElementById('text-' + postNum).value.trim();
       const scheduleTime = document.getElementById('time-' + postNum).value;
+      const scheduleDate = document.getElementById('date-' + postNum).value;
       if (!text) { alert('投稿文が空です'); return; }
       if (!scheduleTime) { alert('投稿時間を設定してください'); return; }
 
@@ -892,19 +946,21 @@ function generateHtml(today, posts) {
         const res = await fetch('http://localhost:3000/api/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postNum, text, scheduleTime, sourceUrl, thumbPath })
+          body: JSON.stringify({ postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath })
         });
         const data = await res.json();
 
         if (data.success) {
+          const dateLabel = scheduleDate === new Date(Date.now() + 9*60*60*1000).toISOString().slice(0,10)
+            ? '今日' : scheduleDate.slice(5).replace('-', '/');
           const badge = document.getElementById('status-' + postNum);
-          badge.textContent = scheduleTime + ' 予約済み ✓';
+          badge.textContent = dateLabel + ' ' + scheduleTime + ' 予約済み ✓';
           badge.className = 'x-status-badge scheduled';
-          btn.textContent = '✓ ' + scheduleTime;
+          btn.textContent = '✓ ' + dateLabel + ' ' + scheduleTime;
           btn.classList.add('done');
           document.getElementById('card-' + postNum).classList.add('scheduled');
           document.getElementById('cancel-' + postNum).style.display = 'inline-block';
-          showToast('✅ 投稿' + postNum + ' を ' + scheduleTime + ' に予約しました！GitHubにPushを忘れずに↑');
+          showToast('✅ 投稿' + postNum + ' を ' + dateLabel + ' ' + scheduleTime + ' に予約しました！GitHubにPushを忘れずに↑');
         } else {
           btn.disabled = false;
           btn.textContent = '予約投稿';
@@ -1012,18 +1068,7 @@ async function main() {
   console.log("━".repeat(50));
 
   // 保存ファイルの準備
-  // 最終スロット(22:00)を過ぎていたら翌日の日付で生成（夜に翌日分を準備するケース対応）
-  const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const jstHour = jstNow.getUTCHours();
-  const jstMin = jstNow.getUTCMinutes();
-  const lastSlot = SCHEDULE_TIMES[SCHEDULE_TIMES.length - 1]; // "22:00"
-  const [lastH, lastM] = lastSlot.split(":").map(Number);
-  const isPastLastSlot = jstHour > lastH || (jstHour === lastH && jstMin >= lastM);
-  if (isPastLastSlot) {
-    jstNow.setUTCDate(jstNow.getUTCDate() + 1);
-    console.log(`⏰ 本日の最終スロット(${lastSlot})を過ぎているため、翌日(${jstNow.toISOString().slice(0, 10)})分として生成します。`);
-  }
-  const today = jstNow.toISOString().slice(0, 10); // JST
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); // JST
   const browser = await puppeteer.launch({ headless: true });
   const saveFile = path.join(POSTS_DIR, `${today}.txt`);
   const lines = [

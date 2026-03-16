@@ -52,9 +52,10 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "posts")));
 app.use("/images",      express.static(path.join(__dirname, "images")));
-app.use("/shorts",      express.static(path.join(__dirname, "shorts")));
-app.use("/thumbnails",  express.static(path.join(__dirname, "thumbnails")));
-app.use("/videos",      express.static(path.join(__dirname, "videos")));
+app.use("/shorts",        express.static(path.join(__dirname, "shorts")));
+app.use("/shorts_slides", express.static(path.join(__dirname, "shorts_slides")));
+app.use("/thumbnails",    express.static(path.join(__dirname, "thumbnails")));
+app.use("/videos",        express.static(path.join(__dirname, "videos")));
 
 const xClient = new TwitterApi({
   appKey:        process.env.X_API_KEY,
@@ -66,28 +67,59 @@ const xClient = new TwitterApi({
 // 予約済みタスク管理
 const scheduledJobs = {};
 
-// ── 予約投稿API ─────────────────────────────────────────────────────────
-app.post("/api/schedule", async (req, res) => {
-  const { postNum, text, scheduleTime, sourceUrl, thumbPath } = req.body;
+// ── 投稿実行（再利用可能） ────────────────────────────────────────────────
+async function executePost({ postNum, text, sourceUrl, thumbPath }) {
+  try {
+    let tweetParams = { text };
+    if (thumbPath && fs.existsSync(thumbPath)) {
+      try {
+        const mediaId = await xClient.v1.uploadMedia(thumbPath);
+        tweetParams.media = { media_ids: [mediaId] };
+        console.log(`🖼️  投稿${postNum} 画像アップロード完了`);
+      } catch (mediaErr) {
+        console.log(`⚠️  投稿${postNum} 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+      }
+    }
+    const tweet = await xClient.v2.tweet(tweetParams);
+    const tweetId = tweet.data.id;
+    console.log(`✅ 投稿${postNum} 送信完了 (ID: ${tweetId})`);
+    if (sourceUrl) {
+      await xClient.v2.reply(sourceUrl, tweetId);
+      console.log(`💬 投稿${postNum} リプ送信完了`);
+    }
+    delete scheduledJobs[postNum];
+  } catch (e) {
+    console.error(`❌ 投稿${postNum} エラー:`, e.message);
+  }
+}
 
-  // 予約時刻を計算
+// ── 予約をセット（再利用可能） ────────────────────────────────────────────
+function scheduleJob({ postNum, text, sourceUrl, thumbPath, scheduleDate, scheduleTime }) {
   const now = new Date();
   const [hours, minutes] = scheduleTime.split(":").map(Number);
-  const scheduledDate = new Date();
-  scheduledDate.setHours(hours, minutes, 0, 0);
-
-  // 既に過ぎている時刻なら翌日にセット
-  if (scheduledDate <= now) {
-    scheduledDate.setDate(scheduledDate.getDate() + 1);
+  let scheduledDate;
+  if (scheduleDate) {
+    // 明示的に日付が指定されている場合はその日付のJST時刻をUTCに変換
+    scheduledDate = new Date(`${scheduleDate}T${scheduleTime}:00+09:00`);
+  } else {
+    scheduledDate = new Date();
+    scheduledDate.setHours(hours, minutes, 0, 0);
+    if (scheduledDate <= now) scheduledDate.setDate(scheduledDate.getDate() + 1);
   }
-
   const msUntil = scheduledDate - now;
-  const scheduledStr = scheduledDate.toLocaleString("ja-JP");
+  if (scheduledJobs[postNum]) clearTimeout(scheduledJobs[postNum]);
+  scheduledJobs[postNum] = setTimeout(() => executePost({ postNum, text, sourceUrl, thumbPath }), msUntil);
+  return { scheduledAt: scheduledDate.toLocaleString("ja-JP"), msUntil };
+}
 
-  // 承認済みJSONに保存（GitHub Actions用）
-  const today = new Date().toISOString().slice(0, 10);
-  const approvedPath = path.join(__dirname, "temp", `approved_${today}.json`);
-  let approved = { date: today, posts: [] };
+// ── 予約投稿API ─────────────────────────────────────────────────────────
+app.post("/api/schedule", async (req, res) => {
+  const { postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath } = req.body;
+
+  // 承認済みJSONに保存（scheduleDate指定があればその日付、なければJST今日）
+  const targetDate = scheduleDate || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const approvedPath = path.join(__dirname, "temp", `approved_${targetDate}.json`);
+  let approved = { date: targetDate, posts: [] };
   if (fs.existsSync(approvedPath)) {
     approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
   }
@@ -100,49 +132,11 @@ app.post("/api/schedule", async (req, res) => {
   }
   approved.posts.sort((a, b) => a.postNum - b.postNum);
   fs.writeFileSync(approvedPath, JSON.stringify(approved, null, 2), "utf8");
-  console.log(`💾 approved_${today}.json に保存 (投稿${postNum})`);
+  console.log(`💾 approved_${targetDate}.json に保存 (投稿${postNum})`);
 
-  console.log(`📅 投稿${postNum} を ${scheduledStr} に予約しました（${Math.round(msUntil/1000/60)}分後）`);
-
-  // 既存の予約があればキャンセル
-  if (scheduledJobs[postNum]) {
-    clearTimeout(scheduledJobs[postNum]);
-  }
-
-  // タイムアウトで予約
-  scheduledJobs[postNum] = setTimeout(async () => {
-    try {
-      let tweetParams = { text };
-
-      // サムネイル画像があればアップロード
-      if (thumbPath && fs.existsSync(thumbPath)) {
-        try {
-          const mediaId = await xClient.v1.uploadMedia(thumbPath);
-          tweetParams.media = { media_ids: [mediaId] };
-          console.log(`🖼️  投稿${postNum} 画像アップロード完了`);
-        } catch (mediaErr) {
-          console.log(`⚠️  投稿${postNum} 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
-        }
-      }
-
-      // ツイート投稿
-      const tweet = await xClient.v2.tweet(tweetParams);
-      const tweetId = tweet.data.id;
-      console.log(`✅ 投稿${postNum} 送信完了 (ID: ${tweetId})`);
-
-      // リプ欄に元ネタURL
-      if (sourceUrl) {
-        await xClient.v2.reply(sourceUrl, tweetId);
-        console.log(`💬 投稿${postNum} リプ送信完了`);
-      }
-
-      delete scheduledJobs[postNum];
-    } catch (e) {
-      console.error(`❌ 投稿${postNum} エラー:`, e.message);
-    }
-  }, msUntil);
-
-  res.json({ success: true, scheduledAt: scheduledStr, msUntil });
+  const { scheduledAt, msUntil } = scheduleJob({ postNum, text, sourceUrl, thumbPath, scheduleDate: targetDate, scheduleTime });
+  console.log(`📅 投稿${postNum} を ${scheduledAt} に予約しました（${Math.round(msUntil/1000/60)}分後）`);
+  res.json({ success: true, scheduledAt, msUntil });
 });
 
 // ── 予約キャンセルAPI ───────────────────────────────────────────────────
@@ -152,7 +146,7 @@ app.post("/api/cancel", (req, res) => {
     clearTimeout(scheduledJobs[postNum]);
     delete scheduledJobs[postNum];
     // 承認済みJSONからも削除
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const approvedPath = path.join(__dirname, "temp", `approved_${today}.json`);
     if (fs.existsSync(approvedPath)) {
       const approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
@@ -173,7 +167,7 @@ app.get("/api/status", (req, res) => {
 
 // ── GitHub Push API ──────────────────────────────────────────────────────
 app.post("/api/push-github", (req, res) => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   // ① mainブランチへの投稿データpush
   try {
@@ -573,20 +567,27 @@ app.get("/youtube", (req, res) => {
   const SHORTS_DIR = path.join(__dirname, "shorts");
 
   // 日付を決定（クエリ or 最新ファイル自動検出）
+  // generated_*.json を優先（最新の投稿日付）、なければ shorts_content_*.json から取得
   let today = req.query.date;
   if (!today) {
-    const files = fs.readdirSync(TEMP_DIR)
-      .filter(f => f.startsWith("shorts_content_") && f.endsWith(".json"))
-      .sort().reverse();
-    if (files.length === 0) {
-      return res.send("<h2>shorts_content_*.json が見つかりません。generate_shorts.js を先に実行してください。</h2>");
+    const genFiles = fs.existsSync(TEMP_DIR)
+      ? fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("generated_") && f.endsWith(".json")).sort().reverse()
+      : [];
+    const cFiles = fs.existsSync(TEMP_DIR)
+      ? fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("shorts_content_") && f.endsWith(".json")).sort().reverse()
+      : [];
+    const latestGen     = genFiles.length ? genFiles[0].replace("generated_", "").replace(".json", "") : "";
+    const latestContent = cFiles.length  ? cFiles[0].replace("shorts_content_", "").replace(".json", "") : "";
+    today = latestGen >= latestContent ? latestGen : latestContent;
+    if (!today) {
+      return res.send("<h2>コンテンツファイルが見つかりません。先にX投稿ランチャーでPushしてください。</h2>");
     }
-    today = files[0].replace("shorts_content_", "").replace(".json", "");
   }
 
   const contentPath = path.join(TEMP_DIR, `shorts_content_${today}.json`);
   if (!fs.existsSync(contentPath)) {
-    return res.send(`<h2>ファイルが見つかりません: ${contentPath}</h2>`);
+    // shorts_content がない場合は Shorts ランチャーに誘導
+    return res.redirect(`/shorts-launcher?date=${today}`);
   }
 
   const { posts: contentPosts } = JSON.parse(fs.readFileSync(contentPath, "utf8"));
@@ -624,6 +625,395 @@ app.get("/youtube", (req, res) => {
   });
 
   res.send(buildYouTubeLauncherHtml(today, shorts));
+});
+
+// ── Shorts コンテンツ自動生成（Claude Haiku） ─────────────────────────────
+async function generateShortsContentServer(genPosts, date) {
+  const EMOTIONS = ["SURPRISE", "HAPPY", "THINK", "SHOCK", "SAD", "EXCITED"];
+  const posts = [];
+  for (const gp of genPosts) {
+    const prompt = `以下の海外Redditネタを元に、YouTubeショート動画用のコンテンツを日本語で作成してください。
+
+元ネタ:
+タイトル: ${gp.title}
+投稿文: ${gp.postText}
+
+以下のJSON形式のみで返答してください（他のテキスト不要）:
+{
+  "catchLine1": "視聴者が思わず止まる1行目キャッチ（10〜16文字）",
+  "catchLine2": "驚きを深める2行目キャッチ（10〜16文字）",
+  "slide1": {
+    "narration": "導入ナレーション（60〜80文字）。視聴者を引き込む衝撃の事実から始める",
+    "subtitle": "スライド字幕1（改行可、1行12文字以内×2行）",
+    "emotion": "SURPRISE"
+  },
+  "slide2": {
+    "narration": "詳細説明ナレーション（60〜80文字）。なぜそうなるのか理由や背景を説明",
+    "subtitle": "スライド字幕2（改行可、1行12文字以内×2行）",
+    "emotion": "THINK"
+  },
+  "slide3": {
+    "narration": "海外反応ナレーション（60〜80文字）。世界での反応や驚きを伝える",
+    "subtitle": "スライド字幕3（改行可、1行12文字以内×2行）",
+    "emotion": "SHOCK"
+  },
+  "slide4": {
+    "narration": "締めナレーション（40〜60文字）。視聴者への問いかけまたは行動促進",
+    "subtitle": "スライド字幕4（改行可、1行12文字以内×2行）"
+  }
+}
+
+emotionは ${EMOTIONS.join(" / ")} のいずれかを使用。slide4はemission不要。`;
+
+    try {
+      const msg = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 800,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const raw = msg.content[0].text;
+      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+      posts.push(parsed);
+      console.log(`✅ Shorts コンテンツ生成: ${parsed.catchLine1}`);
+    } catch (e) {
+      console.error(`❌ Shorts コンテンツ生成失敗:`, e.message);
+      posts.push({
+        catchLine1: gp.title.slice(0, 16),
+        catchLine2: "詳細はこちら",
+        slide1: { narration: gp.postText.slice(0, 80), subtitle: "詳細情報", emotion: "SURPRISE" },
+        slide2: { narration: "海外でも話題になっています。", subtitle: "海外の反応", emotion: "THINK" },
+        slide3: { narration: "世界中で注目を集めています。", subtitle: "世界が注目", emotion: "SHOCK" },
+        slide4: { narration: "あなたはどう思いますか？", subtitle: "あなたは\nどう思う？" },
+      });
+    }
+  }
+  const content = { date, posts };
+  const filePath = path.join(__dirname, "temp", `shorts_content_${date}.json`);
+  fs.writeFileSync(filePath, JSON.stringify(content, null, 2), "utf8");
+  console.log(`💾 shorts_content_${date}.json を保存`);
+  return content;
+}
+
+// ── Shorts コンテンツ取得API ─────────────────────────────────────────────
+app.get("/api/shorts-content", async (req, res) => {
+  let date = req.query.date;
+  const TEMP_DIR = path.join(__dirname, "temp");
+  if (!date) {
+    const files = fs.existsSync(TEMP_DIR)
+      ? fs.readdirSync(TEMP_DIR).filter(f => f.startsWith("generated_") && f.endsWith(".json")).sort().reverse()
+      : [];
+    if (!files.length) return res.json({ success: false, message: "generated_*.json が見つかりません。先にX投稿ランチャーでPushしてください。" });
+    date = files[0].replace("generated_", "").replace(".json", "");
+  }
+
+  const contentPath = path.join(TEMP_DIR, `shorts_content_${date}.json`);
+  if (fs.existsSync(contentPath)) {
+    const content = JSON.parse(fs.readFileSync(contentPath, "utf8"));
+    return res.json({ success: true, date, content, generated: false });
+  }
+
+  const genPath = path.join(TEMP_DIR, `generated_${date}.json`);
+  if (!fs.existsSync(genPath)) {
+    return res.json({ success: false, message: `generated_${date}.json が見つかりません。先にX投稿ランチャーでPushしてください。` });
+  }
+
+  try {
+    const { posts: genPosts } = JSON.parse(fs.readFileSync(genPath, "utf8"));
+    console.log(`🤖 shorts_content_${date}.json を自動生成中 (${genPosts.length}件)...`);
+    const content = await generateShortsContentServer(genPosts, date);
+    res.json({ success: true, date, content, generated: true });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// ── Shorts コンテンツ保存API ─────────────────────────────────────────────
+app.post("/api/shorts-content", (req, res) => {
+  const { date, posts } = req.body;
+  if (!date || !posts) return res.json({ success: false, message: "date, posts が必要です" });
+  const filePath = path.join(__dirname, "temp", `shorts_content_${date}.json`);
+  try {
+    fs.writeFileSync(filePath, JSON.stringify({ date, posts }, null, 2), "utf8");
+    console.log(`💾 shorts_content_${date}.json を保存 (${posts.length}件)`);
+    res.json({ success: true });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
+});
+
+// ── Shorts GitHub Push API ───────────────────────────────────────────────
+app.post("/api/push-shorts", (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.json({ success: false, message: "date が必要です" });
+  const filePath = `02_reddit_global/temp/shorts_content_${date}.json`;
+  try {
+    execSync(
+      `git -C "${REPO_ROOT}" add "${filePath}" && git -C "${REPO_ROOT}" commit -m "shorts ${date}" && git -C "${REPO_ROOT}" push`,
+      { stdio: "pipe" }
+    );
+    console.log(`✅ shorts_content_${date}.json を GitHub にpush完了`);
+    res.json({ success: true });
+  } catch (e) {
+    const msg = e.stderr ? e.stderr.toString() : e.message;
+    if (msg.includes("nothing to commit")) {
+      console.log("変更なし（既にpush済み）");
+      return res.json({ success: true });
+    }
+    console.error("❌ push失敗:", msg);
+    res.json({ success: false, message: msg });
+  }
+});
+
+// ── Shorts ランチャーHTML ─────────────────────────────────────────────────
+function buildShortsLauncherHtml() {
+  const EMOTION_OPTIONS = ["SURPRISE", "HAPPY", "THINK", "SHOCK", "SAD", "EXCITED"];
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Shorts制作ランチャー</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", sans-serif; background: #0d0d1a; color: #e0e0e0; min-height: 100vh; }
+    .topbar { background: #1a1a2e; border-bottom: 1px solid #333; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
+    .topbar h1 { font-size: 1.1em; font-weight: 900; color: #ff6b6b; white-space: nowrap; }
+    .nav { display: flex; gap: 8px; margin-left: auto; }
+    .nav a { padding: 6px 14px; border-radius: 16px; text-decoration: none; font-size: 0.82em; font-weight: bold; color: #999; border: 1px solid #333; }
+    .nav a:hover { color: #fff; border-color: #666; }
+    .nav a.active { background: #ff4444; color: #fff; border-color: #ff4444; }
+    .toolbar { background: #16213e; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #333; flex-wrap: wrap; }
+    .date-badge { background: #0f3460; color: #4fc3f7; padding: 5px 14px; border-radius: 12px; font-size: 0.9em; font-weight: bold; }
+    .status-msg { font-size: 0.85em; color: #aaa; flex: 1; }
+    .btn-push { background: linear-gradient(135deg, #ff4444, #ff6b6b); color: #fff; border: none; padding: 10px 24px; border-radius: 20px; font-size: 0.95em; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+    .btn-push:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(255,68,68,0.4); }
+    .btn-push:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .content { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .loading { text-align: center; padding: 60px 20px; color: #4fc3f7; font-size: 1.1em; }
+    .loading .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top-color: #4fc3f7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box { background: #2a1a1a; border: 1px solid #ff4444; border-radius: 8px; padding: 20px; color: #ff8888; text-align: center; }
+    .post-card { background: #16213e; border: 1px solid #2a3a5e; border-radius: 12px; margin-bottom: 24px; overflow: hidden; }
+    .post-header { background: linear-gradient(135deg, #1a1a2e, #0f3460); padding: 12px 18px; display: flex; align-items: center; gap: 12px; }
+    .post-num { background: #ff4444; color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9em; flex-shrink: 0; }
+    .catch-row { display: flex; gap: 8px; flex: 1; }
+    .catch-input { flex: 1; background: #0d1b3e; border: 1px solid #3a4a6e; border-radius: 8px; padding: 6px 10px; color: #fff; font-size: 0.9em; font-weight: bold; }
+    .catch-input:focus { outline: none; border-color: #4fc3f7; }
+    .catch-label { font-size: 0.72em; color: #4fc3f7; align-self: flex-end; padding-bottom: 6px; white-space: nowrap; }
+    .slides-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px; }
+    @media (max-width: 900px) { .slides-grid { grid-template-columns: repeat(2, 1fr); } }
+    .slide-card { background: #0d1b3e; border: 1px solid #2a3a5e; border-radius: 10px; overflow: hidden; }
+    .slide-preview { background: linear-gradient(180deg, #0a0a1a 0%, #1a0a2e 100%); aspect-ratio: 9/16; max-height: 200px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px; text-align: center; }
+    .slide-preview img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; border-radius: 0; }
+    .slide-num-badge { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.7); color: #4fc3f7; font-size: 0.65em; font-weight: bold; padding: 2px 7px; border-radius: 8px; z-index: 1; }
+    .slide-subtitle-preview { font-size: 0.75em; font-weight: bold; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); white-space: pre-line; line-height: 1.4; z-index: 1; }
+    .emotion-badge-preview { position: absolute; bottom: 6px; right: 6px; font-size: 0.6em; font-weight: bold; padding: 2px 6px; border-radius: 6px; z-index: 1; }
+    .em-SURPRISE { background: #ff6b6b; color: #fff; }
+    .em-HAPPY { background: #ffd93d; color: #333; }
+    .em-THINK { background: #4fc3f7; color: #000; }
+    .em-SHOCK { background: #ff4444; color: #fff; }
+    .em-SAD { background: #7986cb; color: #fff; }
+    .em-EXCITED { background: #ff9800; color: #fff; }
+    .slide-fields { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .field-label { font-size: 0.7em; color: #888; font-weight: bold; margin-bottom: 2px; }
+    .field-ta { width: 100%; background: #0a0a1a; border: 1px solid #2a3a5e; border-radius: 6px; padding: 6px 8px; color: #e0e0e0; font-size: 0.78em; line-height: 1.5; resize: vertical; font-family: inherit; }
+    .field-ta:focus { outline: none; border-color: #4fc3f7; }
+    .field-select { width: 100%; background: #0a0a1a; border: 1px solid #2a3a5e; border-radius: 6px; padding: 5px 8px; color: #e0e0e0; font-size: 0.78em; }
+    .field-select:focus { outline: none; border-color: #4fc3f7; }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 24px; border-radius: 20px; font-size: 0.88em; z-index: 999; display: none; }
+    .toast.ok { background: #27ae60; }
+    .toast.err { background: #e74c3c; }
+    .actions-bar { padding: 12px 16px; background: #0f0f1a; border-top: 1px solid #2a3a5e; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .btn-regen { background: #0f3460; color: #4fc3f7; border: 1px solid #4fc3f7; padding: 7px 14px; border-radius: 14px; font-size: 0.8em; cursor: pointer; }
+    .btn-regen:hover { background: #1a4a80; }
+    .btn-save-local { background: #333; color: #ccc; border: 1px solid #555; padding: 7px 14px; border-radius: 14px; font-size: 0.8em; cursor: pointer; }
+    .btn-save-local:hover { background: #444; }
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🎬 Shorts制作ランチャー</h1>
+  <nav class="nav">
+    <a href="/launcher">𝕏 X投稿</a>
+    <a href="/youtube">▶ YouTube</a>
+    <a href="/shorts-launcher" class="active">🎬 Shorts</a>
+    <a href="/engagement">🎯 交流</a>
+  </nav>
+</div>
+<div class="toolbar">
+  <span class="date-badge" id="dateBadge">読み込み中...</span>
+  <span class="status-msg" id="statusMsg">コンテンツを読み込んでいます...</span>
+  <button class="btn-push" id="btnPush" onclick="pushToGitHub()" disabled>🚀 GitHubにPush → 動画生成開始</button>
+</div>
+<div class="content" id="mainContent">
+  <div class="loading"><div class="spinner"></div>コンテンツを準備しています...<br><small style="color:#666;margin-top:8px;display:block">初回はClaudeがコンテンツを自動生成します（30秒〜1分）</small></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const EMOTION_OPTIONS = ${JSON.stringify(EMOTION_OPTIONS)};
+let currentDate = null;
+let currentPosts = null;
+
+async function loadContent() {
+  const res = await fetch("/api/shorts-content");
+  const data = await res.json();
+  if (!data.success) {
+    document.getElementById("mainContent").innerHTML =
+      '<div class="error-box">❌ ' + data.message + '</div>';
+    document.getElementById("statusMsg").textContent = "エラー";
+    return;
+  }
+  currentDate = data.date;
+  currentPosts = data.content.posts;
+  document.getElementById("dateBadge").textContent = data.date;
+  document.getElementById("statusMsg").textContent =
+    data.generated ? "✨ Claude が自動生成しました。内容を確認・編集してPushしてください" :
+    "✅ 保存済みコンテンツを読み込みました。編集後にPushしてください";
+  document.getElementById("btnPush").disabled = false;
+  renderPosts();
+}
+
+function renderPosts() {
+  const html = currentPosts.map((post, idx) => renderPostCard(post, idx)).join("");
+  document.getElementById("mainContent").innerHTML = html;
+}
+
+function renderPostCard(post, idx) {
+  const num = idx + 1;
+  const slides = ["slide1","slide2","slide3","slide4"];
+  const slideNames = ["①導入","②詳細","③反応","④締め"];
+  const slideCodes = ["s00_title","s01_content1","s02_content2","s04_cta"];
+
+  const slideCards = slides.map((sk, si) => {
+    const slide = post[sk] || {};
+    const imgPath = "/shorts_slides/" + currentDate + "_" + num + "/" + slideCodes[si] + ".png";
+    const emotion = slide.emotion || "";
+    const emClass = emotion ? "em-" + emotion : "";
+    const emotionBadge = emotion ? '<span class="emotion-badge-preview ' + emClass + '">' + emotion + '</span>' : "";
+    const emotionSelect = si < 3
+      ? '<div class="field-label">感情</div><select class="field-select" id="post' + idx + '_' + sk + '_emotion" onchange="syncPreview(' + idx + ',' + si + ')">' +
+        EMOTION_OPTIONS.map(e => '<option value="' + e + '"' + (e === emotion ? " selected" : "") + '>' + e + '</option>').join("") +
+        '</select>'
+      : "";
+
+    const subtitleDisplay = (slide.subtitle || "").replace(/\\n/g, "\\n");
+
+    return '<div class="slide-card">'
+      + '<div class="slide-preview" id="preview_' + idx + '_' + si + '">'
+      + '<img src="' + imgPath + '" onerror="this.remove()">'
+      + '<span class="slide-num-badge">' + slideNames[si] + '</span>'
+      + '<div class="slide-subtitle-preview" id="subtitlePrev_' + idx + '_' + si + '">' + (slide.subtitle || "").replace(/</g,"&lt;") + '</div>'
+      + emotionBadge
+      + '</div>'
+      + '<div class="slide-fields">'
+      + '<div class="field-label">字幕（改行=\\n）</div>'
+      + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_subtitle" rows="2" oninput="syncPreview(' + idx + ',' + si + ')">' + (slide.subtitle || "") + '</textarea>'
+      + '<div class="field-label">ナレーション</div>'
+      + '<textarea class="field-ta" id="post' + idx + '_' + sk + '_narration" rows="3">' + (slide.narration || "") + '</textarea>'
+      + emotionSelect
+      + '</div></div>';
+  }).join("");
+
+  return '<div class="post-card" id="postcard_' + idx + '">'
+    + '<div class="post-header">'
+    + '<div class="post-num">' + num + '</div>'
+    + '<div class="catch-row">'
+    + '<span class="catch-label">キャッチ①</span>'
+    + '<input class="catch-input" id="post' + idx + '_catchLine1" value="' + (post.catchLine1 || "").replace(/"/g,"&quot;") + '">'
+    + '<span class="catch-label">キャッチ②</span>'
+    + '<input class="catch-input" id="post' + idx + '_catchLine2" value="' + (post.catchLine2 || "").replace(/"/g,"&quot;") + '">'
+    + '</div>'
+    + '</div>'
+    + '<div class="slides-grid">' + slideCards + '</div>'
+    + '<div class="actions-bar">'
+    + '<button class="btn-save-local" onclick="savePost(' + idx + ')">💾 この投稿を保存</button>'
+    + '</div>'
+    + '</div>';
+}
+
+function syncPreview(idx, si) {
+  const sk = "slide" + (si + 1);
+  const subtitle = document.getElementById("post" + idx + "_" + sk + "_subtitle")?.value || "";
+  const prev = document.getElementById("subtitlePrev_" + idx + "_" + si);
+  if (prev) prev.textContent = subtitle;
+}
+
+function collectAll() {
+  const posts = currentPosts.map((_, idx) => {
+    const slides = {};
+    ["slide1","slide2","slide3","slide4"].forEach((sk, si) => {
+      slides[sk] = {
+        narration: document.getElementById("post" + idx + "_" + sk + "_narration")?.value || "",
+        subtitle:  document.getElementById("post" + idx + "_" + sk + "_subtitle")?.value || "",
+      };
+      const emotionEl = document.getElementById("post" + idx + "_" + sk + "_emotion");
+      if (emotionEl) slides[sk].emotion = emotionEl.value;
+    });
+    return {
+      catchLine1: document.getElementById("post" + idx + "_catchLine1")?.value || "",
+      catchLine2: document.getElementById("post" + idx + "_catchLine2")?.value || "",
+      ...slides,
+    };
+  });
+  return posts;
+}
+
+async function savePost(idx) {
+  currentPosts = collectAll();
+  const res = await fetch("/api/shorts-content", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: currentDate, posts: currentPosts }),
+  });
+  const data = await res.json();
+  showToast(data.success ? "💾 保存しました" : "❌ " + data.message, data.success);
+}
+
+async function pushToGitHub() {
+  const btn = document.getElementById("btnPush");
+  btn.disabled = true; btn.textContent = "⏳ 保存 & Push中...";
+  // まずローカル保存
+  currentPosts = collectAll();
+  const saveRes = await fetch("/api/shorts-content", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: currentDate, posts: currentPosts }),
+  });
+  if (!(await saveRes.json()).success) {
+    btn.disabled = false; btn.textContent = "🚀 GitHubにPush → 動画生成開始";
+    showToast("❌ 保存に失敗しました", false); return;
+  }
+  // Push
+  const pushRes = await fetch("/api/push-shorts", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: currentDate }),
+  });
+  const pushData = await pushRes.json();
+  if (pushData.success) {
+    document.getElementById("statusMsg").innerHTML =
+      '✅ Push完了！<a href="https://github.com/gagazetmt/sekai_no_wadai/actions" target="_blank" style="color:#4fc3f7">GitHub Actions で動画生成 →</a>';
+    btn.textContent = "✅ Push完了";
+    showToast("🚀 GitHubにPushしました！", true);
+  } else {
+    btn.disabled = false; btn.textContent = "🚀 GitHubにPush → 動画生成開始";
+    showToast("❌ " + pushData.message, false);
+  }
+}
+
+function showToast(msg, ok) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "toast " + (ok ? "ok" : "err");
+  t.style.display = "block";
+  setTimeout(() => { t.style.display = "none"; }, 3000);
+}
+
+loadContent();
+</script>
+</body>
+</html>`;
+}
+
+app.get("/shorts-launcher", (req, res) => {
+  res.send(buildShortsLauncherHtml());
 });
 
 // ── Engagement Command Center ─────────────────────────────────────────────
@@ -1114,7 +1504,6 @@ app.get("/app", (req, res) => {
     <div class="tab-logo">🌍</div>
     <div class="tab active" data-tab="x" onclick="switchTab('x')">𝕏 X投稿</div>
     <div class="tab" data-tab="eng" onclick="switchTab('eng')">🎯 交流</div>
-    <div class="tab" data-tab="yt" onclick="switchTab('yt')">▶ YouTube</div>
   </div>
   <div class="frames">
     <div class="frame-wrap active" id="tab-x">
@@ -1124,13 +1513,9 @@ app.get("/app", (req, res) => {
       <div class="loading-msg" id="loading-eng">読み込み中...</div>
       <iframe id="frame-eng" style="display:none"></iframe>
     </div>
-    <div class="frame-wrap" id="tab-yt">
-      <div class="loading-msg" id="loading-yt">読み込み中...</div>
-      <iframe id="frame-yt" style="display:none"></iframe>
-    </div>
   </div>
   <script>
-    const SRCS = { x: null, eng: "/engagement", yt: "/youtube" };
+    const SRCS = { x: null, eng: "/engagement" };
     function switchTab(name) {
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
       document.querySelectorAll(".frame-wrap").forEach(f => f.classList.remove("active"));
@@ -1163,12 +1548,48 @@ app.get("/launcher", (req, res) => {
   res.redirect(`/${htmlFiles[0]}`);
 });
 
+// ── 起動時に未投稿の予約を復元 ───────────────────────────────────────────
+function restoreScheduledPosts() {
+  const TEMP_DIR = path.join(__dirname, "temp");
+  if (!fs.existsSync(TEMP_DIR)) return;
+
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const approvedPath = path.join(TEMP_DIR, `approved_${today}.json`);
+  if (!fs.existsSync(approvedPath)) return;
+
+  let approved;
+  try { approved = JSON.parse(fs.readFileSync(approvedPath, "utf8")); }
+  catch { return; }
+
+  const now = new Date();
+  let restored = 0;
+  for (const post of approved.posts) {
+    const [h, m] = post.scheduleTime.split(":").map(Number);
+    const scheduledDate = new Date();
+    scheduledDate.setHours(h, m, 0, 0);
+    // 今日の予約時刻がまだ未来なら復元（翌日扱いにしない）
+    if (scheduledDate > now) {
+      scheduleJob({
+        postNum:      post.postNum,
+        text:         post.text,
+        sourceUrl:    post.sourceUrl,
+        thumbPath:    post.thumbPath,
+        scheduleTime: post.scheduleTime,
+      });
+      console.log(`♻️  復元: 投稿${post.postNum} → ${post.scheduleTime} (${Math.round((scheduledDate - now)/1000/60)}分後)`);
+      restored++;
+    }
+  }
+  if (restored > 0) console.log(`♻️  予約復元完了: ${restored}件\n`);
+}
+
 const PORT = 3000;
 const server = app.listen(PORT, () => {
   console.log(`\n🚀 投稿サーバー起動！`);
   console.log(`📋 X投稿ランチャー:  http://localhost:3000/launcher`);
   console.log(`▶  YouTubeランチャー: http://localhost:3000/youtube`);
   console.log(`🎯 交流センター:      http://localhost:3000/engagement\n`);
+  restoreScheduledPosts();
 });
 
 server.on("error", (err) => {
