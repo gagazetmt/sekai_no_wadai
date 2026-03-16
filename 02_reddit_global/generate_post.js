@@ -835,7 +835,7 @@ function generateHtml(today, posts) {
         + day.posts.map(p =>
           '<div class="approved-post">'
           + '<span class="ap-time">' + p.scheduleTime + '</span>'
-          + '<span class="ap-text">' + p.text.replace(/\n/g, ' ').replace(/</g, '&lt;').slice(0, 60) + '…</span>'
+          + '<span class="ap-text">' + p.text.replace(/\\n/g, ' ').replace(/</g, '&lt;').slice(0, 60) + '…</span>'
           + '<button class="btn-del-post" data-date="' + day.date + '" data-num="' + p.postNum + '" onclick="deletePost(this.dataset.date, +this.dataset.num)">✕</button>'
           + '</div>'
         ).join('')
