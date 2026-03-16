@@ -886,8 +886,8 @@ function generateHtml(today, posts) {
       el.style.color = len > 140 ? '#f4212e' : len > 120 ? '#ffd400' : '#536471';
     }
 
-    // 日付selectを初期化（今日/明日/明後日）
-    (function initDateSelectors() {
+    // 日付selectを初期化（今日/明日/明後日）— DOM構築後に実行
+    document.addEventListener('DOMContentLoaded', function() {
       const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
       const pad = n => String(n).padStart(2, '0');
       const toDateStr = d => d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate());
@@ -908,7 +908,7 @@ function generateHtml(today, posts) {
         const timeSel = document.getElementById('time-' + postNum);
         if (timeSel) _setSmartDateDefault(sel, timeSel.value, jstNow, dateOptions);
       });
-    })();
+    });
 
     function _setSmartDateDefault(dateSel, timeStr, jstNow, dateOptions) {
       const [h, m] = timeStr.split(':').map(Number);
