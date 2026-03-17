@@ -37,7 +37,7 @@ async function main() {
 
   // GitHub Actions の cron 式から担当スロットを確定（遅延があっても混線しない）
   let scheduledTime;
-  const cronExpr = process.env.GITHUB_SCHEDULED_CRON;
+  const cronExpr = process.env.SCHEDULED_CRON;
   if (cronExpr) {
     // "30 22 * * *" → UTC 22:30 → JST 07:30
     const [min, hour] = cronExpr.split(" ");
