@@ -35,24 +35,36 @@ async function main() {
 
   console.log(`\n現在時刻 (JST): ${jstDateStr} ${jstTimeStr}`);
 
-  // スケジュールに照合（±12分以内）
-  let postIndex = -1;
-  for (let i = 0; i < SCHEDULE_TIMES.length; i++) {
-    const [h, m] = SCHEDULE_TIMES[i].split(":").map(Number);
-    const schedMinutes = h * 60 + m;
-    if (Math.abs(jstMinutes - schedMinutes) <= TOLERANCE_MINUTES) {
-      postIndex = i;
-      break;
+  // GitHub Actions の cron 式から担当スロットを確定（遅延があっても混線しない）
+  let scheduledTime;
+  const cronExpr = process.env.GITHUB_SCHEDULED_CRON;
+  if (cronExpr) {
+    // "30 22 * * *" → UTC 22:30 → JST 07:30
+    const [min, hour] = cronExpr.split(" ");
+    const utcMin = parseInt(hour) * 60 + parseInt(min);
+    const jstMin = (utcMin + 9 * 60) % (24 * 60);
+    const jstH = Math.floor(jstMin / 60);
+    const jstM = jstMin % 60;
+    scheduledTime = `${String(jstH).padStart(2, "0")}:${String(jstM).padStart(2, "0")}`;
+    console.log(`→ cron式 "${cronExpr}" から担当スロット: ${scheduledTime}`);
+  } else {
+    // workflow_dispatch（手動実行）時は現在時刻から照合
+    let postIndex = -1;
+    for (let i = 0; i < SCHEDULE_TIMES.length; i++) {
+      const [h, m] = SCHEDULE_TIMES[i].split(":").map(Number);
+      const schedMinutes = h * 60 + m;
+      if (Math.abs(jstMinutes - schedMinutes) <= TOLERANCE_MINUTES) {
+        postIndex = i;
+        break;
+      }
     }
+    if (postIndex === -1) {
+      console.log(`JST ${jstTimeStr} に該当するスケジュールがありません。スキップします。`);
+      process.exit(0);
+    }
+    scheduledTime = SCHEDULE_TIMES[postIndex];
+    console.log(`→ 現在時刻から照合: ${scheduledTime}`);
   }
-
-  if (postIndex === -1) {
-    console.log(`JST ${jstTimeStr} に該当するスケジュールがありません。スキップします。`);
-    process.exit(0);
-  }
-
-  const scheduledTime = SCHEDULE_TIMES[postIndex];
-  console.log(`→ 投稿${postIndex + 1} (予定: ${scheduledTime}) にマッチしました`);
 
   // 今日の承認済みJSONファイルを読む
   const TEMP_DIR = path.join(__dirname, "temp");
@@ -88,15 +100,17 @@ async function main() {
   // メディア（動画 or 画像）アップロード
   let tweetParams = { text: post.text };
 
+  // Windowsパス（バックスラッシュ）をLinuxでも正しくbasenameできるよう正規化
+  const winBasename = (p) => p.replace(/\\/g, "/").split("/").pop();
+
   // 動画: videoPathからファイル名を取り出してリポジトリ内のvideos/を参照
-  // （WindowsフルパスはGitHub Actionsで使えないため basename のみ使用）
   const videoFile = post.videoPath
-    ? path.basename(post.videoPath)
+    ? winBasename(post.videoPath)
     : `${jstDateStr}_${post.postNum}.mp4`;
   const videoPath = path.join(__dirname, "videos", videoFile);
 
   // 画像: thumbPathからファイル名のみ取り出してリポジトリ内の thumbnails/ を参照
-  const thumbFile = post.thumbPath ? path.basename(post.thumbPath) : null;
+  const thumbFile = post.thumbPath ? winBasename(post.thumbPath) : null;
   const thumbRepoPath = thumbFile
     ? path.join(__dirname, "thumbnails", thumbFile)
     : null;
@@ -126,7 +140,17 @@ async function main() {
   }
 
   // ツイート投稿
-  const tweet = await xClient.v2.tweet(tweetParams);
+  let tweet;
+  try {
+    tweet = await xClient.v2.tweet(tweetParams);
+  } catch (tweetErr) {
+    const status = tweetErr.code || tweetErr?.data?.status;
+    if (status === 403) {
+      console.log(`⏭️ 重複投稿のためスキップ（すでに同内容が投稿済み）`);
+      process.exit(0);
+    }
+    throw tweetErr;
+  }
   const tweetId = tweet.data.id;
   console.log(`\n✅ ツイート送信完了 (ID: ${tweetId})`);
 
