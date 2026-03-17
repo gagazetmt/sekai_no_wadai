@@ -40,6 +40,10 @@ on:
     - cron: '30 14 * * *'  # 23:30 JST
   workflow_dispatch:        # 手動実行ボタン（テスト用）
 
+concurrency:
+  group: tweet-post
+  cancel-in-progress: true   # 同時実行は1件のみ、後発はキャンセル
+
 jobs:
   post-tweet:
     runs-on: ubuntu-latest
