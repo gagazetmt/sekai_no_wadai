@@ -173,7 +173,7 @@ app.post("/api/push-github", (req, res) => {
   // ① mainブランチへの投稿データpush
   try {
     execSync(
-      `git -C "${REPO_ROOT}" add -A 02_reddit_global/temp/ && git -C "${REPO_ROOT}" commit -m "posts ${today}" && git -C "${REPO_ROOT}" push`,
+      `git -C "${REPO_ROOT}" add -A 02_reddit_global/temp/ 02_reddit_global/thumbnails/ && git -C "${REPO_ROOT}" commit -m "posts ${today}" && git -C "${REPO_ROOT}" push`,
       { stdio: "pipe" }
     );
     console.log(`✅ GitHub push 完了 (${today})`);
