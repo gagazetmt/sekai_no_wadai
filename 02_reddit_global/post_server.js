@@ -68,34 +68,53 @@ const xClient = new TwitterApi({
 // 予約済みタスク管理
 const scheduledJobs = {};
 
-// ── 投稿実行（再利用可能） ────────────────────────────────────────────────
-async function executePost({ postNum, text, sourceUrl, thumbPath }) {
+// ── 投稿実行（スレッド対応） ──────────────────────────────────────────────
+async function executePost({ postNum, tweets, sourceUrl, thumbPath }) {
+  let lastTweetId = null;
   try {
-    let tweetParams = { text };
-    if (thumbPath && fs.existsSync(thumbPath)) {
-      try {
-        const mediaId = await xClient.v1.uploadMedia(thumbPath);
-        tweetParams.media = { media_ids: [mediaId] };
-        console.log(`🖼️  投稿${postNum} 画像アップロード完了`);
-      } catch (mediaErr) {
-        console.log(`⚠️  投稿${postNum} 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+    for (const [index, tweetText] of tweets.entries()) {
+      let tweetParams = { text: tweetText };
+
+      // 1ツイート目にのみメディアを添付
+      if (index === 0 && thumbPath && fs.existsSync(thumbPath)) {
+        try {
+          const mediaId = await xClient.v1.uploadMedia(thumbPath);
+          tweetParams.media = { media_ids: [mediaId] };
+          console.log(`🖼️  投稿${postNum} 画像アップロード完了`);
+        } catch (mediaErr) {
+          console.log(`⚠️  投稿${postNum} 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+        }
+      }
+
+      let tweet;
+      if (lastTweetId) {
+        tweet = await xClient.v2.reply(tweetText, lastTweetId);
+      } else {
+        tweet = await xClient.v2.tweet(tweetParams);
+      }
+      lastTweetId = tweet.data.id;
+      console.log(`✅ 投稿${postNum} ツイート${index + 1}/${tweets.length} 完了 (ID: ${lastTweetId})`);
+
+      // レート制限対策（最後のツイート以外は1秒待機）
+      if (index < tweets.length - 1) {
+        await new Promise(r => setTimeout(r, 1000));
       }
     }
-    const tweet = await xClient.v2.tweet(tweetParams);
-    const tweetId = tweet.data.id;
-    console.log(`✅ 投稿${postNum} 送信完了 (ID: ${tweetId})`);
-    if (sourceUrl) {
-      await xClient.v2.reply(sourceUrl, tweetId);
-      console.log(`💬 投稿${postNum} リプ送信完了`);
+
+    // 最終リプライにソースURL
+    if (sourceUrl && lastTweetId) {
+      await xClient.v2.reply(sourceUrl, lastTweetId);
+      console.log(`💬 投稿${postNum} ソースURL リプ完了`);
     }
     delete scheduledJobs[postNum];
   } catch (e) {
     console.error(`❌ 投稿${postNum} エラー:`, e.message);
+    // エラーが発生しても既に投稿済みのツイートは維持される
   }
 }
 
 // ── 予約をセット（再利用可能） ────────────────────────────────────────────
-function scheduleJob({ postNum, text, sourceUrl, thumbPath, scheduleDate, scheduleTime }) {
+function scheduleJob({ postNum, tweets, sourceUrl, thumbPath, scheduleDate, scheduleTime }) {
   const now = new Date();
   const [hours, minutes] = scheduleTime.split(":").map(Number);
   let scheduledDate;
@@ -109,13 +128,13 @@ function scheduleJob({ postNum, text, sourceUrl, thumbPath, scheduleDate, schedu
   }
   const msUntil = scheduledDate - now;
   if (scheduledJobs[postNum]) clearTimeout(scheduledJobs[postNum]);
-  scheduledJobs[postNum] = setTimeout(() => executePost({ postNum, text, sourceUrl, thumbPath }), msUntil);
+  scheduledJobs[postNum] = setTimeout(() => executePost({ postNum, tweets, sourceUrl, thumbPath }), msUntil);
   return { scheduledAt: scheduledDate.toLocaleString("ja-JP"), msUntil };
 }
 
 // ── 予約投稿API ─────────────────────────────────────────────────────────
 app.post("/api/schedule", async (req, res) => {
-  const { postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath } = req.body;
+  const { postNum, tweets, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath } = req.body;
 
   // 承認済みJSONに保存（scheduleDate指定があればその日付、なければJST今日）
   const targetDate = scheduleDate || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -125,7 +144,7 @@ app.post("/api/schedule", async (req, res) => {
     approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
   }
   const idx = approved.posts.findIndex(p => p.postNum === postNum);
-  const entry = { postNum, scheduleTime, text, sourceUrl, thumbPath: thumbPath || null, videoPath: videoPath || null };
+  const entry = { postNum, scheduleTime, tweets, sourceUrl, thumbPath: thumbPath || null, videoPath: videoPath || null };
   if (idx >= 0) {
     approved.posts[idx] = entry;
   } else {
@@ -135,7 +154,7 @@ app.post("/api/schedule", async (req, res) => {
   fs.writeFileSync(approvedPath, JSON.stringify(approved, null, 2), "utf8");
   console.log(`💾 approved_${targetDate}.json に保存 (投稿${postNum})`);
 
-  const { scheduledAt, msUntil } = scheduleJob({ postNum, text, sourceUrl, thumbPath, scheduleDate: targetDate, scheduleTime });
+  const { scheduledAt, msUntil } = scheduleJob({ postNum, tweets, sourceUrl, thumbPath, scheduleDate: targetDate, scheduleTime });
   console.log(`📅 投稿${postNum} を ${scheduledAt} に予約しました（${Math.round(msUntil/1000/60)}分後）`);
   res.json({ success: true, scheduledAt, msUntil });
 });

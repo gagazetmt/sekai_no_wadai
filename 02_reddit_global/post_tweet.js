@@ -86,7 +86,10 @@ async function main() {
     process.exit(0);
   }
 
-  console.log(`\n投稿文:\n${post.text}`);
+  // backward compat: 旧形式 text / 新形式 tweets 両対応
+  const tweets = post.tweets || [post.text];
+  console.log(`\nスレッド: ${tweets.length}ツイート`);
+  tweets.forEach((t, i) => console.log(`  [${i+1}] ${t}`));
   console.log(`元ネタURL: ${post.sourceUrl}`);
 
   // X APIクライアント初期化
@@ -96,9 +99,6 @@ async function main() {
     accessToken: process.env.X_ACCESS_TOKEN,
     accessSecret: process.env.X_ACCESS_TOKEN_SECRET,
   });
-
-  // メディア（動画 or 画像）アップロード
-  let tweetParams = { text: post.text };
 
   // Windowsパス（バックスラッシュ）をLinuxでも正しくbasenameできるよう正規化
   const winBasename = (p) => p.replace(/\\/g, "/").split("/").pop();
@@ -115,48 +115,64 @@ async function main() {
     ? path.join(__dirname, "thumbnails", thumbFile)
     : null;
 
-  if (fs.existsSync(videoPath)) {
-    console.log(`\n🎬 動画をアップロード中: ${videoPath}`);
-    try {
-      const mediaId = await xClient.v1.uploadMedia(videoPath, { mimeType: "video/mp4" });
-      tweetParams.media = { media_ids: [mediaId] };
-      console.log(`✅ 動画アップロード完了 (mediaId: ${mediaId})`);
-    } catch (mediaErr) {
-      console.log(`⚠️ 動画アップロード失敗: ${mediaErr.message}`);
-    }
-  } else if (thumbRepoPath && fs.existsSync(thumbRepoPath)) {
-    console.log(`\n🖼️  画像をアップロード中: ${thumbRepoPath}`);
-    try {
-      const mediaId = await xClient.v1.uploadMedia(thumbRepoPath, { mimeType: "image/png" });
-      tweetParams.media = { media_ids: [mediaId] };
-      console.log(`✅ 画像アップロード完了 (mediaId: ${mediaId})`);
-    } catch (mediaErr) {
-      console.log(`⚠️ 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
-    }
-  } else {
-    console.log(`\n📝 メディアなし（テキストのみ）`);
-    console.log(`   動画パス: ${videoPath}`);
-    console.log(`   画像パス: ${thumbRepoPath || "なし"}`);
-  }
+  // スレッド投稿ループ
+  let lastTweetId = null;
+  for (const [index, tweetText] of tweets.entries()) {
+    let tweetParams = { text: tweetText };
 
-  // ツイート投稿
-  let tweet;
-  try {
-    tweet = await xClient.v2.tweet(tweetParams);
-  } catch (tweetErr) {
-    const status = tweetErr.code || tweetErr?.data?.status;
-    if (status === 403) {
-      console.log(`⏭️ 重複投稿のためスキップ（すでに同内容が投稿済み）`);
-      process.exit(0);
+    // 1ツイート目にのみメディアを添付
+    if (index === 0) {
+      if (fs.existsSync(videoPath)) {
+        console.log(`\n🎬 動画をアップロード中: ${videoPath}`);
+        try {
+          const mediaId = await xClient.v1.uploadMedia(videoPath, { mimeType: "video/mp4" });
+          tweetParams.media = { media_ids: [mediaId] };
+          console.log(`✅ 動画アップロード完了 (mediaId: ${mediaId})`);
+        } catch (mediaErr) {
+          console.log(`⚠️ 動画アップロード失敗: ${mediaErr.message}`);
+        }
+      } else if (thumbRepoPath && fs.existsSync(thumbRepoPath)) {
+        console.log(`\n🖼️  画像をアップロード中: ${thumbRepoPath}`);
+        try {
+          const mediaId = await xClient.v1.uploadMedia(thumbRepoPath, { mimeType: "image/png" });
+          tweetParams.media = { media_ids: [mediaId] };
+          console.log(`✅ 画像アップロード完了 (mediaId: ${mediaId})`);
+        } catch (mediaErr) {
+          console.log(`⚠️ 画像アップロード失敗（テキストのみで投稿）: ${mediaErr.message}`);
+        }
+      } else {
+        console.log(`\n📝 メディアなし（テキストのみ）`);
+      }
     }
-    throw tweetErr;
+
+    let tweet;
+    try {
+      if (lastTweetId) {
+        tweet = await xClient.v2.reply(tweetText, lastTweetId);
+      } else {
+        tweet = await xClient.v2.tweet(tweetParams);
+      }
+    } catch (tweetErr) {
+      const status = tweetErr.code || tweetErr?.data?.status;
+      if (status === 403 && index === 0) {
+        console.log(`⏭️ 重複投稿のためスキップ（すでに同内容が投稿済み）`);
+        process.exit(0);
+      }
+      console.log(`⚠️ ツイート${index+1} 投稿失敗（そこまでの投稿は維持）: ${tweetErr.message}`);
+      break;
+    }
+    lastTweetId = tweet.data.id;
+    console.log(`✅ ツイート${index+1}/${tweets.length} 送信完了 (ID: ${lastTweetId})`);
+
+    // レート制限対策
+    if (index < tweets.length - 1) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
-  const tweetId = tweet.data.id;
-  console.log(`\n✅ ツイート送信完了 (ID: ${tweetId})`);
 
   // リプ欄に元ネタURL
-  if (post.sourceUrl) {
-    await xClient.v2.reply(post.sourceUrl, tweetId);
+  if (post.sourceUrl && lastTweetId) {
+    await xClient.v2.reply(post.sourceUrl, lastTweetId);
     console.log(`💬 リプライ送信完了: ${post.sourceUrl}`);
   }
 

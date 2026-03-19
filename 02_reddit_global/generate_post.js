@@ -167,6 +167,7 @@ function fetchSubreddit(subreddit) {
               score: d.score,
               comments: d.num_comments,
               url: `https://www.reddit.com${d.permalink}`,
+              permalink: d.permalink,
               imageUrl,
               videoUrl,
               isVideo,
@@ -228,40 +229,64 @@ async function trimPost(text) {
   return msg.content[0].text.trim();
 }
 
-// Claudeに日本語投稿文を生成させる
+// Claudeにスレッド形式の投稿文を生成させる（配列を返す）
 async function generatePost(post) {
   const prompt = `
-以下の海外Reddit投稿を、日本語のX（Twitter）投稿文に変換してください。
+以下の海外Reddit投稿を、日本語のXスレッド形式に変換してください。
 
 【元の投稿タイトル】
 ${post.title}
 
 【絶対に守るルール】
-- ハッシュタグは一切つけないこと（アルゴリズムに不利なため）
+- 各ツイートは130文字以内（日本語）
+- ハッシュタグは一切つけないこと
 - URLは含めないこと
-- 必ず130文字以内に収めること（超えた場合は文章を削ること。絵文字・問いかけは残す）
+- 通常3〜7ツイート。内容が豊富な場合のみ最大10まで
 
-【構成テンプレート（この順番で書くこと）】
-① 1行目：【衝撃】【驚愕】【速報】【朗報】【やばい】などのフックワード＋核心を1行で
-② 2〜3行：具体的な事実・数字・驚きのポイントを簡潔に（伝聞形「〜らしい」「〜とのこと」）
-③ 最終行：読者に問いかける締め（例：「あなたはどう思う？👇」「知らなかった人RT↑」「〇〇か△△、どっちだと思う？」）
+【各ポストの役割】
+
+① 1ツイート目（本投稿）：
+  - 1行目：フックタイトル（【衝撃】【驚愕】【速報】【朗報】などのラベル＋核心を端的に、30文字以内）
+  - 2行目以降：全体の要約を2〜3行で簡潔に
+  - 末尾に必ず「（つづく）リプ欄へ👇」を入れる
+  - 合計130文字以内
+
+② リプライ（2ツイート目以降）：
+  - 各リプライは110文字前後（短すぎず、情報を削らないこと）
+  - 元のニュースや投稿タイトルの事実を、そのまま直接的に記述する
+  - 「〜らしい」「〜とのこと」「〜とされる」「〜と報告されている」などの伝聞表現は使わない
+  - 「〜した」「〜である」「〜だ」「〜となった」の断定口調で書く
+  - 1リプライ1トピック。情報を削らず、タイトルから読み取れる事実を最大限盛り込む
+  - 各リプライ末尾に次を読みたくなる一文を入れる（「さらに注目すべき事実がある」「しかし、問題はここからだ」など）
+  - 絵文字は控えめに（0〜1個）
+
+③ 最終リプライ：
+  - 結論・教訓・社会的意義を断定的にまとめる
+  - 「出典：Reddit（r/${post.subreddit || 'unknown'}）」を含める
+  - 読者への問いかけで締める
+  - 110文字前後
 
 【文体のポイント】
-- 絵文字は2〜3個、感情強調に使う（⚡😮🌍💡🔴など）
-- 「日本では〇〇なのに海外では△△」の対比があれば積極的に使う
-- 数字・統計があれば必ず入れる（「〇〇人に1人」「世界の△△%」など）
-- 1行目で「続きが気になる」と思わせることが最重要
+- 伝聞でなく報道。事実を直接書く
+- 「日本では〇〇、一方海外では△△」の対比構造を積極的に活用
+- 数字・固有名詞・具体的な地名や名称を積極的に使う
+- 1ツイート目で「続きが気になる」と思わせることが最重要
 
-投稿文のみ出力してください。説明は不要です。
+以下のJSON配列のみで出力してください。説明は不要です。
+["ツイート1", "ツイート2", "ツイート3", ...]
 `;
 
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 300,
+    max_tokens: 2000,
     messages: [{ role: "user", content: prompt }],
   });
 
-  return message.content[0].text;
+  const text = message.content[0].text;
+  // JSON配列を確実に抽出（前後に余分なテキストがあっても対応）
+  const match = text.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error(`JSON配列が見つかりません: ${text.slice(0, 100)}`);
+  return JSON.parse(match[0]);
 }
 
 // サムネイルHTML生成（3分割レイアウト：画像への文字被りなし）
@@ -379,11 +404,11 @@ async function generateThumbnail(browser, imagePath, outputPath, catchCopy) {
 // HTML投稿ランチャーを生成
 function generateHtml(today, posts) {
   const cards = posts.map((item, idx) => {
-    const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedVideoPath, thumbPath, isVideo, finalPost, sourceUrl, videoDuration = 0 } = item;
+    const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedVideoPath, thumbPath, isVideo, tweets: rawTweets, sourceUrl, videoDuration = 0 } = item;
+    const tweets = rawTweets || [];
     const thumbAbsPath = thumbPath ? thumbPath.replace(/\\/g, "\\\\") : "";
     const videoAbsPath = savedVideoPath ? savedVideoPath.replace(/\\/g, "\\\\") : "";
     const safeSourceUrl = sourceUrl.replace(/'/g, "\\'");
-    const charCount = finalPost.length;
     const videoOverLimit = isVideo && videoDuration > 140;
     const durationStr = videoDuration > 0
       ? `${Math.floor(videoDuration/60)}:${String(videoDuration%60).padStart(2,'0')}`
@@ -406,27 +431,59 @@ function generateHtml(today, posts) {
         <span class="source-title">${title.length > 60 ? title.slice(0, 60) + "…" : title}</span>
       </div>`;
 
+    // 本投稿（左カラム）用
+    const mainText = tweets[0] || "";
+    const safeMainText = mainText.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const mainCharLen = mainText.length;
+    const mainCharColor = mainCharLen > 140 ? "#f4212e" : mainCharLen > 120 ? "#ffd400" : "#536471";
+
+    // リプライ（右カラム）用
+    const replyItems = tweets.slice(1).map((tweetText, i) => {
+      const tweetIdx = i + 1;
+      const safeText = tweetText.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const charLen = tweetText.length;
+      const charColor = charLen > 140 ? "#f4212e" : charLen > 110 ? "#00ba7c" : charLen > 80 ? "#ffd400" : "#536471";
+      return `
+      <div class="reply-item">
+        <div class="reply-item-header">
+          <div class="x-avatar x-avatar-sm">世</div>
+          <span class="x-name" style="font-size:0.85em;">【速報】世界の話題</span>
+          <span class="x-handle">@sekai_no_wadai</span>
+          <span class="reply-num-badge">${tweetIdx + 1}/${tweets.length}</span>
+        </div>
+        <textarea class="x-textarea reply-textarea" id="tweet-${postNum}-${tweetIdx}"
+          oninput="updateThreadCount(${postNum}, ${tweetIdx})">${safeText}</textarea>
+        <div class="tweet-char-row">
+          <span class="x-char-count" id="count-${postNum}-${tweetIdx}" style="color:${charColor}">${charLen}/140</span>
+        </div>
+      </div>`;
+    }).join("");
+
     return `
     <div class="x-card" id="card-${postNum}">
+      <div class="thread-card-header">
+        <div class="x-avatar">世</div>
+        <div>
+          <span class="x-name">【速報】世界の話題</span>
+          <span class="x-handle">@sekai_no_wadai</span>
+        </div>
+        <div class="thread-card-header-right">
+          ${videoOverLimit ? `<span class="x-over-badge">⚠️ 時間超過 ${durationStr}</span>` : ""}
+          <span class="thread-count-badge">${tweets.length}ツイート</span>
+          <span class="x-status-badge" id="status-${postNum}">未予約 #${postNum}</span>
+        </div>
+      </div>
+      ${sourcePreview}
       <div class="x-card-inner">
 
-        <!-- 左：ツイート編集ボックス -->
+        <!-- 左：本投稿 -->
         <div class="compose-box">
-          <div class="compose-header">
-            <div class="x-avatar">世</div>
-            <div>
-              <span class="x-name">【速報】世界の話題</span>
-              <span class="x-handle">@sekai_no_wadai</span>
-            </div>
-            <div class="compose-header-right">
-              ${videoOverLimit ? `<span class="x-over-badge">⚠️ 時間超過 ${durationStr}</span>` : ""}
-              <span class="x-status-badge" id="status-${postNum}">未予約 #${postNum}</span>
-            </div>
+          <textarea class="x-textarea" id="tweet-${postNum}-0"
+            oninput="updateThreadCount(${postNum}, 0)">${safeMainText}</textarea>
+          <div class="tweet-char-row">
+            <span class="x-char-count" id="count-${postNum}-0" style="color:${mainCharColor}">${mainCharLen}/140</span>
           </div>
-          <textarea class="x-textarea" id="text-${postNum}"
-            oninput="updateCount(${postNum})">${finalPost}</textarea>
           ${mediaBlock}
-          ${sourcePreview}
           <div class="x-actions">
             <div class="x-left-actions">
               <div class="x-time-wrap">
@@ -442,12 +499,8 @@ function generateHtml(today, posts) {
               </div>
             </div>
             <div class="x-right-actions">
-              <span class="x-char-count" id="count-${postNum}"
-                style="color:${charCount > 120 ? (charCount > 140 ? '#f4212e' : '#ffd400') : '#536471'}">
-                ${charCount}/140
-              </span>
               <button class="x-post-btn" id="btn-${postNum}"
-                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}', '${videoAbsPath}')">
+                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}', '${videoAbsPath}', ${tweets.length})">
                 予約投稿
               </button>
               <button class="x-cancel-btn" id="cancel-${postNum}" style="display:none"
@@ -458,29 +511,21 @@ function generateHtml(today, posts) {
           </div>
         </div>
 
-        <!-- コネクター -->
-        <div class="reply-connector">
-          <div class="connector-dot"></div>
-          <div class="connector-line"></div>
-          <div class="connector-dot"></div>
-        </div>
-
-        <!-- 右：リプライボックス（80%サイズ） -->
-        <div class="reply-box">
-          <div class="compose-header">
-            <div class="x-avatar x-avatar-sm">世</div>
-            <div>
-              <span class="x-name" style="font-size:0.88em;">【速報】世界の話題</span>
+        <!-- 右：リプライ一覧 -->
+        <div class="reply-column">
+          ${replyItems}
+          <!-- sourceURL リプライ（自動） -->
+          <div class="reply-item reply-url-item">
+            <div class="reply-item-header">
+              <div class="x-avatar x-avatar-sm">世</div>
               <span class="x-handle">@sekai_no_wadai</span>
+              <span style="color:#536471;font-size:0.78em;">への返信（自動）</span>
             </div>
-          </div>
-          <div class="reply-to-label">
-            <span class="reply-mention">@sekai_no_wadai</span> への返信
-          </div>
-          <a class="reply-url" href="${sourceUrl}" target="_blank">${sourceUrl}</a>
-          <div class="reply-source-tag">
-            <span class="source-label">r/${subreddit}</span>
-            <span style="color:#536471;font-size:0.82em;">👍 ${score.toLocaleString()}</span>
+            <a class="reply-url" href="${sourceUrl}" target="_blank">${sourceUrl}</a>
+            <div class="reply-source-tag">
+              <span class="source-label">r/${subreddit}</span>
+              <span style="color:#536471;font-size:0.82em;">👍 ${score.toLocaleString()}</span>
+            </div>
           </div>
         </div>
 
@@ -564,47 +609,48 @@ function generateHtml(today, posts) {
     }
     .x-card:hover { background: rgba(0,0,0,0.01); }
     .x-card.scheduled { background: #fffbea; border-left: 3px solid #ffd400; }
-    .x-card-inner {
-      display: flex; align-items: flex-start; gap: 0;
+    /* ── スレッドカードレイアウト ── */
+    .thread-card-header {
+      display: flex; align-items: center; gap: 10px;
+      padding-bottom: 10px; flex-wrap: wrap;
     }
+    .thread-card-header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .thread-count-badge {
+      font-size: 0.75em; font-weight: 700; padding: 2px 10px;
+      border-radius: 20px; background: #e7f3ff; color: #1d9bf0;
+      border: 1px solid #1d9bf0;
+    }
+    .tweet-char-row { display: flex; justify-content: flex-end; padding: 2px 0 4px; }
 
-    /* ── ツイート編集ボックス（左） ── */
+    /* ── 2カラムレイアウト ── */
+    .x-card-inner { display: flex; align-items: flex-start; gap: 12px; }
     .compose-box {
       flex: 5; min-width: 0;
       border: 1.5px solid #cfd9de; border-radius: 16px;
       padding: 16px; background: #fff;
     }
-    .compose-header {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 10px; flex-wrap: wrap;
-    }
-    .compose-header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-
-    /* ── コネクター ── */
-    .reply-connector {
-      flex: 0 0 36px;
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; padding-top: 28px; gap: 3px;
-    }
-    .connector-dot {
-      width: 5px; height: 5px; border-radius: 50%; background: #cfd9de;
-    }
-    .connector-line { width: 2px; height: 28px; background: #cfd9de; }
-
-    /* ── リプライボックス（右・80%） ── */
-    .reply-box {
+    .reply-column {
       flex: 4; min-width: 0;
-      border: 1.5px solid #eff3f4; border-radius: 16px;
-      padding: 14px; background: #f7f9f9;
       display: flex; flex-direction: column; gap: 8px;
+      max-height: 680px; overflow-y: auto;
     }
-    .reply-to-label {
-      font-size: 0.82em; color: #536471;
+    .reply-item {
+      border: 1.5px solid #eff3f4; border-radius: 12px;
+      padding: 12px 14px; background: #f7f9f9;
     }
-    .reply-mention { color: #1d9bf0; }
+    .reply-item-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px; flex-wrap: wrap;
+    }
+    .reply-num-badge {
+      margin-left: auto; font-size: 0.72em; color: #536471;
+      background: #e7e9ea; border-radius: 10px; padding: 1px 8px;
+    }
+    .reply-textarea { min-height: 100px !important; }
+    .reply-url-item { background: #f0f7ff; border-color: #cce4f7; }
     .reply-url {
       font-size: 0.82em; color: #1d9bf0; word-break: break-all;
-      text-decoration: none; line-height: 1.5;
+      text-decoration: none; line-height: 1.5; display: block; margin: 4px 0;
     }
     .reply-url:hover { text-decoration: underline; }
     .reply-source-tag { display: flex; align-items: center; gap: 8px; }
@@ -786,7 +832,11 @@ function generateHtml(today, posts) {
         if (data.success) {
           btn.textContent = '✅ Push済み';
           btn.classList.add('pushed');
-          showToast('✅ GitHubにPush完了！自動投稿が有効になりました', '#00ba7c');
+          showToast('✅ Push完了！3秒後に自動終了します...', '#00ba7c');
+          setTimeout(async () => {
+            try { await fetch('http://localhost:3000/api/shutdown', { method: 'POST' }); } catch(e) {}
+            document.body.innerHTML = '<div style="font-family:sans-serif;text-align:center;padding:80px;color:#e7e9ea;background:#000;min-height:100vh;"><h2>✅ Push完了！サーバーを終了しました</h2><p style="color:#71767b;margin-top:12px;">このタブは閉じてください。</p></div>';
+          }, 3000);
         } else {
           btn.textContent = '↑ GitHubにPush';
           btn.disabled = false;
@@ -816,13 +866,30 @@ function generateHtml(today, posts) {
     function renderApproved(days) {
       const badge = document.getElementById('approvedBadge');
       const body = document.getElementById('approvedBody');
-      const total = days.reduce((s, d) => s + d.posts.length, 0);
-      badge.textContent = days.length + '日分 / ' + total + '件';
+      const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+      const nowMin = jstNow.getUTCHours() * 60 + jstNow.getUTCMinutes();
+      const todayStr = jstNow.getUTCFullYear() + '-'
+        + String(jstNow.getUTCMonth()+1).padStart(2,'0') + '-'
+        + String(jstNow.getUTCDate()).padStart(2,'0');
+
+      // 過去スロットを除外（今日かつ時刻が現在より前の投稿は非表示）
+      const filteredDays = days.map(day => {
+        const posts = day.posts.filter(p => {
+          if (day.date > todayStr) return true;
+          if (day.date < todayStr) return false;
+          const [h, m] = p.scheduleTime.split(':').map(Number);
+          return (h * 60 + m) > nowMin;
+        });
+        return { ...day, posts };
+      }).filter(day => day.posts.length > 0);
+
+      const total = filteredDays.reduce((s, d) => s + d.posts.length, 0);
+      badge.textContent = filteredDays.length + '日分 / ' + total + '件';
       if (total === 0) {
         body.innerHTML = '<div class="approved-empty">予約済み投稿はありません</div>';
         return;
       }
-      body.innerHTML = days.map(day =>
+      body.innerHTML = filteredDays.map(day =>
         '<div class="approved-day">'
         + '<div class="approved-day-header">'
         + '<span class="approved-date">' + day.date + '</span>'
@@ -834,7 +901,7 @@ function generateHtml(today, posts) {
         + day.posts.map(p =>
           '<div class="approved-post">'
           + '<span class="ap-time">' + p.scheduleTime + '</span>'
-          + '<span class="ap-text">' + p.text.replace(/\\n/g, ' ').replace(/</g, '&lt;').slice(0, 60) + '…</span>'
+          + '<span class="ap-text">' + (p.tweets ? p.tweets[0] : p.text || '').replace(/\\n/g, ' ').replace(/</g, '&lt;').slice(0, 60) + '…</span>'
           + '<button class="btn-del-post" data-date="' + day.date + '" data-num="' + p.postNum + '" onclick="deletePost(this.dataset.date, +this.dataset.num)">✕</button>'
           + '</div>'
         ).join('')
@@ -876,11 +943,11 @@ function generateHtml(today, posts) {
       document.querySelectorAll('.x-textarea').forEach(ta => autoResize(ta));
     });
 
-    function updateCount(postNum) {
-      const ta = document.getElementById('text-' + postNum);
+    function updateThreadCount(postNum, tweetIdx) {
+      const ta = document.getElementById('tweet-' + postNum + '-' + tweetIdx);
       autoResize(ta);
       const len = ta.value.length;
-      const el = document.getElementById('count-' + postNum);
+      const el = document.getElementById('count-' + postNum + '-' + tweetIdx);
       el.textContent = len + '/140';
       el.style.color = len > 140 ? '#f4212e' : len > 120 ? '#ffd400' : '#536471';
     }
@@ -930,11 +997,17 @@ function generateHtml(today, posts) {
       if (dateSel && timeSel) _setSmartDateDefault(dateSel, timeSel.value, jstNow, dateOptions);
     }
 
-    async function schedulePost(postNum, sourceUrl, thumbPath, videoPath) {
-      const text = document.getElementById('text-' + postNum).value.trim();
+    async function schedulePost(postNum, sourceUrl, thumbPath, videoPath, tweetCount) {
+      const tweets = [];
+      for (let i = 0; i < tweetCount; i++) {
+        const el = document.getElementById('tweet-' + postNum + '-' + i);
+        if (!el) break;
+        const t = el.value.trim();
+        if (t) tweets.push(t);
+      }
+      if (tweets.length === 0) { alert('投稿文が空です'); return; }
       const scheduleTime = document.getElementById('time-' + postNum).value;
       const scheduleDate = document.getElementById('date-' + postNum).value;
-      if (!text) { alert('投稿文が空です'); return; }
       if (!scheduleTime) { alert('投稿時間を設定してください'); return; }
 
       const btn = document.getElementById('btn-' + postNum);
@@ -945,7 +1018,7 @@ function generateHtml(today, posts) {
         const res = await fetch('http://localhost:3000/api/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postNum, text, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath: videoPath || null })
+          body: JSON.stringify({ postNum, tweets, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath: videoPath || null })
         });
         const data = await res.json();
 
@@ -959,7 +1032,7 @@ function generateHtml(today, posts) {
           btn.classList.add('done');
           document.getElementById('card-' + postNum).classList.add('scheduled');
           document.getElementById('cancel-' + postNum).style.display = 'inline-block';
-          showToast('✅ 投稿' + postNum + ' を ' + dateLabel + ' ' + scheduleTime + ' に予約しました！GitHubにPushを忘れずに↑');
+          showToast('✅ 投稿' + postNum + '（' + tweets.length + 'ツイート）を ' + dateLabel + ' ' + scheduleTime + ' に予約しました！GitHubにPushを忘れずに↑');
         } else {
           btn.disabled = false;
           btn.textContent = '予約投稿';
@@ -1118,10 +1191,16 @@ async function main() {
       console.log(`⚠️  画像なし`);
     }
 
-    let generatedPost = await generatePost(post);
-    generatedPost = generatedPost.trim();
-    const finalPost = generatedPost.length > 140 ? await trimPost(generatedPost) : generatedPost;
-    if (generatedPost.length > 140) console.log(`✂️  投稿${postNum} 短縮: ${generatedPost.length}→${finalPost.length}文字`);
+    let tweets = await generatePost(post);
+    // 各ツイートが140文字超えていたらトリム
+    for (let i = 0; i < tweets.length; i++) {
+      tweets[i] = tweets[i].trim();
+      if (tweets[i].length > 140) {
+        tweets[i] = await trimPost(tweets[i]);
+        console.log(`✂️  投稿${postNum} ツイート${i+1} 短縮完了`);
+      }
+    }
+    console.log(`📝 スレッド: ${tweets.length}ツイート`);
     const sourceUrl = post.url;
 
     // 動画の場合はサムネイル生成スキップ
@@ -1136,8 +1215,8 @@ async function main() {
       console.log(`🖼️  サムネイル生成: ${thumbPath}`);
     }
 
-    console.log("\n▼ 投稿文（コピペ用）:");
-    console.log(finalPost);
+    console.log(`\n▼ スレッド（${tweets.length}ツイート）:`);
+    tweets.forEach((t, i) => console.log(`  [${i+1}] ${t}`));
     console.log("\n" + "━".repeat(50));
 
     // ファイルに記録
@@ -1149,7 +1228,7 @@ async function main() {
     lines.push(`種別: ${post.isVideo ? "🎬 動画" : "🖼️ 画像"}`);
     lines.push(`動画: ${savedVideoPath || "なし"}`);
     lines.push(`画像: ${savedImagePath || "なし"}`);
-    lines.push(`\n▼ 投稿文（コピペ用）:\n${finalPost}\n`);
+    lines.push(`\n▼ スレッド（${tweets.length}ツイート）:\n${tweets.map((t,i)=>`[${i+1}] ${t}`).join('\n')}\n`);
     lines.push(`▼ リプ欄に貼るURL:\n${sourceUrl}\n`);
 
     // 動画の秒数を取得（X無料版は140秒まで）
@@ -1164,7 +1243,7 @@ async function main() {
       } catch (e) { /* 取得失敗時は0のまま */ }
     }
 
-    htmlItems.push({ postNum, scheduleTime, subreddit: post.subreddit, title: post.title, score: post.score, savedImagePath, savedVideoPath, thumbPath, isVideo: post.isVideo, finalPost, sourceUrl, videoDuration });
+    htmlItems.push({ postNum, scheduleTime, subreddit: post.subreddit, title: post.title, score: post.score, savedImagePath, savedVideoPath, thumbPath, isVideo: post.isVideo, tweets, sourceUrl, videoDuration });
   }
 
   // テキストファイル保存
@@ -1182,7 +1261,7 @@ async function main() {
     date: today,
     posts: htmlItems.map(item => ({
       title: item.title,
-      postText: item.finalPost,
+      postText: item.tweets[0],
       sourceUrl: item.sourceUrl,
       scheduleTime: item.scheduleTime,
       savedImagePath: item.savedImagePath || null,
