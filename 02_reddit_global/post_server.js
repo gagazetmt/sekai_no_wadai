@@ -849,6 +849,7 @@ function buildShortsLauncherHtml() {
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Shorts制作ランチャー</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -961,6 +962,41 @@ function buildShortsLauncherHtml() {
     .toast.ok { background: #27ae60; }
     .toast.err { background: #e74c3c; }
     .scroll-hint { position: fixed; bottom: 70px; right: 20px; background: rgba(79,195,247,0.12); border: 1px solid #4fc3f7; color: #4fc3f7; padding: 5px 12px; border-radius: 14px; font-size: 0.75em; pointer-events: none; z-index: 100; transition: opacity 0.5s; }
+
+    /* ── スマホ対応 (〜767px) ── */
+    @media (max-width: 767px) {
+      /* スクロールロック解除 */
+      html, body { overflow: auto; height: auto; }
+
+      .topbar { height: auto; min-height: 44px; flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
+      .topbar h1 { font-size: 0.95em; }
+      .nav { flex-wrap: nowrap; gap: 5px; }
+      .nav a { padding: 4px 9px; font-size: 0.75em; }
+
+      .toolbar { height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 6px; }
+      .date-badge { font-size: 0.8em; padding: 4px 10px; }
+      .status-msg { width: 100%; font-size: 0.78em; order: 3; }
+      .btn-push { font-size: 0.82em; padding: 7px 14px; }
+
+      /* スクロールスナップ解除・各カードを通常フローに */
+      .content { height: auto; overflow-y: visible; scroll-snap-type: none; }
+      .post-card { height: auto; scroll-snap-align: none; overflow: visible; margin-bottom: 16px; }
+      .post-header { height: auto; min-height: 44px; flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+
+      /* スライドグリッド: 横スクロール維持・幅調整 */
+      .slides-grid { padding: 6px 8px; gap: 6px; }
+      .slide-card { min-width: 200px; flex: 0 0 200px; }
+
+      /* アニメプレビュー: 固定高さをスマホ向けに調整 */
+      .slide-anim-wrap { height: 240px; }
+
+      /* フィールドエリア */
+      .slide-fields { max-height: 200px; }
+      .field-ta { font-size: 0.72em; }
+
+      .actions-bar { height: auto; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+      .scroll-hint { display: none; }
+    }
   </style>
 </head>
 <body>

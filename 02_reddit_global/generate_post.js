@@ -893,6 +893,35 @@ function generateHtml(today, posts) {
     }
     .btn-del-post:hover { border-color: #f4212e; color: #f4212e; }
     .approved-empty { color: #536471; font-size: 0.85em; text-align: center; padding: 16px; }
+
+    /* ── スマホ対応 (〜767px) ── */
+    @media (max-width: 767px) {
+      .container { padding: 0 0 80px; }
+      .top-bar { padding: 8px 12px; gap: 6px; }
+      .top-date { display: none; }
+      .nav-btn { padding: 5px 10px; font-size: 0.78em; }
+      .x-card { padding: 12px 10px; }
+
+      /* 2カラム → 縦積みに変更 */
+      .x-card-inner { flex-direction: column; gap: 10px; }
+      .reply-column { max-height: none; overflow-y: visible; }
+
+      .x-textarea { min-height: 140px; font-size: 0.97em; }
+      .x-actions { flex-wrap: wrap; gap: 6px; }
+      .x-left-actions { width: 100%; }
+      .x-right-actions { width: 100%; justify-content: flex-end; }
+      .x-time-wrap { width: 100%; justify-content: flex-start; }
+
+      /* 元ネタタイトルは省略（幅が足りない） */
+      .source-title { display: none; }
+
+      /* リプライ画像ピッカー */
+      .reply-image-area { flex-wrap: wrap; }
+
+      /* 承認済みセクション */
+      .approved-post { font-size: 0.78em; }
+      .ap-text { max-width: 180px; }
+    }
   </style>
   <script>
     let toastTimer;
