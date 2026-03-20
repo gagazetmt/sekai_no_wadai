@@ -104,10 +104,9 @@ async function main() {
   const winBasename = (p) => p.replace(/\\/g, "/").split("/").pop();
 
   // 動画: videoPathからファイル名を取り出してリポジトリ内のvideos/を参照
-  const videoFile = post.videoPath
-    ? winBasename(post.videoPath)
-    : `${jstDateStr}_${post.postNum}.mp4`;
-  const videoPath = path.join(__dirname, "videos", videoFile);
+  // videoPathがnullの場合はfallbackしない（別ポストの動画が混入するバグ防止）
+  const videoFile = post.videoPath ? winBasename(post.videoPath) : null;
+  const videoPath = videoFile ? path.join(__dirname, "videos", videoFile) : null;
 
   // 画像: thumbPathからファイル名のみ取り出してリポジトリ内の thumbnails/ を参照
   const thumbFile = post.thumbPath ? winBasename(post.thumbPath) : null;
@@ -117,12 +116,13 @@ async function main() {
 
   // スレッド投稿ループ
   let lastTweetId = null;
+  const tempFiles = []; // 一時ファイル管理（後片付け用）
   for (const [index, tweetText] of tweets.entries()) {
     let tweetParams = { text: tweetText };
 
-    // 1ツイート目にのみメディアを添付
     if (index === 0) {
-      if (fs.existsSync(videoPath)) {
+      // 1ツイート目: 動画 > ギャラリー複数画像 > サムネイル の優先順
+      if (videoPath && fs.existsSync(videoPath)) {
         console.log(`\n🎬 動画をアップロード中: ${videoPath}`);
         try {
           const mediaId = await xClient.v1.uploadMedia(videoPath, { mimeType: "video/mp4" });
@@ -134,7 +134,9 @@ async function main() {
       } else if (thumbRepoPath && fs.existsSync(thumbRepoPath)) {
         console.log(`\n🖼️  画像をアップロード中: ${thumbRepoPath}`);
         try {
-          const mediaId = await xClient.v1.uploadMedia(thumbRepoPath, { mimeType: "image/png" });
+          const ext = path.extname(thumbRepoPath).toLowerCase();
+          const thumbMime = ext === ".png" ? "image/png" : ext === ".gif" ? "image/gif" : "image/jpeg";
+          const mediaId = await xClient.v1.uploadMedia(thumbRepoPath, { mimeType: thumbMime });
           tweetParams.media = { media_ids: [mediaId] };
           console.log(`✅ 画像アップロード完了 (mediaId: ${mediaId})`);
         } catch (mediaErr) {
@@ -143,12 +145,34 @@ async function main() {
       } else {
         console.log(`\n📝 メディアなし（テキストのみ）`);
       }
+    } else {
+      // リプライツイート: replyImages に画像があれば添付
+      const replyImgPath = post.replyImages?.[index];
+      if (replyImgPath) {
+        const absPath = path.join(__dirname, "images", winBasename(replyImgPath));
+        if (fs.existsSync(absPath)) {
+          try {
+            const ext = path.extname(absPath).toLowerCase();
+            const mime = ext === ".png" ? "image/png" : ext === ".gif" ? "image/gif" : "image/jpeg";
+            const mediaId = await xClient.v1.uploadMedia(absPath, { mimeType: mime });
+            tweetParams.media = { media_ids: [mediaId] };
+            console.log(`🖼️  リプライ${index} 画像アップロード完了`);
+          } catch (mediaErr) {
+            console.log(`⚠️ リプライ${index} 画像アップロード失敗: ${mediaErr.message}`);
+          }
+        }
+      }
     }
 
     let tweet;
     try {
       if (lastTweetId) {
-        tweet = await xClient.v2.reply(tweetText, lastTweetId);
+        // リプライにメディアがある場合は tweet() で送信
+        if (tweetParams.media) {
+          tweet = await xClient.v2.tweet({ ...tweetParams, reply: { in_reply_to_tweet_id: lastTweetId } });
+        } else {
+          tweet = await xClient.v2.reply(tweetText, lastTweetId);
+        }
       } else {
         tweet = await xClient.v2.tweet(tweetParams);
       }
@@ -164,16 +188,26 @@ async function main() {
     lastTweetId = tweet.data.id;
     console.log(`✅ ツイート${index+1}/${tweets.length} 送信完了 (ID: ${lastTweetId})`);
 
-    // レート制限対策
+    // レート制限対策（3〜7秒ランダム待機：機械的パターン回避）
     if (index < tweets.length - 1) {
-      await new Promise(r => setTimeout(r, 1000));
+      const delay = Math.floor(Math.random() * 10000) + 10000;
+      console.log(`⏳ 次のリプまで ${(delay / 1000).toFixed(1)}秒 待機...`);
+      await new Promise(r => setTimeout(r, delay));
     }
   }
 
-  // リプ欄に元ネタURL
+  // リプ欄に元ネタURL（最終リプからも間隔をあける）
   if (post.sourceUrl && lastTweetId) {
+    const urlDelay = Math.floor(Math.random() * 10000) + 10000;
+    console.log(`⏳ URL投稿まで ${(urlDelay / 1000).toFixed(1)}秒 待機...`);
+    await new Promise(r => setTimeout(r, urlDelay));
     await xClient.v2.reply(post.sourceUrl, lastTweetId);
     console.log(`💬 リプライ送信完了: ${post.sourceUrl}`);
+  }
+
+  // 一時ファイルの後片付け
+  for (const tmp of tempFiles) {
+    try { fs.unlinkSync(tmp); } catch (e) {}
   }
 
   console.log("\n🎉 完了！");

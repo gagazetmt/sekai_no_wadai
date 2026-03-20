@@ -49,7 +49,7 @@ const ENGAGEMENT_TARGETS = [
 ];
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 app.use(express.static(path.join(__dirname, "posts")));
 app.use("/images",      express.static(path.join(__dirname, "images")));
 app.use("/shorts",        express.static(path.join(__dirname, "shorts")));
@@ -134,7 +134,7 @@ function scheduleJob({ postNum, tweets, sourceUrl, thumbPath, scheduleDate, sche
 
 // ── 予約投稿API ─────────────────────────────────────────────────────────
 app.post("/api/schedule", async (req, res) => {
-  const { postNum, tweets, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath } = req.body;
+  const { postNum, tweets, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath, replyImages, galleryImageUrls } = req.body;
 
   // 承認済みJSONに保存（scheduleDate指定があればその日付、なければJST今日）
   const targetDate = scheduleDate || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -144,7 +144,7 @@ app.post("/api/schedule", async (req, res) => {
     approved = JSON.parse(fs.readFileSync(approvedPath, "utf8"));
   }
   const idx = approved.posts.findIndex(p => p.postNum === postNum);
-  const entry = { postNum, scheduleTime, tweets, sourceUrl, thumbPath: thumbPath || null, videoPath: videoPath || null };
+  const entry = { postNum, scheduleTime, tweets, sourceUrl, thumbPath: thumbPath || null, videoPath: videoPath || null, replyImages: replyImages || null, galleryImageUrls: galleryImageUrls?.length ? galleryImageUrls : null };
   if (idx >= 0) {
     approved.posts[idx] = entry;
   } else {
@@ -157,6 +157,21 @@ app.post("/api/schedule", async (req, res) => {
   const { scheduledAt, msUntil } = scheduleJob({ postNum, tweets, sourceUrl, thumbPath, scheduleDate: targetDate, scheduleTime });
   console.log(`📅 投稿${postNum} を ${scheduledAt} に予約しました（${Math.round(msUntil/1000/60)}分後）`);
   res.json({ success: true, scheduledAt, msUntil });
+});
+
+// ── リプライ画像アップロード API ──────────────────────────────────────────
+app.post("/api/upload-reply-image", (req, res) => {
+  const { postNum, tweetIdx, base64, filename } = req.body;
+  if (!base64 || !filename) return res.json({ success: false, message: "パラメータ不足" });
+  try {
+    const ext = path.extname(filename).toLowerCase() || ".jpg";
+    const safeName = `reply_${postNum}_${tweetIdx}_${Date.now()}${ext}`;
+    const savePath = path.join(__dirname, "images", safeName);
+    fs.writeFileSync(savePath, Buffer.from(base64, "base64"));
+    res.json({ success: true, path: savePath });
+  } catch (e) {
+    res.json({ success: false, message: e.message });
+  }
 });
 
 // ── 予約キャンセルAPI ───────────────────────────────────────────────────
@@ -191,10 +206,10 @@ app.post("/api/push-github", (req, res) => {
 
   // ① mainブランチへの投稿データpush
   try {
-    execSync(
-      `git -C "${REPO_ROOT}" add -A 02_reddit_global/temp/ 02_reddit_global/thumbnails/ && git -C "${REPO_ROOT}" commit -m "posts ${today}" && git -C "${REPO_ROOT}" push`,
-      { stdio: "pipe" }
-    );
+    // reply_* はファイルがない場合もあるため別途add（エラー無視）
+    execSync(`git -C "${REPO_ROOT}" add -A 02_reddit_global/temp/ 02_reddit_global/thumbnails/`, { stdio: "pipe" });
+    try { execSync(`git -C "${REPO_ROOT}" add 02_reddit_global/images/reply_*`, { stdio: "pipe" }); } catch (_) {}
+    execSync(`git -C "${REPO_ROOT}" commit -m "posts ${today}" && git -C "${REPO_ROOT}" push`, { stdio: "pipe" });
     console.log(`✅ GitHub push 完了 (${today})`);
   } catch (e) {
     const msg = e.stderr ? e.stderr.toString() : e.message;
@@ -207,8 +222,21 @@ app.post("/api/push-github", (req, res) => {
 
   // ② videosブランチへの動画push
   const srcVideosDir = path.join(__dirname, "videos");
+  // 今日の承認済みJSONで参照されている動画ファイルも対象に含める（日付をまたぐ参照の混入防止）
+  const approvedForToday = path.join(__dirname, "temp", `approved_${today}.json`);
+  const referencedVideoFiles = new Set();
+  if (fs.existsSync(approvedForToday)) {
+    const approved = JSON.parse(fs.readFileSync(approvedForToday, "utf8"));
+    for (const post of approved.posts) {
+      if (post.videoPath) {
+        referencedVideoFiles.add(post.videoPath.replace(/\\/g, "/").split("/").pop());
+      }
+    }
+  }
   const videoFiles = fs.existsSync(srcVideosDir)
-    ? fs.readdirSync(srcVideosDir).filter(f => f.startsWith(today) && f.endsWith(".mp4"))
+    ? fs.readdirSync(srcVideosDir).filter(f =>
+        (f.startsWith(today) || referencedVideoFiles.has(f)) && f.endsWith(".mp4")
+      )
     : [];
 
   if (videoFiles.length === 0) {
@@ -1905,11 +1933,10 @@ const server = app.listen(PORT, () => {
 
 server.on("error", (err) => {
   if (err.code === "EADDRINUSE") {
-    console.error(`\n❌ ポート${PORT}は既に使用中です。`);
-    console.error(`   別のサーバーが起動しているか確認してください。`);
-    console.error(`   解決: タスクマネージャーでnodeプロセスを終了してから再起動\n`);
+    console.log(`\n⚠️  ポート${PORT}が使用中です。1秒後に再試行...\n`);
+    setTimeout(() => server.listen(PORT), 1000);
   } else {
     console.error(`\n❌ サーバーエラー: ${err.message}\n`);
+    process.exit(1);
   }
-  process.exit(1);
 });
