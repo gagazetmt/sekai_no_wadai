@@ -24,6 +24,38 @@ if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR);
 const TEMP_DIR = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
+// 3日以上前のローカルファイルを削除（images/thumbnails/videos/posts/）
+function cleanupOldLocalFiles() {
+  const cutoff = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  cutoff.setDate(cutoff.getDate() - 3);
+  const cutoffStr = cutoff.toISOString().slice(0, 10); // YYYY-MM-DD
+
+  const targets = [
+    { dir: IMAGE_DIR,  exts: [".jpg", ".jpeg", ".png", ".gif", ".webp"] },
+    { dir: THUMB_DIR,  exts: [".jpg", ".jpeg", ".png", ".gif", ".webp"] },
+    { dir: VIDEOS_DIR, exts: [".mp4"] },
+    { dir: POSTS_DIR,  exts: [".html", ".txt"] },
+  ];
+
+  let deleted = 0;
+  for (const { dir, exts } of targets) {
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir)) {
+      const fileDate = f.slice(0, 10); // 先頭10文字が YYYY-MM-DD
+      if (!/^\d{4}-\d{2}-\d{2}/.test(fileDate)) continue;
+      if (fileDate >= cutoffStr) continue;
+      if (!exts.includes(path.extname(f).toLowerCase())) continue;
+      try {
+        fs.unlinkSync(path.join(dir, f));
+        deleted++;
+      } catch (e) {
+        // 削除失敗は無視
+      }
+    }
+  }
+  if (deleted > 0) console.log(`🗑️  古いローカルファイルを ${deleted} 件削除しました（${cutoffStr} 以前）`);
+}
+
 // 朝・夜のゴールデンタイムに集中した予約投稿時間
 const SCHEDULE_TIMES = [
   "06:00", "06:30", "07:00", "07:30", "08:00",
@@ -147,17 +179,22 @@ function fetchSubreddit(subreddit) {
             const d = child.data;
             const isVideo = d.post_hint === "hosted:video" || d.post_hint === "rich:video" || d.is_video === true;
             let imageUrl = null;
+            let imageUrls = [];
             let videoUrl = null;
             if (!isVideo && d.post_hint === "image" && d.url) {
               imageUrl = d.url;
+              imageUrls = [d.url];
             } else if (d.is_gallery && d.gallery_data?.items?.length > 0) {
-              // ギャラリー投稿（複数画像）→ 1枚目を取得
-              const firstId = d.gallery_data.items[0].media_id;
-              const meta = d.media_metadata?.[firstId];
-              if (meta?.s?.u) imageUrl = meta.s.u.replace(/&amp;/g, "&");
-              else if (meta?.s?.gif) imageUrl = meta.s.gif.replace(/&amp;/g, "&");
+              // ギャラリー投稿（複数画像）→ 全件取得
+              for (const item of d.gallery_data.items) {
+                const meta = d.media_metadata?.[item.media_id];
+                const url = meta?.s?.u?.replace(/&amp;/g, "&") || meta?.s?.gif?.replace(/&amp;/g, "&");
+                if (url) imageUrls.push(url);
+              }
+              imageUrl = imageUrls[0] || null;
             } else if (d.preview?.images?.[0]?.source?.url) {
               imageUrl = d.preview.images[0].source.url.replace(/&amp;/g, "&");
+              imageUrls = imageUrl ? [imageUrl] : [];
             }
             if (isVideo && d.media?.reddit_video?.fallback_url) {
               videoUrl = d.media.reddit_video.fallback_url.replace(/&amp;/g, "&");
@@ -169,6 +206,7 @@ function fetchSubreddit(subreddit) {
               url: `https://www.reddit.com${d.permalink}`,
               permalink: d.permalink,
               imageUrl,
+              imageUrls,
               videoUrl,
               isVideo,
             };
@@ -252,7 +290,7 @@ ${post.title}
   - 合計130文字以内
 
 ② リプライ（2ツイート目以降）：
-  - 各リプライは110文字前後（短すぎず、情報を削らないこと）
+  - 各リプライは120〜140文字程度（情報を削らず、しっかり書くこと）
   - 元のニュースや投稿タイトルの事実を、そのまま直接的に記述する
   - 「〜らしい」「〜とのこと」「〜とされる」「〜と報告されている」などの伝聞表現は使わない
   - 「〜した」「〜である」「〜だ」「〜となった」の断定口調で書く
@@ -264,7 +302,7 @@ ${post.title}
   - 結論・教訓・社会的意義を断定的にまとめる
   - 「出典：Reddit（r/${post.subreddit || 'unknown'}）」を含める
   - 読者への問いかけで締める
-  - 110文字前後
+  - 130文字前後
 
 【文体のポイント】
 - 伝聞でなく報道。事実を直接書く
@@ -284,16 +322,21 @@ ${post.title}
 
   const text = message.content[0].text;
   // JSON配列を確実に抽出（前後に余分なテキストがあっても対応）
-  const match = text.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error(`JSON配列が見つかりません: ${text.slice(0, 100)}`);
-  return JSON.parse(match[0]);
+  const start = text.indexOf('[');
+  if (start === -1) throw new Error(`JSON配列が見つかりません: ${text.slice(0, 100)}`);
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '[') depth++;
+    else if (text[i] === ']') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end === -1) throw new Error(`JSON配列の終端が見つかりません: ${text.slice(0, 100)}`);
+  return JSON.parse(text.slice(start, end + 1));
 }
 
-// サムネイルHTML生成（3分割レイアウト：画像への文字被りなし）
+// サムネイルHTML生成（ブラー背景 + センター画像の2層構造）
 function buildThumbnailHtml(imageBase64, imageMime, catchCopy) {
-  const imageStyle = imageBase64
-    ? `background-image: url('data:${imageMime};base64,${imageBase64}'); background-size: cover; background-position: center;`
-    : `background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);`;
+  const imgSrc = imageBase64 ? `data:${imageMime};base64,${imageBase64}` : null;
 
   return `<!DOCTYPE html>
 <html>
@@ -303,12 +346,23 @@ function buildThumbnailHtml(imageBase64, imageMime, catchCopy) {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { width: 1600px; height: 900px; overflow: hidden; font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; }
   .bg { width: 1600px; height: 900px; position: relative; background: #000; }
+  /* 背景：ブラー＋暗転で縦長画像の余白を自然に埋める */
+  .bg-blur {
+    position: absolute; inset: 0;
+    ${imgSrc ? `background-image: url('${imgSrc}'); background-size: cover; background-position: center;` : `background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);`}
+    filter: blur(28px) brightness(0.38);
+    transform: scale(1.08);
+  }
+  /* 前景：画像を縦横ともに収まるよう中央配置 */
   .bg-image {
     position: absolute; inset: 0;
-    ${imageStyle}
-    filter: brightness(1.0);
+    display: flex; align-items: center; justify-content: center;
   }
-  .overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.0) 30%, rgba(0,0,0,0.7) 100%); }
+  .bg-image img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+  }
+  .overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.0) 40%, rgba(0,0,0,0.75) 100%); }
   .account {
     position: absolute; top: 52px; right: 48px;
     color: rgba(255,255,255,0.9); font-size: 30px; font-weight: 600;
@@ -337,7 +391,8 @@ function buildThumbnailHtml(imageBase64, imageMime, catchCopy) {
 </head>
 <body>
   <div class="bg">
-    <div class="bg-image"></div>
+    <div class="bg-blur"></div>
+    <div class="bg-image">${imgSrc ? `<img src="${imgSrc}">` : ""}</div>
     <div class="overlay"></div>
     <div class="account">@sekai_no_wadai</div>
     <div class="bottom">
@@ -404,7 +459,7 @@ async function generateThumbnail(browser, imagePath, outputPath, catchCopy) {
 // HTML投稿ランチャーを生成
 function generateHtml(today, posts) {
   const cards = posts.map((item, idx) => {
-    const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedVideoPath, thumbPath, isVideo, tweets: rawTweets, sourceUrl, videoDuration = 0 } = item;
+    const { postNum, scheduleTime, subreddit, title, score, savedImagePath, savedImagePaths = [], savedVideoPath, thumbPath, isVideo, tweets: rawTweets, sourceUrl, videoDuration = 0, galleryImageUrls = [] } = item;
     const tweets = rawTweets || [];
     const thumbAbsPath = thumbPath ? thumbPath.replace(/\\/g, "\\\\") : "";
     const videoAbsPath = savedVideoPath ? savedVideoPath.replace(/\\/g, "\\\\") : "";
@@ -450,17 +505,24 @@ function generateHtml(today, posts) {
           <span class="x-name" style="font-size:0.85em;">【速報】世界の話題</span>
           <span class="x-handle">@sekai_no_wadai</span>
           <span class="reply-num-badge">${tweetIdx + 1}/${tweets.length}</span>
+          <button class="reply-delete-btn" onclick="deleteReplyItem(this, ${postNum})" title="このリプライを削除">🗑️</button>
         </div>
         <textarea class="x-textarea reply-textarea" id="tweet-${postNum}-${tweetIdx}"
           oninput="updateThreadCount(${postNum}, ${tweetIdx})">${safeText}</textarea>
         <div class="tweet-char-row">
           <span class="x-char-count" id="count-${postNum}-${tweetIdx}" style="color:${charColor}">${charLen}/140</span>
         </div>
+        <div class="reply-image-area">
+          <input type="file" id="img-pick-${postNum}-${tweetIdx}" class="reply-img-input" accept="image/*" style="display:none" onchange="onReplyImagePicked(this, ${postNum}, ${tweetIdx})">
+          <button class="reply-img-btn" onclick="document.getElementById('img-pick-${postNum}-${tweetIdx}').click()">📎 画像</button>
+          <div class="reply-img-preview" id="img-preview-${postNum}-${tweetIdx}" style="display:inline-block;vertical-align:middle;margin-left:6px;"></div>
+        </div>
       </div>`;
     }).join("");
 
+    const galleryUrlsJson = JSON.stringify(galleryImageUrls).replace(/"/g, "&quot;");
     return `
-    <div class="x-card" id="card-${postNum}">
+    <div class="x-card" id="card-${postNum}" data-gallery-urls="${galleryUrlsJson}">
       <div class="thread-card-header">
         <div class="x-avatar">世</div>
         <div>
@@ -500,7 +562,7 @@ function generateHtml(today, posts) {
             </div>
             <div class="x-right-actions">
               <button class="x-post-btn" id="btn-${postNum}"
-                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}', '${videoAbsPath}', ${tweets.length})">
+                onclick="schedulePost(${postNum}, '${safeSourceUrl}', '${thumbAbsPath}', '${videoAbsPath}')">
                 予約投稿
               </button>
               <button class="x-cancel-btn" id="cancel-${postNum}" style="display:none"
@@ -512,7 +574,7 @@ function generateHtml(today, posts) {
         </div>
 
         <!-- 右：リプライ一覧 -->
-        <div class="reply-column">
+        <div class="reply-column" id="reply-col-${postNum}">
           ${replyItems}
           <!-- sourceURL リプライ（自動） -->
           <div class="reply-item reply-url-item">
@@ -757,6 +819,27 @@ function generateHtml(today, posts) {
     }
     .x-cancel-btn:hover { background: rgba(244,33,46,0.07); }
 
+    /* ── ギャラリー画像 ── */
+    .gallery-images { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; padding-bottom: 4px; }
+    .gallery-thumb { height: 120px; width: auto; max-width: 200px; border-radius: 8px; object-fit: cover; border: 1px solid #eff3f4; flex-shrink: 0; }
+
+    /* ── リプライ削除ボタン ── */
+    .reply-delete-btn {
+      margin-left: auto; background: none; border: none; cursor: pointer;
+      color: #aaa; font-size: 0.95em; padding: 2px 4px; line-height: 1;
+      border-radius: 4px; transition: color 0.15s;
+    }
+    .reply-delete-btn:hover { color: #f4212e; }
+
+    /* ── リプライ画像ピッカー ── */
+    .reply-image-area { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .reply-img-btn {
+      background: none; border: 1px solid #cfd9de; border-radius: 10px;
+      padding: 2px 8px; font-size: 0.78em; color: #1d9bf0; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .reply-img-btn:hover { background: #e7f3ff; }
+
     /* ── 素材なし ── */
     .media-placeholder {
       width: 100%; height: 120px; background: #f7f9f9; border-radius: 16px;
@@ -997,14 +1080,79 @@ function generateHtml(today, posts) {
       if (dateSel && timeSel) _setSmartDateDefault(dateSel, timeSel.value, jstNow, dateOptions);
     }
 
-    async function schedulePost(postNum, sourceUrl, thumbPath, videoPath, tweetCount) {
-      const tweets = [];
-      for (let i = 0; i < tweetCount; i++) {
-        const el = document.getElementById('tweet-' + postNum + '-' + i);
-        if (!el) break;
-        const t = el.value.trim();
-        if (t) tweets.push(t);
+    // リプライボックス削除（修正３）
+    function deleteReplyItem(btn, postNum) {
+      btn.closest('.reply-item').remove();
+      const col = document.getElementById('reply-col-' + postNum);
+      const count = 1 + (col ? col.querySelectorAll('.reply-item').length : 0);
+      const badge = document.querySelector('#card-' + postNum + ' .thread-count-badge');
+      if (badge) badge.textContent = count + 'ツイート';
+    }
+
+    // リプライ画像アップロード（修正２）
+    async function onReplyImagePicked(input, postNum, tweetIdx) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(',')[1];
+        try {
+          const res = await fetch('http://localhost:3000/api/upload-reply-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postNum, tweetIdx, base64, filename: file.name })
+          });
+          const data = await res.json();
+          if (data.success) {
+            input.dataset.savedPath = data.path;
+            document.getElementById('img-preview-' + postNum + '-' + tweetIdx).innerHTML =
+              '<img src="' + e.target.result + '" style="max-height:54px;border-radius:6px;vertical-align:middle">'
+              + '<button onclick="removeReplyImage(' + postNum + ',' + tweetIdx + ')" style="margin-left:4px;background:none;border:none;color:#f4212e;cursor:pointer;font-size:0.85em;">✕</button>';
+            showToast('✅ 画像をセットしました');
+          }
+        } catch(e) {
+          showToast('❌ 画像アップロード失敗', '#f4212e');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeReplyImage(postNum, tweetIdx) {
+      const input = document.getElementById('img-pick-' + postNum + '-' + tweetIdx);
+      if (input) { input.value = ''; input.dataset.savedPath = ''; }
+      const preview = document.getElementById('img-preview-' + postNum + '-' + tweetIdx);
+      if (preview) preview.innerHTML = '';
+    }
+
+    async function schedulePost(postNum, sourceUrl, thumbPath, videoPath) {
+      // 本投稿（index 0）
+      const mainEl = document.getElementById('tweet-' + postNum + '-0');
+      const mainText = mainEl ? mainEl.value.trim() : '';
+      if (!mainText) { alert('投稿文が空です'); return; }
+      const tweets = [mainText];
+      const replyImages = [null]; // index 0 はメイン投稿（画像はthumbPath経由）
+
+      // リプライを reply-col からDOMで動的収集（削除済みは除外）
+      const replyCol = document.getElementById('reply-col-' + postNum);
+      if (replyCol) {
+        replyCol.querySelectorAll('.reply-item').forEach(item => {
+          const ta = item.querySelector('.reply-textarea');
+          const imgInput = item.querySelector('.reply-img-input');
+          if (ta) {
+            const t = ta.value.trim();
+            if (t) {
+              tweets.push(t);
+              replyImages.push(imgInput?.dataset.savedPath || null);
+            }
+          }
+        });
       }
+
+      // galleryImageUrls を data 属性から取得
+      const card = document.getElementById('card-' + postNum);
+      let galleryImageUrls = [];
+      try { galleryImageUrls = JSON.parse(card.dataset.galleryUrls || '[]'); } catch(e) {}
+
       if (tweets.length === 0) { alert('投稿文が空です'); return; }
       const scheduleTime = document.getElementById('time-' + postNum).value;
       const scheduleDate = document.getElementById('date-' + postNum).value;
@@ -1018,7 +1166,7 @@ function generateHtml(today, posts) {
         const res = await fetch('http://localhost:3000/api/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postNum, tweets, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath: videoPath || null })
+          body: JSON.stringify({ postNum, tweets, scheduleTime, scheduleDate, sourceUrl, thumbPath, videoPath: videoPath || null, replyImages, galleryImageUrls })
         });
         const data = await res.json();
 
@@ -1108,6 +1256,7 @@ function generateHtml(today, posts) {
 // メイン処理
 async function main() {
   console.log("=== 【速報】世界の話題 投稿文生成（10件/日） ===\n");
+  cleanupOldLocalFiles();
   console.log("Redditからネタを取得中...\n");
 
   // 全サブレディットからネタ取得
@@ -1140,7 +1289,6 @@ async function main() {
 
   // 保存ファイルの準備
   const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); // JST
-  const browser = await puppeteer.launch({ headless: true });
   const saveFile = path.join(POSTS_DIR, `${today}.txt`);
   const lines = [
     `【速報】世界の話題 投稿文ログ ${today}`,
@@ -1148,6 +1296,7 @@ async function main() {
     "",
   ];
   const htmlItems = [];
+  const browser = await puppeteer.launch({ headless: true });
 
   for (const [idx, post] of selectedPosts.entries()) {
     const postNum = idx + 1;
@@ -1160,6 +1309,7 @@ async function main() {
 
     // 画像 or 動画ダウンロード（日付＋番号でリネーム）
     let savedImagePath = null;
+    let savedImagePaths = [];
     let savedVideoPath = null;
     if (post.isVideo && post.videoUrl) {
       const filename = `${today}_${postNum}.mp4`;
@@ -1178,15 +1328,22 @@ async function main() {
           console.log(`🖼️  プレビュー画像: ${savedImagePath}`);
         }
       }
-    } else if (post.imageUrl) {
-      const ext = post.imageUrl.split("?")[0].split(".").pop() || "jpg";
-      const filename = `${today}_${postNum}.${ext}`;
-      savedImagePath = await downloadImage(post.imageUrl, filename);
-      if (savedImagePath) {
-        console.log(`🖼️  画像: ${savedImagePath}`);
-      } else {
-        console.log(`⚠️  画像取得失敗`);
+    } else if (post.imageUrls?.length > 0) {
+      // ギャラリー or 単一画像（最大4枚まで取得）
+      for (let j = 0; j < Math.min(post.imageUrls.length, 4); j++) {
+        const rawExt = post.imageUrls[j].split("?")[0].split(".").pop().split("&")[0] || "jpg";
+        const ext = rawExt.length > 4 ? "jpg" : rawExt;
+        const filename = post.imageUrls.length > 1
+          ? `${today}_${postNum}_${j + 1}.${ext}`
+          : `${today}_${postNum}.${ext}`;
+        const imgPath = await downloadImage(post.imageUrls[j], filename);
+        if (imgPath) {
+          savedImagePaths.push(imgPath);
+          console.log(`🖼️  画像${j + 1}: ${imgPath}`);
+        }
       }
+      savedImagePath = savedImagePaths[0] || null;
+      if (!savedImagePath) console.log(`⚠️  画像取得失敗`);
     } else {
       console.log(`⚠️  画像なし`);
     }
@@ -1203,11 +1360,11 @@ async function main() {
     console.log(`📝 スレッド: ${tweets.length}ツイート`);
     const sourceUrl = post.url;
 
-    // 動画の場合はサムネイル生成スキップ
+    // サムネイル: Puppeteerでキャッチコピー付きPNG生成（複数画像でも1枚目を使用）
     let thumbPath = null;
     if (post.isVideo) {
       console.log(`🎬 動画投稿 - サムネイル生成スキップ`);
-    } else {
+    } else if (savedImagePath && fs.existsSync(savedImagePath)) {
       const catchCopy = await generateCatchCopy(post);
       console.log(`💬 キャッチコピー: ${catchCopy.line1} / ${catchCopy.line2}`);
       thumbPath = path.join(THUMB_DIR, `${today}_${postNum}.png`);
@@ -1243,12 +1400,12 @@ async function main() {
       } catch (e) { /* 取得失敗時は0のまま */ }
     }
 
-    htmlItems.push({ postNum, scheduleTime, subreddit: post.subreddit, title: post.title, score: post.score, savedImagePath, savedVideoPath, thumbPath, isVideo: post.isVideo, tweets, sourceUrl, videoDuration });
+    htmlItems.push({ postNum, scheduleTime, subreddit: post.subreddit, title: post.title, score: post.score, savedImagePath, savedImagePaths, savedVideoPath, thumbPath, isVideo: post.isVideo, tweets, sourceUrl, videoDuration, galleryImageUrls: post.imageUrls || [] });
   }
 
-  // テキストファイル保存
   await browser.close();
 
+  // テキストファイル保存
   fs.writeFileSync(saveFile, lines.join("\n"), "utf8");
   console.log(`\n✅ 投稿文を保存しました: ${saveFile}`);
 

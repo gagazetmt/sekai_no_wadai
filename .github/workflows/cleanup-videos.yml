@@ -15,33 +15,59 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 前日以前の動画を削除
+      - name: git設定
         run: |
-          # videosブランチが存在するか確認
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+
+      - name: mainブランチ：3日以上前のサムネイル・tempファイルを削除
+        run: |
+          CUTOFF=$(TZ=Asia/Tokyo date -d "3 days ago" +%Y-%m-%d)
+          DELETED=0
+
+          for dir in 02_reddit_global/thumbnails 02_reddit_global/temp; do
+            [ -d "$dir" ] || continue
+            while IFS= read -r -d '' f; do
+              FNAME=$(basename "$f")
+              FILE_DATE="${FNAME:0:10}"
+              if [[ "$FILE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]] && [ "$FILE_DATE" \< "$CUTOFF" ]; then
+                git rm -f "$f" 2>/dev/null && DELETED=$((DELETED + 1))
+              fi
+            done < <(find "$dir" -type f -print0 2>/dev/null)
+          done
+
+          if [ $DELETED -gt 0 ]; then
+            git commit -m "cleanup: mainブランチ ${DELETED}件削除 (${CUTOFF}以前)"
+            git push
+            echo "🗑️ ${DELETED}件削除しました"
+          else
+            echo "削除対象なし（main）"
+          fi
+
+      - name: videosブランチ：3日以上前の動画を削除
+        run: |
           if ! git ls-remote --heads origin videos | grep -q videos; then
             echo "videosブランチが存在しません。スキップします。"
             exit 0
           fi
 
           git checkout videos
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
 
-          TODAY=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          CUTOFF=$(TZ=Asia/Tokyo date -d "3 days ago" +%Y-%m-%d)
           DELETED=0
 
           while IFS= read -r -d '' f; do
             FNAME=$(basename "$f")
             FILE_DATE="${FNAME:0:10}"
-            if [ "$FILE_DATE" \< "$TODAY" ]; then
+            if [[ "$FILE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2} ]] && [ "$FILE_DATE" \< "$CUTOFF" ]; then
               git rm -f "$f" 2>/dev/null && DELETED=$((DELETED + 1))
             fi
           done < <(find . -name "*.mp4" -print0 2>/dev/null)
 
           if [ $DELETED -gt 0 ]; then
-            git commit -m "cleanup: ${DELETED}件の動画を削除 (${TODAY})"
+            git commit -m "cleanup: videosブランチ ${DELETED}件削除 (${CUTOFF}以前)"
             git push
-            echo "🗑️ ${DELETED}件の動画を削除しました"
+            echo "🗑️ ${DELETED}件削除しました"
           else
-            echo "削除対象なし"
+            echo "削除対象なし（videos）"
           fi
