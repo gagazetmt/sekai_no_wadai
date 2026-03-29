@@ -50,18 +50,20 @@ async function fetchXImages(keyword, prefix, limit = 10, queryType = "Latest") {
   if (!keyword)  return [];
 
   let tweets = [];
-  try {
-    const res = await axios.get(BASE_URL + "/twitter/tweet/advanced_search", {
-      headers: { "X-API-Key": API_KEY },
-      params:  { query: keyword, queryType },
-      timeout: 12000,
-    });
-    // レスポンス構造の違いを吸収
-    tweets = res.data?.tweets || res.data?.data?.tweets || res.data?.data || [];
-    if (!Array.isArray(tweets)) tweets = [];
-  } catch (e) {
-    console.warn("TwitterAPI.io error:", e.message);
-    return [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await axios.get(BASE_URL + "/twitter/tweet/advanced_search", {
+        headers: { "X-API-Key": API_KEY },
+        params:  { query: keyword, queryType },
+        timeout: 20000,
+      });
+      tweets = res.data?.tweets || res.data?.data?.tweets || res.data?.data || [];
+      if (!Array.isArray(tweets)) tweets = [];
+      break;
+    } catch (e) {
+      if (attempt === 2) { console.warn("TwitterAPI.io error:", e.message); return []; }
+      console.warn(`TwitterAPI.io retry (${attempt}/2):`, e.message);
+    }
   }
 
 
@@ -90,17 +92,20 @@ async function fetchXComments(keyword, limit = 20) {
   if (!keyword)  return [];
 
   let tweets = [];
-  try {
-    const res = await axios.get(BASE_URL + "/twitter/tweet/advanced_search", {
-      headers: { "X-API-Key": API_KEY },
-      params:  { query: keyword, queryType: "Top" },
-      timeout: 15000,
-    });
-    tweets = res.data?.tweets || res.data?.data?.tweets || res.data?.data || [];
-    if (!Array.isArray(tweets)) tweets = [];
-  } catch (e) {
-    console.warn("TwitterAPI.io fetchXComments error:", e.message);
-    return [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await axios.get(BASE_URL + "/twitter/tweet/advanced_search", {
+        headers: { "X-API-Key": API_KEY },
+        params:  { query: keyword, queryType: "Top" },
+        timeout: 20000,
+      });
+      tweets = res.data?.tweets || res.data?.data?.tweets || res.data?.data || [];
+      if (!Array.isArray(tweets)) tweets = [];
+      break;
+    } catch (e) {
+      if (attempt === 2) { console.warn("TwitterAPI.io fetchXComments error:", e.message); return []; }
+      console.warn(`TwitterAPI.io fetchXComments retry (${attempt}/2):`, e.message);
+    }
   }
 
   return tweets
