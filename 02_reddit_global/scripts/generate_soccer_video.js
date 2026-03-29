@@ -264,7 +264,14 @@ function buildSlideHtml(type, data = {}) {
 // ─── PNG レンダリング ─────────────────────────────────────────────────────────
 async function renderSlide(page, html, outputPath) {
   await page.setContent(html, { waitUntil: "domcontentloaded" });
-  await new Promise(r => setTimeout(r, 400));
+  // アニメーションを最終表示状態に強制（opacity:0のままにならないよう）
+  await page.evaluate(() => {
+    document.querySelectorAll("*").forEach(el => {
+      el.style.animationDelay     = "-5s";
+      el.style.animationPlayState = "paused";
+    });
+  });
+  await new Promise(r => setTimeout(r, 200));
   await page.screenshot({ path: outputPath, type: "png" });
 }
 
@@ -365,9 +372,7 @@ async function narrationVoiceVox(text, outputPath) {
 }
 
 async function generateNarration(text, outputPath) {
-  return process.env.OPENAI_API_KEY
-    ? narrationOpenAI(text, outputPath)
-    : narrationVoiceVox(text, outputPath);
+  return narrationVoiceVox(text, outputPath);
 }
 
 // ─── 音声長取得（ms） ─────────────────────────────────────────────────────────
