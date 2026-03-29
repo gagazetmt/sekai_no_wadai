@@ -165,7 +165,7 @@ function showLogScreen() {
 
 async function pollJobStatus() {
   try {
-    const res  = await fetch('${VPS_URL}/api/video-status');
+    const res  = await fetch('/api/vps-status');
     const data = await res.json();
 
     const logBox = document.getElementById('logBox');
@@ -246,6 +246,20 @@ const server = http.createServer(async (req, res) => {
   if (req.url === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+
+  // VPSジョブステータス中継（ブラウザのCORSを回避するためサーバー経由）
+  if (req.url === "/api/vps-status" && req.method === "GET") {
+    try {
+      const vpsRes = await fetch(`${VPS_URL}/api/video-status`);
+      const data   = await vpsRes.json();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(data));
+    } catch (e) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ running: false, done: false, log: "", error: e.message }));
+    }
     return;
   }
 
