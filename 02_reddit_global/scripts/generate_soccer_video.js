@@ -37,7 +37,7 @@ const BEEP_PATH  = path.join(__dirname, "..", "soccer_slides", "beep.wav");
 
 // ─── データ読み込み ───────────────────────────────────────────────────────────
 function loadData() {
-  const file = path.join(TEMP_DIR, `soccer_video_content_${today}.json`);
+  const file = path.join(TEMP_DIR, `soccer_yt_content_${today}.json`);
   if (!fs.existsSync(file)) {
     console.error(`❌ Not found: ${file}`);
     console.error("先に generate_soccer.js を実行してください");
