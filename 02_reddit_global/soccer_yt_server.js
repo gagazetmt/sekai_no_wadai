@@ -31,6 +31,7 @@ const LOG_FILE       = path.join(__dirname, "soccer_yt.log");
 const THUMB_DIR      = path.join(__dirname, "soccer_yt_thumbnails");
 const MC_DIR         = path.join(__dirname, "match_center");
 const STOCK_DIR      = path.join(__dirname, "stock");
+const VIDEO_DIR      = path.join(__dirname, "soccer_videos");
 const W = 1920, H = 1080, SAFE = 60;
 
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
@@ -41,6 +42,7 @@ app.use("/narrations",    express.static(SLIDES_DIR));
 app.use("/images",        express.static(IMG_DIR));
 app.use("/match-center-images", express.static(MC_DIR));
 app.use("/stock",         express.static(STOCK_DIR));
+app.use("/video-files",   express.static(VIDEO_DIR));
 
 // ─── ストック素材マップ ───────────────────────────────────────────────────────
 // ストック画像: searchText にフォルダ名が含まれるフォルダから取得
@@ -2528,6 +2530,94 @@ app.post("/api/soccer-yt/import-selected", (req, res) => {
 app.get("/api/last-log", (req, res) => {
   if (!fs.existsSync(LOG_FILE)) return res.json({ ok: false, log: "ログファイルがありません" });
   res.json({ ok: true, log: fs.readFileSync(LOG_FILE, "utf8") });
+});
+
+// ─── 動画一覧API ──────────────────────────────────────────────────────────────
+app.get("/api/videos", (req, res) => {
+  if (!fs.existsSync(VIDEO_DIR)) return res.json({ videos: [] });
+  const files = fs.readdirSync(VIDEO_DIR)
+    .filter(f => f.endsWith(".mp4"))
+    .sort((a, b) => b.localeCompare(a))
+    .map(f => {
+      const thumb = f.replace(".mp4", "_thumb.png");
+      return {
+        name: f,
+        url: `/video-files/${f}`,
+        thumb: fs.existsSync(path.join(VIDEO_DIR, thumb)) ? `/video-files/${thumb}` : null,
+        size: Math.round(fs.statSync(path.join(VIDEO_DIR, f)).size / 1024 / 1024 * 10) / 10,
+      };
+    });
+  res.json({ videos: files });
+});
+
+// ─── 動画一覧ページ ───────────────────────────────────────────────────────────
+app.get("/videos", (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🎬 動画一覧</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: sans-serif; background: #0d0d1a; color: #eee; padding: 12px; max-width: 700px; margin: 0 auto; }
+h1 { font-size: 18px; margin-bottom: 14px; color: #e94560; }
+.back { display: inline-block; margin-bottom: 14px; color: #aaa; font-size: 13px; text-decoration: none; }
+.card { background: #16213e; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+.thumb { width: 100%; aspect-ratio: 16/9; background: #0a0a1a; object-fit: cover; display: block; }
+.thumb-placeholder { width: 100%; aspect-ratio: 16/9; background: #0a0a1a; display: flex; align-items: center; justify-content: center; font-size: 40px; }
+.info { padding: 10px 12px; }
+.filename { font-size: 13px; color: #ccc; margin-bottom: 8px; word-break: break-all; }
+.meta { font-size: 11px; color: #888; margin-bottom: 10px; }
+.btns { display: flex; gap: 8px; }
+button, a.btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: bold; text-decoration: none; display: inline-block; }
+.btn-play { background: #e94560; color: #fff; }
+.btn-dl { background: #0f3460; color: #eee; }
+.player-wrap { display: none; padding: 0 12px 12px; }
+video { width: 100%; border-radius: 6px; }
+.empty { text-align: center; padding: 40px; color: #666; }
+</style>
+</head>
+<body>
+<a href="/" class="back">← ランチャーに戻る</a>
+<h1>🎬 生成済み動画</h1>
+<div id="list"><div class="empty">読み込み中...</div></div>
+<script>
+async function load() {
+  const res = await fetch('/api/videos');
+  const { videos } = await res.json();
+  const el = document.getElementById('list');
+  if (!videos.length) { el.innerHTML = '<div class="empty">動画がまだありません</div>'; return; }
+  el.innerHTML = videos.map((v, i) => \`
+    <div class="card">
+      \${v.thumb
+        ? '<img class="thumb" src="' + v.thumb + '" loading="lazy">'
+        : '<div class="thumb-placeholder">🎬</div>'}
+      <div class="info">
+        <div class="filename">\${v.name}</div>
+        <div class="meta">\${v.size} MB</div>
+        <div class="btns">
+          <button class="btn-play" onclick="togglePlay(\${i})">▶ 再生</button>
+          <a class="btn btn-dl" href="\${v.url}" download="\${v.name}">⬇ DL</a>
+        </div>
+      </div>
+      <div class="player-wrap" id="pw_\${i}">
+        <video controls src="\${v.url}" id="vid_\${i}"></video>
+      </div>
+    </div>
+  \`).join('');
+}
+function togglePlay(i) {
+  const pw = document.getElementById('pw_' + i);
+  const vid = document.getElementById('vid_' + i);
+  const open = pw.style.display === 'block';
+  pw.style.display = open ? 'none' : 'block';
+  if (open) vid.pause(); else vid.play();
+}
+load();
+</script>
+</body>
+</html>`);
 });
 
 // ─── サーバー起動 ─────────────────────────────────────────────────────────────
