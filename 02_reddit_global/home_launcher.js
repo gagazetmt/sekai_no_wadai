@@ -56,6 +56,13 @@ button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; f
 .loading { color: #aaa; font-size: 13px; text-align: center; padding: 24px; }
 .status { font-size: 13px; text-align: center; padding: 10px; min-height: 36px; }
 .selected-count { font-size: 12px; color: #aaa; text-align: right; padding: 4px 0; }
+#logScreen { display: none; }
+.log-title { font-size: 15px; font-weight: bold; margin-bottom: 10px; color: #e94560; }
+.log-box { background: #0d0d1a; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; line-height: 1.6; color: #ccc; height: 55vh; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+.log-status { text-align: center; padding: 12px; font-size: 14px; }
+.spinner { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-vps { background: #27ae60; color: #fff; width: 100%; padding: 14px; font-size: 16px; margin-top: 12px; border-radius: 8px; display: none; }
 </style>
 </head>
 <body>
@@ -64,10 +71,19 @@ button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; f
   <input type="date" id="date" />
   <button class="btn-fetch" onclick="fetchCandidates()">📥 取得</button>
 </div>
-<div id="results"></div>
-<div class="selected-count" id="selectedCount"></div>
-<button class="btn-send" id="sendBtn" onclick="sendToVps()">🚀 VPSに送って生成開始</button>
-<div class="status" id="status"></div>
+<div id="mainScreen">
+  <div id="results"></div>
+  <div class="selected-count" id="selectedCount"></div>
+  <button class="btn-send" id="sendBtn" onclick="sendToVps()">🚀 VPSに送って生成開始</button>
+  <div class="status" id="status"></div>
+</div>
+
+<div id="logScreen">
+  <div class="log-title">⏳ VPSで生成中...</div>
+  <div class="log-box" id="logBox"></div>
+  <div class="log-status" id="logStatus"><span class="spinner">⚙️</span> 処理中...</div>
+  <button class="btn-vps" id="vpsBtn" onclick="window.open('${VPS_URL}', '_blank')">🎬 動画生成ランチャーへ</button>
+</div>
 
 <script>
 const today = new Date();
@@ -139,6 +155,40 @@ function toggleCheck(id) {
   onCheckChange();
 }
 
+let _pollTimer = null;
+
+function showLogScreen() {
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('logScreen').style.display  = 'block';
+  pollJobStatus();
+}
+
+async function pollJobStatus() {
+  try {
+    const res  = await fetch('${VPS_URL}/api/video-status');
+    const data = await res.json();
+
+    const logBox = document.getElementById('logBox');
+    logBox.textContent = data.log || '(ログ待機中...)';
+    logBox.scrollTop   = logBox.scrollHeight;
+
+    if (data.done) {
+      clearTimeout(_pollTimer);
+      const ok = data.exitCode === 0;
+      document.getElementById('logStatus').textContent = ok ? '✅ 生成完了！' : '❌ エラーで終了（exitCode: ' + data.exitCode + '）';
+      document.getElementById('logTitle') && (document.getElementById('logTitle').textContent = ok ? '✅ 生成完了' : '❌ 生成エラー');
+      document.querySelector('.log-title').textContent = ok ? '✅ 生成完了！' : '❌ 生成エラー';
+      document.getElementById('vpsBtn').style.display = 'block';
+      if (ok) setTimeout(() => window.open('${VPS_URL}', '_blank'), 1500);
+    } else {
+      _pollTimer = setTimeout(pollJobStatus, 2000);
+    }
+  } catch (e) {
+    document.getElementById('logStatus').textContent = '⚠️ VPS接続エラー: ' + e.message;
+    _pollTimer = setTimeout(pollJobStatus, 3000);
+  }
+}
+
 function onCheckChange() {
   const checked = document.querySelectorAll('input[type=checkbox]:checked');
   const btn     = document.getElementById('sendBtn');
@@ -170,9 +220,7 @@ async function sendToVps() {
     });
     const result = await res.json();
     if (result.ok) {
-      status.textContent = '✅ 送信完了！VPSランチャーに移動します...';
-      btn.style.display  = 'none';
-      setTimeout(() => window.open('${VPS_URL}', '_blank'), 1000);
+      showLogScreen();
     } else {
       status.textContent = '❌ ' + (result.error || '送信失敗');
       btn.disabled = false;
