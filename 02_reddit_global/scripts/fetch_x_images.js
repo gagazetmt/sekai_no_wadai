@@ -152,7 +152,7 @@ function resolveTeamHandle(teamName) {
 async function fetchOfficialXImages(teamName, prefix, limit = 7) {
   const handle = resolveTeamHandle(teamName);
   if (!handle) return [];
-  return fetchXImages(`from:${handle}`, prefix, limit);
+  return fetchXImages(`from:${handle} filter:images -filter:retweets`, prefix, limit, "Top");
 }
 
 // クエリ文字列からチーム名を検出して公式画像を取得（SCRIPT B用）
