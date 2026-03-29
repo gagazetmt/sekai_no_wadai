@@ -700,8 +700,9 @@ async function main() {
       ]);
       // 既にkeywordsに含まれている場合は重複スキップ
       const newManagers = topicManagers.filter(m => !baseWords.some(w => m.toLowerCase().includes(w.toLowerCase())));
-      const newPlayers  = playerNames.filter(p => !baseWords.some(w => p.toLowerCase().includes(w.toLowerCase())));
       // チーム・国名はX公式でカバー済み → Wikimediaは人名（選手・監督）のみ
+      // playerNamesはbaseWordsと重複してもそのまま使う（baseWordsはwikiWordsに含まない）
+      const newPlayers = playerNames.filter(p => !newManagers.some(m => m.toLowerCase().includes(p.toLowerCase())));
       const wikiWords = [...newManagers, ...newPlayers];
       if (wikiWords.length > 0) {
         process.stdout.write(`  [${num}] Wikimedia取得中 [${wikiWords.join(", ")}]... `);
