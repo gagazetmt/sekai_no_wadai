@@ -757,8 +757,10 @@ async function main() {
   }
   posts.sort((a, b) => a.num - b.num);
 
-  // 保存（新規を先頭にマージ）
-  const mergedPosts = [...posts, ...existingPosts];
+  // 保存（新規を先頭にマージ・同一スレッドは新規で上書き）
+  const newTitles   = new Set(posts.map(p => p._meta?.threadTitle).filter(Boolean));
+  const deduped     = existingPosts.filter(p => !newTitles.has(p._meta?.threadTitle));
+  const mergedPosts = [...posts, ...deduped];
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify({ date: today, posts: mergedPosts }, null, 2), "utf8");
 
   console.log(`✅ 完了！${posts.length}件を保存`);
