@@ -14,12 +14,7 @@
 require("dotenv").config();
 const fs    = require("fs");
 
-const REDDIT_PROXY_URL = process.env.REDDIT_PROXY_URL || "";
 async function redditFetch(url) {
-  if (REDDIT_PROXY_URL) {
-    const proxyUrl = `${REDDIT_PROXY_URL}/?url=${encodeURIComponent(url)}`;
-    return fetch(proxyUrl, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
-  }
   return fetch(url, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
 }
 const path  = require("path");

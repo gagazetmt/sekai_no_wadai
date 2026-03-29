@@ -2501,6 +2501,29 @@ app.post("/api/soccer-yt/process-selected", (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── ホームランチャーからの案件インポート ────────────────────────────────────
+app.post("/api/soccer-yt/import-selected", (req, res) => {
+  const { date, threads, preloadedComments } = req.body;
+  if (!threads?.length) return res.json({ ok: false, message: "スレッドが選択されていません" });
+  if (videoJob.running)  return res.json({ ok: false, message: "別のジョブが実行中です" });
+
+  const tmpFile = path.join(TEMP_DIR, `selected_${date}.json`);
+  fs.writeFileSync(tmpFile, JSON.stringify({ date, threads, preloadedComments: preloadedComments || {} }, null, 2));
+
+  videoJob = { running: true, log: [], done: false, exitCode: null };
+  const script = path.join(__dirname, "scripts", "generate_content.js");
+  const proc   = spawn(process.execPath, [script, `--selected=${tmpFile}`, date], { cwd: __dirname, env: process.env });
+  proc.stdout.on("data", d => videoJob.log.push(d.toString()));
+  proc.stderr.on("data", d => videoJob.log.push(d.toString()));
+  proc.on("close", code => {
+    videoJob.running  = false;
+    videoJob.done     = true;
+    videoJob.exitCode = code;
+    fs.writeFileSync(LOG_FILE, `[ホームインポート ${new Date().toLocaleString("ja-JP")}]\n` + videoJob.log.join(""));
+  });
+  res.json({ ok: true });
+});
+
 // ─── 最終ログ取得 ─────────────────────────────────────────────────────────────
 app.get("/api/last-log", (req, res) => {
   if (!fs.existsSync(LOG_FILE)) return res.json({ ok: false, log: "ログファイルがありません" });

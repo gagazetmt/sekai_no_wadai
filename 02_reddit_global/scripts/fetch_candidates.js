@@ -6,14 +6,7 @@
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env"), quiet: true });
 const { callAI } = require("./ai_client");
 
-const REDDIT_PROXY_URL = process.env.REDDIT_PROXY_URL || "";
-
-// RedditへのfetchをローカルPCプロキシ経由で行う
 async function redditFetch(url) {
-  if (REDDIT_PROXY_URL) {
-    const proxyUrl = `${REDDIT_PROXY_URL}/?url=${encodeURIComponent(url)}`;
-    return fetch(proxyUrl, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
-  }
   return fetch(url, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
 }
 

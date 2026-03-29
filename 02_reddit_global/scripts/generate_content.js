@@ -66,7 +66,13 @@ ${items.map((t, i) => `${i}: ${t}`).join("\n")}
 }
 
 // ─── 共通: Reddit スレッド本文＋コメント取得 ──────────────────────────────────
+// ホームランチャーから事前取得したコメントがあればそれを使う
+let _preloadedComments = {};
+
 async function fetchThreadFull(permalink) {
+  if (permalink && _preloadedComments[permalink]) {
+    return _preloadedComments[permalink];
+  }
   try {
     const url = `https://www.reddit.com${permalink}.json?limit=50&depth=1`;
     const res = await fetch(url, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
@@ -503,6 +509,7 @@ async function main() {
 
   const selectedData = JSON.parse(fs.readFileSync(selectedFile, "utf8"));
   const threads = selectedData.threads || [];
+  _preloadedComments = selectedData.preloadedComments || {};
 
   console.log(`\n=== コンテンツ生成 (${today}) ===`);
   console.log(`対象: ${threads.length}件\n`);
