@@ -170,8 +170,9 @@ async function sendToVps() {
     });
     const result = await res.json();
     if (result.ok) {
-      status.textContent = '✅ 送信完了！VPSランチャーで生成状況を確認してください。';
+      status.textContent = '✅ 送信完了！VPSランチャーに移動します...';
       btn.style.display  = 'none';
+      setTimeout(() => window.open('${VPS_URL}', '_blank'), 1000);
     } else {
       status.textContent = '❌ ' + (result.error || '送信失敗');
       btn.disabled = false;
