@@ -6,6 +6,17 @@
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env"), quiet: true });
 const { callAI } = require("./ai_client");
 
+const REDDIT_PROXY_URL = process.env.REDDIT_PROXY_URL || "";
+
+// RedditへのfetchをローカルPCプロキシ経由で行う
+async function redditFetch(url) {
+  if (REDDIT_PROXY_URL) {
+    const proxyUrl = `${REDDIT_PROXY_URL}/?url=${encodeURIComponent(url)}`;
+    return fetch(proxyUrl, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
+  }
+  return fetch(url, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
+}
+
 
 const now       = new Date();
 const jstOffset = 9 * 60 * 60 * 1000;
@@ -55,7 +66,7 @@ async function redditSearch(subreddit, query, sort, time, limit) {
   const url = `https://www.reddit.com/r/${subreddit}/search.json?` +
     `q=${encodeURIComponent(query)}&sort=${sort}&restrict_sr=true&limit=${limit}&t=${time}`;
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
+    const res = await redditFetch(url);
     if (!res.ok) return [];
     const json = await res.json();
     return (json.data?.children || []).map(mapRedditPost);
@@ -64,7 +75,7 @@ async function redditSearch(subreddit, query, sort, time, limit) {
 
 async function redditListing(url) {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "soccer-news-bot/1.0" } });
+    const res = await redditFetch(url);
     if (!res.ok) return [];
     const json = await res.json();
     return (json.data?.children || []).map(mapRedditPost);

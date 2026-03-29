@@ -7,7 +7,7 @@ require("dotenv").config();
 const express = require("express");
 const { TwitterApi } = require("twitter-api-v2");
 const Anthropic = require("@anthropic-ai/sdk");
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -67,6 +67,9 @@ const xClient = new TwitterApi({
 
 // 予約済みタスク管理
 const scheduledJobs = {};
+
+// ネタ生成ジョブ管理
+let generateJob = null;
 
 // ── 投稿実行（スレッド対応） ──────────────────────────────────────────────
 async function executePost({ postNum, tweets, sourceUrl, thumbPath }) {
@@ -201,6 +204,33 @@ app.get("/api/status", (req, res) => {
 });
 
 // ── GitHub Push API ──────────────────────────────────────────────────────
+// ── ネタ生成実行 API ──────────────────────────────────────────────────────
+app.post("/api/run-generate", (req, res) => {
+  if (generateJob?.running) return res.json({ ok: false, message: "すでに実行中です" });
+  generateJob = { running: true, log: [], done: false, exitCode: null };
+  const proc = spawn(process.execPath, [path.join(__dirname, "scripts", "generate_post.js")], {
+    cwd: __dirname, env: process.env
+  });
+  proc.stdout.on("data", d => generateJob.log.push(d.toString()));
+  proc.stderr.on("data", d => generateJob.log.push(d.toString()));
+  proc.on("close", code => {
+    generateJob.running = false;
+    generateJob.done = true;
+    generateJob.exitCode = code;
+  });
+  res.json({ ok: true });
+});
+
+app.get("/api/generate-status", (req, res) => {
+  if (!generateJob) return res.json({ running: false, done: false, log: "" });
+  res.json({
+    running: generateJob.running,
+    done: generateJob.done,
+    exitCode: generateJob.exitCode,
+    log: generateJob.log.join("")
+  });
+});
+
 app.post("/api/push-github", (req, res) => {
   const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
