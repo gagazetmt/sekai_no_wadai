@@ -24,7 +24,7 @@
 require("dotenv").config();
 const fs   = require("fs");
 const path = require("path");
-const Anthropic = require("@anthropic-ai/sdk");
+const { callAI } = require("./ai_client");
 
 // ─── Reddit 取得 ──────────────────────────────────────────────────────────
 // ※ Reddit の公開 JSON API はキー不要。日本語コメントが欲しい場合は
@@ -159,14 +159,12 @@ function fetchFromLocal({ file }) {
 // ─── Claude フィルタリング ────────────────────────────────────────────────
 // 「毒気はあるが規約違反ではない」20〜30文字のコメントを厳選
 async function filterWithClaude(rawComments, { topic = "", targetCount = 10, maxChars = 30, minChars = 8 }) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("[Claude] ANTHROPIC_API_KEY 未設定 → 長さフィルタのみ適用");
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.DEEPSEEK_API_KEY) {
+    console.error("[AI] API_KEY 未設定 → 長さフィルタのみ適用");
     return lengthFilter(rawComments, minChars, maxChars).slice(0, targetCount);
   }
 
-  const client = new Anthropic();
-
-  // 長さで事前フィルタ（Claude への入力を絞る）
+  // 長さで事前フィルタ（AIへの入力を絞る）
   const preFiltered = rawComments.filter(c =>
     c.text.length >= 4 && c.text.length <= 100
   ).slice(0, 200); // 最大200件をClaudeに渡す
@@ -197,13 +195,7 @@ async function filterWithClaude(rawComments, { topic = "", targetCount = 10, max
 ${commentList}`;
 
   try {
-    const res = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const content = res.content[0]?.text || "";
+    const content = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 1024, messages: [{ role: "user", content: prompt }] });
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("JSON が見つかりません");
 
