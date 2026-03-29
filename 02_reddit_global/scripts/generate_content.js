@@ -148,6 +148,20 @@ async function extractImageKeywords(title) {
   } catch { return []; }
 }
 
+async function extractPlayerNames(title) {
+  try {
+    const raw = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 80,
+      messages: [{ role: "user", content: `Extract soccer player names only (not teams/countries/managers) from this headline. Return English names as a JSON array, max 3. E.g. ["Junya Ito","Erling Haaland"]. If none, return [].\n${title}` }],
+    });
+    const match = raw.match(/\[[\s\S]*?\]/);
+    if (!match) return [];
+    const arr = JSON.parse(match[0]);
+    return Array.isArray(arr) ? arr.filter(w => w && w.length >= 2).slice(0, 3) : [];
+  } catch { return []; }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // SCRIPT A: 試合（post-match）
 // ════════════════════════════════════════════════════════════════════════════
@@ -676,14 +690,19 @@ async function main() {
         } catch (e) { console.log(`  ⚠️ ${e.message}`); }
       }
 
-      // ③ Wikimedia画像（entities + チームの監督名）
+      // ③ Wikimedia画像（entities + チームの監督名 + 選手名）
       const baseWords = imgKeywords.length
         ? imgKeywords
         : xImgQuery.split(/\s+/).filter(w => w.length >= 3).slice(0, 2);
-      const topicManagers = lookupManagers(imgKeywords);
-      // 既にkeywordsに監督名が含まれている場合は重複スキップ
+      const [topicManagers, playerNames] = await Promise.all([
+        Promise.resolve(lookupManagers(imgKeywords)),
+        extractPlayerNames(thread.title),
+      ]);
+      // 既にkeywordsに含まれている場合は重複スキップ
       const newManagers = topicManagers.filter(m => !baseWords.some(w => m.toLowerCase().includes(w.toLowerCase())));
-      const wikiWords = [...baseWords, ...newManagers];
+      const newPlayers  = playerNames.filter(p => !baseWords.some(w => p.toLowerCase().includes(w.toLowerCase())));
+      // チーム・国名はX公式でカバー済み → Wikimediaは人名（選手・監督）のみ
+      const wikiWords = [...newManagers, ...newPlayers];
       if (wikiWords.length > 0) {
         process.stdout.write(`  [${num}] Wikimedia取得中 [${wikiWords.join(", ")}]... `);
         const wikiResults = await Promise.all(
