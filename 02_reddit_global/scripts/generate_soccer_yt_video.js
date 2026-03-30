@@ -664,7 +664,7 @@ async function main() {
   // 固定サイズのページプールを作成（投稿数に依存しない）
   const poolPages = await Promise.all(
     Array.from({ length: POOL_SIZE }, () =>
-      browser.newPage().then(p => { p.setViewport({ width: W, height: H }); return p; })
+      browser.newPage().then(p => { p.setViewport({ width: W, height: H }); p.setDefaultTimeout(0); return p; })
     )
   );
   const pagePool = createPagePool(poolPages);
