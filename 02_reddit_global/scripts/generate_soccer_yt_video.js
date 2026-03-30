@@ -517,6 +517,7 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
 
     await page.screenshot({
       path: path.join(frameDir, `f${String(f).padStart(4, "0")}.png`),
+      timeout: 0,
     });
   }
 
