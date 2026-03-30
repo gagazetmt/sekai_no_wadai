@@ -13,15 +13,15 @@ const puppeteer = require("puppeteer");
 const FFMPEG = "C:\\ffmpeg\\bin\\ffmpeg.exe";
 
 // 画像・投稿文保存フォルダの作成
-const IMAGE_DIR = path.join(__dirname, "..", "images");
+const IMAGE_DIR = path.join(__dirname, "images");
 if (!fs.existsSync(IMAGE_DIR)) fs.mkdirSync(IMAGE_DIR);
-const POSTS_DIR = path.join(__dirname, "..", "posts");
+const POSTS_DIR = path.join(__dirname, "posts");
 if (!fs.existsSync(POSTS_DIR)) fs.mkdirSync(POSTS_DIR);
-const THUMB_DIR = path.join(__dirname, "..", "thumbnails");
+const THUMB_DIR = path.join(__dirname, "thumbnails");
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR);
-const VIDEOS_DIR = path.join(__dirname, "..", "videos");
+const VIDEOS_DIR = path.join(__dirname, "videos");
 if (!fs.existsSync(VIDEOS_DIR)) fs.mkdirSync(VIDEOS_DIR);
-const TEMP_DIR = path.join(__dirname, "..", "temp");
+const TEMP_DIR = path.join(__dirname, "temp");
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
 
 // 3日以上前のローカルファイルを削除（images/thumbnails/videos/posts/）
