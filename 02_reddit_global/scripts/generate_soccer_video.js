@@ -12,8 +12,8 @@ const { execSync } = require("child_process");
 const FFMPEG       = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
 const FFPROBE      = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffprobe.exe" : "ffprobe";
 const VOICEVOX_URL = "http://localhost:50021";
-const VV_SPEAKER   = 3;
-const VV_SPEED     = 1.15;
+const VV_SPEAKER   = 13;  // 青山龍星 ノーマル（soccer_yt_server.jsと同設定）
+const VV_SPEED     = 1.2;
 
 const W    = 1920;
 const H    = 1080;
@@ -484,17 +484,22 @@ async function main() {
     const slideDir = path.join(SLIDES_DIR, `${today}_${post.num}`);
     if (!fs.existsSync(slideDir)) fs.mkdirSync(slideDir, { recursive: true });
 
-    const slides = (post.slides || []).slice(0, 4);
-    while (slides.length < 4) slides.push({ narration: "", subtitleBox: "", comments: [] });
+    // 実際のデータ構造からスライドをマッピング
+    const slides = [
+      { narration: post.overviewNarration || "",                                    subtitleBox: post.overviewTelop || "",          comments: [] },
+      { narration: post.slide3?.noNarration ? "" : (post.slide3?.narration || ""),  subtitleBox: post.slide3?.subtitleBox || "",     comments: post.slide3?.comments || [] },
+      { narration: post.slide4?.noNarration ? "" : (post.slide4?.narration || ""),  subtitleBox: post.slide4?.subtitleBox || "",     comments: post.slide4?.comments || [] },
+      { narration: "",                                                               subtitleBox: "",                                 comments: [] },
+    ];
 
-    // ナレーションテキスト（S0〜S4、S5はnull）
+    // ナレーションテキスト（S0〜S5）
     const narrTexts = [
       post.catchLine1,
       slides[0].narration,
       slides[1].narration,
       slides[2].narration,
       slides[3].narration,
-      null,
+      post.outroNarration || post.outroTelop || null,
     ];
 
     console.log(`  ナレーション生成中...`);
@@ -524,12 +529,12 @@ async function main() {
     // HTML生成
     const label   = getLabel(post);
     const htmlArr = [
-      buildSlideHtml("title_card", { catchLine1: post.catchLine1, subtitle: post.subtitle || "", labelText: label }),
+      buildSlideHtml("title_card", { catchLine1: post.catchLine1, subtitle: post.overviewTelop || "", labelText: label }),
       buildSlideHtml("content",    { subtitleBox: slides[0].subtitleBox, comments: slides[0].comments || [] }),
       buildSlideHtml("content",    { subtitleBox: slides[1].subtitleBox, comments: slides[1].comments || [] }),
       buildSlideHtml("content",    { subtitleBox: slides[2].subtitleBox, comments: slides[2].comments || [] }),
       buildSlideHtml("content",    { subtitleBox: slides[3].subtitleBox, comments: slides[3].comments || [] }),
-      buildSlideHtml("outro",      { finalComment: post.outro?.finalComment }),
+      buildSlideHtml("outro",      { finalComment: post.outroTelop || "" }),
     ];
 
     const effects  = ["zoom_in_fast", "zoom_in", "zoom_in", "zoom_in", "zoom_in", "zoom_in"];
