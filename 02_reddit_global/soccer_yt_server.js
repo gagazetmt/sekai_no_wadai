@@ -31,7 +31,7 @@ const LOG_FILE       = path.join(__dirname, "soccer_yt.log");
 const THUMB_DIR      = path.join(__dirname, "soccer_yt_thumbnails");
 const MC_DIR         = path.join(__dirname, "match_center");
 const STOCK_DIR      = path.join(__dirname, "stock");
-const VIDEO_DIR      = path.join(__dirname, "soccer_videos");
+const VIDEO_DIR      = path.join(__dirname, "soccer_yt_videos");
 const W = 1920, H = 1080, SAFE = 60;
 
 if (!fs.existsSync(THUMB_DIR)) fs.mkdirSync(THUMB_DIR, { recursive: true });
