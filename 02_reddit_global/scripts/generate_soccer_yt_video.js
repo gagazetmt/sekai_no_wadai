@@ -611,6 +611,23 @@ function ensureBeep() {
   );
 }
 
+// ─── ページプール ─────────────────────────────────────────────────────────────
+// 固定数のPuppeteerページを共有し、同時レンダリング数を一定に保つ
+function createPagePool(pages) {
+  const pool    = [...pages];
+  const waiters = [];
+  return {
+    async acquire() {
+      if (pool.length > 0) return pool.pop();
+      return new Promise(resolve => waiters.push(resolve));
+    },
+    release(page) {
+      if (waiters.length > 0) waiters.shift()(page);
+      else pool.push(page);
+    },
+  };
+}
+
 // ─── メイン ───────────────────────────────────────────────────────────────────
 async function main() {
   const ttsMode = process.env.OPENAI_API_KEY ? "OpenAI TTS (nova)" : "VoiceVox (fallback)";
@@ -636,19 +653,23 @@ async function main() {
   const posts    = allPosts.slice(0, LIMIT_ARG ?? allPosts.length);
   console.log(`📄 ${posts.length}件を処理します（全${allPosts.length}件中）\n`);
 
+  const POOL_SIZE = 8; // 同時レンダリング数（6コアに対して最適値）
+
   const browser = await puppeteer.launch({
     headless: true,
     args: process.platform !== "win32" ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
   });
-  // 投稿数分のページを事前作成（投稿並列処理用・1投稿1ページ）
-  const pages = await Promise.all(
-    posts.map(() => browser.newPage().then(p => { p.setViewport({ width: W, height: H }); return p; }))
+  // 固定サイズのページプールを作成（投稿数に依存しない）
+  const poolPages = await Promise.all(
+    Array.from({ length: POOL_SIZE }, () =>
+      browser.newPage().then(p => { p.setViewport({ width: W, height: H }); return p; })
+    )
   );
+  const pagePool = createPagePool(poolPages);
 
-  // 全投稿を並列処理
+  // 全投稿を並列スタート（ナレーション完了次第スライドをキューへ投入）
   await Promise.all(
     posts.map(async (post, postArrayIdx) => {
-      const page = pages[postArrayIdx];
       const _t0 = Date.now();
       console.log(`\n▶ [${postArrayIdx + 1}/${posts.length}] 動画${post.num}「${post.catchLine1}」`);
 
@@ -665,7 +686,7 @@ async function main() {
       ];
       const PHASE_OFFSETS = [0, 3000, 1000, 1000, 3000];
 
-      // ── ① ナレーション生成（投稿内は直列・投稿間は並列） ─────────────────
+      // ── ① ナレーション生成（投稿内は直列・VoiceVox保護） ─────────────────
       const narrPaths = [];
       let failCount = 0;
       for (let i = 0; i < narrTexts.length; i++) {
@@ -712,13 +733,20 @@ async function main() {
       const totalMs = durMs.reduce((a, b) => a + b, 0);
       console.log(`  ⏱️  [動画${post.num}] ${durMs.map((d, i) => `S${i + 1}:${(d/1000).toFixed(1)}s`).join(" | ")} → 計${(totalMs/1000).toFixed(1)}s`);
 
-      // ── ④ スライド動画生成（投稿内は直列・投稿間は並列） ─────────────────
-      const videoPaths = [];
-      for (let i = 0; i < htmlArr.length; i++) {
-        const vPath = path.join(slideDir, `slide_${i + 1}.mp4`);
-        await renderVideo(page, htmlArr[i], durMs[i], vPath);
-        videoPaths.push(vPath);
-      }
+      // ── ④ スライド動画生成（グローバルページプールで並列制御） ────────────
+      // narr完了次第キューへ投入。プール空き次第レンダリング開始。
+      const videoPaths = await Promise.all(
+        htmlArr.map(async (html, i) => {
+          const vPath = path.join(slideDir, `slide_${i + 1}.mp4`);
+          const pg = await pagePool.acquire();
+          try {
+            await renderVideo(pg, html, durMs[i], vPath);
+          } finally {
+            pagePool.release(pg);
+          }
+          return vPath;
+        })
+      );
 
       // ── ⑤ 音声トラック合成 ───────────────────────────────────────────────
       const audioPath = path.join(slideDir, "audio.wav");
