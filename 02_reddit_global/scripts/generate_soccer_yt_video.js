@@ -663,16 +663,14 @@ async function main() {
     const slideDir = path.join(SLIDES_DIR, `${today}_${post.num}`);
     if (!fs.existsSync(slideDir)) fs.mkdirSync(slideDir, { recursive: true });
 
-    // ── HTML 取得（サーバーのプレビューAPIから） ────────────────────────────
-    const idx = postArrayIdx;  // サーバーのidxは0始まり（配列上の位置）
-    const [h1, h2, h3, h4, h5] = await Promise.all([
-      fetch(`${SERVER_URL}/api/preview/s1/${today}/${idx}`).then(r => r.text()),
-      fetch(`${SERVER_URL}/api/preview/s2/${today}/${idx}`).then(r => r.text()),
-      fetch(`${SERVER_URL}/api/preview/s3/${today}/${idx}`).then(r => r.text()),
-      fetch(`${SERVER_URL}/api/preview/s4/${today}/${idx}`).then(r => r.text()),
-      fetch(`${SERVER_URL}/api/preview/s5/${today}/${idx}`).then(r => r.text()),
-    ]);
-    const htmlArr = [h1, h2, h3, h4, h5];
+    // ── HTML 生成（スクリプト自身のビルダーを使用） ────────────────────────
+    const htmlArr = [
+      buildS1(post),
+      buildS2(post),
+      buildCommentSlide(post, "slide3"),
+      buildCommentSlide(post, "slide4"),
+      buildS5(post),
+    ];
 
     // ── ナレーションテキスト ────────────────────────────────────────────────
     const narrTexts = [
