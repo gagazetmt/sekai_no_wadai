@@ -636,12 +636,18 @@ async function main() {
   const posts    = allPosts.slice(0, LIMIT_ARG ?? allPosts.length);
   console.log(`📄 ${posts.length}件を処理します（全${allPosts.length}件中）\n`);
 
+  const SLIDE_COUNT = 5;
+
   const browser = await puppeteer.launch({
     headless: true,
     args: process.platform !== "win32" ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
   });
-  const page = await browser.newPage();
-  await page.setViewport({ width: W, height: H });
+  // スライド数分のページを事前作成（並列レンダリング用）
+  const pages = await Promise.all(
+    Array.from({ length: SLIDE_COUNT }, () =>
+      browser.newPage().then(p => { p.setViewport({ width: W, height: H }); return p; })
+    )
+  );
 
   for (let postArrayIdx = 0; postArrayIdx < posts.length; postArrayIdx++) {
     const post = posts[postArrayIdx];
@@ -663,22 +669,23 @@ async function main() {
     // ── フェーズオフセット（ナレーション開始遅延 ms） ──────────────────────
     const PHASE_OFFSETS = [0, 3000, 1000, 1000, 3000];
 
-    // ── ① ナレーション生成（先に行い実際の尺をHTMLに反映） ────────────────
-    console.log(`  🎙️  ナレーション生成中...`);
-    const narrPaths = [];
-    let failCount = 0;
-    for (let i = 0; i < narrTexts.length; i++) {
-      if (!narrTexts[i]?.trim()) { narrPaths.push(null); continue; }
-      const p = path.join(slideDir, `narr_${i}.wav`);
-      try {
-        await generateNarration(narrTexts[i], p);
-        narrPaths.push(p);
-      } catch (err) {
-        console.warn(`  ⚠️ S${i + 1} ナレーション失敗: ${err.message}`);
-        narrPaths.push(null);
-        failCount++;
-      }
-    }
+    // ── ① ナレーション生成（並列） ─────────────────────────────────────────
+    console.log(`  🎙️  ナレーション生成中（並列）...`);
+    const narrResults = await Promise.all(
+      narrTexts.map(async (text, i) => {
+        if (!text?.trim()) return null;
+        const p = path.join(slideDir, `narr_${i}.wav`);
+        try {
+          await generateNarration(text, p);
+          return p;
+        } catch (err) {
+          console.warn(`  ⚠️ S${i + 1} ナレーション失敗: ${err.message}`);
+          return null;
+        }
+      })
+    );
+    const narrPaths  = narrResults;
+    const failCount  = narrPaths.filter(p => p === null).length;
     if (failCount === 0) console.log(`  ✅ ナレーション5件完了`);
     else console.warn(`  ⚠️ ${failCount}件失敗 → BGMのみで続行`);
 
@@ -691,11 +698,8 @@ async function main() {
 
     const durMs = narrDurMs.map((nd, i) => {
       if (i === 2 || i === 3) {
-        // S3/S4: コメント表示時間込みで計算
         const slideData = i === 2 ? post.slide3 : post.slide4;
-        if (nd > 0) {
-          return Math.min(calcCommentSlideDurMs(nd, slideData), MAX_MS[i]);
-        }
+        if (nd > 0) return Math.min(calcCommentSlideDurMs(nd, slideData), MAX_MS[i]);
         return MIN_NO_NARR[i];
       }
       const narrDur = nd > 0 ? nd + PADDING_MS : 0;
@@ -703,7 +707,7 @@ async function main() {
       return Math.min(total, MAX_MS[i]);
     });
 
-    // ── ③ HTML 生成（S3/S4は実際のナレーション尺を使いコメントタイミングを確定）
+    // ── ③ HTML 生成 ────────────────────────────────────────────────────────
     const htmlArr = [
       buildS1(post),
       buildS2(post),
@@ -715,21 +719,22 @@ async function main() {
     const totalMs = durMs.reduce((a, b) => a + b, 0);
     console.log(`  ⏱️  尺: ${durMs.map((d, i) => `S${i + 1}:${(d/1000).toFixed(1)}s`).join(" | ")} → 計${(totalMs/1000).toFixed(1)}s`);
 
-    // ── スライド動画生成 ────────────────────────────────────────────────────
-    const videoPaths = [];
-    for (let i = 0; i < htmlArr.length; i++) {
-      console.log(`  🎬 S${i + 1} レンダリング中...`);
-      const vPath = path.join(slideDir, `slide_${i + 1}.mp4`);
-      await renderVideo(page, htmlArr[i], durMs[i], vPath);
-      videoPaths.push(vPath);
-    }
+    // ── ④ スライド動画生成（並列） ─────────────────────────────────────────
+    console.log(`  🎬 S1〜S5 並列レンダリング中...`);
+    const videoPaths = await Promise.all(
+      htmlArr.map(async (html, i) => {
+        const vPath = path.join(slideDir, `slide_${i + 1}.mp4`);
+        await renderVideo(pages[i], html, durMs[i], vPath);
+        return vPath;
+      })
+    );
 
-    // ── 音声トラック合成 ────────────────────────────────────────────────────
+    // ── ⑤ 音声トラック合成 ─────────────────────────────────────────────────
     console.log(`  🔊 音声ミックス中...`);
     const audioPath = path.join(slideDir, "audio.wav");
     generateAudioTrack(durMs, narrPaths, PHASE_OFFSETS, audioPath);
 
-    // ── 最終動画出力 ────────────────────────────────────────────────────────
+    // ── ⑥ 最終動画出力 ─────────────────────────────────────────────────────
     const outPath = path.join(VIDEO_DIR, `${today}_${post.num}.mp4`);
     concatAndMix(videoPaths, audioPath, totalMs, outPath);
 
