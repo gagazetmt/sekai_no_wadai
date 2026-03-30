@@ -80,6 +80,36 @@ function imgBase64(imgPath) {
   return { b64: fs.readFileSync(imgPath).toString("base64"), mime };
 }
 
+// ─── 画像サイズ取得（PNG/JPEG バイナリ解析） ──────────────────────────────────
+function getImageSize(imgPath) {
+  if (!imgPath || !fs.existsSync(imgPath)) return null;
+  try {
+    const buf = fs.readFileSync(imgPath);
+    const ext = path.extname(imgPath).toLowerCase();
+    if (ext === ".png") return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xFF) break;
+      const m = buf[i + 1];
+      if ([0xC0,0xC1,0xC2,0xC3,0xC5,0xC6,0xC7,0xC9,0xCA,0xCB,0xCD,0xCE,0xCF].includes(m)) {
+        return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) };
+      }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  } catch (_) {}
+  return null;
+}
+
+function imgMeta(imgPath) {
+  const { b64, mime } = imgBase64(imgPath);
+  const size = getImageSize(imgPath);
+  return { b64, mime, isPortrait: size ? size.height > size.width : false };
+}
+
+function getImgZoom(post, key) {
+  return (post.imgZoom && post.imgZoom[key]) || { zoom: 1.0, x: 50, y: 50 };
+}
+
 // ─── チームロゴ HTML ─────────────────────────────────────────────────────────
 // PNGがあればそれを表示、なければイニシャル入り色付き円（ダミー）
 function logoHtml(teamName, size = 120) {
@@ -109,8 +139,21 @@ function logoHtml(teamName, size = 120) {
 }
 
 // ─── HTML エスケープ ──────────────────────────────────────────────────────────
-const esc = s => String(s || "")
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc     = s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const escRed  = s => esc(s).replace(/\[r\](.*?)\[\/r\]/g, '<span style="color:#c00000">$1</span>');
+const escLine = s => escRed(String(s || "").replace(/\\n/g, "\n")).replace(/\n/g, "<br>");
+
+function splitSubText(text) {
+  const parts = [];
+  let current = "", w = 0;
+  for (const c of (text || "")) {
+    current += c;
+    w += /[\u3040-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(c) ? 2 : 1;
+    if ((c === "、" || c === "。") && w >= 40) { parts.push(current.trim()); current = ""; w = 0; }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts.length >= 2 ? parts : [text || ""];
+}
 
 // ─── ラベル自動判定 ───────────────────────────────────────────────────────────
 function getLabel(post) {
@@ -124,212 +167,181 @@ function getLabel(post) {
 // ─── 共通 CSS ─────────────────────────────────────────────────────────────────
 const COMMON_CSS = `
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{
-    width:${W}px;height:${H}px;overflow:hidden;
-    font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
-  }
+  body{width:${W}px;height:${H}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
   .bg{width:${W}px;height:${H}px;position:relative;overflow:hidden;}
-  @keyframes fadeUp{
-    from{opacity:0;transform:translateY(16px)}
-    to  {opacity:1;transform:translateY(0)}
-  }
-  @keyframes slideUp{
-    from{opacity:0;transform:translateY(30px)}
-    to  {opacity:1;transform:translateY(0)}
-  }
-  @keyframes scaleIn{
-    from{opacity:0;transform:scale(0.88)}
-    to  {opacity:1;transform:scale(1)}
-  }
-  @keyframes kbZoom{
-    from{transform:scale(1.0) translate(-2%,0)}
-    to  {transform:scale(1.12) translate(2%,0)}
-  }
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes scaleIn{from{opacity:0;transform:scale(0.88)}to{opacity:1;transform:scale(1)}}
+  @keyframes kbZoom{from{transform:scale(1.0)}to{transform:scale(1.1)}}
+  @keyframes slideDown{from{opacity:0;transform:translateY(-30px)}to{opacity:1;transform:translateY(0)}}
 `;
 
 // ─── S1: タイトルカード ───────────────────────────────────────────────────────
-// メイン画像（ぼかしなし）+ 複数バッジ + キャッチコピー
 function buildS1(post) {
-  const { b64, mime } = imgBase64(post.mainImagePath);
+  const { b64, mime, isPortrait } = imgMeta(post.mainImagePath);
+  const iz = getImgZoom(post, "s1");
+  const bgPos = `${iz.x}% ${iz.y}%`;
   const bgStyle = b64
-    ? `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:center top;`
+    ? isPortrait
+      ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
+      : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#1a1a3e,#2d2d60);`;
+  const kbExtra = isPortrait
+    ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
+    : iz.zoom !== 1.0
+      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
+      : "";
+  const bgImgCss = isPortrait
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
   const label = getLabel(post);
   const badge = post.badge || "";
-
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
-  .bg-img{
-    position:absolute;inset:0;
-    ${bgStyle}
-    animation:kbZoom 10s linear forwards paused;
-    transform-origin:center top;
-  }
-  .overlay{
-    position:absolute;inset:0;
-    background:linear-gradient(
-      to top,
-      rgba(0,0,0,0.92) 0%,
-      rgba(0,0,0,0.60) 35%,
-      rgba(0,0,0,0.10) 65%,
-      rgba(0,0,0,0) 100%
-    );
-  }
-  .badges{
-    position:absolute;top:${SAFE}px;left:${SAFE}px;
-    display:flex;flex-direction:column;gap:12px;
-    animation:fadeUp 0.4s ease-out both paused;
-  }
-  .badge-item{
-    display:inline-block;font-size:34px;font-weight:900;
-    padding:9px 22px;border-radius:8px;letter-spacing:2px;color:#fff;
-    width:fit-content;
-  }
-  .badge-primary{background:rgba(200,0,0,0.95);}
-  .badge-secondary{background:rgba(180,100,0,0.95);}
-  .title-main{
-    position:absolute;bottom:${SAFE + 30}px;left:${SAFE}px;right:${SAFE}px;
-    color:#FFD700;font-size:82px;font-weight:900;
-    line-height:1.3;
-    text-shadow:3px 3px 0px rgba(0,0,0,1),6px 6px 24px rgba(0,0,0,0.9);
-    overflow-wrap:break-word;word-break:break-all;
-    animation:fadeUp 0.45s ease-out both paused;
-  }
-  .account{
-    position:absolute;bottom:${SAFE - 24}px;right:${SAFE}px;
-    color:rgba(255,255,255,0.35);font-size:22px;
-  }
+  ${kbExtra}
+  .bg-img{${bgImgCss}}
+  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.12);}
+  .title-area{position:absolute;bottom:${SAFE}px;left:0;right:0;display:flex;flex-direction:column;align-items:flex-start;gap:18px;}
+  .badges{display:flex;flex-direction:row;gap:80px;align-items:center;padding-left:${SAFE}px;}
+  .badge-item{display:inline-block;font-size:41px;font-weight:900;padding:5px 26px;border-radius:8px;letter-spacing:2px;color:#fff;width:fit-content;animation:fadeUp 0.45s ease-out both;}
+  .badge-primary{background:rgba(200,0,0,0.95);animation-delay:0s;}
+  .badge-secondary{background:rgba(180,100,0,0.95);animation-delay:0.35s;}
+  .title-main{color:#fff;font-size:82px;font-weight:900;line-height:1.3;background:rgba(0,0,0,0.6);border-radius:0;padding:48px 30px;width:100%;overflow-wrap:break-word;word-break:break-all;animation:fadeUp 0.55s 0.6s ease-out both;}
   </style></head><body><div class="bg">
-    <div class="bg-img"></div>
-    <div class="overlay"></div>
-    <div class="badges" data-start="0">
-      <div class="badge-item badge-primary">${esc(label)}</div>
-      ${badge ? `<div class="badge-item badge-secondary">${esc(badge)}</div>` : ""}
+    <div class="bg-img"></div><div class="overlay"></div>
+    <div class="title-area">
+      <div class="badges">
+        <div class="badge-item badge-primary">${esc(label)}</div>
+        ${badge ? `<div class="badge-item badge-secondary">${esc(badge)}</div>` : ""}
+      </div>
+      <div class="title-main">${escLine(post.catchLine1)}</div>
     </div>
-    <div class="title-main" data-start="0.2">${esc(post.catchLine1)}</div>
-    <div class="account">@sekai_no_wadai</div>
   </div></body></html>`;
 }
 
-// ─── S2: ソーススライド（ツイートカード風） ──────────────────────────────────
-// Fabrizio Romano風ツイートカード。3秒後に概要テロップ出現
+// ─── S2: ソーススライド（背景画像 + ソースカード + テロップ分割表示） ─────────
 function buildS2(post) {
   const author = post.sourceAuthor || "情報筋";
-  const text   = post.sourceText   || "";
+  const { b64, mime, isPortrait } = imgMeta(post.slide2ImagePath || post.mainImagePath);
+  const iz = getImgZoom(post, "s2");
+  const bgPos = `${iz.x}% ${iz.y}%`;
+  const bgStyle = b64
+    ? isPortrait
+      ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
+      : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
+    : `background:linear-gradient(135deg,#0a1520,#1a2a3a);`;
+  const kbExtra = isPortrait
+    ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
+    : iz.zoom !== 1.0
+      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
+      : "";
+  const bgImgCss = isPortrait
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
+
+  const subParts = splitSubText(post.overviewNarration || post.overviewTelop || "");
+  const S2_START = 1.0;
+  let _t = S2_START;
+  const subHtml = subParts.map((p, i) => {
+    const start = _t.toFixed(1);
+    const dur = Math.max(1.5, p.replace(/\s/g, "").length / 8.0);
+    _t += dur;
+    const isLast = i === subParts.length - 1;
+    const fadeOut = isLast ? "" : `,fadeOut 0.3s ${(_t - 0.3).toFixed(1)}s ease-out forwards`;
+    return `<div class="sub-part" style="animation:fadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
+  }).join("");
+  const subH = Math.round((Math.round(53 * 1.55) + 44) * 1.21);
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
-  .bg{background:#0d0d12;}
-
-  /* ── 右上バッジ群 ── */
-  .badge-group{
-    position:absolute;top:${SAFE}px;right:${SAFE}px;
-    display:flex;flex-direction:column;align-items:flex-end;gap:12px;
-    animation:fadeUp 0.3s ease-out both paused;
-  }
-  .badge-source{
-    background:#f59e0b;color:#000;
-    font-size:28px;font-weight:900;
-    padding:9px 24px;border-radius:22px;letter-spacing:1px;
-  }
-  .badge-ja{
-    background:rgba(255,255,255,0.10);color:#fff;
-    border:1px solid rgba(255,255,255,0.25);
-    font-size:22px;font-weight:700;
-    padding:6px 18px;border-radius:16px;
-  }
-
-  /* ── ツイートカード ── */
-  .tweet-card{
-    position:absolute;top:50%;left:50%;
-    transform:translate(-50%,-50%);
-    width:1480px;
-    background:rgba(255,255,255,0.06);
-    border:1px solid rgba(255,255,255,0.16);
-    border-radius:22px;
-    padding:54px 72px;
-    animation:scaleIn 0.4s ease-out both paused;
-  }
-  .tweet-header{
-    display:flex;align-items:center;gap:24px;margin-bottom:38px;
-  }
-  .tweet-icon{
-    width:88px;height:88px;border-radius:50%;
-    background:linear-gradient(135deg,#1DA1F2,#0a6fa8);
-    display:flex;align-items:center;justify-content:center;
-    font-size:44px;flex-shrink:0;
-  }
-  .tweet-author{
-    color:#fff;font-size:36px;font-weight:900;
-    display:flex;align-items:center;gap:10px;
-  }
-  .tweet-check{color:#1DA1F2;font-size:30px;}
-  .tweet-handle{color:rgba(255,255,255,0.42);font-size:24px;margin-top:6px;}
-  .tweet-body{
-    color:#e8e8e8;font-size:46px;font-weight:700;
-    line-height:1.65;overflow-wrap:break-word;
-    white-space:pre-line;
-  }
-
-  /* ── テロップ（3秒後） ── */
-  .sub-box{
-    position:absolute;bottom:0;left:0;right:0;
-    background:rgba(10,16,32,0.97);border-top:2px solid rgba(245,158,11,0.5);
-    padding:22px ${SAFE + 20}px;
-    animation:fadeUp 0.35s ease-out both paused;
-  }
-  .sub-text{color:#fff;font-size:38px;font-weight:800;text-align:center;line-height:1.55;overflow-wrap:break-word;}
-  .account{position:absolute;bottom:${SAFE - 10}px;left:${SAFE}px;color:rgba(255,255,255,0.22);font-size:20px;}
+  ${kbExtra}
+  @keyframes cardIn{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes fadeOut{to{opacity:0}}
+  .bg-img{${bgImgCss}}
+  .overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,0.85) 0%,rgba(0,0,0,0.40) 35%,rgba(0,0,0,0.05) 65%,rgba(0,0,0,0) 100%);}
+  .source-card{position:absolute;top:${SAFE}px;right:${SAFE}px;background:rgba(0,0,0,0.78);border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:18px 24px;animation:cardIn 0.45s 0.2s ease-out both;}
+  .tweet-author{color:#fff;font-size:18px;font-weight:900;display:flex;align-items:center;gap:8px;}
+  .tweet-check{color:#1DA1F2;font-size:14px;}
+  .tweet-handle{color:rgba(255,255,255,0.40);font-size:13px;margin-top:2px;}
+  .sub-box{position:absolute;bottom:0;left:0;right:0;background:rgba(10,16,32,0.97);border-top:2px solid rgba(245,158,11,0.5);min-height:${subH}px;animation:slideUp 0.4s 1.0s ease-out both;}
+  .sub-part{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:22px ${SAFE+20}px;color:#fff;font-size:53px;font-weight:800;text-align:center;line-height:1.55;overflow-wrap:break-word;opacity:0;}
+  .account{position:absolute;bottom:${SAFE-10}px;left:${SAFE}px;color:rgba(255,255,255,0.22);font-size:20px;animation:fadeUp 0.3s 1.5s ease-out both;}
   </style></head><body><div class="bg">
-    <div class="badge-group" data-start="0">
-      <div class="badge-source">♦ ソース（反応15秒〜）</div>
-      <div class="badge-ja">日本語訳</div>
+    <div class="bg-img"></div><div class="overlay"></div>
+    <div class="source-card">
+      <div class="tweet-author">${esc(author)}<span class="tweet-check">✓</span></div>
+      <div class="tweet-handle">@${esc(author.toLowerCase().replace(/\s+/g,""))}</div>
     </div>
-    <div class="tweet-card" data-start="0">
-      <div class="tweet-header">
-        <div class="tweet-icon">🐦</div>
-        <div>
-          <div class="tweet-author">${esc(author)}<span class="tweet-check">✓</span></div>
-          <div class="tweet-handle">@${esc(author.toLowerCase().replace(/\s+/g, ""))}</div>
-        </div>
-      </div>
-      <div class="tweet-body">${esc(text)}</div>
-    </div>
-    <div class="sub-box" data-start="3.0">
-      <div class="sub-text">${esc(post.overviewTelop || "")}</div>
-    </div>
+    <div class="sub-box">${subHtml}</div>
     <div class="account">@sekai_no_wadai</div>
   </div></body></html>`;
 }
 
-// ─── S3/S4: コメントスライド（シンプル積み上がりカード） ─────────────────────
-// 背景暗め + topicTag右上（ティール） + コメントカード順次出現（1枚ハイライト）
+// ─── S3/S4: コメントスライド ──────────────────────────────────────────────────
 // narrDurSec: 実際のナレーション秒数（省略時は文字数から推定）
 function buildCommentSlide(post, slideKey, narrDurSec = null) {
-  const slide    = post[slideKey] || {};
-  const imgKey   = slideKey === "slide3" ? "slide3ImagePath" : "slide4ImagePath";
-  const { b64, mime } = imgBase64(post[imgKey]);
-  const bgStyle  = b64
-    ? `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:center;`
+  const slide   = post[slideKey] || {};
+  const imgKey  = slideKey === "slide3" ? "slide3ImagePath" : "slide4ImagePath";
+  const { b64, mime, isPortrait } = imgMeta(post[imgKey]);
+  const iz = getImgZoom(post, slideKey === "slide3" ? "s3" : "s4");
+  const bgPos = `${iz.x}% ${iz.y}%`;
+  const bgStyle = b64
+    ? isPortrait
+      ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
+      : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#0a1520,#1a2a3a);`;
+  const kbExtra = isPortrait
+    ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
+    : iz.zoom !== 1.0
+      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
+      : "";
+  const bgImgCss = isPortrait
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
 
-  const topicTag    = slide.topicTag || "";
+  const topicTag     = slide.topicTag || "";
   const highlightIdx = slide.highlightIdx !== undefined ? parseInt(slide.highlightIdx) : 0;
-
   const CMT_AFTER_NARR = 2.0;
   const CMT_GAP        = 0.8;
-  const narrText = slide.narration || slide.subtitleBox || "";
-  const estNarrSec = narrDurSec !== null
-    ? narrDurSec
-    : Math.max(1.2, narrText.replace(/\s/g, "").length / 8.0);
 
-  const comments = (slide.comments || []).slice(0, 4);
-  let _ct = estNarrSec + CMT_AFTER_NARR;
+  const FONT_SIZE      = 49;
+  const LINE_H_PX      = Math.round(FONT_SIZE * 1.4);
+  const CARD_PAD_V     = 20;
+  const GAP            = 20;
+  const AREA_TOP_PX    = SAFE + 60;
+  const AREA_BOTTOM_PX = 110;
+  const AVAILABLE_H    = H - AREA_TOP_PX - AREA_BOTTOM_PX;
+  const CHARS_PER_LINE = Math.floor((W - 2 * SAFE - 2 * 18) / FONT_SIZE);
+
+  function estimateLines(text) {
+    return (text || "").split("\\n").reduce(
+      (sum, seg) => sum + Math.max(1, Math.ceil(seg.length / CHARS_PER_LINE)), 0
+    );
+  }
+  function cardH(text) { return CARD_PAD_V + estimateLines(text) * LINE_H_PX; }
+
+  const allComments = (slide.comments || []).slice(0, 7);
+  let count = Math.min(allComments.length, 7);
+  while (count > 4) {
+    const sel    = allComments.slice(0, count);
+    const totalH = sel.reduce((s, c) => s + cardH(typeof c === "string" ? c : (c.text || "")), 0)
+                 + (count - 1) * GAP;
+    if (totalH <= AVAILABLE_H) break;
+    count--;
+  }
+  const comments = allComments.slice(0, count);
+
+  const narrText   = slide.narration || slide.subtitleBox || "";
+  const narrEstSec = narrDurSec !== null
+    ? narrDurSec
+    : (slide.noNarration ? 0 : Math.max(1.2, narrText.replace(/\s/g, "").length / 8.0));
+  let _ct = narrEstSec + CMT_AFTER_NARR;
   const commentDelays = comments.map(c => {
     const start = _ct;
     const txt = typeof c === "string" ? c : (c.text || "");
     _ct += Math.max(1.2, txt.replace(/\s/g, "").length / 8.0) + CMT_GAP;
-    return parseFloat(start.toFixed(2));
+    return start;
   });
 
   const CMT_BG    = ["#FFF9C4","#C8EEFF","#D4F5D4","#EDD5FF","#FFE8CC","#FFD5EA"];
@@ -338,66 +350,34 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
   const commentsHtml = comments.map((c, i) => {
     const text = typeof c === "string" ? c : (c.text || "");
     const isHL = i === highlightIdx;
+    const side = i % 2 === 0 ? "flex-start" : "flex-end";
     const bg   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
-    return `<div class="c-card${isHL ? " c-hl" : ""}" data-start="${commentDelays[i]}" style="background:${bg};">
-      <div class="c-text">${esc(text)}</div>
+    return `<div class="c-card${isHL ? " c-hl" : ""}" style="align-self:${side};background:${bg};animation:slideDown 0.45s ${commentDelays[i]}s ease-out both;">
+      <div class="c-text">${esc(text).replace(/\\n/g, "<br>")}</div>
     </div>`;
   }).join("");
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
-  .bg-img{
-    position:absolute;inset:0;
-    ${bgStyle}
-    filter:brightness(0.35);
-    animation:kbZoom 10s linear forwards paused;
-  }
-  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.20);}
-  .topic-tag{
-    position:absolute;top:${SAFE}px;right:${SAFE}px;
-    background:#1aa8a8;color:#fff;
-    font-size:28px;font-weight:900;
-    padding:8px 22px;border-radius:6px;
-    animation:fadeUp 0.3s ease-out both paused;
-  }
-  .comments-area{
-    position:absolute;
-    top:${SAFE + 20}px;bottom:110px;
-    left:${SAFE}px;right:${SAFE}px;
-    display:flex;flex-direction:column;justify-content:flex-start;
-    gap:20px;
-  }
-  .c-card{
-    border:3px solid rgba(0,0,0,0.25);
-    border-radius:10px;padding:18px 28px;
-    width:fit-content;max-width:100%;
-    animation:slideUp 0.4s ease-out both paused;
-  }
-  .c-card.c-hl{
-    border:3px solid rgba(0,0,0,0.5);
-    box-shadow:0 4px 20px rgba(0,0,0,0.3);
-  }
-  .c-text{
-    color:#111;font-size:42px;font-weight:700;
-    line-height:1.5;overflow-wrap:break-word;
-  }
+  ${kbExtra}
+  .bg-img{${bgImgCss}}
+  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.10);}
+  .topic-tag{position:absolute;top:${SAFE}px;right:${SAFE}px;background:#1aa8a8;color:#fff;font-size:28px;font-weight:900;padding:8px 22px;border-radius:6px;animation:fadeUp 0.35s 0s ease-out both;}
+  .comments-area{position:absolute;top:${AREA_TOP_PX}px;bottom:${AREA_BOTTOM_PX}px;left:${SAFE}px;right:${SAFE}px;display:flex;flex-direction:column;justify-content:flex-start;gap:${GAP}px;}
+  .c-card{border:3px solid #000;border-radius:8px;padding:10px 18px;width:fit-content;max-width:100%;}
+  .c-card.c-hl{border:3px solid #000;}
+  .c-text{color:#111;font-size:${FONT_SIZE}px;font-weight:700;line-height:1.4;overflow-wrap:break-word;}
   .c-hl .c-text{color:#000;font-weight:900;}
-  .sub-box{
-    position:absolute;bottom:0;left:0;right:0;
-    background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);
-    padding:18px ${SAFE}px;
-    animation:fadeUp 0.3s ease-out both paused;
-  }
-  .sub-text{color:#fff;font-size:34px;font-weight:800;text-align:center;line-height:1.5;}
+  @keyframes subFadeOut{to{opacity:0;visibility:hidden;}}
+  .sub-box{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);padding:18px ${SAFE}px;animation:slideUp 0.6s 0s ease-out both, subFadeOut 0.3s ${(narrEstSec + CMT_AFTER_NARR).toFixed(1)}s ease-out forwards;}
+  .sub-text{color:#fff;font-size:48px;font-weight:800;text-align:center;line-height:1.5;}
   .citation{position:absolute;bottom:14px;left:${SAFE}px;color:rgba(255,255,255,0.28);font-size:20px;}
   </style></head><body><div class="bg">
     <div class="bg-img"></div>
     <div class="overlay"></div>
-    ${topicTag ? `<div class="topic-tag" data-start="0">${esc(topicTag)}</div>` : ""}
+    ${topicTag ? `<div class="topic-tag">${esc(topicTag)}</div>` : ""}
     <div class="comments-area">${commentsHtml}</div>
-    <div class="sub-box" data-start="0">
-      <div class="sub-text">${esc(slide.subtitleBox || "")}</div>
-    </div>
+    ${(!slide.noNarration && narrText) ? `<div class="sub-box"><div class="sub-text">${esc(narrText)}</div></div>` : ""}
     <div class="citation">©Fotmobより引用</div>
   </div></body></html>`;
 }
@@ -416,47 +396,37 @@ function calcCommentSlideDurMs(narrDurMs, slide) {
   return Math.round(t * 1000) + PADDING;
 }
 
-// ─── S5: アウトロ ────────────────────────────────────────────────────────────
-// S1と同じ画像（ぼかしなし）＋ 3秒ため → 白ボックス青文字テロップ
+// ─── S5: アウトロ ─────────────────────────────────────────────────────────────
 function buildS5(post) {
-  const { b64, mime } = imgBase64(post.mainImagePath);
+  const { b64, mime, isPortrait } = imgMeta(post.slide5ImagePath || post.mainImagePath);
+  const iz = getImgZoom(post, "s5");
+  const bgPos = `${iz.x}% ${iz.y}%`;
   const bgStyle = b64
-    ? `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:center;`
+    ? isPortrait
+      ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
+      : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);`;
+  const kbExtra = isPortrait
+    ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
+    : iz.zoom !== 1.0
+      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
+      : "";
+  const bgImgCss = isPortrait
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
-  .bg-img{
-    position:absolute;inset:0;
-    ${bgStyle}
-    filter:brightness(0.48);
-    animation:kbZoom 10s linear forwards paused;
-  }
+  ${kbExtra}
+  .bg-img{${bgImgCss}}
   .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.22);}
-  .outro-wrap{
-    position:absolute;bottom:${SAFE + 60}px;left:${SAFE}px;right:${SAFE}px;
-    text-align:center;
-    animation:scaleIn 0.5s ease-out both paused;
-  }
-  .outro-box{
-    display:inline-block;
-    background:#fff;color:#1a6ef5;
-    font-size:68px;font-weight:900;
-    padding:38px 68px;border-radius:16px;
-    box-shadow:0 8px 40px rgba(0,0,0,0.6);
-    line-height:1.4;
-    max-width:1680px;overflow-wrap:break-word;
-  }
-  .account{
-    position:absolute;bottom:${SAFE - 10}px;right:${SAFE}px;
-    color:rgba(255,255,255,0.35);font-size:22px;
-  }
+  .outro-wrap{position:absolute;top:50%;left:${SAFE}px;right:${SAFE}px;transform:translateY(-50%);text-align:center;animation:scaleIn 0.6s 4.0s ease-out both;}
+  .outro-box{display:inline-block;background:#fff;color:#1a6ef5;font-size:68px;font-weight:900;padding:38px 68px;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,0.6);line-height:1.4;max-width:1680px;overflow-wrap:break-word;}
+  .account{position:absolute;bottom:${SAFE-10}px;right:${SAFE}px;color:rgba(255,255,255,0.35);font-size:22px;animation:fadeUp 0.4s 1.0s ease-out both;}
   </style></head><body><div class="bg">
     <div class="bg-img"></div>
     <div class="overlay"></div>
-    <div class="outro-wrap" data-start="3.0">
-      <div class="outro-box">${esc(post.outroTelop || "")}</div>
-    </div>
+    <div class="outro-wrap"><div class="outro-box">${esc(post.outroTelop || "")}</div></div>
     <div class="account">@sekai_no_wadai</div>
     <div style="position:absolute;bottom:14px;left:${SAFE}px;color:rgba(255,255,255,0.30);font-size:20px;">※Fotmobより引用</div>
   </div></body></html>`;
@@ -524,10 +494,8 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   const duration    = durationMs / 1000;
   const totalFrames = Math.round(duration * FPS);
 
-  // 背景Ken Burnsアニメーションを実際の尺に合わせて上書き
-  const injectStyle = `<style id="yt-inject">
-    .bg-img{animation:kbZoom ${duration}s linear forwards paused !important;}
-  </style>`;
+  // bg-img アニメーション尺をスライド全体に合わせて上書き（kbZoom / panDown 両対応）
+  const injectStyle = `<style id="yt-inject">.bg-img{animation-duration:${duration}s !important;}</style>`;
   const html = slideHtml.replace("</head>", `${injectStyle}</head>`);
 
   await page.setContent(html, { waitUntil: "load", timeout: 120000 });
@@ -536,21 +504,16 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   if (!fs.existsSync(frameDir)) fs.mkdirSync(frameDir, { recursive: true });
 
   for (let f = 0; f < totalFrames; f++) {
-    const t = f / FPS;
-    await page.evaluate((t) => {
-      // 背景Ken Burns
-      document.querySelectorAll(".bg-img").forEach(el => {
-        el.style.animationDelay     = `-${t}s`;
-        el.style.animationPlayState = "paused";
+    const tMs = Math.round((f / FPS) * 1000);
+    // Web Animations API で全アニメーションを一括制御
+    // currentTime はアニメーション固有のタイムライン（delay 込み）なので
+    // CSS animation-delay が自動的に考慮される
+    await page.evaluate((tMs) => {
+      document.getAnimations().forEach(anim => {
+        anim.pause();
+        try { anim.currentTime = tMs; } catch (_) {}
       });
-      // data-start 属性を持つ全要素：指定時刻以降に出現
-      document.querySelectorAll("[data-start]").forEach(el => {
-        const startAt = parseFloat(el.dataset.start || "0");
-        const animT   = Math.max(0, t - startAt);
-        el.style.animationDelay     = `-${animT}s`;
-        el.style.animationPlayState = "paused";
-      });
-    }, t);
+    }, tMs);
 
     await page.screenshot({
       path: path.join(frameDir, `f${String(f).padStart(4, "0")}.png`),
