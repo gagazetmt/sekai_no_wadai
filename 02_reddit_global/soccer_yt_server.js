@@ -814,7 +814,7 @@ app.post("/api/run-video", (req, res) => {
   if (!date) return res.status(400).json({ error: "date が必要です" });
 
   videoJob = { running: true, log: [], done: false, exitCode: null };
-  const args = [path.join(__dirname, "scripts", "generate_soccer_video.js"), date];
+  const args = [path.join(__dirname, "scripts", "generate_soccer_yt_video.js"), date];
   if (count) args.push(String(count));
 
   const proc = spawn(process.execPath, args, { cwd: __dirname, env: process.env });
