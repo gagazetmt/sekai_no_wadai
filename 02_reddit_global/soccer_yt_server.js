@@ -547,16 +547,17 @@ function estTtsSec(text) {
 function calcLoopMs(post, slideKey) {
   const CMT_OFFSET = 2.0, CMT_GAP = 0.8;
   if (slideKey === "s1") return 7000;
-  if (slideKey === "s2") return Math.round((1.0 + estTtsSec(post.overviewNarration) + 1.5) * 1000);
+  if (slideKey === "s2") return Math.round((3.0 + estTtsSec(post.overviewTelop || post.overviewNarration) + 1.5) * 1000);
   if (slideKey === "s3" || slideKey === "s4") {
     const slide = post[slideKey === "s3" ? "slide3" : "slide4"];
     const narrSec = slide?.noNarration ? 0 : estTtsSec(slide?.narration || slide?.subtitleBox);
-    const comments = (slide?.comments || []).filter(c => (typeof c === "string" ? c : (c.text||"")).trim());
+    // buildCommentSlideと同じく最大4件に制限
+    const comments = (slide?.comments || []).slice(0, 4).filter(c => (typeof c === "string" ? c : (c.text||"")).trim());
     let t = narrSec + CMT_OFFSET;
     for (const c of comments) { t += estTtsSec(typeof c === "string" ? c : (c.text||"")) + CMT_GAP; }
     return Math.round((t + 1.5) * 1000);
   }
-  if (slideKey === "s5") return Math.round((4.0 + estTtsSec(post.outroTelop || post.outroNarration) + 1.5) * 1000);
+  if (slideKey === "s5") return Math.round((3.0 + estTtsSec(post.outroTelop || post.outroNarration) + 1.5) * 1000);
   return 9000;
 }
 
