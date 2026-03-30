@@ -653,7 +653,7 @@ async function main() {
   const posts    = allPosts.slice(0, LIMIT_ARG ?? allPosts.length);
   console.log(`📄 ${posts.length}件を処理します（全${allPosts.length}件中）\n`);
 
-  const POOL_SIZE = 8; // 同時レンダリング数（6コアに対して最適値）
+  const POOL_SIZE = 3; // 同時レンダリング数（Windows RAM 8GB考慮）
 
   const browser = await puppeteer.launch({
     headless: true,
