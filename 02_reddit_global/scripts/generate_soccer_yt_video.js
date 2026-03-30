@@ -18,7 +18,7 @@ require("dotenv").config();
 const puppeteer    = require("puppeteer");
 const fs           = require("fs");
 const path         = require("path");
-const { execSync } = require("child_process");
+const { execSync, spawn } = require("child_process");
 
 // ─── 定数 ────────────────────────────────────────────────────────────────────
 const FFMPEG       = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
@@ -497,11 +497,27 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   // bg-img アニメーション尺をスライド全体に合わせて上書き（kbZoom / panDown 両対応）
   const injectStyle = `<style id="yt-inject">.bg-img{animation-duration:${duration}s !important;}</style>`;
   const html = slideHtml.replace("</head>", `${injectStyle}</head>`);
-
   await page.setContent(html, { waitUntil: "load", timeout: 120000 });
 
-  const frameDir = outputPath.replace(/\.mp4$/, "_frames");
-  if (!fs.existsSync(frameDir)) fs.mkdirSync(frameDir, { recursive: true });
+  // FFmpegをstdin受け取りモードで先に起動（フレームファイル不要）
+  const ffmpegProc = spawn(FFMPEG, [
+    "-y",
+    "-f",       "image2pipe",
+    "-vcodec",  "mjpeg",
+    "-r",       String(FPS),
+    "-i",       "pipe:0",
+    "-r",       "30",
+    "-c:v",     "libx264",
+    "-preset",  "veryfast",
+    "-pix_fmt", "yuv420p",
+    "-vf",      `scale=${W}:${H}`,
+    outputPath,
+  ], { stdio: ["pipe", "pipe", "pipe"] });
+
+  const ffmpegDone = new Promise((resolve, reject) => {
+    ffmpegProc.on("close", code => code === 0 ? resolve() : reject(new Error(`FFmpeg exit ${code}`)));
+    ffmpegProc.stderr.on("data", () => {}); // drain（バッファ詰まり防止）
+  });
 
   for (let f = 0; f < totalFrames; f++) {
     const tMs = Math.round((f / FPS) * 1000);
@@ -515,22 +531,19 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
       });
     }, tMs);
 
-    await page.screenshot({
-      path: path.join(frameDir, `f${String(f).padStart(4, "0")}.png`),
-      timeout: 0,
+    const buffer = await page.screenshot({
+      type:     "jpeg",
+      quality:  80,
+      encoding: "binary",
+      timeout:  0,
     });
+
+    const ok = ffmpegProc.stdin.write(buffer);
+    if (!ok) await new Promise(r => ffmpegProc.stdin.once("drain", r));
   }
 
-  execSync([
-    `"${FFMPEG}" -y`,
-    `-framerate ${FPS}`,
-    `-i "${path.join(frameDir, "f%04d.png")}"`,
-    `-r 30 -c:v libx264 -pix_fmt yuv420p`,
-    `-vf "scale=${W}:${H}"`,
-    `"${outputPath}"`,
-  ].join(" "), { stdio: "pipe" });
-
-  fs.rmSync(frameDir, { recursive: true });
+  ffmpegProc.stdin.end();
+  await ffmpegDone;
 }
 
 // ─── 音声トラック合成 ─────────────────────────────────────────────────────────
@@ -657,9 +670,21 @@ async function main() {
   const POOL_SIZE = 3; // 同時レンダリング数（Windows RAM 8GB考慮）
 
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: "shell",
     protocolTimeout: 300000,
-    args: process.platform !== "win32" ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--disable-software-rasterizer",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--mute-audio",
+      "--hide-scrollbars",
+      "--disable-sync",
+      `--window-size=${W},${H}`,
+    ],
   });
   // 固定サイズのページプールを作成（投稿数に依存しない）
   const poolPages = await Promise.all(
