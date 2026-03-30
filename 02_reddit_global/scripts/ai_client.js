@@ -32,20 +32,27 @@ function getClient() {
 
 /**
  * AIにメッセージを送り、テキスト応答を返す
- * @param {{ model: string, max_tokens: number, messages: Array }} opts
+ * @param {{ model: string, max_tokens: number, messages: Array, system?: string }} opts
+ *   system: DeepSeek → role:"system" メッセージとして先頭に追加
+ *           Anthropic → system パラメータとして渡す
  * @returns {Promise<string>}
  */
-async function callAI({ model, max_tokens, messages }) {
+async function callAI({ model, max_tokens, messages, system }) {
   const client = getClient();
   if (PROVIDER === "deepseek") {
+    const msgs = system
+      ? [{ role: "system", content: system }, ...messages]
+      : messages;
     const res = await client.chat.completions.create({
       model:      "deepseek-chat",
       max_tokens,
-      messages,
+      messages:   msgs,
     });
     return res.choices[0].message.content;
   } else {
-    const res = await client.messages.create({ model, max_tokens, messages });
+    const opts = { model, max_tokens, messages };
+    if (system) opts.system = system;
+    const res = await client.messages.create(opts);
     return res.content[0].text;
   }
 }

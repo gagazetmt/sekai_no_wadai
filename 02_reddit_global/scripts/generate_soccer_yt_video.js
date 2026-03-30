@@ -37,12 +37,14 @@ const jstOffset = 9 * 60 * 60 * 1000;
 const today     = process.argv[2] || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
 const LIMIT_ARG = process.argv[3] ? parseInt(process.argv[3]) : null;
 
-const VIDEO_DIR  = path.join(__dirname, "..", "soccer_yt_videos");
-const SLIDES_DIR = path.join(__dirname, "..", "soccer_yt_slides");
-const TEMP_DIR   = path.join(__dirname, "..", "temp");
-const BGM_PATH   = path.join(__dirname, "..", "bgm.mp3");
-const BEEP_PATH  = path.join(__dirname, "..", "soccer_yt_slides", "beep.wav");
-const LOGOS_DIR  = path.join(__dirname, "..", "logos");
+const VIDEO_DIR   = path.join(__dirname, "..", "soccer_yt_videos");
+const SLIDES_DIR  = path.join(__dirname, "..", "soccer_yt_slides");
+const TEMP_DIR    = path.join(__dirname, "..", "temp");
+const BGM_PATH    = path.join(__dirname, "..", "bgm.mp3");
+const BEEP_PATH   = path.join(__dirname, "..", "soccer_yt_slides", "beep.wav");
+const LOGOS_DIR   = path.join(__dirname, "..", "logos");
+const SERVER_PORT = process.env.PORT || 3003;
+const SERVER_URL  = `http://localhost:${SERVER_PORT}`;
 
 [VIDEO_DIR, SLIDES_DIR, TEMP_DIR, path.join(__dirname, "..", "soccer_yt_slides")].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -653,21 +655,24 @@ async function main() {
   const page = await browser.newPage();
   await page.setViewport({ width: W, height: H });
 
-  for (const post of posts) {
+  for (let postArrayIdx = 0; postArrayIdx < posts.length; postArrayIdx++) {
+    const post = posts[postArrayIdx];
     const _t0 = Date.now();
     console.log(`\n▶ 動画${post.num}「${post.catchLine1}」`);
 
     const slideDir = path.join(SLIDES_DIR, `${today}_${post.num}`);
     if (!fs.existsSync(slideDir)) fs.mkdirSync(slideDir, { recursive: true });
 
-    // ── HTML 生成（5スライド） ──────────────────────────────────────────────
-    const htmlArr = [
-      buildS1(post),
-      buildS2(post),
-      buildCommentSlide(post, "slide3"),
-      buildCommentSlide(post, "slide4"),
-      buildS5(post),
-    ];
+    // ── HTML 取得（サーバーのプレビューAPIから） ────────────────────────────
+    const idx = postArrayIdx;  // サーバーのidxは0始まり（配列上の位置）
+    const [h1, h2, h3, h4, h5] = await Promise.all([
+      fetch(`${SERVER_URL}/api/preview/s1/${today}/${idx}`).then(r => r.text()),
+      fetch(`${SERVER_URL}/api/preview/s2/${today}/${idx}`).then(r => r.text()),
+      fetch(`${SERVER_URL}/api/preview/s3/${today}/${idx}`).then(r => r.text()),
+      fetch(`${SERVER_URL}/api/preview/s4/${today}/${idx}`).then(r => r.text()),
+      fetch(`${SERVER_URL}/api/preview/s5/${today}/${idx}`).then(r => r.text()),
+    ]);
+    const htmlArr = [h1, h2, h3, h4, h5];
 
     // ── ナレーションテキスト ────────────────────────────────────────────────
     const narrTexts = [
