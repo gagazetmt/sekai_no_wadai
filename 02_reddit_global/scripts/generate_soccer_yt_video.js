@@ -709,7 +709,7 @@ async function main() {
     // 各スライドの尺 = フェーズオフセット + ナレーション長 + 余白
     // ナレーションなし時はデフォルト尺を使用
     const MIN_NO_NARR = [5000, 7000, 5000, 5000, 6500]; // ナレーションなし時
-    const MAX_MS      = [15000, 40000, 35000, 35000, 25000];
+    const MAX_MS      = [15000, 40000, 90000, 90000, 25000];
     const PADDING_MS  = 700;
 
     const durMs = narrPaths.map((p, i) => {
