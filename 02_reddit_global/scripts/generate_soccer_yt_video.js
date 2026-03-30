@@ -657,6 +657,7 @@ async function main() {
 
   const browser = await puppeteer.launch({
     headless: true,
+    protocolTimeout: 300000,
     args: process.platform !== "win32" ? ["--no-sandbox", "--disable-setuid-sandbox"] : [],
   });
   // 固定サイズのページプールを作成（投稿数に依存しない）
