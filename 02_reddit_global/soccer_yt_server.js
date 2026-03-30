@@ -376,13 +376,28 @@ function buildCommentSlide(post, slideKey) {
   const topicTag    = slide.topicTag || "";
   const highlightIdx = slide.highlightIdx !== undefined ? parseInt(slide.highlightIdx) : 0;
 
-  const COMMENT_TIMES = [0.3, 0.9, 1.5, 2.1];
+  const CMT_AFTER_NARR = 2.0;
+  const CMT_GAP        = 0.8;
+  const narrText = slide.narration || slide.subtitleBox || "";
+  const estNarrSec = Math.max(1.2, narrText.replace(/\s/g, "").length / 8.0);
+
   const comments = (slide.comments || []).slice(0, 4);
+  let _ct = estNarrSec + CMT_AFTER_NARR;
+  const commentDelays = comments.map(c => {
+    const start = _ct;
+    const txt = typeof c === "string" ? c : (c.text || "");
+    _ct += Math.max(1.2, txt.replace(/\s/g, "").length / 8.0) + CMT_GAP;
+    return parseFloat(start.toFixed(2));
+  });
+
+  const CMT_BG    = ["#FFF9C4","#C8EEFF","#D4F5D4","#EDD5FF","#FFE8CC","#FFD5EA"];
+  const CMT_BG_HL = ["#FFD700","#5BB8F5","#5ED45E","#B86FFF","#FF9F43","#FF70A6"];
 
   const commentsHtml = comments.map((c, i) => {
     const text = typeof c === "string" ? c : (c.text || "");
     const isHL = i === highlightIdx;
-    return `<div class="c-card${isHL ? " c-hl" : ""}" data-start="${COMMENT_TIMES[i]}">
+    const bg   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
+    return `<div class="c-card${isHL ? " c-hl" : ""}" data-start="${commentDelays[i]}" style="background:${bg};">
       <div class="c-text">${esc(text)}</div>
     </div>`;
   }).join("");
@@ -392,10 +407,10 @@ function buildCommentSlide(post, slideKey) {
   .bg-img{
     position:absolute;inset:0;
     ${bgStyle}
-    filter:brightness(0.28);
+    filter:brightness(0.35);
     animation:kbZoom 10s linear forwards paused;
   }
-  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.30);}
+  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.20);}
   .topic-tag{
     position:absolute;top:${SAFE}px;right:${SAFE}px;
     background:#1aa8a8;color:#fff;
@@ -407,25 +422,24 @@ function buildCommentSlide(post, slideKey) {
     position:absolute;
     top:${SAFE + 20}px;bottom:110px;
     left:${SAFE}px;right:${SAFE}px;
-    display:flex;flex-direction:column;justify-content:center;
+    display:flex;flex-direction:column;justify-content:flex-start;
     gap:20px;
   }
   .c-card{
-    background:rgba(0,0,0,0.72);
-    border-radius:10px;padding:20px 30px;
-    border-left:4px solid rgba(255,255,255,0.10);
+    border:3px solid rgba(0,0,0,0.25);
+    border-radius:10px;padding:18px 28px;
+    width:fit-content;max-width:100%;
     animation:slideUp 0.4s ease-out both paused;
   }
   .c-card.c-hl{
-    background:rgba(0,40,100,0.88);
-    border-left:4px solid #4a9eff;
-    box-shadow:0 0 28px rgba(74,158,255,0.15);
+    border:3px solid rgba(0,0,0,0.5);
+    box-shadow:0 4px 20px rgba(0,0,0,0.3);
   }
   .c-text{
-    color:#f0f0f0;font-size:42px;font-weight:700;
+    color:#111;font-size:42px;font-weight:700;
     line-height:1.5;overflow-wrap:break-word;
   }
-  .c-hl .c-text{color:#fff;font-weight:900;}
+  .c-hl .c-text{color:#000;font-weight:900;}
   .sub-box{
     position:absolute;bottom:0;left:0;right:0;
     background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);
@@ -439,7 +453,7 @@ function buildCommentSlide(post, slideKey) {
     <div class="overlay"></div>
     ${topicTag ? `<div class="topic-tag" data-start="0">${esc(topicTag)}</div>` : ""}
     <div class="comments-area">${commentsHtml}</div>
-    <div class="sub-box" data-start="1.0">
+    <div class="sub-box" data-start="0">
       <div class="sub-text">${esc(slide.subtitleBox || "")}</div>
     </div>
     <div class="citation">©Fotmobより引用</div>

@@ -304,7 +304,8 @@ function buildS2(post) {
 
 // ─── S3/S4: コメントスライド（シンプル積み上がりカード） ─────────────────────
 // 背景暗め + topicTag右上（ティール） + コメントカード順次出現（1枚ハイライト）
-function buildCommentSlide(post, slideKey) {
+// narrDurSec: 実際のナレーション秒数（省略時は文字数から推定）
+function buildCommentSlide(post, slideKey, narrDurSec = null) {
   const slide    = post[slideKey] || {};
   const imgKey   = slideKey === "slide3" ? "slide3ImagePath" : "slide4ImagePath";
   const { b64, mime } = imgBase64(post[imgKey]);
@@ -315,15 +316,30 @@ function buildCommentSlide(post, slideKey) {
   const topicTag    = slide.topicTag || "";
   const highlightIdx = slide.highlightIdx !== undefined ? parseInt(slide.highlightIdx) : 0;
 
-  const COMMENT_TIMES = [0.3, 0.9, 1.5, 2.1];
+  const CMT_AFTER_NARR = 2.0;
+  const CMT_GAP        = 0.8;
+  const narrText = slide.narration || slide.subtitleBox || "";
+  const estNarrSec = narrDurSec !== null
+    ? narrDurSec
+    : Math.max(1.2, narrText.replace(/\s/g, "").length / 8.0);
+
   const comments = (slide.comments || []).slice(0, 4);
+  let _ct = estNarrSec + CMT_AFTER_NARR;
+  const commentDelays = comments.map(c => {
+    const start = _ct;
+    const txt = typeof c === "string" ? c : (c.text || "");
+    _ct += Math.max(1.2, txt.replace(/\s/g, "").length / 8.0) + CMT_GAP;
+    return parseFloat(start.toFixed(2));
+  });
+
+  const CMT_BG    = ["#FFF9C4","#C8EEFF","#D4F5D4","#EDD5FF","#FFE8CC","#FFD5EA"];
+  const CMT_BG_HL = ["#FFD700","#5BB8F5","#5ED45E","#B86FFF","#FF9F43","#FF70A6"];
 
   const commentsHtml = comments.map((c, i) => {
     const text = typeof c === "string" ? c : (c.text || "");
-    const user = typeof c === "string" ? "" : (c.user || "");
     const isHL = i === highlightIdx;
-    return `<div class="c-card${isHL ? " c-hl" : ""}" data-start="${COMMENT_TIMES[i]}">
-      ${user ? `<div class="c-user">${esc(user)}</div>` : ""}
+    const bg   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
+    return `<div class="c-card${isHL ? " c-hl" : ""}" data-start="${commentDelays[i]}" style="background:${bg};">
       <div class="c-text">${esc(text)}</div>
     </div>`;
   }).join("");
@@ -333,10 +349,10 @@ function buildCommentSlide(post, slideKey) {
   .bg-img{
     position:absolute;inset:0;
     ${bgStyle}
-    filter:brightness(0.28);
+    filter:brightness(0.35);
     animation:kbZoom 10s linear forwards paused;
   }
-  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.30);}
+  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.20);}
   .topic-tag{
     position:absolute;top:${SAFE}px;right:${SAFE}px;
     background:#1aa8a8;color:#fff;
@@ -348,29 +364,24 @@ function buildCommentSlide(post, slideKey) {
     position:absolute;
     top:${SAFE + 20}px;bottom:110px;
     left:${SAFE}px;right:${SAFE}px;
-    display:flex;flex-direction:column;justify-content:center;
+    display:flex;flex-direction:column;justify-content:flex-start;
     gap:20px;
   }
   .c-card{
-    background:rgba(0,0,0,0.72);
-    border-radius:10px;padding:20px 30px;
-    border-left:4px solid rgba(255,255,255,0.10);
+    border:3px solid rgba(0,0,0,0.25);
+    border-radius:10px;padding:18px 28px;
+    width:fit-content;max-width:100%;
     animation:slideUp 0.4s ease-out both paused;
   }
   .c-card.c-hl{
-    background:rgba(0,40,100,0.88);
-    border-left:4px solid #4a9eff;
-    box-shadow:0 0 28px rgba(74,158,255,0.15);
-  }
-  .c-user{
-    color:rgba(255,255,255,0.42);font-size:22px;font-weight:700;
-    margin-bottom:8px;
+    border:3px solid rgba(0,0,0,0.5);
+    box-shadow:0 4px 20px rgba(0,0,0,0.3);
   }
   .c-text{
-    color:#f0f0f0;font-size:42px;font-weight:700;
+    color:#111;font-size:42px;font-weight:700;
     line-height:1.5;overflow-wrap:break-word;
   }
-  .c-hl .c-text{color:#fff;font-weight:900;}
+  .c-hl .c-text{color:#000;font-weight:900;}
   .sub-box{
     position:absolute;bottom:0;left:0;right:0;
     background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);
@@ -384,11 +395,25 @@ function buildCommentSlide(post, slideKey) {
     <div class="overlay"></div>
     ${topicTag ? `<div class="topic-tag" data-start="0">${esc(topicTag)}</div>` : ""}
     <div class="comments-area">${commentsHtml}</div>
-    <div class="sub-box" data-start="1.0">
+    <div class="sub-box" data-start="0">
       <div class="sub-text">${esc(slide.subtitleBox || "")}</div>
     </div>
     <div class="citation">©Fotmobより引用</div>
   </div></body></html>`;
+}
+
+// S3/S4の期待スライド尺を計算（ms）
+function calcCommentSlideDurMs(narrDurMs, slide) {
+  const CMT_AFTER_NARR = 2.0;
+  const CMT_GAP        = 0.8;
+  const PADDING        = 1500;
+  const comments = (slide.comments || []).slice(0, 4);
+  let t = (narrDurMs / 1000) + CMT_AFTER_NARR;
+  for (const c of comments) {
+    const txt = typeof c === "string" ? c : (c.text || "");
+    t += Math.max(1.2, txt.replace(/\s/g, "").length / 8.0) + CMT_GAP;
+  }
+  return Math.round(t * 1000) + PADDING;
 }
 
 // ─── S5: アウトロ ────────────────────────────────────────────────────────────
@@ -663,15 +688,6 @@ async function main() {
     const slideDir = path.join(SLIDES_DIR, `${today}_${post.num}`);
     if (!fs.existsSync(slideDir)) fs.mkdirSync(slideDir, { recursive: true });
 
-    // ── HTML 生成（スクリプト自身のビルダーを使用） ────────────────────────
-    const htmlArr = [
-      buildS1(post),
-      buildS2(post),
-      buildCommentSlide(post, "slide3"),
-      buildCommentSlide(post, "slide4"),
-      buildS5(post),
-    ];
-
     // ── ナレーションテキスト ────────────────────────────────────────────────
     const narrTexts = [
       post.catchLine1,            // S1
@@ -684,7 +700,7 @@ async function main() {
     // ── フェーズオフセット（ナレーション開始遅延 ms） ──────────────────────
     const PHASE_OFFSETS = [0, 3000, 1000, 1000, 3000];
 
-    // ── ナレーション生成 ────────────────────────────────────────────────────
+    // ── ① ナレーション生成（先に行い実際の尺をHTMLに反映） ────────────────
     console.log(`  🎙️  ナレーション生成中...`);
     const narrPaths = [];
     let failCount = 0;
@@ -703,18 +719,35 @@ async function main() {
     if (failCount === 0) console.log(`  ✅ ナレーション5件完了`);
     else console.warn(`  ⚠️ ${failCount}件失敗 → BGMのみで続行`);
 
-    // ── スライド尺計算 ──────────────────────────────────────────────────────
-    // 各スライドの尺 = フェーズオフセット + ナレーション長 + 余白
-    // ナレーションなし時はデフォルト尺を使用
-    const MIN_NO_NARR = [5000, 7000, 5000, 5000, 6500]; // ナレーションなし時
+    // ── ② スライド尺計算 ───────────────────────────────────────────────────
+    const MIN_NO_NARR = [5000, 7000, 5000, 5000, 6500];
     const MAX_MS      = [15000, 40000, 90000, 90000, 25000];
     const PADDING_MS  = 700;
 
-    const durMs = narrPaths.map((p, i) => {
-      const narrDur = p ? getAudioDuration(p) + PADDING_MS : 0;
+    const narrDurMs = narrPaths.map(p => p ? getAudioDuration(p) : 0);
+
+    const durMs = narrDurMs.map((nd, i) => {
+      if (i === 2 || i === 3) {
+        // S3/S4: コメント表示時間込みで計算
+        const slideData = i === 2 ? post.slide3 : post.slide4;
+        if (nd > 0) {
+          return Math.min(calcCommentSlideDurMs(nd, slideData), MAX_MS[i]);
+        }
+        return MIN_NO_NARR[i];
+      }
+      const narrDur = nd > 0 ? nd + PADDING_MS : 0;
       const total   = PHASE_OFFSETS[i] + (narrDur > 0 ? narrDur : MIN_NO_NARR[i]);
       return Math.min(total, MAX_MS[i]);
     });
+
+    // ── ③ HTML 生成（S3/S4は実際のナレーション尺を使いコメントタイミングを確定）
+    const htmlArr = [
+      buildS1(post),
+      buildS2(post),
+      buildCommentSlide(post, "slide3", narrDurMs[2] > 0 ? narrDurMs[2] / 1000 : null),
+      buildCommentSlide(post, "slide4", narrDurMs[3] > 0 ? narrDurMs[3] / 1000 : null),
+      buildS5(post),
+    ];
 
     const totalMs = durMs.reduce((a, b) => a + b, 0);
     console.log(`  ⏱️  尺: ${durMs.map((d, i) => `S${i + 1}:${(d/1000).toFixed(1)}s`).join(" | ")} → 計${(totalMs/1000).toFixed(1)}s`);
