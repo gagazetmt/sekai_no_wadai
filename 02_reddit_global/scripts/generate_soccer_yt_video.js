@@ -504,19 +504,28 @@ function getAudioDuration(p) {
 }
 
 // ─── フレームキャプチャ → MP4 ─────────────────────────────────────────────────
+// Page.startScreencast (CDP) でブラウザ側からフレームをプッシュ受信する低負荷実装。
+// pull型の page.screenshot() と異なり、フレームごとのラウンドトリップが不要。
+//
+// 同期フロー:
+//   page.evaluate → アニメーション更新 + requestAnimationFrame 登録
+//   → rAF コールバック実行 (paint 前) → evaluate 解決
+//   → paint / composite → Page.screencastFrame イベント到着
+//   → nextFrame() が解決 → FFmpeg stdin へパイプ
 async function renderVideo(page, slideHtml, durationMs, outputPath) {
   const duration    = durationMs / 1000;
   const totalFrames = Math.round(duration * FPS);
 
-  // 背景ズーム/パンは常に固定の遅い速度（スライド尺に依存させない）
-  // animation-fill-mode:forwards で終端フレームをキープするため、
-  // スライドより長い尺に設定するだけでOK
+  // 背景ズーム/パンは固定40秒（スライド尺に依存させない）
   const BG_ANIM_SECS = 40;
   const injectStyle = `<style id="yt-inject">.bg-img{animation-duration:${BG_ANIM_SECS}s !important;}</style>`;
   const html = slideHtml.replace("</head>", `${injectStyle}</head>`);
   await page.setContent(html, { waitUntil: "load", timeout: 120000 });
 
-  // FFmpegをstdin受け取りモードで先に起動（フレームファイル不要）
+  // CDP セッション（1スライドごとに作成・破棄）
+  const client = await page.createCDPSession();
+
+  // FFmpeg を stdin パイプで先に起動
   const ffmpegProc = spawn(FFMPEG, [
     "-y",
     "-f",       "image2pipe",
@@ -533,32 +542,48 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
 
   const ffmpegDone = new Promise((resolve, reject) => {
     ffmpegProc.on("close", code => code === 0 ? resolve() : reject(new Error(`FFmpeg exit ${code}`)));
-    ffmpegProc.stderr.on("data", () => {}); // drain（バッファ詰まり防止）
+    ffmpegProc.stderr.on("data", () => {}); // drain
   });
+
+  // screencastFrame をキュー＋ウェイターで受け取る
+  const queue = [];
+  const waiters = [];
+  client.on("Page.screencastFrame", async ({ data, sessionId }) => {
+    await client.send("Page.screencastFrameAck", { sessionId });
+    const buf = Buffer.from(data, "base64");
+    if (waiters.length > 0) waiters.shift()(buf);
+    else queue.push(buf);
+  });
+
+  // rAF 完了後（paint 前）にキューをクリアして最新フレームを待つ
+  const nextFrame = () =>
+    queue.length > 0 ? Promise.resolve(queue.shift()) : new Promise(r => waiters.push(r));
+
+  await client.send("Page.startScreencast", { format: "jpeg", quality: 80, everyNthFrame: 1 });
 
   for (let f = 0; f < totalFrames; f++) {
     const tMs = Math.round((f / FPS) * 1000);
-    // Web Animations API で全アニメーションを一括制御
-    // currentTime はアニメーション固有のタイムライン（delay 込み）なので
-    // CSS animation-delay が自動的に考慮される
-    await page.evaluate((tMs) => {
-      document.getAnimations().forEach(anim => {
-        anim.pause();
-        try { anim.currentTime = tMs; } catch (_) {}
+
+    // アニメーション時刻を設定し rAF でレンダリングサイクルを確実に起動
+    await page.evaluate((tMs) => new Promise(resolve => {
+      document.getAnimations().forEach(a => {
+        a.pause();
+        try { a.currentTime = tMs; } catch (_) {}
       });
-    }, tMs);
+      requestAnimationFrame(resolve); // rAF は paint 前に解決
+    }), tMs);
 
-    const buffer = await page.screenshot({
-      type:     "jpeg",
-      quality:  80,
-      encoding: "binary",
-      timeout:  0,
-    });
+    // evaluate（rAF）解決後 = paint/composite 前なのでキューは古いフレームのみ
+    // → クリアして次の composite で届く最新フレームを待つ
+    queue.length = 0;
+    const buf = await nextFrame();
 
-    const ok = ffmpegProc.stdin.write(buffer);
+    const ok = ffmpegProc.stdin.write(buf);
     if (!ok) await new Promise(r => ffmpegProc.stdin.once("drain", r));
   }
 
+  await client.send("Page.stopScreencast");
+  await client.detach();
   ffmpegProc.stdin.end();
   await ffmpegDone;
 }
@@ -695,36 +720,65 @@ async function main() {
   const posts    = allPosts.slice(0, LIMIT_ARG ?? allPosts.length);
   console.log(`📄 ${posts.length}件を処理します（全${allPosts.length}件中）\n`);
 
-  const POOL_SIZE = 3; // 同時レンダリング数（Windows RAM 8GB考慮）
+  const POOL_SIZE   = 3;    // 同時レンダリング数（RAM 8GB考慮）
+  const STAGGER_MS  = 3000; // 投稿スタートをずらしてCPUスパイクを平滑化
 
   const browser = await puppeteer.launch({
     headless: "shell",
     protocolTimeout: 300000,
     args: [
+      // ── 基本サンドボックス解除 ──
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
+      // ── メモリ最適化 ──
+      "--disable-dev-shm-usage",       // /dev/shm をメインメモリで代替
+      "--no-zygote",                   // zygate プロセスを省略
+      "--single-process",              // VPS 向け: 全処理を1プロセスに集約
+      "--renderer-process-limit=1",    // レンダラープロセス数上限
+      "--memory-pressure-off",         // メモリ圧力通知を無視
+      // ── GPU / レンダリング機能削減 ──
       "--disable-gpu",
       "--disable-software-rasterizer",
+      "--disable-accelerated-2d-canvas",
+      "--disable-accelerated-video-decode",
+      "--disable-features=VizDisplayCompositor,TranslateUI",
+      "--disable-canvas-aa",           // アンチエイリアス無効（動画用に不要）
+      "--disable-2d-canvas-clip-aa",
+      // ── バックグラウンドスロットリング無効 ──
+      "--disable-renderer-backgrounding",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-ipc-flooding-protection",
+      // ── 不要機能の無効化 ──
       "--disable-extensions",
       "--disable-background-networking",
+      "--disable-sync",
       "--mute-audio",
       "--hide-scrollbars",
-      "--disable-sync",
+      "--no-first-run",
+      // ── ビューポートをHTML設計値に合わせる（1920×1080横型固定） ──
       `--window-size=${W},${H}`,
     ],
   });
-  // 固定サイズのページプールを作成（投稿数に依存しない）
+
+  // 固定サイズのページプールを作成
   const poolPages = await Promise.all(
     Array.from({ length: POOL_SIZE }, () =>
-      browser.newPage().then(p => { p.setViewport({ width: W, height: H }); p.setDefaultTimeout(0); return p; })
+      browser.newPage().then(p => {
+        p.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
+        p.setDefaultTimeout(0);
+        return p;
+      })
     )
   );
   const pagePool = createPagePool(poolPages);
 
-  // 全投稿を並列スタート（ナレーション完了次第スライドをキューへ投入）
+  // 全投稿を並列スタート（Staggered: STAGGER_MS ずつずらして CPU スパイクを分散）
   await Promise.all(
     posts.map(async (post, postArrayIdx) => {
+      if (postArrayIdx > 0)
+        await new Promise(r => setTimeout(r, postArrayIdx * STAGGER_MS));
+
       const _t0 = Date.now();
       console.log(`\n▶ [${postArrayIdx + 1}/${posts.length}] 動画${post.num}「${post.catchLine1}」`);
 
