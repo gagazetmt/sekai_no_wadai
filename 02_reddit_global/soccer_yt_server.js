@@ -121,8 +121,9 @@ const TEAM_LOGOS = (() => {
 })();
 
 // ─── ジョブ管理 ───────────────────────────────────────────────────────────────
-let ttsJob   = { running: false, results: [], done: false, error: null };
-let videoJob = { running: false, log: [], done: false, exitCode: null };
+let ttsJob      = { running: false, results: [], done: false, error: null };
+let videoJob    = { running: false, log: [], done: false, exitCode: null };
+let imgFetchJob = { running: false, log: [], done: false, exitCode: null, date: null };
 
 // ─── ユーティリティ ───────────────────────────────────────────────────────────
 function imgBase64(imgPath) {
@@ -2571,6 +2572,46 @@ app.post("/api/soccer-yt/load-daily-candidates", (req, res) => {
   } catch (e) {
     res.json({ ok: false, error: `JSON解析エラー: ${e.message}` });
   }
+});
+
+// ─── 画像取得ジョブ起動（ローカルPCのSCP送信後に呼ばれる） ────────────────────
+app.post("/api/soccer-yt/start-image-fetch", (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.json({ ok: false, error: "date が必要です" });
+
+  const contentFile = path.join(TEMP_DIR, `content_${date}.json`);
+  if (!fs.existsSync(contentFile)) {
+    return res.json({ ok: false, error: `content_${date}.json が見つかりません` });
+  }
+  if (imgFetchJob.running) {
+    return res.json({ ok: false, error: `画像取得ジョブが既に実行中です (${imgFetchJob.date})` });
+  }
+
+  imgFetchJob = { running: true, log: [], done: false, exitCode: null, date };
+  const script = path.join(__dirname, "scripts", "fetch_images_for_content.js");
+  const proc   = spawn(process.execPath, [script, date], { cwd: __dirname, env: process.env });
+  proc.stdout.on("data", d => { process.stdout.write(d); imgFetchJob.log.push(d.toString()); });
+  proc.stderr.on("data", d => { process.stderr.write(d); imgFetchJob.log.push(d.toString()); });
+  proc.on("close", code => {
+    imgFetchJob.running  = false;
+    imgFetchJob.done     = true;
+    imgFetchJob.exitCode = code;
+    fs.writeFileSync(LOG_FILE, `[画像取得 ${date} ${new Date().toLocaleString("ja-JP")}]\n` + imgFetchJob.log.join(""), { flag: "a" });
+    console.log(`[画像取得] 完了 exit:${code}`);
+  });
+
+  res.json({ ok: true, message: `画像取得ジョブ開始: ${date}` });
+});
+
+// ─── 画像取得ジョブ状態確認 ──────────────────────────────────────────────────
+app.get("/api/img-fetch-status", (req, res) => {
+  res.json({
+    running:  imgFetchJob.running,
+    done:     imgFetchJob.done,
+    exitCode: imgFetchJob.exitCode,
+    date:     imgFetchJob.date,
+    log:      imgFetchJob.log.join("").slice(-3000),
+  });
 });
 
 // ─── 案件候補取得 ─────────────────────────────────────────────────────────────
