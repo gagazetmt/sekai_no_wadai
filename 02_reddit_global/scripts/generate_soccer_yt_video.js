@@ -508,8 +508,11 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   const duration    = durationMs / 1000;
   const totalFrames = Math.round(duration * FPS);
 
-  // bg-img アニメーション尺をスライド全体に合わせて上書き（kbZoom / panDown 両対応）
-  const injectStyle = `<style id="yt-inject">.bg-img{animation-duration:${duration}s !important;}</style>`;
+  // 背景ズーム/パンは常に固定の遅い速度（スライド尺に依存させない）
+  // animation-fill-mode:forwards で終端フレームをキープするため、
+  // スライドより長い尺に設定するだけでOK
+  const BG_ANIM_SECS = 40;
+  const injectStyle = `<style id="yt-inject">.bg-img{animation-duration:${BG_ANIM_SECS}s !important;}</style>`;
   const html = slideHtml.replace("</head>", `${injectStyle}</head>`);
   await page.setContent(html, { waitUntil: "load", timeout: 120000 });
 
