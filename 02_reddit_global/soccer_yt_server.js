@@ -2112,10 +2112,12 @@ window.addEventListener("beforeunload", syncPost);
 // ═══════════════════════════════════════════════════════════════
 
 var candidateData = null;
+var _preloadedComments = null;  // 事前取得済みコメント（load-daily-candidates 使用時にセット）
 
 function openCandidateModal() {
   var date = document.getElementById("date-input").value;
   if (!date) { alert("まず日付を選択してください"); return; }
+  _preloadedComments = null;
   document.getElementById("candidate-modal").style.display = "block";
   var content = document.getElementById("cm-content");
   content.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">Reddit 取得中...</div>';
@@ -2144,6 +2146,41 @@ function openCandidateModal() {
 
 function closeCandidateModal() {
   document.getElementById("candidate-modal").style.display = "none";
+}
+
+// ── 事前取得済み日次候補を読み込む ────────────────────────────────────────────
+function loadDailyCandidates() {
+  var date = document.getElementById("date-input").value;
+  if (!date) { alert("まず日付を選択してください"); return; }
+  _preloadedComments = null;
+  document.getElementById("candidate-modal").style.display = "block";
+  var content = document.getElementById("cm-content");
+  content.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">📥 事前取得済みデータを読み込み中...</div>';
+  document.getElementById("btn-process").disabled = true;
+  document.getElementById("cm-count").textContent = "0件選択中";
+  document.getElementById("cm-log").style.display = "none";
+  document.getElementById("cm-source-badge").textContent = "";
+
+  fetch("/api/soccer-yt/load-daily-candidates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: date })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok) {
+      content.innerHTML = '<div style="color:#e66;padding:20px;">⚠️ ' + (data.error || "読み込み失敗") + '</div>';
+      return;
+    }
+    _preloadedComments = data.preloadedComments || {};
+    candidateData = data;
+    var badge = document.getElementById("cm-source-badge");
+    if (badge) badge.textContent = "📥 事前取得済み (" + (data.last_updated || "").slice(11,16) + " 更新)";
+    renderCandidates(data);
+  })
+  .catch(function(e) {
+    content.innerHTML = '<div style="color:#e66;padding:20px;">通信エラー: ' + e.message + '</div>';
+  });
 }
 
 function badgeClass(type) {
@@ -2267,10 +2304,15 @@ function processSelected() {
   logEl.style.display = "block";
   logEl.textContent = "処理開始...";
 
-  fetch("/api/soccer-yt/process-selected", {
+  // 事前取得済みコメントがあれば import-selected（Reddit再取得スキップ）を使う
+  var endpoint = _preloadedComments ? "/api/soccer-yt/import-selected" : "/api/soccer-yt/process-selected";
+  var body = { date: date, threads: threads };
+  if (_preloadedComments) body.preloadedComments = _preloadedComments;
+
+  fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date: date, threads: threads })
+    body: JSON.stringify(body)
   })
   .then(function(r) { return r.json(); })
   .then(function(data) {
@@ -2340,9 +2382,14 @@ initMobile();
   <div class="cm-box">
     <div class="cm-head">
       <h2>📋 案件選択</h2>
-      <button class="cm-close" onclick="closeCandidateModal()">✕</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span id="cm-source-badge" style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.15);padding:3px 10px;border-radius:12px;"></span>
+        <button onclick="loadDailyCandidates()" style="background:#1a3a2a;color:#4ade80;border:1px solid #2a5a3a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📥 事前取得済み</button>
+        <button onclick="openCandidateModal()" style="background:#2a1a3a;color:#c084fc;border:1px solid #4a2a6a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">🔄 今すぐ取得</button>
+        <button class="cm-close" onclick="closeCandidateModal()">✕</button>
+      </div>
     </div>
-    <div id="cm-content"></div>
+    <div id="cm-content" style="min-height:80px;"></div>
     <div class="cm-footer">
       <span class="cm-count" id="cm-count">0件選択中</span>
       <button id="btn-process" onclick="processSelected()" disabled>自動生成（0件）</button>
@@ -2454,6 +2501,76 @@ app.post("/api/match-center/run", (req, res) => {
   child.on("close", code => {
     res.json({ ok: code === 0, message: code === 0 ? "生成完了！" : "エラー（コンソール確認）", log: out });
   });
+});
+
+// ─── 事前取得済み日次候補を読み込む ──────────────────────────────────────────
+// fetch_daily_candidates.js がローカルPCで取得してSCP送信した
+// temp/candidates_YYYY-MM-DD.json を読み込んでランチャーに渡す
+app.post("/api/soccer-yt/load-daily-candidates", (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.json({ ok: false, error: "date が指定されていません" });
+
+  const file = path.join(TEMP_DIR, `candidates_${date}.json`);
+  if (!fs.existsSync(file)) {
+    return res.json({
+      ok:    false,
+      error: `candidates_${date}.json が見つかりません。ローカルPCからSCP送信されているか確認してください（temp/ フォルダ）`,
+    });
+  }
+
+  try {
+    const raw  = JSON.parse(fs.readFileSync(file, "utf8"));
+    const LEAGUE_KW = ["Premier League","La Liga","Bundesliga","Ligue 1","Serie A",
+      "Champions League","Europa League","Conference League","World Cup","FA Cup","Copa del Rey"];
+
+    function detectType(title) {
+      const lower = title.toLowerCase();
+      const isPost  = lower.includes("post match thread") || lower.includes("post-match thread");
+      const hasLeague = LEAGUE_KW.some(k => title.includes(k));
+      if (isPost && hasLeague) return "post-match";
+      if (/transfer|signs for|joins|loan deal|contract extension|here we go/i.test(lower)) return "transfer";
+      if (/injur|ruled out|muscle|hamstring|knee|ligament/i.test(lower)) return "injury";
+      if (/sacked|fired|resign|appointed|new manager|new head coach/i.test(lower)) return "manager";
+      if (/\bffp\b|financial fair play|ban|suspend|charged|breach/i.test(lower)) return "finance";
+      return "topic";
+    }
+
+    const posts = (raw.posts || []).map(p => ({
+      ...p,
+      type: detectType(p.title || ""),
+    }));
+
+    // preloadedComments: permalink → { selftext, comments: string[] }
+    // generate_content.js が fetchThreadFull() の代わりに使う
+    const preloadedComments = {};
+    for (const p of posts) {
+      if (p.permalink && p.comments?.length) {
+        preloadedComments[p.permalink] = {
+          selftext: "",
+          comments: p.comments.map(c => `[👍${c.score || 0}] ${c.body || ""}`),
+        };
+      }
+    }
+
+    // renderCandidates() が期待するフォーマットに変換
+    const postMatchThreads = posts.filter(p => p.type === "post-match");
+    const redditTopics     = posts.filter(p => p.source === "reddit" && p.type !== "post-match");
+    const rssTopics        = posts.filter(p => p.source === "rss");
+
+    res.json({
+      ok:               true,
+      date:             raw.date,
+      last_updated:     raw.last_updated || raw.created_at || "",
+      source:           "daily-fetch",
+      commonTopics:     [],
+      postMatchThreads,
+      redditTopics,
+      rssTopics,
+      preloadedComments,
+    });
+  } catch (e) {
+    res.json({ ok: false, error: `JSON解析エラー: ${e.message}` });
+  }
 });
 
 // ─── 案件候補取得 ─────────────────────────────────────────────────────────────
