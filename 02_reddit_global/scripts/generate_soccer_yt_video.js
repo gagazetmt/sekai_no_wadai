@@ -35,7 +35,20 @@ const FPS  = 15;
 const now       = new Date();
 const jstOffset = 9 * 60 * 60 * 1000;
 const today     = process.argv[2] || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
-const LIMIT_ARG = process.argv[3] ? parseInt(process.argv[3]) : null;
+const TARGET_ARG = process.argv[3] ? String(process.argv[3]) : null;
+
+// ターゲットとなるインデックスを解析
+let targetIndices = null;
+if (TARGET_ARG) {
+  if (TARGET_ARG.includes(",")) {
+    targetIndices = TARGET_ARG.split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+  } else {
+    const limit = parseInt(TARGET_ARG);
+    if (!isNaN(limit)) {
+      targetIndices = Array.from({ length: limit }, (_, i) => i);
+    }
+  }
+}
 
 const VIDEO_DIR   = path.join(__dirname, "..", "soccer_yt_videos");
 const SLIDES_DIR  = path.join(__dirname, "..", "soccer_yt_slides");
@@ -69,7 +82,15 @@ function loadData() {
     process.exit(1);
   }
   const { posts } = JSON.parse(fs.readFileSync(file, "utf8"));
-  return posts.map((p, i) => ({ num: i + 1, ...p }));
+  
+  // 元のインデックスを保持したままマッピング
+  const allMapped = posts.map((p, i) => ({ index: i, num: i + 1, ...p }));
+
+  if (targetIndices) {
+    console.log(`🎯 指定されたインデックスのみを処理します: ${targetIndices.join(", ")}`);
+    return allMapped.filter(p => targetIndices.includes(p.index));
+  }
+  return allMapped;
 }
 
 // ─── 画像 base64 化 ───────────────────────────────────────────────────────────
@@ -488,7 +509,15 @@ async function narrationVoiceVox(text, outputPath) {
 }
 
 async function generateNarration(text, outputPath) {
-  return narrationVoiceVox(text, outputPath);
+  // 相棒の要望により VoiceVox を最優先（OpenAI APIキーがあっても無視）
+  try {
+    return await narrationVoiceVox(text, outputPath);
+  } catch (err) {
+    console.warn(`  ⚠️ VoiceVox生成エラー: ${err.message}`);
+    // もしどうしても OpenAI を使いたい場合はここにフォールバックを書けるけど、
+    // 今は VoiceVox が基本だから、そのままエラーを投げるね！
+    throw err;
+  }
 }
 
 // ─── 音声長取得（ms） ─────────────────────────────────────────────────────────
@@ -717,7 +746,7 @@ async function main() {
   ensureBeep();
 
   const allPosts = loadData();
-  const posts    = allPosts.slice(0, LIMIT_ARG ?? allPosts.length);
+  const posts = allPosts;
   console.log(`📄 ${posts.length}件を処理します（全${allPosts.length}件中）\n`);
 
   const POOL_SIZE   = 3;    // 同時レンダリング数（RAM 8GB考慮）
@@ -884,6 +913,9 @@ async function main() {
       const outPath = path.join(VIDEO_DIR, `${today}_${post.num}.mp4`);
       concatAndMix(videoPaths, audioPath, totalMs, outPath);
 
+      // 生成済みフラグを JSON に書き込む
+      updateGeneratedStatus(post.index);
+
       const elapsed = ((Date.now() - _t0) / 1000).toFixed(1);
       console.log(`  ✅ [動画${post.num}] 完成: ${outPath}  (処理時間: ${elapsed}s)`);
     })
@@ -891,6 +923,22 @@ async function main() {
 
   await browser.close();
   console.log(`\n🎉 全動画生成完了！`);
+}
+
+// ─── 生成ステータス更新 ────────────────────────────────────────────────────────
+function updateGeneratedStatus(originalIndex) {
+  const file = path.join(TEMP_DIR, `soccer_yt_content_${today}.json`);
+  if (!fs.existsSync(file)) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (data.posts && data.posts[originalIndex]) {
+      data.posts[originalIndex].isGenerated = true;
+      data.posts[originalIndex].generatedAt = new Date().toISOString();
+      fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+    }
+  } catch (e) {
+    console.warn(`  ⚠️ JSON更新失敗: ${e.message}`);
+  }
 }
 
 main().catch(err => {

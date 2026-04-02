@@ -1,0 +1,622 @@
+[
+  {
+    "name": "Arsenal",
+    "file": "arsenal.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Aston Villa",
+    "file": "aston_villa.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Bournemouth",
+    "file": "bournemouth.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Brentford",
+    "file": "brentford.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Brighton",
+    "file": "brighton.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Chelsea",
+    "file": "chelsea.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Crystal Palace",
+    "file": "crystal_palace.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Everton",
+    "file": "everton.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Fulham",
+    "file": "fulham.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Ipswich Town",
+    "file": "ipswich.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Leicester City",
+    "file": "leicester.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Liverpool",
+    "file": "liverpool.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Manchester City",
+    "file": "man_city.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Manchester United",
+    "file": "man_united.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Newcastle United",
+    "file": "newcastle.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Nottingham Forest",
+    "file": "nottm_forest.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Southampton",
+    "file": "southampton.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Tottenham Hotspur",
+    "file": "tottenham.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "West Ham United",
+    "file": "west_ham.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Wolverhampton Wanderers",
+    "file": "wolves.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Athletic Club",
+    "file": "athletic_bilbao.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Atletico Madrid",
+    "file": "atletico_madrid.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Barcelona",
+    "file": "barcelona.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Real Betis",
+    "file": "betis.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Celta Vigo",
+    "file": "celta_vigo.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Espanyol",
+    "file": "espanyol.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Getafe",
+    "file": "getafe.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Girona",
+    "file": "girona.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Las Palmas",
+    "file": "las_palmas.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Leganes",
+    "file": "leganes.png",
+    "reason": "API: team not found"
+  },
+  {
+    "name": "Mallorca",
+    "file": "mallorca.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Osasuna",
+    "file": "osasuna.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Rayo Vallecano",
+    "file": "rayo_vallecano.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Real Madrid",
+    "file": "real_madrid.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Real Sociedad",
+    "file": "real_sociedad.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Sevilla",
+    "file": "sevilla.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Valencia",
+    "file": "valencia.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Real Valladolid",
+    "file": "valladolid.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Villarreal",
+    "file": "villarreal.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Augsburg",
+    "file": "augsburg.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Bayer Leverkusen",
+    "file": "bayer_leverkusen.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Bayern Munich",
+    "file": "bayern_munich.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Bochum",
+    "file": "bochum.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Borussia Dortmund",
+    "file": "borussia_dortmund.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Borussia Monchengladbach",
+    "file": "borussia_mgladbach.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Eintracht Frankfurt",
+    "file": "eintracht_frankfurt.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Freiburg",
+    "file": "freiburg.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Heidenheim",
+    "file": "heidenheim.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Hoffenheim",
+    "file": "hoffenheim.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Holstein Kiel",
+    "file": "holstein_kiel.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Mainz",
+    "file": "mainz.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "RB Leipzig",
+    "file": "rb_leipzig.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "St. Pauli",
+    "file": "st_pauli.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Stuttgart",
+    "file": "stuttgart.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Union Berlin",
+    "file": "union_berlin.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Werder Bremen",
+    "file": "werder_bremen.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Wolfsburg",
+    "file": "wolfsburg.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "AC Milan",
+    "file": "ac_milan.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "AS Roma",
+    "file": "as_roma.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Atalanta",
+    "file": "atalanta.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Bologna",
+    "file": "bologna.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Cagliari",
+    "file": "cagliari.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Como",
+    "file": "como.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Empoli",
+    "file": "empoli.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Fiorentina",
+    "file": "fiorentina.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Genoa",
+    "file": "genoa.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Hellas Verona",
+    "file": "hellas_verona.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Inter Milan",
+    "file": "inter_milan.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Juventus",
+    "file": "juventus.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Lazio",
+    "file": "lazio.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Lecce",
+    "file": "lecce.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Monza",
+    "file": "monza.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Napoli",
+    "file": "napoli.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Parma",
+    "file": "parma.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Torino",
+    "file": "torino.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Udinese",
+    "file": "udinese.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Venezia",
+    "file": "venezia.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Angers",
+    "file": "angers.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Auxerre",
+    "file": "auxerre.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Brest",
+    "file": "brest.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Le Havre",
+    "file": "le_havre.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Lens",
+    "file": "lens.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Lille",
+    "file": "lille.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Lyon",
+    "file": "lyon.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Marseille",
+    "file": "marseille.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Monaco",
+    "file": "monaco.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Montpellier",
+    "file": "montpellier.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Nantes",
+    "file": "nantes.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Nice",
+    "file": "nice.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Paris Saint-Germain",
+    "file": "psg.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Reims",
+    "file": "reims.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Rennes",
+    "file": "rennes.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Saint-Etienne",
+    "file": "saint_etienne.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Strasbourg",
+    "file": "strasbourg.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Toulouse",
+    "file": "toulouse.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "FC Porto",
+    "file": "porto.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Benfica",
+    "file": "benfica.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Sporting CP",
+    "file": "sporting_cp.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Ajax",
+    "file": "ajax.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "PSV Eindhoven",
+    "file": "psv.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Feyenoord",
+    "file": "feyenoord.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Celtic",
+    "file": "celtic.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Rangers",
+    "file": "rangers.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Club Brugge",
+    "file": "club_brugge.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Anderlecht",
+    "file": "anderlecht.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Royal Antwerp",
+    "file": "royal_antwerp.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Shakhtar Donetsk",
+    "file": "shakhtar_donetsk.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Dynamo Kyiv",
+    "file": "dynamo_kyiv.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Red Bull Salzburg",
+    "file": "rb_salzburg.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Sturm Graz",
+    "file": "sturm_graz.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Galatasaray",
+    "file": "galatasaray.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Besiktas",
+    "file": "besiktas.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Dinamo Zagreb",
+    "file": "dinamo_zagreb.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Red Star Belgrade",
+    "file": "red_star_belgrade.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Slavia Prague",
+    "file": "slavia_prague.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Viktoria Plzen",
+    "file": "viktoria_plzen.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Sparta Prague",
+    "file": "sparta_prague.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Young Boys",
+    "file": "young_boys.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "FC Midtjylland",
+    "file": "midtjylland.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "FC Copenhagen",
+    "file": "copenhagen.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Maccabi Haifa",
+    "file": "maccabi_haifa.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "Olympiakos",
+    "file": "olympiakos.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "AEK Athens",
+    "file": "aek_athens.png",
+    "reason": "Request failed with status code 429"
+  },
+  {
+    "name": "PAOK",
+    "file": "paok.png",
+    "reason": "Request failed with status code 429"
+  }
+]

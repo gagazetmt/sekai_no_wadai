@@ -25,8 +25,9 @@ const { callAI }    = require("./ai_client");
 const DATA_DIR          = path.join(__dirname, "..", "data");
 const HISTORY_FILE      = path.join(DATA_DIR, "seen_history.json");
 const HISTORY_KEEP_DAYS = 30;
-const REDDIT_TOP_N      = 15;
-const RSS_TOP_N         = 15;
+const REDDIT_TOP_N      = 10;
+const RSS_TOP_N         = 10;
+const MAX_TOTAL_POSTS   = 30;
 const COMMENT_LIMIT     = 20;
 
 const VPS_HOST = "root@37.60.224.54";
@@ -276,14 +277,24 @@ async function main() {
   console.log("🌐 Translating Reddit titles...");
   const allFetched = await translateTitles([...redditPosts, ...rssPosts]);
 
+  // ── ソート & 上限30件ヘルパー ──
+  const finalizePosts = (pArr) => {
+    return pArr
+      .sort((a, b) => (b.score - a.score) || (b.created_utc - a.created_utc))
+      .slice(0, MAX_TOTAL_POSTS);
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   if (isMidnight) {
     // ── midnight モード: 新しい本日ベースJSONを作成 ──────────────────────────
     const history = loadHistory();
     const seenSet = getSeenSet(history);
 
-    const newPosts = allFetched.filter(p => !seenSet.has(p.id));
-    console.log(`🔍 History dedup: ${allFetched.length} → ${newPosts.length} posts (${allFetched.length - newPosts.length} already seen)`);
+    let newPosts = allFetched.filter(p => !seenSet.has(p.id));
+    console.log(`🔍 History dedup: ${allFetched.length} → ${newPosts.length} posts`);
+
+    // 上限30件に絞る
+    newPosts = finalizePosts(newPosts);
 
     const todayData = {
       date,
@@ -306,28 +317,36 @@ async function main() {
     const existing = loadDaily(date);
 
     if (!existing) {
-      // 当日のベースJSONがない場合（0:00のJSONが存在しない → 新規作成で代用）
+      // 当日のベースJSONがない場合
       console.warn("⚠️  当日ベースJSONが見つかりません。今回取得分で新規作成します。");
       const todayData = {
         date,
         mode:         "update-fallback",
         created_at:   iso,
         last_updated: iso,
-        posts:        allFetched.map(p => ({ ...p, added_at: iso })),
+        posts:        finalizePosts(allFetched).map(p => ({ ...p, added_at: iso })),
       };
       saveDaily(date, todayData);
       sendToVps(date);
       return;
     }
 
-    // 既存ポストのIDセット
-    const existingIds = new Set(existing.posts.map(p => p.id));
-    const newPosts    = allFetched.filter(p => !existingIds.has(p.id));
+    // 既存ポストと新規ポストをマージして重複除去
+    const existingMap = new Map(existing.posts.map(p => [p.id, p]));
+    allFetched.forEach(p => {
+      if (!existingMap.has(p.id)) {
+        existingMap.set(p.id, { ...p, added_at: iso });
+      }
+    });
 
-    console.log(`🔀 Merge: ${newPosts.length} new posts added (${allFetched.length - newPosts.length} duplicates skipped)`);
+    // ソート & 上限30件
+    const mergedPosts = finalizePosts(Array.from(existingMap.values()));
+    const newCount    = mergedPosts.filter(p => !existing.posts.some(ep => ep.id === p.id)).length;
+
+    console.log(`🔀 Merge & Trim: Total ${mergedPosts.length} posts (Added ${newCount} new)`);
 
     existing.last_updated = iso;
-    existing.posts.push(...newPosts.map(p => ({ ...p, added_at: iso })));
+    existing.posts        = mergedPosts;
     saveDaily(date, existing);
     sendToVps(date);
   }

@@ -1,0 +1,85 @@
+{
+  "date": "test",
+  "posts": [
+    {
+      "num": 1,
+      "type": "topic",
+      "catchLine1": "デ・ゼルビ就任にファン激怒！その理由とは",
+      "label": "【衝撃】",
+      "badge": "緊急会見",
+      "sourceAuthor": "Tottenham Supporters' Trust",
+      "sourceText": "トッテナム・ホットスパーの公式サポーターズトラストが、ロベルト・デ・ゼルビの監督就任を支持できないと発表。\\nその背景には、デ・ゼルビが過去にメイソン・グリーンウッドを擁護したことが大きく影響しています。",
+      "overviewNarration": "トッテナム・ホットスパーに衝撃が走りました！次期監督候補として浮上したロベルト・デ・ゼルビの就任に対し、公式サポーターズトラストが強く反対声明を発表。その理由は、デ・ゼルビが過去に問題発言をした選手を擁護したことにあります。ファンの怒りは収まる気配がありません。",
+      "overviewTelop": "サポーターズトラストがデ・ゼルビ就任を拒否",
+      "slide3": {
+        "topicTag": "※ファンの怒り",
+        "highlightIdx": 0,
+        "narration": "海外サッカー掲示板では、この決定に対するファンの怒りが爆発しています。多くのトッテナムサポーターが、クラブの決定に強い失望と抗議の意思を示し、中にはサブスクリプションの解約を表明する声も。",
+        "subtitleBox": "「解約した」",
+        "comments": [
+          {
+            "user": "SpursFan1987",
+            "text": "もうSpursplay Kingsの会員を解約したよ。"
+          }
+        ]
+      },
+      "slide4": {
+        "topicTag": "※問題の核心",
+        "highlightIdx": 0,
+        "narration": "ファンの怒りの根底にあるのは、デ・ゼルビが過去にメイソン・グリーンウッドを擁護したという事実です。",
+        "subtitleBox": "グリーンウッド擁護が原因",
+        "comments": [
+          {
+            "user": "JusticeFirst",
+            "text": "彼がメイソンを連れてくるのを見ろ。"
+          }
+        ]
+      },
+      "outroNarration": "クラブの決定とファンの声。その大きな溝は、簡単には埋まりそうにありません。",
+      "outroTelop": "倫理観と勝利、どちらを選ぶのか",
+      "youtubeTitle": "トッテナム衝撃！デ・ゼルビ監督就任にサポーター激怒の理由 海外サッカーファンの反応",
+      "hashtagsText": "#トッテナム #デゼルビ #プレミアリーグ #海外の反応 #サッカー #メイソングリーンウッド",
+      "matchResult": null,
+      "imagePaths": [
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x1.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x2.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x3.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x4.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x5.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x1.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x2.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x3.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x4.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x5.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x6.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x7.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x8.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x9.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_x10.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_wm0_wiki1.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_wm0_wiki2.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_wm0_wiki3.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_wm1_wiki1.jpg",
+        "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_wm1_wiki2.png"
+      ],
+      "mainImagePath": "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x1.jpg",
+      "slide2ImagePath": "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x2.jpg",
+      "slide3ImagePath": "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x2.jpg",
+      "slide4ImagePath": "C:\\Users\\USER\\Documents\\side_biz\\02_reddit_global\\images\\test_1_nt0_x3.jpg",
+      "slide5ImagePath": null,
+      "_imgMeta": {
+        "title": "Tottenham Supporters' Trust says it cannot support De Zerbi appointment",
+        "type": "topic",
+        "source": "reddit",
+        "xSearchQuery": "Tottenham De Zerbi Greenwood",
+        "wikiWords": [
+          "Tottenham Hotspur",
+          "Roberto De Zerbi",
+          "Mason Greenwood"
+        ],
+        "imgFetched": true,
+        "fetchedAt": "2026-04-02T08:10:45.747Z"
+      }
+    }
+  ]
+}

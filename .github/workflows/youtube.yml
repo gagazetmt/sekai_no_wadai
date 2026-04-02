@@ -1,0 +1,79 @@
+name: YouTube Video Generator
+
+on:
+  # ランチャーの「GitHub Push & GHA起動」ボタンから起動
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "生成対象の日付 (yyyy-mm-dd)"
+        required: true
+        default: ""
+  # youtube_content JSON が push された時に自動起動（バックアップトリガー）
+  push:
+    paths:
+      - "02_reddit_global/temp/youtube_content_*.json"
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "02_reddit_global/package.json"
+
+      - name: Install dependencies
+        working-directory: 02_reddit_global
+        run: npm install
+
+      - name: Install Chromium (Puppeteer)
+        run: npx puppeteer browsers install chrome
+        working-directory: 02_reddit_global
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
+
+      - name: Determine date
+        id: date
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            echo "date=${{ github.event.inputs.date }}" >> $GITHUB_OUTPUT
+          else
+            # push トリガー時: 変更されたファイル名から日付を抽出
+            CHANGED=$(git diff --name-only HEAD^ HEAD | grep "youtube_content_" | head -1)
+            DATE=$(echo "$CHANGED" | grep -oP '\d{4}-\d{2}-\d{2}')
+            echo "date=${DATE:-$(date +%Y-%m-%d)}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate YouTube video
+        working-directory: 02_reddit_global
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "生成対象: ${{ steps.date.outputs.date }}"
+          node generate_youtube.js ${{ steps.date.outputs.date }}
+
+      - name: Upload video as Artifact（確認用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-video-${{ steps.date.outputs.date }}
+          path: 02_reddit_global/youtube/*.mp4
+          retention-days: 7
+
+      # ── YouTube API アップロード（オプション・未実装） ─────────────────
+      # - name: Upload to YouTube
+      #   env:
+      #     YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      #     YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      #     YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      #   run: node upload_youtube.js ${{ steps.date.outputs.date }}

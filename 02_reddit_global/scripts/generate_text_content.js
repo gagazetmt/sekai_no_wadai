@@ -28,7 +28,7 @@ const now       = new Date();
 const jstOffset = 9 * 60 * 60 * 1000;
 const dateArg   = process.argv.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a))
                || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
-const topArg    = parseInt((process.argv.find(a => a.startsWith("--top=")) || "--top=8").replace("--top=", ""));
+const topArg    = parseInt((process.argv.find(a => a.startsWith("--top=")) || "--top=30").replace("--top=", ""));
 
 const TEAM_MANAGERS_PATH = path.join(__dirname, "..", "logos", "team_managers.json");
 const _teamManagers = (() => {
@@ -56,8 +56,10 @@ function detectType(title) {
 async function translateKeywordToEnglish(text) {
   try {
     const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 80,
-      messages: [{ role: "user", content: `Translate this Japanese soccer news headline to English keywords for Twitter image search. Return only key search terms (max 60 chars, no quotes):\n${text}` }] });
-    return raw.trim().slice(0, 60);
+      messages: [{ role: "user", content: `Extract ONLY the 2 most essential English proper nouns (Player name, Manager name, or Team name) for image search from this headline. 
+Ignore quotes, sentences, and adjectives. Return ONLY the keywords separated by a single space.
+Headline: ${text}` }] });
+    return raw.trim().slice(0, 60).replace(/["']/g, "");
   } catch { return text.slice(0, 60); }
 }
 
@@ -198,8 +200,8 @@ async function main() {
   const existingTitles = new Set(existingContent.posts.map(p => p._meta?.title).filter(Boolean));
 
   // 生成対象: Reddit上位N件 + RSS上位M件（スコア順）
-  const REDDIT_LIMIT = Math.max(1, topArg - 3);
-  const RSS_LIMIT    = Math.min(3, topArg);
+  const REDDIT_LIMIT = 15;
+  const RSS_LIMIT    = 15;
 
   const redditCandidates = allPosts
     .filter(p => p.source === "reddit" && !existingTitles.has(p.title))

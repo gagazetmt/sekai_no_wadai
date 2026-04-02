@@ -777,13 +777,27 @@ async function main() {
   }
   posts.sort((a, b) => a.num - b.num);
 
-  // 保存（新規を先頭にマージ・同一スレッドは新規で上書き）
-  const newTitles   = new Set(posts.map(p => p._meta?.threadTitle).filter(Boolean));
+  // 保存（新規を先頭にマージ・同一スレッドは新規で上書き、ただし生成済みフラグは引き継ぐ）
+  const existingMap = new Map(existingPosts.map(p => [p._meta?.threadTitle, p]));
+  const finalPosts = posts.map(p => {
+    const title = p._meta?.threadTitle;
+    if (existingMap.has(title)) {
+      const ex = existingMap.get(title);
+      // 既に生成済みならフラグを継承
+      if (ex.isGenerated) {
+        p.isGenerated = true;
+        p.generatedAt = ex.generatedAt;
+      }
+    }
+    return p;
+  });
+
+  const newTitles   = new Set(finalPosts.map(p => p._meta?.threadTitle).filter(Boolean));
   const deduped     = existingPosts.filter(p => !newTitles.has(p._meta?.threadTitle));
-  const mergedPosts = [...posts, ...deduped];
+  const mergedPosts = [...finalPosts, ...deduped];
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify({ date: today, posts: mergedPosts }, null, 2), "utf8");
 
-  console.log(`✅ 完了！${posts.length}件を保存`);
+  console.log(`✅ 完了！${finalPosts.length}件を新規作成・更新 / 計${mergedPosts.length}件を保存`);
   console.log(`   → ${OUTPUT_FILE}`);
 }
 

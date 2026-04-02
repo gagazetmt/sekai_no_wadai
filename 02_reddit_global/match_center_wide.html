@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>PL Match Center – Wide</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg:        #ffffff;
+    --surface:   #f5f5f5;
+    --surface2:  #e8e8e8;
+    --border:    rgba(0,0,0,0.1);
+    --home:      #4fc3f7;
+    --away:      #ef5350;
+    --home-dim:  rgba(79,195,247,0.2);
+    --away-dim:  rgba(239,83,80,0.2);
+    --gold:      #e6a800;
+    --text:      #111111;
+    --muted:     #666666;
+    --pitch:     #1a4a1e;
+    --pitch2:    #1e5522;
+    --line:      rgba(255,255,255,0.22);
+    --font-head: 'Barlow Condensed', sans-serif;
+    --font-body: 'Barlow', sans-serif;
+}
+
+html, body {
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: var(--font-body);
+    color: var(--text);
+}
+
+/* ── Outer layout ── */
+.wrapper {
+    width: 1280px;
+    height: 720px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+/* animated gradient bg */
+.wrapper::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 20% 50%, rgba(79,195,247,0.04) 0%, transparent 70%),
+                radial-gradient(ellipse 60% 50% at 80% 50%, rgba(239,83,80,0.04) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+/* ── Top bar ── */
+.topbar {
+    flex-shrink: 0;
+    height: 36px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 24px;
+    font-family: var(--font-head);
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.topbar .league-tag {
+    display: flex; flex-direction: column; gap: 1px;
+    font-weight: 700; color: var(--gold);
+}
+.topbar .league-name {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px;
+}
+.topbar .kickoff {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 400;
+    letter-spacing: 0.5px;
+    text-transform: none;
+}
+.topbar .league-tag .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+    animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.status-pill {
+    background: rgba(46,125,50,0.12);
+    border: 1px solid rgba(46,125,50,0.35);
+    color: #2e7d32;
+    padding: 2px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+}
+
+/* ── Main columns ── */
+.main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 552px 1fr;
+    overflow: hidden;
+    padding: 16px 42px 23px 42px;
+    gap: 16px;
+    align-items: start;
+}
+
+/* ════════════════════════════
+   LEFT COLUMN
+════════════════════════════ */
+.left-col {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(0,0,0,0.55);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg);
+    height: auto;
+}
+
+/* ── League info inside left col ── */
+.league-info-block {
+    display: flex;
+    align-items: center;
+    padding: 8px 24px 0;
+    background: linear-gradient(160deg, var(--surface) 0%, var(--bg) 100%);
+}
+.league-name-row {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-head);
+    font-size: 15px;
+    font-weight: 700;
+    color: #111111;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.league-name-row .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+    animation: pulse 2s ease-in-out infinite;
+    flex-shrink: 0;
+}
+.kickoff-inline {
+    font-family: var(--font-head);
+    font-size: 15px;
+    font-weight: 400;
+    color: var(--muted);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    margin-left: 10px;
+}
+
+/* ── Score block ── */
+.score-block {
+    flex-shrink: 0;
+    padding: 12px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(160deg, var(--surface) 0%, var(--bg) 100%);
+}
+
+.score-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.team-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.team-badge {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+.badge-home {
+    background: var(--home-dim);
+    border: 1.5px solid #1a9fd4;
+    color: #111111;
+    box-shadow: 0 0 8px rgba(79,195,247,0.15);
+}
+.badge-away {
+    background: var(--away-dim);
+    border: 1.5px solid #e53935;
+    color: #111111;
+    box-shadow: 0 0 8px rgba(239,83,80,0.15);
+}
+.team-label {
+    font-family: var(--font-head);
+    font-size: clamp(13px, 2vw, 20px);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-align: center;
+    width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.team-form { display: none; }
+
+.score-center { text-align: center; }
+.score-nums {
+    font-family: var(--font-head);
+    font-size: 72px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: 6px;
+}
+.s-home { color: #111111; text-shadow: none; }
+.s-sep  { color: var(--muted); font-size: 42px; margin: 0 4px; }
+.s-away { color: #111111; text-shadow: none; }
+.score-time { font-size: 13px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; font-family: var(--font-head); }
+
+/* ── Goals row ── */
+.goals-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: clamp(11px, 1.6vw, 18px);
+    color: var(--muted);
+    line-height: 1.7;
+    gap: 8px;
+}
+.goals-home { color: #111111; flex: 1; overflow: hidden; }
+.goals-away { text-align: right; color: #111111; flex: 1; overflow: hidden; }
+.goal-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.goal-item::before { content: '⚽ '; }
+.red-item::before  { content: '🟥 '; }
+.red-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Substitution row ── */
+.subs-row {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 20px 8px;
+    font-size: clamp(9px, 1.1vw, 13px);
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+    line-height: 1.7;
+}
+.subs-home { color: #111111; flex: 1; overflow: hidden; }
+.subs-away { text-align: right; color: #111111; flex: 1; overflow: hidden; }
+.sub-item {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sub-item::before { content: '🔄 '; }
+
+/* ── Formation labels ── */
+.formation-row {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 24px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-head);
+    font-size: 20px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+.form-home { color: #111111; font-weight: 700; }
+.form-label { color: var(--muted); font-size: 17px; }
+.form-away  { color: #111111; font-weight: 700; }
+
+/* ── Stats ── */
+.stats-block {
+    flex: 1;
+    overflow: hidden;
+    padding: 8px 24px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.stats-header-row {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-head);
+    font-size: 17px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+.stats-header-row .h { color: #111111; font-weight: 700; }
+.stats-header-row .a { color: #111111; font-weight: 700; }
+
+.stat-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.stat-val {
+    font-family: var(--font-head);
+    font-size: 16px;
+    font-weight: 700;
+    width: 30px;
+    text-align: right;
+}
+.stat-val.home { color: var(--home); }
+.stat-val.away { color: var(--away); text-align: left; }
+.stat-name {
+    width: 108px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+}
+.stat-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+}
+.bar-h {
+    background: linear-gradient(to right, rgba(79,195,247,0.5), var(--home));
+    border-radius: 4px 0 0 4px;
+    transition: width 1s ease;
+}
+.bar-a {
+    background: linear-gradient(to left, rgba(239,83,80,0.5), var(--away));
+    border-radius: 0 4px 4px 0;
+    transition: width 1s ease;
+}
+/* possession special */
+.stat-row.possession .bar-h { border-radius: 4px 0 0 4px; }
+.stat-row.possession .bar-a { border-radius: 0 4px 4px 0; flex: 1; }
+
+/* ════════════════════════════
+   RIGHT COLUMN – PITCH
+════════════════════════════ */
+.right-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 4px 10px 4px 10px;
+    overflow: hidden;
+    height: 100%;
+}
+
+.pitch-outer {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: hidden;
+}
+
+/* pitch: 10% larger — height fills available space minus topbar+padding */
+.pitch {
+    position: relative;
+    height: calc(720px - 36px - 8px);
+    max-height: calc(720px - 36px - 8px);
+    width: auto;
+    aspect-ratio: 78 / 100;
+    background: var(--pitch);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.6);
+}
+
+/* stripe pattern */
+.pitch::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0, transparent 7%,
+        rgba(0,0,0,0.1) 7%, rgba(0,0,0,0.1) 14%
+    );
+}
+
+/* pitch SVG lines */
+.pitch-svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+}
+
+/* player dots */
+.player {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+.p-dot {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-head);
+    font-size: 7.5px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    border: 2px solid rgba(255,255,255,0.7);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+.p-home .p-dot { background: var(--home); color: #0d1117; }
+.p-away .p-dot { background: var(--away); color: #fff; }
+.p-gk .p-dot   { background: var(--gold) !important; color: #0d1117 !important; border-color: rgba(255,255,255,0.9); }
+.p-name {
+    margin-top: 2px;
+    font-size: 19px;
+    font-weight: 600;
+    font-family: var(--font-head);
+    letter-spacing: 0.3px;
+    color: #fff;
+    background: rgba(0,0,0,0.6);
+    padding: 1px 5px;
+    border-radius: 2px;
+    white-space: nowrap;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* legend hidden */
+.pitch-legend { display: none; }
+
+/* ── Safe Zone Overlay ── */
+#safe-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    background: transparent;
+}
+.sz-box {
+    position: absolute;
+    background: transparent;
+}
+.sz-action {
+    top: 23px; left: 42px; right: 42px; bottom: 23px;
+    border: 2px dashed rgba(180,130,0,0.6);
+}
+.sz-title {
+    top: 36px; left: 64px; right: 64px; bottom: 36px;
+    border: 2px dashed rgba(0,120,180,0.6);
+}
+.sz-label {
+    position: absolute;
+    font-family: var(--font-head);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+.sz-label-action { top: 26px; left: 46px; color: rgba(140,100,0,0.9); background: rgba(255,220,0,0.15); }
+.sz-label-title  { top: 39px; left: 68px; color: rgba(0,90,140,0.9);  background: rgba(0,180,255,0.12); }
+.sz-bottom {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 50px;
+    background: rgba(180,0,0,0.06);
+    border-top: 2px dashed rgba(160,0,0,0.4);
+}
+.sz-label-bottom { bottom: 54px; right: 12px; color: rgba(140,0,0,0.8); background: rgba(255,100,100,0.1); }
+#sz-toggle {
+    position: absolute;
+    top: 6px; right: 8px;
+    pointer-events: auto;
+    background: rgba(0,0,0,0.12);
+    color: #333;
+    border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-family: var(--font-head);
+    letter-spacing: 0.5px;
+    cursor: pointer;
+}
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.score-block  { animation: fadeUp 0.5s ease both; }
+.formation-row{ animation: fadeUp 0.5s 0.1s ease both; }
+.stats-block  { animation: fadeUp 0.5s 0.2s ease both; }
+.right-col    { animation: fadeUp 0.5s 0.15s ease both; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+    <!-- TOP BAR -->
+    <div class="topbar">
+        <span></span>
+        <span class="status-pill" id="match-status">試合終了</span>
+    </div>
+
+    <div class="main">
+
+        <!-- ════ LEFT COLUMN ════ -->
+        <div class="left-col">
+
+            <!-- League + Kickoff info -->
+            <div class="league-info-block">
+                <div class="league-name-row">
+                    <span class="dot"></span>
+                    <span id="league-name">リーグ名 · 第○節</span>
+                    <span class="kickoff-inline" id="kickoff-time">YYYY年MM月DD日（曜）HH:MM JST</span>
+                </div>
+            </div>
+
+            <!-- Score -->
+            <div class="score-block">
+                <div class="score-row">
+                    <div class="team-info">
+                        <div class="team-badge badge-home" id="badge-home">HOM</div>
+                        <div class="team-label" id="team-home">ホームチーム</div>
+                        <div class="team-form" id="form-home"></div>
+                    </div>
+                    <div class="score-center">
+                        <div class="score-nums">
+                            <span class="s-home" id="score-home">0</span>
+                            <span class="s-sep">–</span>
+                            <span class="s-away" id="score-away">0</span>
+                        </div>
+                        <div class="score-time" id="score-time">試合終了 · 90'</div>
+                    </div>
+                    <div class="team-info">
+                        <div class="team-badge badge-away" id="badge-away">AWY</div>
+                        <div class="team-label" id="team-away">アウェイチーム</div>
+                        <div class="team-form" id="form-away"></div>
+                    </div>
+                </div>
+                <div class="goals-row">
+                    <div class="goals-home" id="goals-home"><!-- 例: <div class="goal-item">選手名 00'</div> --></div>
+                    <div class="goals-away" id="goals-away"></div>
+                </div>
+            </div>
+
+            <!-- Substitution row -->
+            <div class="subs-row">
+                <div class="subs-home" id="subs-home"><!-- 例: <div class="sub-item">選手OUT → 選手IN 60'</div> --></div>
+                <div class="subs-away" id="subs-away"></div>
+            </div>
+
+            <!-- Formation row -->
+            <div class="formation-row">
+                <span class="form-home" id="fl-home">–</span>
+                <span class="form-label">フォーメーション</span>
+                <span class="form-away" id="fl-away">–</span>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-block">
+                <div class="stats-header-row" style="display:none;">
+                    <span class="h" id="stats-team-home">ホーム</span>
+                    <span style="flex:1;text-align:center">スタッツ</span>
+                    <span class="a" id="stats-team-away">アウェイ</span>
+                </div>
+                <div id="stats-container"></div>
+            </div>
+        </div>
+
+        <!-- ════ RIGHT COLUMN ════ -->
+        <div class="right-col">
+            <div class="pitch-outer">
+                <div style="display:flex;flex-direction:column;align-items:flex-start;height:100%;justify-content:center;gap:4px;width:100%;">
+                    <div class="pitch" id="pitch">
+                        <svg class="pitch-svg" viewBox="0 0 100 154" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="14" y="2"  width="72" height="150" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
+                            <line x1="14" y1="77" x2="86" y2="77" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
+                            <circle cx="50" cy="77" r="11.5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
+                            <circle cx="50" cy="77" r="0.9" fill="rgba(255,255,255,0.4)"/>
+                            <rect x="29" y="2"  width="42" height="18" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>
+                            <rect x="39" y="2"  width="22" height="7.5" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>
+                            <circle cx="50" cy="13.5" r="0.8" fill="rgba(255,255,255,0.3)"/>
+                            <rect x="29" y="134" width="42" height="18" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>
+                            <rect x="39" y="144.5" width="22" height="7.5" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>
+                            <circle cx="50" cy="140.5" r="0.8" fill="rgba(255,255,255,0.3)"/>
+                            <rect x="43" y="0.2" width="14" height="2.5" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.6"/>
+                            <rect x="43" y="151.3" width="14" height="2.5" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="0.6"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /main -->
+</div><!-- /wrapper -->
+
+<script>
+// ══════════════════════════════════════════
+// ここを試合ごとに書き換えてください
+// ══════════════════════════════════════════
+
+const matchData = {
+    league:   'リーグ名 · 第○節',
+    kickoff:  'YYYY年MM月DD日（曜）HH:MM JST',
+    status:   '試合終了',
+    scoreTime:'試合終了 · 90\'',
+    home: { abbr: 'HOM', name: 'ホームチーム', score: 0,
+        goals: [],
+        reds:  [],
+        subs:  [],
+    },
+    away: { abbr: 'AWY', name: 'アウェイチーム', score: 0,
+        goals: [],
+        reds:  [],
+        subs:  [],
+    },
+};
+
+const lineups = {
+    HOME: [
+        { name: 'GK', pos: 'goalkeeper' },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'MF', pos: 'midfielder' },
+        { name: 'MF', pos: 'midfielder' },
+        { name: 'MF', pos: 'midfielder' },
+        { name: 'FW', pos: 'forward'    },
+        { name: 'FW', pos: 'forward'    },
+        { name: 'FW', pos: 'forward'    },
+    ],
+    AWAY: [
+        { name: 'GK', pos: 'goalkeeper' },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'DF', pos: 'defender'   },
+        { name: 'MF', pos: 'midfielder' },
+        { name: 'MF', pos: 'midfielder' },
+        { name: 'MF', pos: 'midfielder' },
+        { name: 'FW', pos: 'forward'    },
+        { name: 'FW', pos: 'forward'    },
+        { name: 'FW', pos: 'forward'    },
+    ],
+};
+
+const statsData = [
+    { label: 'ポゼッション', hv: 50, av: 50, unit: '%' },
+    { label: 'シュート',     hv: 0,  av: 0  },
+    { label: '枠内シュート', hv: 0,  av: 0  },
+    { label: 'コーナー',     hv: 0,  av: 0  },
+    { label: 'ファウル',     hv: 0,  av: 0  },
+    { label: 'イエロー',     hv: 0,  av: 0  },
+];
+
+// ══════════════════════════════════════════
+// 以下は変更不要
+// ══════════════════════════════════════════
+
+function applyMatchData() {
+    document.getElementById('league-name').textContent    = matchData.league;
+    document.getElementById('kickoff-time').textContent   = matchData.kickoff;
+    document.getElementById('match-status').textContent   = matchData.status;
+    document.getElementById('score-time').textContent     = matchData.scoreTime;
+    document.getElementById('badge-home').textContent     = matchData.home.abbr;
+    document.getElementById('badge-away').textContent     = matchData.away.abbr;
+    document.getElementById('team-home').textContent      = matchData.home.name;
+    document.getElementById('team-away').textContent      = matchData.away.name;
+    document.getElementById('score-home').textContent     = matchData.home.score;
+    document.getElementById('score-away').textContent     = matchData.away.score;
+    document.getElementById('stats-team-home').textContent= matchData.home.name;
+    document.getElementById('stats-team-away').textContent= matchData.away.name;
+
+    const gh = document.getElementById('goals-home');
+    const ga = document.getElementById('goals-away');
+
+    function buildEvents(data) {
+        const goals = (data.goals || []).map(g => `<div class="goal-item">${g}</div>`);
+        const reds  = (data.reds  || []).map(r => `<div class="red-item">${r}</div>`);
+        return goals.join('') + reds.join('');
+    }
+
+    gh.innerHTML = buildEvents(matchData.home);
+    ga.innerHTML = buildEvents(matchData.away);
+
+    // 4件以上あればフォント縮小
+    const homeCount = (matchData.home.goals||[]).length + (matchData.home.reds||[]).length;
+    const awayCount = (matchData.away.goals||[]).length + (matchData.away.reds||[]).length;
+    const maxCount  = Math.max(homeCount, awayCount);
+    const goalsRow  = document.querySelector('.goals-row');
+    if (maxCount >= 6)      goalsRow.style.fontSize = '11px';
+    else if (maxCount >= 4) goalsRow.style.fontSize = '14px';
+
+    const sh = document.getElementById('subs-home');
+    const sa = document.getElementById('subs-away');
+    sh.innerHTML = matchData.home.subs.map(s => `<div class="sub-item">${s}</div>`).join('');
+    sa.innerHTML = matchData.away.subs.map(s => `<div class="sub-item">${s}</div>`).join('');
+}
+
+function detectFormation(players) {
+    const def = players.filter(p => p.pos === 'defender').length;
+    const mid = players.filter(p => p.pos === 'midfielder').length;
+    const fwd = players.filter(p => p.pos === 'forward').length;
+    return `${def}-${mid}-${fwd}`;
+}
+
+function layoutPlayers(players, isHome) {
+    const order = ['goalkeeper','defender','midfielder','forward'];
+    const yLines = isHome ? [6,17,30,42] : [94,83,70,58];
+    const result = [];
+    order.forEach((pos, li) => {
+        const line = players.filter(p => p.pos === pos);
+        line.forEach((pl, i) => {
+            const n = line.length;
+            const x = n === 1 ? 50 : 18 + (64 / (n - 1)) * i;
+            result.push({ ...pl, x, y: yLines[li], isHome });
+        });
+    });
+    return result;
+}
+
+function posLabel(pos) {
+    return { goalkeeper:'GK', defender:'DF', midfielder:'MF', forward:'FW' }[pos] || '';
+}
+
+function renderPitch() {
+    const pitch = document.getElementById('pitch');
+    const fh = detectFormation(lineups.HOME);
+    const fa = detectFormation(lineups.AWAY);
+    ['form-home','fl-home'].forEach(id => document.getElementById(id).textContent = fh);
+    ['form-away','fl-away'].forEach(id => document.getElementById(id).textContent = fa);
+
+    [...layoutPlayers(lineups.HOME, true), ...layoutPlayers(lineups.AWAY, false)].forEach(p => {
+        const div = document.createElement('div');
+        div.className = `player ${p.isHome ? 'p-home' : 'p-away'} ${p.pos === 'goalkeeper' ? 'p-gk' : ''}`;
+        div.style.left = p.x + '%';
+        div.style.top  = p.y + '%';
+        div.innerHTML  = `<div class="p-dot">${posLabel(p.pos)}</div><div class="p-name">${p.name}</div>`;
+        pitch.appendChild(div);
+    });
+}
+
+function renderStats() {
+    const container = document.getElementById('stats-container');
+    statsData.forEach(s => {
+        const total = s.hv + s.av || 1;
+        const hw = (s.hv / total * 100).toFixed(1);
+        const aw = (s.av / total * 100).toFixed(1);
+        const hDisp = s.hv + (s.unit || '');
+        const aDisp = s.av + (s.unit || '');
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;width:100%;';
+        row.innerHTML = `
+            <div style="font-size:24px;min-width:42px;text-align:right;font-family:var(--font-head);font-weight:700;color:#111111;">${hDisp}</div>
+            <div style="width:110px;text-align:center;font-size:17px;color:var(--muted);flex-shrink:0;">${s.label}</div>
+            <div style="flex:1;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;display:flex;">
+                <div style="width:${hw}%;background:linear-gradient(to right,rgba(79,195,247,0.45),var(--home));border-radius:4px 0 0 4px;"></div>
+                <div style="width:${aw}%;background:linear-gradient(to left,rgba(239,83,80,0.45),var(--away));border-radius:0 4px 4px 0;"></div>
+            </div>
+            <div style="font-size:24px;min-width:42px;text-align:left;font-family:var(--font-head);font-weight:700;color:#111111;">${aDisp}</div>
+        `;
+        container.appendChild(row);
+    });
+}
+
+applyMatchData();
+renderPitch();
+renderStats();
+</script>
+</body>
+</html>

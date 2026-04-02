@@ -71,6 +71,10 @@ button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; f
   <input type="date" id="date" />
   <button class="btn-fetch" onclick="fetchCandidates()">📥 取得</button>
 </div>
+<div class="row" style="margin-bottom: 8px; display: none;" id="bulkBtns">
+  <button style="background:#444; color:#eee; flex:1; padding:6px; font-size:12px; border-radius:4px;" onclick="selectAll(true)">✅ 全選択</button>
+  <button style="background:#444; color:#eee; flex:1; padding:6px; font-size:12px; border-radius:4px;" onclick="selectAll(false)">❌ 全解除</button>
+</div>
 <div id="mainScreen">
   <div id="results"></div>
   <div class="selected-count" id="selectedCount"></div>

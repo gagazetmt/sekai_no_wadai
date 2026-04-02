@@ -1,0 +1,22 @@
+[案件生成 2026/4/2 23:51:46]
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: 🤖 agentic secret storage: https://dotenvx.com/as2
+
+=== コンテンツ生成 (2026-04-02) ===
+対象: 2件
+
+▶ [1/2] [注目トピック] Graham Potter: "Look at this. This is a fucking team. And we're going to the fucking World Cup, Baby."
+  [1] コメント取得中... ▶ [2/2] [注目トピック] 日本代表、「対W杯優勝経験国」で残る未勝利はイタリアのみ！森保監督がブラジル、スペイン、ドイツ、イングランドを撃破
+  [2] コメント取得中... 0件
+  [2] キーワード抽出中... 15件
+  [1] キーワード抽出中... "Graham Potter: "Look at this. This is a fucking team. And we're going to the fuc" / entities: [Graham Potter]
+  [1] X取得中 [Graham Potter: "Look at this. ]... "Japan Italy unbeaten record Moriyasu Brazil Spain Germany En" / entities: [Italy, Morihiro, Brazil]
+  [2] X取得中 [Japan Italy unbeaten record Mo]... 公式0枚 / KW画像0枚 / Xコメント0件
+  [1] コンテンツ生成中... 公式10枚 / KW画像0枚 / Xコメント6件
+  [2] Wikimedia取得中 [Luciano Spalletti, Dorival Junior, Junya Ito]... 6枚
+  [2] コンテンツ生成中... ✅
+✅
+
+
+✅ 完了！2件を新規作成・更新 / 計2件を保存
+   → C:\Users\USER\Documents\side_biz\02_reddit_global\temp\soccer_yt_content_2026-04-02.json

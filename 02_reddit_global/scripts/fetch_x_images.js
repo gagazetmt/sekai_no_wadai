@@ -49,12 +49,13 @@ async function fetchXImages(keyword, prefix, limit = 10, queryType = "Latest") {
   if (!API_KEY)  { console.warn("TWITTER_API_IO_KEY not set"); return []; }
   if (!keyword)  return [];
 
+  // 検索クエリを調整: Latest を優先しつつ、より広い範囲を狙う
   let tweets = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const res = await axios.get(BASE_URL + "/twitter/tweet/advanced_search", {
         headers: { "X-API-Key": API_KEY },
-        params:  { query: keyword, queryType },
+        params:  { query: keyword, queryType: queryType || "Latest" },
         timeout: 20000,
       });
       tweets = res.data?.tweets || res.data?.data?.tweets || res.data?.data || [];
@@ -68,17 +69,25 @@ async function fetchXImages(keyword, prefix, limit = 10, queryType = "Latest") {
 
 
   const imagePaths = [];
+  const seenUrls   = new Set();
   for (const tweet of tweets) {
     if (imagePaths.length >= limit) break;
     const mediaUrls = extractMediaUrls(tweet);
+    // 1つのツイートから取得する画像は最大2枚までに制限（バリエーション確保）
+    let perTweetCount = 0;
     for (const url of mediaUrls) {
       if (imagePaths.length >= limit) break;
+      if (perTweetCount >= 2) break;
+      if (seenUrls.has(url)) continue; // 重複URLはスキップ
+
       try {
         const ext      = url.includes(".png") ? "png" : "jpg";
         const fileName = prefix + "_x" + (imagePaths.length + 1) + "." + ext;
         const filePath = path.join(IMG_DIR, fileName);
         await downloadImage(url, filePath);
         imagePaths.push(filePath);
+        seenUrls.add(url);
+        perTweetCount++;
       } catch { /* skip */ }
     }
   }

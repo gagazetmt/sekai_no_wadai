@@ -522,11 +522,12 @@ function withLoop(html, ms) {
 // ─── API: コンテンツ読み込み ───────────────────────────────────────────────────
 app.get("/api/content/:date", (req, res) => {
   const file = path.join(TEMP_DIR, `soccer_yt_content_${req.params.date}.json`);
-  if (!fs.existsSync(file)) return res.json({ posts: [] });
+  if (!fs.existsSync(file)) return res.json({ posts: [], pendingPosts: [], generatedPosts: [] });
   const data = JSON.parse(fs.readFileSync(file, "utf8"));
 
-  // 実画像が10枚未満のpostにstock5枚を補完（全記事種別対象）
-  for (const post of (data.posts || [])) {
+  const posts = data.posts || [];
+  // 実画像が10枚未満のpostにstock5枚を補完
+  for (const post of posts) {
     const realCount = (post.imagePaths || []).length;
     if (realCount < 10) {
       const searchText = [
@@ -541,6 +542,10 @@ app.get("/api/content/:date", (req, res) => {
       post._stockImages = [];
     }
   }
+
+  // 未生成と生成済みに振り分け
+  data.pendingPosts   = posts.filter(p => !p.isGenerated);
+  data.generatedPosts = posts.filter(p => p.isGenerated);
 
   res.json(data);
 });
@@ -810,12 +815,19 @@ app.post("/api/tts/scene", async (req, res) => {
 // ─── API: 動画生成実行 ────────────────────────────────────────────────────────
 app.post("/api/run-video", (req, res) => {
   if (videoJob.running) return res.json({ ok: false, message: "生成中です" });
-  const { date, count } = req.body;
+  const { date, count, indices } = req.body;
   if (!date) return res.status(400).json({ error: "date が必要です" });
 
   videoJob = { running: true, log: [], done: false, exitCode: null };
   const args = [path.join(__dirname, "scripts", "generate_soccer_yt_video.js"), date];
-  if (count) args.push(String(count));
+  
+  if (indices && indices.length > 0) {
+    // 特定のインデックス指定（例: "0,2,5"）
+    args.push(indices.join(","));
+  } else if (count) {
+    // 従来の件数指定
+    args.push(String(count));
+  }
 
   const proc = spawn(process.execPath, args, { cwd: __dirname, env: process.env });
   proc.stdout.on("data", d => videoJob.log.push(d.toString()));
@@ -1190,12 +1202,20 @@ async function loadContent() {
   if (!date) return status("日付を選択してください", "err");
   const r = await fetch("/api/content/" + date);
   const d = await r.json();
-  data = d.posts?.length ? d : { posts: [] };
+  data = d.posts?.length ? d : { posts: [], pendingPosts: [], generatedPosts: [] };
   status(data.posts.length ? data.posts.length + "件読み込み完了" : "コンテンツなし",
          data.posts.length ? "ok" : "err");
   renderSidebar();
-  if (data.posts.length > 0) selectPost(0);
-  else { idx = -1; renderRightGallery(); }
+  
+  // 未生成があればそれを、なければ最初を選択
+  if (data.pendingPosts && data.pendingPosts.length > 0) {
+    const firstPendingIdx = data.posts.indexOf(data.pendingPosts[0]);
+    selectPost(firstPendingIdx);
+  } else if (data.posts.length > 0) {
+    selectPost(0);
+  } else {
+    idx = -1; renderRightGallery();
+  }
 }
 
 // ── 保存 ──────────────────────────────────────────────────────────────────────
@@ -1220,12 +1240,44 @@ function schedulePreview() {
 
 // ── サイドバー ────────────────────────────────────────────────────────────────
 function renderSidebar() {
-  document.getElementById("post-list").innerHTML = data.posts.map((p, i) =>
-    "<div class='post-item" + (i === idx ? " active" : "") + "' onclick='selectPost(" + i + ")'>" +
-    "<span class='post-item-label'>" + esc(p.catchLine1 || "（無題）") + "</span>" +
-    "<button class='post-del' onclick='event.stopPropagation();deletePost(" + i + ")' title='削除'>×</button>" +
-    "</div>"
-  ).join("");
+  const container = document.getElementById("post-list");
+  
+  // 未生成セクション
+  let html = "<div style='font-size:10px; color:#aaa; padding:8px 4px 4px; font-weight:bold;'>📝 未生成</div>";
+  html += "<div style='display:flex;gap:4px;margin-bottom:8px;padding:0 4px;'>" +
+          "<button onclick='toggleAll(true)' style='flex:1;font-size:9px;padding:2px;background:#333;color:#ccc;'>全選択</button>" +
+          "<button onclick='toggleAll(false)' style='flex:1;font-size:9px;padding:2px;background:#333;color:#ccc;'>解除</button>" +
+          "</div>";
+  
+  const pending = (data.posts || []).filter(p => !p.isGenerated);
+  html += pending.map(p => {
+    const i = data.posts.indexOf(p);
+    return "<div class='post-item" + (i === idx ? " active" : "") + "' onclick='selectPost(" + i + ")'>" +
+           "<input type='checkbox' class='post-check' data-idx='" + i + "' onclick='event.stopPropagation()' style='margin-right:6px;cursor:pointer;'>" +
+           "<span class='post-item-label'>" + esc(p.catchLine1 || "（無題）") + "</span>" +
+           "<button class='post-del' onclick='event.stopPropagation();deletePost(" + i + ")' title='削除'>×</button>" +
+           "</div>";
+  }).join("");
+
+  // 生成済みセクション
+  const generated = (data.posts || []).filter(p => p.isGenerated);
+  if (generated.length > 0) {
+    html += "<div style='font-size:10px; color:#4ea; padding:16px 4px 4px; font-weight:bold; border-top:1px solid #333;'>🎬 生成済み</div>";
+    html += generated.map(p => {
+      const i = data.posts.indexOf(p);
+      return "<div class='post-item" + (i === idx ? " active" : "") + "' style='background:rgba(78,238,170,0.05);' onclick='selectPost(" + i + ")'>" +
+             "<span style='margin-right:6px; font-size:11px;'>✅</span>" +
+             "<span class='post-item-label' style='color:#aaa;'>" + esc(p.catchLine1 || "（無題）") + "</span>" +
+             "<button class='post-del' onclick='event.stopPropagation();deletePost(" + i + ")' title='削除'>×</button>" +
+             "</div>";
+    }).join("");
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleAll(checked) {
+  document.querySelectorAll(".post-check").forEach(cb => cb.checked = checked);
 }
 
 function deletePost(i) {
@@ -1991,9 +2043,24 @@ async function runTtsScene(scene) {
 async function runVideo() {
   const date = document.getElementById("date-input").value;
   if (!date) return status("日付を選択してください", "err");
-  if (!confirm("動画を生成します（数分かかります）。よろしいですか？")) return;
+  
+  // チェックされているインデックスを収集
+  const checks = document.querySelectorAll(".post-check:checked");
+  const indices = Array.from(checks).map(cb => parseInt(cb.dataset.idx));
+  
+  if (indices.length === 0) {
+    return status("動画を生成する案件にチェックを入れてください", "err");
+  }
+
+  if (!confirm(indices.length + "件の動画を生成します（数分かかります）。よろしいですか？")) return;
+  
   await saveLocal();
-  await fetch("/api/run-video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, count: data.posts.length }) });
+  await fetch("/api/run-video", { 
+    method: "POST", 
+    headers: { "Content-Type": "application/json" }, 
+    body: JSON.stringify({ date, indices }) 
+  });
+  
   document.getElementById("btn-video").disabled = true;
   status("🎬 動画生成中...", "running");
   showLog(true);
