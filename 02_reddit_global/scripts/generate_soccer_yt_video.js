@@ -574,15 +574,16 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   for (let f = 0; f < totalFrames; f++) {
     const tMs = Math.round((f / FPS) * 1000);
 
-    // アニメーション時刻をセット（rAF待ち不要・screenshot が強制レンダリングを起動）
-    await page.evaluate((tMs) => {
+    // アニメーション時刻をセットしてrAFで描画完了を待つ（screencastは使わない）
+    await page.evaluate((tMs) => new Promise(resolve => {
       document.getAnimations().forEach(a => {
         a.pause();
         try { a.currentTime = tMs; } catch (_) {}
       });
-    }, tMs);
+      requestAnimationFrame(resolve);
+    }), tMs);
 
-    // screenshot でオンデマンド即座キャプチャ（VPSでのrAFスロットリングを回避）
+    // rAF後に screenshot でキャプチャ（screencastのイベントキュー遅延を排除）
     const buf = await page.screenshot({ type: "jpeg", quality: 80 });
 
     const ok = ffmpegProc.stdin.write(buf);
