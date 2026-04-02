@@ -551,6 +551,9 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   const html = slideHtml.replace("</head>", `${injectStyle}</head>`);
   await page.setContent(html, { waitUntil: "load", timeout: 120000 });
 
+  // CDP セッション（1スライドごとに作成・破棄）
+  const client = await page.createCDPSession();
+
   // FFmpeg を stdin パイプで先に起動
   const ffmpegProc = spawn(FFMPEG, [
     "-y",
@@ -571,24 +574,45 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
     ffmpegProc.stderr.on("data", () => {}); // drain
   });
 
+  // screencastFrame をキュー＋ウェイターで受け取る
+  const queue = [];
+  const waiters = [];
+  client.on("Page.screencastFrame", async ({ data, sessionId }) => {
+    await client.send("Page.screencastFrameAck", { sessionId });
+    const buf = Buffer.from(data, "base64");
+    if (waiters.length > 0) waiters.shift()(buf);
+    else queue.push(buf);
+  });
+
+  // rAF 完了後（paint 前）にキューをクリアして最新フレームを待つ
+  const nextFrame = () =>
+    queue.length > 0 ? Promise.resolve(queue.shift()) : new Promise(r => waiters.push(r));
+
+  await client.send("Page.startScreencast", { format: "jpeg", quality: 80, everyNthFrame: 1 });
+
   for (let f = 0; f < totalFrames; f++) {
     const tMs = Math.round((f / FPS) * 1000);
 
-    // アニメーション時刻をセット（rAF待ち不要・screenshot が強制レンダリングを起動）
-    await page.evaluate((tMs) => {
+    // アニメーション時刻を設定し rAF でレンダリングサイクルを確実に起動
+    await page.evaluate((tMs) => new Promise(resolve => {
       document.getAnimations().forEach(a => {
         a.pause();
         try { a.currentTime = tMs; } catch (_) {}
       });
-    }, tMs);
+      requestAnimationFrame(resolve); // rAF は paint 前に解決
+    }), tMs);
 
-    // screenshot でオンデマンド即座キャプチャ（VPSでのrAFスロットリングを回避）
-    const buf = await page.screenshot({ type: "jpeg", quality: 80 });
+    // evaluate（rAF）解決後 = paint/composite 前なのでキューは古いフレームのみ
+    // → クリアして次の composite で届く最新フレームを待つ
+    queue.length = 0;
+    const buf = await nextFrame();
 
     const ok = ffmpegProc.stdin.write(buf);
     if (!ok) await new Promise(r => ffmpegProc.stdin.once("drain", r));
   }
 
+  await client.send("Page.stopScreencast");
+  await client.detach();
   ffmpegProc.stdin.end();
   await ffmpegDone;
 }
