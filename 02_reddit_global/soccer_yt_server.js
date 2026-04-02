@@ -822,8 +822,8 @@ app.post("/api/run-video", (req, res) => {
   const args = [path.join(__dirname, "scripts", "generate_soccer_yt_video.js"), date];
   
   if (indices && indices.length > 0) {
-    // 特定のインデックス指定（例: "0,2,5"）
-    args.push(indices.join(","));
+    // 特定のインデックス指定（例: "0,2,5"）末尾カンマで件数指定と区別
+    args.push(indices.join(",") + ",");
   } else if (count) {
     // 従来の件数指定
     args.push(String(count));
