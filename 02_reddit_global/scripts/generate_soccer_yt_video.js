@@ -864,7 +864,24 @@ async function main() {
       );
 
       // ── ⑤ 音声トラック合成 ───────────────────────────────────────────────
-      // ランチャーが生成したコメント個別音声（cmt_2_*.wav / cmt_3_*.wav）を収集
+      // コメント個別音声を自動生成（未生成のもののみ）
+      for (const [si, slideData] of [[2, post.slide3], [3, post.slide4]]) {
+        if (!slideData?.comments?.length) continue;
+        const cmtKey = si === 2 ? "2" : "3";
+        for (let ci = 0; ci < slideData.comments.length; ci++) {
+          const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
+          if (fs.existsSync(p)) continue;
+          const text = (slideData.comments[ci].text || "").replace(/\n/g, "　").trim();
+          if (!text) continue;
+          try {
+            await generateNarration(text, p);
+          } catch (e) {
+            console.warn(`  ⚠️ コメント音声失敗 [cmt_${cmtKey}_${ci}]: ${e.message}`);
+          }
+        }
+      }
+
+      // コメント個別音声（cmt_2_*.wav / cmt_3_*.wav）を収集
       const extraAudios = [];
       let cumSlideMs = 0;
       for (const [si, slideData] of [[2, post.slide3], [3, post.slide4]]) {
