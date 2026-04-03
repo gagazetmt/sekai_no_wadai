@@ -262,21 +262,20 @@ function buildS2(post, narrDurSec = null) {
     : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
 
   const subParts = splitSubText(post.overviewNarration || post.overviewTelop || "");
-  const S2_BOX_START  = 1.5;  // 字幕ボックス出現タイミング
-  const S2_TEXT_START = 3.0;  // テキスト表示開始（PHASE_OFFSETS[1]=3000msに合わせる）
-  let _t = S2_TEXT_START;
-  // 実際のナレーション秒数を文字数比例で各パートに配分（均等より自然）
-  const totalSubSec = narrDurSec !== null
-    ? Math.max(narrDurSec, subParts.length * 1.5)
-    : subParts.reduce((s, p) => s + Math.max(1.5, p.replace(/\s/g, "").length / 8.0), 0);
+  const S2_BOX_START  = 0.5;
+  const S2_TEXT_START = W_S2_START; // 遷移1秒後に字幕表示開始
+  
+  let _st = S2_TEXT_START;
+  const STN_DUR = narrDurSec !== null ? narrDurSec : subParts.reduce((s, p) => s + Math.max(1.5, p.replace(/\s/g, "").length / 8.0), 0);
   const totalCharsS2 = subParts.reduce((s, p) => s + Math.max(1, p.replace(/\s/g, "").length), 0);
+
   const subHtml = subParts.map((p, i) => {
-    const start = _t.toFixed(1);
-    const chars  = Math.max(1, p.replace(/\s/g, "").length);
-    const dur    = totalSubSec * (chars / totalCharsS2);
-    _t += dur;
+    const start = _st.toFixed(2);
+    const chars = Math.max(1, p.replace(/\s/g, "").length);
+    const dur   = STN_DUR * (chars / totalCharsS2);
+    _st += dur;
     const isLast = i === subParts.length - 1;
-    const fadeOut = isLast ? "" : `,fadeOut 0.3s ${(_t - 0.3).toFixed(1)}s ease-out forwards`;
+    const fadeOut = isLast ? "" : `,fadeOut 0.3s ${(_st - 0.3).toFixed(2)}s ease-out forwards`;
     return `<div class="sub-part" style="animation:fadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
   }).join("");
   const subH = Math.round((Math.round(53 * 1.55) + 44) * 1.21);
@@ -307,60 +306,44 @@ function buildS2(post, narrDurSec = null) {
   </div></body></html>`;
 }
 
-// ─── コメントタイミング計算（buildCommentSlide / calcCommentSlideDurMs 共通） ──
-// narrDurSec: 実際のナレーション秒数（null = テキスト文字数から推定）
-// 戻り値: { delays: number[], narrEstSec: number, endTimeSec: number, comments: array }
-function calcCommentTiming(slide, narrDurSec) {
-  const CMT_AFTER_NARR = 2.0;
-  const CMT_GAP        = 0.8;
-  const FONT_SIZE      = 49;
-  const LINE_H_PX      = Math.round(FONT_SIZE * 1.4);
-  const CARD_PAD_V     = 20;
-  const GAP            = 20;
-  const AREA_TOP_PX    = SAFE + 60;
-  const AREA_BOTTOM_PX = 110;
-  const AVAILABLE_H    = H - AREA_TOP_PX - AREA_BOTTOM_PX;
-  const CHARS_PER_LINE = Math.floor((W - 2 * SAFE - 2 * 18) / FONT_SIZE);
+// ─── 相棒の設計図：待機時間定数 ──────────────────────────────────────────
+const W_S1_START = 1.0; // S1開始後の待機（TBN前）
+const W_S1_END   = 3.0; // S1-TBN終了後の待機
+const W_S2_START = 1.0; // S2遷移後の待機（ST/STN開始まで）
+const W_S2_END   = 2.0; // S2-STN終了後の待機
+const W_S3_START = 1.0; // S3/S4遷移後の待機（ST/STN開始まで）
+const W_S3_CB_DELAY = 2.0; // S3/S4-STN終了からCB表示開始までの待機
+const W_CBN_GAP  = 1.0; // 前のCBN終了から次のCBN開始までの待機
+const W_S5_WAIT  = 4.0; // S5遷移後の待機（アウトロ表示まで）
+const W_S5_END   = 2.0; // S5-TBN終了後の余韻
 
-  function estimateLines(text) {
-    // JSONから来た実際の改行文字(\n=0x0A)と文字数でカード高さを推定
-    return (text || "").split("\n").reduce(
-      (sum, seg) => sum + Math.max(1, Math.ceil(seg.length / CHARS_PER_LINE)), 0
-    );
-  }
-  function cardH(text) { return CARD_PAD_V + estimateLines(text) * LINE_H_PX; }
-
-  // 最大7件から、画面に収まる件数を動的に決定（長いコメントも正しく高さ計算）
-  const allComments = (slide?.comments || []).slice(0, 7);
-  let count = Math.min(allComments.length, 7);
-  while (count > 1) {
-    const sel    = allComments.slice(0, count);
-    const totalH = sel.reduce((s, c) => s + cardH(typeof c === "string" ? c : (c.text || "")), 0)
-                 + (count - 1) * GAP;
-    if (totalH <= AVAILABLE_H) break;
-    count--;
-  }
-  const comments = allComments.slice(0, count);
-
-  const narrText   = (slide?.narration || slide?.subtitleBox || "");
-  const narrEstSec = narrDurSec !== null
-    ? narrDurSec
-    : (slide?.noNarration ? 0 : Math.max(1.2, narrText.replace(/\s/g, "").length / 8.0));
-
-  let _ct = narrEstSec + CMT_AFTER_NARR;
-  const delays = comments.map(c => {
+// ─── コメントタイミング計算（相棒の設計図：実測ベース） ──────────────────────
+// narrDurSec: STNの実測秒数
+// cmtDurs: CBNの実測秒数の配列
+function calcCommentTiming(slide, narrDurSec, cmtDurs = []) {
+  const STN_DUR = narrDurSec || 0;
+  
+  // CB表示開始タイミング（STN終了から2秒後）
+  let _ct = STN_DUR + W_S3_CB_DELAY;
+  
+  const delays = (cmtDurs || []).map((dur, i) => {
     const start = _ct;
-    const txt = typeof c === "string" ? c : (c.text || "");
-    _ct += Math.max(1.2, txt.replace(/\s/g, "").length / 8.0) + CMT_GAP;
+    _ct += dur + W_CBN_GAP; // 次のコメントは前回の終了から1秒後
     return start;
   });
 
-  return { delays, narrEstSec, endTimeSec: _ct, comments };
+  return { 
+    delays, 
+    narrEstSec: STN_DUR, 
+    endTimeSec: _ct, 
+    comments: (slide?.comments || []).slice(0, cmtDurs.length) 
+  };
 }
 
 // ─── S3/S4: コメントスライド ──────────────────────────────────────────────────
-// narrDurSec: 実際のナレーション秒数（null = テキスト文字数から推定）
-function buildCommentSlide(post, slideKey, narrDurSec = null) {
+// narrDurSec: 実際のナレーション秒数（STNの実測秒数）
+// cmtDurs: CBNの実測秒数の配列
+function buildCommentSlide(post, slideKey, narrDurSec = null, cmtDurs = []) {
   const slide   = post[slideKey] || {};
   const imgKey  = slideKey === "slide3" ? "slide3ImagePath" : "slide4ImagePath";
   const { b64, mime, isPortrait } = imgMeta(post[imgKey]);
@@ -382,11 +365,9 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
 
   const topicTag     = slide.topicTag || "";
   const highlightIdx = slide.highlightIdx !== undefined ? parseInt(slide.highlightIdx) : 0;
-  const CMT_AFTER_NARR = 2.0;
-  const GAP            = 20;
 
-  // タイミング計算を共通関数に委譲
-  const { delays: commentDelays, narrEstSec, comments } = calcCommentTiming(slide, narrDurSec);
+  // タイミング計算（実測ベース）
+  const { delays: commentDelays, narrEstSec: STN_DUR, endTimeSec, comments } = calcCommentTiming(slide, narrDurSec, cmtDurs);
   const narrText = slide.narration || slide.subtitleBox || "";
 
   const CMT_BG    = ["#FFF9C4","#C8EEFF","#D4F5D4","#EDD5FF","#FFE8CC","#FFD5EA"];
@@ -395,33 +376,37 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
   const FONT_SIZE      = 49;
   const AREA_TOP_PX    = SAFE + 60;
   const AREA_BOTTOM_PX = 110;
+  const GAP            = 20;
 
   const commentsHtml = comments.map((c, i) => {
     const text = typeof c === "string" ? c : (c.text || "");
     const isHL = i === highlightIdx;
     const side = i % 2 === 0 ? "flex-start" : "flex-end";
     const bg   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
-    return `<div class="c-card${isHL ? " c-hl" : ""}" style="align-self:${side};background:${bg};animation:slideDown 0.45s ${commentDelays[i]}s ease-out both;">
+    // CB表示開始（CBN開始と同時）
+    return `<div class="c-card${isHL ? " c-hl" : ""}" style="align-self:${side};background:${bg};animation:slideDown 0.45s ${commentDelays[i].toFixed(2)}s ease-out both;">
       <div class="c-text">${esc(text).replace(/\n/g, "<br>")}</div>
     </div>`;
   }).join("");
 
-  // 字幕の分割切り替え表示（文字数比例で各パートの表示時間を配分）
+  // 字幕同期（STN実測ベースの比例配分）
   const subParts = splitSubText(narrText);
-  const subH = 130; // 字幕ボックス高さ（48px×1.5行＋余白）
-  let _st = 0;
-  const totalSubSecCmt = narrEstSec > 0
-    ? narrEstSec
-    : Math.max(1.5, narrText.replace(/\s/g, "").length / 8.0);
+  const subH = 130;
+  let _st = W_S3_START;
   const totalCharsCmt = subParts.reduce((s, p) => s + Math.max(1, p.replace(/\s/g, "").length), 0);
   const subPartsHtml = subParts.map((p, i) => {
-    const start = _st.toFixed(1);
+    const start = _st.toFixed(2);
     const chars = Math.max(1, p.replace(/\s/g, "").length);
-    _st += totalSubSecCmt * (chars / totalCharsCmt);
+    const dur   = STN_DUR * (chars / totalCharsCmt);
+    _st += dur;
     const isLast = i === subParts.length - 1;
-    const fadeOut = isLast ? "" : `,subPtFadeOut 0.3s ${(_st - 0.3).toFixed(1)}s ease-out forwards`;
+    // ST表示終了（STN終了まで。BOX自体はBOX_START/ENDのアニメで制御）
+    const fadeOut = isLast ? "" : `,subPtFadeOut 0.3s ${(_st - 0.3).toFixed(2)}s ease-out forwards`;
     return `<div class="sub-part" style="animation:subPtFadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
   }).join("");
+
+  // ST表示ボックス（STN終了から2秒後まで表示）
+  const boxFadeOutTime = (W_S3_START + STN_DUR + W_S3_CB_DELAY).toFixed(2);
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
@@ -437,7 +422,7 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
   @keyframes subFadeOut{to{opacity:0;visibility:hidden;}}
   @keyframes subPtFadeIn{from{opacity:0}to{opacity:1}}
   @keyframes subPtFadeOut{to{opacity:0}}
-  .sub-box{position:absolute;bottom:0;left:0;right:0;min-height:${subH}px;background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);animation:slideUp 0.6s 0s ease-out both, subFadeOut 0.3s ${(narrEstSec + CMT_AFTER_NARR).toFixed(1)}s ease-out forwards;}
+  .sub-box{position:absolute;bottom:0;left:0;right:0;min-height:${subH}px;background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);animation:slideUp 0.6s 0s ease-out both, subFadeOut 0.3s ${boxFadeOutTime}s ease-out forwards;}
   .sub-part{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:18px ${SAFE}px;color:#fff;font-size:48px;font-weight:800;text-align:center;line-height:1.5;overflow-wrap:break-word;opacity:0;}
   .citation{position:absolute;bottom:14px;left:${SAFE}px;color:rgba(255,255,255,0.28);font-size:20px;}
   </style></head><body><div class="bg">
@@ -451,13 +436,14 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
 }
 
 // S3/S4 スライド尺計算（ms）
-// narrDurMs: 実際のナレーション長ms（0 = 失敗 → テキスト推定で計算）
-function calcCommentSlideDurMs(slide, narrDurMs) {
-  const PADDING  = 1500;
-  // narrDurMs=0 のとき null を渡してテキスト推定を使わせる
-  const narrDurSec = narrDurMs > 0 ? narrDurMs / 1000 : null;
-  const { endTimeSec } = calcCommentTiming(slide, narrDurSec);
-  return Math.round(endTimeSec * 1000) + PADDING;
+// narrDurMs: STNの実測ms（0 = 失敗 → デフォルト想定）
+// cmtDurs: CBNの実測秒数の配列
+function calcCommentSlideDurMs(slide, narrDurMs, cmtDurs = []) {
+  const PADDING  = 1000; // 最終CBN終了後の余韻
+  const narrDurSec = narrDurMs > 0 ? narrDurMs / 1000 : 2.0; // 失敗時は2秒想定
+  const { endTimeSec } = calcCommentTiming(slide, narrDurSec, cmtDurs);
+  // S3全体の尺: 遷移(0) + 待機(1) + STN(実測) + 待機(2) + (全CBN + 1s間隔) + 余韻(1)
+  return Math.round((W_S3_START + endTimeSec) * 1000) + PADDING;
 }
 
 // ─── S5: アウトロ ─────────────────────────────────────────────────────────────
@@ -484,7 +470,7 @@ function buildS5(post) {
   ${kbExtra}
   .bg-img{${bgImgCss}}
   .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.22);}
-  .outro-wrap{position:absolute;top:50%;left:${SAFE}px;right:${SAFE}px;transform:translateY(-50%);text-align:center;animation:scaleIn 0.6s 4.0s ease-out both;}
+  .outro-wrap{position:absolute;top:50%;left:${SAFE}px;right:${SAFE}px;transform:translateY(-50%);text-align:center;animation:scaleIn 0.6s ${W_S5_WAIT.toFixed(1)}s ease-out both;}
   .outro-box{display:inline-block;background:#fff;color:#1a6ef5;font-size:68px;font-weight:900;padding:38px 68px;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,0.6);line-height:1.4;max-width:1680px;overflow-wrap:break-word;}
   .account{position:absolute;bottom:${SAFE-10}px;right:${SAFE}px;color:rgba(255,255,255,0.35);font-size:22px;animation:fadeUp 0.4s 1.0s ease-out both;}
   </style></head><body><div class="bg">
@@ -916,124 +902,101 @@ async function main() {
       ];
       const PHASE_OFFSETS = [0, 3000, 1000, 1000, 4000];
 
-      // ── ① ナレーション生成（投稿内は直列・VoiceVox保護） ─────────────────
+      // ── ① ナレーション/コメント音声の先行生成 ─────────────────────────────
       const narrPaths = [];
-      let failCount = 0;
       for (let i = 0; i < narrTexts.length; i++) {
         if (!narrTexts[i]?.trim()) { narrPaths.push(null); continue; }
         const p = path.join(slideDir, `narr_${i}.wav`);
-        try {
-          await generateNarration(narrTexts[i], p);
-          narrPaths.push(p);
-        } catch (err) {
-          console.warn(`  ⚠️ [動画${post.num}] S${i + 1} ナレーション失敗: ${err.message}`);
-          narrPaths.push(null);
-          failCount++;
+        try { await generateNarration(narrTexts[i], p); narrPaths.push(p); }
+        catch (err) { console.warn(`  ⚠️ S${i + 1} TBN/STN失敗: ${err.message}`); narrPaths.push(null); }
+      }
+
+      const cmtDursBySlide = { slide3: [], slide4: [] };
+      let cmtGlobalIdx = 0;
+      for (const [si, slideKey] of [[2, "slide3"], [3, "slide4"]]) {
+        const slideData = post[slideKey];
+        if (!slideData?.comments?.length) continue;
+        const cmtKey = si === 2 ? "2" : "3";
+        for (let ci = 0; ci < slideData.comments.length; ci++) {
+          const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
+          const text = (slideData.comments[ci].text || "").replace(/\n/g, "　").trim();
+          if (!text) { cmtDursBySlide[slideKey].push(0); cmtGlobalIdx++; continue; }
+          if (!fs.existsSync(p)) {
+            const speaker = VV_CMT_SPEAKERS[cmtGlobalIdx % VV_CMT_SPEAKERS.length];
+            try { await narrationVoiceVox(text, p, speaker); }
+            catch (e) { console.warn(`  ⚠️ CBN失敗 [cmt_${cmtKey}_${ci}]: ${e.message}`); }
+          }
+          cmtDursBySlide[slideKey].push(fs.existsSync(p) ? getAudioDuration(p) : 0);
+          cmtGlobalIdx++;
         }
       }
-      if (failCount > 0) console.warn(`  ⚠️ [動画${post.num}] ${failCount}件失敗 → BGMのみで続行`);
 
-      // ── ② スライド尺計算 ─────────────────────────────────────────────────
-      const MIN_NO_NARR = [5000, 7000, 5000, 5000, 6500];
-      const MAX_MS      = [15000, 40000, 90000, 90000, 25000];
-      const PADDING_MS  = 700;
-
-      const narrDurMs = narrPaths.map(p => p ? getAudioDuration(p) : 0);
-
-      const durMs = narrDurMs.map((nd, i) => {
-        if (i === 2 || i === 3) {
-          const slideData = i === 2 ? post.slide3 : post.slide4;
-          // nd=0（ナレーション失敗）でも calcCommentSlideDurMs がテキスト推定で計算
-          return Math.min(calcCommentSlideDurMs(slideData, nd), MAX_MS[i]);
-        }
-        const narrDur = nd > 0 ? nd + PADDING_MS : 0;
-        const total   = PHASE_OFFSETS[i] + (narrDur > 0 ? narrDur : MIN_NO_NARR[i]);
-        return Math.min(total, MAX_MS[i]);
-      });
+      // ── ② スライド尺計算（相棒の設計図：実測ベース） ──────────────────────
+      const narrDurs = narrPaths.map(p => p ? getAudioDuration(p) : 0);
+      const durMs = [
+        Math.round((W_S1_START + narrDurs[0] + W_S1_END) * 1000),
+        Math.round((W_S2_START + narrDurs[1] + W_S2_END) * 1000),
+        calcCommentSlideDurMs(post.slide3, narrDurs[2] * 1000, cmtDursBySlide.slide3),
+        calcCommentSlideDurMs(post.slide4, narrDurs[3] * 1000, cmtDursBySlide.slide4),
+        Math.round((W_S5_WAIT + narrDurs[4] + W_S5_END) * 1000),
+      ];
 
       // ── ③ HTML 生成 ──────────────────────────────────────────────────────
       const htmlArr = [
         buildS1(post),
-        buildS2(post, narrDurMs[1] > 0 ? narrDurMs[1] / 1000 : null),
-        buildCommentSlide(post, "slide3", narrDurMs[2] > 0 ? narrDurMs[2] / 1000 : null),
-        buildCommentSlide(post, "slide4", narrDurMs[3] > 0 ? narrDurMs[3] / 1000 : null),
+        buildS2(post, narrDurs[1]),
+        buildCommentSlide(post, "slide3", narrDurs[2], cmtDursBySlide.slide3),
+        buildCommentSlide(post, "slide4", narrDurs[3], cmtDursBySlide.slide4),
         buildS5(post),
       ];
 
       const totalMs = durMs.reduce((a, b) => a + b, 0);
       console.log(`  ⏱️  [動画${post.num}] ${durMs.map((d, i) => `S${i + 1}:${(d/1000).toFixed(1)}s`).join(" | ")} → 計${(totalMs/1000).toFixed(1)}s`);
 
-      // ── ④ スライド動画生成（グローバルページプールで並列制御） ────────────
-      // narr完了次第キューへ投入。プール空き次第レンダリング開始。
+      // ── ④ スライド動画生成 ───────────────────────────────────────────────
       const videoPaths = await Promise.all(
         htmlArr.map(async (html, i) => {
           const vPath = path.join(slideDir, `slide_${i + 1}.mp4`);
           const pg = await pagePool.acquire();
-          try {
-            await renderVideo(pg, html, durMs[i], vPath);
-          } finally {
-            pagePool.release(pg);
-          }
+          try { await renderVideo(pg, html, durMs[i], vPath); }
+          finally { pagePool.release(pg); }
           return vPath;
         })
       );
 
-      // ── ⑤ 音声トラック合成 ───────────────────────────────────────────────
-      // コメント個別音声を自動生成（未生成のもののみ・男80%女20%ローテーション）
-      let cmtGlobalIdx = 0;  // スライドをまたいだコメント通し番号（ローテ用）
-      for (const [si, slideData] of [[2, post.slide3], [3, post.slide4]]) {
-        if (!slideData?.comments?.length) continue;
-        const cmtKey = si === 2 ? "2" : "3";
-        for (let ci = 0; ci < slideData.comments.length; ci++) {
-          const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
-          if (fs.existsSync(p)) { cmtGlobalIdx++; continue; }
-          const text = (slideData.comments[ci].text || "").replace(/\n/g, "　").trim();
-          if (!text) { cmtGlobalIdx++; continue; }
-          const speaker = VV_CMT_SPEAKERS[cmtGlobalIdx % VV_CMT_SPEAKERS.length];
-          try {
-            await narrationVoiceVox(text, p, speaker);
-          } catch (e) {
-            console.warn(`  ⚠️ コメント音声失敗 [cmt_${cmtKey}_${ci}]: ${e.message}`);
-          }
-          cmtGlobalIdx++;
-        }
-      }
-
-      // コメント個別音声（cmt_2_*.wav / cmt_3_*.wav）を収集
-      // 実際の音声durationで順次スタート位置を計算（テキスト推定より正確・被り防止）
+      // ── ⑤ 音声トラック合成（相棒の設計図どおりに配置） ────────────────────
       const extraAudios = [];
-      const CMT_AUDIO_GAP_MS = 600;  // コメント間の無音ギャップ
-      for (const [si, slideData] of [[2, post.slide3], [3, post.slide4]]) {
-        const cumSlideMs = durMs.slice(0, si).reduce((a, b) => a + b, 0);
+      const PHASE_STARTS = [0];
+      for (let i = 0; i < durMs.length - 1; i++) PHASE_STARTS.push(PHASE_STARTS[i] + durMs[i]);
+
+      const narrStartOffsets = [W_S1_START, W_S2_START, W_S3_START, W_S3_START, W_S5_WAIT];
+      narrPaths.forEach((p, i) => {
+        if (!p) return;
+        extraAudios.push({ path: p, startMs: Math.round(PHASE_STARTS[i] + narrStartOffsets[i] * 1000) });
+      });
+
+      for (const [si, slideKey] of [[2, "slide3"], [3, "slide4"]]) {
+        const slideData = post[slideKey];
         if (!slideData?.comments?.length) continue;
+        const { delays } = calcCommentTiming(slideData, narrDurs[si], cmtDursBySlide[slideKey]);
         const cmtKey = si === 2 ? "2" : "3";
-        // 表示されるコメント一覧（calcCommentTimingで高さフィット済み）
-        const narrDurSecForTiming = narrDurMs[si] > 0 ? narrDurMs[si] / 1000 : null;
-        const { comments, narrEstSec } = calcCommentTiming(slideData, narrDurSecForTiming);
-        // ナレーション終了後2秒でコメント音声スタート
-        let audioMs = Math.round(narrEstSec * 1000) + 2000;
-        for (let ci = 0; ci < comments.length; ci++) {
+        for (let ci = 0; ci < delays.length; ci++) {
           const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
-          if (!fs.existsSync(p)) {
-            audioMs += 1200 + CMT_AUDIO_GAP_MS;  // 音声なし → 1.2秒分スキップ
-            continue;
+          if (fs.existsSync(p)) {
+            extraAudios.push({ path: p, startMs: Math.round(PHASE_STARTS[si] + delays[ci] * 1000) });
           }
-          extraAudios.push({ path: p, startMs: Math.round(cumSlideMs + audioMs) });
-          audioMs += getAudioDuration(p) + CMT_AUDIO_GAP_MS;  // 実際のduration + gap
         }
       }
-      if (extraAudios.length > 0)
-        console.log(`  🎤 [動画${post.num}] コメント音声 ${extraAudios.length}件 ミックス`);
 
       const audioPath = path.join(slideDir, "audio.wav");
-      generateAudioTrack(durMs, narrPaths, PHASE_OFFSETS, audioPath, extraAudios);
+      generateAudioTrack(durMs, [null,null,null,null,null], [0,0,0,0,0], audioPath, extraAudios);
 
       // ── ⑥ 最終動画出力 ───────────────────────────────────────────────────
       const outPath = path.join(VIDEO_DIR, `${today}_${post.num}.mp4`);
       concatAndMix(videoPaths, audioPath, totalMs, outPath);
 
       // 生成済みフラグを JSON に書き込む
-      updateGeneratedStatus(post.index);
+      updateGeneratedStatus(postArrayIdx);
 
       const elapsed = ((Date.now() - _t0) / 1000).toFixed(1);
       console.log(`  ✅ [動画${post.num}] 完成: ${outPath}  (処理時間: ${elapsed}s)`);
