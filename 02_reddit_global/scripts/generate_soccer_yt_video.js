@@ -262,11 +262,12 @@ function buildS2(post, narrDurSec = null) {
     : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
 
   const subParts = splitSubText(post.overviewNarration || post.overviewTelop || "");
-  const S2_START = 1.0;
-  let _t = S2_START;
+  const S2_BOX_START  = 1.5;  // 字幕ボックス出現タイミング
+  const S2_TEXT_START = 3.0;  // テキスト表示開始（PHASE_OFFSETS[1]=3000msに合わせる）
+  let _t = S2_TEXT_START;
   // 実際のナレーション秒数が既知なら均等配分、なければ文字数推定
   const totalSubSec = narrDurSec !== null
-    ? Math.max(narrDurSec - S2_START, subParts.length * 1.5)
+    ? Math.max(narrDurSec, subParts.length * 1.5)
     : subParts.reduce((s, p) => s + Math.max(1.5, p.replace(/\s/g, "").length / 8.0), 0);
   const perPartSec = subParts.length > 1 ? totalSubSec / subParts.length : totalSubSec;
   const subHtml = subParts.map((p, i) => {
@@ -290,7 +291,7 @@ function buildS2(post, narrDurSec = null) {
   .tweet-author{color:#fff;font-size:18px;font-weight:900;display:flex;align-items:center;gap:8px;}
   .tweet-check{color:#1DA1F2;font-size:14px;}
   .tweet-handle{color:rgba(255,255,255,0.40);font-size:13px;margin-top:2px;}
-  .sub-box{position:absolute;bottom:0;left:0;right:0;background:rgba(10,16,32,0.97);border-top:2px solid rgba(245,158,11,0.5);min-height:${subH}px;animation:slideUp 0.4s 1.0s ease-out both;}
+  .sub-box{position:absolute;bottom:0;left:0;right:0;background:rgba(10,16,32,0.97);border-top:2px solid rgba(245,158,11,0.5);min-height:${subH}px;animation:slideUp 0.4s ${S2_BOX_START}s ease-out both;}
   .sub-part{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:22px ${SAFE+20}px;color:#fff;font-size:53px;font-weight:800;text-align:center;line-height:1.55;overflow-wrap:break-word;opacity:0;}
   .account{position:absolute;bottom:${SAFE-10}px;left:${SAFE}px;color:rgba(255,255,255,0.22);font-size:20px;animation:fadeUp 0.3s 1.5s ease-out both;}
   </style></head><body><div class="bg">
@@ -510,16 +511,43 @@ async function narrationOpenAI(text, outputPath) {
   return outputPath;
 }
 
-// ─── TTS: VoiceVox (fallback) ────────────────────────────────────────────────
+// ─── サッカー用語の読み補正（VoiceVox が苦手なものを変換） ──────────────────
+function sanitizeForVoiceVox(text) {
+  return (text || "")
+    .replace(/W杯/g, "ワールドカップ")
+    .replace(/W・杯/g, "ワールドカップ")
+    .replace(/\bCL\b/g, "チャンピオンズリーグ")
+    .replace(/\bPL\b/g, "プレミアリーグ")
+    .replace(/\bBL\b/g, "ブンデスリーガ")
+    .replace(/\bSA\b/g, "セリエエー")
+    .replace(/\bUEFA\b/g, "ウエファ")
+    .replace(/\bFIFA\b/g, "フィファ")
+    .replace(/\bFW\b/g, "フォワード")
+    .replace(/\bMF\b/g, "ミッドフィールダー")
+    .replace(/\bDF\b/g, "ディフェンダー")
+    .replace(/\bGK\b/g, "ゴールキーパー")
+    .replace(/\bJ1\b/g, "Jリーグワン")
+    .replace(/\bJ2\b/g, "Jリーグツー")
+    .replace(/→/g, "から")
+    .replace(/×/g, "たい")
+    .replace(/【([^】]+)】/g, "$1")
+    .replace(/〝([^〟]+)〟/g, "$1")
+    .replace(/\n/g, "　")
+    .trim();
+}
+
+// ─── TTS: VoiceVox ────────────────────────────────────────────────────────────
 async function narrationVoiceVox(text, outputPath, speaker = VV_SPEAKER) {
-  const safe = text.replace(/\n/g, "　").trim();
+  const safe = sanitizeForVoiceVox(text);
   const qRes = await fetch(
     `${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(safe)}&speaker=${speaker}`,
     { method: "POST" }
   );
   if (!qRes.ok) throw new Error(`VoiceVox query: ${qRes.status}`);
   const query = await qRes.json();
-  query.speedScale = VV_SPEED;
+  query.speedScale      = VV_SPEED;
+  query.intonationScale = 1.35;  // 抑揚を強める（デフォルト1.0）
+  query.volumeScale     = 1.1;   // 少し大きめ
   const sRes = await fetch(`${VOICEVOX_URL}/synthesis?speaker=${speaker}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
