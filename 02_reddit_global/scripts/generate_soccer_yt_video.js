@@ -26,7 +26,7 @@ const FFPROBE      = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffprobe.ex
 const VOICEVOX_URL = "http://localhost:50021";
 const VV_SPEAKER   = 13;  // 青山龍星 ノーマル（ナレーション用）
 const VV_SPEED     = 1.2;
-const VV_CMT_SPEAKERS = [13, 13, 13, 13, 0];  // コメント用: 青山龍星×4 + 四国めたん×1（男80%/女20%）
+const VV_CMT_SPEAKERS = [13, 11, 3, 11, 13, 3, 0];  // コメント用: 青山龍星/玄野武宏/ずんだもん ローテ + 四国めたん×1
 
 const W    = 1920;
 const H    = 1080;
