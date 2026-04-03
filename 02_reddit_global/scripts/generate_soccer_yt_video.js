@@ -24,8 +24,9 @@ const { execSync, spawn } = require("child_process");
 const FFMPEG       = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
 const FFPROBE      = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffprobe.exe" : "ffprobe";
 const VOICEVOX_URL = "http://localhost:50021";
-const VV_SPEAKER   = 13;  // 青山龍星 ノーマル
+const VV_SPEAKER   = 13;  // 青山龍星 ノーマル（ナレーション用）
 const VV_SPEED     = 1.2;
+const VV_CMT_SPEAKERS = [13, 13, 13, 13, 0];  // コメント用: 青山龍星×4 + 四国めたん×1（男80%/女20%）
 
 const W    = 1920;
 const H    = 1080;
@@ -489,16 +490,16 @@ async function narrationOpenAI(text, outputPath) {
 }
 
 // ─── TTS: VoiceVox (fallback) ────────────────────────────────────────────────
-async function narrationVoiceVox(text, outputPath) {
+async function narrationVoiceVox(text, outputPath, speaker = VV_SPEAKER) {
   const safe = text.replace(/\n/g, "　").trim();
   const qRes = await fetch(
-    `${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(safe)}&speaker=${VV_SPEAKER}`,
+    `${VOICEVOX_URL}/audio_query?text=${encodeURIComponent(safe)}&speaker=${speaker}`,
     { method: "POST" }
   );
   if (!qRes.ok) throw new Error(`VoiceVox query: ${qRes.status}`);
   const query = await qRes.json();
   query.speedScale = VV_SPEED;
-  const sRes = await fetch(`${VOICEVOX_URL}/synthesis?speaker=${VV_SPEAKER}`, {
+  const sRes = await fetch(`${VOICEVOX_URL}/synthesis?speaker=${speaker}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(query),
@@ -864,20 +865,23 @@ async function main() {
       );
 
       // ── ⑤ 音声トラック合成 ───────────────────────────────────────────────
-      // コメント個別音声を自動生成（未生成のもののみ）
+      // コメント個別音声を自動生成（未生成のもののみ・男80%女20%ローテーション）
+      let cmtGlobalIdx = 0;  // スライドをまたいだコメント通し番号（ローテ用）
       for (const [si, slideData] of [[2, post.slide3], [3, post.slide4]]) {
         if (!slideData?.comments?.length) continue;
         const cmtKey = si === 2 ? "2" : "3";
         for (let ci = 0; ci < slideData.comments.length; ci++) {
           const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
-          if (fs.existsSync(p)) continue;
+          if (fs.existsSync(p)) { cmtGlobalIdx++; continue; }
           const text = (slideData.comments[ci].text || "").replace(/\n/g, "　").trim();
-          if (!text) continue;
+          if (!text) { cmtGlobalIdx++; continue; }
+          const speaker = VV_CMT_SPEAKERS[cmtGlobalIdx % VV_CMT_SPEAKERS.length];
           try {
-            await generateNarration(text, p);
+            await narrationVoiceVox(text, p, speaker);
           } catch (e) {
             console.warn(`  ⚠️ コメント音声失敗 [cmt_${cmtKey}_${ci}]: ${e.message}`);
           }
+          cmtGlobalIdx++;
         }
       }
 
