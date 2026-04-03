@@ -50,6 +50,7 @@ JSONのみを返してください。`;
 }
 
 // ─── RSS OG画像取得（既存 generate_content.js と同じロジック） ───────────────
+const now       = new Date();
 const jstOffset = 9 * 60 * 60 * 1000;
 const dateArg   = process.argv[2] || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
 
