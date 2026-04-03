@@ -934,19 +934,19 @@ async function main() {
       // ── ② スライド尺計算（相棒の設計図：実測ベース） ──────────────────────
       const narrDurs = narrPaths.map(p => p ? getAudioDuration(p) : 0);
       const durMs = [
-        Math.round((W_S1_START + narrDurs[0] + W_S1_END) * 1000),
-        Math.round((W_S2_START + narrDurs[1] + W_S2_END) * 1000),
-        calcCommentSlideDurMs(post.slide3, narrDurs[2] * 1000, cmtDursBySlide.slide3),
-        calcCommentSlideDurMs(post.slide4, narrDurs[3] * 1000, cmtDursBySlide.slide4),
-        Math.round((W_S5_WAIT + narrDurs[4] + W_S5_END) * 1000),
+        Math.round((W_S1_START + narrDurs[0] / 1000 + W_S1_END) * 1000),
+        Math.round((W_S2_START + narrDurs[1] / 1000 + W_S2_END) * 1000),
+        calcCommentSlideDurMs(post.slide3, narrDurs[2], cmtDursBySlide.slide3.map(d => d / 1000)),
+        calcCommentSlideDurMs(post.slide4, narrDurs[3], cmtDursBySlide.slide4.map(d => d / 1000)),
+        Math.round((W_S5_WAIT + narrDurs[4] / 1000 + W_S5_END) * 1000),
       ];
 
       // ── ③ HTML 生成 ──────────────────────────────────────────────────────
       const htmlArr = [
         buildS1(post),
-        buildS2(post, narrDurs[1]),
-        buildCommentSlide(post, "slide3", narrDurs[2], cmtDursBySlide.slide3),
-        buildCommentSlide(post, "slide4", narrDurs[3], cmtDursBySlide.slide4),
+        buildS2(post, narrDurs[1] / 1000),
+        buildCommentSlide(post, "slide3", narrDurs[2] / 1000, cmtDursBySlide.slide3.map(d => d / 1000)),
+        buildCommentSlide(post, "slide4", narrDurs[3] / 1000, cmtDursBySlide.slide4.map(d => d / 1000)),
         buildS5(post),
       ];
 
