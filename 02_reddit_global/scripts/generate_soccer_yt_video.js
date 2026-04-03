@@ -265,14 +265,16 @@ function buildS2(post, narrDurSec = null) {
   const S2_BOX_START  = 1.5;  // 字幕ボックス出現タイミング
   const S2_TEXT_START = 3.0;  // テキスト表示開始（PHASE_OFFSETS[1]=3000msに合わせる）
   let _t = S2_TEXT_START;
-  // 実際のナレーション秒数が既知なら均等配分、なければ文字数推定
+  // 実際のナレーション秒数を文字数比例で各パートに配分（均等より自然）
   const totalSubSec = narrDurSec !== null
     ? Math.max(narrDurSec, subParts.length * 1.5)
     : subParts.reduce((s, p) => s + Math.max(1.5, p.replace(/\s/g, "").length / 8.0), 0);
-  const perPartSec = subParts.length > 1 ? totalSubSec / subParts.length : totalSubSec;
+  const totalCharsS2 = subParts.reduce((s, p) => s + Math.max(1, p.replace(/\s/g, "").length), 0);
   const subHtml = subParts.map((p, i) => {
     const start = _t.toFixed(1);
-    _t += perPartSec;
+    const chars  = Math.max(1, p.replace(/\s/g, "").length);
+    const dur    = totalSubSec * (chars / totalCharsS2);
+    _t += dur;
     const isLast = i === subParts.length - 1;
     const fadeOut = isLast ? "" : `,fadeOut 0.3s ${(_t - 0.3).toFixed(1)}s ease-out forwards`;
     return `<div class="sub-part" style="animation:fadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
@@ -321,15 +323,17 @@ function calcCommentTiming(slide, narrDurSec) {
   const CHARS_PER_LINE = Math.floor((W - 2 * SAFE - 2 * 18) / FONT_SIZE);
 
   function estimateLines(text) {
-    return (text || "").split("\\n").reduce(
+    // JSONから来た実際の改行文字(\n=0x0A)と文字数でカード高さを推定
+    return (text || "").split("\n").reduce(
       (sum, seg) => sum + Math.max(1, Math.ceil(seg.length / CHARS_PER_LINE)), 0
     );
   }
   function cardH(text) { return CARD_PAD_V + estimateLines(text) * LINE_H_PX; }
 
+  // 最大7件から、画面に収まる件数を動的に決定（長いコメントも正しく高さ計算）
   const allComments = (slide?.comments || []).slice(0, 7);
   let count = Math.min(allComments.length, 7);
-  while (count > 4) {
+  while (count > 1) {
     const sel    = allComments.slice(0, count);
     const totalH = sel.reduce((s, c) => s + cardH(typeof c === "string" ? c : (c.text || "")), 0)
                  + (count - 1) * GAP;
@@ -398,20 +402,22 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
     const side = i % 2 === 0 ? "flex-start" : "flex-end";
     const bg   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
     return `<div class="c-card${isHL ? " c-hl" : ""}" style="align-self:${side};background:${bg};animation:slideDown 0.45s ${commentDelays[i]}s ease-out both;">
-      <div class="c-text">${esc(text).replace(/\\n/g, "<br>")}</div>
+      <div class="c-text">${esc(text).replace(/\n/g, "<br>")}</div>
     </div>`;
   }).join("");
 
-  // 字幕の分割切り替え表示（S2と同様のsplitSubText）
+  // 字幕の分割切り替え表示（文字数比例で各パートの表示時間を配分）
   const subParts = splitSubText(narrText);
   const subH = 130; // 字幕ボックス高さ（48px×1.5行＋余白）
   let _st = 0;
-  const perPartSec = narrEstSec > 0
-    ? narrEstSec / subParts.length
-    : Math.max(1.5, narrText.replace(/\s/g, "").length / 8.0 / Math.max(1, subParts.length));
+  const totalSubSecCmt = narrEstSec > 0
+    ? narrEstSec
+    : Math.max(1.5, narrText.replace(/\s/g, "").length / 8.0);
+  const totalCharsCmt = subParts.reduce((s, p) => s + Math.max(1, p.replace(/\s/g, "").length), 0);
   const subPartsHtml = subParts.map((p, i) => {
     const start = _st.toFixed(1);
-    _st += perPartSec;
+    const chars = Math.max(1, p.replace(/\s/g, "").length);
+    _st += totalSubSecCmt * (chars / totalCharsCmt);
     const isLast = i === subParts.length - 1;
     const fadeOut = isLast ? "" : `,subPtFadeOut 0.3s ${(_st - 0.3).toFixed(1)}s ease-out forwards`;
     return `<div class="sub-part" style="animation:subPtFadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
@@ -511,23 +517,82 @@ async function narrationOpenAI(text, outputPath) {
   return outputPath;
 }
 
+// ─── S1タイトルコールに自然な読点を挿入 ──────────────────────────────────────
+function addTitlePunctuation(text) {
+  if (!text) return text;
+  // 既に十分な区切りがあれば何もしない（！？は区切り効果あり）
+  if ((text.match(/[、。！？]/g) || []).length >= 2) return text;
+  return text
+    // 漢字の直後に数字が来る場合（例：当確19人 → 当確、19人）
+    .replace(/([\u3000-\u9FFF\u30A0-\u30FF])(\d)/g, "$1、$2")
+    // 特定キーワードの後に文章が続く場合
+    .replace(/(当確|決定|確定|発覚|発表|覚醒|復帰|移籍|招集|炎上|批判|退場|活躍|処分|辞任|就任)(?=[^\s！？。、]{2,})/g, "$1、")
+    // ！や？の後に文章が続く場合（スペースを挿入してVoiceVoxが一呼吸おけるように）
+    .replace(/([！？])(?=[^\s！？。、]{2,})/g, "$1　");
+}
+
 // ─── サッカー用語の読み補正（VoiceVox が苦手なものを変換） ──────────────────
 function sanitizeForVoiceVox(text) {
   return (text || "")
+    // ─ 大会名 ─
     .replace(/W杯/g, "ワールドカップ")
     .replace(/W・杯/g, "ワールドカップ")
+    .replace(/CLグループ|チャンピオンズL/g, "チャンピオンズリーグ")
     .replace(/\bCL\b/g, "チャンピオンズリーグ")
+    .replace(/\bEL\b/g, "ヨーロッパリーグ")
+    .replace(/\bECL\b/g, "カンファレンスリーグ")
     .replace(/\bPL\b/g, "プレミアリーグ")
     .replace(/\bBL\b/g, "ブンデスリーガ")
     .replace(/\bSA\b/g, "セリエエー")
+    .replace(/ラ・リーガ|LaLiga/g, "ラリーガ")
     .replace(/\bUEFA\b/g, "ウエファ")
     .replace(/\bFIFA\b/g, "フィファ")
+    .replace(/\bAFCアジア|AFCアジア/g, "エーエフシーアジア")
+    // ─ ポジション ─
     .replace(/\bFW\b/g, "フォワード")
     .replace(/\bMF\b/g, "ミッドフィールダー")
     .replace(/\bDF\b/g, "ディフェンダー")
     .replace(/\bGK\b/g, "ゴールキーパー")
-    .replace(/\bJ1\b/g, "Jリーグワン")
-    .replace(/\bJ2\b/g, "Jリーグツー")
+    .replace(/\bCB\b/g, "センターバック")
+    .replace(/\bSB\b/g, "サイドバック")
+    .replace(/\bSH\b/g, "サイドハーフ")
+    .replace(/\bCH\b/g, "セントラルミッドフィールダー")
+    .replace(/\bDMF?\b/g, "ボランチ")
+    .replace(/\bOH\b/g, "トップ下")
+    .replace(/\bSS\b/g, "セカンドストライカー")
+    .replace(/\bCF\b/g, "センターフォワード")
+    // ─ 審判・ルール用語 ─
+    .replace(/\bVAR\b/g, "ビデオ判定")
+    .replace(/\bFK\b/g, "フリーキック")
+    .replace(/\bCK\b/g, "コーナーキック")
+    .replace(/\bPK\b/g, "ペナルティキック")
+    .replace(/\bOG\b/g, "オウンゴール")
+    .replace(/\bPP\b/g, "ペナルティポイント")
+    // ─ リーグ名 ─
+    .replace(/\bJ1\b/g, "ジェイワン")
+    .replace(/\bJ2\b/g, "ジェイツー")
+    .replace(/\bJ3\b/g, "ジェイスリー")
+    // ─ 日本代表選手（難読・読み間違いやすい） ─
+    .replace(/三笘(?:薫)?/g, "みとま")
+    .replace(/久保(?:建英)?/g, "くぼたけふさ")
+    .replace(/上田(?:綺世)?/g, "うえだあやせ")
+    .replace(/鎌田(?:大地)?/g, "かまただいち")
+    .replace(/中村(?:敬斗)?/g, "なかむらけいと")
+    .replace(/堂安(?:律)?/g, "どうあんりつ")
+    .replace(/板倉(?:滉)?/g, "いたくらこう")
+    .replace(/冨安(?:健洋)?/g, "とみやすたけひろ")
+    .replace(/谷口(?:彰悟)?/g, "たにぐちしょうご")
+    .replace(/守田(?:英正)?/g, "もりたひでまさ")
+    .replace(/遠藤(?:航)?/g, "えんどうわたる")
+    .replace(/伊東(?:純也)?/g, "いとうじゅんや")
+    .replace(/南野(?:拓実)?/g, "みなみのたくみ")
+    .replace(/旗手(?:怜央)?/g, "はたてれお")
+    .replace(/前田(?:大然)?/g, "まえだだいぜん")
+    .replace(/毎熊(?:晟矢)?/g, "まいくません")
+    .replace(/古橋(?:亨梧)?/g, "ふるはしきょうご")
+    .replace(/西村(?:拓真)?/g, "にしむらたくま")
+    .replace(/森保(?:一)?/g, "もりやすはじめ")
+    // ─ 記号・特殊文字 ─
     .replace(/→/g, "から")
     .replace(/×/g, "たい")
     .replace(/【([^】]+)】/g, "$1")
@@ -843,7 +908,7 @@ async function main() {
 
       // ── ナレーションテキスト ──────────────────────────────────────────────
       const narrTexts = [
-        post.catchLine1,
+        addTitlePunctuation(post.catchLine1),  // S1 タイトルコール（句読点で自然な間を追加）
         post.overviewNarration,
         post.slide3?.narration,
         post.slide4?.narration,
@@ -935,19 +1000,26 @@ async function main() {
       }
 
       // コメント個別音声（cmt_2_*.wav / cmt_3_*.wav）を収集
+      // 実際の音声durationで順次スタート位置を計算（テキスト推定より正確・被り防止）
       const extraAudios = [];
-      let cumSlideMs = 0;
+      const CMT_AUDIO_GAP_MS = 600;  // コメント間の無音ギャップ
       for (const [si, slideData] of [[2, post.slide3], [3, post.slide4]]) {
-        cumSlideMs = durMs.slice(0, si).reduce((a, b) => a + b, 0);
+        const cumSlideMs = durMs.slice(0, si).reduce((a, b) => a + b, 0);
         if (!slideData?.comments?.length) continue;
-        const cmtKey    = si === 2 ? "2" : "3";
-        const narrDurSec = narrDurMs[si] > 0 ? narrDurMs[si] / 1000 : null;
-        const { delays } = calcCommentTiming(slideData, narrDurSec);
-        for (let ci = 0; ci < delays.length; ci++) {
+        const cmtKey = si === 2 ? "2" : "3";
+        // 表示されるコメント一覧（calcCommentTimingで高さフィット済み）
+        const narrDurSecForTiming = narrDurMs[si] > 0 ? narrDurMs[si] / 1000 : null;
+        const { comments, narrEstSec } = calcCommentTiming(slideData, narrDurSecForTiming);
+        // ナレーション終了後2秒でコメント音声スタート
+        let audioMs = Math.round(narrEstSec * 1000) + 2000;
+        for (let ci = 0; ci < comments.length; ci++) {
           const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
-          if (fs.existsSync(p)) {
-            extraAudios.push({ path: p, startMs: Math.round(cumSlideMs + delays[ci] * 1000) });
+          if (!fs.existsSync(p)) {
+            audioMs += 1200 + CMT_AUDIO_GAP_MS;  // 音声なし → 1.2秒分スキップ
+            continue;
           }
+          extraAudios.push({ path: p, startMs: Math.round(cumSlideMs + audioMs) });
+          audioMs += getAudioDuration(p) + CMT_AUDIO_GAP_MS;  // 実際のduration + gap
         }
       }
       if (extraAudios.length > 0)
