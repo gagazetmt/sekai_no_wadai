@@ -978,7 +978,7 @@ async function main() {
       for (const [si, slideKey] of [[2, "slide3"], [3, "slide4"]]) {
         const slideData = post[slideKey];
         if (!slideData?.comments?.length) continue;
-        const { delays } = calcCommentTiming(slideData, narrDurs[si], cmtDursBySlide[slideKey]);
+        const { delays } = calcCommentTiming(slideData, narrDurs[si] / 1000, cmtDursBySlide[slideKey].map(d => d / 1000));
         const cmtKey = si === 2 ? "2" : "3";
         for (let ci = 0; ci < delays.length; ci++) {
           const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
