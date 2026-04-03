@@ -242,7 +242,7 @@ function buildS1(post) {
 }
 
 // ─── S2: ソーススライド（背景画像 + ソースカード + テロップ分割表示） ─────────
-function buildS2(post) {
+function buildS2(post, narrDurSec = null) {
   const author = post.sourceAuthor || "情報筋";
   const { b64, mime, isPortrait } = imgMeta(post.slide2ImagePath || post.mainImagePath);
   const iz = getImgZoom(post, "s2");
@@ -264,10 +264,14 @@ function buildS2(post) {
   const subParts = splitSubText(post.overviewNarration || post.overviewTelop || "");
   const S2_START = 1.0;
   let _t = S2_START;
+  // 実際のナレーション秒数が既知なら均等配分、なければ文字数推定
+  const totalSubSec = narrDurSec !== null
+    ? Math.max(narrDurSec - S2_START, subParts.length * 1.5)
+    : subParts.reduce((s, p) => s + Math.max(1.5, p.replace(/\s/g, "").length / 8.0), 0);
+  const perPartSec = subParts.length > 1 ? totalSubSec / subParts.length : totalSubSec;
   const subHtml = subParts.map((p, i) => {
     const start = _t.toFixed(1);
-    const dur = Math.max(1.5, p.replace(/\s/g, "").length / 8.0);
-    _t += dur;
+    _t += perPartSec;
     const isLast = i === subParts.length - 1;
     const fadeOut = isLast ? "" : `,fadeOut 0.3s ${(_t - 0.3).toFixed(1)}s ease-out forwards`;
     return `<div class="sub-part" style="animation:fadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
@@ -397,6 +401,21 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
     </div>`;
   }).join("");
 
+  // 字幕の分割切り替え表示（S2と同様のsplitSubText）
+  const subParts = splitSubText(narrText);
+  const subH = 130; // 字幕ボックス高さ（48px×1.5行＋余白）
+  let _st = 0;
+  const perPartSec = narrEstSec > 0
+    ? narrEstSec / subParts.length
+    : Math.max(1.5, narrText.replace(/\s/g, "").length / 8.0 / Math.max(1, subParts.length));
+  const subPartsHtml = subParts.map((p, i) => {
+    const start = _st.toFixed(1);
+    _st += perPartSec;
+    const isLast = i === subParts.length - 1;
+    const fadeOut = isLast ? "" : `,subPtFadeOut 0.3s ${(_st - 0.3).toFixed(1)}s ease-out forwards`;
+    return `<div class="sub-part" style="animation:subPtFadeIn 0.3s ${start}s ease-out both${fadeOut}">${esc(p)}</div>`;
+  }).join("");
+
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
   ${kbExtra}
@@ -409,15 +428,17 @@ function buildCommentSlide(post, slideKey, narrDurSec = null) {
   .c-text{color:#111;font-size:${FONT_SIZE}px;font-weight:700;line-height:1.4;overflow-wrap:break-word;}
   .c-hl .c-text{color:#000;font-weight:900;}
   @keyframes subFadeOut{to{opacity:0;visibility:hidden;}}
-  .sub-box{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);padding:18px ${SAFE}px;animation:slideUp 0.6s 0s ease-out both, subFadeOut 0.3s ${(narrEstSec + CMT_AFTER_NARR).toFixed(1)}s ease-out forwards;}
-  .sub-text{color:#fff;font-size:48px;font-weight:800;text-align:center;line-height:1.5;}
+  @keyframes subPtFadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes subPtFadeOut{to{opacity:0}}
+  .sub-box{position:absolute;bottom:0;left:0;right:0;min-height:${subH}px;background:rgba(0,0,0,0.88);border-top:1px solid rgba(255,255,255,0.08);animation:slideUp 0.6s 0s ease-out both, subFadeOut 0.3s ${(narrEstSec + CMT_AFTER_NARR).toFixed(1)}s ease-out forwards;}
+  .sub-part{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:18px ${SAFE}px;color:#fff;font-size:48px;font-weight:800;text-align:center;line-height:1.5;overflow-wrap:break-word;opacity:0;}
   .citation{position:absolute;bottom:14px;left:${SAFE}px;color:rgba(255,255,255,0.28);font-size:20px;}
   </style></head><body><div class="bg">
     <div class="bg-img"></div>
     <div class="overlay"></div>
     ${topicTag ? `<div class="topic-tag">${esc(topicTag)}</div>` : ""}
     <div class="comments-area">${commentsHtml}</div>
-    ${(!slide.noNarration && narrText) ? `<div class="sub-box"><div class="sub-text">${esc(narrText)}</div></div>` : ""}
+    ${(!slide.noNarration && narrText) ? `<div class="sub-box">${subPartsHtml}</div>` : ""}
     <div class="citation">©Fotmobより引用</div>
   </div></body></html>`;
 }
@@ -798,9 +819,9 @@ async function main() {
         post.overviewNarration,
         post.slide3?.narration,
         post.slide4?.narration,
-        post.outroNarration,
+        post.outroTelop || post.outroNarration,
       ];
-      const PHASE_OFFSETS = [0, 3000, 1000, 1000, 3000];
+      const PHASE_OFFSETS = [0, 3000, 1000, 1000, 4000];
 
       // ── ① ナレーション生成（投稿内は直列・VoiceVox保護） ─────────────────
       const narrPaths = [];
@@ -840,7 +861,7 @@ async function main() {
       // ── ③ HTML 生成 ──────────────────────────────────────────────────────
       const htmlArr = [
         buildS1(post),
-        buildS2(post),
+        buildS2(post, narrDurMs[1] > 0 ? narrDurMs[1] / 1000 : null),
         buildCommentSlide(post, "slide3", narrDurMs[2] > 0 ? narrDurMs[2] / 1000 : null),
         buildCommentSlide(post, "slide4", narrDurMs[3] > 0 ? narrDurMs[3] / 1000 : null),
         buildS5(post),
