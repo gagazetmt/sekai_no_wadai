@@ -52,6 +52,27 @@ function detectType(title) {
   return "topic";
 }
 
+// ─── Serper検索 ───────────────────────────────────────────────────────────────
+async function searchSerper(query) {
+  const apiKey = process.env.SERPER_API_KEY;
+  if (!apiKey) return [];
+  try {
+    const res = await fetch("https://google.serper.dev/search", {
+      method:  "POST",
+      headers: { "X-API-KEY": apiKey, "Content-Type": "application/json" },
+      body:    JSON.stringify({ q: query, tbs: "qdr:w", num: 5, hl: "en" }),
+      signal:  AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return (json.organic || []).slice(0, 3).map(r => ({
+      title:   r.title   || "",
+      snippet: r.snippet || "",
+      date:    r.date    || "",
+    }));
+  } catch { return []; }
+}
+
 // ─── AI ヘルパー ──────────────────────────────────────────────────────────────
 async function translateKeywordToEnglish(text) {
   try {
@@ -142,8 +163,11 @@ async function generateMatchContent(matchData, comments, thread, xComments=[]) {
 }
 
 const TYPE_LABEL_MAP = { transfer:"移籍情報", injury:"負傷情報", manager:"監督情報", finance:"財政・制裁", topic:"注目トピック" };
-async function generateTopicContent(topicData, comments, thread, xComments=[]) {
+async function generateTopicContent(topicData, comments, thread, xComments=[], serperSnippets=[]) {
   const typeLabel = TYPE_LABEL_MAP[thread.type] || "注目トピック";
+  const serperSection = serperSnippets.length > 0
+    ? `\n【参考記事（Google検索・過去7日）】以下のスニペットに記載された情報のみ補足として使用してよい。記載のない事実（スコア・日付・人名・移籍先等）は絶対に推測・補完しないこと。\n${serperSnippets.map((s,i)=>`[${i+1}] ${s.date?`(${s.date}) `:""}${s.title}\n${s.snippet}`).join("\n")}`
+    : "";
   const prompt = `あなたはサッカーニュース動画のコンテンツライターです。以下のデータをもとに、視聴者が冒頭10秒で離脱できない動画コンテンツを設計してください。
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【スレッドタイトル】${thread.title}
@@ -152,7 +176,7 @@ async function generateTopicContent(topicData, comments, thread, xComments=[]) {
 【絶対ルール】存在しない人名・チーム名・数字は使わない。監督名・選手名・所属クラブはスレッドまたは提供データに明記されている場合のみ使用し、記載のない情報は推測・補完しないこと。
 【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。基本はニュース解説口調を維持すること。ただし「これは注目ですね」「驚きの展開です」程度の軽い感嘆は自然に入れてよい。キャラクターを前面に出したり友達に話しかける感覚にはしないこと。ニュースキャスターが少しだけ砕けた感じ。
 【制作ルール】- 「Reddit」→「海外サッカー掲示板」。- コメント意訳は「笑い・驚き・共感」のどれか。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。- ナレーション・字幕・コメント全ての文章は日本語で書くこと。英語の選手名・チーム名・大会名はカタカナ表記にすること（例: Salah→サラー, Champions League→チャンピオンズリーグ）。
-【スレッド本文】${(topicData.selftext||"").slice(0,800)||"（本文なし）"}
+【スレッド本文】${(topicData.selftext||"").slice(0,800)||"（本文なし）"}${serperSection}
 【海外ファンの反応（Reddit）】${comments.slice(0,15).join("\n")}${xComments.length>0?`\n【X海外ファンの反応】\n${xComments.slice(0,15).join("\n")}`:""}
 以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字）","overviewTelop":"S2テロップ（25文字以内・誰が・何をしたか）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（20〜40文字）","outroTelop":"S5テロップ（18〜28文字・登録呼びかけ厳禁）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
   const raw = await callAI({ model: "claude-sonnet-4-6", max_tokens: 2200, messages: [{ role: "user", content: prompt }] });
@@ -270,8 +294,13 @@ async function main() {
           ...playerNames,
         ].filter(Boolean);
 
+        // Serper検索で補強情報取得（過去7日・最大3件）
+        process.stdout.write(`  [${num}] Serper検索 "${engQuery.slice(0,40)}"... `);
+        const serperSnippets = await searchSerper(engQuery);
+        console.log(serperSnippets.length > 0 ? `✅ ${serperSnippets.length}件` : "⚠️ 0件（スキップ）");
+
         process.stdout.write(`  [${num}] コンテンツ生成... `);
-        ytContent = await generateTopicContent({ selftext }, rawComments, post);
+        ytContent = await generateTopicContent({ selftext }, rawComments, post, [], serperSnippets);
         console.log("✅");
       }
 
