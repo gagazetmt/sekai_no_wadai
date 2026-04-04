@@ -192,11 +192,15 @@ async function fetchRss({ name, url }) {
   }
 }
 
+// Jリーグ関連タイトルを弾くフィルター
+const J_LEAGUE_FILTER = /明治安田|百年構想|Jリーグ|J1リーグ|J2リーグ|J3リーグ/;
+
 async function fetchAllRss() {
   const results = await Promise.all(RSS_FEEDS.map(fetchRss));
   const seen = new Set();
   return results.flat()
     .filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; })
+    .filter(p => !J_LEAGUE_FILTER.test(p.title || ""))
     .sort((a, b) => b.created_utc - a.created_utc)
     .slice(0, RSS_TOP_N);
 }
