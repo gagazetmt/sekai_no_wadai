@@ -3052,7 +3052,7 @@ async function loadPosts() {
     renderPosts();
     const videoCount    = postsData.filter(p => p.hasVideo).length;
     const generatedCount = postsData.filter(p => p.isGenerated).length;
-    const extra = generatedCount > videoCount ? `  ⚠️ 生成フラグあり: ${generatedCount}件 (ファイル見つからず)` : "";
+    const extra = generatedCount > videoCount ? "  ⚠️ 生成フラグあり: " + generatedCount + "件 (ファイル見つからず)" : "";
     setGlobalStatus("✅ " + postsData.length + "件読み込み完了（動画あり: " + videoCount + "件）" + extra, videoCount > 0 ? "ok" : "run");
   } catch(e) { setGlobalStatus("❌ " + e.message, "err"); }
 }
