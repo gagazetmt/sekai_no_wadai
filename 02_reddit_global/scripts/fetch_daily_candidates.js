@@ -73,9 +73,10 @@ async function redditGet(url) {
 
 async function fetchRedditTop() {
   const json = await redditGet("https://www.reddit.com/r/soccer/hot.json?limit=40");
+  const nowSec = Date.now() / 1000;
   return (json.data?.children || [])
     .map(c => c.data)
-    .filter(p => !p.stickied && p.score > 10)
+    .filter(p => !p.stickied && p.score > 10 && (nowSec - p.created_utc) < 48 * 3600)
     .slice(0, REDDIT_TOP_N)
     .map(p => ({
       id:          p.permalink,          // 重複チェックキー
