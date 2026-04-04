@@ -1173,7 +1173,7 @@ let hlIdx3    = 0;
 let hlIdx4    = 0;
 let draggedPath = null;
 
-document.getElementById("date-input").value = new Date().toISOString().slice(0, 10);
+document.getElementById("date-input").value = new Date(Date.now() + 9*60*60*1000).toISOString().slice(0, 10);
 
 function status(msg, cls) {
   const bar = document.getElementById("status-bar");
