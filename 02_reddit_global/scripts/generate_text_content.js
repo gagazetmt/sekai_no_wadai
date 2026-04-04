@@ -160,6 +160,29 @@ Examples:
   } catch { return title.slice(0, 40); }
 }
 
+// Serper検索に最適な短いクエリをAIに考えさせる
+async function generateSerperQuery(title) {
+  try {
+    const prompt = `Soccer news title: "${title}"
+
+Generate a focused Google search query (5-10 words) to find recent news articles about this exact story.
+Rules:
+- Include player/team names and the key event (transfer, injury, match result, etc.)
+- Use English only
+- Do NOT include year or generic filler words like "news", "soccer", "football"
+Return ONLY the search query. No explanation.
+
+Examples:
+"Liverpool have reached a verbal agreement with Bayern Munich for the transfer of Leroy Sane" → "Leroy Sane Liverpool transfer Bayern Munich"
+"Real Madrid manager Carlo Ancelotti knee injury ruled out" → "Carlo Ancelotti knee injury Real Madrid"
+"PSG defeated Manchester City 3-1 Champions League quarter-final" → "PSG Manchester City Champions League quarter-final"`;
+    const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 30,
+      messages: [{ role: "user", content: prompt }] });
+    const q = raw.trim().replace(/^["']|["']$/g, "").replace(/\n.*/s, "");
+    return q.length > 4 ? q : title.slice(0, 60);
+  } catch { return title.slice(0, 60); }
+}
+
 // ─── Serper検索 ───────────────────────────────────────────────────────────────
 async function searchSerper(query) {
   const apiKey = process.env.SERPER_API_KEY;
@@ -418,8 +441,9 @@ async function main() {
         xSearchQuery = engQuery;
 
         // ② Serper検索（スニペット取得）
-        process.stdout.write(`  [${num}] Serper検索 "${engQuery.slice(0,40)}"... `);
-        serperSnippets = await searchSerper(engQuery);
+        const serperQuery = await generateSerperQuery(engQuery);
+        process.stdout.write(`  [${num}] Serper検索 "${serperQuery.slice(0,40)}"... `);
+        serperSnippets = await searchSerper(serperQuery);
         console.log(serperSnippets.length > 0 ? `✅ ${serperSnippets.length}件` : "⚠️ 0件");
 
         // ③ スニペット込みでキーワード抽出（精度向上）

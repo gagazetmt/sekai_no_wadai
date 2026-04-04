@@ -2921,6 +2921,9 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
       thumbUrl:     thumbName ? `/images/${thumbName}` : null,
       imageUrls:    imagePaths.map(p2 => `/images/${p2.replace(/\\\\/g, "/").split("/").pop()}`),
       commentPool:  (p._commentPool || []).slice(0, 40),
+      sourceUrl:    p._meta?.redditUrl || p._imgMeta?.url || "",
+      sourceOverview: (p.overviewNarration || "").slice(0, 300),
+      serperSnippets: (p._imgMeta?.serperSnippets || []).slice(0, 3),
     };
   });
   res.json({ ok: true, date, posts });
@@ -2991,6 +2994,13 @@ textarea{resize:vertical;min-height:120px;}
 .badge-reddit{background:#ff6314;color:#fff;}
 .badge-rss{background:#009688;color:#fff;}
 .badge-xjp{background:#e00010;color:#fff;}
+.btn-source{background:#1e3a5a;color:#7ab8e8;font-size:12px;padding:5px 12px;margin-top:6px;}
+.source-panel{display:none;background:#0d1f30;border:1px solid #2a4a6b;border-radius:6px;padding:10px 12px;margin-top:8px;font-size:12px;line-height:1.6;}
+.source-panel.open{display:block;}
+.source-url{margin-bottom:6px;}.source-url a{color:#7ab8e8;word-break:break-all;}
+.source-overview{color:#bbb;white-space:pre-wrap;}
+.serper-snippets{margin-top:8px;border-top:1px solid #2a4a6b;padding-top:8px;}
+.serper-snippet{margin-bottom:6px;color:#aaa;}.serper-snippet b{color:#ddd;}
 .badge-xother{background:#1a1a2e;color:#aad4ff;border:1px solid #3a5a8a;}
 /* ── 右列: 動画 ── */
 .video-col{display:flex;flex-direction:column;gap:10px;}
@@ -3045,12 +3055,22 @@ function renderPosts() {
     const videoHtml = p.hasVideo
       ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>"
       : "<div class='no-video-msg'>動画未生成</div>";
+    const snippetsHtml = (p.serperSnippets||[]).length > 0
+      ? \`<div class='serper-snippets'>\${(p.serperSnippets||[]).map(s=>\`<div class='serper-snippet'><b>\${esc(s.title)}</b><br>\${esc(s.snippet)}</div>\`).join("")}</div>\`
+      : "";
+    const sourcePanelHtml = \`<button class='btn btn-source' onclick='toggleSource(\${i})'>📰 ソース</button>
+<div class='source-panel' id='src-\${i}'>
+  \${p.sourceUrl ? \`<div class='source-url'><a href='\${esc(p.sourceUrl)}' target='_blank'>\${esc(p.sourceUrl)}</a></div>\` : "<div style='color:#555;font-size:12px;'>URLなし</div>"}
+  <div class='source-overview'>\${esc(p.sourceOverview||"（概要なし）")}</div>
+  \${snippetsHtml}
+</div>\`;
     return \`
 <div class='post-card \${p.hasVideo ? "has-video" : "no-video"}' id='card-\${i}'>
   <div class='left-col'>
     <div>
       <div class='card-num'>#\${p.num}</div>
       <div class='card-title'>\${esc(p.catchLine1)}</div>
+      \${sourcePanelHtml}
       <div class='check-row'>
         <input type='checkbox' id='chk-\${i}' \${p.hasVideo ? "" : "disabled"} data-idx='\${i}'>
         <label for='chk-\${i}'>投稿対象に含める</label>
@@ -3099,6 +3119,11 @@ function renderPosts() {
 }
 
 function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+
+function toggleSource(i) {
+  const panel = document.getElementById("src-" + i);
+  if (panel) panel.classList.toggle("open");
+}
 
 function swapThumb(postIdx, imgIdx, url) {
   selectedThumbs[postIdx] = url;
