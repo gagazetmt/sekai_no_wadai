@@ -24,6 +24,10 @@ const { execSync, spawn } = require("child_process");
 const FFMPEG       = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
 const FFPROBE      = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffprobe.exe" : "ffprobe";
 const VOICEVOX_URL = "http://localhost:50021";
+// ─── VPS SCP設定 ──────────────────────────────────────────────────────────────
+const VPS_SSH_HOST  = "root@37.60.224.54";
+const VPS_VIDEO_DIR = "/root/sekai_no_wadai/02_reddit_global/soccer_yt_videos/";
+const SSH_KEY       = path.join(process.env.USERPROFILE || "C:\\Users\\USER", ".ssh", "id_ed25519");
 const VV_SPEAKER   = 13;  // 青山龍星 ノーマル（ナレーション用）
 const VV_SPEED     = 1.26;
 const VV_CMT_SPEAKERS = [13, 11, 3, 11, 13, 3, 0];  // コメント用: 青山龍星/玄野武宏/ずんだもん ローテ + 四国めたん×1
@@ -1033,6 +1037,9 @@ async function main() {
       // 生成済みフラグを JSON に書き込む
       updateGeneratedStatus(postArrayIdx);
 
+      // VPS へ転送（ローカル実行時のみ）
+      scpVideoToVps(outPath);
+
       const elapsed = ((Date.now() - _t0) / 1000).toFixed(1);
       console.log(`  ✅ [動画${post.num}] 完成: ${outPath}  (処理時間: ${elapsed}s)`);
     })
@@ -1040,6 +1047,19 @@ async function main() {
 
   await browser.close();
   console.log(`\n🎉 全動画生成完了！`);
+}
+
+// ─── VPS へ動画をSCPアップロード ──────────────────────────────────────────────
+function scpVideoToVps(videoPath) {
+  // ローカル（Windows）から実行した場合のみアップロード
+  if (process.platform !== "win32") return;
+  try {
+    const cmd = `scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no -o ConnectTimeout=20 "${videoPath}" "${VPS_SSH_HOST}:${VPS_VIDEO_DIR}"`;
+    execSync(cmd, { stdio: "pipe", timeout: 120000 });
+    console.log(`  📤 VPS転送完了: ${path.basename(videoPath)}`);
+  } catch (e) {
+    console.warn(`  ⚠️ VPS転送失敗（ローカル確認のみ）: ${e.message}`);
+  }
 }
 
 // ─── 生成ステータス更新 ────────────────────────────────────────────────────────
