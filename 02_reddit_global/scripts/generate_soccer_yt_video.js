@@ -208,14 +208,13 @@ function buildS1(post) {
       ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
       : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#1a1a3e,#2d2d60);`;
+  const _s1Scale = iz.zoom || 1.0;
   const kbExtra = isPortrait
     ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
-    : iz.zoom !== 1.0
-      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
-      : "";
+    : `@keyframes kbZoom{from{transform:scale(${_s1Scale}) translate(-2%,0)}to{transform:scale(${(_s1Scale+0.08).toFixed(2)}) translate(2%,0)}}`;
   const bgImgCss = isPortrait
-    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
-    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 39s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 25s linear forwards;transform-origin:${bgPos};`;
   const label = getLabel(post);
   const badge = post.badge || "";
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
@@ -252,14 +251,13 @@ function buildS2(post, narrDurSec = null) {
       ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
       : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#0a1520,#1a2a3a);`;
+  const _s2Scale = iz.zoom || 1.0;
   const kbExtra = isPortrait
     ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
-    : iz.zoom !== 1.0
-      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
-      : "";
+    : `@keyframes kbZoom{from{transform:scale(${_s2Scale}) translate(-2%,0)}to{transform:scale(${(_s2Scale+0.08).toFixed(2)}) translate(2%,0)}}`;
   const bgImgCss = isPortrait
-    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
-    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 39s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 25s linear forwards;transform-origin:${bgPos};`;
 
   const subParts = splitSubText(post.overviewNarration || post.overviewTelop || "");
   const S2_BOX_START  = 0.5;
@@ -317,6 +315,37 @@ const W_CBN_GAP  = 1.0; // 前のCBN終了から次のCBN開始までの待機
 const W_S5_WAIT  = 4.0; // S5遷移後の待機（アウトロ表示まで）
 const W_S5_END   = 2.0; // S5-TBN終了後の余韻
 
+// ─── 画面内に収まるコメント件数を推定（画面外はCBN読み上げなし） ───────────────
+function estimateVisibleCommentCount(comments) {
+  const SCREEN_H     = 1920;
+  const AREA_TOP     = SAFE + 60;  // 120px
+  const AREA_BOTTOM  = 110;
+  const AREA_H       = SCREEN_H - AREA_TOP - AREA_BOTTOM; // 1690px
+  const FONT_SIZE    = 49;
+  const LINE_H       = Math.ceil(FONT_SIZE * 1.4); // 69px
+  const CARD_PAD_V   = 20;  // padding top+bottom
+  const CARD_BORDER_V = 6;  // border top+bottom
+  const GAP          = 20;
+  const CONTENT_W    = 1080 - SAFE * 2 - 18 * 2; // 924px
+  const CHARS_PER_LINE = Math.floor(CONTENT_W / FONT_SIZE); // ~18chars
+
+  let usedH = 0;
+  let count = 0;
+  for (const c of (comments || [])) {
+    const text = (typeof c === "string" ? c : (c.text || "")).trim();
+    const logicalLines = text.split("\n");
+    let physLines = 0;
+    for (const ll of logicalLines) {
+      physLines += Math.max(1, Math.ceil(ll.replace(/\s/g, "").length / CHARS_PER_LINE));
+    }
+    const cardH = physLines * LINE_H + CARD_PAD_V + CARD_BORDER_V;
+    if (usedH + cardH > AREA_H) break;
+    usedH += cardH + GAP;
+    count++;
+  }
+  return count;
+}
+
 // ─── コメントタイミング計算（相棒の設計図：実測ベース） ──────────────────────
 // narrDurSec: STNの実測秒数
 // cmtDurs: CBNの実測秒数の配列
@@ -354,14 +383,13 @@ function buildCommentSlide(post, slideKey, narrDurSec = null, cmtDurs = []) {
       ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
       : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#0a1520,#1a2a3a);`;
+  const _cScale = iz.zoom || 1.0;
   const kbExtra = isPortrait
     ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
-    : iz.zoom !== 1.0
-      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
-      : "";
+    : `@keyframes kbZoom{from{transform:scale(${_cScale}) translate(-2%,0)}to{transform:scale(${(_cScale+0.08).toFixed(2)}) translate(2%,0)}}`;
   const bgImgCss = isPortrait
-    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
-    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 39s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 25s linear forwards;transform-origin:${bgPos};`;
 
   const topicTag     = slide.topicTag || "";
   const highlightIdx = slide.highlightIdx !== undefined ? parseInt(slide.highlightIdx) : 0;
@@ -456,14 +484,13 @@ function buildS5(post) {
       ? `background-image:url('data:${mime};base64,${b64}');background-size:100% auto;background-position:50% 0%;`
       : `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${bgPos};`
     : `background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);`;
+  const _cScale = iz.zoom || 1.0;
   const kbExtra = isPortrait
     ? `@keyframes panDown{from{background-position:50% 0%}to{background-position:50% 100%}}`
-    : iz.zoom !== 1.0
-      ? `@keyframes kbZoom{from{transform:scale(${iz.zoom}) translate(-2%,0)}to{transform:scale(${(iz.zoom+0.12).toFixed(2)}) translate(2%,0)}}`
-      : "";
+    : `@keyframes kbZoom{from{transform:scale(${_cScale}) translate(-2%,0)}to{transform:scale(${(_cScale+0.08).toFixed(2)}) translate(2%,0)}}`;
   const bgImgCss = isPortrait
-    ? `position:absolute;inset:0;${bgStyle}animation:panDown 30s linear forwards;`
-    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 10s linear forwards;transform-origin:${bgPos};`;
+    ? `position:absolute;inset:0;${bgStyle}animation:panDown 39s linear forwards;`
+    : `position:absolute;inset:0;${bgStyle}animation:kbZoom 25s linear forwards;transform-origin:${bgPos};`;
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   ${COMMON_CSS}
@@ -919,10 +946,12 @@ async function main() {
         const slideData = post[slideKey];
         if (!slideData?.comments?.length) continue;
         const cmtKey = si === 2 ? "2" : "3";
+        const visibleCmtCount = estimateVisibleCommentCount(slideData.comments);
         for (let ci = 0; ci < slideData.comments.length; ci++) {
           const p = path.join(slideDir, `cmt_${cmtKey}_${ci}.wav`);
           const text = (slideData.comments[ci].text || "").replace(/\n/g, "　").trim();
-          if (!text) { cmtDursBySlide[slideKey].push(0); cmtGlobalIdx++; continue; }
+          // 画面外コメント（visibleCmtCount以降）は読み上げなし
+          if (!text || ci >= visibleCmtCount) { cmtDursBySlide[slideKey].push(0); cmtGlobalIdx++; continue; }
           if (!fs.existsSync(p)) {
             const speaker = VV_CMT_SPEAKERS[cmtGlobalIdx % VV_CMT_SPEAKERS.length];
             try { await narrationVoiceVox(text, p, speaker); }
