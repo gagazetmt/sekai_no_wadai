@@ -134,7 +134,6 @@ async function scrapeCalciomatome(url) {
 // ─── RSS fetch ─────────────────────────────────────────────────────────────────
 const RSS_FEEDS = [
   { name: "calciomatome", url: "https://www.calciomatome.net/index20.rdf" },
-  { name: "soccer-king",  url: "https://www.soccer-king.jp/feed" },
 ];
 
 function extractXml(body, tag) {
