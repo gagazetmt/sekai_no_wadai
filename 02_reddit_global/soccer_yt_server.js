@@ -2918,6 +2918,8 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
       hashtagsText: p.hashtagsText || "",
       hasVideo:    fs.existsSync(videoPath),
       videoUrl:    fs.existsSync(videoPath) ? `/video-files/${videoName}` : null,
+      videoName,
+      isGenerated: p.isGenerated || false,
       thumbUrl:     thumbName ? `/images/${thumbName}` : null,
       imageUrls:    imagePaths.map(p2 => `/images/${p2.replace(/\\\\/g, "/").split("/").pop()}`),
       commentPool:  (p._commentPool || []).slice(0, 40),
@@ -3013,7 +3015,8 @@ textarea{resize:vertical;min-height:120px;}
 <body>
 <header>
   <h1>▶ YouTube投稿ランチャー</h1>
-  <span class="date-lbl">日付: <span id="date-val">-</span></span>
+  <input type="date" id="date-input-yt" style="background:#222;color:#ffd700;border:1px solid #555;border-radius:6px;padding:6px 10px;font-size:14px;font-weight:700;">
+  <button class="btn btn-load" onclick="changeDate()">読み込み</button>
   <div class="ml-auto" style="display:flex;gap:10px;align-items:center;">
     <button class="btn btn-load" onclick="loadPosts()">再読み込み</button>
     <button class="btn btn-upload-all" onclick="uploadAll()">▶ チェック済みを一括投稿</button>
@@ -3024,8 +3027,16 @@ textarea{resize:vertical;min-height:120px;}
 
 <script>
 const urlParams = new URLSearchParams(location.search);
-const DATE = urlParams.get("date") || "";
-document.getElementById("date-val").textContent = DATE || "未指定";
+let DATE = urlParams.get("date") || new Date(Date.now() + 9*60*60*1000).toISOString().slice(0,10);
+const dateInputYt = document.getElementById("date-input-yt");
+dateInputYt.value = DATE;
+
+function changeDate() {
+  DATE = dateInputYt.value;
+  if (!DATE) return;
+  history.replaceState(null, "", "/youtube?date=" + DATE);
+  loadPosts();
+}
 
 let postsData = [];
 let selectedThumbs = {};
@@ -3039,8 +3050,10 @@ async function loadPosts() {
     if (!j.ok) { setGlobalStatus("❌ " + j.error, "err"); return; }
     postsData = j.posts;
     renderPosts();
-    const videoCount = postsData.filter(p => p.hasVideo).length;
-    setGlobalStatus("✅ " + postsData.length + "件読み込み完了（動画あり: " + videoCount + "件）", "ok");
+    const videoCount    = postsData.filter(p => p.hasVideo).length;
+    const generatedCount = postsData.filter(p => p.isGenerated).length;
+    const extra = generatedCount > videoCount ? `  ⚠️ 生成フラグあり: ${generatedCount}件 (ファイル見つからず)` : "";
+    setGlobalStatus("✅ " + postsData.length + "件読み込み完了（動画あり: " + videoCount + "件）" + extra, videoCount > 0 ? "ok" : "run");
   } catch(e) { setGlobalStatus("❌ " + e.message, "err"); }
 }
 
@@ -3054,7 +3067,7 @@ function renderPosts() {
     ).join("");
     const videoHtml = p.hasVideo
       ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>"
-      : "<div class='no-video-msg'>動画未生成</div>";
+      : "<div class='no-video-msg'>動画未生成<br><span style='font-size:11px;color:#444;'>" + (p.videoName||"") + "</span></div>";
     const snippetsHtml = (p.serperSnippets||[]).length > 0
       ? \`<div class='serper-snippets'>\${(p.serperSnippets||[]).map(s=>\`<div class='serper-snippet'><b>\${esc(s.title)}</b><br>\${esc(s.snippet)}</div>\`).join("")}</div>\`
       : "";
