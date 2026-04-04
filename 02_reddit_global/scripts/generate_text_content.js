@@ -53,25 +53,75 @@ function detectType(title) {
 }
 
 // ─── X コメント取得 ───────────────────────────────────────────────────────────
-async function fetchXComments(query, lang, max = 5) {
+
+// ベース: 生ツイートを返す
+async function fetchRawTweets(query, max = 10) {
   const apiKey = process.env.TWITTER_API_IO_KEY;
   if (!apiKey || !query) return [];
   try {
     const res = await fetch("https://api.twitterapi.io/twitter/tweet/advanced_search", {
       method:  "POST",
       headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-      body:    JSON.stringify({ query: `${query} lang:${lang} -is:retweet`, max_results: max }),
-      signal:  AbortSignal.timeout(10000),
+      body:    JSON.stringify({ query, max_results: max }),
+      signal:  AbortSignal.timeout(12000),
     });
     if (!res.ok) return [];
-    const data  = await res.json();
-    const tweets = data?.tweets || data?.data || [];
-    return tweets.map(t => ({
+    const data = await res.json();
+    return data?.tweets || data?.data || [];
+  } catch { return []; }
+}
+
+// ツイート配列 → コメント形式に整形
+function cleanTweets(tweets, lang, max) {
+  return tweets
+    .map(t => ({
       text: (t.text || t.full_text || "").replace(/https?:\/\/\S+/g,"").replace(/@\w+/g,"").replace(/\n+/g," ").trim(),
       user: t.user?.name || t.author?.name || "X user",
       lang,
-    })).filter(c => c.text.length > 5).slice(0, max);
-  } catch { return []; }
+    }))
+    .filter(c => c.text.length > 5)
+    .slice(0, max);
+}
+
+// キーワード検索（フォールバック用）
+async function fetchXComments(query, lang, max = 5) {
+  const tweets = await fetchRawTweets(`${query} lang:${lang} -is:retweet`, max * 3);
+  return cleanTweets(tweets, lang, max);
+}
+
+// ニュースタイプ→参照アカウント辞書
+const SOURCE_ACCOUNTS = {
+  transfer:     ["FabrizioRomano", "David_Ornstein"],
+  manager:      ["FabrizioRomano", "David_Ornstein"],
+  injury:       ["FabrizioRomano", "David_Ornstein"],
+  "post-match": ["goal", "espnfc", "SkySportsFootball"],
+  topic:        ["goal", "espnfc", "SkySportsFootball", "bbcsport"],
+};
+
+// メインの新戦略: ソースアカウントのツイート → 返信を取得
+// フォールバック: ソースツイートなし or 返信0件 → キーワード検索
+async function fetchXCommentsViaAccount(keyword, type, lang, max = 5) {
+  const accounts = SOURCE_ACCOUNTS[type] || SOURCE_ACCOUNTS.topic;
+
+  // Step1: 各アカウントのキーワード関連ツイートを検索（英語で検索、言語フィルタなし）
+  const fromQuery = accounts.map(a => `from:${a}`).join(" OR ");
+  const sourceTweets = await fetchRawTweets(`(${fromQuery}) ${keyword} -is:retweet`, 5);
+
+  if (sourceTweets.length > 0) {
+    // Step2: 最初のツイートのconversationから返信を取得
+    const tweet = sourceTweets[0];
+    const tweetId = tweet.id_str || tweet.id || tweet.tweetId || tweet.tweet_id;
+    if (tweetId) {
+      const replies = await fetchRawTweets(
+        `conversation_id:${tweetId} lang:${lang} -is:retweet`,
+        max * 3
+      );
+      if (replies.length > 0) return cleanTweets(replies, lang, max);
+    }
+  }
+
+  // フォールバック: キーワード検索
+  return fetchXComments(keyword, lang, max);
 }
 
 async function detectFanLang(engQuery, imgKeywords) {
@@ -350,8 +400,8 @@ async function main() {
           fanLang = detectedLang;
           process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
           [xJaComments, xOtherComments] = await Promise.all([
-            fetchXComments(xQuery, "ja"),
-            fanLang !== "ja" ? fetchXComments(xQuery, fanLang) : Promise.resolve([]),
+            fetchXCommentsViaAccount(xQuery, "post-match", "ja"),
+            fanLang !== "ja" ? fetchXCommentsViaAccount(xQuery, "post-match", fanLang) : Promise.resolve([]),
           ]);
           console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
         }
@@ -392,8 +442,8 @@ async function main() {
           fanLang = detectedLang;
           process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
           [xJaComments, xOtherComments] = await Promise.all([
-            fetchXComments(xQuery, "ja"),
-            fanLang !== "ja" ? fetchXComments(xQuery, fanLang) : Promise.resolve([]),
+            fetchXCommentsViaAccount(xQuery, post.type || "topic", "ja"),
+            fanLang !== "ja" ? fetchXCommentsViaAccount(xQuery, post.type || "topic", fanLang) : Promise.resolve([]),
           ]);
           console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
         }
