@@ -107,6 +107,30 @@ async function fetchComments(permalink) {
   }
 }
 
+// ─── calciomatome 記事スクレイピング ─────────────────────────────────────────────
+// t_b クラス: [0]=試合データ/本文、[1]〜=5chコメント（Shift-JIS decode）
+async function scrapeCalciomatome(url) {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return { selftext: "", comments: [] };
+    const buf  = await res.arrayBuffer();
+    const html = new TextDecoder("shift_jis").decode(buf);
+
+    const blocks = [...html.matchAll(/<[^>]+class="t_b[^"]*"[^>]*>([\s\S]*?)<\/[a-z]+>/gi)]
+      .map(m => m[1].replace(/<[^>]+>/g, "").replace(/&gt;/g, "＞").replace(/&amp;/g, "&").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim())
+      .filter(t => t.length > 5);
+
+    const selftext = blocks[0] || "";
+    const comments = blocks.slice(1, 16).map((text, i) => ({ body: text, score: 15 - i }));
+    return { selftext, comments };
+  } catch {
+    return { selftext: "", comments: [] };
+  }
+}
+
 // ─── RSS fetch ─────────────────────────────────────────────────────────────────
 const RSS_FEEDS = [
   { name: "calciomatome", url: "https://www.calciomatome.net/index20.rdf" },
@@ -145,9 +169,22 @@ async function fetchRss({ name, url }) {
         score:       0,
         numComments: 0,
         created_utc,
+        selftext:    "",
         comments:    [],
       });
     }
+
+    // calciomatome は記事ページから本文・コメントをスクレイピング
+    if (name === "calciomatome") {
+      for (const item of items) {
+        const { selftext, comments } = await scrapeCalciomatome(item.url);
+        item.selftext    = selftext;
+        item.comments    = comments;
+        item.numComments = comments.length;
+        await new Promise(r => setTimeout(r, 300)); // レートリミット対策
+      }
+    }
+
     return items.sort((a, b) => b.created_utc - a.created_utc).slice(0, RSS_TOP_N);
   } catch (e) {
     console.warn(`⚠️  RSS取得失敗 [${name}]: ${e.message}`);
