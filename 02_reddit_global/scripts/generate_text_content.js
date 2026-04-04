@@ -124,14 +124,14 @@ async function generateMatchContent(matchData, comments, thread, xComments=[]) {
     ? `\n2試合制ノックアウト: 総合スコア ${matchData.aggregateScore}（${matchData.teamThatAdvances??""}が勝ち抜け）` : "";
   const d = new Date(dateArg+"T00:00:00Z");
   const jstDateStr = `${d.getUTCFullYear()}年${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
-  const prompt = `あなたは「リネカ」——20代前半、欧州サッカーに人生を捧げたクリエイティブ・ディレクターです。Reddit・Xの海外リアクションをリアルタイムで追い、「現地の温度感」を日本語に落とし込むプロ。以下のデータをもとに、視聴者が冒頭10秒で離脱できない動画コンテンツを設計してください。
+  const prompt = `あなたはサッカーニュース動画のコンテンツライターです。以下のデータをもとに、視聴者が冒頭10秒で離脱できない動画コンテンツを設計してください。
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【スレッドタイトル（最重要・この事件を動画化する）】${thread.title}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【コンテンツタイプ】post-match（試合後）
 【絶対ルール】スレッドタイトルと試合データに存在しない人名・チーム名は絶対に使わない。架空の数字・記録は使わない。
-【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。「なんと！」「信じられない展開！」「これは熱い！」のような感嘆や興奮を交えた、テンション高めのYouTuberキャスター口調。堅い言い回しは避け友達に話しかける感覚で。ただし意味は明確に。
-【リネカの制作哲学】- ナレーション中に「Reddit」は絶対に使わず「海外サッカー掲示板」と表現。- 大会名・日付・スコア・主要得点者と分数を必ず盛り込む。- コメント意訳は「笑い・驚き・共感」のどれかを持たせる。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。
+【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。基本はニュース解説口調を維持すること。ただし「これは注目ですね」「驚きの一戦でした」程度の軽い感嘆は自然に入れてよい。キャラクターを前面に出したり友達に話しかける感覚にはしないこと。ニュースキャスターが少しだけ砕けた感じ。
+【制作ルール】- ナレーション中に「Reddit」は絶対に使わず「海外サッカー掲示板」と表現。- 大会名・日付・スコア・主要得点者と分数を必ず盛り込む。- コメント意訳は「笑い・驚き・共感」のどれかを持たせる。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。
 【試合データ】日付:${jstDateStr} 対戦:${matchData.homeTeam}vs${matchData.awayTeam} スコア:${matchData.homeScore}-${matchData.awayScore} 大会:${matchData.leagueJa||matchData.league}${knockoutNote} 得点:${goalsText} 退場:${matchData.redCards?.length>0?matchData.redCards.map(r=>`${r.minute}分 ${r.player}`).join("、"):"なし"} ムード:${matchData.matchMood||"EXCITING"}
 【海外ファンの反応（Reddit）】${comments.slice(0,15).join("\n")}${xComments.length>0?`\n【X海外ファンの反応】\n${xComments.slice(0,15).join("\n")}`:""}
 以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字・大会名・日付・スコア・得点者分数を必ず含む）","overviewTelop":"S2テロップ（25文字以内）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（20〜40文字）","outroTelop":"S5テロップ（18〜28文字・登録呼びかけ厳禁）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
@@ -144,14 +144,14 @@ async function generateMatchContent(matchData, comments, thread, xComments=[]) {
 const TYPE_LABEL_MAP = { transfer:"移籍情報", injury:"負傷情報", manager:"監督情報", finance:"財政・制裁", topic:"注目トピック" };
 async function generateTopicContent(topicData, comments, thread, xComments=[]) {
   const typeLabel = TYPE_LABEL_MAP[thread.type] || "注目トピック";
-  const prompt = `あなたは「リネカ」——20代前半、欧州サッカーに人生を捧げたクリエイティブ・ディレクターです。以下のデータをもとに、視聴者が冒頭10秒で離脱できない動画コンテンツを設計してください。
+  const prompt = `あなたはサッカーニュース動画のコンテンツライターです。以下のデータをもとに、視聴者が冒頭10秒で離脱できない動画コンテンツを設計してください。
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【スレッドタイトル】${thread.title}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【コンテンツタイプ】${typeLabel}
 【絶対ルール】存在しない人名・チーム名・数字は使わない。
-【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。「なんと！」「これは熱い！」「マジか！」のような感嘆や興奮を交えた、テンション高めのYouTuberキャスター口調。堅い言い回しは避け友達に話しかける感覚で。ただし意味は明確に。
-【リネカの制作哲学】- 「Reddit」→「海外サッカー掲示板」。- コメント意訳は「笑い・驚き・共感」のどれか。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。
+【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。基本はニュース解説口調を維持すること。ただし「これは注目ですね」「驚きの展開です」程度の軽い感嘆は自然に入れてよい。キャラクターを前面に出したり友達に話しかける感覚にはしないこと。ニュースキャスターが少しだけ砕けた感じ。
+【制作ルール】- 「Reddit」→「海外サッカー掲示板」。- コメント意訳は「笑い・驚き・共感」のどれか。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。
 【スレッド本文】${(topicData.selftext||"").slice(0,800)||"（本文なし）"}
 【海外ファンの反応（Reddit）】${comments.slice(0,15).join("\n")}${xComments.length>0?`\n【X海外ファンの反応】\n${xComments.slice(0,15).join("\n")}`:""}
 以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字）","overviewTelop":"S2テロップ（25文字以内・誰が・何をしたか）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（20〜40文字）","outroTelop":"S5テロップ（18〜28文字・登録呼びかけ厳禁）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
