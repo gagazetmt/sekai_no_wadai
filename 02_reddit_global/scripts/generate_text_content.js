@@ -84,10 +84,12 @@ Headline: ${text}` }] });
   } catch { return text.slice(0, 60); }
 }
 
-async function extractImageKeywords(title) {
+async function extractImageKeywords(title, snippets = []) {
+  const ctx = snippets.length > 0
+    ? `\nContext from recent articles:\n${snippets.map(s => s.title + ": " + s.snippet).join("\n")}` : "";
   try {
-    const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 60,
-      messages: [{ role: "user", content: `Extract up to 3 English proper nouns (team names, player names, manager names) from this soccer news headline for image search. Return a JSON array only, e.g. ["England","Tuchel","Foden"]. No explanation.\n${title}` }] });
+    const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 80,
+      messages: [{ role: "user", content: `Extract up to 3 English proper nouns (team names, player names, manager names) for image search. Prioritize names found in the context. Return a JSON array only, e.g. ["Chelsea","De Zerbi","Enzo"]. No explanation.\nHeadline: ${title}${ctx}` }] });
     const m = raw.match(/\[[\s\S]*?\]/);
     if (!m) return [];
     const arr = JSON.parse(m[0]);
@@ -95,10 +97,12 @@ async function extractImageKeywords(title) {
   } catch { return []; }
 }
 
-async function extractPlayerNames(title) {
+async function extractPlayerNames(title, snippets = []) {
+  const ctx = snippets.length > 0
+    ? `\nContext: ${snippets.map(s => s.snippet).join(" ").slice(0, 400)}` : "";
   try {
     const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 80,
-      messages: [{ role: "user", content: `Extract soccer player names only (not teams/countries/managers) from this headline. Return English names as a JSON array, max 3. E.g. ["Junya Ito","Erling Haaland"]. If none, return [].\n${title}` }] });
+      messages: [{ role: "user", content: `Extract soccer player names only (not teams/countries/managers). Prioritize names found in the context. Return English names as a JSON array, max 3. E.g. ["Junya Ito","Erling Haaland"]. If none, return [].\nHeadline: ${title}${ctx}` }] });
     const m = raw.match(/\[[\s\S]*?\]/);
     if (!m) return [];
     const arr = JSON.parse(m[0]);
@@ -259,10 +263,11 @@ async function main() {
       const rawComments = (post.comments || []).map(c => `[👍${c.score||0}] ${c.body||""}`);
       const selftext = post.selftext || "";
 
-      let matchData = null;
-      let ytContent  = null;
-      let xSearchQuery = "";
-      let wikiWords  = [];
+      let matchData     = null;
+      let ytContent     = null;
+      let xSearchQuery  = "";
+      let wikiWords     = [];
+      let serperSnippets = [];
 
       if (isMatch) {
         // 試合データ抽出
@@ -279,25 +284,27 @@ async function main() {
         ytContent = await generateMatchContent(matchData, rawComments, post);
         console.log("✅");
       } else {
-        // キーワード抽出
+        // ① engQuery を先に取得
         const rawQuery = post.title.replace(/^\[.*?\]\s*/g,"").slice(0, 80);
         const needsTranslation = /[\u3040-\u30ff\u4e00-\u9fff]/.test(rawQuery);
-        const [engQuery, imgKeywords, playerNames] = await Promise.all([
-          needsTranslation ? translateKeywordToEnglish(rawQuery) : Promise.resolve(rawQuery),
-          extractImageKeywords(post.title),
-          extractPlayerNames(post.title),
-        ]);
+        const engQuery = needsTranslation ? await translateKeywordToEnglish(rawQuery) : rawQuery;
         xSearchQuery = engQuery;
+
+        // ② Serper検索（スニペット取得）
+        process.stdout.write(`  [${num}] Serper検索 "${engQuery.slice(0,40)}"... `);
+        serperSnippets = await searchSerper(engQuery);
+        console.log(serperSnippets.length > 0 ? `✅ ${serperSnippets.length}件` : "⚠️ 0件");
+
+        // ③ スニペット込みでキーワード抽出（精度向上）
+        const [imgKeywords, playerNames] = await Promise.all([
+          extractImageKeywords(post.title, serperSnippets),
+          extractPlayerNames(post.title, serperSnippets),
+        ]);
         const managers = lookupManagers(imgKeywords);
         wikiWords = [
           ...managers.filter(m => !imgKeywords.some(k => m.toLowerCase().includes(k.toLowerCase()))),
           ...playerNames,
         ].filter(Boolean);
-
-        // Serper検索で補強情報取得（過去7日・最大3件）
-        process.stdout.write(`  [${num}] Serper検索 "${engQuery.slice(0,40)}"... `);
-        const serperSnippets = await searchSerper(engQuery);
-        console.log(serperSnippets.length > 0 ? `✅ ${serperSnippets.length}件` : "⚠️ 0件（スキップ）");
 
         process.stdout.write(`  [${num}] コンテンツ生成... `);
         ytContent = await generateTopicContent({ selftext }, rawComments, post, [], serperSnippets);
@@ -351,6 +358,7 @@ async function main() {
           url:         post.url || null,
           xSearchQuery,
           wikiWords,
+          serperSnippets,
           matchData:   matchData || null,
           imgFetched:  false,
         },

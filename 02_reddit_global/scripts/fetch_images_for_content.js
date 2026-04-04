@@ -61,7 +61,7 @@ async function planImageSearch(post) {
 元タイトル(英): ${meta.title}
 日本語タイトル: ${post.youtubeTitle || post.catchLine1 || ""}
 ハッシュタグ: ${post.hashtagsText || ""}
-概要: ${(post.overviewNarration || "").slice(0, 200)}
+概要: ${(post.overviewNarration || "").slice(0, 200)}${meta.serperSnippets?.length > 0 ? `\n【参考記事（最新ニュース）】\n${meta.serperSnippets.map(s => s.title + ": " + s.snippet).join("\n")}` : ""}
 
 【取得方法と上限】
 1. チーム公式X (最大6枚): 以下の辞書に登録されたチーム名を指定すると公式アカウントから取得
