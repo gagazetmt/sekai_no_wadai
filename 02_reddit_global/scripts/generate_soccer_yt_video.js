@@ -606,10 +606,14 @@ function sanitizeForVoiceVox(text) {
     .replace(/西村(?:拓真)?/g, "にしむらたくま")
     .replace(/森保(?:一)?/g, "もりやすはじめ")
     // ─ 記号・特殊文字 ─
+    .replace(/\[r\](.*?)\[\/r\]/g, "$1")  // [r]赤文字[/r]タグを除去（内容は残す）
+    .replace(/\[r\]|\[\/r\]/g, "")         // 残った[r][/r]を除去
+    .replace(/\\n/g, "　")                  // リテラル\nを全角スペースに
     .replace(/→/g, "から")
     .replace(/×/g, "たい")
     .replace(/【([^】]+)】/g, "$1")
     .replace(/〝([^〟]+)〟/g, "$1")
+    .replace(/・/g, " ")                    // 中点は短ポーズ（スペース）に
     .replace(/\n/g, "　")
     .trim();
 }

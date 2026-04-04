@@ -84,6 +84,32 @@ async function detectFanLang(engQuery, imgKeywords) {
   } catch { return "en"; }
 }
 
+// X検索に最適な短いキーワードをDeepSeekに考えさせる
+async function generateXQuery(title, serperSnippets) {
+  try {
+    const ctx = serperSnippets?.length
+      ? serperSnippets.map(s => s.title).join(" / ")
+      : "";
+    const prompt = `Soccer news title: "${title}"${ctx ? `\nContext: ${ctx}` : ""}
+
+Generate ONE short X (Twitter) search keyword to find fan reaction tweets about this news.
+Rules:
+- Use the most recognizable name (player name, team name, or key term)
+- Short enough to return many results (1-4 words max)
+- Avoid full sentences or overly specific phrases that return 0 results
+Return ONLY the search term. No explanation.
+
+Examples:
+"Alternate angles of Dembélé's goal against Toulouse" → "Dembele PSG"
+"Leicester City 15 games without win relegated" → "Leicester relegation"
+"Canada Soccer offering Italian fans free jersey" → "Canada Italy shirt"`;
+    const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 20,
+      messages: [{ role: "user", content: prompt }] });
+    const q = raw.trim().replace(/^["']|["']$/g, "").replace(/\n.*/s, "");
+    return q.length > 2 ? q : title.slice(0, 40);
+  } catch { return title.slice(0, 40); }
+}
+
 // ─── Serper検索 ───────────────────────────────────────────────────────────────
 async function searchSerper(query) {
   const apiKey = process.env.SERPER_API_KEY;
@@ -317,11 +343,15 @@ async function main() {
 
         // Xコメント取得（試合はリーグから言語判定）
         if (process.env.TWITTER_API_IO_KEY) {
-          fanLang = await detectFanLang(xSearchQuery, [matchData.homeTeam, matchData.awayTeam]);
-          process.stdout.write(`  [${num}] Xコメント取得 (ja+${fanLang})... `);
+          const [xQuery, detectedLang] = await Promise.all([
+            generateXQuery(xSearchQuery, []),
+            detectFanLang(xSearchQuery, [matchData.homeTeam, matchData.awayTeam]),
+          ]);
+          fanLang = detectedLang;
+          process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
           [xJaComments, xOtherComments] = await Promise.all([
-            fetchXComments(xSearchQuery, "ja"),
-            fanLang !== "ja" ? fetchXComments(xSearchQuery, fanLang) : Promise.resolve([]),
+            fetchXComments(xQuery, "ja"),
+            fanLang !== "ja" ? fetchXComments(xQuery, fanLang) : Promise.resolve([]),
           ]);
           console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
         }
@@ -355,11 +385,15 @@ async function main() {
 
         // ④ Xコメント取得（ja + 検出言語）
         if (process.env.TWITTER_API_IO_KEY) {
-          fanLang = await detectFanLang(engQuery, imgKeywords);
-          process.stdout.write(`  [${num}] Xコメント取得 (ja+${fanLang})... `);
+          const [xQuery, detectedLang] = await Promise.all([
+            generateXQuery(engQuery, serperSnippets),
+            detectFanLang(engQuery, imgKeywords),
+          ]);
+          fanLang = detectedLang;
+          process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
           [xJaComments, xOtherComments] = await Promise.all([
-            fetchXComments(engQuery, "ja"),
-            fanLang !== "ja" ? fetchXComments(engQuery, fanLang) : Promise.resolve([]),
+            fetchXComments(xQuery, "ja"),
+            fanLang !== "ja" ? fetchXComments(xQuery, fanLang) : Promise.resolve([]),
           ]);
           console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
         }
