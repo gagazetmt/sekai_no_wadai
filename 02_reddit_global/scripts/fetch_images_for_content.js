@@ -92,6 +92,12 @@ async function planImageSearch(post) {
         Object.keys(TEAM_X_ACCOUNTS).some(k => k.toLowerCase() === (name || "").toLowerCase())
       );
     }
+    // テキスト生成時に抽出済みの選手名・監督名を先頭に保証（AIが抜かした場合の補完）
+    if (meta.wikiWords?.length > 0) {
+      const planSet = new Set((plan.wikiWords || []).map(w => w.toLowerCase()));
+      const toAdd = meta.wikiWords.filter(w => w && !planSet.has(w.toLowerCase()));
+      plan.wikiWords = [...toAdd, ...(plan.wikiWords || [])];
+    }
     return plan;
   } catch (e) {
     console.warn(`  ⚠️ プラン生成失敗: ${e.message} → フォールバック`);
@@ -216,7 +222,7 @@ async function fetchImagesForPost(post, num, date) {
 
   // ── AI による画像スライド配置 ─────────────────────────────────────────────
   process.stdout.write(`  [${num}] AI画像配置(${imageInfos.length}枚から選定)... `);
-  const selection = await selectBestImagesWithAI(meta.title, imageInfos);
+  const selection = await selectBestImagesWithAI(post, imageInfos);
   console.log("完了");
 
   const imagePaths = imageInfos.map(info => info.path);
