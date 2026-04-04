@@ -339,7 +339,7 @@ function estimateVisibleCommentCount(comments) {
       physLines += Math.max(1, Math.ceil(ll.replace(/\s/g, "").length / CHARS_PER_LINE));
     }
     const cardH = physLines * LINE_H + CARD_PAD_V + CARD_BORDER_V;
-    if (usedH + cardH > AREA_H) break;
+    if (usedH + cardH * 0.5 > AREA_H) break;  // 半分以上見えてれば読み上げOK
     usedH += cardH + GAP;
     count++;
   }
@@ -673,8 +673,8 @@ async function renderVideo(page, slideHtml, durationMs, outputPath) {
   const duration    = durationMs / 1000;
   const totalFrames = Math.round(duration * FPS);
 
-  // 背景ズーム/パンは固定40秒（スライド尺に依存させない）
-  const BG_ANIM_SECS = 40;
+  // 背景ズーム/パンはスライド尺に合わせる（全アニメーションがスライド内で完結）
+  const BG_ANIM_SECS = Math.max(duration, 5);
   const injectStyle = `<style id="yt-inject">.bg-img{animation-duration:${BG_ANIM_SECS}s !important;}</style>`;
   const html = slideHtml.replace("</head>", `${injectStyle}</head>`);
   await page.setContent(html, { waitUntil: "load", timeout: 120000 });

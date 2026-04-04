@@ -2935,56 +2935,66 @@ app.get("/youtube", (req, res) => {
 <title>▶ YouTube投稿ランチャー</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#0d0d0d;color:#e8e8e8;font-family:"Hiragino Kaku Gothic ProN",sans-serif;font-size:13px;}
-header{background:#1a1a1a;border-bottom:1px solid #2e2e2e;padding:10px 16px;display:flex;align-items:center;gap:10px;}
-header h1{font-size:15px;font-weight:900;color:#ffd700;}
-.date-lbl{color:#888;font-size:12px;}
+body{background:#0d0d0d;color:#e8e8e8;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;font-size:15px;}
+header{background:#1a1a1a;border-bottom:2px solid #2e2e2e;padding:14px 24px;display:flex;align-items:center;gap:14px;}
+header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
+.date-lbl{color:#888;font-size:14px;}
 #date-val{color:#ffd700;font-weight:700;}
-.btn{cursor:pointer;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;}
-.btn:hover{opacity:.8;}.btn:disabled{opacity:.4;cursor:not-allowed;}
-.btn-load{background:#333;color:#e8e8e8;}
-.btn-upload{background:#ff0000;color:#fff;}
-.btn-upload-all{background:#cc0000;color:#fff;font-size:13px;padding:8px 18px;}
-.btn-sm{padding:4px 8px;font-size:11px;background:#333;color:#aaa;}
+.btn{cursor:pointer;border:none;border-radius:6px;padding:9px 20px;font-size:14px;font-weight:700;transition:opacity .15s;}
+.btn:hover{opacity:.8;}.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-load{background:#3a3a3a;color:#e8e8e8;}
+.btn-upload{background:#ff0000;color:#fff;font-size:15px;padding:10px 24px;}
+.btn-upload-all{background:#cc0000;color:#fff;font-size:15px;padding:10px 24px;}
 .ml-auto{margin-left:auto;}
-.container{max-width:1200px;margin:0 auto;padding:16px;}
-.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
-.post-card{background:#1a1a1a;border:1px solid #2e2e2e;border-radius:10px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:200px 1fr 220px;gap:16px;}
-.post-card.has-video{border-color:#444;}
-.post-card.no-video{opacity:.6;}
-.check-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
-.check-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
-.check-row label{font-size:13px;font-weight:700;color:#ffd700;cursor:pointer;}
-.thumb-area{position:relative;}
-.thumb-area img{width:100%;border-radius:6px;border:2px solid #333;display:block;}
-.thumb-area .no-img{width:100%;height:110px;background:#222;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#555;font-size:12px;}
-.thumb-swap{margin-top:6px;}
-.thumb-swap-label{font-size:10px;color:#666;margin-bottom:4px;}
-.thumb-images{display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;}
-.thumb-images img{width:40px;height:40px;object-fit:cover;border-radius:3px;cursor:pointer;border:2px solid transparent;opacity:.7;}
-.thumb-images img:hover,.thumb-images img.selected{border-color:#ff0000;opacity:1;}
-.meta-col{display:flex;flex-direction:column;gap:8px;}
-.field-lbl{font-size:10px;color:#888;margin-bottom:2px;}
-.field-lbl span{color:#e8e8e8;}
-input[type=text],textarea{width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:4px;padding:6px 8px;font-size:12px;font-family:inherit;}
-input[type=text]:focus,textarea:focus{border-color:#ffd700;outline:none;}
-textarea{resize:vertical;min-height:70px;}
-.video-col{display:flex;flex-direction:column;gap:8px;}
-.video-preview{width:100%;border-radius:6px;background:#000;}
-.no-video-msg{width:100%;height:100px;background:#111;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#555;font-size:11px;text-align:center;}
-.post-actions{display:flex;gap:6px;align-items:center;margin-top:auto;}
-.status-msg{font-size:11px;padding:3px 8px;border-radius:4px;}
+.container{max-width:1800px;margin:0 auto;padding:20px 24px;}
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+.global-status{padding:10px 24px;background:#111;border-bottom:1px solid #2e2e2e;font-size:14px;color:#888;min-height:38px;}
 .status-ok{background:#1a3a1a;color:#3cb371;}
 .status-err{background:#3a1a1a;color:#e05555;}
 .status-run{background:#1a2a3a;color:#4a9eff;}
-.global-status{padding:8px 16px;background:#111;border-bottom:1px solid #2e2e2e;font-size:12px;color:#888;min-height:34px;}
+
+/* ── カード ── */
+.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:380px 1fr 300px;gap:20px;}
+.post-card.has-video{border-color:#3a3a3a;}
+.post-card.no-video{opacity:.55;}
+.card-num{font-size:13px;color:#666;margin-bottom:6px;}
+.card-title{font-size:15px;font-weight:700;color:#ffd700;margin-bottom:10px;line-height:1.4;overflow-wrap:break-word;}
+.check-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.check-row input[type=checkbox]{width:20px;height:20px;cursor:pointer;accent-color:#ff0000;}
+.check-row label{font-size:14px;font-weight:700;color:#ccc;cursor:pointer;}
+
+/* ── 左列: サムネ + ギャラリー ── */
+.left-col{display:flex;flex-direction:column;gap:12px;}
+.tn-wrapper{width:380px;height:214px;overflow:hidden;border-radius:8px;border:2px solid #333;background:#000;position:relative;}
+.tn-wrapper iframe{width:1280px;height:720px;transform:scale(0.2969);transform-origin:0 0;border:none;pointer-events:none;}
+.no-thumb{width:380px;height:214px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;}
+.gallery-label{font-size:12px;color:#666;margin-bottom:6px;}
+.gallery{display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;}
+.gallery img{width:56px;height:56px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid transparent;opacity:.65;transition:all .15s;}
+.gallery img:hover,.gallery img.selected{border-color:#ff0000;opacity:1;}
+
+/* ── 中列: テキスト編集 ── */
+.meta-col{display:flex;flex-direction:column;gap:14px;}
+.field-lbl{font-size:12px;color:#888;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+input[type=text],textarea{width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:10px 12px;font-size:14px;font-family:inherit;line-height:1.5;}
+input[type=text]:focus,textarea:focus{border-color:#ffd700;outline:none;}
+textarea{resize:vertical;min-height:120px;}
+.textarea-desc{min-height:160px;}
+
+/* ── 右列: 動画 ── */
+.video-col{display:flex;flex-direction:column;gap:10px;}
+.video-preview{width:100%;border-radius:8px;background:#000;display:block;}
+.no-video-msg{width:100%;height:200px;background:#111;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;text-align:center;}
+.post-actions{display:flex;gap:10px;align-items:center;margin-top:4px;}
+.status-msg{font-size:13px;padding:5px 10px;border-radius:5px;flex:1;}
 </style>
 </head>
 <body>
 <header>
   <h1>▶ YouTube投稿ランチャー</h1>
   <span class="date-lbl">日付: <span id="date-val">-</span></span>
-  <div class="ml-auto" style="display:flex;gap:8px;">
+  <div class="ml-auto" style="display:flex;gap:10px;align-items:center;">
+    <button class="btn btn-load" onclick="loadPosts()">再読み込み</button>
     <button class="btn btn-upload-all" onclick="uploadAll()">▶ チェック済みを一括投稿</button>
   </div>
 </header>
@@ -3016,26 +3026,29 @@ async function loadPosts() {
 function renderPosts() {
   const container = document.getElementById("posts-container");
   container.innerHTML = postsData.map((p, i) => {
-    const thumbHtml = p.thumbUrl
-      ? "<img id='thumb-" + i + "' src='" + p.thumbUrl + "' alt='サムネイル'>"
-      : "<div class='no-img'>サムネなし</div>";
+    // TNダブ: メインランチャーと同じ /api/thumbnail/preview/:date/:idx
+    const tnHtml = \`<div class='tn-wrapper'><iframe src='/api/thumbnail/preview/\${DATE}/\${p.idx}?t=\${Date.now()}' scrolling='no'></iframe></div>\`;
     const swapImgs = p.imageUrls.map((url, j) =>
-      "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + ",\\\"" + url + "\\\")' title='サムネに設定'>"
+      "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + ",\"" + url + "\")' title='サムネに設定'>"
     ).join("");
     const videoHtml = p.hasVideo
-      ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "' style='width:100%;border-radius:6px;'></video>"
+      ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>"
       : "<div class='no-video-msg'>動画未生成</div>";
     return \`
 <div class='post-card \${p.hasVideo ? "has-video" : "no-video"}' id='card-\${i}'>
-  <div>
-    <div class='check-row'>
-      <input type='checkbox' id='chk-\${i}' \${p.hasVideo ? "" : "disabled"} data-idx='\${i}'>
-      <label for='chk-\${i}'>#\${p.num} \${p.catchLine1}</label>
+  <div class='left-col'>
+    <div>
+      <div class='card-num'>#\${p.num}</div>
+      <div class='card-title'>\${esc(p.catchLine1)}</div>
+      <div class='check-row'>
+        <input type='checkbox' id='chk-\${i}' \${p.hasVideo ? "" : "disabled"} data-idx='\${i}'>
+        <label for='chk-\${i}'>投稿対象に含める</label>
+      </div>
     </div>
-    <div class='thumb-area'>\${thumbHtml}</div>
-    <div class='thumb-swap'>
-      <div class='thumb-swap-label'>サムネ変更</div>
-      <div class='thumb-images' id='thumbs-\${i}'>\${swapImgs}</div>
+    \${tnHtml}
+    <div>
+      <div class='gallery-label'>サムネ画像を変更</div>
+      <div class='gallery' id='thumbs-\${i}'>\${swapImgs}</div>
     </div>
   </div>
   <div class='meta-col'>
@@ -3045,7 +3058,7 @@ function renderPosts() {
     </div>
     <div>
       <div class='field-lbl'>説明文・概要欄</div>
-      <textarea id='desc-\${i}' rows='4'>\${esc(p.description)}</textarea>
+      <textarea class='textarea-desc' id='desc-\${i}'>\${esc(p.description)}</textarea>
     </div>
     <div>
       <div class='field-lbl'>ハッシュタグ</div>
@@ -3066,8 +3079,6 @@ function renderPosts() {
 function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 
 function swapThumb(postIdx, imgIdx, url) {
-  const thumbEl = document.getElementById("thumb-" + postIdx);
-  if (thumbEl) thumbEl.src = url;
   selectedThumbs[postIdx] = url;
   const container = document.getElementById("thumbs-" + postIdx);
   if (container) container.querySelectorAll("img").forEach((img, j) => {
