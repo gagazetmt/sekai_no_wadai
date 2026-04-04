@@ -25,7 +25,7 @@ const FFMPEG       = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe
 const FFPROBE      = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffprobe.exe" : "ffprobe";
 const VOICEVOX_URL = "http://localhost:50021";
 const VV_SPEAKER   = 13;  // 青山龍星 ノーマル（ナレーション用）
-const VV_SPEED     = 1.2;
+const VV_SPEED     = 1.26;
 const VV_CMT_SPEAKERS = [13, 11, 3, 11, 13, 3, 0];  // コメント用: 青山龍星/玄野武宏/ずんだもん ローテ + 四国めたん×1
 
 const W    = 1920;
@@ -597,7 +597,7 @@ async function narrationVoiceVox(text, outputPath, speaker = VV_SPEAKER) {
   if (!qRes.ok) throw new Error(`VoiceVox query: ${qRes.status}`);
   const query = await qRes.json();
   query.speedScale      = VV_SPEED;
-  query.intonationScale = 1.35;  // 抑揚を強める（デフォルト1.0）
+  query.intonationScale = 1.45;  // 抑揚を強める（デフォルト1.0）
   query.volumeScale     = 1.1;   // 少し大きめ
   const sRes = await fetch(`${VOICEVOX_URL}/synthesis?speaker=${speaker}`, {
     method: "POST",

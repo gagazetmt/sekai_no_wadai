@@ -104,20 +104,28 @@ async function planImageSearch(post) {
 }
 
 // ─── AI による画像スライド配置選定 ──────────────────────────────────────────────
-async function selectBestImagesWithAI(title, imageInfos) {
+async function selectBestImagesWithAI(post, imageInfos) {
   if (!imageInfos || imageInfos.length === 0) return {};
-  const prompt = `以下のサッカーニュースに最適な画像を選んでスライドに配置してください。
-ニュースタイトル: ${title}
+  const meta = post._imgMeta || {};
+  const prompt = `あなたはサッカーYouTube動画の画像編集者です。以下のニュース内容と画像リストをもとに、各スライドに最適な画像番号を選んでください。
 
-画像リスト:
-${imageInfos.map((img, i) => `${i}: [出所:${img.source}] [KW:${img.kw}]`).join("\n")}
+【ニュース情報】
+タイトル(英): ${meta.title || ""}
+日本語タイトル: ${post.youtubeTitle || post.catchLine1 || ""}
+概要: ${(post.overviewNarration || "").slice(0, 150)}
+ハッシュタグ: ${post.hashtagsText || ""}
 
-以下のJSONのみを返してください（なるべく異なる画像を選択）:
-{"main": 番号, "s2": 番号, "s3": 番号, "s4": 番号}
-- main: サムネイル用（選手・監督の顔、インパクトある場面）
-- s2: 概要用（公式発表、試合シーン）
-- s3: 反応用1（スタジアム、現地の熱気）
-- s4: 反応用2（補足画像）`;
+【選定基準】
+- main（サムネイル）: このニュースの主人公（選手・監督）の顔が写った画像を最優先。なければキーワードに最も関連する画像。
+- s2（概要スライド）: 試合・発表シーンなど「事実」を伝える画像
+- s3（反応スライド1）: 選手・監督のアクション、スタジアムの熱気
+- s4（反応スライド2）: s3と異なる角度・人物の画像
+
+【画像リスト】
+${imageInfos.map((img, i) => `${i}: [出所:${img.source}] [検索KW:${img.kw}]`).join("\n")}
+
+JSONのみを返してください（なるべく全て異なる番号を選択）:
+{"main": 番号, "s2": 番号, "s3": 番号, "s4": 番号}`;
 
   try {
     const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 150, messages: [{ role: "user", content: prompt }] });
