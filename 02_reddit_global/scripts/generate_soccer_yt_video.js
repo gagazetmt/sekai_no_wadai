@@ -891,6 +891,8 @@ async function main() {
 
       const slideDir = path.join(SLIDES_DIR, `${today}_${post.num}`);
       if (!fs.existsSync(slideDir)) fs.mkdirSync(slideDir, { recursive: true });
+      // コンテンツ更新時の古いWAVキャッシュを削除（バブルと音声のズレ防止）
+      fs.readdirSync(slideDir).filter(f => f.endsWith(".wav")).forEach(f => fs.unlinkSync(path.join(slideDir, f)));
 
       // ── ナレーションテキスト ──────────────────────────────────────────────
       const narrTexts = [
