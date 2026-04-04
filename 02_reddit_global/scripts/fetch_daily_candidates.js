@@ -25,9 +25,9 @@ const { callAI }    = require("./ai_client");
 const DATA_DIR          = path.join(__dirname, "..", "data");
 const HISTORY_FILE      = path.join(DATA_DIR, "seen_history.json");
 const HISTORY_KEEP_DAYS = 30;
-const REDDIT_TOP_N      = 10;
-const RSS_TOP_N         = 10;
-const MAX_TOTAL_POSTS   = 30;
+const REDDIT_TOP_N      = 8;
+const RSS_TOP_N         = 8;
+const MAX_TOTAL_POSTS   = 20;
 const COMMENT_LIMIT     = 20;
 
 const VPS_HOST = "root@37.60.224.54";
@@ -295,7 +295,16 @@ async function main() {
   console.log(`\n🕐 ${iso} | Mode: ${mode} | Date: ${date}`);
   console.log("─".repeat(50));
 
-  // ① Reddit top15 + RSS top15 を並列取得
+  // update モード: 既存JSONが上限に達していればスキップ
+  if (!isMidnight) {
+    const existing = loadDaily(date);
+    if (existing && existing.posts?.length >= MAX_TOTAL_POSTS) {
+      console.log(`✅ 上限${MAX_TOTAL_POSTS}件に達しているためスキップ (現在 ${existing.posts.length}件)`);
+      return;
+    }
+  }
+
+  // ① Reddit top8 + RSS top8 を並列取得
   console.log(`📡 Fetching Reddit top${REDDIT_TOP_N} + RSS top${RSS_TOP_N}...`);
   let [redditPosts, rssPosts] = await Promise.all([
     fetchRedditTop().catch(e => { console.warn(`⚠️ Reddit取得失敗: ${e.message}`); return []; }),
