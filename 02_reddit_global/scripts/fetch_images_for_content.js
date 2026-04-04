@@ -14,7 +14,7 @@ const { callAI } = require("./ai_client");
 
 // 既存モジュールをそのまま利用
 const { fetchMatchImages }                          = require("./fetch_match_images");
-const { fetchXImages, fetchOfficialXImages }        = require("./fetch_x_images");
+const { fetchOfficialXImages }                      = require("./fetch_x_images");
 const { fetchWikimediaImages }                      = require("./fetch_wikimedia");
 
 const TEMP_DIR = path.join(__dirname, "..", "temp");
@@ -73,7 +73,7 @@ async function planImageSearch(post) {
 {
   "xKeywords": "英語検索クエリ（具体的な人名・チーム名・事象を含む3-5ワード。filter:imagesは不要）",
   "officialTeams": ["辞書に登録されているチーム名"],
-  "wikiWords": ["優先度順の検索ワード（選手名・監督名・チーム名を英語で）"]
+  "wikiWords": ["優先度順の検索ワード。選手名・監督名を最優先。次にチーム名。チーム名が確定している場合は 'チーム名 stadium' と 'チーム名 logo' も末尾に追加すること（post-matchはホームチームのみ）。全て英語で。"]
 }`;
 
   try {
@@ -174,17 +174,17 @@ async function fetchImagesForPost(post, num, date) {
       imageInfos.push(...ogPaths.map(p => ({ path: p, source: "RSS_OGP", kw: meta.title })));
     }
 
-    // ── ① X検索（最大6枚） ────────────────────────────────────────────────
-    if (process.env.TWITTER_API_IO_KEY && plan.xKeywords) {
-      try {
-        process.stdout.write(`  [${num}] X検索(最大6枚)... `);
-        const xPaths = await fetchXImages(
-          `${plan.xKeywords} filter:images -filter:retweets`,
-          prefix, 6, "Latest"
-        );
-        imageInfos.push(...xPaths.map(p => ({ path: p, source: "X_Search", kw: plan.xKeywords })));
-        console.log(`${xPaths.length}枚`);
-      } catch (e) { console.warn(`⚠️ ${e.message}`); }
+    // ── ① Wikimedia 多段検索（15枚以上集まるまでワードを順に試す） ────────────
+    if (plan.wikiWords?.length > 0) {
+      process.stdout.write(`  [${num}] Wikimedia多段検索(${plan.wikiWords.length}ワード)... `);
+      let wikiTotal = 0;
+      for (let i = 0; i < plan.wikiWords.length; i++) {
+        if (imageInfos.length >= 15) break;
+        const wikiPaths = await fetchWikimediaImages(plan.wikiWords[i], `${prefix}_wm${i}`).catch(() => []);
+        imageInfos.push(...wikiPaths.map(p => ({ path: p, source: "Wikimedia", kw: plan.wikiWords[i] })));
+        wikiTotal += wikiPaths.length;
+      }
+      console.log(`${wikiTotal}枚`);
     }
 
     // ── ② 公式チームX（最大6枚・複数チームは均等配分） ──────────────────────
@@ -201,19 +201,6 @@ async function fetchImagesForPost(post, num, date) {
         imageInfos.push(...officialPaths.map(p => ({ path: p, source: "Official_X", kw: plan.officialTeams.join(", ") })));
         console.log(`${officialPaths.length}枚`);
       } catch (e) { console.warn(`⚠️ ${e.message}`); }
-    }
-
-    // ── ③ Wikimedia 多段検索（15枚以上集まるまでワードを順に試す） ────────────
-    if (plan.wikiWords?.length > 0) {
-      process.stdout.write(`  [${num}] Wikimedia多段検索(${plan.wikiWords.length}ワード)... `);
-      let wikiTotal = 0;
-      for (let i = 0; i < plan.wikiWords.length; i++) {
-        if (imageInfos.length >= 15) break;
-        const wikiPaths = await fetchWikimediaImages(plan.wikiWords[i], `${prefix}_wm${i}`).catch(() => []);
-        imageInfos.push(...wikiPaths.map(p => ({ path: p, source: "Wikimedia", kw: plan.wikiWords[i] })));
-        wikiTotal += wikiPaths.length;
-      }
-      console.log(`${wikiTotal}枚`);
     }
   }
 
