@@ -54,15 +54,15 @@ function detectType(title) {
 
 // ─── X コメント取得 ───────────────────────────────────────────────────────────
 
-// ベース: 生ツイートを返す
+// ベース: 生ツイートを返す（GETリクエスト）
 async function fetchRawTweets(query, max = 10) {
   const apiKey = process.env.TWITTER_API_IO_KEY;
   if (!apiKey || !query) return [];
   try {
-    const res = await fetch("https://api.twitterapi.io/twitter/tweet/advanced_search", {
-      method:  "POST",
-      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
-      body:    JSON.stringify({ query, max_results: max }),
+    const params = new URLSearchParams({ query, queryType: "Latest" });
+    const res = await fetch(`https://api.twitterapi.io/twitter/tweet/advanced_search?${params}`, {
+      method:  "GET",
+      headers: { "X-API-Key": apiKey },
       signal:  AbortSignal.timeout(12000),
     });
     if (!res.ok) return [];
