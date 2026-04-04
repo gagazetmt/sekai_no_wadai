@@ -52,6 +52,38 @@ function detectType(title) {
   return "topic";
 }
 
+// ─── X コメント取得 ───────────────────────────────────────────────────────────
+async function fetchXComments(query, lang, max = 5) {
+  const apiKey = process.env.TWITTER_API_IO_KEY;
+  if (!apiKey || !query) return [];
+  try {
+    const res = await fetch("https://api.twitterapi.io/twitter/tweet/advanced_search", {
+      method:  "POST",
+      headers: { "X-API-Key": apiKey, "Content-Type": "application/json" },
+      body:    JSON.stringify({ query: `${query} lang:${lang} -is:retweet`, max_results: max }),
+      signal:  AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return [];
+    const data  = await res.json();
+    const tweets = data?.tweets || data?.data || [];
+    return tweets.map(t => ({
+      text: (t.text || t.full_text || "").replace(/https?:\/\/\S+/g,"").replace(/@\w+/g,"").replace(/\n+/g," ").trim(),
+      user: t.user?.name || t.author?.name || "X user",
+      lang,
+    })).filter(c => c.text.length > 5).slice(0, max);
+  } catch { return []; }
+}
+
+async function detectFanLang(engQuery, imgKeywords) {
+  try {
+    const prompt = `Soccer news: "${engQuery}"\nTeams: ${(imgKeywords||[]).join(", ")}\nWhich ONE country's fans are most relevant? Return ONLY ISO 639-1 code (en/es/it/de/fr/nl/pt/tr/ar/etc). Default "en". No explanation.`;
+    const raw = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 5,
+      messages: [{ role: "user", content: prompt }] });
+    const code = raw.trim().slice(0, 2).toLowerCase();
+    return /^[a-z]{2}$/.test(code) ? code : "en";
+  } catch { return "en"; }
+}
+
 // ─── Serper検索 ───────────────────────────────────────────────────────────────
 async function searchSerper(query) {
   const apiKey = process.env.SERPER_API_KEY;
@@ -263,11 +295,14 @@ async function main() {
       const rawComments = (post.comments || []).map(c => `[👍${c.score||0}] ${c.body||""}`);
       const selftext = post.selftext || "";
 
-      let matchData     = null;
-      let ytContent     = null;
-      let xSearchQuery  = "";
-      let wikiWords     = [];
+      let matchData      = null;
+      let ytContent      = null;
+      let xSearchQuery   = "";
+      let wikiWords      = [];
       let serperSnippets = [];
+      let xJaComments    = [];
+      let xOtherComments = [];
+      let fanLang        = "en";
 
       if (isMatch) {
         // 試合データ抽出
@@ -280,8 +315,20 @@ async function main() {
         const managers = lookupManagers([matchData.homeTeam, matchData.awayTeam]);
         wikiWords = [matchData.homeTeam, matchData.awayTeam, ...managers];
 
+        // Xコメント取得（試合はリーグから言語判定）
+        if (process.env.TWITTER_API_IO_KEY) {
+          fanLang = await detectFanLang(xSearchQuery, [matchData.homeTeam, matchData.awayTeam]);
+          process.stdout.write(`  [${num}] Xコメント取得 (ja+${fanLang})... `);
+          [xJaComments, xOtherComments] = await Promise.all([
+            fetchXComments(xSearchQuery, "ja"),
+            fanLang !== "ja" ? fetchXComments(xSearchQuery, fanLang) : Promise.resolve([]),
+          ]);
+          console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
+        }
+
+        const xComments = [...xJaComments, ...xOtherComments].map(c => `[${c.lang.toUpperCase()}] ${c.text}`);
         process.stdout.write(`  [${num}] コンテンツ生成... `);
-        ytContent = await generateMatchContent(matchData, rawComments, post);
+        ytContent = await generateMatchContent(matchData, rawComments, post, xComments);
         console.log("✅");
       } else {
         // ① engQuery を先に取得
@@ -306,8 +353,20 @@ async function main() {
           ...playerNames,
         ].filter(Boolean);
 
+        // ④ Xコメント取得（ja + 検出言語）
+        if (process.env.TWITTER_API_IO_KEY) {
+          fanLang = await detectFanLang(engQuery, imgKeywords);
+          process.stdout.write(`  [${num}] Xコメント取得 (ja+${fanLang})... `);
+          [xJaComments, xOtherComments] = await Promise.all([
+            fetchXComments(engQuery, "ja"),
+            fanLang !== "ja" ? fetchXComments(engQuery, fanLang) : Promise.resolve([]),
+          ]);
+          console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
+        }
+
+        const xComments = [...xJaComments, ...xOtherComments].map(c => `[${c.lang.toUpperCase()}] ${c.text}`);
         process.stdout.write(`  [${num}] コンテンツ生成... `);
-        ytContent = await generateTopicContent({ selftext }, rawComments, post, [], serperSnippets);
+        ytContent = await generateTopicContent({ selftext }, rawComments, post, xComments, serperSnippets);
         console.log("✅");
       }
 
@@ -364,6 +423,12 @@ async function main() {
         },
         _rawComments:   { reddit: rawComments, x: [] },
         _rawCommentsJa: { reddit: redditJa,    x: [] },
+        _commentPool: [
+          ...rawComments.map(c => ({ text: c.replace(/^\[👍\d+\]\s*/,""), source: "reddit" })),
+          ...(post.comments||[]).filter(c=>c.body).map(c => ({ text: c.body, source: "rss" })),
+          ...xJaComments.map(c   => ({ text: c.text, user: c.user, source: "x_japan" })),
+          ...xOtherComments.map(c => ({ text: c.text, user: c.user, source: `x_other_${fanLang}` })),
+        ],
         _meta: {
           threadTitle: post.title,
           redditUrl:   post.url || (post.permalink ? `https://www.reddit.com${post.permalink}` : ""),

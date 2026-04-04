@@ -2918,8 +2918,9 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
       hashtagsText: p.hashtagsText || "",
       hasVideo:    fs.existsSync(videoPath),
       videoUrl:    fs.existsSync(videoPath) ? `/video-files/${videoName}` : null,
-      thumbUrl:    thumbName ? `/images/${thumbName}` : null,
-      imageUrls:   imagePaths.map(p2 => `/images/${p2.replace(/\\\\/g, "/").split("/").pop()}`),
+      thumbUrl:     thumbName ? `/images/${thumbName}` : null,
+      imageUrls:    imagePaths.map(p2 => `/images/${p2.replace(/\\\\/g, "/").split("/").pop()}`),
+      commentPool:  (p._commentPool || []).slice(0, 40),
     };
   });
   res.json({ ok: true, date, posts });
@@ -2981,6 +2982,16 @@ input[type=text]:focus,textarea:focus{border-color:#ffd700;outline:none;}
 textarea{resize:vertical;min-height:120px;}
 .textarea-desc{min-height:160px;}
 
+/* ── コメントプール ── */
+.comment-pool{margin-top:14px;}
+.comment-pool-label{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.comment-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;}
+.comment-item{background:#0d0d0d;border:1px solid #2a2a2a;border-radius:6px;padding:8px 10px;font-size:13px;line-height:1.5;color:#ccc;display:flex;gap:8px;align-items:flex-start;}
+.badge{font-size:10px;font-weight:900;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:2px;}
+.badge-reddit{background:#ff6314;color:#fff;}
+.badge-rss{background:#009688;color:#fff;}
+.badge-xjp{background:#e00010;color:#fff;}
+.badge-xother{background:#1a1a2e;color:#aad4ff;border:1px solid #3a5a8a;}
 /* ── 右列: 動画 ── */
 .video-col{display:flex;flex-direction:column;gap:10px;}
 .video-preview{width:100%;border-radius:8px;background:#000;display:block;}
@@ -3063,6 +3074,17 @@ function renderPosts() {
     <div>
       <div class='field-lbl'>ハッシュタグ</div>
       <input type='text' id='tags-\${i}' value='\${esc(p.hashtagsText)}'>
+    </div>
+    <div class='comment-pool'>
+      <div class='comment-pool-label'>コメント一覧（\${p.commentPool?.length||0}件）</div>
+      <div class='comment-list'>
+        \${(p.commentPool||[]).map(c => {
+          const src = c.source||"";
+          const badgeClass = src==="reddit"?"badge-reddit":src==="rss"?"badge-rss":src==="x_japan"?"badge-xjp":"badge-xother";
+          const badgeLabel = src==="reddit"?"Reddit":src==="rss"?"まとめ":src==="x_japan"?"X-JP":("X-"+(src.split("_").pop()||"EN").toUpperCase());
+          return \`<div class='comment-item'><span class='badge \${badgeClass}'>\${badgeLabel}</span><span>\${esc(c.text||"").slice(0,120)}</span></div>\`;
+        }).join("")||"<div style='color:#555;font-size:12px;'>コメントなし</div>"}
+      </div>
     </div>
   </div>
   <div class='video-col'>
