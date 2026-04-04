@@ -174,14 +174,24 @@ async function fetchImagesForPost(post, num, date) {
       imageInfos.push(...ogPaths.map(p => ({ path: p, source: "RSS_OGP", kw: meta.title })));
     }
 
-    // ── ① Wikimedia 多段検索（15枚以上集まるまでワードを順に試す） ────────────
+    // ── ① Wikimedia 多段検索 ────────────────────────────────────────────────
     if (plan.wikiWords?.length > 0) {
       process.stdout.write(`  [${num}] Wikimedia多段検索(${plan.wikiWords.length}ワード)... `);
       let wikiTotal = 0;
-      for (let i = 0; i < plan.wikiWords.length; i++) {
+      // stadium/logo は必ず2枚ずつ確保（上限チェックをスキップ）
+      const stadiumLogoWords = plan.wikiWords.filter(w => /stadium|logo/i.test(w));
+      const regularWords     = plan.wikiWords.filter(w => !/stadium|logo/i.test(w));
+
+      for (let i = 0; i < stadiumLogoWords.length; i++) {
+        const wikiPaths = await fetchWikimediaImages(stadiumLogoWords[i], `${prefix}_sl${i}`, 2).catch(() => []);
+        imageInfos.push(...wikiPaths.map(p => ({ path: p, source: "Wikimedia", kw: stadiumLogoWords[i] })));
+        wikiTotal += wikiPaths.length;
+      }
+      // 通常ワードは15枚上限まで
+      for (let i = 0; i < regularWords.length; i++) {
         if (imageInfos.length >= 15) break;
-        const wikiPaths = await fetchWikimediaImages(plan.wikiWords[i], `${prefix}_wm${i}`).catch(() => []);
-        imageInfos.push(...wikiPaths.map(p => ({ path: p, source: "Wikimedia", kw: plan.wikiWords[i] })));
+        const wikiPaths = await fetchWikimediaImages(regularWords[i], `${prefix}_wm${i}`).catch(() => []);
+        imageInfos.push(...wikiPaths.map(p => ({ path: p, source: "Wikimedia", kw: regularWords[i] })));
         wikiTotal += wikiPaths.length;
       }
       console.log(`${wikiTotal}枚`);
