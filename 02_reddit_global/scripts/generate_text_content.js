@@ -239,7 +239,7 @@ async function main() {
     .sort((a, b) => b.created_utc - a.created_utc)
     .slice(0, RSS_LIMIT);
 
-  const targets = [...redditCandidates, ...rssCandidates];
+  const targets = [...redditCandidates, ...rssCandidates].slice(0, topArg);
 
   const jst = new Date(Date.now() + jstOffset);
   console.log(`\n📝 テキストコンテンツ生成 (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
