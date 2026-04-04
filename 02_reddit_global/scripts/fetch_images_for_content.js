@@ -17,8 +17,10 @@ const { fetchMatchImages }                          = require("./fetch_match_ima
 const { fetchOfficialXImages }                      = require("./fetch_x_images");
 const { fetchWikimediaImages }                      = require("./fetch_wikimedia");
 
-const TEMP_DIR = path.join(__dirname, "..", "temp");
-const IMG_DIR  = path.join(__dirname, "..", "images");
+const TEMP_DIR    = path.join(__dirname, "..", "temp");
+const IMG_DIR     = path.join(__dirname, "..", "images");
+const CONCURRENCY = 3;   // 並列処理数
+const X_LIMIT     = 10;  // 公式X画像の上限枚数
 if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
 
 const now       = new Date();
@@ -64,7 +66,7 @@ async function planImageSearch(post) {
 概要: ${(post.overviewNarration || "").slice(0, 200)}${meta.serperSnippets?.length > 0 ? `\n【参考記事（最新ニュース）】\n${meta.serperSnippets.map(s => s.title + ": " + s.snippet).join("\n")}` : ""}
 
 【取得方法と上限】
-1. チーム公式X (最大6枚): 以下の辞書に登録されたチーム名を指定すると公式アカウントから取得
+1. チーム公式X (最大10枚): 以下の辞書に登録されたチーム名を指定すると公式アカウントから取得
    登録チーム: ${TEAM_NAMES_LIST}
 2. Wikimedia (残りを多段検索): 選手名・監督名・チーム名等で百科事典画像を取得
 
@@ -185,17 +187,17 @@ async function fetchImagesForPost(post, num, date) {
       console.log(`${wikiTotal}枚`);
     }
 
-    // ── ② 公式チームX（最大6枚・複数チームは均等配分） ──────────────────────
+    // ── ② 公式チームX（最大10枚・複数チームは均等配分） ──────────────────────
     if (process.env.TWITTER_API_IO_KEY && plan.officialTeams?.length > 0) {
       try {
         process.stdout.write(`  [${num}] 公式X(${plan.officialTeams.join(", ")})... `);
-        const perTeam = Math.ceil(6 / plan.officialTeams.length);
+        const perTeam = Math.ceil(X_LIMIT / plan.officialTeams.length);
         const results = await Promise.all(
           plan.officialTeams.map((name, i) =>
             fetchOfficialXImages(name, `${prefix}_nt${i}`, perTeam).catch(() => [])
           )
         );
-        const officialPaths = results.flat().slice(0, 6);
+        const officialPaths = results.flat().slice(0, X_LIMIT);
         imageInfos.push(...officialPaths.map(p => ({ path: p, source: "Official_X", kw: plan.officialTeams.join(", ") })));
         console.log(`${officialPaths.length}枚`);
       } catch (e) { console.warn(`⚠️ ${e.message}`); }
@@ -241,9 +243,16 @@ async function main() {
   console.log("─".repeat(50));
 
   const updated = [...posts];
-  for (let i = 0; i < updated.length; i++) {
-    if (updated[i]._imgMeta?.imgFetched) continue;
-    updated[i] = await fetchImagesForPost(updated[i], i + 1, dateArg);
+  for (let i = 0; i < updated.length; i += CONCURRENCY) {
+    const batch = updated.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((post, j) =>
+        post._imgMeta?.imgFetched
+          ? Promise.resolve(post)
+          : fetchImagesForPost(post, i + j + 1, dateArg)
+      )
+    );
+    results.forEach((r, j) => { updated[i + j] = r; });
   }
 
   // soccer_yt_content_YYYY-MM-DD.json として保存（ランチャー読み込み用）
