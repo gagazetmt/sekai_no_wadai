@@ -894,7 +894,7 @@ button{cursor:pointer;border:none;border-radius:5px;padding:6px 11px;font-size:1
 button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
 .btn-load{background:#333;color:var(--text);}.btn-save{background:#2a4a2a;color:var(--green);}
 .btn-gen{background:#2a1a3a;color:#c084fc;}.btn-tts{background:#1a3a4a;color:#67e8f9;}
-.btn-video{background:var(--accent);color:#fff;}.ml-auto{margin-left:auto;}
+.btn-video{background:var(--accent);color:#fff;}.btn-yt{background:#ff0000;color:#fff;font-weight:900;}.ml-auto{margin-left:auto;}
 /* 3カラム */
 .main{display:grid;grid-template-columns:170px 0.7fr 1.3fr;flex:1;overflow:hidden;}
 /* 左: 投稿リスト */
@@ -1067,10 +1067,10 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
   <input type="date" id="date-input">
   <button class="btn-load" onclick="loadContent()">📂 読み込み</button>
   <button class="btn-gen"  onclick="openCandidateModal()">📋 案件抽出</button>
-  <button class="btn-gen"  id="btn-thumb" onclick="exportThumb()">🖼 サムネ書き出し</button>
-  <button class="btn-tts"  id="btn-tts"   onclick="runTts()">🎙 音声生成</button>
+  <button class="btn-gen"  id="btn-thumb" onclick="exportThumb()">🖼 サムネイル</button>
+  <button class="btn-video" id="btn-video" onclick="runVideo()">🎬 動画生成</button>
   <div class="ml-auto">
-    <button class="btn-video" id="btn-video" onclick="runVideo()">🎬 動画生成</button>
+    <button class="btn-yt" onclick="openYoutubeLauncher()">▶ YouTube投稿</button>
   </div>
 </header>
 
@@ -2085,6 +2085,13 @@ function showLog(show) {
   if (el) el.style.display = show ? "block" : "none";
 }
 
+// ── YouTube投稿ランチャーを開く ───────────────────────────────────────────────
+function openYoutubeLauncher() {
+  const date = document.getElementById("date-input").value;
+  if (!date) return status("日付を選択してください", "err");
+  window.open("/youtube?date=" + date, "_blank");
+}
+
 // ── 右カラム 画像ギャラリー ────────────────────────────────────────────────────
 function renderRightGallery() {
   const el = document.getElementById("rg-gallery");
@@ -2883,6 +2890,244 @@ function cleanupOldFiles() {
 
   if (count > 0) console.log(`🗑  古いファイルを ${count} 件削除しました（${KEEP_DAYS}日以上前）`);
 }
+
+// ─── YouTube投稿ランチャー: データAPI ────────────────────────────────────────
+app.get("/api/youtube-launcher/:date", (req, res) => {
+  const date = req.params.date;
+  const contentFile = path.join(TEMP_DIR, `soccer_yt_content_${date}.json`);
+  if (!fs.existsSync(contentFile)) return res.json({ ok: false, error: `soccer_yt_content_${date}.json が見つかりません` });
+
+  const data  = JSON.parse(fs.readFileSync(contentFile, "utf8"));
+  const posts = (data.posts || []).map((p, i) => {
+    const num       = p.num || (i + 1);
+    const videoName = `${date}_${num}.mp4`;
+    const videoPath = path.join(VIDEO_DIR, videoName);
+    const imagePaths = (p.imagePaths || []).filter(Boolean);
+    const thumbName  = p.mainImagePath ? p.mainImagePath.replace(/\\\\/g, "/").split("/").pop() : null;
+    const desc = [
+      p.overviewNarration || "",
+      "",
+      p.hashtagsText || "",
+    ].join("\n").trim();
+    return {
+      idx:         i,
+      num,
+      catchLine1:  p.catchLine1 || "",
+      youtubeTitle: p.youtubeTitle || p.catchLine1 || "",
+      description: desc,
+      hashtagsText: p.hashtagsText || "",
+      hasVideo:    fs.existsSync(videoPath),
+      videoUrl:    fs.existsSync(videoPath) ? `/video-files/${videoName}` : null,
+      thumbUrl:    thumbName ? `/images/${thumbName}` : null,
+      imageUrls:   imagePaths.map(p2 => `/images/${p2.replace(/\\\\/g, "/").split("/").pop()}`),
+    };
+  });
+  res.json({ ok: true, date, posts });
+});
+
+// ─── YouTube投稿ランチャー: ページ ────────────────────────────────────────────
+app.get("/youtube", (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>▶ YouTube投稿ランチャー</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0d0d0d;color:#e8e8e8;font-family:"Hiragino Kaku Gothic ProN",sans-serif;font-size:13px;}
+header{background:#1a1a1a;border-bottom:1px solid #2e2e2e;padding:10px 16px;display:flex;align-items:center;gap:10px;}
+header h1{font-size:15px;font-weight:900;color:#ffd700;}
+.date-lbl{color:#888;font-size:12px;}
+#date-val{color:#ffd700;font-weight:700;}
+.btn{cursor:pointer;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;}
+.btn:hover{opacity:.8;}.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-load{background:#333;color:#e8e8e8;}
+.btn-upload{background:#ff0000;color:#fff;}
+.btn-upload-all{background:#cc0000;color:#fff;font-size:13px;padding:8px 18px;}
+.btn-sm{padding:4px 8px;font-size:11px;background:#333;color:#aaa;}
+.ml-auto{margin-left:auto;}
+.container{max-width:1200px;margin:0 auto;padding:16px;}
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.post-card{background:#1a1a1a;border:1px solid #2e2e2e;border-radius:10px;padding:16px;margin-bottom:16px;display:grid;grid-template-columns:200px 1fr 220px;gap:16px;}
+.post-card.has-video{border-color:#444;}
+.post-card.no-video{opacity:.6;}
+.check-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.check-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;}
+.check-row label{font-size:13px;font-weight:700;color:#ffd700;cursor:pointer;}
+.thumb-area{position:relative;}
+.thumb-area img{width:100%;border-radius:6px;border:2px solid #333;display:block;}
+.thumb-area .no-img{width:100%;height:110px;background:#222;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#555;font-size:12px;}
+.thumb-swap{margin-top:6px;}
+.thumb-swap-label{font-size:10px;color:#666;margin-bottom:4px;}
+.thumb-images{display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;}
+.thumb-images img{width:40px;height:40px;object-fit:cover;border-radius:3px;cursor:pointer;border:2px solid transparent;opacity:.7;}
+.thumb-images img:hover,.thumb-images img.selected{border-color:#ff0000;opacity:1;}
+.meta-col{display:flex;flex-direction:column;gap:8px;}
+.field-lbl{font-size:10px;color:#888;margin-bottom:2px;}
+.field-lbl span{color:#e8e8e8;}
+input[type=text],textarea{width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:4px;padding:6px 8px;font-size:12px;font-family:inherit;}
+input[type=text]:focus,textarea:focus{border-color:#ffd700;outline:none;}
+textarea{resize:vertical;min-height:70px;}
+.video-col{display:flex;flex-direction:column;gap:8px;}
+.video-preview{width:100%;border-radius:6px;background:#000;}
+.no-video-msg{width:100%;height:100px;background:#111;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#555;font-size:11px;text-align:center;}
+.post-actions{display:flex;gap:6px;align-items:center;margin-top:auto;}
+.status-msg{font-size:11px;padding:3px 8px;border-radius:4px;}
+.status-ok{background:#1a3a1a;color:#3cb371;}
+.status-err{background:#3a1a1a;color:#e05555;}
+.status-run{background:#1a2a3a;color:#4a9eff;}
+.global-status{padding:8px 16px;background:#111;border-bottom:1px solid #2e2e2e;font-size:12px;color:#888;min-height:34px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>▶ YouTube投稿ランチャー</h1>
+  <span class="date-lbl">日付: <span id="date-val">-</span></span>
+  <div class="ml-auto" style="display:flex;gap:8px;">
+    <button class="btn btn-upload-all" onclick="uploadAll()">▶ チェック済みを一括投稿</button>
+  </div>
+</header>
+<div class="global-status" id="global-status">読み込み中...</div>
+<div class="container" id="posts-container"></div>
+
+<script>
+const urlParams = new URLSearchParams(location.search);
+const DATE = urlParams.get("date") || "";
+document.getElementById("date-val").textContent = DATE || "未指定";
+
+let postsData = [];
+let selectedThumbs = {};
+
+async function loadPosts() {
+  if (!DATE) { setGlobalStatus("日付が指定されていません", "err"); return; }
+  setGlobalStatus("読み込み中...", "run");
+  try {
+    const res = await fetch("/api/youtube-launcher/" + DATE);
+    const j   = await res.json();
+    if (!j.ok) { setGlobalStatus("❌ " + j.error, "err"); return; }
+    postsData = j.posts;
+    renderPosts();
+    const videoCount = postsData.filter(p => p.hasVideo).length;
+    setGlobalStatus("✅ " + postsData.length + "件読み込み完了（動画あり: " + videoCount + "件）", "ok");
+  } catch(e) { setGlobalStatus("❌ " + e.message, "err"); }
+}
+
+function renderPosts() {
+  const container = document.getElementById("posts-container");
+  container.innerHTML = postsData.map((p, i) => {
+    const thumbHtml = p.thumbUrl
+      ? "<img id='thumb-" + i + "' src='" + p.thumbUrl + "' alt='サムネイル'>"
+      : "<div class='no-img'>サムネなし</div>";
+    const swapImgs = p.imageUrls.map((url, j) =>
+      "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + ",\\\"" + url + "\\\")' title='サムネに設定'>"
+    ).join("");
+    const videoHtml = p.hasVideo
+      ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "' style='width:100%;border-radius:6px;'></video>"
+      : "<div class='no-video-msg'>動画未生成</div>";
+    return \`
+<div class='post-card \${p.hasVideo ? "has-video" : "no-video"}' id='card-\${i}'>
+  <div>
+    <div class='check-row'>
+      <input type='checkbox' id='chk-\${i}' \${p.hasVideo ? "" : "disabled"} data-idx='\${i}'>
+      <label for='chk-\${i}'>#\${p.num} \${p.catchLine1}</label>
+    </div>
+    <div class='thumb-area'>\${thumbHtml}</div>
+    <div class='thumb-swap'>
+      <div class='thumb-swap-label'>サムネ変更</div>
+      <div class='thumb-images' id='thumbs-\${i}'>\${swapImgs}</div>
+    </div>
+  </div>
+  <div class='meta-col'>
+    <div>
+      <div class='field-lbl'>YouTubeタイトル</div>
+      <input type='text' id='title-\${i}' value='\${esc(p.youtubeTitle)}'>
+    </div>
+    <div>
+      <div class='field-lbl'>説明文・概要欄</div>
+      <textarea id='desc-\${i}' rows='4'>\${esc(p.description)}</textarea>
+    </div>
+    <div>
+      <div class='field-lbl'>ハッシュタグ</div>
+      <input type='text' id='tags-\${i}' value='\${esc(p.hashtagsText)}'>
+    </div>
+  </div>
+  <div class='video-col'>
+    \${videoHtml}
+    <div class='post-actions'>
+      <button class='btn btn-upload' onclick='uploadSingle(\${i})' \${p.hasVideo ? "" : "disabled"}>▶ 投稿</button>
+      <span class='status-msg' id='st-\${i}'></span>
+    </div>
+  </div>
+</div>\`;
+  }).join("");
+}
+
+function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+
+function swapThumb(postIdx, imgIdx, url) {
+  const thumbEl = document.getElementById("thumb-" + postIdx);
+  if (thumbEl) thumbEl.src = url;
+  selectedThumbs[postIdx] = url;
+  const container = document.getElementById("thumbs-" + postIdx);
+  if (container) container.querySelectorAll("img").forEach((img, j) => {
+    img.classList.toggle("selected", j === imgIdx);
+  });
+}
+
+function setGlobalStatus(msg, type) {
+  const el = document.getElementById("global-status");
+  el.textContent = msg;
+  el.className = "global-status" + (type === "ok" ? " status-ok" : type === "err" ? " status-err" : type === "run" ? " status-run" : "");
+}
+
+function setPostStatus(i, msg, type) {
+  const el = document.getElementById("st-" + i);
+  if (el) { el.textContent = msg; el.className = "status-msg status-" + type; }
+}
+
+async function uploadSingle(i) {
+  const post = postsData[i];
+  const title = document.getElementById("title-" + i).value;
+  const desc  = document.getElementById("desc-" + i).value;
+  const tags  = document.getElementById("tags-" + i).value;
+  const thumb = selectedThumbs[i] || post.thumbUrl;
+  setPostStatus(i, "投稿中...", "run");
+  try {
+    const res = await fetch("/api/youtube/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: DATE, postIdx: i, num: post.num, title, description: desc + "\\n" + tags, thumbnailUrl: thumb }),
+    });
+    const j = await res.json();
+    if (j.ok) setPostStatus(i, "✅ 投稿完了", "ok");
+    else setPostStatus(i, "❌ " + (j.error || "失敗"), "err");
+  } catch(e) { setPostStatus(i, "❌ " + e.message, "err"); }
+}
+
+async function uploadAll() {
+  const checks = document.querySelectorAll("input[type=checkbox]:checked");
+  if (!checks.length) { setGlobalStatus("チェックを入れてください", "err"); return; }
+  if (!confirm(checks.length + "件を投稿しますか？")) return;
+  for (const cb of checks) {
+    await uploadSingle(parseInt(cb.dataset.idx));
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  setGlobalStatus("✅ 一括投稿完了", "ok");
+}
+
+loadPosts();
+</script>
+</body></html>`);
+});
+
+// ─── YouTube投稿API（プレースホルダー） ──────────────────────────────────────
+app.post("/api/youtube/upload", (req, res) => {
+  const { date, num, title, description } = req.body;
+  // TODO: YouTube Data API v3 OAuth連携で実際の投稿を実装
+  console.log(`[YouTube Upload] ${date}_${num}: ${title}`);
+  res.json({ ok: false, error: "YouTube API未設定。OAuth認証の設定が必要です。" });
+});
 
 app.listen(PORT, () => {
   cleanupOldFiles();
