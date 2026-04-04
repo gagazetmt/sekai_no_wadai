@@ -614,10 +614,20 @@ function sanitizeForVoiceVox(text) {
     .replace(/\[r\]|\[\/r\]/g, "")         // 残った[r][/r]を除去
     .replace(/\\n/g, "　")                  // リテラル\nを全角スペースに
     .replace(/→/g, "から")
-    .replace(/×/g, "たい")
+    // ─ スコア（N-M / N－M / N×M → 「Nたいm」）─
+    .replace(/[０-９0-9]{1,2}[×－-][０-９0-9]{1,2}/g, m => {
+      const norm = m.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30));
+      const parts = norm.split(/[×－-]/);
+      const numJa = n => {
+        const v = parseInt(n, 10);
+        const d = ['ぜろ','いち','に','さん','よん','ご','ろく','なな','はち','きゅう'];
+        return v < 10 ? d[v] : (v === 10 ? 'じゅう' : 'じゅう' + d[v - 10]);
+      };
+      return numJa(parts[0]) + 'たい' + numJa(parts[1]);
+    })
     .replace(/【([^】]+)】/g, "$1")
     .replace(/〝([^〟]+)〟/g, "$1")
-    .replace(/・/g, " ")                    // 中点は短ポーズ（スペース）に
+    .replace(/・/g, "")                     // 中点は除去（マンチェスター・シティ→マンチェスターシティ）
     .replace(/\n/g, "　")
     .trim();
 }
