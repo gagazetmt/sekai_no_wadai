@@ -628,9 +628,11 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
   const qZoom = parseFloat(req.query.zoom);
   const qX    = parseFloat(req.query.px);
   const qY    = parseFloat(req.query.py);
-  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY)) {
+  const qImg  = req.query.img; // "/images/filename.jpg" → IMG_DIR/filename
+  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg) {
     const cur = (post.imgZoom && post.imgZoom.tn) || { zoom: 1.0, x: 50, y: 50 };
     const overridePost = Object.assign({}, post, {
+      mainImagePath: qImg ? path.join(IMG_DIR, path.basename(qImg)) : post.mainImagePath,
       imgZoom: Object.assign({}, post.imgZoom, {
         tn: { zoom: isNaN(qZoom) ? cur.zoom : qZoom, x: isNaN(qX) ? cur.x : qX, y: isNaN(qY) ? cur.y : qY }
       })
@@ -642,12 +644,13 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
 
 // ─── API: サムネイル PNG 書き出し ─────────────────────────────────────────────
 app.post("/api/thumbnail/export", async (req, res) => {
-  const { date, postIdx, post } = req.body;
+  const { date, postIdx, post, selectedImgUrl } = req.body;
   if (!date || postIdx === undefined || !post)
     return res.status(400).json({ error: "date / postIdx / post が必要" });
   const num     = postIdx + 1;
   const outPath = path.join(THUMB_DIR, `${date}_${num}_thumb.png`);
   try {
+    if (selectedImgUrl) post.mainImagePath = path.join(IMG_DIR, path.basename(selectedImgUrl));
     const html    = buildThumbnailHtml(post);
     const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
     const page    = await browser.newPage();
@@ -3129,6 +3132,16 @@ function swapThumb(postIdx, imgIdx, url) {
   if (container) container.querySelectorAll("img").forEach((img, j) => {
     img.classList.toggle("selected", j === imgIdx);
   });
+  // iframeプレビューを更新
+  const post = postsData[postIdx];
+  const z = parseFloat(document.getElementById("zoom-z-" + postIdx)?.value || 1.0);
+  const x = parseFloat(document.getElementById("zoom-x-" + postIdx)?.value || 50);
+  const y = parseFloat(document.getElementById("zoom-y-" + postIdx)?.value || 50);
+  const frame = document.getElementById("tn-frame-" + postIdx);
+  if (frame) {
+    frame.src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
+      "?img=" + encodeURIComponent(url) + "&zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
+  }
 }
 
 function setGlobalStatus(msg, type) {
@@ -3150,8 +3163,10 @@ function updateTnZoom(i) {
   document.getElementById("zoom-xv-" + i).textContent = x;
   document.getElementById("zoom-yv-" + i).textContent = y;
   const post = postsData[i];
-  document.getElementById("tn-frame-" + i).src =
-    "/api/thumbnail/preview/" + DATE + "/" + post.idx + "?zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
+  const selectedImg = selectedThumbs[i];
+  let src = "/api/thumbnail/preview/" + DATE + "/" + post.idx + "?zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
+  if (selectedImg) src += "&img=" + encodeURIComponent(selectedImg);
+  document.getElementById("tn-frame-" + i).src = src;
 }
 
 function insertRedYT(i) {
@@ -3181,7 +3196,7 @@ async function exportThumb(i) {
     const r = await fetch("/api/thumbnail/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: DATE, postIdx: post.idx, post: exportPost }),
+      body: JSON.stringify({ date: DATE, postIdx: post.idx, post: exportPost, selectedImgUrl: selectedThumbs[i] || null }),
     });
     const j = await r.json();
     if (j.ok) setPostStatus(i, "✅ " + j.filename, "ok");
