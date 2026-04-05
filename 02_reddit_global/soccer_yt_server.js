@@ -677,6 +677,33 @@ app.post("/api/upload-image", (req, res) => {
   res.json({ ok: true, path: outPath });
 });
 
+// ─── API: YouTubeランチャー ギャラリー画像追加 ──────────────────────────────────
+app.post("/api/gallery/add-image", express.json({ limit: "30mb" }), (req, res) => {
+  const { date, postIdx, filename, data } = req.body;
+  if (!date || postIdx === undefined || !data)
+    return res.status(400).json({ error: "date / postIdx / data が必要" });
+  try {
+    const ext      = (filename || "image.jpg").split(".").pop().toLowerCase().replace("jpeg", "jpg");
+    const saveName = `${date}_${Number(postIdx) + 1}_custom_${Date.now()}.${ext}`;
+    const savePath = path.join(IMG_DIR, saveName);
+    if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
+    fs.writeFileSync(savePath, Buffer.from(data, "base64"));
+    // content JSON の imagePaths にも追記（再読込後も残る）
+    const contentFile = path.join(TEMP_DIR, `soccer_yt_content_${date}.json`);
+    if (fs.existsSync(contentFile)) {
+      const content = JSON.parse(fs.readFileSync(contentFile, "utf8"));
+      if (content.posts && content.posts[postIdx]) {
+        content.posts[postIdx].imagePaths = content.posts[postIdx].imagePaths || [];
+        content.posts[postIdx].imagePaths.push(savePath);
+        fs.writeFileSync(contentFile, JSON.stringify(content, null, 2));
+      }
+    }
+    res.json({ ok: true, url: `/images/${saveName}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── ヘルパー: VoiceVox TTS → WAV ───────────────────────────────────────────
 const VOICEVOX_URL    = "http://localhost:50021";
 const VV_NARR_SPEAKER = 13;   // 青山龍星 ノーマル（S1/S2/S3/S4/S5 ナレーション）
@@ -3096,7 +3123,13 @@ function renderPosts() {
       </div>
     </div>
     <div>
-      <div class='gallery-label'>サムネ画像を変更</div>
+      <div class='gallery-label' style='display:flex;align-items:center;justify-content:space-between;'>
+        <span>サムネ画像を変更</span>
+        <label style='cursor:pointer;background:#1a3a1a;color:#7f7;border:1px solid #3a6a3a;border-radius:4px;padding:2px 10px;font-size:11px;white-space:nowrap;'>
+          ＋ 画像追加
+          <input type='file' accept='image/*' style='display:none' onchange='addGalleryImage(\${i}, this)'>
+        </label>
+      </div>
       <div class='gallery' id='thumbs-\${i}'>\${swapImgs}</div>
     </div>
     <button class='btn btn-load' id='btn-tn-\${i}' onclick='exportThumb(\${i})' style='margin-top:8px;width:100%;'>🖼 サムネイル生成</button>
@@ -3142,6 +3175,41 @@ function swapThumb(postIdx, imgIdx, url) {
     frame.src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
       "?img=" + encodeURIComponent(url) + "&zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
   }
+}
+
+async function addGalleryImage(i, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result.split(",")[1];
+    const post = postsData[i];
+    setPostStatus(i, "⏳ アップロード中...", "run");
+    try {
+      const r = await fetch("/api/gallery/add-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: DATE, postIdx: post.idx, filename: file.name, data: base64 })
+      });
+      const j = await r.json();
+      if (j.ok) {
+        const newIdx = postsData[i].imageUrls.length;
+        postsData[i].imageUrls.push(j.url);
+        const container = document.getElementById("thumbs-" + i);
+        const img = document.createElement("img");
+        img.src = j.url;
+        img.title = "サムネに設定";
+        img.onclick = () => swapThumb(i, newIdx, j.url);
+        container.appendChild(img);
+        swapThumb(i, newIdx, j.url); // 追加直後に選択状態に
+        setPostStatus(i, "✅ 画像追加完了", "ok");
+      } else {
+        setPostStatus(i, "❌ " + (j.error || "失敗"), "err");
+      }
+    } catch(e) { setPostStatus(i, "❌ " + e.message, "err"); }
+    input.value = "";
+  };
+  reader.readAsDataURL(file);
 }
 
 function setGlobalStatus(msg, type) {
