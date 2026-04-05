@@ -970,11 +970,6 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
 .tts-item{display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid #1a2a3a;flex-wrap:nowrap;}.tts-item:last-child{border-bottom:none;}
 .tts-sym{background:#1a3a5a;color:#67e8f9;font-size:10px;font-weight:700;border-radius:3px;padding:1px 5px;flex-shrink:0;min-width:20px;text-align:center;}
 .tts-item-txt{font-size:10px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;max-width:90px;}
-.iz-ctrl{background:#1a0d2a;border:1px solid #3a1a5a;border-radius:6px;padding:8px 10px;margin-bottom:8px;}
-.iz-ctrl-title{font-size:10px;color:#d8a4f8;font-weight:700;}
-.iz-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
-.iz-lbl{font-size:10px;color:var(--sub);width:36px;flex-shrink:0;}
-.iz-val{font-size:10px;color:var(--text);width:28px;text-align:right;flex-shrink:0;}
 /* 右カラム 画像ギャラリー */
 .rg-section{padding:8px 0 4px;border-bottom:1px solid var(--border);margin-bottom:8px;}
 .rg-lbl{font-size:10px;color:var(--sub);margin-bottom:5px;}
@@ -1131,7 +1126,6 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
       <div id="pv-bar-bg"><div id="pv-bar-fill"></div></div>
     </div>
     <div class="pv-bottom">
-      <div id="img-zoom-ctrl"></div>
       <div id="tts-ctrl"></div>
       <div style="font-size:10px;color:var(--sub);margin-bottom:6px;">🎙 音声生成結果</div>
       <div id="tts-results"></div>
@@ -1413,7 +1407,6 @@ function renderSlide() {
     inp.addEventListener("change", schedulePreview);
   });
   updateGallery(post);
-  renderImgZoomCtrl();
   renderTtsCtrl();
 }
 
@@ -1778,56 +1771,6 @@ async function runGenerate() {
   pollJob(() => loadContent());
 }
 
-// ── 画像ズーム・フォーカスパネル ────────────────────────────────────────────────
-function renderImgZoomCtrl() {
-  const el = document.getElementById("img-zoom-ctrl");
-  if (!el) return;
-  if (idx < 0) { el.innerHTML = ""; return; }
-  const post = data.posts[idx];
-  const sceneKey = slide === 6 ? "tn" : "s" + slide;
-  if (!post.imgZoom) post.imgZoom = {};
-  const iz = post.imgZoom[sceneKey] || { zoom: 1.0, x: 50, y: 50 };
-  if (!post.imgZoom[sceneKey]) post.imgZoom[sceneKey] = iz;
-
-  el.innerHTML =
-    "<div class='iz-ctrl'>" +
-      "<div style='display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;'>" +
-        "<div class='iz-ctrl-title'>🔍 " + (slide === 6 ? "TN" : "S" + slide) + " 画像調整</div>" +
-        "<button onclick='applyImgZoom()' style='font-size:10px;padding:2px 8px;cursor:pointer;border-radius:3px;'>▶ 反映</button>" +
-      "</div>" +
-      "<div class='iz-row'><span class='iz-lbl'>ズーム</span>" +
-        "<input type='range' id='iz-zoom' min='0.5' max='1.5' step='0.05' value='" + iz.zoom + "' oninput='onIzInput(this)' style='flex:1;accent-color:#d8a4f8;'>" +
-        "<span class='iz-val' id='iz-zoom-v'>" + iz.zoom.toFixed(2) + "</span>" +
-      "</div>" +
-      "<div class='iz-row'><span class='iz-lbl'>X位置</span>" +
-        "<input type='range' id='iz-x' min='0' max='100' step='1' value='" + iz.x + "' oninput='onIzInput(this)' style='flex:1;accent-color:#d8a4f8;'>" +
-        "<span class='iz-val' id='iz-x-v'>" + iz.x + "</span>" +
-      "</div>" +
-      "<div class='iz-row'><span class='iz-lbl'>Y位置</span>" +
-        "<input type='range' id='iz-y' min='0' max='100' step='1' value='" + iz.y + "' oninput='onIzInput(this)' style='flex:1;accent-color:#d8a4f8;'>" +
-        "<span class='iz-val' id='iz-y-v'>" + iz.y + "</span>" +
-      "</div>" +
-    "</div>";
-}
-
-function onIzInput(el) {
-  const v = parseFloat(el.value);
-  const vEl = document.getElementById(el.id + "-v");
-  if (vEl) vEl.textContent = el.id === "iz-zoom" ? v.toFixed(2) : v;
-}
-
-function applyImgZoom() {
-  if (idx < 0) return;
-  const post = data.posts[idx];
-  const sceneKey = slide === 6 ? "tn" : "s" + slide;
-  if (!post.imgZoom) post.imgZoom = {};
-  post.imgZoom[sceneKey] = {
-    zoom: parseFloat(document.getElementById("iz-zoom")?.value || "1"),
-    x:    parseInt(document.getElementById("iz-x")?.value   || "50"),
-    y:    parseInt(document.getElementById("iz-y")?.value   || "50"),
-  };
-  schedulePreview();
-}
 
 // ── TTS 音声設定パネル（VoiceVox）────────────────────────────────────────────
 const VV_SPEAKERS = {
