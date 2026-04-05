@@ -19,9 +19,29 @@ const path       = require("path");
 const { spawn, execSync } = require("child_process");
 const FFMPEG = process.platform === "win32" ? "C:\\ffmpeg\\bin\\ffmpeg.exe" : "ffmpeg";
 const puppeteer  = require("puppeteer");
+const { google }  = require("googleapis");
 
 const app  = express();
 const PORT = 3003;
+
+// ─── YouTube OAuth2 ────────────────────────────────────────────────────────
+const YT_TOKEN_PATH = path.join(__dirname, ".youtube_tokens.json");
+const oauth2Client = new google.auth.OAuth2(
+  process.env.YOUTUBE_CLIENT_ID,
+  process.env.YOUTUBE_CLIENT_SECRET,
+  process.env.YOUTUBE_REDIRECT_URI || `http://localhost:${PORT}/auth/youtube/callback`
+);
+if (fs.existsSync(YT_TOKEN_PATH)) {
+  oauth2Client.setCredentials(JSON.parse(fs.readFileSync(YT_TOKEN_PATH, "utf8")));
+  console.log("[YouTube] 保存済みトークン読み込み完了");
+}
+oauth2Client.on("tokens", tokens => {
+  const merged = fs.existsSync(YT_TOKEN_PATH)
+    ? { ...JSON.parse(fs.readFileSync(YT_TOKEN_PATH, "utf8")), ...tokens }
+    : tokens;
+  fs.writeFileSync(YT_TOKEN_PATH, JSON.stringify(merged, null, 2));
+  console.log("[YouTube] トークン更新・保存完了");
+});
 
 const TEMP_DIR       = path.join(__dirname, "temp");
 const IMG_DIR        = path.join(__dirname, "images");
@@ -3022,6 +3042,8 @@ textarea{resize:vertical;min-height:120px;}
   <input type="date" id="date-input-yt" style="background:#222;color:#ffd700;border:1px solid #555;border-radius:6px;padding:6px 10px;font-size:14px;font-weight:700;">
   <button class="btn btn-load" onclick="changeDate()">読み込み</button>
   <div class="ml-auto" style="display:flex;gap:10px;align-items:center;">
+    <span id="yt-auth-badge" style="font-size:13px;padding:5px 12px;border-radius:6px;background:#333;color:#888;">認証確認中...</span>
+    <button class="btn btn-load" id="yt-auth-btn" onclick="window.open('/auth/youtube','_blank','width=600,height=700')" style="display:none">🔑 YouTube認証</button>
     <button class="btn btn-load" onclick="loadPosts()">再読み込み</button>
     <button class="btn btn-upload-all" onclick="uploadAll()">▶ チェック済みを一括投稿</button>
   </div>
@@ -3031,27 +3053,33 @@ textarea{resize:vertical;min-height:120px;}
 
 <div id="upload-modal">
   <div class="upload-modal-inner">
-    <h2>📤 YouTube アップロード準備</h2>
-    <div style="font-size:13px;color:#888;margin-bottom:16px;">各項目をコピーして、YouTube Studioで貼り付けてください。</div>
+    <h2>📤 YouTube アップロード</h2>
     <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">タイトル</div>
     <div class="copy-row">
-      <input type="text" id="modal-title" readonly>
+      <input type="text" id="modal-title">
       <button class="btn-copy" onclick="copyField('modal-title',this)">コピー</button>
     </div>
     <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">説明文</div>
     <div class="copy-row">
-      <textarea id="modal-desc" rows="5" readonly></textarea>
+      <textarea id="modal-desc" rows="5"></textarea>
       <button class="btn-copy" onclick="copyField('modal-desc',this)">コピー</button>
     </div>
     <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">ハッシュタグ</div>
     <div class="copy-row">
-      <input type="text" id="modal-tags" readonly>
+      <input type="text" id="modal-tags">
       <button class="btn-copy" onclick="copyField('modal-tags',this)">コピー</button>
     </div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">公開設定</div>
+    <select id="modal-privacy" style="background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:16px;">
+      <option value="public">公開</option>
+      <option value="unlisted">限定公開</option>
+      <option value="private">非公開</option>
+    </select>
+    <div id="modal-upload-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:14px;margin-bottom:12px;"></div>
     <div class="upload-modal-actions">
-      <button class="btn-yt-open" onclick="window.open('https://studio.youtube.com/','_blank')">▶ YouTube Studio を開く</button>
+      <button class="btn-yt-open" id="btn-do-upload" onclick="doUpload()">🚀 YouTubeにアップロード</button>
       <a id="modal-dl-link" class="btn-dl" download>⬇ 動画をダウンロード</a>
-      <button class="btn-close-modal" onclick="document.getElementById('upload-modal').style.display='none'">✕ 閉じる</button>
+      <button class="btn-close-modal" onclick="closeUploadModal()">✕ 閉じる</button>
     </div>
   </div>
 </div>
@@ -3071,6 +3099,29 @@ function changeDate() {
 
 let postsData = [];
 let selectedThumbs = {};
+let currentUploadIdx = -1;
+
+// ─── YouTube認証状態チェック ────────────────────────────────────────────
+async function checkYtAuth() {
+  try {
+    const r = await fetch("/auth/youtube/status");
+    const j = await r.json();
+    const badge = document.getElementById("yt-auth-badge");
+    const btn   = document.getElementById("yt-auth-btn");
+    if (j.authenticated) {
+      badge.textContent = "✅ YouTube認証済み";
+      badge.style.background = "#1a3a1a";
+      badge.style.color = "#3cb371";
+      btn.style.display = "none";
+    } else {
+      badge.textContent = "⚠️ YouTube未認証";
+      badge.style.background = "#3a1a1a";
+      badge.style.color = "#e66";
+      btn.style.display = "";
+    }
+  } catch(e) {}
+}
+checkYtAuth();
 
 async function loadPosts() {
   if (!DATE) { setGlobalStatus("日付が指定されていません", "err"); return; }
@@ -3291,15 +3342,74 @@ function uploadSingle(i) {
   const title = document.getElementById("title-" + i).value;
   const desc  = document.getElementById("desc-" + i).value;
   const tags  = document.getElementById("tags-" + i).value;
+  currentUploadIdx = i;
   document.getElementById("modal-title").value = title;
   document.getElementById("modal-desc").value  = desc;
   document.getElementById("modal-tags").value  = tags;
+  document.getElementById("modal-privacy").value = "public";
   const dlLink = document.getElementById("modal-dl-link");
   dlLink.href     = post.videoUrl;
   dlLink.download = post.videoName || "video.mp4";
+  const statusEl = document.getElementById("modal-upload-status");
+  statusEl.style.display = "none";
+  statusEl.textContent = "";
   document.querySelectorAll(".btn-copy").forEach(b => b.classList.remove("ok"));
+  document.getElementById("btn-do-upload").disabled = false;
   document.getElementById("upload-modal").style.display = "block";
-  setPostStatus(i, "📋 投稿準備中...", "run");
+}
+
+async function doUpload() {
+  if (currentUploadIdx < 0) return;
+  const post    = postsData[currentUploadIdx];
+  const title   = document.getElementById("modal-title").value;
+  const desc    = document.getElementById("modal-desc").value;
+  const tags    = document.getElementById("modal-tags").value;
+  const privacy = document.getElementById("modal-privacy").value;
+  const statusEl = document.getElementById("modal-upload-status");
+  const btn      = document.getElementById("btn-do-upload");
+
+  btn.disabled = true;
+  statusEl.style.display = "block";
+  statusEl.style.background = "#1a2a3a";
+  statusEl.style.color = "#7ab8e8";
+  statusEl.textContent = "⏳ アップロード中... 動画サイズによって数分かかります";
+  setPostStatus(currentUploadIdx, "⏳ アップロード中...", "run");
+
+  try {
+    const r = await fetch("/api/youtube/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: DATE,
+        postIdx: post.idx,
+        title, description: desc, tags,
+        privacyStatus: privacy,
+      }),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      statusEl.style.background = "#1a3a1a";
+      statusEl.style.color = "#3cb371";
+      statusEl.innerHTML = \`✅ アップロード完了！ <a href="\${j.url}" target="_blank" style="color:#ffd700">\${j.url}</a>\`;
+      setPostStatus(currentUploadIdx, "✅ YouTube投稿済み", "ok");
+    } else {
+      statusEl.style.background = "#3a1a1a";
+      statusEl.style.color = "#e66";
+      statusEl.textContent = "❌ " + (j.error || "アップロード失敗");
+      setPostStatus(currentUploadIdx, "❌ 失敗: " + (j.error || ""), "err");
+      btn.disabled = false;
+    }
+  } catch(e) {
+    statusEl.style.background = "#3a1a1a";
+    statusEl.style.color = "#e66";
+    statusEl.textContent = "❌ " + e.message;
+    btn.disabled = false;
+  }
+}
+
+function closeUploadModal() {
+  document.getElementById("upload-modal").style.display = "none";
+  currentUploadIdx = -1;
 }
 
 function copyField(id, btn) {
@@ -3326,12 +3436,86 @@ loadPosts();
 </body></html>`);
 });
 
-// ─── YouTube投稿API（プレースホルダー） ──────────────────────────────────────
-app.post("/api/youtube/upload", (req, res) => {
-  const { date, num, title, description } = req.body;
-  // TODO: YouTube Data API v3 OAuth連携で実際の投稿を実装
-  console.log(`[YouTube Upload] ${date}_${num}: ${title}`);
-  res.json({ ok: false, error: "YouTube API未設定。OAuth認証の設定が必要です。" });
+// ─── YouTube OAuth: 認証開始 ──────────────────────────────────────────────
+app.get("/auth/youtube", (req, res) => {
+  if (!process.env.YOUTUBE_CLIENT_ID) {
+    return res.send("❌ .env に YOUTUBE_CLIENT_ID が設定されていません");
+  }
+  const url = oauth2Client.generateAuthUrl({
+    access_type: "offline",
+    scope: ["https://www.googleapis.com/auth/youtube.upload"],
+    prompt: "consent",
+  });
+  res.redirect(url);
+});
+
+// ─── YouTube OAuth: コールバック ──────────────────────────────────────────
+app.get("/auth/youtube/callback", async (req, res) => {
+  const { code, error } = req.query;
+  if (error) return res.send(`<h2 style="color:red">認証エラー: ${error}</h2>`);
+  try {
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+    fs.writeFileSync(YT_TOKEN_PATH, JSON.stringify(tokens, null, 2));
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="background:#0d0d0d;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+<div style="text-align:center">
+  <div style="font-size:64px;margin-bottom:16px">✅</div>
+  <h2 style="color:#ffd700;margin-bottom:8px">YouTube認証完了！</h2>
+  <p style="color:#888">このウィンドウを閉じてください</p>
+  <script>setTimeout(()=>{try{opener.location.reload();}catch(e){}window.close();},2000)</script>
+</div></body></html>`);
+  } catch (e) {
+    res.send(`<h2 style="color:red">❌ トークン取得失敗: ${e.message}</h2>`);
+  }
+});
+
+// ─── YouTube OAuth: 認証状態確認 ─────────────────────────────────────────
+app.get("/auth/youtube/status", (req, res) => {
+  res.json({ authenticated: fs.existsSync(YT_TOKEN_PATH) && !!oauth2Client.credentials.access_token });
+});
+
+// ─── YouTube 動画アップロード ─────────────────────────────────────────────
+app.post("/api/youtube/upload", async (req, res) => {
+  if (!fs.existsSync(YT_TOKEN_PATH) || !oauth2Client.credentials.access_token) {
+    return res.json({ ok: false, error: "YouTube未認証。/auth/youtube から認証してください。" });
+  }
+
+  const { date, postIdx, title, description, tags, privacyStatus = "public" } = req.body;
+  const num      = String(parseInt(postIdx, 10) + 1);
+  const videoFile = path.join(__dirname, "soccer_yt_videos", `${date}_${num}.mp4`);
+
+  if (!fs.existsSync(videoFile)) {
+    return res.json({ ok: false, error: `動画ファイルが見つかりません: ${date}_${num}.mp4` });
+  }
+
+  try {
+    const youtube  = google.youtube({ version: "v3", auth: oauth2Client });
+    const fileSize = fs.statSync(videoFile).size;
+    console.log(`[YouTube Upload] 開始: ${date}_${num}.mp4 (${(fileSize/1024/1024).toFixed(1)}MB)`);
+
+    const response = await youtube.videos.insert({
+      part: ["snippet", "status"],
+      requestBody: {
+        snippet: {
+          title:           title || "（タイトルなし）",
+          description:     description || "",
+          tags:            tags ? tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+          categoryId:      "17",
+          defaultLanguage: "ja",
+        },
+        status: { privacyStatus },
+      },
+      media: { body: fs.createReadStream(videoFile) },
+    });
+
+    const videoId = response.data.id;
+    console.log(`[YouTube Upload] 完了: https://youtu.be/${videoId}`);
+    res.json({ ok: true, videoId, url: `https://youtu.be/${videoId}` });
+  } catch (e) {
+    console.error("[YouTube Upload Error]", e.message);
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 app.listen(PORT, () => {
