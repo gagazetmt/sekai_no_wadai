@@ -3069,7 +3069,10 @@ function renderPosts() {
   <div class='left-col'>
     <div>
       <div class='card-num'>#\${p.num}</div>
-      <div class='card-title'>\${esc(p.catchLine1)}</div>
+      <div style='display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;'>
+        <textarea id='catch-\${i}' rows='3' style='flex:1;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;'>\${esc(p.catchLine1)}</textarea>
+        <button onclick='insertRedYT(\${i})' title='選択テキストを赤字' style='background:#c00000;color:#fff;border:none;padding:10px 12px;border-radius:6px;cursor:pointer;font-weight:900;font-size:18px;flex-shrink:0;'>🔴</button>
+      </div>
       <div class='check-row'>
         <input type='checkbox' id='chk-\${i}' data-idx='\${i}'>
         <label for='chk-\${i}'>投稿対象に含める</label>
@@ -3128,16 +3131,28 @@ function setPostStatus(i, msg, type) {
   if (el) { el.textContent = msg; el.className = "status-msg status-" + type; }
 }
 
+function insertRedYT(i) {
+  const el = document.getElementById("catch-" + i);
+  if (!el) return;
+  const start = el.selectionStart, end = el.selectionEnd;
+  el.value = el.value.slice(0, start) + "[r]" + el.value.slice(start, end) + "[/r]" + el.value.slice(end);
+  el.focus();
+  el.selectionStart = start + 3;
+  el.selectionEnd   = end + 3;
+}
+
 async function exportThumb(i) {
   const post = postsData[i];
+  const catchLine1 = document.getElementById("catch-" + i)?.value || post.thumbExportPost.catchLine1;
   const btn = document.getElementById("btn-tn-" + i);
   if (btn) btn.disabled = true;
   setPostStatus(i, "🖼 サムネ生成中...", "run");
   try {
+    const exportPost = Object.assign({}, post.thumbExportPost, { catchLine1 });
     const r = await fetch("/api/thumbnail/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: DATE, postIdx: post.idx, post: post.thumbExportPost }),
+      body: JSON.stringify({ date: DATE, postIdx: post.idx, post: exportPost }),
     });
     const j = await r.json();
     if (j.ok) setPostStatus(i, "✅ " + j.filename, "ok");
