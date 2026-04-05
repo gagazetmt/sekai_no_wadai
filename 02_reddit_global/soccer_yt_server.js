@@ -3034,6 +3034,26 @@ textarea{resize:vertical;min-height:120px;}
 .btn-yt-open{background:#ff0000;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;}
 .btn-dl{background:#333;color:#ccc;border:none;border-radius:8px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;}
 .btn-close-modal{background:#333;color:#aaa;border:none;border-radius:8px;padding:12px 20px;font-size:14px;cursor:pointer;margin-left:auto;}
+
+/* ── レスポンシブ（スマホ対応） ── */
+@media(max-width:768px){
+  header{flex-wrap:wrap;gap:8px;padding:10px 14px;}
+  header h1{font-size:15px;width:100%;}
+  #yt-auth-badge{font-size:11px;}
+  .btn{padding:8px 12px;font-size:13px;}
+  .btn-upload{font-size:13px;padding:8px 14px;}
+  .btn-upload-all{font-size:13px;padding:8px 14px;}
+  .container{padding:12px 10px;}
+  .post-card{grid-template-columns:1fr;gap:14px;padding:14px;}
+  .tn-wrapper{width:100%;height:0;padding-bottom:56.25%;position:relative;}
+  .tn-wrapper iframe{width:1280px;height:720px;transform-origin:0 0;position:absolute;top:0;left:0;}
+  .no-thumb{width:100%;height:180px;}
+  .upload-modal-inner{padding:16px;}
+  .upload-modal-actions{flex-direction:column;}
+  .btn-yt-open,.btn-dl,.btn-close-modal{width:100%;text-align:center;margin-left:0;}
+  select#modal-privacy{width:100%;}
+  .global-status{padding:8px 12px;font-size:13px;}
+}
 </style>
 </head>
 <body>
@@ -3123,6 +3143,21 @@ async function checkYtAuth() {
 }
 checkYtAuth();
 
+// サムネiframeのスケールをウィンドウ幅に合わせて動的調整
+function adjustTnScale() {
+  document.querySelectorAll(".tn-wrapper").forEach(wrap => {
+    const w = wrap.offsetWidth;
+    if (!w) return;
+    const scale = w / 1280;
+    const iframe = wrap.querySelector("iframe");
+    if (iframe) {
+      iframe.style.transform = \`scale(\${scale})\`;
+      wrap.style.height = (720 * scale) + "px";
+    }
+  });
+}
+window.addEventListener("resize", adjustTnScale);
+
 async function loadPosts() {
   if (!DATE) { setGlobalStatus("日付が指定されていません", "err"); return; }
   setGlobalStatus("読み込み中...", "run");
@@ -3208,6 +3243,7 @@ function renderPosts() {
   </div>
 </div>\`;
   }).join("");
+  setTimeout(adjustTnScale, 100);
 }
 
 function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
@@ -3382,6 +3418,7 @@ async function doUpload() {
       body: JSON.stringify({
         date: DATE,
         videoName: post.videoName,
+        thumbName: DATE + "_" + (post.idx + 1) + "_thumb.png",
         title, description: desc, tags,
         privacyStatus: privacy,
       }),
@@ -3390,7 +3427,8 @@ async function doUpload() {
     if (j.ok) {
       statusEl.style.background = "#1a3a1a";
       statusEl.style.color = "#3cb371";
-      statusEl.innerHTML = \`✅ アップロード完了！ <a href="\${j.url}" target="_blank" style="color:#ffd700">\${j.url}</a>\`;
+      const thumbMsg = j.thumbSet ? " ｜ 🖼 サムネイル設定済み" : " ｜ ⚠️ サムネイル未生成（先に🖼ボタンを押してください）";
+      statusEl.innerHTML = \`✅ アップロード完了！\${thumbMsg}<br><a href="\${j.url}" target="_blank" style="color:#ffd700">\${j.url}</a>\`;
       setPostStatus(currentUploadIdx, "✅ YouTube投稿済み", "ok");
     } else {
       statusEl.style.background = "#3a1a1a";
@@ -3481,8 +3519,9 @@ app.post("/api/youtube/upload", async (req, res) => {
     return res.json({ ok: false, error: "YouTube未認証。/auth/youtube から認証してください。" });
   }
 
-  const { date, videoName, title, description, tags, privacyStatus = "public" } = req.body;
+  const { date, videoName, thumbName, title, description, tags, privacyStatus = "public" } = req.body;
   const videoFile = path.join(__dirname, "soccer_yt_videos", videoName);
+  const thumbFile = thumbName ? path.join(__dirname, "soccer_yt_thumbnails", thumbName) : null;
 
   if (!fs.existsSync(videoFile)) {
     return res.json({ ok: false, error: `動画ファイルが見つかりません: ${videoName}` });
@@ -3503,14 +3542,36 @@ app.post("/api/youtube/upload", async (req, res) => {
           categoryId:      "17",
           defaultLanguage: "ja",
         },
-        status: { privacyStatus },
+        status: {
+          privacyStatus,
+          selfDeclaredMadeForKids: false,
+        },
       },
       media: { body: fs.createReadStream(videoFile) },
     });
 
     const videoId = response.data.id;
-    console.log(`[YouTube Upload] 完了: https://youtu.be/${videoId}`);
-    res.json({ ok: true, videoId, url: `https://youtu.be/${videoId}` });
+    console.log(`[YouTube Upload] 動画完了: https://youtu.be/${videoId}`);
+
+    // サムネイルをセット
+    if (thumbFile && fs.existsSync(thumbFile)) {
+      try {
+        await youtube.thumbnails.set({
+          videoId,
+          media: {
+            mimeType: "image/png",
+            body: fs.createReadStream(thumbFile),
+          },
+        });
+        console.log(`[YouTube Upload] サムネイル設定完了: ${thumbName}`);
+      } catch (tErr) {
+        console.warn(`[YouTube Upload] サムネイル設定失敗（動画は投稿済み）: ${tErr.message}`);
+      }
+    } else {
+      console.log(`[YouTube Upload] サムネイルなし（先に「🖼 サムネイル生成」を押してください）`);
+    }
+
+    res.json({ ok: true, videoId, url: `https://youtu.be/${videoId}`, thumbSet: !!(thumbFile && fs.existsSync(thumbFile)) });
   } catch (e) {
     console.error("[YouTube Upload Error]", e.message);
     res.json({ ok: false, error: e.message });
