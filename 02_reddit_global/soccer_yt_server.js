@@ -625,14 +625,16 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
   const post = posts[parseInt(req.params.idx)];
   if (!post) return res.status(404).send("Post not found");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  const qZoom = parseFloat(req.query.zoom);
-  const qX    = parseFloat(req.query.px);
-  const qY    = parseFloat(req.query.py);
-  const qImg  = req.query.img; // "/images/filename.jpg" → IMG_DIR/filename
-  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg) {
+  const qZoom  = parseFloat(req.query.zoom);
+  const qX     = parseFloat(req.query.px);
+  const qY     = parseFloat(req.query.py);
+  const qImg   = req.query.img;   // "/images/filename.jpg" → IMG_DIR/filename
+  const qCatch = req.query.catch; // catchLine1 テキスト上書き
+  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg || qCatch !== undefined) {
     const cur = (post.imgZoom && post.imgZoom.tn) || { zoom: 1.0, x: 50, y: 50 };
     const overridePost = Object.assign({}, post, {
       mainImagePath: qImg ? path.join(IMG_DIR, path.basename(qImg)) : post.mainImagePath,
+      catchLine1:    qCatch !== undefined ? qCatch : post.catchLine1,
       imgZoom: Object.assign({}, post.imgZoom, {
         tn: { zoom: isNaN(qZoom) ? cur.zoom : qZoom, x: isNaN(qX) ? cur.x : qX, y: isNaN(qY) ? cur.y : qY }
       })
@@ -3096,7 +3098,7 @@ function renderPosts() {
     <div>
       <div class='card-num'>#\${p.num}</div>
       <div style='display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;'>
-        <textarea id='catch-\${i}' rows='3' style='flex:1;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;'>\${esc(p.catchLine1)}</textarea>
+        <textarea id='catch-\${i}' rows='3' style='flex:1;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;' oninput='updateTnPreview(\${i})'>\${esc(p.catchLine1)}</textarea>
         <button onclick='insertRedYT(\${i})' title='選択テキストを赤字' style='background:#c00000;color:#fff;border:none;padding:10px 12px;border-radius:6px;cursor:pointer;font-weight:900;font-size:18px;flex-shrink:0;'>🔴</button>
       </div>
       <div class='check-row'>
@@ -3166,15 +3168,8 @@ function swapThumb(postIdx, imgIdx, url) {
     img.classList.toggle("selected", j === imgIdx);
   });
   // iframeプレビューを更新
-  const post = postsData[postIdx];
-  const z = parseFloat(document.getElementById("zoom-z-" + postIdx)?.value || 1.0);
-  const x = parseFloat(document.getElementById("zoom-x-" + postIdx)?.value || 50);
-  const y = parseFloat(document.getElementById("zoom-y-" + postIdx)?.value || 50);
   const frame = document.getElementById("tn-frame-" + postIdx);
-  if (frame) {
-    frame.src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
-      "?img=" + encodeURIComponent(url) + "&zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
-  }
+  if (frame) frame.src = buildPreviewSrc(postIdx);
 }
 
 async function addGalleryImage(i, input) {
@@ -3223,6 +3218,20 @@ function setPostStatus(i, msg, type) {
   if (el) { el.textContent = msg; el.className = "status-msg status-" + type; }
 }
 
+function buildPreviewSrc(i) {
+  const post  = postsData[i];
+  const z     = parseFloat(document.getElementById("zoom-z-" + i)?.value || 1.0);
+  const x     = parseFloat(document.getElementById("zoom-x-" + i)?.value || 50);
+  const y     = parseFloat(document.getElementById("zoom-y-" + i)?.value || 50);
+  const catchText = document.getElementById("catch-" + i)?.value ?? "";
+  const selectedImg = selectedThumbs[i];
+  let src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
+    "?zoom=" + z + "&px=" + x + "&py=" + y +
+    "&catch=" + encodeURIComponent(catchText) + "&t=" + Date.now();
+  if (selectedImg) src += "&img=" + encodeURIComponent(selectedImg);
+  return src;
+}
+
 function updateTnZoom(i) {
   const z  = parseFloat(document.getElementById("zoom-z-" + i).value);
   const x  = parseFloat(document.getElementById("zoom-x-" + i).value);
@@ -3230,11 +3239,15 @@ function updateTnZoom(i) {
   document.getElementById("zoom-zv-" + i).textContent = z.toFixed(2);
   document.getElementById("zoom-xv-" + i).textContent = x;
   document.getElementById("zoom-yv-" + i).textContent = y;
-  const post = postsData[i];
-  const selectedImg = selectedThumbs[i];
-  let src = "/api/thumbnail/preview/" + DATE + "/" + post.idx + "?zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
-  if (selectedImg) src += "&img=" + encodeURIComponent(selectedImg);
-  document.getElementById("tn-frame-" + i).src = src;
+  document.getElementById("tn-frame-" + i).src = buildPreviewSrc(i);
+}
+
+const _tnDebounce = {};
+function updateTnPreview(i) {
+  clearTimeout(_tnDebounce[i]);
+  _tnDebounce[i] = setTimeout(() => {
+    document.getElementById("tn-frame-" + i).src = buildPreviewSrc(i);
+  }, 500);
 }
 
 function insertRedYT(i) {
