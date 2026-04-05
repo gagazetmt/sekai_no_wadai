@@ -28,7 +28,7 @@ const now       = new Date();
 const jstOffset = 9 * 60 * 60 * 1000;
 const dateArg   = process.argv.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a))
                || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
-const topArg    = parseInt((process.argv.find(a => a.startsWith("--top=")) || "--top=30").replace("--top=", ""));
+const topArg    = parseInt((process.argv.find(a => a.startsWith("--top=")) || "--top=8").replace("--top=", ""));
 
 const TEAM_MANAGERS_PATH = path.join(__dirname, "..", "logos", "team_managers.json");
 const _teamManagers = (() => {
@@ -356,14 +356,27 @@ async function main() {
   const candidatesData = JSON.parse(fs.readFileSync(candidatesFile, "utf8"));
   const allPosts = (candidatesData.posts || []).map(p => ({ ...p, type: p.type || detectType(p.title||"") }));
 
-  // 既存の content JSON があればスキップ対象を把握
+  // 過去168時間（7日分）の content JSON を確認してスキップ対象を把握
+  const existingTitles = new Set();
+  for (let d = 0; d < 7; d++) {
+    const checkDate = new Date(Date.now() + jstOffset - d * 86400000).toISOString().slice(0, 10);
+    const f = path.join(DATA_DIR, `content_${checkDate}.json`);
+    if (fs.existsSync(f)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(f, "utf8"));
+        for (const p of data.posts || []) {
+          if (p._meta?.title) existingTitles.add(p._meta.title);
+        }
+      } catch { /* 読み取り失敗は無視 */ }
+    }
+  }
   const contentFile = path.join(DATA_DIR, `content_${dateArg}.json`);
+  // 当日JSONのマージ用（今回生成分 + 既存分を合わせる）
   const existingContent = fs.existsSync(contentFile) ? JSON.parse(fs.readFileSync(contentFile, "utf8")) : { posts: [] };
-  const existingTitles = new Set(existingContent.posts.map(p => p._meta?.title).filter(Boolean));
 
-  // 生成対象: Reddit上位N件 + RSS上位M件（スコア順）
-  const REDDIT_LIMIT = 15;
-  const RSS_LIMIT    = 15;
+  // 生成対象: Reddit上位4件(score降順) + RSS上位4件(recency降順)
+  const REDDIT_LIMIT = 4;
+  const RSS_LIMIT    = 4;
 
   const redditCandidates = allPosts
     .filter(p => p.source === "reddit" && !existingTitles.has(p.title))
@@ -379,7 +392,7 @@ async function main() {
 
   const jst = new Date(Date.now() + jstOffset);
   console.log(`\n📝 テキストコンテンツ生成 (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
-  console.log(`対象: ${targets.length}件 (Reddit${redditCandidates.length} + RSS${rssCandidates.length}) / スキップ済み: ${existingTitles.size}件`);
+  console.log(`対象: ${targets.length}件 (Reddit${redditCandidates.length} + RSS${rssCandidates.length}) / 168h済みスキップ: ${existingTitles.size}件`);
   console.log("─".repeat(50));
 
   const newPosts = [];
@@ -557,7 +570,7 @@ async function main() {
   // 既存コンテンツとマージ（同一タイトルは新規で上書き）
   const newTitles  = new Set(newPosts.map(p => p._meta?.threadTitle));
   const deduped    = existingContent.posts.filter(p => !newTitles.has(p._meta?.threadTitle));
-  const merged     = [...newPosts, ...deduped];
+  const merged     = [...newPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
 
   const outputData = {
     date:         dateArg,
