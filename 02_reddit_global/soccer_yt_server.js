@@ -2962,7 +2962,7 @@ header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
 .status-run{background:#1a2a3a;color:#4a9eff;}
 
 /* ── カード ── */
-.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:380px 1fr 600px;gap:20px;}
+.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:420px 1fr;gap:20px;}
 .post-card.has-video{border-color:#3a3a3a;}
 .post-card.no-video{opacity:.55;}
 .card-num{font-size:13px;color:#666;margin-bottom:6px;}
@@ -3006,12 +3006,21 @@ textarea{resize:vertical;min-height:120px;}
 .serper-snippets{margin-top:8px;border-top:1px solid #2a4a6b;padding-top:8px;}
 .serper-snippet{margin-bottom:6px;color:#aaa;}.serper-snippet b{color:#ddd;}
 .badge-xother{background:#1a1a2e;color:#aad4ff;border:1px solid #3a5a8a;}
-/* ── 右列: 動画 ── */
-.video-col{display:flex;flex-direction:column;gap:10px;}
-.video-preview{width:100%;border-radius:8px;background:#000;display:block;}
-.no-video-msg{width:100%;height:200px;background:#111;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;text-align:center;}
-.post-actions{display:flex;gap:10px;align-items:center;margin-top:4px;}
+.video-preview{width:100%;border-radius:8px;background:#000;display:block;margin-bottom:14px;}
+.post-actions{display:flex;gap:10px;align-items:center;margin-top:8px;}
 .status-msg{font-size:13px;padding:5px 10px;border-radius:5px;flex:1;}
+/* ── アップロードモーダル ── */
+#upload-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;overflow-y:auto;padding:40px 20px;}
+.upload-modal-inner{max-width:700px;margin:0 auto;background:#1a1a1a;border:1px solid #444;border-radius:12px;padding:28px;}
+.upload-modal-inner h2{color:#ffd700;font-size:18px;margin-bottom:20px;}
+.copy-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:16px;}
+.copy-row textarea,.copy-row input{flex:1;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;}
+.btn-copy{background:#2a4a6b;color:#7ab8e8;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:13px;white-space:nowrap;flex-shrink:0;}
+.btn-copy.ok{background:#1a3a1a;color:#3cb371;}
+.upload-modal-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;}
+.btn-yt-open{background:#ff0000;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;}
+.btn-dl{background:#333;color:#ccc;border:none;border-radius:8px;padding:12px 24px;font-size:15px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block;}
+.btn-close-modal{background:#333;color:#aaa;border:none;border-radius:8px;padding:12px 20px;font-size:14px;cursor:pointer;margin-left:auto;}
 </style>
 </head>
 <body>
@@ -3026,6 +3035,33 @@ textarea{resize:vertical;min-height:120px;}
 </header>
 <div class="global-status" id="global-status">読み込み中...</div>
 <div class="container" id="posts-container"></div>
+
+<div id="upload-modal">
+  <div class="upload-modal-inner">
+    <h2>📤 YouTube アップロード準備</h2>
+    <div style="font-size:13px;color:#888;margin-bottom:16px;">各項目をコピーして、YouTube Studioで貼り付けてください。</div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">タイトル</div>
+    <div class="copy-row">
+      <input type="text" id="modal-title" readonly>
+      <button class="btn-copy" onclick="copyField('modal-title',this)">コピー</button>
+    </div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">説明文</div>
+    <div class="copy-row">
+      <textarea id="modal-desc" rows="5" readonly></textarea>
+      <button class="btn-copy" onclick="copyField('modal-desc',this)">コピー</button>
+    </div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">ハッシュタグ</div>
+    <div class="copy-row">
+      <input type="text" id="modal-tags" readonly>
+      <button class="btn-copy" onclick="copyField('modal-tags',this)">コピー</button>
+    </div>
+    <div class="upload-modal-actions">
+      <button class="btn-yt-open" onclick="window.open('https://studio.youtube.com/','_blank')">▶ YouTube Studio を開く</button>
+      <a id="modal-dl-link" class="btn-dl" download>⬇ 動画をダウンロード</a>
+      <button class="btn-close-modal" onclick="document.getElementById('upload-modal').style.display='none'">✕ 閉じる</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const urlParams = new URLSearchParams(location.search);
@@ -3063,7 +3099,6 @@ function renderPosts() {
     const swapImgs = p.imageUrls.map((url, j) =>
       "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + "," + JSON.stringify(url) + ")' title='サムネに設定'>"
     ).join("");
-    const videoHtml = "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>";
     return \`
 <div class='post-card has-video' id='card-\${i}'>
   <div class='left-col'>
@@ -3086,6 +3121,7 @@ function renderPosts() {
     <button class='btn btn-load' id='btn-tn-\${i}' onclick='exportThumb(\${i})' style='margin-top:8px;width:100%;'>🖼 サムネイル生成</button>
   </div>
   <div class='meta-col'>
+    <video class='video-preview' controls preload='metadata' src='\${p.videoUrl}'></video>
     <div>
       <div class='field-lbl'>YouTubeタイトル</div>
       <input type='text' id='title-\${i}' value='\${esc(p.youtubeTitle)}'>
@@ -3098,11 +3134,8 @@ function renderPosts() {
       <div class='field-lbl'>ハッシュタグ</div>
       <input type='text' id='tags-\${i}' value='\${esc(p.hashtagsText)}'>
     </div>
-  </div>
-  <div class='video-col'>
-    \${videoHtml}
     <div class='post-actions'>
-      <button class='btn btn-upload' onclick='uploadSingle(\${i})'>▶ 投稿</button>
+      <button class='btn btn-upload' onclick='uploadSingle(\${i})'>📤 投稿準備</button>
       <span class='status-msg' id='st-\${i}'></span>
     </div>
   </div>
@@ -3161,23 +3194,28 @@ async function exportThumb(i) {
   if (btn) btn.disabled = false;
 }
 
-async function uploadSingle(i) {
-  const post = postsData[i];
+function uploadSingle(i) {
+  const post  = postsData[i];
   const title = document.getElementById("title-" + i).value;
   const desc  = document.getElementById("desc-" + i).value;
   const tags  = document.getElementById("tags-" + i).value;
-  const thumb = selectedThumbs[i] || post.thumbUrl;
-  setPostStatus(i, "投稿中...", "run");
-  try {
-    const res = await fetch("/api/youtube/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: DATE, postIdx: i, num: post.num, title, description: desc + "\\n" + tags, thumbnailUrl: thumb }),
-    });
-    const j = await res.json();
-    if (j.ok) setPostStatus(i, "✅ 投稿完了", "ok");
-    else setPostStatus(i, "❌ " + (j.error || "失敗"), "err");
-  } catch(e) { setPostStatus(i, "❌ " + e.message, "err"); }
+  document.getElementById("modal-title").value = title;
+  document.getElementById("modal-desc").value  = desc;
+  document.getElementById("modal-tags").value  = tags;
+  const dlLink = document.getElementById("modal-dl-link");
+  dlLink.href     = post.videoUrl;
+  dlLink.download = post.videoName || "video.mp4";
+  document.querySelectorAll(".btn-copy").forEach(b => b.classList.remove("ok"));
+  document.getElementById("upload-modal").style.display = "block";
+  setPostStatus(i, "📋 投稿準備中...", "run");
+}
+
+function copyField(id, btn) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el.value).then(() => {
+    btn.textContent = "✅ コピー済";
+    btn.classList.add("ok");
+  });
 }
 
 async function uploadAll() {
