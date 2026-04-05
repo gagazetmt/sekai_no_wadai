@@ -625,6 +625,18 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
   const post = posts[parseInt(req.params.idx)];
   if (!post) return res.status(404).send("Post not found");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  const qZoom = parseFloat(req.query.zoom);
+  const qX    = parseFloat(req.query.px);
+  const qY    = parseFloat(req.query.py);
+  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY)) {
+    const cur = (post.imgZoom && post.imgZoom.tn) || { zoom: 1.0, x: 50, y: 50 };
+    const overridePost = Object.assign({}, post, {
+      imgZoom: Object.assign({}, post.imgZoom, {
+        tn: { zoom: isNaN(qZoom) ? cur.zoom : qZoom, x: isNaN(qX) ? cur.x : qX, y: isNaN(qY) ? cur.y : qY }
+      })
+    });
+    return res.send(buildThumbnailHtml(overridePost));
+  }
   res.send(buildThumbnailHtml(post));
 });
 
@@ -2977,6 +2989,12 @@ header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
 .tn-wrapper iframe{width:1280px;height:720px;transform:scale(0.35625);transform-origin:0 0;border:none;pointer-events:none;}
 .no-thumb{width:456px;height:257px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;}
 .gallery-label{font-size:12px;color:#666;margin-bottom:6px;}
+.zoom-ctrl{background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;margin-bottom:8px;}
+.zoom-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.zoom-row:last-child{margin-bottom:0;}
+.zoom-lbl{font-size:11px;color:#888;width:40px;flex-shrink:0;}
+.zoom-row input[type=range]{flex:1;accent-color:#ffd700;height:4px;}
+.zoom-val{font-size:11px;color:#ffd700;width:36px;text-align:right;flex-shrink:0;}
 .gallery{display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;}
 .gallery img{width:56px;height:56px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid transparent;opacity:.65;transition:all .15s;}
 .gallery img:hover,.gallery img.selected{border-color:#ff0000;opacity:1;}
@@ -3113,7 +3131,24 @@ function renderPosts() {
         <label for='chk-\${i}'>投稿対象に含める</label>
       </div>
     </div>
-    \${tnHtml}
+    <div class='tn-wrapper' id='tn-wrap-\${i}'><iframe id='tn-frame-\${i}' src='/api/thumbnail/preview/\${DATE}/\${p.idx}?t=\${Date.now()}' scrolling='no'></iframe></div>
+    <div class='zoom-ctrl'>
+      <div class='zoom-row'>
+        <span class='zoom-lbl'>ズーム</span>
+        <input type='range' min='1.0' max='2.5' step='0.05' value='1.0' id='zoom-z-\${i}' oninput='updateTnZoom(\${i})'>
+        <span class='zoom-val' id='zoom-zv-\${i}'>1.0</span>
+      </div>
+      <div class='zoom-row'>
+        <span class='zoom-lbl'>X位置</span>
+        <input type='range' min='0' max='100' step='1' value='50' id='zoom-x-\${i}' oninput='updateTnZoom(\${i})'>
+        <span class='zoom-val' id='zoom-xv-\${i}'>50</span>
+      </div>
+      <div class='zoom-row'>
+        <span class='zoom-lbl'>Y位置</span>
+        <input type='range' min='0' max='100' step='1' value='50' id='zoom-y-\${i}' oninput='updateTnZoom(\${i})'>
+        <span class='zoom-val' id='zoom-yv-\${i}'>50</span>
+      </div>
+    </div>
     <div>
       <div class='gallery-label'>サムネ画像を変更</div>
       <div class='gallery' id='thumbs-\${i}'>\${swapImgs}</div>
@@ -3164,6 +3199,18 @@ function setPostStatus(i, msg, type) {
   if (el) { el.textContent = msg; el.className = "status-msg status-" + type; }
 }
 
+function updateTnZoom(i) {
+  const z  = parseFloat(document.getElementById("zoom-z-" + i).value);
+  const x  = parseFloat(document.getElementById("zoom-x-" + i).value);
+  const y  = parseFloat(document.getElementById("zoom-y-" + i).value);
+  document.getElementById("zoom-zv-" + i).textContent = z.toFixed(2);
+  document.getElementById("zoom-xv-" + i).textContent = x;
+  document.getElementById("zoom-yv-" + i).textContent = y;
+  const post = postsData[i];
+  document.getElementById("tn-frame-" + i).src =
+    "/api/thumbnail/preview/" + DATE + "/" + post.idx + "?zoom=" + z + "&px=" + x + "&py=" + y + "&t=" + Date.now();
+}
+
 function insertRedYT(i) {
   const el = document.getElementById("catch-" + i);
   if (!el) return;
@@ -3177,11 +3224,17 @@ function insertRedYT(i) {
 async function exportThumb(i) {
   const post = postsData[i];
   const catchLine1 = document.getElementById("catch-" + i)?.value || post.thumbExportPost.catchLine1;
+  const zoom = parseFloat(document.getElementById("zoom-z-" + i)?.value || 1.0);
+  const px   = parseFloat(document.getElementById("zoom-x-" + i)?.value || 50);
+  const py   = parseFloat(document.getElementById("zoom-y-" + i)?.value || 50);
   const btn = document.getElementById("btn-tn-" + i);
   if (btn) btn.disabled = true;
   setPostStatus(i, "🖼 サムネ生成中...", "run");
   try {
-    const exportPost = Object.assign({}, post.thumbExportPost, { catchLine1 });
+    const exportPost = Object.assign({}, post.thumbExportPost, {
+      catchLine1,
+      imgZoom: { tn: { zoom, x: px, y: py } }
+    });
     const r = await fetch("/api/thumbnail/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
