@@ -1480,7 +1480,7 @@ function buildS1(post) {
     "<input type='text' id='f-badge' value='" + esc(post.badge || "") + "'></div>" +
     "</div>" +
     "<div class='sec-lbl'>🖼 背景画像（S1・S5共通）</div>" +
-    "<div class='g-wrap'>" + galleryHtml("main") + "</div>" +
+    "<div class='g-wrap'>" + galleryHtml("main") + "</div>";
 }
 
 // ── SI（ソース情報）────────────────────────────────────────────────────────────
