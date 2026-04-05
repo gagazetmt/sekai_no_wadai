@@ -1,18 +1,16 @@
 // fetch_daily_candidates.js
 // 定時実行スクリプト: Reddit + 国内まとめブログから案件取得 → VPS送信
 //
-// 【実行モード（JST時刻で自動判定）】
-//   0:00 → midnight: 本日のベースJSON作成（過去30日との重複除去）
-//   6:00〜21:00 → update: 当日JSONにマージ（重複除去）
+// 【動作】
+//   毎回: 36時間以内の新着スレを取得 → 過去7日(168h)既出IDを除外 → Reddit4+RSS4を選定
+//   当日のJSONに追記（added_at降順=新しい順）→ VPS送信
 //
 // 【出力ファイル】
-//   data/candidates_YYYY-MM-DD.json  ... 当日の積み上げJSON
-//   data/seen_history.json           ... 過去案件IDの履歴
+//   data/candidates_YYYY-MM-DD.json  ... 当日の積み上げJSON（added_at降順）
+//   data/seen_history.json           ... 過去7日の既出ID履歴
 //
 // 使い方:
-//   node scripts/fetch_daily_candidates.js           (時刻自動判定)
-//   node scripts/fetch_daily_candidates.js midnight  (強制ミッドナイト)
-//   node scripts/fetch_daily_candidates.js update    (強制アップデート)
+//   node scripts/fetch_daily_candidates.js
 
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env"), quiet: true });
 
@@ -24,10 +22,14 @@ const { callAI }    = require("./ai_client");
 // ─── 定数 ─────────────────────────────────────────────────────────────────────
 const DATA_DIR          = path.join(__dirname, "..", "data");
 const HISTORY_FILE      = path.join(DATA_DIR, "seen_history.json");
-const HISTORY_KEEP_DAYS = 30;
-const REDDIT_TOP_N      = 8;
-const RSS_TOP_N         = 8;
-const MAX_TOTAL_POSTS   = 20;
+const HISTORY_KEEP_DAYS = 7;    // 168時間（7日）分の既出IDを保持
+const REDDIT_FETCH_N    = 50;   // Reddit APIから取得する最大件数（dedup候補）
+const RSS_FETCH_N       = 20;   // RSSから取得する最大件数（dedup候補）
+const REDDIT_SELECT_N   = 4;    // 1回の実行でJSONに追加するReddit件数
+const RSS_SELECT_N      = 4;    // 1回の実行でJSONに追加するRSS件数
+const REDDIT_MAX_HOURS  = 24;   // Reddit取得対象の最大経過時間
+const RSS_MAX_HOURS     = 48;   // RSS取得対象の最大経過時間
+const FRESH_WINDOWS     = [4, 8, 12, 24]; // Reddit ウォーターフォール時間窓（h）
 const COMMENT_LIMIT     = 20;
 
 const VPS_HOST = "root@37.60.224.54";
@@ -72,25 +74,30 @@ async function redditGet(url) {
 }
 
 async function fetchRedditTop() {
-  const json = await redditGet("https://www.reddit.com/r/soccer/hot.json?limit=40");
+  const json = await redditGet("https://www.reddit.com/r/soccer/rising.json?limit=100");
   const nowSec = Date.now() / 1000;
   return (json.data?.children || [])
     .map(c => c.data)
-    .filter(p => !p.stickied && p.score > 10 && (nowSec - p.created_utc) < 48 * 3600)
-    .slice(0, REDDIT_TOP_N)
-    .map(p => ({
-      id:          p.permalink,          // 重複チェックキー
-      source:      "reddit",
-      title:       p.title,
-      titleJa:     "",
-      url:         "https://www.reddit.com" + p.permalink,
-      permalink:   p.permalink,
-      score:       p.score,
-      numComments: p.num_comments,
-      created_utc: p.created_utc,
-      subreddit:   p.subreddit,
-      comments:    [],
-    }));
+    .filter(p => !p.stickied && p.score > 5 && (nowSec - p.created_utc) < REDDIT_MAX_HOURS * 3600)
+    .slice(0, REDDIT_FETCH_N)
+    .map(p => {
+      const hoursOld = (nowSec - p.created_utc) / 3600;
+      return {
+        id:          p.permalink,
+        source:      "reddit",
+        title:       p.title,
+        titleJa:     "",
+        url:         "https://www.reddit.com" + p.permalink,
+        permalink:   p.permalink,
+        score:       p.score,
+        velocity:    Math.round(p.score / Math.max(hoursOld, 0.5)), // upvotes/h
+        hoursOld:    Math.round(hoursOld * 10) / 10,
+        numComments: p.num_comments,
+        created_utc: p.created_utc,
+        subreddit:   p.subreddit,
+        comments:    [],
+      };
+    });
 }
 
 async function fetchComments(permalink) {
@@ -156,7 +163,7 @@ async function fetchRss({ name, url }) {
       const pubDate = extractXml(body, "pubDate") || extractXml(body, "dc:date");
       if (!title || !link) continue;
       const created_utc = pubDate ? Math.floor(new Date(pubDate).getTime() / 1000) : now;
-      if (now - created_utc > 4 * 86400) continue; // 4日以上前はスキップ
+      if (now - created_utc > RSS_MAX_HOURS * 3600) continue; // 鮮度フィルター（48h）
       items.push({
         id:          link,              // 重複チェックキー
         source:      "rss",
@@ -184,7 +191,7 @@ async function fetchRss({ name, url }) {
       }
     }
 
-    return items.sort((a, b) => b.created_utc - a.created_utc).slice(0, RSS_TOP_N);
+    return items.sort((a, b) => b.created_utc - a.created_utc).slice(0, RSS_FETCH_N);
   } catch (e) {
     console.warn(`⚠️  RSS取得失敗 [${name}]: ${e.message}`);
     return [];
@@ -201,7 +208,7 @@ async function fetchAllRss() {
     .filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; })
     .filter(p => !J_LEAGUE_FILTER.test(p.title || ""))
     .sort((a, b) => b.created_utc - a.created_utc)
-    .slice(0, RSS_TOP_N);
+    .slice(0, RSS_FETCH_N);
 }
 
 // ─── タイトル翻訳（Reddit のみ）────────────────────────────────────────────────
@@ -288,118 +295,108 @@ function sendToVps(date) {
 
 // ─── メイン ───────────────────────────────────────────────────────────────────
 async function main() {
-  const { date, hour, iso } = jstNow();
+  const { date, iso } = jstNow();
 
-  // 実行モード判定（引数 > 時刻自動判定）
-  const modeArg = process.argv[2];
-  const isMidnight = modeArg === "midnight" || (!modeArg && hour === 0);
-  const mode = isMidnight ? "midnight" : "update";
-
-  console.log(`\n🕐 ${iso} | Mode: ${mode} | Date: ${date}`);
+  console.log(`\n🕐 ${iso} | Date: ${date}`);
   console.log("─".repeat(50));
 
-  // update モード: 既存JSONが上限に達していればスキップ
-  if (!isMidnight) {
-    const existing = loadDaily(date);
-    if (existing && existing.posts?.length >= MAX_TOTAL_POSTS) {
-      console.log(`✅ 上限${MAX_TOTAL_POSTS}件に達しているためスキップ (現在 ${existing.posts.length}件)`);
-      return;
-    }
-  }
-
-  // ① Reddit top8 + RSS top8 を並列取得
-  console.log(`📡 Fetching Reddit top${REDDIT_TOP_N} + RSS top${RSS_TOP_N}...`);
+  // ① Reddit × REDDIT_FETCH_N + RSS × RSS_FETCH_N を並列取得
+  console.log(`📡 Fetching Reddit rising(up to ${REDDIT_FETCH_N}, ${REDDIT_MAX_HOURS}h) + RSS(up to ${RSS_FETCH_N}, ${RSS_MAX_HOURS}h)...`);
   let [redditPosts, rssPosts] = await Promise.all([
     fetchRedditTop().catch(e => { console.warn(`⚠️ Reddit取得失敗: ${e.message}`); return []; }),
     fetchAllRss(),
   ]);
 
-  // ② Reddit 各スレッドのコメント上位20件を並列取得
-  console.log(`💬 Fetching comments (${COMMENT_LIMIT}/post × ${redditPosts.length} posts)...`);
-  redditPosts = await Promise.all(
-    redditPosts.map(async p => ({
+  // ② 過去7日(168h)の既出IDを取得してフィルター
+  const history = loadHistory();
+  const seenSet = getSeenSet(history);
+
+  const newRedditAll = redditPosts.filter(p => !seenSet.has(p.id));
+  const newRssAll    = rssPosts.filter(p => !seenSet.has(p.id));
+
+  console.log(`🔍 Dedup(7days): Reddit ${redditPosts.length}→${newRedditAll.length}, RSS ${rssPosts.length}→${newRssAll.length}`);
+
+  // ③ 選定: Reddit=ウォーターフォール鮮度(velocity降順) + RSS=新着順
+  const nowSec = Date.now() / 1000;
+  let selectedReddit = [];
+  for (const maxH of FRESH_WINDOWS) {
+    const fresh = newRedditAll.filter(p => (nowSec - p.created_utc) <= maxH * 3600);
+    console.log(`  Reddit ${maxH}h以内: ${fresh.length}件`);
+    if (fresh.length >= REDDIT_SELECT_N) {
+      selectedReddit = fresh
+        .sort((a, b) => (b.velocity || b.score) - (a.velocity || a.score))
+        .slice(0, REDDIT_SELECT_N);
+      console.log(`  → ${maxH}h窓で${REDDIT_SELECT_N}件選定（velocity降順）`);
+      break;
+    }
+  }
+  if (selectedReddit.length === 0) {
+    selectedReddit = newRedditAll
+      .sort((a, b) => (b.velocity || b.score) - (a.velocity || a.score))
+      .slice(0, REDDIT_SELECT_N);
+    console.log(`  → フォールバック: 全期間から${selectedReddit.length}件選定`);
+  }
+
+  const selectedRss = newRssAll
+    .sort((a, b) => b.created_utc - a.created_utc)
+    .slice(0, RSS_SELECT_N);
+
+  const selected = [...selectedReddit, ...selectedRss];
+
+  if (selected.length === 0) {
+    console.log("⏭ 新規ネタなし（全て既出）、スキップ");
+    return;
+  }
+
+  console.log(`✅ 選定: Reddit ${selectedReddit.length}件 + RSS ${selectedRss.length}件 = 計${selected.length}件`);
+
+  // ④ Reddit コメント取得（選定分のみ）
+  const selectedRedditWithComments = await Promise.all(
+    selected.filter(p => p.source === "reddit").map(async p => ({
       ...p,
       comments: await fetchComments(p.permalink),
     }))
   );
+  const selectedRssItems = selected.filter(p => p.source !== "reddit");
+  const selectedWithComments = [...selectedRedditWithComments, ...selectedRssItems];
 
-  // ③ タイトル翻訳（Reddit のみ）
+  // ⑤ タイトル翻訳（Reddit のみ）
   console.log("🌐 Translating Reddit titles...");
-  const allFetched = await translateTitles([...redditPosts, ...rssPosts]);
+  const translated = await translateTitles(selectedWithComments);
 
-  // ── ソート & 上限30件ヘルパー ──
-  const finalizePosts = (pArr) => {
-    return pArr
-      .sort((a, b) => (b.score - a.score) || (b.created_utc - a.created_utc))
-      .slice(0, MAX_TOTAL_POSTS);
+  // ⑥ added_at を付与（同一バッチ内はscore降順が維持されるようにする）
+  const postsWithTime = translated.map(p => ({ ...p, added_at: iso }));
+
+  // ⑦ seen_history に追加
+  recordToHistory(history, date, postsWithTime.map(p => p.id));
+  saveHistory(history);
+  console.log(`📚 History updated: ${Object.keys(history.seen).length} days tracked`);
+
+  // ⑧ 既存の当日JSONに追記（新しいバッチを先頭に）
+  const existing = loadDaily(date);
+  const existingPosts = existing?.posts || [];
+
+  // 既存JSONに同じIDがあれば除外（二重追加防止）
+  const existingIds = new Set(existingPosts.map(p => p.id));
+  const trulyNew = postsWithTime.filter(p => !existingIds.has(p.id));
+
+  // 新しいバッチ先頭 + 既存（added_at降順、同一バッチ内はscore降順）
+  const allPosts = [...trulyNew, ...existingPosts].sort((a, b) => {
+    const ta = a.added_at ? new Date(a.added_at).getTime() : 0;
+    const tb = b.added_at ? new Date(b.added_at).getTime() : 0;
+    if (tb !== ta) return tb - ta;                          // 新しいバッチが上
+    return (b.score || 0) - (a.score || 0);                // 同バッチ内はscore降順
+  });
+
+  const todayData = {
+    date,
+    created_at:   existing?.created_at || iso,
+    last_updated: iso,
+    posts:        allPosts,
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  if (isMidnight) {
-    // ── midnight モード: 新しい本日ベースJSONを作成 ──────────────────────────
-    const history = loadHistory();
-    const seenSet = getSeenSet(history);
-
-    let newPosts = allFetched.filter(p => !seenSet.has(p.id));
-    console.log(`🔍 History dedup: ${allFetched.length} → ${newPosts.length} posts`);
-
-    // 上限30件に絞る
-    newPosts = finalizePosts(newPosts);
-
-    const todayData = {
-      date,
-      mode:         "midnight",
-      created_at:   iso,
-      last_updated: iso,
-      posts:        newPosts.map(p => ({ ...p, added_at: iso })),
-    };
-
-    // 当日分のIDを履歴に追加
-    recordToHistory(history, date, newPosts.map(p => p.id));
-    saveHistory(history);
-    console.log(`📚 History updated: ${Object.keys(history.seen).length} days tracked`);
-
-    saveDaily(date, todayData);
-    sendToVps(date);
-
-  } else {
-    // ── update モード: 当日JSONにマージ ──────────────────────────────────────
-    const existing = loadDaily(date);
-
-    if (!existing) {
-      // 当日のベースJSONがない場合
-      console.warn("⚠️  当日ベースJSONが見つかりません。今回取得分で新規作成します。");
-      const todayData = {
-        date,
-        mode:         "update-fallback",
-        created_at:   iso,
-        last_updated: iso,
-        posts:        finalizePosts(allFetched).map(p => ({ ...p, added_at: iso })),
-      };
-      saveDaily(date, todayData);
-      sendToVps(date);
-      return;
-    }
-
-    // 既存ポストと新規ポストをマージして重複除去
-    const existingMap = new Map(existing.posts.map(p => [p.id, p]));
-    allFetched.forEach(p => {
-      if (!existingMap.has(p.id)) {
-        existingMap.set(p.id, { ...p, added_at: iso });
-      }
-    });
-
-    // ソート & 上限30件
-    const mergedPosts = finalizePosts(Array.from(existingMap.values()));
-    const newCount    = mergedPosts.filter(p => !existing.posts.some(ep => ep.id === p.id)).length;
-
-    console.log(`🔀 Merge & Trim: Total ${mergedPosts.length} posts (Added ${newCount} new)`);
-
-    existing.last_updated = iso;
-    existing.posts        = mergedPosts;
-    saveDaily(date, existing);
-    sendToVps(date);
-  }
+  saveDaily(date, todayData);
+  sendToVps(date);
 
   console.log("✅ Done.\n");
 }
