@@ -3078,7 +3078,7 @@ function renderPosts() {
     // TNダブ: メインランチャーと同じ /api/thumbnail/preview/:date/:idx
     const tnHtml = \`<div class='tn-wrapper'><iframe src='/api/thumbnail/preview/\${DATE}/\${p.idx}?t=\${Date.now()}' scrolling='no'></iframe></div>\`;
     const swapImgs = p.imageUrls.map((url, j) =>
-      "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + ",\"" + url + "\")' title='サムネに設定'>"
+      "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + "," + JSON.stringify(url) + ")' title='サムネに設定'>"
     ).join("");
     const videoHtml = p.hasVideo
       ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>"
