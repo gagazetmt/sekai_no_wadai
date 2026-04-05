@@ -1486,7 +1486,12 @@ function buildS1(post) {
     "<div class='field'><label>動画タイトル（SEO用）</label>" +
     "<input type='text' id='f-youtubeTitle' value='" + esc(post.youtubeTitle || "") + "' placeholder='【速報】〇〇さん、〇〇！！！！'></div>" +
     "<div class='field'><label>ハッシュタグ</label>" +
-    "<textarea id='f-hashtagsText' rows='2' placeholder='#サッカー #海外の反応 #レアルマドリード'>" + esc(post.hashtagsText || "") + "</textarea></div>";
+    "<textarea id='f-hashtagsText' rows='2' placeholder='#サッカー #海外の反応 #レアルマドリード'>" + esc(post.hashtagsText || "") + "</textarea></div>" +
+    "<div class='sec-lbl'>📰 ソース情報</div>" +
+    "<div style='margin-bottom:4px;'>" +
+    "<a href='" + esc(post._meta?.redditUrl || post._imgMeta?.url || "#") + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(post._meta?.redditUrl || post._imgMeta?.url || "URLなし") + "</a>" +
+    "</div>" +
+    "<div style='background:#0d1f30;border:1px solid #2a4a6b;border-radius:6px;padding:8px 10px;font-size:12px;color:#bbb;white-space:pre-wrap;line-height:1.5;'>" + esc((post.overviewNarration || "（概要なし）").slice(0, 300)) + "</div>";
 }
 
 // ── S2 ───────────────────────────────────────────────────────────────────────
