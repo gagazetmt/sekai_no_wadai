@@ -3381,7 +3381,7 @@ async function doUpload() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         date: DATE,
-        postIdx: post.idx,
+        videoName: post.videoName,
         title, description: desc, tags,
         privacyStatus: privacy,
       }),
@@ -3481,18 +3481,17 @@ app.post("/api/youtube/upload", async (req, res) => {
     return res.json({ ok: false, error: "YouTube未認証。/auth/youtube から認証してください。" });
   }
 
-  const { date, postIdx, title, description, tags, privacyStatus = "public" } = req.body;
-  const num      = String(parseInt(postIdx, 10) + 1);
-  const videoFile = path.join(__dirname, "soccer_yt_videos", `${date}_${num}.mp4`);
+  const { date, videoName, title, description, tags, privacyStatus = "public" } = req.body;
+  const videoFile = path.join(__dirname, "soccer_yt_videos", videoName);
 
   if (!fs.existsSync(videoFile)) {
-    return res.json({ ok: false, error: `動画ファイルが見つかりません: ${date}_${num}.mp4` });
+    return res.json({ ok: false, error: `動画ファイルが見つかりません: ${videoName}` });
   }
 
   try {
     const youtube  = google.youtube({ version: "v3", auth: oauth2Client });
     const fileSize = fs.statSync(videoFile).size;
-    console.log(`[YouTube Upload] 開始: ${date}_${num}.mp4 (${(fileSize/1024/1024).toFixed(1)}MB)`);
+    console.log(`[YouTube Upload] 開始: ${videoName} (${(fileSize/1024/1024).toFixed(1)}MB)`);
 
     const response = await youtube.videos.insert({
       part: ["snippet", "status"],
