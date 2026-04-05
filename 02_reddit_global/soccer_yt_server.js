@@ -2962,7 +2962,7 @@ header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
 .status-run{background:#1a2a3a;color:#4a9eff;}
 
 /* ── カード ── */
-.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:420px minmax(0,600px);gap:20px;}
+.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:504px minmax(0,600px);gap:20px;}
 .post-card.has-video{border-color:#3a3a3a;}
 .post-card.no-video{opacity:.55;}
 .card-num{font-size:13px;color:#666;margin-bottom:6px;}
@@ -2973,9 +2973,9 @@ header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
 
 /* ── 左列: サムネ + ギャラリー ── */
 .left-col{display:flex;flex-direction:column;gap:12px;}
-.tn-wrapper{width:380px;height:214px;overflow:hidden;border-radius:8px;border:2px solid #333;background:#000;position:relative;}
-.tn-wrapper iframe{width:1280px;height:720px;transform:scale(0.2969);transform-origin:0 0;border:none;pointer-events:none;}
-.no-thumb{width:380px;height:214px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;}
+.tn-wrapper{width:456px;height:257px;overflow:hidden;border-radius:8px;border:2px solid #333;background:#000;position:relative;}
+.tn-wrapper iframe{width:1280px;height:720px;transform:scale(0.35625);transform-origin:0 0;border:none;pointer-events:none;}
+.no-thumb{width:456px;height:257px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;font-size:13px;}
 .gallery-label{font-size:12px;color:#666;margin-bottom:6px;}
 .gallery{display:flex;flex-wrap:wrap;gap:6px;max-height:160px;overflow-y:auto;}
 .gallery img{width:56px;height:56px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid transparent;opacity:.65;transition:all .15s;}
