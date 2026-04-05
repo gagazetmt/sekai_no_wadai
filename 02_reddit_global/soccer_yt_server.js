@@ -1487,11 +1487,21 @@ function buildS1(post) {
     "<input type='text' id='f-youtubeTitle' value='" + esc(post.youtubeTitle || "") + "' placeholder='【速報】〇〇さん、〇〇！！！！'></div>" +
     "<div class='field'><label>ハッシュタグ</label>" +
     "<textarea id='f-hashtagsText' rows='2' placeholder='#サッカー #海外の反応 #レアルマドリード'>" + esc(post.hashtagsText || "") + "</textarea></div>" +
-    "<div class='sec-lbl'>📰 ソース情報</div>" +
-    "<div style='margin-bottom:4px;'>" +
-    "<a href='" + esc(post._meta?.redditUrl || post._imgMeta?.url || "#") + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(post._meta?.redditUrl || post._imgMeta?.url || "URLなし") + "</a>" +
-    "</div>" +
-    "<div style='background:#0d1f30;border:1px solid #2a4a6b;border-radius:6px;padding:8px 10px;font-size:12px;color:#bbb;white-space:pre-wrap;line-height:1.5;'>" + esc((post.overviewNarration || "（概要なし）").slice(0, 300)) + "</div>";
+    (function() {
+      const snippets = post._imgMeta?.serperSnippets || [];
+      const primaryLinks = snippets.filter(s => s.link).map(s =>
+        "<div style='margin-bottom:4px;'><a href='" + esc(s.link) + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(s.title || s.link) + "</a>" +
+        (s.date ? "<span style='color:#666;margin-left:6px;font-size:11px;'>" + esc(s.date) + "</span>" : "") + "</div>"
+      ).join("");
+      const fallbackUrl = post._meta?.redditUrl || post._imgMeta?.url || "";
+      const fallbackHtml = fallbackUrl
+        ? "<div style='margin-bottom:4px;'><a href='" + esc(fallbackUrl) + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(fallbackUrl) + "</a></div>"
+        : "<div style='color:#555;font-size:12px;margin-bottom:4px;'>URLなし</div>";
+      return "<div class='sec-lbl'>📰 ソース情報（一次情報）</div>" +
+        (primaryLinks || fallbackHtml) +
+        "<div style='background:#0d1f30;border:1px solid #2a4a6b;border-radius:6px;padding:8px 10px;font-size:12px;color:#bbb;white-space:pre-wrap;line-height:1.5;'>" +
+        esc((post.overviewNarration || "（概要なし）").slice(0, 300)) + "</div>";
+    })()
 }
 
 // ── S2 ───────────────────────────────────────────────────────────────────────

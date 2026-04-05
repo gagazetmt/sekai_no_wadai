@@ -200,6 +200,7 @@ async function searchSerper(query) {
       title:   r.title   || "",
       snippet: r.snippet || "",
       date:    r.date    || "",
+      link:    r.link    || "",
     }));
   } catch { return []; }
 }
