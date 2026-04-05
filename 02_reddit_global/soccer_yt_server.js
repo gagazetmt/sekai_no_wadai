@@ -1067,7 +1067,6 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
   <input type="date" id="date-input">
   <button class="btn-load" onclick="loadContent()">📂 読み込み</button>
   <button class="btn-gen"  onclick="openCandidateModal()">📋 案件抽出</button>
-  <button class="btn-gen"  id="btn-thumb" onclick="exportThumb()">🖼 サムネイル</button>
   <button class="btn-video" id="btn-video" onclick="runVideo()">🎬 動画生成</button>
   <div class="ml-auto">
     <button class="btn-yt" onclick="openYoutubeLauncher()">▶ YouTube投稿</button>
@@ -1089,7 +1088,7 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
       <div class="slide-tab" id="tab-3" onclick="switchSlide(3)"><span class="sn">S3</span><span class="sl">反応①</span></div>
       <div class="slide-tab" id="tab-4" onclick="switchSlide(4)"><span class="sn">S4</span><span class="sl">反応②</span></div>
       <div class="slide-tab" id="tab-5" onclick="switchSlide(5)"><span class="sn">S5</span><span class="sl">まとめ</span></div>
-      <div class="slide-tab" id="tab-6" onclick="switchSlide(6)"><span class="sn">TN</span><span class="sl">サムネ</span></div>
+      <div class="slide-tab" id="tab-6" onclick="switchSlide(6)"><span class="sn">SI</span><span class="sl">ソース情報</span></div>
     </div>
     <div class="slide-editor" id="slide-editor">
       <div style="color:var(--sub);text-align:center;margin-top:80px;">← 日付を選択して「読み込み」してください</div>
@@ -1104,7 +1103,7 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
       <div class="pvtab" id="ptab-3" onclick="switchSlide(3)">S3</div>
       <div class="pvtab" id="ptab-4" onclick="switchSlide(4)">S4</div>
       <div class="pvtab" id="ptab-5" onclick="switchSlide(5)">S5</div>
-      <div class="pvtab" id="ptab-6" onclick="switchSlide(6)">サムネ</div>
+      <div class="pvtab" id="ptab-6" onclick="switchSlide(6)">ソース</div>
     </div>
     <div class="pv-wrap" id="pv-wrap"
       ondragover="onPreviewDragOver(event)"
@@ -1355,12 +1354,11 @@ function refreshPreview() {
   if (bar) bar.style.width = "0%";
   if (timer) timer.textContent = "0.0s / " + (dur / 1000).toFixed(1) + "s";
   if (slide === 6) {
-    // サムネイル: 1280×720 → scale 0.6 → 768×432
-    fr.style.width  = "1280px";
-    fr.style.height = "720px";
-    fr.style.transform = "scale(0.6)";
+    // SIタブ: プレビュー不要
     document.getElementById("pv-progress").style.display = "none";
-    fr.src = "/api/thumbnail/preview/" + date + "/" + idx + "?t=" + Date.now();
+    document.getElementById("pv-hint").style.display = "block";
+    document.getElementById("pv-hint").textContent = "ソース情報タブ";
+    return;
   } else {
     fr.style.width  = "1920px";
     fr.style.height = "1080px";
@@ -1392,7 +1390,8 @@ function renderSlide() {
   if (idx < 0) return;
   const post = data.posts[idx];
   const el   = document.getElementById("slide-editor");
-  if (slide === 1 || slide === 6) el.innerHTML = buildS1(post);
+  if (slide === 1) el.innerHTML = buildS1(post);
+  else if (slide === 6) el.innerHTML = buildSI(post);
   else if (slide === 2) el.innerHTML = buildS2(post);
   else if (slide === 3) el.innerHTML = buildS3(post);
   else if (slide === 4) el.innerHTML = buildS4(post);
@@ -1482,26 +1481,28 @@ function buildS1(post) {
     "</div>" +
     "<div class='sec-lbl'>🖼 背景画像（S1・S5共通）</div>" +
     "<div class='g-wrap'>" + galleryHtml("main") + "</div>" +
-    "<div class='sec-lbl'>📺 YouTube 投稿情報</div>" +
+}
+
+// ── SI（ソース情報）────────────────────────────────────────────────────────────
+function buildSI(post) {
+  const snippets = post._imgMeta?.serperSnippets || [];
+  const primaryLinks = snippets.filter(s => s.link).map(s =>
+    "<div style='margin-bottom:4px;'><a href='" + esc(s.link) + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(s.title || s.link) + "</a>" +
+    (s.date ? "<span style='color:#666;margin-left:6px;font-size:11px;'>" + esc(s.date) + "</span>" : "") + "</div>"
+  ).join("");
+  const fallbackUrl = post._meta?.redditUrl || post._imgMeta?.url || "";
+  const fallbackHtml = fallbackUrl
+    ? "<div style='margin-bottom:4px;'><a href='" + esc(fallbackUrl) + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(fallbackUrl) + "</a></div>"
+    : "<div style='color:#555;font-size:12px;margin-bottom:4px;'>URLなし</div>";
+  return "<div class='sec-lbl'>📺 YouTube 投稿情報</div>" +
     "<div class='field'><label>動画タイトル（SEO用）</label>" +
     "<input type='text' id='f-youtubeTitle' value='" + esc(post.youtubeTitle || "") + "' placeholder='【速報】〇〇さん、〇〇！！！！'></div>" +
     "<div class='field'><label>ハッシュタグ</label>" +
     "<textarea id='f-hashtagsText' rows='2' placeholder='#サッカー #海外の反応 #レアルマドリード'>" + esc(post.hashtagsText || "") + "</textarea></div>" +
-    (function() {
-      const snippets = post._imgMeta?.serperSnippets || [];
-      const primaryLinks = snippets.filter(s => s.link).map(s =>
-        "<div style='margin-bottom:4px;'><a href='" + esc(s.link) + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(s.title || s.link) + "</a>" +
-        (s.date ? "<span style='color:#666;margin-left:6px;font-size:11px;'>" + esc(s.date) + "</span>" : "") + "</div>"
-      ).join("");
-      const fallbackUrl = post._meta?.redditUrl || post._imgMeta?.url || "";
-      const fallbackHtml = fallbackUrl
-        ? "<div style='margin-bottom:4px;'><a href='" + esc(fallbackUrl) + "' target='_blank' style='color:#7ab8e8;font-size:12px;word-break:break-all;'>" + esc(fallbackUrl) + "</a></div>"
-        : "<div style='color:#555;font-size:12px;margin-bottom:4px;'>URLなし</div>";
-      return "<div class='sec-lbl'>📰 ソース情報（一次情報）</div>" +
-        (primaryLinks || fallbackHtml) +
-        "<div style='background:#0d1f30;border:1px solid #2a4a6b;border-radius:6px;padding:8px 10px;font-size:12px;color:#bbb;white-space:pre-wrap;line-height:1.5;'>" +
-        esc((post.overviewNarration || "（概要なし）").slice(0, 300)) + "</div>";
-    })()
+    "<div class='sec-lbl'>📰 ソース情報（一次情報）</div>" +
+    (primaryLinks || fallbackHtml) +
+    "<div style='background:#0d1f30;border:1px solid #2a4a6b;border-radius:6px;padding:8px 10px;font-size:12px;color:#bbb;white-space:pre-wrap;line-height:1.5;margin-top:6px;'>" +
+    esc((post.overviewNarration || "（概要なし）").slice(0, 400)) + "</div>";
 }
 
 // ── S2 ───────────────────────────────────────────────────────────────────────
@@ -1753,27 +1754,6 @@ function syncPost() {
   }
 }
 
-// ── サムネイル書き出し ─────────────────────────────────────────────────────────
-async function exportThumb() {
-  const date = document.getElementById("date-input").value;
-  if (!date || idx < 0) return status("投稿を選択してください", "err");
-  syncPost();
-  const post = data.posts[idx];
-  document.getElementById("btn-thumb").disabled = true;
-  status("🖼 サムネ生成中...", "running");
-  const r = await fetch("/api/thumbnail/export", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ date, postIdx: idx, post }),
-  });
-  const j = await r.json();
-  document.getElementById("btn-thumb").disabled = false;
-  if (j.ok) {
-    status("✅ サムネ保存: " + j.filename, "ok");
-  } else {
-    status("サムネ生成エラー: " + j.error, "err");
-  }
-}
 
 // ── 自動生成 ──────────────────────────────────────────────────────────────────
 async function runGenerate() {
@@ -2939,8 +2919,15 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
       imageUrls:    imagePaths.map(p2 => `/images/${p2.replace(/\\\\/g, "/").split("/").pop()}`),
       commentPool:  (p._commentPool || []).slice(0, 40),
       sourceUrl:    p._meta?.redditUrl || p._imgMeta?.url || "",
-      sourceOverview: (p.overviewNarration || "").slice(0, 300),
+      sourceOverview: (p.overviewNarration || "").slice(0, 400),
       serperSnippets: (p._imgMeta?.serperSnippets || []).slice(0, 3),
+      thumbExportPost: {
+        mainImagePath: p.mainImagePath || null,
+        catchLine1:    p.catchLine1 || "",
+        label:         p.label || "",
+        badge:         p.badge || "",
+        imgZoom:       p.imgZoom || {},
+      },
     };
   });
   res.json({ ok: true, date, posts });
@@ -2975,7 +2962,7 @@ header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
 .status-run{background:#1a2a3a;color:#4a9eff;}
 
 /* ── カード ── */
-.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:380px 1fr 300px;gap:20px;}
+.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:380px 1fr 600px;gap:20px;}
 .post-card.has-video{border-color:#3a3a3a;}
 .post-card.no-video{opacity:.55;}
 .card-num{font-size:13px;color:#666;margin-bottom:6px;}
@@ -3063,44 +3050,28 @@ async function loadPosts() {
     const res = await fetch("/api/youtube-launcher/" + DATE);
     const j   = await res.json();
     if (!j.ok) { setGlobalStatus("❌ " + j.error, "err"); return; }
-    postsData = j.posts;
+    postsData = j.posts.filter(p => p.hasVideo);
     renderPosts();
-    const videoCount    = postsData.filter(p => p.hasVideo).length;
-    const generatedCount = postsData.filter(p => p.isGenerated).length;
-    const extra = generatedCount > videoCount ? "  ⚠️ 生成フラグあり: " + generatedCount + "件 (ファイル見つからず)" : "";
-    setGlobalStatus("✅ " + postsData.length + "件読み込み完了（動画あり: " + videoCount + "件）" + extra, videoCount > 0 ? "ok" : "run");
+    setGlobalStatus("✅ " + postsData.length + "件（動画生成済み）読み込み完了", postsData.length > 0 ? "ok" : "run");
   } catch(e) { setGlobalStatus("❌ " + e.message, "err"); }
 }
 
 function renderPosts() {
   const container = document.getElementById("posts-container");
   container.innerHTML = postsData.map((p, i) => {
-    // TNダブ: メインランチャーと同じ /api/thumbnail/preview/:date/:idx
     const tnHtml = \`<div class='tn-wrapper'><iframe src='/api/thumbnail/preview/\${DATE}/\${p.idx}?t=\${Date.now()}' scrolling='no'></iframe></div>\`;
     const swapImgs = p.imageUrls.map((url, j) =>
       "<img src='" + url + "' class='" + (url === p.thumbUrl ? "selected" : "") + "' onclick='swapThumb(" + i + "," + j + "," + JSON.stringify(url) + ")' title='サムネに設定'>"
     ).join("");
-    const videoHtml = p.hasVideo
-      ? "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>"
-      : "<div class='no-video-msg'>動画未生成<br><span style='font-size:11px;color:#444;'>" + (p.videoName||"") + "</span></div>";
-    const snippetsHtml = (p.serperSnippets||[]).length > 0
-      ? \`<div class='serper-snippets'>\${(p.serperSnippets||[]).map(s=>\`<div class='serper-snippet'><b>\${esc(s.title)}</b><br>\${esc(s.snippet)}</div>\`).join("")}</div>\`
-      : "";
-    const sourcePanelHtml = \`<button class='btn btn-source' onclick='toggleSource(\${i})'>📰 ソース</button>
-<div class='source-panel' id='src-\${i}'>
-  \${p.sourceUrl ? \`<div class='source-url'><a href='\${esc(p.sourceUrl)}' target='_blank'>\${esc(p.sourceUrl)}</a></div>\` : "<div style='color:#555;font-size:12px;'>URLなし</div>"}
-  <div class='source-overview'>\${esc(p.sourceOverview||"（概要なし）")}</div>
-  \${snippetsHtml}
-</div>\`;
+    const videoHtml = "<video class='video-preview' controls preload='metadata' src='" + p.videoUrl + "'></video>";
     return \`
-<div class='post-card \${p.hasVideo ? "has-video" : "no-video"}' id='card-\${i}'>
+<div class='post-card has-video' id='card-\${i}'>
   <div class='left-col'>
     <div>
       <div class='card-num'>#\${p.num}</div>
       <div class='card-title'>\${esc(p.catchLine1)}</div>
-      \${sourcePanelHtml}
       <div class='check-row'>
-        <input type='checkbox' id='chk-\${i}' \${p.hasVideo ? "" : "disabled"} data-idx='\${i}'>
+        <input type='checkbox' id='chk-\${i}' data-idx='\${i}'>
         <label for='chk-\${i}'>投稿対象に含める</label>
       </div>
     </div>
@@ -3109,6 +3080,7 @@ function renderPosts() {
       <div class='gallery-label'>サムネ画像を変更</div>
       <div class='gallery' id='thumbs-\${i}'>\${swapImgs}</div>
     </div>
+    <button class='btn btn-load' id='btn-tn-\${i}' onclick='exportThumb(\${i})' style='margin-top:8px;width:100%;'>🖼 サムネイル生成</button>
   </div>
   <div class='meta-col'>
     <div>
@@ -3123,22 +3095,11 @@ function renderPosts() {
       <div class='field-lbl'>ハッシュタグ</div>
       <input type='text' id='tags-\${i}' value='\${esc(p.hashtagsText)}'>
     </div>
-    <div class='comment-pool'>
-      <div class='comment-pool-label'>コメント一覧（\${p.commentPool?.length||0}件）</div>
-      <div class='comment-list'>
-        \${(p.commentPool||[]).map(c => {
-          const src = c.source||"";
-          const badgeClass = src==="reddit"?"badge-reddit":src==="rss"?"badge-rss":src==="x_japan"?"badge-xjp":"badge-xother";
-          const badgeLabel = src==="reddit"?"Reddit":src==="rss"?"まとめ":src==="x_japan"?"X-JP":("X-"+(src.split("_").pop()||"EN").toUpperCase());
-          return \`<div class='comment-item'><span class='badge \${badgeClass}'>\${badgeLabel}</span><span>\${esc(c.text||"").slice(0,120)}</span></div>\`;
-        }).join("")||"<div style='color:#555;font-size:12px;'>コメントなし</div>"}
-      </div>
-    </div>
   </div>
   <div class='video-col'>
     \${videoHtml}
     <div class='post-actions'>
-      <button class='btn btn-upload' onclick='uploadSingle(\${i})' \${p.hasVideo ? "" : "disabled"}>▶ 投稿</button>
+      <button class='btn btn-upload' onclick='uploadSingle(\${i})'>▶ 投稿</button>
       <span class='status-msg' id='st-\${i}'></span>
     </div>
   </div>
@@ -3147,11 +3108,6 @@ function renderPosts() {
 }
 
 function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
-
-function toggleSource(i) {
-  const panel = document.getElementById("src-" + i);
-  if (panel) panel.classList.toggle("open");
-}
 
 function swapThumb(postIdx, imgIdx, url) {
   selectedThumbs[postIdx] = url;
@@ -3170,6 +3126,24 @@ function setGlobalStatus(msg, type) {
 function setPostStatus(i, msg, type) {
   const el = document.getElementById("st-" + i);
   if (el) { el.textContent = msg; el.className = "status-msg status-" + type; }
+}
+
+async function exportThumb(i) {
+  const post = postsData[i];
+  const btn = document.getElementById("btn-tn-" + i);
+  if (btn) btn.disabled = true;
+  setPostStatus(i, "🖼 サムネ生成中...", "run");
+  try {
+    const r = await fetch("/api/thumbnail/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: DATE, postIdx: post.idx, post: post.thumbExportPost }),
+    });
+    const j = await r.json();
+    if (j.ok) setPostStatus(i, "✅ " + j.filename, "ok");
+    else setPostStatus(i, "❌ " + (j.error || "失敗"), "err");
+  } catch(e) { setPostStatus(i, "❌ " + e.message, "err"); }
+  if (btn) btn.disabled = false;
 }
 
 async function uploadSingle(i) {
