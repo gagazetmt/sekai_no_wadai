@@ -2962,7 +2962,7 @@ header h1{font-size:20px;font-weight:900;color:#ffd700;letter-spacing:1px;}
 .status-run{background:#1a2a3a;color:#4a9eff;}
 
 /* ── カード ── */
-.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:420px 1fr;gap:20px;}
+.post-card{background:#1a1a1a;border:2px solid #2e2e2e;border-radius:12px;padding:20px;margin-bottom:24px;display:grid;grid-template-columns:420px minmax(0,600px);gap:20px;}
 .post-card.has-video{border-color:#3a3a3a;}
 .post-card.no-video{opacity:.55;}
 .card-num{font-size:13px;color:#666;margin-bottom:6px;}
