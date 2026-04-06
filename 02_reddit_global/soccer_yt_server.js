@@ -3088,6 +3088,12 @@ textarea{resize:vertical;min-height:120px;}
   select#modal-privacy{width:100%;}
   .global-status{padding:8px 12px;font-size:13px;}
 }
+/* ── Reddit抽出パネル ── */
+.btn-reddit{background:#1e3a5a;color:#4a9eff;border:1px solid #2a4a7a;}
+.reddit-panel{background:#0d1520;border:1px solid #1a3a5a;border-radius:8px;margin:0 24px 16px;overflow:hidden;display:none;}
+.reddit-panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#111b27;border-bottom:1px solid #1a3a5a;}
+.reddit-panel-header h3{color:#4a9eff;font-size:14px;font-weight:700;margin:0;}
+.reddit-list{max-height:420px;overflow-y:auto;}
 </style>
 </head>
 <body>
@@ -3098,11 +3104,19 @@ textarea{resize:vertical;min-height:120px;}
   <div class="ml-auto" style="display:flex;gap:10px;align-items:center;">
     <span id="yt-auth-badge" style="font-size:13px;padding:5px 12px;border-radius:6px;background:#333;color:#888;">認証確認中...</span>
     <button class="btn btn-load" id="yt-auth-btn" onclick="window.open('/auth/youtube','_blank','width=600,height=700')" style="display:none">🔑 YouTube認証</button>
+    <button class="btn btn-reddit" onclick="fetchRedditTitles()">📡 今すぐ抽出</button>
     <button class="btn btn-load" onclick="loadPosts()">再読み込み</button>
     <button class="btn btn-upload-all" onclick="uploadAll()">▶ チェック済みを一括投稿</button>
   </div>
 </header>
 <div class="global-status" id="global-status">読み込み中...</div>
+<div id="reddit-panel" class="reddit-panel">
+  <div class="reddit-panel-header">
+    <h3>📡 Reddit r/soccer ライブ一覧（Jリーグ除外・上位20件）</h3>
+    <button onclick="document.getElementById('reddit-panel').style.display='none'" style="background:none;border:none;color:#888;cursor:pointer;font-size:18px;line-height:1;">✕</button>
+  </div>
+  <div id="reddit-list" class="reddit-list"></div>
+</div>
 <div class="container" id="posts-container"></div>
 
 <div id="upload-modal">
@@ -3215,18 +3229,16 @@ function renderPosts() {
     return \`
 <div class='post-card has-video' id='card-\${i}'>
   <div class='left-col'>
-    <div>
-      <div class='card-num'>#\${p.num}</div>
-      <div style='display:flex;gap:6px;align-items:flex-start;margin-bottom:8px;'>
-        <textarea id='catch-\${i}' rows='3' style='flex:1;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;' oninput='updateTnPreview(\${i})'>\${esc(p.catchLine1)}</textarea>
-        <button onclick='insertRedYT(\${i})' title='選択テキストを赤字' style='background:#c00000;color:#fff;border:none;padding:10px 12px;border-radius:6px;cursor:pointer;font-weight:900;font-size:18px;flex-shrink:0;'>🔴</button>
-      </div>
-      <div class='check-row'>
-        <input type='checkbox' id='chk-\${i}' data-idx='\${i}'>
-        <label for='chk-\${i}'>投稿対象に含める</label>
-      </div>
-    </div>
+    <div class='card-num'>#\${p.num}</div>
     <div class='tn-wrapper' id='tn-wrap-\${i}'><iframe id='tn-frame-\${i}' src='/api/thumbnail/preview/\${DATE}/\${p.idx}?t=\${Date.now()}' scrolling='no'></iframe></div>
+    <div style='display:flex;gap:6px;align-items:flex-start;margin-top:8px;'>
+      <textarea id='catch-\${i}' rows='3' style='flex:1;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;' oninput='updateTnPreview(\${i})'>\${esc(p.catchLine1)}</textarea>
+      <button onclick='insertRedYT(\${i})' title='選択テキストを赤字' style='background:#c00000;color:#fff;border:none;padding:10px 12px;border-radius:6px;cursor:pointer;font-weight:900;font-size:18px;flex-shrink:0;'>🔴</button>
+    </div>
+    <div class='check-row'>
+      <input type='checkbox' id='chk-\${i}' data-idx='\${i}'>
+      <label for='chk-\${i}'>投稿対象に含める</label>
+    </div>
     <div class='zoom-ctrl'>
       <div class='zoom-row'>
         <span class='zoom-lbl'>ズーム</span>
@@ -3548,6 +3560,40 @@ async function uploadAll() {
     await new Promise(r => setTimeout(r, 2000));
   }
   setGlobalStatus("✅ 一括投稿完了", "ok");
+}
+
+// ─── Reddit 今すぐ抽出 ────────────────────────────────────────────────────
+const J_LEAGUE_RE = /明治安田|百年構想|Jリーグ|鹿島|アントラーズ|柏レイソル|FC東京|東京ヴェルディ|フロンターレ|マリノス|グランパス|ガンバ|セレッソ|サンフレッチェ|アビスパ|コンサドーレ|ジュビロ|エスパルス|ベルマーレ|ヴァンフォーレ|アルビレックス|モンテディオ|ベガルタ|松本山雅/;
+
+async function fetchRedditTitles() {
+  const panel = document.getElementById("reddit-panel");
+  const list  = document.getElementById("reddit-list");
+  panel.style.display = "block";
+  list.innerHTML = "<div style='color:#888;padding:12px 16px;font-size:13px;'>📡 読み込み中...</div>";
+  try {
+    const res = await fetch("https://www.reddit.com/r/soccer/rising.json?limit=100");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const posts = (j.data?.children || [])
+      .map(c => c.data)
+      .filter(p => !p.stickied && p.score > 5 && !J_LEAGUE_RE.test(p.title))
+      .slice(0, 20);
+    if (!posts.length) {
+      list.innerHTML = "<div style='color:#888;padding:12px 16px;'>投稿が見つかりませんでした</div>";
+      return;
+    }
+    list.innerHTML = posts.map(function(p, n) {
+      return "<div style='padding:9px 14px;border-bottom:1px solid #1a2a3a;display:flex;gap:10px;align-items:flex-start;'>" +
+        "<span style='color:#ffd700;font-size:12px;flex-shrink:0;min-width:22px;font-weight:700;'>" + (n+1) + ".</span>" +
+        "<div style='flex:1;'>" +
+          "<div style='color:#e8e8e8;font-size:13px;line-height:1.4;'>" + esc(p.title) + "</div>" +
+          "<div style='color:#666;font-size:11px;margin-top:3px;'>⬆" + p.score + " &nbsp;💬" + p.num_comments + " &nbsp;<a href='https://reddit.com" + p.permalink + "' target='_blank' style='color:#4a9eff;text-decoration:none;'>Redditで開く →</a></div>" +
+        "</div>" +
+      "</div>";
+    }).join("");
+  } catch(e) {
+    list.innerHTML = "<div style='color:#e66;padding:12px 16px;font-size:13px;'>❌ " + e.message + "<br><small style='color:#888;'>CORSブロックの場合はブラウザのRedditタブから操作してください</small></div>";
+  }
 }
 
 loadPosts();
