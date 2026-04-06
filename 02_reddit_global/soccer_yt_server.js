@@ -963,7 +963,11 @@ button{cursor:pointer;border:none;border-radius:5px;padding:6px 11px;font-size:1
 button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
 .btn-load{background:#333;color:var(--text);}.btn-save{background:#2a4a2a;color:var(--green);}
 .btn-gen{background:#2a1a3a;color:#c084fc;}.btn-tts{background:#1a3a4a;color:#67e8f9;}
-.btn-video{background:var(--accent);color:#fff;}.btn-yt{background:#ff0000;color:#fff;font-weight:900;}.ml-auto{margin-left:auto;}
+.btn-video{background:var(--accent);color:#fff;}.btn-yt{background:#ff0000;color:#fff;font-weight:900;}.btn-reddit{background:#1a3a5a;color:#4a9eff;}.ml-auto{margin-left:auto;}
+.reddit-quick-panel{display:none;background:#0d1520;border:1px solid #1a3a5a;border-radius:8px;margin:6px 10px;overflow:hidden;}
+.reddit-quick-header{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;background:#111b27;border-bottom:1px solid #1a3a5a;}
+.reddit-quick-header h3{color:#4a9eff;font-size:12px;font-weight:700;margin:0;}
+.reddit-quick-list{max-height:360px;overflow-y:auto;}
 /* 3カラム */
 .main{display:grid;grid-template-columns:170px 0.7fr 1.3fr;flex:1;overflow:hidden;}
 /* 左: 投稿リスト */
@@ -1131,6 +1135,7 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
   <input type="date" id="date-input">
   <button class="btn-load" onclick="loadContent()">📂 読み込み</button>
   <button class="btn-gen"  onclick="openCandidateModal()">📋 案件抽出</button>
+  <button class="btn-reddit" onclick="fetchRedditQuick()">📡 今すぐ抽出</button>
   <button class="btn-video" id="btn-video" onclick="runVideo()">🎬 動画生成</button>
   <div class="ml-auto">
     <button class="btn-yt" onclick="openYoutubeLauncher()">▶ YouTube投稿</button>
@@ -2189,6 +2194,41 @@ function onPreviewDrop(e, wrap) {
 
 window.addEventListener("beforeunload", syncPost);
 
+// ─── Reddit 今すぐ抽出 ───────────────────────────────────────────────────────
+const _J_LEAGUE_RE = /明治安田|百年構想|Jリーグ|鹿島|アントラーズ|柏レイソル|FC東京|東京ヴェルディ|フロンターレ|マリノス|グランパス|ガンバ|セレッソ|サンフレッチェ|アビスパ|コンサドーレ|ジュビロ|エスパルス|ベルマーレ|ヴァンフォーレ|アルビレックス|モンテディオ|ベガルタ|松本山雅/;
+
+async function fetchRedditQuick() {
+  const panel = document.getElementById("reddit-quick-panel");
+  const list  = document.getElementById("reddit-quick-list");
+  panel.style.display = "block";
+  list.innerHTML = "<div style='color:#888;padding:10px 14px;font-size:13px;'>📡 読み込み中...</div>";
+  try {
+    const res = await fetch("https://www.reddit.com/r/soccer/rising.json?limit=100");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const posts = (j.data?.children || [])
+      .map(function(c){ return c.data; })
+      .filter(function(p){ return !p.stickied && p.score > 5 && !_J_LEAGUE_RE.test(p.title); })
+      .slice(0, 20);
+    if (!posts.length) {
+      list.innerHTML = "<div style='color:#888;padding:10px 14px;'>投稿が見つかりませんでした</div>";
+      return;
+    }
+    list.innerHTML = posts.map(function(p, n) {
+      return "<div style='padding:7px 14px;border-bottom:1px solid #1a2a3a;display:flex;gap:8px;align-items:flex-start;'>" +
+        "<span style='color:#ffd700;font-size:12px;flex-shrink:0;min-width:22px;font-weight:700;'>" + (n+1) + ".</span>" +
+        "<div style='flex:1;min-width:0;'>" +
+          "<div style='color:#e8e8e8;font-size:13px;line-height:1.4;word-break:break-word;'>" + esc(p.title) + "</div>" +
+          "<div style='color:#666;font-size:11px;margin-top:2px;'>⬆" + p.score + " 💬" + p.num_comments +
+            " <a href='https://reddit.com" + p.permalink + "' target='_blank' style='color:#4a9eff;text-decoration:none;'>Reddit →</a></div>" +
+        "</div>" +
+      "</div>";
+    }).join("");
+  } catch(e) {
+    list.innerHTML = "<div style='color:#e66;padding:10px 14px;font-size:13px;'>❌ " + e.message + "</div>";
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 案件選択モーダル
 // ═══════════════════════════════════════════════════════════════
@@ -2485,6 +2525,14 @@ initMobile();
     </div>
     <div id="cm-log"></div>
   </div>
+</div>
+
+<div id="reddit-quick-panel" class="reddit-quick-panel">
+  <div class="reddit-quick-header">
+    <h3>📡 Reddit r/soccer ライブ（上位20件・Jリーグ除外）</h3>
+    <button onclick="document.getElementById('reddit-quick-panel').style.display='none'" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px;line-height:1;">✕</button>
+  </div>
+  <div id="reddit-quick-list" class="reddit-quick-list"></div>
 </div>
 
 </body></html>`);
@@ -3104,19 +3152,11 @@ textarea{resize:vertical;min-height:120px;}
   <div class="ml-auto" style="display:flex;gap:10px;align-items:center;">
     <span id="yt-auth-badge" style="font-size:13px;padding:5px 12px;border-radius:6px;background:#333;color:#888;">認証確認中...</span>
     <button class="btn btn-load" id="yt-auth-btn" onclick="window.open('/auth/youtube','_blank','width=600,height=700')" style="display:none">🔑 YouTube認証</button>
-    <button class="btn btn-reddit" onclick="fetchRedditTitles()">📡 今すぐ抽出</button>
     <button class="btn btn-load" onclick="loadPosts()">再読み込み</button>
     <button class="btn btn-upload-all" onclick="uploadAll()">▶ チェック済みを一括投稿</button>
   </div>
 </header>
 <div class="global-status" id="global-status">読み込み中...</div>
-<div id="reddit-panel" class="reddit-panel">
-  <div class="reddit-panel-header">
-    <h3>📡 Reddit r/soccer ライブ一覧（Jリーグ除外・上位20件）</h3>
-    <button onclick="document.getElementById('reddit-panel').style.display='none'" style="background:none;border:none;color:#888;cursor:pointer;font-size:18px;line-height:1;">✕</button>
-  </div>
-  <div id="reddit-list" class="reddit-list"></div>
-</div>
 <div class="container" id="posts-container"></div>
 
 <div id="upload-modal">

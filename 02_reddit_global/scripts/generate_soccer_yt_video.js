@@ -1044,8 +1044,8 @@ async function main() {
       const outPath = path.join(VIDEO_DIR, `${today}_${post.num}.mp4`);
       concatAndMix(videoPaths, audioPath, totalMs, outPath);
 
-      // 生成済みフラグを JSON に書き込む
-      updateGeneratedStatus(postArrayIdx);
+      // 生成済みフラグを JSON に書き込む（post.index = content配列の元インデックス）
+      updateGeneratedStatus(post.index);
 
       // VPS へ転送（ローカル実行時のみ）
       scpVideoToVps(outPath);
