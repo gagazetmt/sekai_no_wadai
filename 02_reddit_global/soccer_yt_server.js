@@ -2860,14 +2860,26 @@ app.post("/api/soccer-yt/import-selected", (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── Reddit fetch helper ──────────────────────────────────────────────────────
+// ─── Reddit fetch helper（プロキシフォールバック付き） ────────────────────────
 async function redditFetch(url) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "soccer-news-bot/1.0" },
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) throw new Error(`Reddit HTTP ${res.status}`);
-  return res.json();
+  const headers = { "User-Agent": "soccer-news-bot/1.0" };
+  const proxy   = process.env.REDDIT_PROXY_URL || null;
+
+  // まず直接アクセス
+  try {
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+    if (res.ok) return res.json();
+  } catch { /* fallthrough to proxy */ }
+
+  // プロキシ経由フォールバック
+  if (proxy) {
+    const proxyUrl = `${proxy}/fetch?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { headers, signal: AbortSignal.timeout(10000) });
+    if (res.ok) return res.json();
+    throw new Error(`Reddit proxy HTTP ${res.status}`);
+  }
+
+  throw new Error("Reddit fetch failed (no proxy configured)");
 }
 
 // ─── ワード検索 API ───────────────────────────────────────────────────────────
