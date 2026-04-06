@@ -143,7 +143,8 @@ const TEAM_LOGOS = (() => {
 // ─── ジョブ管理 ───────────────────────────────────────────────────────────────
 let ttsJob      = { running: false, results: [], done: false, error: null };
 let videoJob    = { running: false, log: [], done: false, exitCode: null };
-let imgFetchJob = { running: false, log: [], done: false, exitCode: null, date: null };
+let imgFetchJob   = { running: false, log: [], done: false, exitCode: null, date: null };
+let imgFetchQueue = []; // 実行待ちキュー: { date }[]
 
 // ─── ユーティリティ ───────────────────────────────────────────────────────────
 function imgBase64(imgPath) {
@@ -2657,6 +2658,29 @@ app.post("/api/soccer-yt/load-daily-candidates", (req, res) => {
   }
 });
 
+// ─── 画像取得ジョブ実行（内部関数） ──────────────────────────────────────────
+function runImgFetchJob(date) {
+  const script = path.join(__dirname, "scripts", "fetch_images_for_content.js");
+  imgFetchJob = { running: true, log: [], done: false, exitCode: null, date };
+  console.log(`[画像取得] 開始: ${date}`);
+  const proc = spawn(process.execPath, [script, date], { cwd: __dirname, env: process.env });
+  proc.stdout.on("data", d => { process.stdout.write(d); imgFetchJob.log.push(d.toString()); });
+  proc.stderr.on("data", d => { process.stderr.write(d); imgFetchJob.log.push(d.toString()); });
+  proc.on("close", code => {
+    imgFetchJob.running  = false;
+    imgFetchJob.done     = true;
+    imgFetchJob.exitCode = code;
+    fs.writeFileSync(LOG_FILE, `[画像取得 ${date} ${new Date().toLocaleString("ja-JP")}]\n` + imgFetchJob.log.join(""), { flag: "a" });
+    console.log(`[画像取得] 完了 exit:${code}`);
+    // キューに次のジョブがあれば自動実行
+    if (imgFetchQueue.length > 0) {
+      const next = imgFetchQueue.shift();
+      console.log(`[画像取得] キュー実行: ${next.date}`);
+      runImgFetchJob(next.date);
+    }
+  });
+}
+
 // ─── 画像取得ジョブ起動（ローカルPCのSCP送信後に呼ばれる） ────────────────────
 app.post("/api/soccer-yt/start-image-fetch", (req, res) => {
   const { date } = req.body;
@@ -2666,23 +2690,20 @@ app.post("/api/soccer-yt/start-image-fetch", (req, res) => {
   if (!fs.existsSync(contentFile)) {
     return res.json({ ok: false, error: `content_${date}.json が見つかりません` });
   }
+
   if (imgFetchJob.running) {
-    return res.json({ ok: false, error: `画像取得ジョブが既に実行中です (${imgFetchJob.date})` });
+    // 同じ日付が既に実行中またはキュー済みなら重複しない
+    const alreadyQueued = imgFetchQueue.some(q => q.date === date);
+    if (imgFetchJob.date === date || alreadyQueued) {
+      return res.json({ ok: false, error: `画像取得ジョブが既に実行中または待機中です (${imgFetchJob.date})` });
+    }
+    // 別の日付 → キューに追加して後で実行
+    imgFetchQueue.push({ date });
+    console.log(`[画像取得] キューに追加: ${date} (実行中: ${imgFetchJob.date}, 待機数: ${imgFetchQueue.length})`);
+    return res.json({ ok: true, queued: true, message: `キューに追加しました (実行中: ${imgFetchJob.date})` });
   }
 
-  imgFetchJob = { running: true, log: [], done: false, exitCode: null, date };
-  const script = path.join(__dirname, "scripts", "fetch_images_for_content.js");
-  const proc   = spawn(process.execPath, [script, date], { cwd: __dirname, env: process.env });
-  proc.stdout.on("data", d => { process.stdout.write(d); imgFetchJob.log.push(d.toString()); });
-  proc.stderr.on("data", d => { process.stderr.write(d); imgFetchJob.log.push(d.toString()); });
-  proc.on("close", code => {
-    imgFetchJob.running  = false;
-    imgFetchJob.done     = true;
-    imgFetchJob.exitCode = code;
-    fs.writeFileSync(LOG_FILE, `[画像取得 ${date} ${new Date().toLocaleString("ja-JP")}]\n` + imgFetchJob.log.join(""), { flag: "a" });
-    console.log(`[画像取得] 完了 exit:${code}`);
-  });
-
+  runImgFetchJob(date);
   res.json({ ok: true, message: `画像取得ジョブ開始: ${date}` });
 });
 
