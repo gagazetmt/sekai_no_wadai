@@ -2460,6 +2460,30 @@ window.addEventListener('resize', function() { if (isMobile()) scaleMobilePrevie
 window.addEventListener('DOMContentLoaded', initMobile);
 initMobile();
 
+// ── Reddit をブラウザから直接取得するユーティリティ ────────────────────────────
+function redditClientFetch(url) {
+  return fetch(url).then(function(r) {
+    if (!r.ok) throw new Error("Reddit HTTP " + r.status);
+    return r.json();
+  });
+}
+
+function buildThreadObj(p, sub) {
+  var nowSec = Date.now() / 1000;
+  var hoursOld = Math.round((nowSec - p.created_utc) / 360) / 10;
+  return {
+    source: "reddit", type: "topic",
+    title: p.title, titleJa: p.title,
+    permalink: p.permalink,
+    url: "https://www.reddit.com" + p.permalink,
+    score: p.score, hoursOld: hoursOld,
+    created_utc: p.created_utc,
+    numComments: p.num_comments,
+    subreddit: sub || p.subreddit,
+    comments: [],
+  };
+}
+
 // ── ワード検索 ─────────────────────────────────────────────────────────────────
 function openWordSearch() {
   var date = document.getElementById("date-input").value;
@@ -2495,26 +2519,38 @@ function doWordSearch() {
   resultsEl.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">🔍 検索中...</div>';
   document.getElementById("btn-process").disabled = true;
 
-  fetch("/api/soccer-yt/reddit-search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: q })
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data.ok || !data.threads || !data.threads.length) {
-      resultsEl.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">該当スレッドが見つかりませんでした</div>';
-      return;
-    }
-    var label = data.translatedQuery && data.translatedQuery !== q
-      ? esc(q) + ' → <span style="color:#a78bfa">' + esc(data.translatedQuery) + '</span>'
-      : esc(q);
-    var html = '<div class="cm-section-title">🔍 検索結果 (' + data.threads.length + '件) — ' + label + '</div>';
-    data.threads.forEach(function(t, i) { html += candidateItemHtml(t, "ci-srch-" + i); });
-    resultsEl.innerHTML = html;
-    updateCandidateCount();
-  })
-  .catch(function(e) {
+  var hasJapanese = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(q);
+  var translatePromise = hasJapanese
+    ? fetch("/api/soccer-yt/translate-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q })
+      }).then(function(r) { return r.json(); }).then(function(d) { return d.translatedQuery || q; })
+    : Promise.resolve(q);
+
+  translatePromise.then(function(engQuery) {
+    var encoded = encodeURIComponent(engQuery);
+    return redditClientFetch(
+      "https://www.reddit.com/r/soccer+football+PremierLeague+LaLiga+Bundesliga+SerieA/search.json?q=" + encoded + "&restrict_sr=1&sort=hot&t=month&limit=30"
+    ).then(function(json) {
+      var threads = (json.data && json.data.children || [])
+        .filter(function(c) { return !c.data.stickied; })
+        .slice(0, 25)
+        .map(function(c) { return buildThreadObj(c.data); });
+
+      if (!threads.length) {
+        resultsEl.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">該当スレッドが見つかりませんでした</div>';
+        return;
+      }
+      var label = engQuery !== q
+        ? esc(q) + " → " + esc(engQuery)
+        : esc(q);
+      var html = '<div class="cm-section-title">🔍 検索結果 (' + threads.length + '件) — ' + label + '</div>';
+      threads.forEach(function(t, i) { html += candidateItemHtml(t, "ci-srch-" + i); });
+      resultsEl.innerHTML = html;
+      updateCandidateCount();
+    });
+  }).catch(function(e) {
     resultsEl.innerHTML = '<div style="color:#e66;padding:20px;">エラー: ' + e.message + '</div>';
   });
 }
@@ -2532,23 +2568,61 @@ function loadRedditTop() {
   document.getElementById("cm-source-badge").textContent = "📋 スレッド一覧";
   document.getElementById("cm-log").style.display = "none";
 
-  fetch("/api/soccer-yt/reddit-top", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({})
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    if (!data.ok || !data.threads || !data.threads.length) {
+  var SUBS = ["soccer", "football", "PremierLeague", "LaLiga", "Bundesliga"];
+  var WINDOWS = [6, 12];
+  var TARGET = 30;
+
+  Promise.allSettled(
+    SUBS.map(function(sub) {
+      return redditClientFetch("https://www.reddit.com/r/" + sub + "/hot.json?limit=50")
+        .then(function(json) {
+          return (json.data && json.data.children || []).map(function(c) {
+            return { data: c.data, sub: sub };
+          });
+        })
+        .catch(function() { return []; });
+    })
+  ).then(function(results) {
+    var nowSec = Date.now() / 1000;
+    var seenIds = {};
+    var posts = [];
+    results.forEach(function(r) {
+      if (r.status !== "fulfilled") return;
+      r.value.forEach(function(item) {
+        var p = item.data;
+        if (p.stickied || p.score < 10 || seenIds[p.id]) return;
+        seenIds[p.id] = true;
+        posts.push({ p: p, sub: item.sub });
+      });
+    });
+
+    // ウォーターフォール 6h → 12h
+    var win = WINDOWS[0];
+    var fresh = posts.filter(function(x) { return (nowSec - x.p.created_utc) <= win * 3600; });
+    if (fresh.length < 10) {
+      win = WINDOWS[1];
+      fresh = posts.filter(function(x) { return (nowSec - x.p.created_utc) <= win * 3600; });
+    }
+
+    // velocity降順で30件
+    var threads = fresh
+      .map(function(x) {
+        var h = Math.max((nowSec - x.p.created_utc) / 3600, 0.5);
+        return { obj: buildThreadObj(x.p, x.sub), vel: x.p.score / h };
+      })
+      .sort(function(a, b) { return b.vel - a.vel; })
+      .slice(0, TARGET)
+      .map(function(x) { return x.obj; });
+
+    if (!threads.length) {
       content.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">スレッドが取得できませんでした</div>';
       return;
     }
-    var html = '<div class="cm-section-title">⚡ 急上昇スレ (' + data.threads.length + '件・' + data.window + '時間以内)</div>';
-    data.threads.forEach(function(t, i) { html += candidateItemHtml(t, "ci-top-" + i); });
+    var html = '<div class="cm-section-title">⚡ 急上昇スレ (' + threads.length + '件・' + win + '時間以内)</div>';
+    threads.forEach(function(t, i) { html += candidateItemHtml(t, "ci-top-" + i); });
     content.innerHTML = html;
     updateCandidateCount();
-  })
-  .catch(function(e) {
+  }).catch(function(e) {
     content.innerHTML = '<div style="color:#e66;padding:20px;">エラー: ' + e.message + '</div>';
   });
 }
@@ -2881,6 +2955,24 @@ async function redditFetch(url) {
 
   throw new Error("Reddit fetch failed (no proxy configured)");
 }
+
+// ─── 翻訳クエリ API（日本語→英語、ブラウザ側のワード検索で使用） ────────────
+app.post("/api/soccer-yt/translate-query", async (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.json({ ok: false, translatedQuery: query });
+  try {
+    const { callAI } = require("./scripts/ai_client");
+    const raw = await callAI({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 100,
+      messages: [{ role: "user", content: "Translate to English for Reddit soccer search (return only the translation, no explanation): " + query }],
+    });
+    const translatedQuery = raw.trim().replace(/^["'「」]|["'「」]$/g, "");
+    res.json({ ok: true, translatedQuery });
+  } catch (e) {
+    res.json({ ok: false, translatedQuery: query, error: e.message });
+  }
+});
 
 // ─── ワード検索 API ───────────────────────────────────────────────────────────
 app.post("/api/soccer-yt/reddit-search", async (req, res) => {
