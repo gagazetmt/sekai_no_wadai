@@ -2291,6 +2291,13 @@ function candidateItemHtml(t, id) {
   var metaText   = t.source === "5ch"
     ? "レス" + ((t.resCount || t.fivech && t.fivech.resCount) || 0)
     : "▲" + score.toLocaleString();
+  var timeText = "";
+  if (created) {
+    var hOld = (Date.now() / 1000 - created) / 3600;
+    if (hOld < 1) timeText = " · " + Math.round(hOld * 60) + "m前";
+    else if (hOld < 24) timeText = " · " + Math.round(hOld) + "h前";
+    else timeText = " · " + Math.round(hOld / 24) + "d前";
+  }
   return '<div class="cm-item" id="' + id + '" onclick="toggleCandidate(this)">' +
     '<input type="checkbox"' +
       ' data-type="'       + esc(t.type || "topic")  + '"' +
@@ -2304,7 +2311,7 @@ function candidateItemHtml(t, id) {
     '<span class="cm-badge ' + badgeClass(t.type) + '">' + badgeLabel(t.type) + '</span>' +
     sourceBadgeHtml(t.source) +
     '<span class="cm-title">' + esc(titleJa.slice(0, 90)) + '</span>' +
-    '<span class="cm-meta">' + metaText + '</span>' +
+    '<span class="cm-meta">' + metaText + timeText + '</span>' +
     (t.rssMatch ? '<span class="cm-rss-match">📰 ' + esc((t.rssMatch.title || "").slice(0, 60)) + '</span>' : '') +
     '</div>';
 }
@@ -2452,6 +2459,99 @@ function initMobile() {
 window.addEventListener('resize', function() { if (isMobile()) scaleMobilePreview(); });
 window.addEventListener('DOMContentLoaded', initMobile);
 initMobile();
+
+// ── ワード検索 ─────────────────────────────────────────────────────────────────
+function openWordSearch() {
+  var date = document.getElementById("date-input").value;
+  if (!date) { alert("まず日付を選択してください"); return; }
+  _preloadedComments = null;
+  document.getElementById("candidate-modal").style.display = "block";
+  document.getElementById("cm-source-badge").textContent = "🔍 ワード検索";
+  document.getElementById("cm-count").textContent = "0件選択中";
+  document.getElementById("btn-process").disabled = true;
+  document.getElementById("cm-log").style.display = "none";
+  document.getElementById("cm-content").innerHTML =
+    '<div style="padding:12px 0;">' +
+    '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+    '<input id="cm-search-input" type="text" placeholder="例：ハーランド、移籍、Champions League..." ' +
+    'style="flex:1;background:#111;border:1px solid #444;color:#e0e0e0;padding:7px 10px;border-radius:6px;font-size:13px;" ' +
+    'onkeydown="if(event.key===\'Enter\')doWordSearch()">' +
+    '<button onclick="doWordSearch()" style="background:#4a90e2;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">検索</button>' +
+    '</div>' +
+    '<div style="font-size:11px;color:#666;">日本語もOK（自動で英訳してReddit検索します）</div>' +
+    '</div>' +
+    '<div id="cm-search-results"></div>';
+  setTimeout(function() {
+    var inp = document.getElementById("cm-search-input");
+    if (inp) inp.focus();
+  }, 50);
+}
+
+function doWordSearch() {
+  var q = ((document.getElementById("cm-search-input") || {}).value || "").trim();
+  if (!q) return;
+  var resultsEl = document.getElementById("cm-search-results");
+  if (!resultsEl) return;
+  resultsEl.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">🔍 検索中...</div>';
+  document.getElementById("btn-process").disabled = true;
+
+  fetch("/api/soccer-yt/reddit-search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query: q })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok || !data.threads || !data.threads.length) {
+      resultsEl.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">該当スレッドが見つかりませんでした</div>';
+      return;
+    }
+    var label = data.translatedQuery && data.translatedQuery !== q
+      ? esc(q) + ' → <span style="color:#a78bfa">' + esc(data.translatedQuery) + '</span>'
+      : esc(q);
+    var html = '<div class="cm-section-title">🔍 検索結果 (' + data.threads.length + '件) — ' + label + '</div>';
+    data.threads.forEach(function(t, i) { html += candidateItemHtml(t, "ci-srch-" + i); });
+    resultsEl.innerHTML = html;
+    updateCandidateCount();
+  })
+  .catch(function(e) {
+    resultsEl.innerHTML = '<div style="color:#e66;padding:20px;">エラー: ' + e.message + '</div>';
+  });
+}
+
+// ── スレッド一覧 ───────────────────────────────────────────────────────────────
+function loadRedditTop() {
+  var date = document.getElementById("date-input").value;
+  if (!date) { alert("まず日付を選択してください"); return; }
+  _preloadedComments = null;
+  document.getElementById("candidate-modal").style.display = "block";
+  var content = document.getElementById("cm-content");
+  content.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">📋 Reddit 上位スレ取得中...</div>';
+  document.getElementById("btn-process").disabled = true;
+  document.getElementById("cm-count").textContent = "0件選択中";
+  document.getElementById("cm-source-badge").textContent = "📋 スレッド一覧";
+  document.getElementById("cm-log").style.display = "none";
+
+  fetch("/api/soccer-yt/reddit-top", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (!data.ok || !data.threads || !data.threads.length) {
+      content.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">スレッドが取得できませんでした</div>';
+      return;
+    }
+    var html = '<div class="cm-section-title">⚡ 急上昇スレ (' + data.threads.length + '件・' + data.window + '時間以内)</div>';
+    data.threads.forEach(function(t, i) { html += candidateItemHtml(t, "ci-top-" + i); });
+    content.innerHTML = html;
+    updateCandidateCount();
+  })
+  .catch(function(e) {
+    content.innerHTML = '<div style="color:#e66;padding:20px;">エラー: ' + e.message + '</div>';
+  });
+}
 </script>
 
 <!-- 案件選択モーダル -->
@@ -2462,7 +2562,8 @@ initMobile();
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span id="cm-source-badge" style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.15);padding:3px 10px;border-radius:12px;"></span>
         <button onclick="loadDailyCandidates()" style="background:#1a3a2a;color:#4ade80;border:1px solid #2a5a3a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📥 事前取得済み</button>
-        <button onclick="openCandidateModal()" style="background:#2a1a3a;color:#c084fc;border:1px solid #4a2a6a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">🔄 今すぐ取得</button>
+        <button onclick="loadRedditTop()" style="background:#1a2a3a;color:#60c0f0;border:1px solid #2a4a6a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📋 スレッド一覧</button>
+        <button onclick="openWordSearch()" style="background:#2a1a3a;color:#c084fc;border:1px solid #4a2a6a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">🔍 ワード検索</button>
         <button class="cm-close" onclick="closeCandidateModal()">✕</button>
       </div>
     </div>
@@ -2757,6 +2858,135 @@ app.post("/api/soccer-yt/import-selected", (req, res) => {
     fs.writeFileSync(LOG_FILE, `[ホームインポート ${new Date().toLocaleString("ja-JP")}]\n` + videoJob.log.join(""));
   });
   res.json({ ok: true });
+});
+
+// ─── Reddit fetch helper ──────────────────────────────────────────────────────
+async function redditFetch(url) {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "soccer-news-bot/1.0" },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error(`Reddit HTTP ${res.status}`);
+  return res.json();
+}
+
+// ─── ワード検索 API ───────────────────────────────────────────────────────────
+app.post("/api/soccer-yt/reddit-search", async (req, res) => {
+  const { query } = req.body;
+  if (!query) return res.json({ ok: false, error: "query が指定されていません" });
+
+  try {
+    // 日本語・漢字・ひらがな・カタカナ含む場合は英訳
+    const hasJapanese = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(query);
+    let translatedQuery = query;
+    if (hasJapanese) {
+      const { callAI } = require("./scripts/ai_client");
+      const raw = await callAI({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 100,
+        messages: [{ role: "user", content: `Translate the following to English for a Reddit soccer search query (return only the translated text, no explanation): ${query}` }],
+      });
+      translatedQuery = raw.trim().replace(/^["'「」]|["'「」]$/g, "");
+    }
+
+    const encoded = encodeURIComponent(translatedQuery);
+    const json = await redditFetch(
+      `https://www.reddit.com/r/soccer+football+PremierLeague+LaLiga+Bundesliga+SerieA/search.json?q=${encoded}&restrict_sr=1&sort=hot&t=month&limit=30`
+    );
+
+    const nowSec = Date.now() / 1000;
+    const threads = (json.data?.children || [])
+      .map(c => c.data)
+      .filter(p => !p.stickied)
+      .slice(0, 25)
+      .map(p => {
+        const hoursOld = (nowSec - p.created_utc) / 3600;
+        return {
+          source:      "reddit",
+          type:        "topic",
+          title:       p.title,
+          titleJa:     p.title,
+          permalink:   p.permalink,
+          url:         "https://www.reddit.com" + p.permalink,
+          score:       p.score,
+          hoursOld:    Math.round(hoursOld * 10) / 10,
+          created_utc: p.created_utc,
+          numComments: p.num_comments,
+          comments:    [],
+        };
+      });
+
+    res.json({ ok: true, threads, translatedQuery });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ─── スレッド一覧 API ─────────────────────────────────────────────────────────
+app.post("/api/soccer-yt/reddit-top", async (req, res) => {
+  const SUBREDDITS = ["soccer", "football", "PremierLeague", "LaLiga", "Bundesliga", "SerieA"];
+  const WINDOWS    = [6, 12]; // 6h以内 → 足りなければ12h
+  const TARGET     = 30;
+  const MIN_SCORE  = 10;
+
+  try {
+    const nowSec = Date.now() / 1000;
+
+    const results = await Promise.allSettled(
+      SUBREDDITS.map(sub =>
+        redditFetch(`https://www.reddit.com/r/${sub}/hot.json?limit=50`)
+          .then(json => (json.data?.children || []).map(c => ({ ...c.data, _sub: sub })))
+          .catch(() => [])
+      )
+    );
+
+    // 全サブレをマージ・重複除去（同一スレIDを1件に）
+    const seenIds = new Set();
+    let posts = results
+      .filter(r => r.status === "fulfilled")
+      .flatMap(r => r.value)
+      .filter(p => {
+        if (p.stickied || p.score < MIN_SCORE) return false;
+        if (seenIds.has(p.id)) return false;
+        seenIds.add(p.id);
+        return true;
+      });
+
+    // ウォーターフォール: 6h → 12h
+    let window = WINDOWS[0];
+    let fresh = posts.filter(p => (nowSec - p.created_utc) <= window * 3600);
+    if (fresh.length < 10) {
+      window = WINDOWS[1];
+      fresh = posts.filter(p => (nowSec - p.created_utc) <= window * 3600);
+    }
+
+    // velocity（upvotes/h）降順で30件
+    const threads = fresh
+      .map(p => {
+        const hoursOld = Math.max((nowSec - p.created_utc) / 3600, 0.5);
+        return { ...p, _velocity: Math.round(p.score / hoursOld), _hoursOld: Math.round(hoursOld * 10) / 10 };
+      })
+      .sort((a, b) => b._velocity - a._velocity)
+      .slice(0, TARGET)
+      .map(p => ({
+        source:      "reddit",
+        type:        "topic",
+        title:       p.title,
+        titleJa:     p.title,
+        permalink:   p.permalink,
+        url:         "https://www.reddit.com" + p.permalink,
+        score:       p.score,
+        hoursOld:    p._hoursOld,
+        created_utc: p.created_utc,
+        numComments: p.num_comments,
+        subreddit:   p._sub,
+        comments:    [],
+      }));
+
+    res.json({ ok: true, threads, window });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // ─── 最終ログ取得 ─────────────────────────────────────────────────────────────
