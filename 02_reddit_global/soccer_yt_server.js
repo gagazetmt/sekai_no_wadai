@@ -2203,11 +2203,11 @@ async function fetchRedditQuick() {
   panel.style.display = "block";
   list.innerHTML = "<div style='color:#888;padding:10px 14px;font-size:13px;'>📡 読み込み中...</div>";
   try {
-    const res = await fetch("https://www.reddit.com/r/soccer/rising.json?limit=100");
+    const res = await fetch("/api/reddit-quick-fetch");
     if (!res.ok) throw new Error("HTTP " + res.status);
     const j = await res.json();
-    const posts = (j.data?.children || [])
-      .map(function(c){ return c.data; })
+    if (!j.ok) throw new Error(j.error || "取得失敗");
+    const posts = (j.posts || [])
       .filter(function(p){ return !p.stickied && p.score > 5 && !_J_LEAGUE_RE.test(p.title); })
       .slice(0, 20);
     if (!posts.length) {
@@ -2791,6 +2791,30 @@ app.post("/api/soccer-yt/fetch-candidates", (req, res) => {
       res.json({ ok: false, error: "Parse error: " + stdout.slice(0, 200) });
     }
   });
+});
+
+// ─── Reddit 今すぐ抽出（サーバープロキシ） ────────────────────────────────────
+app.get("/api/reddit-quick-fetch", async (req, res) => {
+  const REDDIT_URL = "https://www.reddit.com/r/soccer/rising.json?limit=100";
+  const HEADERS    = { "User-Agent": "Mozilla/5.0 soccer-news-bot/1.0" };
+  async function tryFetch(url) {
+    const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+  try {
+    const j = await tryFetch(REDDIT_URL);
+    return res.json({ ok: true, posts: (j.data?.children || []).map(c => c.data) });
+  } catch (e) {
+    const proxy = process.env.REDDIT_PROXY_URL;
+    if (proxy) {
+      try {
+        const j = await tryFetch(`${proxy}/fetch?url=${encodeURIComponent(REDDIT_URL)}`);
+        return res.json({ ok: true, posts: (j.data?.children || []).map(c => c.data) });
+      } catch (_) {}
+    }
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 // ─── 選択済みスレッド処理 ───────────────────────────────────────────────────
