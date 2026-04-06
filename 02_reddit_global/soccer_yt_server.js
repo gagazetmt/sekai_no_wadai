@@ -2475,7 +2475,7 @@ function openWordSearch() {
     '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
     '<input id="cm-search-input" type="text" placeholder="例：ハーランド、移籍、Champions League..." ' +
     'style="flex:1;background:#111;border:1px solid #444;color:#e0e0e0;padding:7px 10px;border-radius:6px;font-size:13px;" ' +
-    'onkeydown="if(event.key===\'Enter\')doWordSearch()">' +
+    'onkeydown="if(event.keyCode===13)doWordSearch()">' +
     '<button onclick="doWordSearch()" style="background:#4a90e2;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">検索</button>' +
     '</div>' +
     '<div style="font-size:11px;color:#666;">日本語もOK（自動で英訳してReddit検索します）</div>' +
