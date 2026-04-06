@@ -651,11 +651,15 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
   const qY     = parseFloat(req.query.py);
   const qImg   = req.query.img;   // "/images/filename.jpg" → IMG_DIR/filename
   const qCatch = req.query.catch; // catchLine1 テキスト上書き
-  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg || qCatch !== undefined) {
+  const qLabel = req.query.label; // ラベル（赤バッジ）上書き
+  const qBadge = req.query.badge; // バッジ（橙バッジ）上書き
+  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg || qCatch !== undefined || qLabel !== undefined || qBadge !== undefined) {
     const cur = (post.imgZoom && post.imgZoom.tn) || { zoom: 1.0, x: 50, y: 50 };
     const overridePost = Object.assign({}, post, {
       mainImagePath: qImg ? path.join(IMG_DIR, path.basename(qImg)) : post.mainImagePath,
       catchLine1:    qCatch !== undefined ? qCatch : post.catchLine1,
+      label:         qLabel !== undefined ? qLabel : post.label,
+      badge:         qBadge !== undefined ? qBadge : post.badge,
       imgZoom: Object.assign({}, post.imgZoom, {
         tn: { zoom: isNaN(qZoom) ? cur.zoom : qZoom, x: isNaN(qX) ? cur.x : qX, y: isNaN(qY) ? cur.y : qY }
       })
@@ -2943,6 +2947,8 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
       idx:         i,
       num,
       catchLine1:  p.catchLine1 || "",
+      label:       p.label || "",
+      badge:       p.badge || "",
       youtubeTitle: p.youtubeTitle || p.catchLine1 || "",
       description: desc,
       hashtagsText: p.hashtagsText || "",
@@ -3238,6 +3244,16 @@ function renderPosts() {
         <span class='zoom-val' id='zoom-yv-\${i}'>50</span>
       </div>
     </div>
+    <div style='display:flex;gap:8px;margin:6px 0;'>
+      <div style='flex:1;'>
+        <div style='font-size:10px;color:#888;margin-bottom:3px;'>ラベル（赤バッジ）</div>
+        <input type='text' id='label-\${i}' value='\${esc(p.label)}' placeholder='【速報】' style='width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:4px;padding:4px 6px;font-size:12px;box-sizing:border-box;' oninput='updateTnPreview(\${i})'>
+      </div>
+      <div style='flex:1;'>
+        <div style='font-size:10px;color:#888;margin-bottom:3px;'>バッジ（橙バッジ）</div>
+        <input type='text' id='badge-\${i}' value='\${esc(p.badge)}' placeholder='（なし）' style='width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:4px;padding:4px 6px;font-size:12px;box-sizing:border-box;' oninput='updateTnPreview(\${i})'>
+      </div>
+    </div>
     <div>
       <div class='gallery-label' style='display:flex;align-items:center;justify-content:space-between;'>
         <span>サムネ画像を変更</span>
@@ -3339,10 +3355,15 @@ function buildPreviewSrc(i) {
   const x     = parseFloat(document.getElementById("zoom-x-" + i)?.value || 50);
   const y     = parseFloat(document.getElementById("zoom-y-" + i)?.value || 50);
   const catchText = document.getElementById("catch-" + i)?.value ?? "";
+  const labelText = document.getElementById("label-" + i)?.value ?? "";
+  const badgeText = document.getElementById("badge-" + i)?.value ?? "";
   const selectedImg = selectedThumbs[i];
   let src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
     "?zoom=" + z + "&px=" + x + "&py=" + y +
-    "&catch=" + encodeURIComponent(catchText) + "&t=" + Date.now();
+    "&catch=" + encodeURIComponent(catchText) +
+    "&label=" + encodeURIComponent(labelText) +
+    "&badge=" + encodeURIComponent(badgeText) +
+    "&t=" + Date.now();
   if (selectedImg) src += "&img=" + encodeURIComponent(selectedImg);
   return src;
 }
@@ -3378,6 +3399,8 @@ function insertRedYT(i) {
 async function exportThumb(i) {
   const post = postsData[i];
   const catchLine1 = document.getElementById("catch-" + i)?.value || post.thumbExportPost.catchLine1;
+  const labelVal   = document.getElementById("label-" + i)?.value ?? post.thumbExportPost.label;
+  const badgeVal   = document.getElementById("badge-" + i)?.value ?? post.thumbExportPost.badge;
   const zoom = parseFloat(document.getElementById("zoom-z-" + i)?.value || 1.0);
   const px   = parseFloat(document.getElementById("zoom-x-" + i)?.value || 50);
   const py   = parseFloat(document.getElementById("zoom-y-" + i)?.value || 50);
@@ -3387,6 +3410,8 @@ async function exportThumb(i) {
   try {
     const exportPost = Object.assign({}, post.thumbExportPost, {
       catchLine1,
+      label: labelVal,
+      badge: badgeVal,
       imgZoom: { tn: { zoom, x: px, y: py } }
     });
     const r = await fetch("/api/thumbnail/export", {
