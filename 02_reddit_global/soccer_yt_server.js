@@ -3458,13 +3458,41 @@ function copyField(id, btn) {
   });
 }
 
+async function uploadDirect(i) {
+  const post    = postsData[i];
+  const title   = document.getElementById("title-" + i).value;
+  const desc    = document.getElementById("desc-" + i).value;
+  const tags    = document.getElementById("tags-" + i).value;
+  setPostStatus(i, "⏳ アップロード中...", "run");
+  try {
+    const r = await fetch("/api/youtube/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: DATE, videoName: post.videoName,
+        thumbName: DATE + "_" + (post.idx + 1) + "_thumb.png",
+        title, description: desc, tags, privacyStatus: "public",
+      }),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      const thumbMsg = j.thumbSet ? " ｜ 🖼サムネ設定済み" : "";
+      setPostStatus(i, "✅ 投稿完了" + thumbMsg, "ok");
+    } else {
+      setPostStatus(i, "❌ " + (j.error || "アップロード失敗"), "err");
+    }
+  } catch(e) {
+    setPostStatus(i, "❌ " + e.message, "err");
+  }
+}
+
 async function uploadAll() {
   const checks = document.querySelectorAll("input[type=checkbox]:checked");
   if (!checks.length) { setGlobalStatus("チェックを入れてください", "err"); return; }
   if (!confirm(checks.length + "件を投稿しますか？")) return;
   for (const cb of checks) {
-    await uploadSingle(parseInt(cb.dataset.idx));
-    await new Promise(r => setTimeout(r, 1000));
+    await uploadDirect(parseInt(cb.dataset.idx));
+    await new Promise(r => setTimeout(r, 2000));
   }
   setGlobalStatus("✅ 一括投稿完了", "ok");
 }
