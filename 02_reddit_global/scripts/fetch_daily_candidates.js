@@ -35,10 +35,9 @@ const RSS_MAX_HOURS     = 48;   // RSS取得対象の最大経過時間
 const FRESH_WINDOWS     = [4, 8, 12, 24]; // Reddit ウォーターフォール時間窓（h）
 const COMMENT_LIMIT     = 20;
 
-const VPS_HOST   = "root@37.60.224.54";
-const VPS_DEST   = "/root/sekai_no_wadai/02_reddit_global/temp/";
-const SSH_KEY    = path.join(process.env.USERPROFILE || "C:\\Users\\USER", ".ssh", "id_ed25519");
-const isVpsMode  = process.argv.includes("--vps");
+const VPS_HOST = "root@37.60.224.54";
+const VPS_DEST = "/root/sekai_no_wadai/02_reddit_global/temp/";
+const SSH_KEY  = path.join(process.env.USERPROFILE || "C:\\Users\\USER", ".ssh", "id_ed25519");
 
 // Reddit プロキシ（.env の REDDIT_PROXY_URL が設定されていれば使用）
 const REDDIT_PROXY = process.env.REDDIT_PROXY_URL || null;
@@ -521,17 +520,7 @@ async function main() {
   };
 
   saveDaily(date, todayData);
-
-  if (isVpsMode) {
-    // VPS 上で直接実行された場合：SCP不要、temp/ にコピーして完了
-    const TEMP = path.join(__dirname, "..", "temp");
-    if (!fs.existsSync(TEMP)) fs.mkdirSync(TEMP, { recursive: true });
-    const tempFile = path.join(TEMP, `candidates_${date}.json`);
-    fs.copyFileSync(path.join(DATA_DIR, `candidates_${date}.json`), tempFile);
-    console.log(`📁 VPSモード: temp/candidates_${date}.json に保存`);
-  } else {
-    sendToVps(date);
-  }
+  sendToVps(date);
 
   console.log("✅ Done.\n");
 }

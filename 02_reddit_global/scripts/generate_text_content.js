@@ -18,10 +18,9 @@ const { callAI }   = require("./ai_client");
 
 // ─── 定数 ─────────────────────────────────────────────────────────────────────
 const DATA_DIR  = path.join(__dirname, "..", "data");
-const TEMP_DIR  = path.join(__dirname, "..", "temp");
 const VPS_HOST  = "root@37.60.224.54";
 const VPS_DEST  = "/root/sekai_no_wadai/02_reddit_global/temp/";
-const VPS_API   = "http://localhost:3003";         // VPS上実行時はlocalhost
+const VPS_API   = "http://100.116.25.91:3003";    // Tailscale IP
 const SSH_KEY   = path.join(process.env.USERPROFILE || "C:\\Users\\USER", ".ssh", "id_ed25519");
 const CONCURRENCY = 3;
 
@@ -30,13 +29,6 @@ const jstOffset = 9 * 60 * 60 * 1000;
 const dateArg   = process.argv.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a))
                || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
 const topArg    = parseInt((process.argv.find(a => a.startsWith("--top=")) || "--top=8").replace("--top=", ""));
-
-// --selected=path : VPSのランチャーから選択済みスレッドを生成するモード
-//   - candidates_*.json ではなく selected_*.json を入力とする
-//   - 出力先を temp/ に変更（SCP不要）
-//   - 画像取得トリガーはサーバー側が担当するのでスキップ
-const selectedArg = (process.argv.find(a => a.startsWith("--selected=")) || "").replace("--selected=", "") || null;
-const isVpsMode   = !!selectedArg;
 
 const TEAM_MANAGERS_PATH = path.join(__dirname, "..", "logos", "team_managers.json");
 const _teamManagers = (() => {
@@ -355,71 +347,52 @@ async function triggerVpsImageFetch(date) {
 
 // ─── メイン ───────────────────────────────────────────────────────────────────
 async function main() {
-  // 出力先: VPSモード → temp/  ローカルモード → data/
-  const contentFile = isVpsMode
-    ? path.join(TEMP_DIR, `content_${dateArg}.json`)
-    : path.join(DATA_DIR, `content_${dateArg}.json`);
-
-  // 当日JSONのマージ用（今回生成分 + 既存分を合わせる）
-  const existingContent = fs.existsSync(contentFile)
-    ? JSON.parse(fs.readFileSync(contentFile, "utf8"))
-    : { posts: [] };
-
-  let targets;
-
-  if (isVpsMode) {
-    // ── VPSモード: ランチャーで選択されたスレッドを生成 ──────────────────────
-    if (!fs.existsSync(selectedArg)) {
-      console.error(`❌ selected file が見つかりません: ${selectedArg}`);
-      process.exit(1);
-    }
-    const selectedData = JSON.parse(fs.readFileSync(selectedArg, "utf8"));
-    targets = (selectedData.threads || []).map(p => ({ ...p, type: p.type || detectType(p.title||"") }));
-    const jst = new Date(Date.now() + jstOffset);
-    console.log(`\n📝 テキストコンテンツ生成（ランチャー選択） (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
-    console.log(`対象: ${targets.length}件（ユーザー選択）`);
-  } else {
-    // ── ローカルモード: candidates_*.json から自動選定 ───────────────────────
-    const candidatesFile = path.join(DATA_DIR, `candidates_${dateArg}.json`);
-    if (!fs.existsSync(candidatesFile)) {
-      console.error(`❌ candidates_${dateArg}.json が見つかりません。先に fetch_daily_candidates.js を実行してください。`);
-      process.exit(1);
-    }
-    const candidatesData = JSON.parse(fs.readFileSync(candidatesFile, "utf8"));
-    const allPosts = (candidatesData.posts || []).map(p => ({ ...p, type: p.type || detectType(p.title||"") }));
-
-    // 過去168時間（7日分）の content JSON を確認してスキップ対象を把握
-    const existingTitles = new Set();
-    for (let d = 0; d < 7; d++) {
-      const checkDate = new Date(Date.now() + jstOffset - d * 86400000).toISOString().slice(0, 10);
-      const f = path.join(DATA_DIR, `content_${checkDate}.json`);
-      if (fs.existsSync(f)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(f, "utf8"));
-          for (const p of data.posts || []) {
-            if (p._meta?.title) existingTitles.add(p._meta.title);
-          }
-        } catch { /* 読み取り失敗は無視 */ }
-      }
-    }
-
-    const REDDIT_LIMIT = 4;
-    const RSS_LIMIT    = 4;
-    const redditCandidates = allPosts
-      .filter(p => p.source === "reddit" && !existingTitles.has(p.title))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, REDDIT_LIMIT);
-    const rssCandidates = allPosts
-      .filter(p => p.source === "rss" && !existingTitles.has(p.title))
-      .sort((a, b) => b.created_utc - a.created_utc)
-      .slice(0, RSS_LIMIT);
-    targets = [...redditCandidates, ...rssCandidates].slice(0, topArg);
-
-    const jst = new Date(Date.now() + jstOffset);
-    console.log(`\n📝 テキストコンテンツ生成 (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
-    console.log(`対象: ${targets.length}件 (Reddit${redditCandidates.length} + RSS${rssCandidates.length}) / 168h済みスキップ: ${existingTitles.size}件`);
+  const candidatesFile = path.join(DATA_DIR, `candidates_${dateArg}.json`);
+  if (!fs.existsSync(candidatesFile)) {
+    console.error(`❌ candidates_${dateArg}.json が見つかりません。先に fetch_daily_candidates.js を実行してください。`);
+    process.exit(1);
   }
 
+  const candidatesData = JSON.parse(fs.readFileSync(candidatesFile, "utf8"));
+  const allPosts = (candidatesData.posts || []).map(p => ({ ...p, type: p.type || detectType(p.title||"") }));
+
+  // 過去168時間（7日分）の content JSON を確認してスキップ対象を把握
+  const existingTitles = new Set();
+  for (let d = 0; d < 7; d++) {
+    const checkDate = new Date(Date.now() + jstOffset - d * 86400000).toISOString().slice(0, 10);
+    const f = path.join(DATA_DIR, `content_${checkDate}.json`);
+    if (fs.existsSync(f)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(f, "utf8"));
+        for (const p of data.posts || []) {
+          if (p._meta?.title) existingTitles.add(p._meta.title);
+        }
+      } catch { /* 読み取り失敗は無視 */ }
+    }
+  }
+  const contentFile = path.join(DATA_DIR, `content_${dateArg}.json`);
+  // 当日JSONのマージ用（今回生成分 + 既存分を合わせる）
+  const existingContent = fs.existsSync(contentFile) ? JSON.parse(fs.readFileSync(contentFile, "utf8")) : { posts: [] };
+
+  // 生成対象: Reddit上位4件(score降順) + RSS上位4件(recency降順)
+  const REDDIT_LIMIT = 4;
+  const RSS_LIMIT    = 4;
+
+  const redditCandidates = allPosts
+    .filter(p => p.source === "reddit" && !existingTitles.has(p.title))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, REDDIT_LIMIT);
+
+  const rssCandidates = allPosts
+    .filter(p => p.source === "rss" && !existingTitles.has(p.title))
+    .sort((a, b) => b.created_utc - a.created_utc)
+    .slice(0, RSS_LIMIT);
+
+  const targets = [...redditCandidates, ...rssCandidates].slice(0, topArg);
+
+  const jst = new Date(Date.now() + jstOffset);
+  console.log(`\n📝 テキストコンテンツ生成 (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
+  console.log(`対象: ${targets.length}件 (Reddit${redditCandidates.length} + RSS${rssCandidates.length}) / 168h済みスキップ: ${existingTitles.size}件`);
   console.log("─".repeat(50));
 
   const newPosts = [];
@@ -597,16 +570,7 @@ async function main() {
   // 既存コンテンツとマージ（同一タイトルは新規で上書き）
   const newTitles  = new Set(newPosts.map(p => p._meta?.threadTitle));
   const deduped    = existingContent.posts.filter(p => !newTitles.has(p._meta?.threadTitle));
-
-  // 固有ID付与（MMDD + 3桁連番。既存IDは保持、新規のみ採番）
-  const mmdd = dateArg.replace(/-/g, "").slice(4); // "0407"
-  const existingCounters = deduped
-    .filter(p => p.id && String(p.id).startsWith(mmdd))
-    .map(p => parseInt(String(p.id).slice(4), 10));
-  let nextCounter = existingCounters.length > 0 ? Math.max(...existingCounters) + 1 : 1;
-  const taggedNewPosts = newPosts.map(p => ({ ...p, id: mmdd + String(nextCounter++).padStart(3, "0") }));
-
-  const merged     = [...taggedNewPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
+  const merged     = [...newPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
 
   const outputData = {
     date:         dateArg,
@@ -614,25 +578,21 @@ async function main() {
     posts:        merged,
   };
 
-  const outDir = isVpsMode ? TEMP_DIR : DATA_DIR;
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(contentFile, JSON.stringify(outputData, null, 2));
-  console.log(`\n💾 保存: ${path.basename(contentFile)} (${merged.length}件 / 今回生成${newPosts.length}件)`);
+  console.log(`\n💾 保存: content_${dateArg}.json (${merged.length}件 / 今回生成${newPosts.length}件)`);
 
-  if (isVpsMode) {
-    // VPSモード: SCP不要・画像取得はサーバーが起動するのでスキップ
-    console.log("✅ Done（VPSモード: SCP・画像取得はサーバーが担当）.\n");
-  } else {
-    // ローカルモード: SCPしてから画像取得トリガー
-    try {
-      scpToVps(contentFile);
-    } catch (e) {
-      console.error(`❌ SCP失敗: ${e.message}`);
-      return;
-    }
-    await triggerVpsImageFetch(dateArg);
-    console.log("✅ Done.\n");
+  // VPS に SCP 送信
+  try {
+    scpToVps(contentFile);
+  } catch (e) {
+    console.error(`❌ SCP失敗: ${e.message}`);
+    return;
   }
+
+  // VPS 画像取得ジョブを起動
+  await triggerVpsImageFetch(dateArg);
+  console.log("✅ Done.\n");
 }
 
 main().catch(e => { console.error(`❌ Fatal: ${e.message}`); process.exit(1); });
