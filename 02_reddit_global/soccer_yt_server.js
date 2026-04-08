@@ -1134,8 +1134,7 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
   <h1>⚽ サッカー YT ランチャー</h1>
   <input type="date" id="date-input">
   <button class="btn-load" onclick="loadContent()">📂 読み込み</button>
-  <button class="btn-gen"  onclick="openCandidateModal()">📋 案件抽出</button>
-  <button class="btn-reddit" onclick="fetchRedditQuick()">📡 今すぐ抽出</button>
+  <button class="btn-gen"  onclick="loadDailyCandidates()">📋 案件一覧</button>
   <button class="btn-video" id="btn-video" onclick="runVideo()">🎬 動画生成</button>
   <div class="ml-auto">
     <button class="btn-yt" onclick="openYoutubeLauncher()">▶ YouTube投稿</button>
@@ -2514,7 +2513,7 @@ initMobile();
       <h2>📋 案件選択</h2>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span id="cm-source-badge" style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.15);padding:3px 10px;border-radius:12px;"></span>
-        <button onclick="loadDailyCandidates()" style="background:#1a3a2a;color:#4ade80;border:1px solid #2a5a3a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📥 事前取得済み</button>
+        <button onclick="openCandidateModal()" style="background:#1a3a5a;color:#4a9eff;border:1px solid #2a5a8a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📡 今すぐ抽出</button>
         <button class="cm-close" onclick="closeCandidateModal()">✕</button>
       </div>
     </div>
