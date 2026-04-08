@@ -428,22 +428,7 @@ async function main() {
         const managers = lookupManagers([matchData.homeTeam, matchData.awayTeam]);
         wikiWords = [matchData.homeTeam, matchData.awayTeam, ...managers];
 
-        // Xコメント取得（試合はリーグから言語判定）
-        if (process.env.TWITTER_API_IO_KEY) {
-          const [xQuery, detectedLang] = await Promise.all([
-            generateXQuery(xSearchQuery, []),
-            detectFanLang(xSearchQuery, [matchData.homeTeam, matchData.awayTeam]),
-          ]);
-          fanLang = detectedLang;
-          process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
-          [xJaComments, xOtherComments] = await Promise.all([
-            fetchXCommentsViaAccount(xQuery, "post-match", "ja"),
-            fanLang !== "ja" ? fetchXCommentsViaAccount(xQuery, "post-match", fanLang) : Promise.resolve([]),
-          ]);
-          console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
-        }
-
-        const xComments = [...xJaComments, ...xOtherComments].map(c => `[${c.lang.toUpperCase()}] ${c.text}`);
+        const xComments = [];
         process.stdout.write(`  [${num}] コンテンツ生成... `);
         ytContent = await generateMatchContent(matchData, rawComments, post, xComments);
         console.log("✅");
@@ -471,22 +456,7 @@ async function main() {
           ...playerNames,
         ].filter(Boolean);
 
-        // ④ Xコメント取得（ja + 検出言語）
-        if (process.env.TWITTER_API_IO_KEY) {
-          const [xQuery, detectedLang] = await Promise.all([
-            generateXQuery(engQuery, serperSnippets),
-            detectFanLang(engQuery, imgKeywords),
-          ]);
-          fanLang = detectedLang;
-          process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
-          [xJaComments, xOtherComments] = await Promise.all([
-            fetchXCommentsViaAccount(xQuery, post.type || "topic", "ja"),
-            fanLang !== "ja" ? fetchXCommentsViaAccount(xQuery, post.type || "topic", fanLang) : Promise.resolve([]),
-          ]);
-          console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
-        }
-
-        const xComments = [...xJaComments, ...xOtherComments].map(c => `[${c.lang.toUpperCase()}] ${c.text}`);
+        const xComments = [];
         process.stdout.write(`  [${num}] コンテンツ生成... `);
         ytContent = await generateTopicContent({ selftext }, rawComments, post, xComments, serperSnippets);
         console.log("✅");
@@ -570,7 +540,16 @@ async function main() {
   // 既存コンテンツとマージ（同一タイトルは新規で上書き）
   const newTitles  = new Set(newPosts.map(p => p._meta?.threadTitle));
   const deduped    = existingContent.posts.filter(p => !newTitles.has(p._meta?.threadTitle));
-  const merged     = [...newPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
+
+  // 固有ID付与（MMDD + 3桁連番。既存IDは保持、新規のみ採番）
+  const mmdd = dateArg.replace(/-/g, "").slice(4); // "0407"
+  const existingCounters = deduped
+    .filter(p => p.id && String(p.id).startsWith(mmdd))
+    .map(p => parseInt(String(p.id).slice(4), 10));
+  let nextCounter = existingCounters.length > 0 ? Math.max(...existingCounters) + 1 : 1;
+  const taggedNewPosts = newPosts.map(p => ({ ...p, id: mmdd + String(nextCounter++).padStart(3, "0") }));
+
+  const merged     = [...taggedNewPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
 
   const outputData = {
     date:         dateArg,

@@ -671,11 +671,11 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
 
 // ─── API: サムネイル PNG 書き出し ─────────────────────────────────────────────
 app.post("/api/thumbnail/export", async (req, res) => {
-  const { date, postIdx, post, selectedImgUrl } = req.body;
-  if (!date || postIdx === undefined || !post)
-    return res.status(400).json({ error: "date / postIdx / post が必要" });
-  const num     = postIdx + 1;
-  const outPath = path.join(THUMB_DIR, `${date}_${num}_thumb.png`);
+  const { date, postIdx, postId, post, selectedImgUrl } = req.body;
+  if (!date || !post)
+    return res.status(400).json({ error: "date / post が必要" });
+  const thumbId = postId || (postIdx + 1);
+  const outPath = path.join(THUMB_DIR, `${date}_${thumbId}_thumb.png`);
   try {
     if (selectedImgUrl) post.mainImagePath = path.join(IMG_DIR, path.basename(selectedImgUrl));
     const html    = buildThumbnailHtml(post);
@@ -884,15 +884,15 @@ app.post("/api/tts/scene", async (req, res) => {
 // ─── API: 動画生成実行 ────────────────────────────────────────────────────────
 app.post("/api/run-video", (req, res) => {
   if (videoJob.running) return res.json({ ok: false, message: "生成中です" });
-  const { date, count, indices } = req.body;
+  const { date, count, ids } = req.body;
   if (!date) return res.status(400).json({ error: "date が必要です" });
 
   videoJob = { running: true, log: [], done: false, exitCode: null };
   const args = [path.join(__dirname, "scripts", "generate_soccer_yt_video.js"), date];
   
-  if (indices && indices.length > 0) {
-    // 特定のインデックス指定（例: "0,2,5"）末尾カンマで件数指定と区別
-    args.push(indices.join(",") + ",");
+  if (ids && ids.length > 0) {
+    // ID指定（例: "0407001,0407003"）
+    args.push(ids.join(","));
   } else if (count) {
     // 従来の件数指定
     args.push(String(count));
@@ -1320,7 +1320,7 @@ function renderSidebar() {
   html += pending.map(p => {
     const i = data.posts.indexOf(p);
     return "<div class='post-item" + (i === idx ? " active" : "") + "' onclick='selectPost(" + i + ")'>" +
-           "<input type='checkbox' class='post-check' data-idx='" + i + "' onclick='event.stopPropagation()' style='margin-right:6px;cursor:pointer;'>" +
+           "<input type='checkbox' class='post-check' data-id='" + (p.id || i) + "' onclick='event.stopPropagation()' style='margin-right:6px;cursor:pointer;'>" +
            "<span class='post-item-label'>" + esc(p.catchLine1 || "（無題）") + "</span>" +
            "<button class='post-del' onclick='event.stopPropagation();deletePost(" + i + ")' title='削除'>×</button>" +
            "</div>";
@@ -1333,7 +1333,7 @@ function renderSidebar() {
     html += generated.map(p => {
       const i = data.posts.indexOf(p);
       return "<div class='post-item" + (i === idx ? " active" : "") + "' style='background:rgba(78,238,170,0.05);' onclick='selectPost(" + i + ")'>" +
-             "<span style='margin-right:6px; font-size:11px;'>✅</span>" +
+             "<input type='checkbox' class='post-check-regen' data-id='" + (p.id || i) + "' onclick='event.stopPropagation()' style='margin-right:6px;cursor:pointer;flex-shrink:0;accent-color:#4ea;' title='チェックして再生成'>" +
              "<span class='post-item-label' style='color:#aaa;'>" + esc(p.catchLine1 || "（無題）") + "</span>" +
              "<button class='post-del' onclick='event.stopPropagation();deletePost(" + i + ")' title='削除'>×</button>" +
              "</div>";
@@ -2056,21 +2056,21 @@ async function runVideo() {
   const date = document.getElementById("date-input").value;
   if (!date) return status("日付を選択してください", "err");
   
-  // チェックされているインデックスを収集
-  const checks = document.querySelectorAll(".post-check:checked");
-  const indices = Array.from(checks).map(cb => parseInt(cb.dataset.idx));
-  
-  if (indices.length === 0) {
+  // チェックされているIDを収集（通常 + 再生成）
+  const checks = document.querySelectorAll(".post-check:checked, .post-check-regen:checked");
+  const ids = Array.from(checks).map(cb => cb.dataset.id);
+
+  if (ids.length === 0) {
     return status("動画を生成する案件にチェックを入れてください", "err");
   }
 
-  if (!confirm(indices.length + "件の動画を生成します（数分かかります）。よろしいですか？")) return;
-  
+  if (!confirm(ids.length + "件の動画を生成します（数分かかります）。よろしいですか？")) return;
+
   await saveLocal();
-  await fetch("/api/run-video", { 
-    method: "POST", 
-    headers: { "Content-Type": "application/json" }, 
-    body: JSON.stringify({ date, indices }) 
+  await fetch("/api/run-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, ids })
   });
   
   document.getElementById("btn-video").disabled = true;
@@ -2997,6 +2997,53 @@ function cleanupOldFiles() {
   if (count > 0) console.log(`🗑  古いファイルを ${count} 件削除しました（${KEEP_DAYS}日以上前）`);
 }
 
+// ─── サムネ案5件生成API（Sonnet固定） ────────────────────────────────────────
+app.post("/api/thumb-suggestions", async (req, res) => {
+  const { catchLine1, badge, label, overviewNarration } = req.body;
+  const { callAnthropic } = require("./scripts/ai_client");
+
+  const prompt = `あなたはサッカーYouTubeチャンネルのサムネイル専門コピーライターです。
+以下の動画コンテンツに対して、CTRを最大化するサムネイルテキストを5案ずつ提案してください。
+
+【現在のテキスト】
+メインテキスト: ${catchLine1 || ""}
+バッジ: ${badge || ""}
+ラベル: ${label || ""}
+
+【動画の概要】
+${overviewNarration || ""}
+
+【ルール】
+catchLine1（メインテキスト）:
+- 30文字以内
+- 視聴者が「え、なに？」と思う引きの強さ
+- スコア・結果より「事件・感情・驚き」を前面に
+- [r]赤字にしたい文字[/r] タグを1〜2箇所に使ってもよい
+
+badge（橙バッジ）:
+- 8文字以内
+- 視聴者の心の声を代弁する一言
+- 良い例：「相手は10代やぞ」「マジか...」「これは泣ける」「なんで？」「見てみろ」
+- 情報ラベルはNG：「移籍情報」「最新速報」など
+
+JSON形式のみで出力（説明文不要）：
+{"catchLine1s":["案1","案2","案3","案4","案5"],"badges":["案1","案2","案3","案4","案5"]}`;
+
+  try {
+    const raw = await callAnthropic({
+      model: "claude-sonnet-4-6",
+      max_tokens: 700,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return res.json({ ok: false, error: "JSONパース失敗" });
+    const result = JSON.parse(m[0]);
+    res.json({ ok: true, catchLine1s: result.catchLine1s || [], badges: result.badges || [] });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ─── YouTube投稿ランチャー: データAPI ────────────────────────────────────────
 app.get("/api/youtube-launcher/:date", (req, res) => {
   const date = req.params.date;
@@ -3005,8 +3052,9 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
 
   const data  = JSON.parse(fs.readFileSync(contentFile, "utf8"));
   const posts = (data.posts || []).map((p, i) => {
+    const id        = p.id || p.num || (i + 1);
     const num       = p.num || (i + 1);
-    const videoName = `${date}_${num}.mp4`;
+    const videoName = `${date}_${id}.mp4`;
     const videoPath = path.join(VIDEO_DIR, videoName);
     const imagePaths = (p.imagePaths || []).filter(Boolean);
     const thumbName  = p.mainImagePath ? p.mainImagePath.replace(/\\\\/g, "/").split("/").pop() : null;
@@ -3017,6 +3065,7 @@ app.get("/api/youtube-launcher/:date", (req, res) => {
     ].join("\n").trim();
     return {
       idx:         i,
+      id,
       num,
       catchLine1:  p.catchLine1 || "",
       label:       p.label || "",
@@ -3330,6 +3379,8 @@ function renderPosts() {
         <input type='text' id='badge-\${i}' value='\${esc(p.badge)}' placeholder='（なし）' style='width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:4px;padding:4px 6px;font-size:12px;box-sizing:border-box;' oninput='updateTnPreview(\${i})'>
       </div>
     </div>
+    <button id='btn-suggest-\${i}' onclick='genThumbSuggestions(\${i})' style='width:100%;background:#1e1040;color:#b090ff;border:1px solid #4a2a8a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;margin:6px 0 2px;font-weight:700;'>✨ AIサムネ案を5件生成（Sonnet）</button>
+    <div id='suggestions-\${i}' style='display:none;margin-bottom:6px;'></div>
     <div>
       <div class='gallery-label' style='display:flex;align-items:center;justify-content:space-between;'>
         <span>サムネ画像を変更</span>
@@ -3462,6 +3513,53 @@ function updateTnPreview(i) {
   }, 500);
 }
 
+async function genThumbSuggestions(i) {
+  const p = postsData[i];
+  const btn = document.getElementById("btn-suggest-" + i);
+  const box = document.getElementById("suggestions-" + i);
+  btn.textContent = "⏳ 生成中...";
+  btn.disabled = true;
+  box.style.display = "none";
+  try {
+    const res = await fetch("/api/thumb-suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        catchLine1:       document.getElementById("catch-"  + i)?.value || "",
+        badge:            document.getElementById("badge-"  + i)?.value || "",
+        label:            document.getElementById("label-"  + i)?.value || "",
+        overviewNarration: p.sourceOverview || "",
+      }),
+    });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error);
+    const apply = (fieldId, val) => {
+      const el = document.getElementById(fieldId + "-" + i);
+      if (el) { el.value = val; updateTnPreview(i); }
+    };
+    box.innerHTML =
+      '<div style="font-size:10px;color:#b090ff;margin-bottom:4px;">▼ メインテキスト案（クリックで反映）</div>' +
+      j.catchLine1s.map(t =>
+        '<div onclick=\'document.getElementById("catch-"+' + i + ').value=' + JSON.stringify(t) + ';updateTnPreview(' + i + ')\' ' +
+        'style="background:#12102a;border:1px solid #3a2a6a;border-radius:4px;padding:5px 8px;margin-bottom:3px;cursor:pointer;font-size:12px;color:#e8e8e8;">' +
+        esc(t) + '</div>'
+      ).join("") +
+      '<div style="font-size:10px;color:#b090ff;margin:8px 0 4px;">▼ バッジ案（クリックで反映）</div>' +
+      j.badges.map(t =>
+        '<div onclick=\'document.getElementById("badge-"+' + i + ').value=' + JSON.stringify(t) + ';updateTnPreview(' + i + ')\' ' +
+        'style="background:#12102a;border:1px solid #3a2a6a;border-radius:4px;padding:5px 8px;margin-bottom:3px;cursor:pointer;font-size:12px;color:#e8e8e8;">' +
+        esc(t) + '</div>'
+      ).join("");
+    box.style.display = "block";
+  } catch(e) {
+    box.innerHTML = '<div style="color:#e05555;font-size:12px;">❌ ' + e.message + '</div>';
+    box.style.display = "block";
+  } finally {
+    btn.textContent = "✨ AIサムネ案を5件生成（Sonnet）";
+    btn.disabled = false;
+  }
+}
+
 function insertRedYT(i) {
   const el = document.getElementById("catch-" + i);
   if (!el) return;
@@ -3493,7 +3591,7 @@ async function exportThumb(i) {
     const r = await fetch("/api/thumbnail/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: DATE, postIdx: post.idx, post: exportPost, selectedImgUrl: selectedThumbs[i] || null }),
+      body: JSON.stringify({ date: DATE, postIdx: post.idx, postId: post.id, post: exportPost, selectedImgUrl: selectedThumbs[i] || null }),
     });
     const j = await r.json();
     if (j.ok) setPostStatus(i, "✅ " + j.filename, "ok");
@@ -3547,7 +3645,7 @@ async function doUpload() {
       body: JSON.stringify({
         date: DATE,
         videoName: post.videoName,
-        thumbName: DATE + "_" + (post.idx + 1) + "_thumb.png",
+        thumbName: DATE + "_" + (post.id || (post.idx + 1)) + "_thumb.png",
         title, description: desc, tags,
         privacyStatus: privacy,
       }),
@@ -3599,7 +3697,7 @@ async function uploadDirect(i) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         date: DATE, videoName: post.videoName,
-        thumbName: DATE + "_" + (post.idx + 1) + "_thumb.png",
+        thumbName: DATE + "_" + (post.id || (post.idx + 1)) + "_thumb.png",
         title, description: desc, tags, privacyStatus: "public",
       }),
     });
