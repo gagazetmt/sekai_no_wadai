@@ -2304,6 +2304,49 @@ function loadDailyCandidates() {
   });
 }
 
+function runCandidateFetch() {
+  var date = document.getElementById("date-input").value;
+  if (!date) { alert("まず日付を選択してください"); return; }
+  var btn = document.getElementById("btn-run-fetch");
+  var content = document.getElementById("cm-content");
+  btn.disabled = true;
+  btn.textContent = "⏳ 抽出中...";
+  content.innerHTML = '<div style="color:#888;padding:20px 0;text-align:center;">📡 Reddit/RSS から取得中（1〜2分かかります）...</div>';
+  document.getElementById("btn-process").disabled = true;
+
+  fetch("/api/soccer-yt/run-candidate-fetch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: date })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (!res.ok) {
+      content.innerHTML = '<div style="color:#e66;padding:20px;">⚠️ ' + (res.error || "起動失敗") + '</div>';
+      btn.disabled = false; btn.textContent = "📡 今すぐ抽出";
+      return;
+    }
+    // ジョブ完了をポーリング
+    var poll = setInterval(function() {
+      fetch("/api/video-status").then(function(r){ return r.json(); }).then(function(s) {
+        if (s.done) {
+          clearInterval(poll);
+          btn.disabled = false; btn.textContent = "📡 今すぐ抽出";
+          if (s.exitCode === 0) {
+            loadDailyCandidates();
+          } else {
+            content.innerHTML = '<div style="color:#e66;padding:20px;">⚠️ 抽出スクリプトがエラーで終了しました（exit:' + s.exitCode + '）</div>';
+          }
+        }
+      });
+    }, 3000);
+  })
+  .catch(function(e) {
+    content.innerHTML = '<div style="color:#e66;padding:20px;">通信エラー: ' + e.message + '</div>';
+    btn.disabled = false; btn.textContent = "📡 今すぐ抽出";
+  });
+}
+
 function badgeClass(type) {
   var map = { "post-match": "badge-post-match", "transfer": "badge-transfer",
               "injury": "badge-injury", "manager": "badge-manager",
@@ -2513,7 +2556,7 @@ initMobile();
       <h2>📋 案件選択</h2>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span id="cm-source-badge" style="font-size:11px;color:#a78bfa;background:rgba(139,92,246,0.15);padding:3px 10px;border-radius:12px;"></span>
-        <button onclick="openCandidateModal()" style="background:#1a3a5a;color:#4a9eff;border:1px solid #2a5a8a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📡 今すぐ抽出</button>
+        <button id="btn-run-fetch" onclick="runCandidateFetch()" style="background:#1a3a5a;color:#4a9eff;border:1px solid #2a5a8a;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:700;">📡 今すぐ抽出</button>
         <button class="cm-close" onclick="closeCandidateModal()">✕</button>
       </div>
     </div>
@@ -2770,6 +2813,23 @@ app.get("/api/img-fetch-status", (req, res) => {
 });
 
 // ─── 案件候補取得 ─────────────────────────────────────────────────────────────
+// ─── 今すぐ抽出（VPS上で fetch_daily_candidates.js --vps を実行）──────────────
+app.post("/api/soccer-yt/run-candidate-fetch", (req, res) => {
+  const { date } = req.body;
+  if (!date) return res.json({ ok: false, error: "date が指定されていません" });
+  if (videoJob.running) return res.json({ ok: false, error: "別のジョブが実行中です" });
+
+  videoJob = { running: true, log: [], done: false, exitCode: null };
+  const script = path.join(__dirname, "scripts", "fetch_daily_candidates.js");
+  const proc   = spawn(process.execPath, [script, "--vps"], { cwd: __dirname, env: process.env });
+  proc.stdout.on("data", d => { process.stdout.write(d); videoJob.log.push(d.toString()); });
+  proc.stderr.on("data", d => { process.stderr.write(d); videoJob.log.push(d.toString()); });
+  proc.on("close", code => {
+    videoJob.running = false; videoJob.done = true; videoJob.exitCode = code;
+  });
+  res.json({ ok: true });
+});
+
 app.post("/api/soccer-yt/fetch-candidates", (req, res) => {
   const { date } = req.body;
   const script   = path.join(__dirname, "scripts", "fetch_candidates.js");
