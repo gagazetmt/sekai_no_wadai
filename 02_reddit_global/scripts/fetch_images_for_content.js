@@ -242,6 +242,21 @@ async function fetchImagesForPost(post, num, date) {
       console.log(`${wikiTotal}枚`);
     }
 
+    // ── ② 公式チームX（最大10枚・複数チームは均等配分） ──────────────────────
+    if (process.env.TWITTER_API_IO_KEY && plan.officialTeams?.length > 0) {
+      try {
+        process.stdout.write(`  [${num}] 公式X(${plan.officialTeams.join(", ")})... `);
+        const perTeam = Math.ceil(X_LIMIT / plan.officialTeams.length);
+        const results = await Promise.all(
+          plan.officialTeams.map((name, i) =>
+            fetchOfficialXImages(name, `${prefix}_nt${i}`, perTeam).catch(() => [])
+          )
+        );
+        const officialPaths = results.flat().slice(0, X_LIMIT);
+        imageInfos.push(...officialPaths.map(p => ({ path: p, source: "Official_X", kw: plan.officialTeams.join(", ") })));
+        console.log(`${officialPaths.length}枚`);
+      } catch (e) { console.warn(`⚠️ ${e.message}`); }
+    }
   }
 
   // ── DeepSeek 主題分析 → Wikimedia 5枚追加 ────────────────────────────────

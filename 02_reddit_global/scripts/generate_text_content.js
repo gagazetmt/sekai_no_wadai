@@ -428,7 +428,22 @@ async function main() {
         const managers = lookupManagers([matchData.homeTeam, matchData.awayTeam]);
         wikiWords = [matchData.homeTeam, matchData.awayTeam, ...managers];
 
-        const xComments = [];
+        // Xコメント取得（試合はリーグから言語判定）
+        if (process.env.TWITTER_API_IO_KEY) {
+          const [xQuery, detectedLang] = await Promise.all([
+            generateXQuery(xSearchQuery, []),
+            detectFanLang(xSearchQuery, [matchData.homeTeam, matchData.awayTeam]),
+          ]);
+          fanLang = detectedLang;
+          process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
+          [xJaComments, xOtherComments] = await Promise.all([
+            fetchXCommentsViaAccount(xQuery, "post-match", "ja"),
+            fanLang !== "ja" ? fetchXCommentsViaAccount(xQuery, "post-match", fanLang) : Promise.resolve([]),
+          ]);
+          console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
+        }
+
+        const xComments = [...xJaComments, ...xOtherComments].map(c => `[${c.lang.toUpperCase()}] ${c.text}`);
         process.stdout.write(`  [${num}] コンテンツ生成... `);
         ytContent = await generateMatchContent(matchData, rawComments, post, xComments);
         console.log("✅");
@@ -456,7 +471,22 @@ async function main() {
           ...playerNames,
         ].filter(Boolean);
 
-        const xComments = [];
+        // ④ Xコメント取得（ja + 検出言語）
+        if (process.env.TWITTER_API_IO_KEY) {
+          const [xQuery, detectedLang] = await Promise.all([
+            generateXQuery(engQuery, serperSnippets),
+            detectFanLang(engQuery, imgKeywords),
+          ]);
+          fanLang = detectedLang;
+          process.stdout.write(`  [${num}] Xコメント取得 "${xQuery}" (ja+${fanLang})... `);
+          [xJaComments, xOtherComments] = await Promise.all([
+            fetchXCommentsViaAccount(xQuery, post.type || "topic", "ja"),
+            fanLang !== "ja" ? fetchXCommentsViaAccount(xQuery, post.type || "topic", fanLang) : Promise.resolve([]),
+          ]);
+          console.log(`✅ ja:${xJaComments.length}件 ${fanLang}:${xOtherComments.length}件`);
+        }
+
+        const xComments = [...xJaComments, ...xOtherComments].map(c => `[${c.lang.toUpperCase()}] ${c.text}`);
         process.stdout.write(`  [${num}] コンテンツ生成... `);
         ytContent = await generateTopicContent({ selftext }, rawComments, post, xComments, serperSnippets);
         console.log("✅");
