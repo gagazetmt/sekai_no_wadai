@@ -963,11 +963,7 @@ button{cursor:pointer;border:none;border-radius:5px;padding:6px 11px;font-size:1
 button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
 .btn-load{background:#333;color:var(--text);}.btn-save{background:#2a4a2a;color:var(--green);}
 .btn-gen{background:#2a1a3a;color:#c084fc;}.btn-tts{background:#1a3a4a;color:#67e8f9;}
-.btn-video{background:var(--accent);color:#fff;}.btn-yt{background:#ff0000;color:#fff;font-weight:900;}.btn-reddit{background:#1a3a5a;color:#4a9eff;}.ml-auto{margin-left:auto;}
-.reddit-quick-panel{display:none;background:#0d1520;border:1px solid #1a3a5a;border-radius:8px;margin:6px 10px;overflow:hidden;}
-.reddit-quick-header{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;background:#111b27;border-bottom:1px solid #1a3a5a;}
-.reddit-quick-header h3{color:#4a9eff;font-size:12px;font-weight:700;margin:0;}
-.reddit-quick-list{max-height:360px;overflow-y:auto;}
+.btn-video{background:var(--accent);color:#fff;}.btn-yt{background:#ff0000;color:#fff;font-weight:900;}.ml-auto{margin-left:auto;}
 /* 3カラム */
 .main{display:grid;grid-template-columns:170px 0.7fr 1.3fr;flex:1;overflow:hidden;}
 /* 左: 投稿リスト */
@@ -1135,7 +1131,6 @@ button:hover{opacity:.8;}button:disabled{opacity:.4;cursor:not-allowed;}
   <input type="date" id="date-input">
   <button class="btn-load" onclick="loadContent()">📂 読み込み</button>
   <button class="btn-gen"  onclick="openCandidateModal()">📋 案件抽出</button>
-  <button class="btn-reddit" onclick="fetchRedditQuick()">📡 今すぐ抽出</button>
   <button class="btn-video" id="btn-video" onclick="runVideo()">🎬 動画生成</button>
   <div class="ml-auto">
     <button class="btn-yt" onclick="openYoutubeLauncher()">▶ YouTube投稿</button>
@@ -2365,28 +2360,52 @@ function renderCandidates(data) {
   var content = document.getElementById("cm-content");
   var html = "";
 
-  var com = data.commonTopics || [];
-  var pm  = data.postMatchThreads || [];
-  var rdt = data.redditTopics || data.topicThreads || [];
-  var rss = data.rssTopics || [];
+  // 取得時間 (added_at) ごとにグループ化する
+  var groups = {};
+  var allPosts = [
+    ...(data.postMatchThreads || []),
+    ...(data.redditTopics || data.topicThreads || []),
+    ...(data.rssTopics || [])
+  ];
 
-  if (com.length) {
-    html += '<div class="cm-section-title">🔗 共通ネタ（Reddit＆国内ブログ） (' + com.length + '件)</div>';
-    com.forEach(function(t, i) { html += candidateItemHtml(t, "ci-com-" + i); });
+  allPosts.forEach(function(t) {
+    var timeKey = "不明";
+    if (t.added_at) {
+      // "2026-04-08T15:00:00+09:00" -> "15:00"
+      timeKey = t.added_at.slice(11, 16);
+    }
+    if (!groups[timeKey]) groups[timeKey] = [];
+    groups[timeKey].push(t);
+  });
+
+  // 時間の降順（新しい順）で並べる
+  var sortedKeys = Object.keys(groups).sort(function(a, b) {
+    return b.localeCompare(a);
+  });
+
+  if (sortedKeys.length === 0) {
+    content.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">案件が見つかりませんでした</div>';
+    return;
   }
 
-  html += '<div class="cm-section-title">⚽ ポストマッチ (' + pm.length + '件)</div>';
-  if (!pm.length) html += '<div style="color:#666;font-size:12px;padding:8px;">見つかりませんでした</div>';
-  pm.forEach(function(t, i) { html += candidateItemHtml(t, "ci-pm-" + i); });
-
-  if (rdt.length) {
-    html += '<div class="cm-section-title">🌐 Reddit トピック (' + rdt.length + '件)</div>';
-    rdt.forEach(function(t, i) { html += candidateItemHtml(t, "ci-rdt-" + i); });
-  }
-  if (rss.length) {
-    html += '<div class="cm-section-title">📰 国内ブログ (' + rss.length + '件)</div>';
-    rss.forEach(function(t, i) { html += candidateItemHtml(t, "ci-rss-" + i); });
-  }
+  sortedKeys.forEach(function(time, idx) {
+    var posts = groups[time];
+    // 最初（最新）のグループだけ開いておく
+    var openAttr = (idx === 0) ? " open" : "";
+    
+    html += '<details' + openAttr + ' style="margin-bottom:10px; border:1px solid #333; border-radius:8px; overflow:hidden;">' +
+            '<summary style="padding:10px 14px; background:#252525; cursor:pointer; font-weight:bold; color:var(--yellow); display:flex; align-items:center; justify-content:space-between;">' +
+            '<span>🕒 ' + time + ' 取得分 (' + posts.length + '件)</span>' +
+            '<span style="font-size:10px; opacity:0.6;">クリックで開閉</span>' +
+            '</summary>' +
+            '<div style="padding:8px; background:#1a1a1a;">';
+    
+    posts.forEach(function(t, i) {
+      html += candidateItemHtml(t, "ci-" + time.replace(":","") + "-" + i);
+    });
+    
+    html += '</div></details>';
+  });
 
   content.innerHTML = html;
   updateCandidateCount();
@@ -2711,11 +2730,15 @@ app.post("/api/soccer-yt/load-daily-candidates", (req, res) => {
 });
 
 // ─── 画像取得ジョブ実行（内部関数） ──────────────────────────────────────────
-function runImgFetchJob(date) {
+function runImgFetchJob(date, ids = null) {
   const script = path.join(__dirname, "scripts", "fetch_images_for_content.js");
-  imgFetchJob = { running: true, log: [], done: false, exitCode: null, date };
-  console.log(`[画像取得] 開始: ${date}`);
-  const proc = spawn(process.execPath, [script, date], { cwd: __dirname, env: process.env });
+  imgFetchJob = { running: true, log: [], done: false, exitCode: null, date, ids };
+  console.log(`[画像取得] 開始: ${date} ${ids ? `(ids: ${ids.join(",")})` : "(全件)"}`);
+
+  const args = [script, date];
+  if (ids && ids.length > 0) args.push(`--ids=${ids.join(",")}`);
+
+  const proc = spawn(process.execPath, args, { cwd: __dirname, env: process.env });
   proc.stdout.on("data", d => { process.stdout.write(d); imgFetchJob.log.push(d.toString()); });
   proc.stderr.on("data", d => { process.stderr.write(d); imgFetchJob.log.push(d.toString()); });
   proc.on("close", code => {
@@ -2728,34 +2751,28 @@ function runImgFetchJob(date) {
     if (imgFetchQueue.length > 0) {
       const next = imgFetchQueue.shift();
       console.log(`[画像取得] キュー実行: ${next.date}`);
-      runImgFetchJob(next.date);
+      runImgFetchJob(next.date, next.ids);
     }
   });
 }
 
-// ─── 画像取得ジョブ起動（ローカルPCのSCP送信後に呼ばれる） ────────────────────
+// ─── 画像取得ジョブ起動 ────────────────────
 app.post("/api/soccer-yt/start-image-fetch", (req, res) => {
-  const { date } = req.body;
+  const { date, ids } = req.body;
   if (!date) return res.json({ ok: false, error: "date が必要です" });
 
-  const contentFile = path.join(TEMP_DIR, `content_${date}.json`);
-  if (!fs.existsSync(contentFile)) {
-    return res.json({ ok: false, error: `content_${date}.json が見つかりません` });
-  }
-
   if (imgFetchJob.running) {
-    // 同じ日付が既に実行中またはキュー済みなら重複しない
-    const alreadyQueued = imgFetchQueue.some(q => q.date === date);
-    if (imgFetchJob.date === date || alreadyQueued) {
+    // 同じ日付が既に実行中またはキュー済みなら重複しない (idsが違う場合は別ジョブとして扱う)
+    const alreadyQueued = imgFetchQueue.some(q => q.date === date && JSON.stringify(q.ids) === JSON.stringify(ids));
+    if ((imgFetchJob.date === date && JSON.stringify(imgFetchJob.ids) === JSON.stringify(ids)) || alreadyQueued) {
       return res.json({ ok: false, error: `画像取得ジョブが既に実行中または待機中です (${imgFetchJob.date})` });
     }
-    // 別の日付 → キューに追加して後で実行
-    imgFetchQueue.push({ date });
-    console.log(`[画像取得] キューに追加: ${date} (実行中: ${imgFetchJob.date}, 待機数: ${imgFetchQueue.length})`);
-    return res.json({ ok: true, queued: true, message: `キューに追加しました (実行中: ${imgFetchJob.date})` });
+    // キューに追加
+    imgFetchQueue.push({ date, ids });
+    return res.json({ ok: true, queued: true, message: `キューに追加しました` });
   }
 
-  runImgFetchJob(date);
+  runImgFetchJob(date, ids);
   res.json({ ok: true, message: `画像取得ジョブ開始: ${date}` });
 });
 
@@ -2836,6 +2853,31 @@ app.post("/api/soccer-yt/process-selected", (req, res) => {
     videoJob.done     = true;
     videoJob.exitCode = code;
     fs.writeFileSync(LOG_FILE, `[案件生成 ${new Date().toLocaleString("ja-JP")}]\n` + videoJob.log.join(""));
+
+    // 生成成功時、自動で画像取得を開始
+    if (code === 0) {
+      console.log(`[自動画像取得] 案件生成完了。画像取得を開始します... (${date})`);
+      try {
+        const contentPath = path.join(TEMP_DIR, `content_${date}.json`);
+        if (fs.existsSync(contentPath)) {
+          const content = JSON.parse(fs.readFileSync(contentPath, "utf8"));
+          const importedTitles = new Set(threads.map(t => t.title));
+          const targetIds = content.posts
+            .filter(p => importedTitles.has(p._meta?.threadTitle) || importedTitles.has(p._meta?.title))
+            .map(p => p.id)
+            .filter(Boolean);
+
+          if (targetIds.length > 0) {
+            runImgFetchJob(date, targetIds);
+          } else {
+            runImgFetchJob(date);
+          }
+        }
+      } catch (e) {
+        console.error(`[自動画像取得] ID特定失敗、全件で実行します: ${e.message}`);
+        runImgFetchJob(date);
+      }
+    }
   });
   res.json({ ok: true });
 });
@@ -2859,6 +2901,34 @@ app.post("/api/soccer-yt/import-selected", (req, res) => {
     videoJob.done     = true;
     videoJob.exitCode = code;
     fs.writeFileSync(LOG_FILE, `[ホームインポート ${new Date().toLocaleString("ja-JP")}]\n` + videoJob.log.join(""));
+
+    // インポート成功時、自動で画像取得を開始
+    if (code === 0) {
+      console.log(`[自動画像取得] インポート完了。画像取得を開始します... (${date})`);
+      // 新しく生成された content_{date}.json から ID を取得
+      try {
+        const contentPath = path.join(TEMP_DIR, `content_${date}.json`);
+        if (fs.existsSync(contentPath)) {
+          const content = JSON.parse(fs.readFileSync(contentPath, "utf8"));
+          // 今回インポートしたスレッドに対応するIDを抽出
+          const importedTitles = new Set(threads.map(t => t.title));
+          const targetIds = content.posts
+            .filter(p => importedTitles.has(p._meta?.threadTitle) || importedTitles.has(p._meta?.title))
+            .map(p => p.id)
+            .filter(Boolean);
+
+          if (targetIds.length > 0) {
+            runImgFetchJob(date, targetIds);
+          } else {
+            // IDが見つからない場合は全件(未取得分)を対象に実行
+            runImgFetchJob(date);
+          }
+        }
+      } catch (e) {
+        console.error(`[自動画像取得] ID特定失敗、全件で実行します: ${e.message}`);
+        runImgFetchJob(date);
+      }
+    }
   });
   res.json({ ok: true });
 });

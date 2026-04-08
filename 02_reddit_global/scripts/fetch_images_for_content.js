@@ -25,7 +25,11 @@ if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
 
 const now       = new Date();
 const jstOffset = 9 * 60 * 60 * 1000;
-const dateArg   = process.argv[2] || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
+const dateArg   = process.argv.find(a => /^\d{4}-\d{2}-\d{2}$/.test(a)) || new Date(now.getTime() + jstOffset).toISOString().slice(0, 10);
+
+// --ids=0408001,0408002 形式の引数を解析
+const idsArg = process.argv.find(a => a.startsWith("--ids="));
+const targetIds = idsArg ? idsArg.split("=")[1].split(",").filter(Boolean) : null;
 
 // ─── 公式Xアカウント辞書（チーム名一覧） ────────────────────────────────────────
 const TEAM_X_ACCOUNTS = (() => {
@@ -253,29 +257,42 @@ async function main() {
 
   const data  = JSON.parse(fs.readFileSync(contentFile, "utf8"));
   const posts = data.posts || [];
-  const todo  = posts.filter(p => !p._imgMeta?.imgFetched);
+  
+  // 処理対象のフィルタリング
+  // targetIds が指定されている場合は、そのIDに一致する案件のみ。
+  // 指定されていない場合は、まだ画像が取得されていない(imgFetched=false)案件すべて。
+  const todo = posts.filter(p => {
+    if (targetIds && targetIds.length > 0) {
+      return targetIds.includes(String(p.id));
+    }
+    return !p._imgMeta?.imgFetched;
+  });
 
-  console.log(`\n🖼  画像取得開始 (${dateArg}) — 対象: ${todo.length}件 / 取得済み: ${posts.length - todo.length}件`);
+  if (todo.length === 0) {
+    console.log(`\n✨ 取得対象の案件はありません (targetIds: ${targetIds ? targetIds.join(",") : "なし"})`);
+    return;
+  }
+
+  console.log(`\n🖼  画像取得開始 (${dateArg}) — 対象: ${todo.length}件 / 全体: ${posts.length}件`);
+  if (targetIds) console.log(`   (指定ID: ${targetIds.join(", ")})`);
   console.log("─".repeat(50));
 
+  // 元の配列を順番に処理し、todoに含まれるものだけfetchを実行する
   const updated = [...posts];
-  for (let i = 0; i < updated.length; i += CONCURRENCY) {
-    const batch = updated.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(
-      batch.map((post, j) =>
-        post._imgMeta?.imgFetched
-          ? Promise.resolve(post)
-          : fetchImagesForPost(post, i + j + 1, dateArg)
-      )
-    );
-    results.forEach((r, j) => { updated[i + j] = r; });
+  for (let i = 0; i < updated.length; i++) {
+    const p = updated[i];
+    const isTarget = todo.some(t => t.id === p.id);
+    
+    if (isTarget) {
+      updated[i] = await fetchImagesForPost(p, i + 1, dateArg);
+    }
   }
 
   // soccer_yt_content_YYYY-MM-DD.json として保存（ランチャー読み込み用）
   const outputFile = path.join(TEMP_DIR, `soccer_yt_content_${dateArg}.json`);
   fs.writeFileSync(outputFile, JSON.stringify({ date: dateArg, posts: updated }, null, 2));
 
-  // content JSON の imgFetched フラグも更新
+  // content JSON も同期更新
   data.posts = updated;
   fs.writeFileSync(contentFile, JSON.stringify(data, null, 2));
 

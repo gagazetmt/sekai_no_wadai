@@ -374,21 +374,40 @@ async function main() {
   // 当日JSONのマージ用（今回生成分 + 既存分を合わせる）
   const existingContent = fs.existsSync(contentFile) ? JSON.parse(fs.readFileSync(contentFile, "utf8")) : { posts: [] };
 
-  // 生成対象: Reddit上位4件(score降順) + RSS上位4件(recency降順)
-  const REDDIT_LIMIT = 4;
-  const RSS_LIMIT    = 4;
+  // ─── 生成対象の選定 ───
+  // Reddit上位12件(score降順) + RSS上位5件(recency降順) + Japan枠(最大3件)
+  // ※「クソスレガード」として最低限のスコア・コメント数・鮮度をチェックする
+  const REDDIT_LIMIT = 12;
+  const RSS_LIMIT    = 5;
+  const JAPAN_LIMIT   = 3;
 
+  const nowSec = Date.now() / 1000;
+
+  // 1. Japan枠（日本関連）: スコア50以上 & コメント20件以上
+  const japanCandidates = allPosts
+    .filter(p => p.isJapanThread && !existingTitles.has(p.title))
+    .filter(p => (p.score >= 50 && p.numComments >= 20))
+    .filter(p => (nowSec - p.created_utc) < 24 * 3600)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, JAPAN_LIMIT);
+
+  // 2. Reddit通常枠: スコア15以上 & コメント10件以上
   const redditCandidates = allPosts
-    .filter(p => p.source === "reddit" && !existingTitles.has(p.title))
+    .filter(p => p.source === "reddit" && !p.isJapanThread && !existingTitles.has(p.title))
+    .filter(p => (p.score >= 15 && p.numComments >= 10))
+    .filter(p => (nowSec - p.created_utc) < 24 * 3600)
     .sort((a, b) => b.score - a.score)
     .slice(0, REDDIT_LIMIT);
 
+  // 3. RSS枠: 鮮度のみ（ブログ管理人が選別済みのため甘め）
   const rssCandidates = allPosts
     .filter(p => p.source === "rss" && !existingTitles.has(p.title))
+    .filter(p => (nowSec - p.created_utc) < 48 * 3600)
     .sort((a, b) => b.created_utc - a.created_utc)
     .slice(0, RSS_LIMIT);
 
-  const targets = [...redditCandidates, ...rssCandidates].slice(0, topArg);
+  const targets = [...japanCandidates, ...redditCandidates, ...rssCandidates].slice(0, 30);
+
 
   const jst = new Date(Date.now() + jstOffset);
   console.log(`\n📝 テキストコンテンツ生成 (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
@@ -570,7 +589,20 @@ async function main() {
   // 既存コンテンツとマージ（同一タイトルは新規で上書き）
   const newTitles  = new Set(newPosts.map(p => p._meta?.threadTitle));
   const deduped    = existingContent.posts.filter(p => !newTitles.has(p._meta?.threadTitle));
-  const merged     = [...newPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
+
+  // 固有ID (MMDD + 3桁連番) の採番
+  const mmdd = dateArg.replace(/-/g, "").slice(4); // "0408"
+  const existingCounters = deduped
+    .filter(p => p.id && String(p.id).startsWith(mmdd))
+    .map(p => parseInt(String(p.id).slice(4), 10));
+  let nextCounter = existingCounters.length > 0 ? Math.max(...existingCounters) + 1 : 1;
+
+  const taggedNewPosts = newPosts.map(p => ({
+    ...p,
+    id: p.id || (mmdd + String(nextCounter++).padStart(3, "0"))
+  }));
+
+  const merged = [...taggedNewPosts, ...deduped].map((p, i) => ({ ...p, num: i + 1 }));
 
   const outputData = {
     date:         dateArg,
@@ -590,9 +622,9 @@ async function main() {
     return;
   }
 
-  // VPS 画像取得ジョブを起動
-  await triggerVpsImageFetch(dateArg);
-  console.log("✅ Done.\n");
+  // VPS 画像取得ジョブを起動 (ランチャーから手動で行うためコメントアウト)
+  // await triggerVpsImageFetch(dateArg);
+  console.log("✔ Done.\n");
 }
 
 main().catch(e => { console.error(`❌ Fatal: ${e.message}`); process.exit(1); });

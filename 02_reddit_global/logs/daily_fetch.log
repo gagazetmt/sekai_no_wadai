@@ -322,3 +322,65 @@
 
 [2026/04/01  6:07:58.77] STEP2: generate_text_content END (exit:0) 
 [2026/04/01  6:07:58.77] ===== COMPLETED ===== 
+[2026/04/09  0:00:02.44] ===== START DAILY FETCH ===== 
+[2026/04/09  0:00:02.44] STEP1: fetch_daily_candidates START 
+
+🕐 2026-04-09T00:00:02.509+09:00 | Date: 2026-04-09
+──────────────────────────────────────────────────
+📡 Fetching Reddit rising(up to 50, 24h) + RSS(up to 20, 48h) + Japan threads...
+🔍 Dedup(7days): Reddit 25→25, RSS 13→13, Japan 0→0
+  Reddit 4h以内: 5件
+  → 4h窓で4件選定（velocity降順）
+✅ 選定: Reddit 4件 + RSS 4件 + Japan 0件 = 計8件
+🌐 Translating Reddit titles...
+📚 History updated: 2 days tracked
+💾 Saved: candidates_2026-04-09.json (8 posts)
+📤 VPS送信完了: candidates_2026-04-09.json
+✅ Done.
+
+[2026/04/09  0:00:32.38] STEP1: fetch_daily_candidates END (exit:0) 
+[2026/04/09  0:00:32.38] STEP2: generate_text_content START 
+
+📝 テキストコンテンツ生成 (2026-04-09) — 00:00 JST
+対象: 8件 (Reddit4 + RSS4) / 168h済みスキップ: 0件
+──────────────────────────────────────────────────
+▶ [1/8] [topic] [OneFootball] José Mourinho's Benfica are still the only unb
+▶ [2/8] [topic] [McGrath] Borussia Dortmund are weighing up a third move for
+▶ [3/8] [topic] Hansi Flick nutmeg attempt against Ferran Torres
+  [2] Serper検索 "Borussia Dortmund third move Jadon Sanch"...   [1] Serper検索 "José Mourinho Benfica unbeaten Europe To"...   [3] Serper検索 "Hansi Flick nutmeg Ferran Torres trainin"... ✅ 3件
+✅ 3件
+✅ 3件
+  [3] Xコメント取得 "Flick nutmeg" (ja+de)...   [1] Xコメント取得 "Mourinho Benfica" (ja+pt)...   [2] Xコメント取得 "Sancho Dortmund" (ja+de)... ✅ ja:1件 de:5件
+  [3] コンテンツ生成... ✅ ja:5件 pt:5件
+  [1] コンテンツ生成... ✅ ja:5件 de:5件
+  [2] コンテンツ生成... ✅
+✅
+✅
+▶ [4/8] [topic] Michael Olise getting pushed down in the box against Real Ma
+▶ [5/8] [topic] プレミア勢、アーセナルの勝利で来季CL出場枠「５」が決定！最大で7チーム出場の可能性も
+▶ [6/8] [topic] 【訃報】ルーマニア代表、ルチェスク監督が急死…体調崩し辞任から5日、80歳のレジェンド　3月にトルコに敗れPO敗退
+  [4] Serper検索 "Michael Olise penalty incident Real Madr"...   [5] Serper検索 "Arsenal Champions League latest news"... ✅ 3件
+  [6] Serper検索 "Hagi Lucescu transfer news"... ✅ 3件
+✅ 3件
+  [4] Xコメント取得 "Olise penalty" (ja+de)...   [5] Xコメント取得 "Havertz Arsenal" (ja+en)...   [6] Xコメント取得 "Hagi Romania" (ja+ro)... ✅ ja:0件 de:5件
+  [4] コンテンツ生成... ✅ ja:5件 ro:5件
+  [6] コンテンツ生成... ✅ ja:5件 en:3件
+  [5] コンテンツ生成... ✅
+✅
+✅
+▶ [7/8] [topic] スウェーデン代表MFルンドグレン、アキレス腱断裂でW杯出場は絶望的…W杯で日本と同組
+▶ [8/8] [topic] 森保監督、冨安健洋を6月のW杯でぶっつけ本番での招集を示唆「状態を100％に持っていけるなら考えたい」
+  [7] Serper検索 "Lundgren Japan transfer news"...   [8] Serper検索 "冨安健洋 Japan injury Arsenal"... ✅ 3件
+✅ 3件
+  [7] Xコメント取得 "Lundgren Sweden" (ja+sv)...   [8] Xコメント取得 "冨安健洋" (ja+ja)... ✅ ja:5件 sv:5件
+  [7] コンテンツ生成... ✅ ja:5件 ja:0件
+  [8] コンテンツ生成... ✅
+✅
+
+💾 保存: content_2026-04-09.json (8件 / 今回生成8件)
+📤 VPS送信完了: content_2026-04-09.json
+🖼  VPS画像取得ジョブ開始: 2026-04-09
+✅ Done.
+
+[2026/04/09  0:04:32.64] STEP2: generate_text_content END (exit:0) 
+[2026/04/09  0:04:32.64] ===== COMPLETED ===== 
