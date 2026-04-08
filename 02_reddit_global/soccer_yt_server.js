@@ -2850,15 +2850,22 @@ app.post("/api/soccer-yt/import-selected", (req, res) => {
   fs.writeFileSync(tmpFile, JSON.stringify({ date, threads, preloadedComments: preloadedComments || {} }, null, 2));
 
   videoJob = { running: true, log: [], done: false, exitCode: null };
-  const script = path.join(__dirname, "scripts", "generate_content.js");
-  const proc   = spawn(process.execPath, [script, `--selected=${tmpFile}`, date], { cwd: __dirname, env: process.env });
-  proc.stdout.on("data", d => videoJob.log.push(d.toString()));
-  proc.stderr.on("data", d => videoJob.log.push(d.toString()));
+  const script = path.join(__dirname, "scripts", "generate_text_content.js");
+  const proc   = spawn(process.execPath, [script, date, `--selected=${tmpFile}`], { cwd: __dirname, env: process.env });
+  proc.stdout.on("data", d => { process.stdout.write(d); videoJob.log.push(d.toString()); });
+  proc.stderr.on("data", d => { process.stderr.write(d); videoJob.log.push(d.toString()); });
   proc.on("close", code => {
     videoJob.running  = false;
     videoJob.done     = true;
     videoJob.exitCode = code;
-    fs.writeFileSync(LOG_FILE, `[ホームインポート ${new Date().toLocaleString("ja-JP")}]\n` + videoJob.log.join(""));
+    fs.writeFileSync(LOG_FILE, `[コンテンツ生成 ${new Date().toLocaleString("ja-JP")}]\n` + videoJob.log.join(""));
+    // テキスト生成完了後に画像取得を自動起動
+    if (code === 0) {
+      console.log(`[import-selected] テキスト生成完了 → 画像取得開始: ${date}`);
+      runImgFetchJob(date);
+    } else {
+      console.error(`[import-selected] テキスト生成失敗 (exit:${code})`);
+    }
   });
   res.json({ ok: true });
 });
