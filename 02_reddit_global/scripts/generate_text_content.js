@@ -287,11 +287,17 @@ async function generateMatchContent(matchData, comments, thread, xComments=[]) {
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【コンテンツタイプ】post-match（試合後）
 【絶対ルール】スレッドタイトルと試合データに存在しない人名・チーム名は絶対に使わない。架空の数字・記録は使わない。監督名・選手名・所属クラブはスレッドまたは試合データに明記されている場合のみ使用し、記載のない情報は推測・補完しないこと。
-【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。基本はニュース解説口調を維持すること。ただし「これは注目ですね」「驚きの一戦でした」程度の軽い感嘆は自然に入れてよい。キャラクターを前面に出したり友達に話しかける感覚にはしないこと。ニュースキャスターが少しだけ砕けた感じ。
-【制作ルール】- ナレーション中に「Reddit」は絶対に使わず「海外サッカー掲示板」と表現。- 大会名・日付・スコア・主要得点者と分数を必ず盛り込む。- コメント意訳は「笑い・驚き・共感」のどれかを持たせる。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。- ナレーション・字幕・コメント全ての文章は日本語で書くこと。英語の選手名・チーム名・大会名はカタカナ表記にすること（例: Salah→サラー, Champions League→チャンピオンズリーグ）。
+【トーン指定（10段階中4〜5）】NHKニュースを10、5chスレを0とする。**「サッカーを愛しすぎるがゆえに、時に厳しい皮肉も飛ばす情熱的な解説者」**。知的なユーモアと鋭い批評を織り交ぜること。キャラクターを前面に出しすぎず、あくまでニュースを語る。
+【禁止事項】**容姿、人種、性別、私生活、人格への攻撃は絶対に禁止。** 批判の対象は「プレーの内容」「戦術」「クラブ経営」「移籍金の妥当性」「試合結果」に限定すること。
+【制作ルール】- ナレーション中に「Reddit」は絶対に使わず「海外サッカー掲示板」と表現。- **冒頭（S2ナレーション）は、日付や大会名を淡々と読み上げるのではなく、視聴者の興味を引く「問いかけ」や「衝撃の事実の提示」から開始すること。**
+- ナレーションは1文を短くし、VoiceVoxの平坦な発音でも「鋭さ」が出るように断定系を多用すること。
+- 大会名・スコア・主要得点者は「事実の補足」としてナレーションの後半に自然に組み込む。
+- コメント意訳は、元の意味を壊さない範囲で**「より面白く、より感情的に」**意訳し、22〜28文字に収めること。
+- ナレーション・字幕・コメント全ての文章は日本語で書くこと。英語の選手名・チーム名・大会名はカタカナ表記にすること。
+【アウトロの役割】動画の締めくくりとして、**その日のニュースを綺麗に総括するか、思わずニヤリとするような「オチ」の一言**で締めること。outroNarrationはオチ・総括のみ（登録呼びかけは不要）。ctaNarrationで登録誘導を別途行う。
 【試合データ】日付:${jstDateStr} 対戦:${matchData.homeTeam}vs${matchData.awayTeam} スコア:${matchData.homeScore}-${matchData.awayScore} 大会:${matchData.leagueJa||matchData.league}${knockoutNote} 得点:${goalsText} 退場:${matchData.redCards?.length>0?matchData.redCards.map(r=>`${r.minute}分 ${r.player}`).join("、"):"なし"} ムード:${matchData.matchMood||"EXCITING"}
 【海外ファンの反応（Reddit）】${comments.slice(0,15).join("\n")}${xComments.length>0?`\n【X海外ファンの反応】\n${xComments.slice(0,15).join("\n")}`:""}
-以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字・大会名・日付・スコア・得点者分数を必ず含む）","overviewTelop":"S2テロップ（25文字以内）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（20〜40文字）","outroTelop":"S5テロップ（18〜28文字・登録呼びかけ厳禁）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
+以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字・冒頭にフックを作り、後半に事実を添える。大会名・日付・スコア・得点者分数を含む）","overviewTelop":"S2テロップ（25文字以内）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字・掲示板の「空気感」を伝える）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（オチ・総括のみ・20〜40文字）","outroTelop":"S5テロップ（オチ・総括・18〜28文字）","ctaNarration":"登録誘導（15〜25文字・内容に紐づけた自然な訴求。例：「続報もお届けするのでぜひ登録を」「〜と思った方はチャンネル登録を」）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
   const raw = await callAI({ model: "claude-sonnet-4-6", max_tokens: 2200, messages: [{ role: "user", content: prompt }] });
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("JSON not found");
@@ -310,11 +316,13 @@ async function generateTopicContent(topicData, comments, thread, xComments=[], s
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 【コンテンツタイプ】${typeLabel}
 【絶対ルール】存在しない人名・チーム名・数字は使わない。監督名・選手名・所属クラブはスレッドまたは提供データに明記されている場合のみ使用し、記載のない情報は推測・補完しないこと。
-【トーン指定（10段階中6）】NHKニュースを10、5chスレを0とする。基本はニュース解説口調を維持すること。ただし「これは注目ですね」「驚きの展開です」程度の軽い感嘆は自然に入れてよい。キャラクターを前面に出したり友達に話しかける感覚にはしないこと。ニュースキャスターが少しだけ砕けた感じ。
-【制作ルール】- 「Reddit」→「海外サッカー掲示板」。- コメント意訳は「笑い・驚き・共感」のどれか。- コメントは必ず7件全て日本語で書くこと（英語のまま残さない）。- ナレーション・字幕・コメント全ての文章は日本語で書くこと。英語の選手名・チーム名・大会名はカタカナ表記にすること（例: Salah→サラー, Champions League→チャンピオンズリーグ）。
+【トーン指定（10段階中4〜5）】NHKニュースを10、5chスレを0とする。**「サッカーを愛しすぎるがゆえに、時に厳しい皮肉も飛ばす情熱的な解説者」**。知的なユーモアと鋭い批評を織り交ぜること。キャラクターを前面に出しすぎず、あくまでニュースを語る。
+【禁止事項】**容姿、人種、性別、私生活、人格への攻撃は絶対に禁止。** 批判の対象は「プレーの内容」「戦術」「クラブ経営」「移籍金の妥当性」「試合結果」に限定すること。
+【制作ルール】- 「Reddit」→「海外サッカー掲示板」。- コメント意訳は「笑い・驚き・共感・鋭い皮肉」のどれか。- コメントは必ず7件全て日本語で書くこと。- ナレーション・字幕・コメント全ての文章は日本語で書くこと。英語の選手名・チーム名・大会名はカタカナ表記にすること。
+【アウトロの役割】動画の締めくくりとして、**その日のニュースを綺麗に総括するか、思わずニヤリとするような「オチ」の一言**で締めること。outroNarrationはオチ・総括のみ（登録呼びかけは不要）。ctaNarrationで登録誘導を別途行う。
 【スレッド本文】${(topicData.selftext||"").slice(0,800)||"（本文なし）"}${serperSection}
 【海外ファンの反応（Reddit）】${comments.slice(0,15).join("\n")}${xComments.length>0?`\n【X海外ファンの反応】\n${xComments.slice(0,15).join("\n")}`:""}
-以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字）","overviewTelop":"S2テロップ（25文字以内・誰が・何をしたか）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（20〜40文字）","outroTelop":"S5テロップ（18〜28文字・登録呼びかけ厳禁）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
+以下のJSON形式のみで出力してください：{"catchLine1":"サムネイル兼タイトル文（30文字以内）","label":"【速報】か【衝撃】か【朗報】か【悲報】","badge":"サブバッジ（8文字以内）","sourceAuthor":"情報元","sourceText":"核心テキスト（日本語・2〜4行）","overviewNarration":"S2ナレーション（80〜120文字）","overviewTelop":"S2テロップ（25文字以内・誰が・何をしたか）","slide3":{"topicTag":"S3タグ（12文字以内・※で始まる）","highlightIdx":0,"narration":"S3ナレーション（60〜90文字）","subtitleBox":"S3字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目（日本語60〜80文字）"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"slide4":{"topicTag":"S4タグ（12文字以内・※で始まる・S3と別角度）","highlightIdx":0,"narration":"S4ナレーション（60〜90文字）","subtitleBox":"S4字幕（20文字以内）","comments":[{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"},{"user":"英語圏名","text":"1行目\\n2行目"},{"user":"英語圏名","text":"日本語22〜28文字"}]},"outroNarration":"S5ナレーション（オチ・総括のみ・20〜40文字）","outroTelop":"S5テロップ（オチ・総括・18〜28文字）","ctaNarration":"登録誘導（15〜25文字・内容に紐づけた自然な訴求。例：「続報もお届けするのでぜひ登録を」「〜と思った方はチャンネル登録を」）","youtubeTitle":"YouTubeタイトル（SEO重視・40〜55文字）","hashtagsText":"ハッシュタグ（8〜10個・#サッカー #海外の反応 含む）"}`;
   const raw = await callAI({ model: "claude-sonnet-4-6", max_tokens: 2200, messages: [{ role: "user", content: prompt }] });
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("JSON not found");
@@ -345,6 +353,53 @@ async function triggerVpsImageFetch(date) {
   }
 }
 
+// ─── AI オーディション（ネタ選別） ───────────────────────────────────────────
+async function selectBestPostsWithAI(posts, limit) {
+  if (posts.length <= limit) return posts;
+
+  console.log(`\n🤖 DeepSeekオーディション開始... (${posts.length}件から${limit}件を選別)`);
+  
+  const postList = posts.map((p, i) => `${i}: [${p.source}] ${p.title} (Score:${p.score}, Comments:${p.numComments})`).join("\n");
+  
+  const prompt = `あなたは海外サッカー専門の動画ディレクターです。以下の候補リストから、日本の視聴者がYouTubeで「見たい！」と熱狂するネタを${limit}件選別してください。
+
+【選別基準】
+- 10点：超弩級のニュース（超大物の移籍、衝撃の解任、歴史的な神プレーなど）
+- 8-9点：熱い議論を呼ぶネタ（判定への不満、特定の選手への辛辣な批判、感動的なエピソード）
+- 5-7点：一般的な試合結果や負傷情報
+- 1-4点：単なる統計データ、知名度の低いチームの内輪ネタ、日本人に馴染みの薄い話題
+
+【出力形式】
+JSON配列で、選んだインデックス（0開始）を期待度の高い順に並べてください。
+例: [5, 2, 10, 1, ...]
+
+【候補リスト】
+${postList}`;
+
+  try {
+    const raw = await callAI({ 
+      model: "deepseek-chat", 
+      max_tokens: 200, 
+      messages: [{ role: "user", content: prompt }] 
+    });
+    const m = raw.match(/\[[\d\s,]+\]/);
+    if (!m) throw new Error("JSON形式のインデックスが見つかりませんでした");
+    
+    const bestIndices = JSON.parse(m[0]);
+    const selected = bestIndices
+      .map(idx => posts[idx])
+      .filter(Boolean)
+      .slice(0, limit);
+    
+    console.log(`✅ オーディション完了: ${selected.length}件を選出しました。`);
+    selected.forEach((p, i) => console.log(`   ${i+1}. [${p.score}点/Up] ${p.title.slice(0, 50)}...`));
+    return selected;
+  } catch (e) {
+    console.warn(`⚠️  オーディション失敗（フォールバック）: ${e.message}`);
+    return posts.slice(0, limit); // 失敗時は従来通りスコア順
+  }
+}
+
 // ─── メイン ───────────────────────────────────────────────────────────────────
 async function main() {
   const candidatesFile = path.join(DATA_DIR, `candidates_${dateArg}.json`);
@@ -370,49 +425,24 @@ async function main() {
       } catch { /* 読み取り失敗は無視 */ }
     }
   }
-  const contentFile = path.join(DATA_DIR, `content_${dateArg}.json`);
-  // 当日JSONのマージ用（今回生成分 + 既存分を合わせる）
+  const contentFile = path.join(DATA_DIR, `auto_generated_${dateArg}.json`);
+  // 既存の自動生成JSONがあれば読み込んでマージ
   const existingContent = fs.existsSync(contentFile) ? JSON.parse(fs.readFileSync(contentFile, "utf8")) : { posts: [] };
 
   // ─── 生成対象の選定 ───
-  // Reddit上位12件(score降順) + RSS上位5件(recency降順) + Japan枠(最大3件)
-  // ※「クソスレガード」として最低限のスコア・コメント数・鮮度をチェックする
-  const REDDIT_LIMIT = 12;
-  const RSS_LIMIT    = 5;
-  const JAPAN_LIMIT   = 3;
-
   const nowSec = Date.now() / 1000;
+  
+  // 未処理の全投稿を抽出（重複除去のみ）
+  const freshPosts = allPosts.filter(p => !existingTitles.has(p.title));
 
-  // 1. Japan枠（日本関連）: スコア50以上 & コメント20件以上
-  const japanCandidates = allPosts
-    .filter(p => p.isJapanThread && !existingTitles.has(p.title))
-    .filter(p => (p.score >= 50 && p.numComments >= 20))
-    .filter(p => (nowSec - p.created_utc) < 24 * 3600)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, JAPAN_LIMIT);
-
-  // 2. Reddit通常枠: スコア15以上 & コメント10件以上
-  const redditCandidates = allPosts
-    .filter(p => p.source === "reddit" && !p.isJapanThread && !existingTitles.has(p.title))
-    .filter(p => (p.score >= 15 && p.numComments >= 10))
-    .filter(p => (nowSec - p.created_utc) < 24 * 3600)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, REDDIT_LIMIT);
-
-  // 3. RSS枠: 鮮度のみ（ブログ管理人が選別済みのため甘め）
-  const rssCandidates = allPosts
-    .filter(p => p.source === "rss" && !existingTitles.has(p.title))
-    .filter(p => (nowSec - p.created_utc) < 48 * 3600)
-    .sort((a, b) => b.created_utc - a.created_utc)
-    .slice(0, RSS_LIMIT);
-
-  const targets = [...japanCandidates, ...redditCandidates, ...rssCandidates].slice(0, 30);
-
+  // 1. まずは AIオーディションで面白いネタを厳選（目標件数: topArg）
+  const targets = await selectBestPostsWithAI(freshPosts, topArg);
 
   const jst = new Date(Date.now() + jstOffset);
   console.log(`\n📝 テキストコンテンツ生成 (${dateArg}) — ${jst.toISOString().replace("Z","+09:00").slice(11,16)} JST`);
-  console.log(`対象: ${targets.length}件 (Reddit${redditCandidates.length} + RSS${rssCandidates.length}) / 168h済みスキップ: ${existingTitles.size}件`);
+  console.log(`対象: ${targets.length}件 / 未処理候補: ${freshPosts.length}件`);
   console.log("─".repeat(50));
+
 
   const newPosts = [];
 
@@ -530,6 +560,7 @@ async function main() {
         outroTelop:        ytContent.outroTelop,
         youtubeTitle:      ytContent.youtubeTitle,
         hashtagsText:      ytContent.hashtagsText,
+        ctaNarration:      ytContent.ctaNarration || "",
         matchResult:       matchData ? {
           homeTeam:    matchData.homeTeam,
           awayTeam:    matchData.awayTeam,
