@@ -477,18 +477,33 @@ function buildS5(post) {
   </div></body></html>`;
 }
 
+// ─── サムネイル カラーパレット ────────────────────────────────────────────────
+const TN_COLORS = {
+  A1:{ boxBg:"linear-gradient(135deg,#D4A800,#C08800)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(200,0,0,0.95)"   },  // 金
+  A2:{ boxBg:"linear-gradient(135deg,#cc0000,#960000)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(20,20,20,0.92)"  },  // 赤
+  A3:{ boxBg:"linear-gradient(135deg,#1c1c1c,#2e2e2e)", boxTx:"#fff", strokeClr:"#b88000", lbl:"rgba(180,140,0,0.95)" },  // 黒
+  A4:{ boxBg:"linear-gradient(135deg,#f0f0f0,#dcdcdc)", boxTx:"#111", strokeClr:"#666",    lbl:"rgba(200,0,0,0.95)"   },  // 白
+  A5:{ boxBg:"linear-gradient(135deg,#0044cc,#002d99)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(200,0,0,0.95)"   },  // 紺
+  A6:{ boxBg:"linear-gradient(135deg,#cc5500,#993e00)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(200,0,0,0.95)"   },  // 橙
+};
+
 // ─── サムネイル HTML (1280×720) ───────────────────────────────────────────────
 function buildThumbnailHtml(post) {
-  const TW = 1280, TH = 720, SAFE = 40;
+  const TW = 1280, TH = 720, SAFE = 40, MARGIN = 32;
   const { b64, mime } = imgBase64(post.mainImagePath);
   const iz = getImgZoom(post, 'tn');
-  const bgPos = `${iz.x}% ${iz.y}%`;
   const bgStyle = b64
     ? `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${iz.x}% ${iz.y}%;background-repeat:no-repeat;background-color:#111;`
     : `background:linear-gradient(135deg,#1a1a3e,#2d2d60);`;
   const zoomStyle = `transform:scale(${iz.zoom});transform-origin:${iz.x}% ${iz.y}%;`;
   const label = getLabel(post);
   const badge = post.badge || "";
+  const vc = TN_COLORS[post.colorVariant] || TN_COLORS.A1;
+  const fs = 66;
+  const badgeFs = Math.round(fs * 0.848);
+  const boxPadV = Math.round(fs * 0.18);
+  const boxPadH = 14;
+  const strokeW = Math.max(2, Math.round(fs * 0.045));
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{width:${TW}px;height:${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
@@ -496,11 +511,21 @@ function buildThumbnailHtml(post) {
   .bg-img{position:absolute;inset:0;${bgStyle}${zoomStyle}}
   .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.12);}
   .title-area{position:absolute;bottom:${SAFE}px;left:0;right:0;display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
-  .badges{display:flex;flex-direction:row;gap:60px;align-items:center;padding-left:${SAFE}px;}
-  .badge-item{display:inline-block;font-size:36px;font-weight:900;padding:3px 23px;border-radius:8px;letter-spacing:2px;color:#fff;width:fit-content;}
-  .badge-primary{background:rgba(200,0,0,0.95);}
+  .badges{display:flex;flex-direction:row;gap:40px;align-items:center;padding-left:${SAFE}px;}
+  .badge-item{display:inline-block;font-size:${badgeFs}px;font-weight:900;padding:4px 30px;border-radius:8px;letter-spacing:2px;color:#fff;width:fit-content;
+    text-shadow:1px 2px 6px rgba(0,0,0,0.7);box-shadow:0 4px 14px rgba(0,0,0,0.55);}
+  .badge-primary{background:${vc.lbl};}
   .badge-secondary{background:rgba(180,100,0,0.95);}
-  .title-main{color:#1a1a1a;font-size:55px;font-weight:900;line-height:1.3;background:#D4A800;border-radius:0;padding:32px 30px;margin-left:32px;margin-right:32px;width:calc(100% - 64px);overflow-wrap:break-word;word-break:break-all;}
+  .title-main{
+    color:${vc.boxTx};
+    -webkit-text-stroke:${strokeW}px ${vc.strokeClr};
+    paint-order:stroke fill;
+    text-shadow:3px 4px 10px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,1);
+    font-size:${fs}px;font-weight:900;line-height:1.3;
+    background:${vc.boxBg};
+    box-shadow:0 6px 20px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.15);
+    padding:${boxPadV}px ${boxPadH}px;margin-left:${MARGIN}px;margin-right:${MARGIN}px;
+    width:calc(100% - ${MARGIN*2}px);overflow-wrap:break-word;word-break:break-all;}
   </style></head><body><div class="bg">
     <div class="bg-img"></div><div class="overlay"></div>
     <div class="title-area">
@@ -653,13 +678,15 @@ app.get("/api/thumbnail/preview/:date/:idx", (req, res) => {
   const qCatch = req.query.catch; // catchLine1 テキスト上書き
   const qLabel = req.query.label; // ラベル（赤バッジ）上書き
   const qBadge = req.query.badge; // バッジ（橙バッジ）上書き
-  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg || qCatch !== undefined || qLabel !== undefined || qBadge !== undefined) {
+  const qColor = req.query.color; // ボックスカラー（A1〜A6）
+  if (!isNaN(qZoom) || !isNaN(qX) || !isNaN(qY) || qImg || qCatch !== undefined || qLabel !== undefined || qBadge !== undefined || qColor !== undefined) {
     const cur = (post.imgZoom && post.imgZoom.tn) || { zoom: 1.0, x: 50, y: 50 };
     const overridePost = Object.assign({}, post, {
-      mainImagePath: qImg ? path.join(IMG_DIR, path.basename(qImg)) : post.mainImagePath,
-      catchLine1:    qCatch !== undefined ? qCatch : post.catchLine1,
-      label:         qLabel !== undefined ? qLabel : post.label,
-      badge:         qBadge !== undefined ? qBadge : post.badge,
+      mainImagePath:  qImg ? path.join(IMG_DIR, path.basename(qImg)) : post.mainImagePath,
+      catchLine1:     qCatch !== undefined ? qCatch : post.catchLine1,
+      label:          qLabel !== undefined ? qLabel : post.label,
+      badge:          qBadge !== undefined ? qBadge : post.badge,
+      colorVariant:   qColor !== undefined ? qColor : (post.colorVariant || "A1"),
       imgZoom: Object.assign({}, post.imgZoom, {
         tn: { zoom: isNaN(qZoom) ? cur.zoom : qZoom, x: isNaN(qX) ? cur.x : qX, y: isNaN(qY) ? cur.y : qY }
       })
@@ -3400,6 +3427,15 @@ function renderPosts() {
         <input type='text' id='badge-\${i}' value='\${esc(p.badge)}' placeholder='（なし）' style='width:100%;background:#111;border:1px solid #333;color:#e8e8e8;border-radius:4px;padding:4px 6px;font-size:12px;box-sizing:border-box;' oninput='updateTnPreview(\${i})'>
       </div>
     </div>
+    <div style='margin:4px 0 8px;'>
+      <div style='font-size:10px;color:#888;margin-bottom:4px;'>ボックスカラー</div>
+      <input type='hidden' id='color-\${i}' value='A1'>
+      <div style='display:flex;gap:5px;'>
+        \${[["A1","#D4A800","金"],["A2","#cc0000","赤"],["A3","#1c1c1c","黒"],["A4","#f0f0f0","白"],["A5","#0044cc","紺"],["A6","#cc5500","橙"]].map(([key,color,name],ci)=>
+          "<button id='colorbtn-\${i}-"+key+"' onclick=\\"selectColor(\${i},'"+key+"')\\" style=\\"display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;background:"+(key==="A1"?"#1a1a00":"#111")+";border:"+(key==="A1"?"2px solid #e5a000":"1px solid #333")+";border-radius:5px;padding:4px 2px;cursor:pointer;\\"><div style=\\"width:100%;height:6px;border-radius:2px;background:"+color+";border:"+(color==="#f0f0f0"?"1px solid #555":"none")+"\\"></div><span style=\\"font-size:9px;color:#999;\\">"+name+"</span></button>"
+        ).join("")}
+      </div>
+    </div>
     <div>
       <div class='gallery-label' style='display:flex;align-items:center;justify-content:space-between;'>
         <span>サムネ画像を変更</span>
@@ -3503,15 +3539,28 @@ function buildPreviewSrc(i) {
   const catchText = document.getElementById("catch-" + i)?.value ?? "";
   const labelText = document.getElementById("label-" + i)?.value ?? "";
   const badgeText = document.getElementById("badge-" + i)?.value ?? "";
+  const colorVal  = document.getElementById("color-" + i)?.value || "A1";
   const selectedImg = selectedThumbs[i];
   let src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
     "?zoom=" + z + "&px=" + x + "&py=" + y +
     "&catch=" + encodeURIComponent(catchText) +
     "&label=" + encodeURIComponent(labelText) +
     "&badge=" + encodeURIComponent(badgeText) +
+    "&color=" + encodeURIComponent(colorVal) +
     "&t=" + Date.now();
   if (selectedImg) src += "&img=" + encodeURIComponent(selectedImg);
   return src;
+}
+
+function selectColor(i, key) {
+  document.getElementById("color-" + i).value = key;
+  ["A1","A2","A3","A4","A5","A6"].forEach(k => {
+    const btn = document.getElementById("colorbtn-" + i + "-" + k);
+    if (!btn) return;
+    btn.style.border   = k === key ? "2px solid #e5a000" : "1px solid #333";
+    btn.style.background = k === key ? "#1a1a00" : "#111";
+  });
+  updateTnPreview(i);
 }
 
 function updateTnZoom(i) {
@@ -3544,9 +3593,10 @@ function insertRedYT(i) {
 
 async function exportThumb(i) {
   const post = postsData[i];
-  const catchLine1 = document.getElementById("catch-" + i)?.value || post.thumbExportPost.catchLine1;
-  const labelVal   = document.getElementById("label-" + i)?.value ?? post.thumbExportPost.label;
-  const badgeVal   = document.getElementById("badge-" + i)?.value ?? post.thumbExportPost.badge;
+  const catchLine1    = document.getElementById("catch-" + i)?.value || post.thumbExportPost.catchLine1;
+  const labelVal      = document.getElementById("label-" + i)?.value ?? post.thumbExportPost.label;
+  const badgeVal      = document.getElementById("badge-" + i)?.value ?? post.thumbExportPost.badge;
+  const colorVariant  = document.getElementById("color-" + i)?.value || "A1";
   const zoom = parseFloat(document.getElementById("zoom-z-" + i)?.value || 1.0);
   const px   = parseFloat(document.getElementById("zoom-x-" + i)?.value || 50);
   const py   = parseFloat(document.getElementById("zoom-y-" + i)?.value || 50);
@@ -3558,6 +3608,7 @@ async function exportThumb(i) {
       catchLine1,
       label: labelVal,
       badge: badgeVal,
+      colorVariant,
       imgZoom: { tn: { zoom, x: px, y: py } }
     });
     const r = await fetch("/api/thumbnail/export", {
