@@ -508,6 +508,46 @@ app.get('/api/v2/videos', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Mia チャット
+// ═══════════════════════════════════════════════════════════════════════════════
+const MIA_SYSTEM = `あなたは「ミア」。サッカーYouTube動画を半自動生成するv2ランチャーに組み込まれた相棒エンジニア。
+ユーザーを「相棒」と呼ぶ。口調は明るくなれなれしい。語尾例:「〜だね！」「OK、任せて！」「相棒、天才じゃん！」。
+エラー時は「あちゃー、すぐ直すね！」と明るく対応。返答は短く、行動的に。
+
+ランチャーの機能: 案件選択→モジュール選択→シナリオ生成(DeepSeek)→TTS音声(OpenAI)→動画生成(ffmpeg)→YouTube投稿。
+データソース: Reddit/RSS/X → DeepSeekでシナリオ化 → Wikipedia/SofaScore/Serperで肉付け。`;
+
+const miaHistory = {};
+
+app.post('/api/v2/mia-chat', async (req, res) => {
+  const { message, sessionId = 'default' } = req.body;
+  if (!message) return res.status(400).json({ error: 'message が必要です' });
+
+  if (!miaHistory[sessionId]) miaHistory[sessionId] = [];
+  miaHistory[sessionId].push({ role: 'user', content: message });
+  if (miaHistory[sessionId].length > 20) {
+    miaHistory[sessionId] = miaHistory[sessionId].slice(-20);
+  }
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const resp = await client.messages.create({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 600,
+      system:     MIA_SYSTEM,
+      messages:   miaHistory[sessionId],
+    });
+    const reply = resp.content[0].text;
+    miaHistory[sessionId].push({ role: 'assistant', content: reply });
+    res.json({ reply });
+  } catch (e) {
+    log(`Mia chat error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // メイン UI（SPA）
 // ═══════════════════════════════════════════════════════════════════════════════
 app.get('/', (_, res) => res.send(`<!DOCTYPE html>
@@ -619,6 +659,26 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 
 /* タイトル入力 */
 .yt-title-box{width:100%;font-size:16px;font-weight:700;padding:10px 14px}
+
+/* Mia チャット */
+#miaPanel{position:fixed;bottom:20px;right:20px;width:min(340px,calc(100vw - 32px));background:#161b2e;border:1px solid #2a3050;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:1000;display:flex;flex-direction:column;transition:height .25s}
+#miaPanel.collapsed{height:52px;overflow:hidden}
+.mia-header{padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.mia-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#1a6ef5,#5eb3ff);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.mia-title{font-size:14px;font-weight:700;color:#7dc8ff;flex:1}
+.mia-toggle{font-size:13px;color:#4a6080;transition:transform .25s}
+#miaPanel.collapsed .mia-toggle{transform:rotate(180deg)}
+.mia-messages{height:220px;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #1e2a42}
+.mia-bubble{max-width:88%;padding:8px 12px;border-radius:14px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.mia-bubble.user{background:#1a3a60;color:#c0d8f0;align-self:flex-end;border-bottom-right-radius:4px}
+.mia-bubble.mia{background:#1e2a40;color:#ddeeff;align-self:flex-start;border-bottom-left-radius:4px}
+.mia-bubble.thinking{color:#4a6080;font-style:italic;align-self:flex-start}
+.mia-footer{display:flex;gap:8px;padding:8px 12px 10px;border-top:1px solid #1e2a42}
+.mia-input{flex:1;background:#0f1420;border:1px solid #2a3050;color:#e0e0e0;border-radius:10px;padding:8px 10px;font-size:13px;outline:none;font-family:inherit;resize:none;line-height:1.4;max-height:80px;overflow-y:auto}
+.mia-input:focus{border-color:#1a6ef5}
+.mia-send{background:#1a6ef5;border:none;color:#fff;border-radius:10px;width:38px;flex-shrink:0;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.mia-send:hover{background:#2a7eff}
+.mia-send:disabled{background:#1a3060;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -731,6 +791,23 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
       <div id="videoResult"></div>
     </div>
     <button class="btn btn-ghost" onclick="goStep(4)" style="margin-top:10px">← 編集に戻る</button>
+  </div>
+</div>
+
+<!-- ───── Mia チャットパネル ───── -->
+<div id="miaPanel">
+  <div class="mia-header" onclick="toggleMia()">
+    <div class="mia-avatar">🤖</div>
+    <span class="mia-title">Mia</span>
+    <span class="mia-toggle">▼</span>
+  </div>
+  <div class="mia-messages" id="miaMessages">
+    <div class="mia-bubble mia">相棒！何でも聞いて！ネタ選びでも操作方法でも気軽に話しかけてね！</div>
+  </div>
+  <div class="mia-footer">
+    <textarea class="mia-input" id="miaInput" placeholder="メッセージ..." rows="1"
+      onkeydown="miaKeyDown(event)" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+    <button class="mia-send" id="miaSendBtn" onclick="sendMia()">➤</button>
   </div>
 </div>
 
@@ -1114,6 +1191,53 @@ async function loadVideoResult() {
        </div>\`
     ).join('');
   }
+}
+
+// ─── Mia チャット ────────────────────────────────────────────────────────────
+const miaSid = 'sid_' + Date.now();
+let miaOpen = true;
+
+function toggleMia() {
+  miaOpen = !miaOpen;
+  document.getElementById('miaPanel').classList.toggle('collapsed', !miaOpen);
+}
+
+function miaKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMia(); }
+}
+
+async function sendMia() {
+  const input = document.getElementById('miaInput');
+  const msg   = input.value.trim();
+  if (!msg) return;
+
+  const box = document.getElementById('miaMessages');
+  const btn = document.getElementById('miaSendBtn');
+
+  box.innerHTML += \`<div class="mia-bubble user">\${esc(msg)}</div>\`;
+  input.value = '';
+  input.style.height = 'auto';
+  btn.disabled = true;
+
+  const thinkId = 'tk' + Date.now();
+  box.innerHTML += \`<div class="mia-bubble thinking" id="\${thinkId}">⌛ 考え中...</div>\`;
+  box.scrollTop = box.scrollHeight;
+
+  try {
+    const r = await fetch('/api/v2/mia-chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, sessionId: miaSid }),
+    });
+    const d = await r.json();
+    document.getElementById(thinkId)?.remove();
+    box.innerHTML += \`<div class="mia-bubble mia">\${esc(d.reply || d.error || '通信エラー')}</div>\`;
+  } catch (e) {
+    document.getElementById(thinkId)?.remove();
+    box.innerHTML += \`<div class="mia-bubble thinking">❌ \${esc(e.message)}</div>\`;
+  }
+
+  btn.disabled = false;
+  box.scrollTop = box.scrollHeight;
 }
 
 function esc(s) {
