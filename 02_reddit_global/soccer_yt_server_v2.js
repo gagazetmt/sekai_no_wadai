@@ -90,6 +90,47 @@ function scenarioPath(date, postId) {
   return path.join(TEMP_DIR, `v2_scenario_${date}_${postId}.json`);
 }
 
+// ─── モジュールのソース情報を構築 ────────────────────────────────────────────
+function buildSources(mod) {
+  const d    = mod.fetchedData || {};
+  const today = new Date().toISOString().slice(0, 10);
+
+  if (mod.id === 'news_overview' || mod.id === 'reddit_reaction') {
+    return [{ label: '自動収集データ（Reddit/RSS/X）', date: today }];
+  }
+  if (d.url && d.title) {
+    // Wikipedia
+    return [{ label: `Wikipedia: ${d.title}`, url: d.url, date: today }];
+  }
+  if (d.wiki && d.serper) {
+    // Wikipedia + Serper 組み合わせ
+    const wikiSrc = d.wiki.url
+      ? [{ label: `Wikipedia: ${d.wiki.title || ''}`, url: d.wiki.url, date: today }]
+      : [];
+    const serperSrc = (d.serper.organic || []).slice(0, 2).map(r => ({
+      label: r.title, url: r.link, date: r.date || today,
+    }));
+    return [...wikiSrc, ...serperSrc];
+  }
+  if (d.playerId) {
+    // SofaScore 選手
+    return [{ label: `SofaScore: ${d.name || ''}`, url: `https://www.sofascore.com/player/${d.playerId}`, date: today }];
+  }
+  if (d.results) {
+    // カスタム調査（Serper並列検索結果）
+    return (d.results || []).slice(0, 4).map(r => ({
+      label: r.title, url: r.link, date: today, query: r.query,
+    }));
+  }
+  if (d.organic) {
+    // Serper のみ
+    return (d.organic || []).slice(0, 3).map(r => ({
+      label: r.title, url: r.link, date: r.date || today,
+    }));
+  }
+  return [];
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // シナリオ生成（DeepSeekがモジュールデータからナレーション台本を作成）
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -110,9 +151,9 @@ async function generateScenario(post, modulesWithData) {
       // Wikipedia + Serper 組み合わせ
       dataText = `Wikipedia (${d.wiki.title || ''}):\n${(d.wiki.extract || '').slice(0, 300)}\n` +
         `検索結果:\n${(d.serper.organic || []).slice(0, 3).map(r => `  ・${r.title}: ${r.snippet}`).join('\n')}`;
-    } else if (d.summary) {
-      // カスタム調査モジュール（英語+日本語検索結果）
-      dataText = `調査テーマ「${d.query || mod.params?.customQuery || ''}」の検索結果:\n${d.summary}`;
+    } else if (d.results) {
+      // カスタム調査モジュール（DeepSeek最適化クエリ→Serper並列検索）
+      dataText = `調査テーマ「${d.userQuery || mod.params?.customQuery || ''}」の検索結果:\n${d.summary || '（結果なし）'}`;
     } else if (d.organic) {
       // Serper のみ
       dataText = `検索結果 (${mod.params?.searchQuery || mod.params?.customQuery || ''}):\n` +
@@ -134,35 +175,42 @@ async function generateScenario(post, modulesWithData) {
 
   const originalTitle = post._meta?.threadTitle || post.youtubeTitle || post.catchLine1 || '';
 
+  // DeepSeekに渡すモジュールID一覧（順番通りに全部出力させるため）
+  const moduleIdList = modulesWithData.map((m, i) => `${i + 1}. id="${m.id}" label="${m.label}"`).join('\n');
+
   const prompt = `あなたは日本のサッカーYouTubeチャンネル「速報!サッカーニュース」のナレーターです。
 以下の案件情報とモジュールデータをもとに、4〜5分の動画ナレーション台本を作成してください。
 
-【元の案件タイトル（英語）】
+【元の案件タイトル】
 ${originalTitle}
+
+【モジュール構成（必ず全モジュールを順番通りに出力すること）】
+${moduleIdList}
 
 ${moduleTexts}
 
 【出力形式】JSONのみ（コメント不要）:
 {
-  "youtubeTitle": "（70字以内・日本語・SEO意識・例：【驚愕】ハーランド今季○ゴール！驚きの真実とは）",
-  "hashtagsText": "#サッカー #プレミアリーグ #○○（主要5個スペース区切り）",
+  "youtubeTitle": "（70字以内・日本語・SEO意識）",
+  "hashtagsText": "#サッカー #○○ （主要5個スペース区切り）",
   "outroTelop": "（エンディングの一言テロップ・30字以内）",
   "modules": [
     {
-      "id": "モジュールID",
-      "narration": "（そのモジュールのナレーション文。150〜350字。自然な日本語。）",
-      "keyPoints": ["箇条書きポイント（表示用・2〜4個）"],
+      "id": "上記モジュール構成のidをそのまま使用",
+      "narration": "（150〜350字。自然な日本語。）",
+      "keyPoints": ["表示用の箇条書き2〜4個"],
       "imageQuery": "（英語の画像検索クエリ・10語以内）"
     }
   ]
 }
 
+【重要】modules配列は上記【モジュール構成】の全${modulesWithData.length}個を必ず含めること。1つも省略しないこと。
+
 【ナレーション指示】
 - トーン: ニュースキャスターが少し砕けた感じ（堅すぎず、崩れすぎず）
 - 各モジュールは自然な流れでつながるように書く
-- 数字・固有名詞（選手名・クラブ名）は正確に
-- 「ということで」「それでは」等の繋ぎ言葉で各モジュールを滑らかにつなぐ
-- 視聴者が「へー！」と思える具体的な情報を必ず盛り込む`;
+- 数字・固有名詞は正確に
+- 視聴者が「へー！」と思える具体的な情報を盛り込む`;
 
   const raw = await callAI({
     model:      'deepseek-chat',
@@ -176,9 +224,15 @@ ${moduleTexts}
 
   const scenario = JSON.parse(m[0]);
 
-  // IDと元データをシナリオにマージ
+  // IDと元データをシナリオにマージ（インデックス優先でマッチング）
   scenario.modules = (scenario.modules || []).map((sm, i) => {
-    const orig = modulesWithData.find(mod => mod.id === sm.id) || modulesWithData[i] || {};
+    // インデックスが合えば優先使用。ずれた場合はid検索でフォールバック
+    const orig = modulesWithData[i]?.id === sm.id
+      ? modulesWithData[i]
+      : (modulesWithData.find(mod => mod.id === sm.id) || modulesWithData[i] || {});
+
+    const sources = buildSources(orig);
+
     return {
       id:          sm.id          || orig.id,
       label:       orig.label     || sm.id,
@@ -187,9 +241,28 @@ ${moduleTexts}
       keyPoints:   sm.keyPoints   || [],
       imageQuery:  sm.imageQuery  || '',
       imagePath:   orig.fetchedData?.thumbnail || null,
+      sources,      // ← ソース情報
       fetchedData: orig.fetchedData || {},
     };
   });
+
+  // DeepSeekが省略したモジュールを末尾に補完
+  if (scenario.modules.length < modulesWithData.length) {
+    for (let i = scenario.modules.length; i < modulesWithData.length; i++) {
+      const orig = modulesWithData[i];
+      scenario.modules.push({
+        id:         orig.id,
+        label:      orig.label,
+        icon:       orig.icon || '📌',
+        narration:  '',
+        keyPoints:  [],
+        imageQuery: '',
+        imagePath:  null,
+        sources:    buildSources(orig),
+        fetchedData: orig.fetchedData || {},
+      });
+    }
+  }
 
   return scenario;
 }
@@ -511,6 +584,12 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 .narration-edit:focus{border-color:#1a6ef5;outline:none}
 .key-points{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
 .key-point{background:#1a2a40;border:1px solid #2a4060;border-radius:6px;padding:4px 10px;font-size:11px;color:#8ab0d0}
+.sources-box{margin-top:10px;padding:8px 12px;background:#0f1420;border:1px solid #1a2540;border-radius:6px}
+.sources-title{font-size:10px;color:#4a5a70;margin-bottom:6px;font-weight:700;letter-spacing:0.05em}
+.source-item{font-size:11px;color:#5a7090;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.source-item a{color:#5a8ab0;text-decoration:none}
+.source-item a:hover{text-decoration:underline}
+.source-date{color:#3a4a60;margin-right:6px}
 
 /* ステータス */
 .status-box{background:#0a1020;border:1px solid #1a2a40;border-radius:8px;padding:12px 16px;font-size:13px;color:#8090b0;max-height:200px;overflow-y:auto;white-space:pre-wrap}
@@ -871,6 +950,20 @@ function renderScenario(scenario) {
       \${mod.keyPoints?.length ? \`
         <div class="key-points">
           \${mod.keyPoints.map(kp => \`<span class="key-point">\${esc(kp)}</span>\`).join('')}
+        </div>
+      \` : ''}
+      \${mod.sources?.length ? \`
+        <div class="sources-box">
+          <div class="sources-title">📎 ソース情報</div>
+          \${mod.sources.map(s => \`
+            <div class="source-item">
+              <span class="source-date">\${esc(s.date || '')}</span>
+              \${s.url
+                ? \`<a href="\${esc(s.url)}" target="_blank">\${esc(s.label)}</a>\`
+                : \`<span>\${esc(s.label)}</span>\`}
+              \${s.query ? \`<span style="color:#3a5060"> [\${esc(s.query)}]</span>\` : ''}
+            </div>
+          \`).join('')}
         </div>
       \` : ''}
     </div>
