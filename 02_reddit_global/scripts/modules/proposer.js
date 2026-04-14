@@ -32,7 +32,7 @@ async function proposeModules(post) {
 【案件情報】
 タイトル（英）: ${title}
 タイプ: ${type}
-Redditスコア: ${score}  コメント数: ${numCmts}
+コメント数: ${numCmts}
 概要: ${overview}
 
 【海外コメント抜粋】
