@@ -2,9 +2,11 @@
 // v2 モジュールデータ取得オーケストレーター
 // モジュールIDに応じて適切なフェッチャーを呼び出す
 
+require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env'), quiet: true });
 const { fetchWikipediaSafe }    = require('./fetchers/wikipedia');
 const { fetchSofaScorePlayer }  = require('./fetchers/sofascore_player');
 const { fetchSerper, fetchSerperBilingual } = require('./fetchers/serper_module');
+const { callAI }                = require('../ai_client');
 
 // ── 既存コンテンツから抽出（追加APIコール不要） ──────────────────────────────
 function extractFromPost(moduleId, post) {
@@ -172,23 +174,56 @@ async function fetchModuleData(module, post) {
 
       // ── カスタム調査（ユーザー指定テーマ） ───────────────────────────
       case 'custom_research': {
-        const query = params.customQuery || '';
-        if (!query) return { ok: false, error: 'カスタムクエリが未指定' };
-        // 英語と日本語で並列検索
-        const [enResult, jaResult] = await Promise.all([
-          fetchSerper(query, id, 'en'),
-          fetchSerper(query, id, 'ja'),
-        ]);
+        const userQuery = params.customQuery || '';
+        if (!userQuery) return { ok: false, error: 'カスタムクエリが未指定' };
+
+        // ① DeepSeekに最適な検索クエリ3つを生成させる
+        let queries = [userQuery]; // フォールバック
+        try {
+          const planRaw = await callAI({
+            model:      'deepseek-chat',
+            max_tokens: 400,
+            messages:   [{ role: 'user', content:
+              `サッカーYouTube動画のリサーチです。
+以下のテーマについて、Google検索で最も具体的な情報が得られる検索クエリを3つ生成してください。
+テーマ: ${userQuery}
+
+ルール:
+- クエリは日本語・英語を混在させてOK
+- できるだけ具体的に（年・大会名・数字・固有名詞を含める）
+- 1つは日本語クエリ、1〜2つは英語クエリにする
+
+JSONのみ: {"queries": ["クエリ1", "クエリ2", "クエリ3"]}`
+            }],
+            system: 'リサーチ専門家です。JSONのみ返します。',
+          });
+          const m = planRaw.match(/\{[\s\S]*?\}/);
+          if (m) queries = JSON.parse(m[0]).queries || queries;
+        } catch (e) {
+          console.warn(`[custom_research] クエリ生成失敗: ${e.message}`);
+        }
+
+        // ② 並列検索
+        const searchResults = await Promise.all(
+          queries.map(q => fetchSerper(q, id))
+        );
+
+        // ③ 結果をまとめる
+        const allItems = searchResults.flatMap((r, i) =>
+          (r.organic || []).slice(0, 3).map(a => ({
+            query:   queries[i],
+            title:   a.title,
+            snippet: a.snippet,
+            link:    a.link,
+          }))
+        );
+
         return {
-          ok:      enResult.ok || jaResult.ok,
-          query,
-          en:      enResult,
-          ja:      jaResult,
-          // DeepSeekへのプロンプト用にまとめたテキスト
-          summary: [
-            ...(enResult.organic || []).slice(0, 3).map(r => `[EN] ${r.title}: ${r.snippet}`),
-            ...(jaResult.organic || []).slice(0, 3).map(r => `[JA] ${r.title}: ${r.snippet}`),
-          ].join('\n'),
+          ok:        allItems.length > 0,
+          userQuery,
+          queries,
+          results:   allItems,
+          summary:   allItems.map(r => `[${r.query}]\n  ${r.title}: ${r.snippet}`).join('\n'),
         };
       }
 
