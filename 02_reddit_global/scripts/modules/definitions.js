@@ -234,6 +234,19 @@ const MODULE_TYPES = {
     dataSource:  'serper',
     requiredParams: ['clubNameEn', 'searchQuery'],
   },
+
+  // ══════════════════════════════════════════════════════
+  // カスタム（ユーザーが自由にテーマを指定）
+  // ══════════════════════════════════════════════════════
+
+  custom_research: {
+    id:          'custom_research',
+    label:       'カスタム調査',
+    description: 'ユーザー指定テーマをSerper+DeepSeekで調査',
+    icon:        '🔍',
+    dataSource:  'serper',
+    requiredParams: ['customQuery'],
+  },
 };
 
 // モジュールIDの配列（DeepSeekへのプロンプト用）

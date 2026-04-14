@@ -94,11 +94,18 @@ ${MODULE_LIST_TEXT}
         console.warn(`[proposer] 未定義のモジュールID: ${mod.id} をスキップ`);
         return null;
       }
+
+      // reddit_reaction: 実コメントが3件未満なら除外
+      if (mod.id === 'reddit_reaction' && redditCmts.length < 3) {
+        console.log(`[proposer] reddit_reaction スキップ（実コメント${redditCmts.length}件）`);
+        return null;
+      }
+
       return {
-        ...def,           // 定義側の情報（label, icon, dataSource 等）
-        reason: mod.reason || '',
-        params: mod.params || {},
-        selected: true,   // デフォルト全選択
+        ...def,
+        reason:   mod.reason || '',
+        params:   mod.params || {},
+        selected: true,
       };
     })
     .filter(Boolean);
@@ -106,6 +113,7 @@ ${MODULE_LIST_TEXT}
   return {
     topicSummary: result.topicSummary || '',
     topicType:    result.topicType    || 'other',
+    hasRealReddit: redditCmts.length >= 3,
     modules:      enriched,
   };
 }

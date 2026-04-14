@@ -170,6 +170,28 @@ async function fetchModuleData(module, post) {
           id
         );
 
+      // ── カスタム調査（ユーザー指定テーマ） ───────────────────────────
+      case 'custom_research': {
+        const query = params.customQuery || '';
+        if (!query) return { ok: false, error: 'カスタムクエリが未指定' };
+        // 英語と日本語で並列検索
+        const [enResult, jaResult] = await Promise.all([
+          fetchSerper(query, id, 'en'),
+          fetchSerper(query, id, 'ja'),
+        ]);
+        return {
+          ok:      enResult.ok || jaResult.ok,
+          query,
+          en:      enResult,
+          ja:      jaResult,
+          // DeepSeekへのプロンプト用にまとめたテキスト
+          summary: [
+            ...(enResult.organic || []).slice(0, 3).map(r => `[EN] ${r.title}: ${r.snippet}`),
+            ...(jaResult.organic || []).slice(0, 3).map(r => `[JA] ${r.title}: ${r.snippet}`),
+          ].join('\n'),
+        };
+      }
+
       default:
         return { ok: false, error: `未実装のモジュール: ${id}` };
     }

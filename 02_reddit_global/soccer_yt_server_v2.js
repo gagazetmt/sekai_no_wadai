@@ -110,9 +110,12 @@ async function generateScenario(post, modulesWithData) {
       // Wikipedia + Serper 組み合わせ
       dataText = `Wikipedia (${d.wiki.title || ''}):\n${(d.wiki.extract || '').slice(0, 300)}\n` +
         `検索結果:\n${(d.serper.organic || []).slice(0, 3).map(r => `  ・${r.title}: ${r.snippet}`).join('\n')}`;
+    } else if (d.summary) {
+      // カスタム調査モジュール（英語+日本語検索結果）
+      dataText = `調査テーマ「${d.query || mod.params?.customQuery || ''}」の検索結果:\n${d.summary}`;
     } else if (d.organic) {
       // Serper のみ
-      dataText = `検索結果 (${mod.params?.searchQuery || ''}):\n` +
+      dataText = `検索結果 (${mod.params?.searchQuery || mod.params?.customQuery || ''}):\n` +
         (d.organic || []).slice(0, 4).map(r => `  ・${r.title}: ${r.snippet}`).join('\n');
     } else if (d.name) {
       // SofaScore 選手
@@ -567,9 +570,23 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
       <div class="panel-title"><span class="icon">🧩</span>モジュール候補 <span id="moduleStatus" style="font-size:12px;color:#667;margin-left:8px"></span></div>
       <div id="moduleStatusMsg" style="font-size:13px;color:#8090b0;margin-bottom:10px"></div>
       <div class="module-grid" id="moduleGrid"></div>
+      <!-- カスタムモジュール追加 -->
+      <div id="customModuleArea" style="display:none;margin-top:16px;padding:14px;background:#1a1f35;border:1px dashed #3a4570;border-radius:10px">
+        <div style="font-size:13px;color:#9bb5e0;margin-bottom:8px">🔍 カスタムモジュールを追加</div>
+        <div style="font-size:12px;color:#6070a0;margin-bottom:10px">調べたいテーマを日本語か英語で入力 → Serper+DeepSeekが記事を探してシナリオに組み込みます</div>
+        <div class="row" style="gap:8px">
+          <input type="text" id="customQueryInput" style="flex:1;font-size:13px;padding:8px 12px"
+                 placeholder="例: Jリーグの海外展開戦略　/　Stadium food culture Japan">
+          <button class="btn btn-ghost" onclick="addCustomModule()" style="white-space:nowrap">＋ 追加</button>
+        </div>
+      </div>
+
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-primary" id="proposeBtn" onclick="proposeModules()">
           🤖 モジュール候補を提案
+        </button>
+        <button class="btn btn-ghost" id="addCustomBtn" style="display:none" onclick="toggleCustomArea()">
+          🔍 カスタムモジュールを追加
         </button>
         <button class="btn btn-success" id="generateBtn" style="display:none" onclick="goToGenerate()">
           ✨ 選択した構成でシナリオ生成 →
@@ -726,9 +743,11 @@ async function proposeModules() {
     state.proposedModules = data;
 
     renderModuleCards(data.modules);
+    const hasReddit = data.hasRealReddit ? '' : '（Redditコメントなし → 海外の反応モジュールは除外）';
     document.getElementById('moduleStatusMsg').textContent =
-      \`\${data.topicSummary} (\${data.topicType}) — チェックを入れたモジュールで動画を構成します\`;
+      \`\${data.topicSummary} (\${data.topicType}) \${hasReddit}\`;
     document.getElementById('generateBtn').style.display = '';
+    document.getElementById('addCustomBtn').style.display = '';
   } catch (e) {
     document.getElementById('moduleStatusMsg').textContent = 'エラー: ' + e.message;
   } finally {
@@ -760,6 +779,36 @@ function renderModuleCards(modules) {
       </div>
     </div>
   \`).join('');
+}
+
+function toggleCustomArea() {
+  const area = document.getElementById('customModuleArea');
+  area.style.display = area.style.display === 'none' ? '' : 'none';
+  if (area.style.display !== 'none') {
+    document.getElementById('customQueryInput').focus();
+  }
+}
+
+function addCustomModule() {
+  const query = document.getElementById('customQueryInput').value.trim();
+  if (!query) return;
+  if (!state.proposedModules) return;
+
+  // カスタムモジュールを追加
+  state.proposedModules.modules.push({
+    id:          'custom_research',
+    label:       query,           // 入力テキストをそのままラベルに
+    description: 'カスタム調査モジュール',
+    icon:        '🔍',
+    dataSource:  'serper',
+    reason:      'ユーザー指定テーマ',
+    params:      { customQuery: query },
+    selected:    true,
+  });
+
+  document.getElementById('customQueryInput').value = '';
+  document.getElementById('customModuleArea').style.display = 'none';
+  renderModuleCards(state.proposedModules.modules);
 }
 
 function toggleModule(i) {
