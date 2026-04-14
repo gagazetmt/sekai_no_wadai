@@ -580,16 +580,23 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 .scenario-mod-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .scenario-mod-icon{font-size:20px}
 .scenario-mod-label{font-size:14px;font-weight:700;color:#7dc8ff}
-.narration-edit{width:100%;background:#0f1420;border:1px solid #2a3050;border-radius:6px;color:#d0e0f0;font-size:13px;padding:10px;resize:vertical;min-height:80px;font-family:inherit;line-height:1.6}
+.narration-row{display:flex;gap:12px;align-items:flex-start}
+.narration-left{flex:1;min-width:0}
+.narration-edit{width:100%;background:#0f1420;border:1px solid #2a3050;border-radius:6px;color:#d0e0f0;font-size:13px;padding:10px;resize:vertical;min-height:80px;font-family:inherit;line-height:1.6;box-sizing:border-box}
 .narration-edit:focus{border-color:#1a6ef5;outline:none}
 .key-points{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
 .key-point{background:#1a2a40;border:1px solid #2a4060;border-radius:6px;padding:4px 10px;font-size:11px;color:#8ab0d0}
-.sources-box{margin-top:10px;padding:8px 12px;background:#0f1420;border:1px solid #1a2540;border-radius:6px}
-.sources-title{font-size:10px;color:#4a5a70;margin-bottom:6px;font-weight:700;letter-spacing:0.05em}
-.source-item{font-size:11px;color:#5a7090;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.narration-right{width:170px;flex-shrink:0;background:#0f1420;border:1px solid #1a2540;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:10px}
+.narr-stat{display:flex;flex-direction:column;gap:2px}
+.narr-stat-label{font-size:10px;color:#4a5a70;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+.narr-stat-value{font-size:20px;font-weight:700;color:#5a8ab0;line-height:1.2}
+.narr-stat-sub{font-size:10px;color:#3a5070;margin-top:1px}
+.sources-box{border-top:1px solid #1a2540;padding-top:8px;margin-top:2px}
+.sources-title{font-size:10px;color:#4a5a70;margin-bottom:5px;font-weight:700;letter-spacing:0.05em}
+.source-item{font-size:10px;color:#5a7090;line-height:1.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .source-item a{color:#5a8ab0;text-decoration:none}
-.source-item a:hover{text-decoration:underline}
-.source-date{color:#3a4a60;margin-right:6px}
+.source-item a:hover{text-decoration:underline;color:#7ab0d8}
+.source-date{color:#3a4a60;margin-right:4px}
 
 /* ステータス */
 .status-box{background:#0a1020;border:1px solid #1a2a40;border-radius:8px;padding:12px 16px;font-size:13px;color:#8090b0;max-height:200px;overflow-y:auto;white-space:pre-wrap}
@@ -946,30 +953,63 @@ function renderScenario(scenario) {
         <span class="scenario-mod-icon">\${esc(mod.icon || '📌')}</span>
         <span class="scenario-mod-label">【\${i+1}】\${esc(mod.label || mod.id)}</span>
       </div>
-      <textarea class="narration-edit" id="narr_\${i}" rows="4">\${esc(mod.narration || '')}</textarea>
-      \${mod.keyPoints?.length ? \`
-        <div class="key-points">
-          \${mod.keyPoints.map(kp => \`<span class="key-point">\${esc(kp)}</span>\`).join('')}
-        </div>
-      \` : ''}
-      \${mod.sources?.length ? \`
-        <div class="sources-box">
-          <div class="sources-title">📎 ソース情報</div>
-          \${mod.sources.map(s => \`
-            <div class="source-item">
-              <span class="source-date">\${esc(s.date || '')}</span>
-              \${s.url
-                ? \`<a href="\${esc(s.url)}" target="_blank">\${esc(s.label)}</a>\`
-                : \`<span>\${esc(s.label)}</span>\`}
-              \${s.query ? \`<span style="color:#3a5060"> [\${esc(s.query)}]</span>\` : ''}
+      <div class="narration-row">
+        <div class="narration-left">
+          <textarea class="narration-edit" id="narr_\${i}" rows="4" oninput="updateNarrStats(\${i})">\${esc(mod.narration || '')}</textarea>
+          \${mod.keyPoints?.length ? \`
+            <div class="key-points">
+              \${mod.keyPoints.map(kp => \`<span class="key-point">\${esc(kp)}</span>\`).join('')}
             </div>
-          \`).join('')}
+          \` : ''}
         </div>
-      \` : ''}
+        <div class="narration-right">
+          <div class="narr-stat">
+            <div class="narr-stat-label">文字数</div>
+            <div class="narr-stat-value" id="charCount_\${i}">0</div>
+          </div>
+          <div class="narr-stat">
+            <div class="narr-stat-label">読み上げ</div>
+            <div class="narr-stat-value" id="readTime_\${i}">0秒</div>
+            <div class="narr-stat-sub" id="readSpeed_\${i}"></div>
+          </div>
+          \${mod.sources?.length ? \`
+            <div class="sources-box">
+              <div class="sources-title">📎 情報源</div>
+              \${mod.sources.map(s => \`
+                <div class="source-item">
+                  \${s.url
+                    ? \`<a href="\${esc(s.url)}" target="_blank" title="\${esc(s.label)}">\${esc(s.label)}</a>\`
+                    : \`<span title="\${esc(s.label)}">\${esc(s.label)}</span>\`}
+                  \${s.query ? \`<div style="color:#3a4a5a;font-size:9px">[\${esc(s.query)}]</div>\` : ''}
+                </div>
+              \`).join('')}
+            </div>
+          \` : ''}
+        </div>
+      </div>
     </div>
   \`).join('');
 
+  // 初期値を計算
+  (scenario.modules || []).forEach((_, i) => updateNarrStats(i));
+
   goStep(4);
+}
+
+// 文字数・読み上げ時間をリアルタイム更新（日本語 約5文字/秒）
+function updateNarrStats(i) {
+  const el = document.getElementById('narr_' + i);
+  if (!el) return;
+  const chars = el.value.length;
+  const countEl = document.getElementById('charCount_' + i);
+  const timeEl  = document.getElementById('readTime_' + i);
+  const subEl   = document.getElementById('readSpeed_' + i);
+  if (countEl) countEl.textContent = chars;
+  const secs = Math.round(chars / 5);
+  const min = Math.floor(secs / 60);
+  const sec = secs % 60;
+  if (timeEl) timeEl.textContent = min > 0 ? min + '分' + sec + '秒' : sec + '秒';
+  if (subEl)  subEl.textContent  = '(約5文字/秒)';
 }
 
 function saveAndProceed() {
