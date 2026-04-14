@@ -11,13 +11,17 @@ const MODULE_LIST_TEXT = Object.values(MODULE_TYPES)
   .join('\n');
 
 async function proposeModules(post) {
-  const meta    = post._imgMeta || {};
-  const title   = meta.title || post.redditTitle || '';
-  const type    = meta.type  || 'topic';
-  const score   = meta.score || 0;
-  const numCmts = meta.commentCount || (post.comments || []).length || 0;
+  const title    = post._meta?.threadTitle || post.youtubeTitle || post.catchLine1 || '';
+  const type     = post.type || 'topic';
   const overview = (post.overviewNarration || '').slice(0, 500);
-  const cmtSample = (post.comments || [])
+
+  // コメントは reddit / X / slide3 のいずれかから取得
+  const redditCmts  = post._rawComments?.reddit || [];
+  const xCmts       = post._rawComments?.x       || [];
+  const slide3Cmts  = (post.slide3?.comments || []).map(c => c.text || '');
+  const allCmts     = [...redditCmts, ...xCmts, ...slide3Cmts];
+  const numCmts     = allCmts.length;
+  const cmtSample   = allCmts
     .slice(0, 6)
     .map(c => `  - ${(typeof c === 'string' ? c : c.text || '').slice(0, 100)}`)
     .join('\n');

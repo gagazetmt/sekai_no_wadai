@@ -129,8 +129,7 @@ async function generateScenario(post, modulesWithData) {
     return `【モジュール${i + 1}: ${mod.label}】\n${dataText}`;
   }).join('\n\n');
 
-  const meta = post._imgMeta || {};
-  const originalTitle = meta.title || post.redditTitle || '';
+  const originalTitle = post._meta?.threadTitle || post.youtubeTitle || post.catchLine1 || '';
 
   const prompt = `あなたは日本のサッカーYouTubeチャンネル「速報!サッカーニュース」のナレーターです。
 以下の案件情報とモジュールデータをもとに、4〜5分の動画ナレーション台本を作成してください。
@@ -243,15 +242,18 @@ app.get('/api/v2/content', (req, res) => {
   }
 
   const data  = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const posts = (data.posts || []).map((p, i) => ({
-    index:        i,
-    id:           p.id || String(i + 1),
-    title:        p._imgMeta?.title || p.redditTitle || `案件 ${i + 1}`,
-    type:         p._imgMeta?.type  || 'topic',
-    score:        p._imgMeta?.score || 0,
-    hasScenario:  fs.existsSync(scenarioPath(date, p.id || String(i + 1))),
-    mainImageUrl: p.mainImagePath ? `/images/${path.basename(p.mainImagePath)}` : null,
-  }));
+  const posts = (data.posts || []).map((p, i) => {
+    const id = String(p.num || i + 1);
+    return {
+      index:        i,
+      id,
+      title:        p.youtubeTitle || p.catchLine1 || p._meta?.threadTitle || `案件 ${i + 1}`,
+      type:         p.type || 'topic',
+      score:        0,
+      hasScenario:  fs.existsSync(scenarioPath(date, id)),
+      mainImageUrl: p.mainImagePath ? `/images/${path.basename(p.mainImagePath)}` : null,
+    };
+  });
 
   res.json({ date, posts });
 });
@@ -265,7 +267,7 @@ app.get('/api/v2/post', (req, res) => {
   if (!fs.existsSync(file)) return res.status(404).json({ error: 'コンテンツファイルなし' });
 
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const post = (data.posts || []).find(p => String(p.id) === String(id));
+  const post = (data.posts || []).find((p, i) => String(p.num || i + 1) === String(id));
   if (!post) return res.status(404).json({ error: `id=${id} が見つかりません` });
 
   res.json({ post });
@@ -301,14 +303,14 @@ app.post('/api/v2/generate', async (req, res) => {
     log(`シナリオ生成完了: ${scenario.youtubeTitle}`);
 
     // v2 シナリオとして保存
-    const postId = post.id || '1';
+    const postId = String(post.num || '1');
     const sPath  = scenarioPath(date, postId);
     const toSave = {
       ...scenario,
       _meta: {
         date,
         postId,
-        originalTitle: post._imgMeta?.title || '',
+        originalTitle: post._meta?.threadTitle || post.youtubeTitle || post.catchLine1 || '',
         generatedAt:   new Date().toISOString(),
         mainImagePath: post.mainImagePath || null,
       },
@@ -694,8 +696,8 @@ async function selectPost(postId) {
   state.selectedPost = data.post;
 
   document.getElementById('selectedPostInfo').innerHTML =
-    \`<strong>\${esc(state.selectedPost._imgMeta?.title || state.selectedPost.redditTitle || '（タイトルなし）')}</strong>
-     <span class="tag tag-blue" style="margin-left:8px">\${state.selectedPost._imgMeta?.type || 'topic'}</span>\`;
+    \`<strong>\${esc(state.selectedPost.youtubeTitle || state.selectedPost.catchLine1 || '（タイトルなし）')}</strong>
+     <span class="tag tag-blue" style="margin-left:8px">\${state.selectedPost.type || 'topic'}</span>\`;
 
   // モジュールグリッドをリセット
   document.getElementById('moduleGrid').innerHTML = '';

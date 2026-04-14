@@ -16,9 +16,12 @@ function extractFromPost(moduleId, post) {
     };
   }
   if (moduleId === 'reddit_reaction') {
-    const comments = (post.comments || [])
-      .map(c => (typeof c === 'string' ? c : c.text || ''))
-      .filter(Boolean);
+    // reddit / X / slide3 から海外コメントを収集
+    const reddit  = (post._rawComments?.reddit || []).map(c => typeof c === 'string' ? c : c.text || '');
+    const xCmts   = (post._rawComments?.x || []).map(c => typeof c === 'string' ? c : c.text || '');
+    const s3Cmts  = (post.slide3?.comments || []).map(c => c.text || '');
+    const s4Cmts  = (post.slide4?.comments || []).map(c => c.text || '');
+    const comments = [...reddit, ...xCmts, ...s3Cmts, ...s4Cmts].filter(Boolean);
     return {
       ok:       true,
       comments,
