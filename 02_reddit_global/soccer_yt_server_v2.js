@@ -158,8 +158,11 @@ async function generateScenario(post, modulesWithData) {
       // Serper のみ
       dataText = `検索結果 (${mod.params?.searchQuery || mod.params?.customQuery || ''}):\n` +
         (d.organic || []).slice(0, 4).map(r => `  ・${r.title}: ${r.snippet}`).join('\n');
+    } else if (d.source === 'serper_fallback') {
+      // SofaScore 403 → Serperフォールバック
+      dataText = `選手情報（Serper調査）:\n${d.summary || '（結果なし）'}`;
     } else if (d.name) {
-      // SofaScore 選手
+      // SofaScore 選手（正常取得）
       const s = d.seasonStats || {};
       dataText = `選手データ (${d.name} / ${d.team || '不明'}):\n` +
         `  出場: ${s.appearances ?? '?'}, ゴール: ${s.goals ?? '?'}, アシスト: ${s.assists ?? '?'}, 評価点: ${s.rating ?? '?'}\n` +
