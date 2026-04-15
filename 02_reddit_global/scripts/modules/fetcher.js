@@ -3,10 +3,17 @@
 // モジュールIDに応じて適切なフェッチャーを呼び出す
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env'), quiet: true });
-const { fetchWikipediaSafe }    = require('./fetchers/wikipedia');
-const { fetchSofaScorePlayer }  = require('./fetchers/sofascore_player');
+const { fetchWikipediaSafe }         = require('./fetchers/wikipedia');
+const { fetchSofaScorePlayer }       = require('./fetchers/sofascore_player');
 const { fetchSerper, fetchSerperBilingual } = require('./fetchers/serper_module');
-const { callAI }                = require('../ai_client');
+const { enrichSerperWithArticles }   = require('./fetchers/article_fetcher');
+const { callAI }                     = require('../ai_client');
+
+// Serper検索 + 記事本文取得をセットで行うヘルパー
+async function serperWithArticles(query, moduleId, lang) {
+  const result = await fetchSerper(query, moduleId, lang);
+  return await enrichSerperWithArticles(result);
+}
 
 // ── 既存コンテンツから抽出（追加APIコール不要） ──────────────────────────────
 function extractFromPost(moduleId, post) {
@@ -92,9 +99,8 @@ async function fetchModuleData(module, post) {
       // ── Wikipedia + Serper 組み合わせ ─────────────────────────────
       case 'club_legends': {
         const wiki   = await fetchWikipediaSafe([params.clubNameEn, `${params.clubNameEn} F.C.`]);
-        const serper = await fetchSerper(
-          `${params.clubNameEn} greatest players legends golden era history`,
-          id
+        const serper = await serperWithArticles(
+          `${params.clubNameEn} greatest players legends golden era history`, id
         );
         return { ok: true, wiki, serper };
       }
@@ -104,16 +110,15 @@ async function fetchModuleData(module, post) {
           `${params.clubNameEn} vs ${params.rivalClubNameEn}`,
           `${params.clubNameEn}`,
         ]);
-        const serper = await fetchSerper(
-          `${params.clubNameEn} ${params.rivalClubNameEn} rivalry history classic derby`,
-          id
+        const serper = await serperWithArticles(
+          `${params.clubNameEn} ${params.rivalClubNameEn} rivalry history classic derby`, id
         );
         return { ok: true, wiki, serper };
       }
 
       case 'historical_record': {
         const wiki   = await fetchWikipediaSafe([params.searchQuery]).catch(() => ({ ok: false }));
-        const serper = await fetchSerper(params.searchQuery || '', id);
+        const serper = await serperWithArticles(params.searchQuery || '', id);
         return { ok: true, wiki, serper };
       }
 
@@ -121,83 +126,69 @@ async function fetchModuleData(module, post) {
       case 'player_season_stats':
         return await fetchSofaScorePlayer(params.playerNameEn);
 
-      // ── Serper のみ ───────────────────────────────────────────────
+      // ── Serper + 記事本文 ─────────────────────────────────────────
       case 'domestic_reaction':
-        return await fetchSerper(params.searchQuery || '', id, 'ja');
+        return await serperWithArticles(params.searchQuery || '', id, 'ja');
 
       case 'transfer_rumor':
-        return await fetchSerper(
-          `${params.playerNameEn} transfer rumor latest 2025 2026`,
-          id
+        return await serperWithArticles(
+          `${params.playerNameEn} transfer rumor latest 2025 2026`, id
         );
 
       case 'player_episode':
-        return await fetchSerper(
-          `${params.playerNameEn} ${params.episodeKeyword || 'famous moment story'}`,
-          id
+        return await serperWithArticles(
+          `${params.playerNameEn} ${params.episodeKeyword || 'famous moment story'}`, id
         );
 
       case 'injury_report':
-        return await fetchSerper(
-          `${params.playerNameEn} injury latest update return`,
-          id
+        return await serperWithArticles(
+          `${params.playerNameEn} injury latest update return`, id
         );
 
       case 'club_current_season':
-        return await fetchSerper(
-          `${params.clubName} current season results standings 2025 2026`,
-          id
+        return await serperWithArticles(
+          `${params.clubName} current season results standings 2025 2026`, id
         );
 
       case 'club_key_players':
-        return await fetchSerper(
-          `${params.clubNameEn} key players best performers season 2025 2026`,
-          id
+        return await serperWithArticles(
+          `${params.clubNameEn} key players best performers season 2025 2026`, id
         );
 
       case 'next_match_preview':
-        return await fetchSerper(
-          params.searchQuery || `${params.clubName} next match fixture preview`,
-          id
+        return await serperWithArticles(
+          params.searchQuery || `${params.clubName} next match fixture preview`, id
         );
 
       case 'match_key_moment':
-        return await fetchSerper(
-          params.searchQuery || `${params.homeTeam} ${params.awayTeam} goal highlights`,
-          id
+        return await serperWithArticles(
+          params.searchQuery || `${params.homeTeam} ${params.awayTeam} goal highlights`, id
         );
 
       case 'stats_comparison':
-        return await fetchSerper(
-          `${params.subject1En} vs ${params.subject2En} stats comparison 2025 2026`,
-          id
+        return await serperWithArticles(
+          `${params.subject1En} vs ${params.subject2En} stats comparison 2025 2026`, id
         );
 
       case 'tactical_analysis':
-        return await fetchSerper(
-          params.searchQuery || `${params.clubNameEn} tactics formation analysis 2026`,
-          id
+        return await serperWithArticles(
+          params.searchQuery || `${params.clubNameEn} tactics formation analysis 2026`, id
         );
 
-      // ── SofaScore 試合系（今後詳細実装予定） ─────────────────────
       case 'match_stats':
       case 'formation_board':
-        // TODO: fetch_match_center.js と連携して詳細データを取得
-        return await fetchSerper(
-          `${params.homeTeam} vs ${params.awayTeam} match stats lineups 2026`,
-          id
+        return await serperWithArticles(
+          `${params.homeTeam} vs ${params.awayTeam} match stats lineups 2026`, id
         );
 
       case 'head_to_head':
-        return await fetchSerper(
-          `${params.team1NameEn} vs ${params.team2NameEn} head to head history results`,
-          id
+        return await serperWithArticles(
+          `${params.team1NameEn} vs ${params.team2NameEn} head to head history results`, id
         );
 
       case 'season_standings':
-        return await fetchSerper(
-          `${params.leagueName} standings table 2025 2026 season`,
-          id
+        return await serperWithArticles(
+          `${params.leagueName} standings table 2025 2026 season`, id
         );
 
       // ── カスタム調査（ユーザー指定テーマ） ───────────────────────────
@@ -231,9 +222,9 @@ JSONのみ: {"queries": ["クエリ1", "クエリ2", "クエリ3"]}`
           console.warn(`[custom_research] クエリ生成失敗: ${e.message}`);
         }
 
-        // ② 並列検索
+        // ② 並列検索（記事本文取得込み）
         const searchResults = await Promise.all(
-          queries.map(q => fetchSerper(q, id))
+          queries.map(q => serperWithArticles(q, id))
         );
 
         // ③ 結果をまとめる
@@ -246,12 +237,19 @@ JSONのみ: {"queries": ["クエリ1", "クエリ2", "クエリ3"]}`
           }))
         );
 
+        // ④ 記事本文をまとめる（全クエリ分）
+        const allArticles = searchResults
+          .map(r => r.articleContent)
+          .filter(Boolean)
+          .join('\n\n===\n\n');
+
         return {
-          ok:        allItems.length > 0,
+          ok:             allItems.length > 0,
           userQuery,
           queries,
-          results:   allItems,
-          summary:   allItems.map(r => `[${r.query}]\n  ${r.title}: ${r.snippet}`).join('\n'),
+          results:        allItems,
+          summary:        allItems.map(r => `[${r.query}]\n  ${r.title}: ${r.snippet}`).join('\n'),
+          articleContent: allArticles || null,
         };
       }
 

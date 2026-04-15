@@ -151,13 +151,16 @@ async function generateScenario(post, modulesWithData) {
       // Wikipedia + Serper 組み合わせ
       dataText = `Wikipedia (${d.wiki.title || ''}):\n${(d.wiki.extract || '').slice(0, 300)}\n` +
         `検索結果:\n${(d.serper.organic || []).slice(0, 3).map(r => `  ・${r.title}: ${r.snippet}`).join('\n')}`;
+      if (d.serper.articleContent) dataText += `\n\n【記事本文】\n${d.serper.articleContent}`;
     } else if (d.results) {
       // カスタム調査モジュール（DeepSeek最適化クエリ→Serper並列検索）
       dataText = `調査テーマ「${d.userQuery || mod.params?.customQuery || ''}」の検索結果:\n${d.summary || '（結果なし）'}`;
+      if (d.articleContent) dataText += `\n\n【記事本文】\n${d.articleContent}`;
     } else if (d.organic) {
-      // Serper のみ
+      // Serper + 記事本文
       dataText = `検索結果 (${mod.params?.searchQuery || mod.params?.customQuery || ''}):\n` +
         (d.organic || []).slice(0, 4).map(r => `  ・${r.title}: ${r.snippet}`).join('\n');
+      if (d.articleContent) dataText += `\n\n【記事本文】\n${d.articleContent}`;
     } else if (d.source === 'serper_fallback') {
       // Wikipedia失敗 / SofaScore 403 → Serperフォールバック
       const label = d.playerNameEn || d.clubNameEn || d.playerNameEn || '調査';
