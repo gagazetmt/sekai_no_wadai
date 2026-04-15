@@ -45,21 +45,49 @@ async function fetchModuleData(module, post) {
       case 'reddit_reaction':
         return extractFromPost(id, post);
 
-      // ── Wikipedia ────────────────────────────────────────────────
+      // ── Wikipedia（失敗時はSerperフォールバック） ────────────────
       case 'player_profile':
-      case 'player_career':
-        return await fetchWikipediaSafe([
+      case 'player_career': {
+        const wikiRes = await fetchWikipediaSafe([
           params.playerNameEn,
           `${params.playerNameEn} footballer`,
           `${params.playerNameEn} soccer`,
         ]);
+        if (wikiRes.ok) return wikiRes;
+        // Serperフォールバック（Wikipedia不在・日本語名失敗など）
+        console.log(`[fetcher] Wikipedia失敗 → Serperフォールバック: ${params.playerNameEn}`);
+        const fallback = await fetchSerper(
+          `${params.playerNameEn} footballer profile career stats nationality`,
+          id
+        );
+        return {
+          ok:      fallback.organic?.length > 0,
+          source:  'serper_fallback',
+          playerNameEn: params.playerNameEn,
+          summary: (fallback.organic || []).slice(0, 3).map(r => `${r.title}: ${r.snippet}`).join('\n'),
+        };
+      }
 
-      case 'club_history':
-        return await fetchWikipediaSafe([
+      case 'club_history': {
+        const wikiRes = await fetchWikipediaSafe([
           params.clubNameEn,
           `${params.clubNameEn} F.C.`,
           `${params.clubNameEn} football club`,
         ]);
+        if (wikiRes.ok) return wikiRes;
+        // Serperフォールバック
+        console.log(`[fetcher] Wikipedia失敗 → Serperフォールバック: ${params.clubNameEn}`);
+        const fallback = await fetchSerper(
+          `${params.clubNameEn} football club history founded titles`,
+          id
+        );
+        return {
+          ok:         fallback.organic?.length > 0,
+          source:     'serper_fallback',
+          clubNameEn: params.clubNameEn,
+          summary:    (fallback.organic || []).slice(0, 3).map(r => `${r.title}: ${r.snippet}`).join('\n'),
+        };
+      }
 
       // ── Wikipedia + Serper 組み合わせ ─────────────────────────────
       case 'club_legends': {

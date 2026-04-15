@@ -159,8 +159,9 @@ async function generateScenario(post, modulesWithData) {
       dataText = `検索結果 (${mod.params?.searchQuery || mod.params?.customQuery || ''}):\n` +
         (d.organic || []).slice(0, 4).map(r => `  ・${r.title}: ${r.snippet}`).join('\n');
     } else if (d.source === 'serper_fallback') {
-      // SofaScore 403 → Serperフォールバック
-      dataText = `選手情報（Serper調査）:\n${d.summary || '（結果なし）'}`;
+      // Wikipedia失敗 / SofaScore 403 → Serperフォールバック
+      const label = d.playerNameEn || d.clubNameEn || d.playerNameEn || '調査';
+      dataText = `${label}情報（Serper調査）:\n${d.summary || '（結果なし）'}`;
     } else if (d.name) {
       // SofaScore 選手（正常取得）
       const s = d.seasonStats || {};

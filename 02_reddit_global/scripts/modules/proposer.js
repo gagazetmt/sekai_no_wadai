@@ -55,9 +55,10 @@ ${MODULE_LIST_TEXT}
 2. "reddit_reaction"（海外の反応）は必ず含める
 3. トピックの主役が「選手」なら player_* 系、「クラブ」なら club_* 系を優先
 4. 合計3〜6モジュール（4〜5分の動画になる量）
-5. requiredParams の値は記事から読み取れる正確な英語名・クエリを設定
+5. requiredParams の値は必ず英語で設定すること（絶対に日本語を入れない）
    - 選手名は公式英語表記（例: "Erling Haaland"、"Bukayo Saka"）
-   - クラブ名は正式英語表記（例: "Arsenal F.C."、"Real Madrid"）
+   - 日本人選手も英語表記（例: 大迫敬介→"Keisuke Osako"、三笘薫→"Kaoru Mitoma"）
+   - クラブ名は正式英語表記（例: "Arsenal F.C."、"Real Madrid"、"Dinamo Zagreb"）
    - searchQuery は英語15語以内
 6. 視聴者が「知らなかった！」と感じる情報を含むモジュールを優先
 7. slideTypeが "type1" か "type2" の場合は必ず "statsRows" を指定すること
