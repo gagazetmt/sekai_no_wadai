@@ -15,11 +15,13 @@
 // ══════════════════════════════════════════════════════
 
 const SLIDE_TYPE_META = {
-  story:     { label: 'ストーリー', color: '#1a4a8a', textColor: '#7dc8ff' },
+  story:     { label: 'ストーリー',   color: '#1a4a8a', textColor: '#7dc8ff' },
   reaction:  { label: 'リアクション', color: '#3a2060', textColor: '#c07dff' },
-  insight:   { label: 'インサイト', color: '#1a4030', textColor: '#5ed4a0' },
-  stats:     { label: 'スタッツ',   color: '#3a3010', textColor: '#e0c060' },
-  formation: { label: '戦術ボード', color: '#3a1010', textColor: '#e07070' },
+  insight:   { label: 'インサイト',   color: '#1a4030', textColor: '#5ed4a0' },
+  stats:     { label: 'スタッツ',     color: '#3a3010', textColor: '#e0c060' },
+  formation: { label: '戦術ボード',   color: '#3a1010', textColor: '#e07070' },
+  type1:     { label: 'スタッツA',    color: '#1a3a2a', textColor: '#7dffc0' }, // 左:大画像 右:データ行+ミニ画像
+  type2:     { label: 'スタッツB',    color: '#2a1a3a', textColor: '#c07dff' }, // 左:データ行 右:大画像
 };
 
 const MODULE_TYPES = {

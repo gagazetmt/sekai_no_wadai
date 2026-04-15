@@ -250,6 +250,7 @@ ${moduleTexts}
       imagePath:   orig.fetchedData?.thumbnail || null,
       sources,      // ← ソース情報
       slideType:   orig.slideType || 'story',
+      statsRows:   orig.statsRows || null,  // ← type1/type2のデータ行
       fetchedData: orig.fetchedData || {},
     };
   });
@@ -268,6 +269,7 @@ ${moduleTexts}
         imagePath:  null,
         sources:    buildSources(orig),
         slideType:  orig.slideType || 'story',
+        statsRows:  orig.statsRows || null,
         fetchedData: orig.fetchedData || {},
       });
     }
@@ -675,6 +677,8 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 .slide-type-insight  {background:#1a4030;color:#5ed4a0}
 .slide-type-stats    {background:#3a3010;color:#e0c060}
 .slide-type-formation{background:#3a1010;color:#e07070}
+.slide-type-type1    {background:#1a3a2a;color:#7dffc0}
+.slide-type-type2    {background:#2a1a3a;color:#c07dff}
 .narration-row{display:flex;gap:12px;align-items:flex-start}
 .narration-left{flex:1;min-width:0}
 .narration-edit{width:100%;background:#0f1420;border:1px solid #2a3050;border-radius:6px;color:#d0e0f0;font-size:13px;padding:10px;resize:vertical;min-height:80px;font-family:inherit;line-height:1.6;box-sizing:border-box}
@@ -780,10 +784,25 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
       <!-- カスタムモジュール追加 -->
       <div id="customModuleArea" style="display:none;margin-top:16px;padding:14px;background:#1a1f35;border:1px dashed #3a4570;border-radius:10px">
         <div style="font-size:13px;color:#9bb5e0;margin-bottom:8px">🔍 カスタムモジュールを追加</div>
-        <div style="font-size:12px;color:#6070a0;margin-bottom:10px">調べたいテーマを日本語か英語で入力 → Serper+DeepSeekが記事を探してシナリオに組み込みます</div>
-        <div class="row" style="gap:8px">
+        <div style="font-size:12px;color:#6070a0;margin-bottom:10px">調べたいテーマを入力 → Serperが調査してシナリオに組み込みます</div>
+        <div class="row" style="gap:8px;margin-bottom:8px">
           <input type="text" id="customQueryInput" style="flex:1;font-size:13px;padding:8px 12px"
-                 placeholder="例: Jリーグの海外展開戦略　/　Stadium food culture Japan">
+                 placeholder="例: ワールドカップ放映権料の推移　/　Haaland goal record">
+          <select id="customSlideType" style="font-size:13px;padding:8px 10px;background:#111827;color:#e0e8ff;border:1px solid #3a4570;border-radius:6px" onchange="toggleStatsRowsArea()">
+            <option value="insight">インサイト</option>
+            <option value="story">ストーリー</option>
+            <option value="stats">スタッツ</option>
+            <option value="type1">スタッツA（左:画像 右:データ）</option>
+            <option value="type2">スタッツB（左:データ 右:画像）</option>
+          </select>
+        </div>
+        <!-- statsRows入力エリア（type1/type2選択時のみ表示） -->
+        <div id="statsRowsArea" style="display:none;margin-bottom:8px;background:#111827;border:1px solid #2a3560;border-radius:6px;padding:10px">
+          <div style="font-size:11px;color:#6070a0;margin-bottom:8px">📊 データ行を指定（ラベルのみ→Serperが値を調査）</div>
+          <div id="statsRowsList"></div>
+          <button onclick="addStatsRow()" style="font-size:12px;background:#2a3560;color:#9bb5e0;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;margin-top:4px">＋ 行を追加</button>
+        </div>
+        <div style="text-align:right">
           <button class="btn btn-ghost" onclick="addCustomModule()" style="white-space:nowrap">＋ 追加</button>
         </div>
       </div>
@@ -1024,25 +1043,68 @@ function toggleCustomArea() {
   }
 }
 
+function toggleStatsRowsArea() {
+  const st = document.getElementById('customSlideType').value;
+  const area = document.getElementById('statsRowsArea');
+  if (st === 'type1' || st === 'type2') {
+    area.style.display = '';
+    if (document.getElementById('statsRowsList').children.length === 0) {
+      addStatsRow(); addStatsRow(); addStatsRow(); // 最初から3行
+    }
+  } else {
+    area.style.display = 'none';
+  }
+}
+
+function addStatsRow() {
+  const list = document.getElementById('statsRowsList');
+  const idx = list.children.length;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:4px;align-items:center';
+  row.innerHTML = \`
+    <input type="text" placeholder="例: 2022年カタール大会 放映権料"
+           style="flex:1;font-size:12px;padding:5px 8px;background:#1a2040;color:#e0e8ff;border:1px solid #3a4570;border-radius:4px"
+           id="statsRow_\${idx}">
+    <button onclick="this.parentElement.remove()"
+            style="background:#3a1010;color:#e07070;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>
+  \`;
+  list.appendChild(row);
+}
+
+function getStatsRows() {
+  const inputs = document.querySelectorAll('#statsRowsList input');
+  return Array.from(inputs)
+    .map(el => el.value.trim())
+    .filter(Boolean)
+    .map(label => ({ label }));
+}
+
 function addCustomModule() {
   const query = document.getElementById('customQueryInput').value.trim();
   if (!query) return;
   if (!state.proposedModules) return;
 
-  // カスタムモジュールを追加
-  state.proposedModules.modules.push({
+  const slideType = document.getElementById('customSlideType').value;
+  const statsRows = (slideType === 'type1' || slideType === 'type2') ? getStatsRows() : null;
+
+  const mod = {
     id:          'custom_research',
-    label:       query,           // 入力テキストをそのままラベルに
+    label:       query,
     description: 'カスタム調査モジュール',
-    icon:        '🔍',
-    slideType:   'insight',
+    icon:        slideType === 'type1' ? '📊' : slideType === 'type2' ? '📈' : '🔍',
+    slideType,
     dataSource:  'serper',
     reason:      'ユーザー指定テーマ',
     params:      { customQuery: query },
     selected:    true,
-  });
+  };
+  if (statsRows?.length) mod.statsRows = statsRows;
 
+  state.proposedModules.modules.push(mod);
   document.getElementById('customQueryInput').value = '';
+  document.getElementById('customSlideType').value = 'insight';
+  document.getElementById('statsRowsArea').style.display = 'none';
+  document.getElementById('statsRowsList').innerHTML = '';
   document.getElementById('customModuleArea').style.display = 'none';
   renderModuleCards(state.proposedModules.modules);
 }
@@ -1098,6 +1160,8 @@ const SLIDE_TYPE_LABELS = {
   insight:   'インサイト',
   stats:     'スタッツ',
   formation: '戦術ボード',
+  type1:     'スタッツA',
+  type2:     'スタッツB',
 };
 
 function renderScenario(scenario) {
@@ -1115,6 +1179,17 @@ function renderScenario(scenario) {
         <span class="scenario-mod-label">【\${i+1}】\${esc(mod.label || mod.id)}</span>
         <span class="slide-type-badge slide-type-\${st}">\${stLabel}</span>
       </div>
+      \${(mod.slideType === 'type1' || mod.slideType === 'type2') && mod.statsRows?.length ? \`
+      <div style="margin:8px 0;background:#111827;border:1px solid #2a3560;border-radius:6px;padding:8px;font-size:12px">
+        <div style="color:#6070a0;margin-bottom:6px">📊 データ行（\${mod.slideType === 'type1' ? 'スタッツA: 左=画像 右=データ' : 'スタッツB: 左=データ 右=画像'}）</div>
+        \${mod.statsRows.map((row, ri) => \`
+          <div style="display:flex;gap:6px;margin-bottom:4px;align-items:flex-start">
+            <span style="color:#9bb5e0;min-width:180px;flex-shrink:0">\${esc(row.label)}</span>
+            <span style="color:#e0c060">\${esc(row.value || '（調査中）')}</span>
+          </div>
+        \`).join('')}
+      </div>
+      \` : ''}
       <div class="narration-row">
         <div class="narration-left">
           <textarea class="narration-edit" id="narr_\${i}" rows="4" oninput="updateNarrStats(\${i})">\${esc(mod.narration || '')}</textarea>

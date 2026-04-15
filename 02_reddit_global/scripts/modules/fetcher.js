@@ -235,15 +235,49 @@ JSONのみ: {"queries": ["クエリ1", "クエリ2", "クエリ3"]}`
   }
 }
 
+// ── statsRows の value を Serper で補完 ──────────────────────────────────────
+// statsRows: [{ label: "2022年カタール大会 放映権料" }, ...]
+// → [{ label: "...", value: "Serperが見つけた情報" }, ...]
+async function fillStatsRows(statsRows, contextQuery = '') {
+  if (!statsRows?.length) return statsRows;
+
+  const filled = await Promise.all(
+    statsRows.map(async row => {
+      if (row.value) return row; // すでに値があればスキップ
+      try {
+        const query = contextQuery ? `${contextQuery} ${row.label}` : row.label;
+        const result = await fetchSerper(query, 'statsRows');
+        // answerBox > knowledgeGraph > 最初のorganicのsnippet の順で取る
+        const value =
+          result.answerBox?.answer ||
+          result.answerBox?.snippet ||
+          result.knowledgeGraph?.description ||
+          result.organic?.[0]?.snippet ||
+          '（データ取得失敗）';
+        return { label: row.label, value: value.slice(0, 120) };
+      } catch (e) {
+        return { label: row.label, value: '（データ取得失敗）' };
+      }
+    })
+  );
+  return filled;
+}
+
 // ── 複数モジュールを並列でフェッチ ───────────────────────────────────────────
 async function fetchAllModuleData(modules, post) {
   const results = await Promise.all(
     modules.map(async mod => {
       const fetchedData = await fetchModuleData(mod, post);
-      return { ...mod, fetchedData };
+      // type1/type2 の statsRows を Serper で補完
+      let statsRows = mod.statsRows || null;
+      if (statsRows?.length && (mod.slideType === 'type1' || mod.slideType === 'type2')) {
+        const contextQuery = mod.params?.customQuery || mod.params?.searchQuery || mod.label || '';
+        statsRows = await fillStatsRows(statsRows, contextQuery);
+      }
+      return { ...mod, fetchedData, ...(statsRows ? { statsRows } : {}) };
     })
   );
   return results;
 }
 
-module.exports = { fetchModuleData, fetchAllModuleData };
+module.exports = { fetchModuleData, fetchAllModuleData, fillStatsRows };

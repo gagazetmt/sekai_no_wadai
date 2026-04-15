@@ -41,6 +41,15 @@ ${cmtSample || '（なし）'}
 【選択できるモジュール一覧】
 ${MODULE_LIST_TEXT}
 
+【スライド型の選択肢】
+各モジュールには以下のスライド型を割り当てること:
+- "story"    : ナレーション＋背景画像（テキスト中心の解説）
+- "reaction" : コメント吹き出し読み上げ（reddit/SNS反応）
+- "insight"  : インサイト解説（調査・分析）
+- "stats"    : 数値バーン表示（単一の大きな数字・記録）
+- "type1"    : スタッツ型A（左に大画像、右にデータ行リスト）→ 複数データを画像と並べて見せたい時
+- "type2"    : スタッツ型B（左にデータ行リスト、右に大画像）→ データが主役で画像がサポートの時
+
 【提案ルール】
 1. "news_overview"（ニュース概要）は必ず1番目に含める
 2. "reddit_reaction"（海外の反応）は必ず含める
@@ -51,6 +60,10 @@ ${MODULE_LIST_TEXT}
    - クラブ名は正式英語表記（例: "Arsenal F.C."、"Real Madrid"）
    - searchQuery は英語15語以内
 6. 視聴者が「知らなかった！」と感じる情報を含むモジュールを優先
+7. slideTypeが "type1" か "type2" の場合は必ず "statsRows" を指定すること
+   - statsRowsの各行はlabelのみ記載（valueはSerperが調査して埋める）
+   - 行数は内容に応じて2〜8行で自由に決める
+   - labelは「何を調べるか」が明確に分かる具体的な日本語で書く
 
 返却はJSONのみ（前後の説明文は不要）:
 {
@@ -59,14 +72,20 @@ ${MODULE_LIST_TEXT}
   "modules": [
     {
       "id": "モジュールID",
+      "slideType": "story | reaction | insight | stats | type1 | type2",
       "reason": "このモジュールを選んだ理由（日本語30字以内）",
       "params": {
         "playerNameEn": "...",
         "searchQuery": "..."
-      }
+      },
+      "statsRows": [
+        { "label": "調べる項目名（例: 2022年カタール大会 放映権料）" },
+        { "label": "調べる項目名" }
+      ]
     }
   ]
-}`;
+}
+※ statsRowsはslideTypeがtype1かtype2の時のみ含める`;
 
   const raw = await callAI({
     model:      'deepseek-chat',
@@ -101,12 +120,17 @@ ${MODULE_LIST_TEXT}
         return null;
       }
 
-      return {
+      const enriched = {
         ...def,
-        reason:   mod.reason || '',
-        params:   mod.params || {},
+        reason:   mod.reason   || '',
+        params:   mod.params   || {},
         selected: true,
       };
+      // DeepSeekが提案したslideTypeで上書き（type1/type2対応）
+      if (mod.slideType) enriched.slideType = mod.slideType;
+      // statsRows（type1/type2の時のみ）
+      if (mod.statsRows?.length) enriched.statsRows = mod.statsRows;
+      return enriched;
     })
     .filter(Boolean);
 
