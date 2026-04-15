@@ -174,7 +174,8 @@ async function generateScenario(post, modulesWithData) {
       dataText = `（データなし）`;
     }
 
-    return `【モジュール${i + 1}: ${mod.label}】\n${dataText}`;
+    const scriptHint = mod.scriptNote ? `\n脚本指示: ${mod.scriptNote}` : '';
+    return `【モジュール${i + 1}: ${mod.label}】\n${dataText}${scriptHint}`;
   }).join('\n\n');
 
   const originalTitle = post._meta?.threadTitle || post.youtubeTitle || post.catchLine1 || '';
@@ -253,8 +254,9 @@ ${moduleTexts}
       imageQuery:  sm.imageQuery  || '',
       imagePath:   orig.fetchedData?.thumbnail || null,
       sources,      // ← ソース情報
-      slideType:   orig.slideType || 'story',
-      statsRows:   orig.statsRows || null,  // ← type1/type2のデータ行
+      slideType:   orig.slideType  || 'story',
+      statsRows:   orig.statsRows  || null,
+      scriptNote:  orig.scriptNote || null,
       fetchedData: orig.fetchedData || {},
     };
   });
@@ -272,8 +274,9 @@ ${moduleTexts}
         imageQuery: '',
         imagePath:  null,
         sources:    buildSources(orig),
-        slideType:  orig.slideType || 'story',
-        statsRows:  orig.statsRows || null,
+        slideType:  orig.slideType  || 'story',
+        statsRows:  orig.statsRows  || null,
+        scriptNote: orig.scriptNote || null,
         fetchedData: orig.fetchedData || {},
       });
     }
@@ -802,9 +805,15 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
         </div>
         <!-- statsRows入力エリア（type1/type2選択時のみ表示） -->
         <div id="statsRowsArea" style="display:none;margin-bottom:8px;background:#111827;border:1px solid #2a3560;border-radius:6px;padding:10px">
-          <div style="font-size:11px;color:#6070a0;margin-bottom:8px">📊 データ行を指定（ラベルのみ→Serperが値を調査）</div>
+          <div style="font-size:11px;color:#6070a0;margin-bottom:8px">③ データ行を指定（ラベルのみ→Serperが値を調査）</div>
           <div id="statsRowsList"></div>
           <button onclick="addStatsRow()" style="font-size:12px;background:#2a3560;color:#9bb5e0;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;margin-top:4px">＋ 行を追加</button>
+        </div>
+        <!-- 脚本指示 -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:#6070a0;margin-bottom:4px">④ 脚本指示（AIへの内容指定・任意）</div>
+          <textarea id="customScriptNote" placeholder="例: このスライドでは〇〇について詳しく話す。特に△△の部分を強調して。"
+                    style="width:100%;font-size:12px;padding:6px 8px;background:#0d1220;color:#c0d0f0;border:1px solid #2a3560;border-radius:6px;resize:vertical;min-height:50px;box-sizing:border-box"></textarea>
         </div>
         <div style="text-align:right">
           <button class="btn btn-ghost" onclick="addCustomModule()" style="white-space:nowrap">＋ 追加</button>
@@ -1011,55 +1020,72 @@ function renderModuleCards(modules) {
   const grid = document.getElementById('moduleGrid');
   grid.innerHTML = modules.map((mod, i) => {
     const st = mod.slideType || 'story';
-    const stLabel = SLIDE_TYPE_LABELS[st] || st;
     const hasStats = st === 'type1' || st === 'type2';
     const rows = mod.statsRows || [];
+    const scriptNote = mod.scriptNote || '';
     return \`
     <div class="module-card \${mod.alwaysInclude ? 'always selected' : (mod.selected ? 'selected' : '')}"
-         id="mc_\${i}" onclick="toggleModule(\${i})">
-      <input type="checkbox" class="module-check" id="chk_\${i}"
-             \${mod.selected ? 'checked' : ''}
-             \${mod.alwaysInclude ? 'disabled' : ''}
-             onclick="event.stopPropagation();toggleModule(\${i})">
-      <div class="module-icon">\${mod.icon || '📌'}</div>
-      <div class="module-info" style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
-          <div class="module-label" style="margin-bottom:0">\${esc(mod.label)}</div>
-          <select class="slide-type-badge slide-type-\${st}"
-                  style="font-size:10px;padding:2px 6px;border:none;cursor:pointer;border-radius:8px;font-weight:700"
-                  onclick="event.stopPropagation()"
-                  onchange="event.stopPropagation();changeModuleSlideType(\${i}, this.value)">
-            \${Object.entries(SLIDE_TYPE_LABELS).map(([val, lbl]) =>
-              \`<option value="\${val}" \${val === st ? 'selected' : ''} style="background:#111827;color:#e0e8ff">\${lbl}</option>\`
-            ).join('')}
-          </select>
-        </div>
-        <div class="module-desc">\${esc(mod.description || '')}</div>
-        \${mod.reason ? \`<div class="module-reason">💡 \${esc(mod.reason)}</div>\` : ''}
-        <div class="module-source">データ: \${esc(mod.dataSource || '')}</div>
-        \${hasStats ? \`
-          <div id="statsRowsCard_\${i}" style="margin-top:8px;background:#0d1220;border:1px solid #2a3560;border-radius:6px;padding:8px" onclick="event.stopPropagation()">
-            <div style="font-size:11px;color:#6070a0;margin-bottom:6px">📊 データ行（ラベル指定→Serper調査）</div>
-            <div id="cardRowsList_\${i}">
-              \${rows.map((row, ri) => \`
-                <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center" id="cardRow_\${i}_\${ri}">
-                  <input type="text" value="\${esc(row.label || '')}" placeholder="調べる項目名"
-                         style="flex:1;font-size:11px;padding:4px 7px;background:#1a2040;color:#e0e8ff;border:1px solid #3a4570;border-radius:4px"
-                         onchange="updateStatsRowLabel(\${i}, \${ri}, this.value)">
-                  <button onclick="removeStatsRow(\${i}, \${ri})"
-                          style="background:#3a1010;color:#e07070;border:none;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>
-                </div>
-              \`).join('')}
-            </div>
-            <button onclick="addCardStatsRow(\${i})"
-                    style="font-size:11px;background:#2a3560;color:#9bb5e0;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;margin-top:2px">＋ 行追加</button>
+         id="mc_\${i}">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <input type="checkbox" class="module-check" id="chk_\${i}"
+               \${mod.selected ? 'checked' : ''}
+               \${mod.alwaysInclude ? 'disabled' : ''}
+               onclick="toggleModule(\${i})">
+        <div class="module-icon" style="flex-shrink:0">\${mod.icon || '📌'}</div>
+        <div class="module-info" style="flex:1;min-width:0">
+
+          <!-- ① テーマ + ② 型 -->
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+            <input type="text" value="\${esc(mod.label)}" placeholder="テーマ"
+                   style="flex:1;min-width:120px;font-size:13px;font-weight:600;padding:4px 8px;background:#0d1528;color:#e0e8ff;border:1px solid #2a3560;border-radius:6px"
+                   onclick="event.stopPropagation()"
+                   onchange="event.stopPropagation();updateModuleLabel(\${i}, this.value)">
+            <select class="slide-type-badge slide-type-\${st}"
+                    style="font-size:10px;padding:3px 7px;border:none;cursor:pointer;border-radius:8px;font-weight:700;flex-shrink:0"
+                    onclick="event.stopPropagation()"
+                    onchange="event.stopPropagation();changeModuleSlideType(\${i}, this.value)">
+              \${Object.entries(SLIDE_TYPE_LABELS).map(([val, lbl]) =>
+                \`<option value="\${val}" \${val === st ? 'selected' : ''} style="background:#111827;color:#e0e8ff">\${lbl}</option>\`
+              ).join('')}
+            </select>
           </div>
-        \` : ''}
-      </div>
-      <div style="display:flex;flex-direction:column;gap:2px">
-        <button class="move-btn" onclick="event.stopPropagation();moveModule(\${i},-1)">▲</button>
-        <div class="module-order">\${i+1}</div>
-        <button class="move-btn" onclick="event.stopPropagation();moveModule(\${i},+1)">▼</button>
+
+          \${mod.reason ? \`<div class="module-reason" style="margin-bottom:6px">💡 \${esc(mod.reason)}</div>\` : ''}
+
+          <!-- ③ データ行（type1/type2） -->
+          \${hasStats ? \`
+            <div id="statsRowsCard_\${i}" style="margin-bottom:8px;background:#0d1220;border:1px solid #2a3560;border-radius:6px;padding:8px" onclick="event.stopPropagation()">
+              <div style="font-size:11px;color:#6070a0;margin-bottom:6px">③ データ行（ラベル指定→Serper調査）</div>
+              <div id="cardRowsList_\${i}">
+                \${rows.map((row, ri) => \`
+                  <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center">
+                    <input type="text" value="\${esc(row.label || '')}" placeholder="調べる項目名"
+                           style="flex:1;font-size:11px;padding:4px 7px;background:#1a2040;color:#e0e8ff;border:1px solid #3a4570;border-radius:4px"
+                           onchange="updateStatsRowLabel(\${i}, \${ri}, this.value)">
+                    <button onclick="removeStatsRow(\${i}, \${ri})"
+                            style="background:#3a1010;color:#e07070;border:none;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>
+                  </div>
+                \`).join('')}
+              </div>
+              <button onclick="addCardStatsRow(\${i})"
+                      style="font-size:11px;background:#2a3560;color:#9bb5e0;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;margin-top:2px">＋ 行追加</button>
+            </div>
+          \` : ''}
+
+          <!-- ④ 脚本指示 -->
+          <div onclick="event.stopPropagation()">
+            <div style="font-size:11px;color:#6070a0;margin-bottom:4px">④ 脚本指示（AIへの内容指定・任意）</div>
+            <textarea placeholder="例: このスライドでは〇〇について詳しく話す。特に△△の部分を強調して。"
+                      style="width:100%;font-size:12px;padding:6px 8px;background:#0d1220;color:#c0d0f0;border:1px solid #2a3560;border-radius:6px;resize:vertical;min-height:50px;box-sizing:border-box;line-height:1.5"
+                      onchange="updateModuleScriptNote(\${i}, this.value)">\${esc(scriptNote)}</textarea>
+          </div>
+
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+          <button class="move-btn" onclick="event.stopPropagation();moveModule(\${i},-1)">▲</button>
+          <div class="module-order">\${i+1}</div>
+          <button class="move-btn" onclick="event.stopPropagation();moveModule(\${i},+1)">▼</button>
+        </div>
       </div>
     </div>
   \`;
@@ -1092,6 +1118,14 @@ function removeStatsRow(i, ri) {
 function updateStatsRowLabel(i, ri, value) {
   const mods = state.proposedModules.modules;
   if (mods[i].statsRows?.[ri]) mods[i].statsRows[ri].label = value;
+}
+
+function updateModuleLabel(i, value) {
+  state.proposedModules.modules[i].label = value;
+}
+
+function updateModuleScriptNote(i, value) {
+  state.proposedModules.modules[i].scriptNote = value;
 }
 
 function toggleCustomArea() {
@@ -1143,8 +1177,9 @@ function addCustomModule() {
   if (!query) return;
   if (!state.proposedModules) return;
 
-  const slideType = document.getElementById('customSlideType').value;
-  const statsRows = (slideType === 'type1' || slideType === 'type2') ? getStatsRows() : null;
+  const slideType  = document.getElementById('customSlideType').value;
+  const statsRows  = (slideType === 'type1' || slideType === 'type2') ? getStatsRows() : null;
+  const scriptNote = document.getElementById('customScriptNote').value.trim();
 
   const mod = {
     id:          'custom_research',
@@ -1158,10 +1193,12 @@ function addCustomModule() {
     selected:    true,
   };
   if (statsRows?.length) mod.statsRows = statsRows;
+  if (scriptNote) mod.scriptNote = scriptNote;
 
   state.proposedModules.modules.push(mod);
   document.getElementById('customQueryInput').value = '';
   document.getElementById('customSlideType').value = 'insight';
+  document.getElementById('customScriptNote').value = '';
   document.getElementById('statsRowsArea').style.display = 'none';
   document.getElementById('statsRowsList').innerHTML = '';
   document.getElementById('customModuleArea').style.display = 'none';
