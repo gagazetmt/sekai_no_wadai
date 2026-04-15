@@ -249,6 +249,7 @@ ${moduleTexts}
       imageQuery:  sm.imageQuery  || '',
       imagePath:   orig.fetchedData?.thumbnail || null,
       sources,      // ← ソース情報
+      slideType:   orig.slideType || 'story',
       fetchedData: orig.fetchedData || {},
     };
   });
@@ -266,6 +267,7 @@ ${moduleTexts}
         imageQuery: '',
         imagePath:  null,
         sources:    buildSources(orig),
+        slideType:  orig.slideType || 'story',
         fetchedData: orig.fetchedData || {},
       });
     }
@@ -667,6 +669,12 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 .scenario-mod-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .scenario-mod-icon{font-size:20px}
 .scenario-mod-label{font-size:14px;font-weight:700;color:#7dc8ff}
+.slide-type-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;letter-spacing:0.05em;flex-shrink:0}
+.slide-type-story    {background:#1a4a8a;color:#7dc8ff}
+.slide-type-reaction {background:#3a2060;color:#c07dff}
+.slide-type-insight  {background:#1a4030;color:#5ed4a0}
+.slide-type-stats    {background:#3a3010;color:#e0c060}
+.slide-type-formation{background:#3a1010;color:#e07070}
 .narration-row{display:flex;gap:12px;align-items:flex-start}
 .narration-left{flex:1;min-width:0}
 .narration-edit{width:100%;background:#0f1420;border:1px solid #2a3050;border-radius:6px;color:#d0e0f0;font-size:13px;padding:10px;resize:vertical;min-height:80px;font-family:inherit;line-height:1.6;box-sizing:border-box}
@@ -978,7 +986,10 @@ async function proposeModules() {
 
 function renderModuleCards(modules) {
   const grid = document.getElementById('moduleGrid');
-  grid.innerHTML = modules.map((mod, i) => \`
+  grid.innerHTML = modules.map((mod, i) => {
+    const st = mod.slideType || 'story';
+    const stLabel = SLIDE_TYPE_LABELS[st] || st;
+    return \`
     <div class="module-card \${mod.alwaysInclude ? 'always selected' : (mod.selected ? 'selected' : '')}"
          id="mc_\${i}" onclick="toggleModule(\${i})">
       <input type="checkbox" class="module-check" id="chk_\${i}"
@@ -987,7 +998,10 @@ function renderModuleCards(modules) {
              onclick="event.stopPropagation();toggleModule(\${i})">
       <div class="module-icon">\${mod.icon || '📌'}</div>
       <div class="module-info">
-        <div class="module-label">\${esc(mod.label)}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <div class="module-label" style="margin-bottom:0">\${esc(mod.label)}</div>
+          <span class="slide-type-badge slide-type-\${st}" style="font-size:9px;padding:1px 6px">\${stLabel}</span>
+        </div>
         <div class="module-desc">\${esc(mod.description || '')}</div>
         \${mod.reason ? \`<div class="module-reason">💡 \${esc(mod.reason)}</div>\` : ''}
         <div class="module-source">データ: \${esc(mod.dataSource || '')}</div>
@@ -998,7 +1012,8 @@ function renderModuleCards(modules) {
         <button class="move-btn" onclick="event.stopPropagation();moveModule(\${i},+1)">▼</button>
       </div>
     </div>
-  \`).join('');
+  \`;
+  }).join('');
 }
 
 function toggleCustomArea() {
@@ -1020,6 +1035,7 @@ function addCustomModule() {
     label:       query,           // 入力テキストをそのままラベルに
     description: 'カスタム調査モジュール',
     icon:        '🔍',
+    slideType:   'insight',
     dataSource:  'serper',
     reason:      'ユーザー指定テーマ',
     params:      { customQuery: query },
@@ -1076,16 +1092,28 @@ async function goToGenerate() {
 }
 
 // ─── STEP4: シナリオ表示 ────────────────────────────────────────────────────
+const SLIDE_TYPE_LABELS = {
+  story:     'ストーリー',
+  reaction:  'リアクション',
+  insight:   'インサイト',
+  stats:     'スタッツ',
+  formation: '戦術ボード',
+};
+
 function renderScenario(scenario) {
   document.getElementById('ytTitle').value     = scenario.youtubeTitle || '';
   document.getElementById('ytHashtags').value  = scenario.hashtagsText || '';
 
   const container = document.getElementById('scenarioModules');
-  container.innerHTML = (scenario.modules || []).map((mod, i) => \`
+  container.innerHTML = (scenario.modules || []).map((mod, i) => {
+    const st = mod.slideType || 'story';
+    const stLabel = SLIDE_TYPE_LABELS[st] || st;
+    return \`
     <div class="scenario-module">
       <div class="scenario-mod-header">
         <span class="scenario-mod-icon">\${esc(mod.icon || '📌')}</span>
         <span class="scenario-mod-label">【\${i+1}】\${esc(mod.label || mod.id)}</span>
+        <span class="slide-type-badge slide-type-\${st}">\${stLabel}</span>
       </div>
       <div class="narration-row">
         <div class="narration-left">
@@ -1122,7 +1150,8 @@ function renderScenario(scenario) {
         </div>
       </div>
     </div>
-  \`).join('');
+  \`;
+  }).join('');
 
   // 初期値を計算
   (scenario.modules || []).forEach((_, i) => updateNarrStats(i));

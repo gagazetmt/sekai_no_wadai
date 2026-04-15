@@ -4,6 +4,24 @@
 // DeepSeekはこのリストを参照し、案件に合わせて適切なモジュールを選んで提案する。
 // 各モジュールはスライド1枚に対応する。
 
+// ══════════════════════════════════════════════════════
+// スライドタイプ定義
+// ══════════════════════════════════════════════════════
+// story      : ストーリースライド  - テキスト中心の解説・背景・経緯
+// reaction   : リアクションスライド - コメント紹介・ファンの声
+// insight    : インサイトスライド  - 分析・最新情報・調査レポート
+// stats      : スタッツカード     - 数値・データを視覚的に見せる
+// formation  : タクティクスボード  - フォーメーション・戦術図解
+// ══════════════════════════════════════════════════════
+
+const SLIDE_TYPE_META = {
+  story:     { label: 'ストーリー', color: '#1a4a8a', textColor: '#7dc8ff' },
+  reaction:  { label: 'リアクション', color: '#3a2060', textColor: '#c07dff' },
+  insight:   { label: 'インサイト', color: '#1a4030', textColor: '#5ed4a0' },
+  stats:     { label: 'スタッツ',   color: '#3a3010', textColor: '#e0c060' },
+  formation: { label: '戦術ボード', color: '#3a1010', textColor: '#e07070' },
+};
+
 const MODULE_TYPES = {
 
   // ══════════════════════════════════════════════════════
@@ -15,6 +33,7 @@ const MODULE_TYPES = {
     label:       'ニュース概要',
     description: '今回の話題の背景・経緯・何が起きたか',
     icon:        '📰',
+    slideType:   'story',
     dataSource:  'existing',   // 既存コンテンツから生成。追加フェッチ不要
     alwaysInclude: true,       // 必ず含める
     requiredParams: [],
@@ -25,6 +44,7 @@ const MODULE_TYPES = {
     label:       '海外の反応',
     description: 'Redditの海外サポーター・ファンのコメント',
     icon:        '🌍',
+    slideType:   'reaction',
     dataSource:  'existing',
     alwaysInclude: true,
     requiredParams: [],
@@ -35,6 +55,7 @@ const MODULE_TYPES = {
     label:       '国内の反応',
     description: '日本語Twitter/ニュースでの反応・評価',
     icon:        '🇯🇵',
+    slideType:   'reaction',
     dataSource:  'serper',
     requiredParams: ['searchQuery'], // 例: "ハーランド マンチェスターシティ 反応"
   },
@@ -48,6 +69,7 @@ const MODULE_TYPES = {
     label:       '選手プロフィール',
     description: '年齢・国籍・ポジション・現所属クラブなど基本情報',
     icon:        '👤',
+    slideType:   'story',
     dataSource:  'wikipedia',
     requiredParams: ['playerNameEn'], // 例: "Erling Haaland"
   },
@@ -57,6 +79,7 @@ const MODULE_TYPES = {
     label:       '選手の来歴',
     description: 'キャリアの歩み・過去の所属クラブ・代表歴',
     icon:        '📋',
+    slideType:   'story',
     dataSource:  'wikipedia',
     requiredParams: ['playerNameEn'],
   },
@@ -66,6 +89,7 @@ const MODULE_TYPES = {
     label:       '今シーズンの成績',
     description: '出場数・ゴール・アシスト・評価点など今季スタッツ',
     icon:        '📊',
+    slideType:   'stats',
     dataSource:  'sofascore',
     requiredParams: ['playerNameEn'],
   },
@@ -75,6 +99,7 @@ const MODULE_TYPES = {
     label:       '選手エピソード',
     description: '選手にまつわる名場面・逸話・伝説のシーン',
     icon:        '✨',
+    slideType:   'story',
     dataSource:  'serper',
     requiredParams: ['playerNameEn', 'episodeKeyword'], // 例: "bicycle kick" "comeback"
   },
@@ -84,6 +109,7 @@ const MODULE_TYPES = {
     label:       '移籍の噂',
     description: '移籍市場での情報・噂・推定市場価値',
     icon:        '🔄',
+    slideType:   'insight',
     dataSource:  'serper',
     requiredParams: ['playerNameEn'],
   },
@@ -93,6 +119,7 @@ const MODULE_TYPES = {
     label:       '負傷・欠場情報',
     description: '離脱の経緯・復帰見込み・チームへの影響',
     icon:        '🏥',
+    slideType:   'insight',
     dataSource:  'serper',
     requiredParams: ['playerNameEn'],
   },
@@ -106,6 +133,7 @@ const MODULE_TYPES = {
     label:       'クラブの来歴',
     description: 'クラブの設立から現在までの歴史・タイトル',
     icon:        '🏛️',
+    slideType:   'story',
     dataSource:  'wikipedia',
     requiredParams: ['clubNameEn'], // 例: "Manchester City"
   },
@@ -115,6 +143,7 @@ const MODULE_TYPES = {
     label:       '全盛期とレジェンド',
     description: 'クラブの黄金時代・最多得点者・伝説の選手たち',
     icon:        '🏆',
+    slideType:   'story',
     dataSource:  'serper+wikipedia',
     requiredParams: ['clubNameEn'],
   },
@@ -124,6 +153,7 @@ const MODULE_TYPES = {
     label:       '今シーズンの戦績',
     description: 'リーグ戦の勝敗・順位・直近の調子',
     icon:        '📈',
+    slideType:   'insight',
     dataSource:  'sofascore',
     requiredParams: ['clubName'], // チーム名（SofaScore検索用）
   },
@@ -133,6 +163,7 @@ const MODULE_TYPES = {
     label:       'ライバルとの因縁',
     description: '伝統的なライバル関係・過去の名勝負・相性',
     icon:        '⚔️',
+    slideType:   'story',
     dataSource:  'serper+wikipedia',
     requiredParams: ['clubNameEn', 'rivalClubNameEn'],
   },
@@ -142,6 +173,7 @@ const MODULE_TYPES = {
     label:       '現在のキープレーヤー',
     description: '今シーズンのチームを支える主要選手の紹介',
     icon:        '⭐',
+    slideType:   'insight',
     dataSource:  'serper',
     requiredParams: ['clubNameEn'],
   },
@@ -155,6 +187,7 @@ const MODULE_TYPES = {
     label:       '試合スタッツ',
     description: 'ポゼッション・シュート・コーナー等の詳細統計',
     icon:        '⚽',
+    slideType:   'stats',
     dataSource:  'sofascore',
     requiredParams: ['homeTeam', 'awayTeam'], // 例: "Arsenal", "Chelsea"
   },
@@ -164,6 +197,7 @@ const MODULE_TYPES = {
     label:       'フォーメーション',
     description: '両チームのスターティングイレブンと布陣',
     icon:        '🗺️',
+    slideType:   'formation',
     dataSource:  'sofascore',
     requiredParams: ['homeTeam', 'awayTeam'],
   },
@@ -173,6 +207,7 @@ const MODULE_TYPES = {
     label:       '直近の対戦成績',
     description: '両チームの直近の対戦履歴・勝率・ゴール数',
     icon:        '📉',
+    slideType:   'stats',
     dataSource:  'sofascore',
     requiredParams: ['team1NameEn', 'team2NameEn'],
   },
@@ -182,6 +217,7 @@ const MODULE_TYPES = {
     label:       '次節プレビュー',
     description: '次の対戦相手・日程・見どころ・注目点',
     icon:        '🔭',
+    slideType:   'story',
     dataSource:  'serper',
     requiredParams: ['clubName', 'searchQuery'],
   },
@@ -191,6 +227,7 @@ const MODULE_TYPES = {
     label:       '試合の決定的瞬間',
     description: 'ゴールシーン・退場・PKなど試合を動かしたプレー',
     icon:        '🎯',
+    slideType:   'story',
     dataSource:  'serper',
     requiredParams: ['homeTeam', 'awayTeam', 'searchQuery'],
   },
@@ -204,6 +241,7 @@ const MODULE_TYPES = {
     label:       'スタッツ比較',
     description: '2人の選手・2チームのデータを並べて徹底比較',
     icon:        '📊',
+    slideType:   'stats',
     dataSource:  'sofascore+serper',
     requiredParams: ['subject1En', 'subject2En'],
   },
@@ -213,6 +251,7 @@ const MODULE_TYPES = {
     label:       'リーグ順位表',
     description: '現在のリーグ上位の勝点・得失点差・注目チーム',
     icon:        '🏅',
+    slideType:   'stats',
     dataSource:  'sofascore',
     requiredParams: ['leagueName'], // 例: "Premier League"
   },
@@ -222,6 +261,7 @@ const MODULE_TYPES = {
     label:       '歴史的記録・節目',
     description: '前人未到の記録・通算ゴール・歴史的な出来事',
     icon:        '📜',
+    slideType:   'story',
     dataSource:  'serper+wikipedia',
     requiredParams: ['searchQuery'], // 例: "Ronaldo all-time goal record"
   },
@@ -231,6 +271,7 @@ const MODULE_TYPES = {
     label:       '戦術分析',
     description: '戦術的な変化・フォーメーション変更・監督の意図',
     icon:        '🔬',
+    slideType:   'formation',
     dataSource:  'serper',
     requiredParams: ['clubNameEn', 'searchQuery'],
   },
@@ -244,6 +285,7 @@ const MODULE_TYPES = {
     label:       'カスタム調査',
     description: 'ユーザー指定テーマをSerper+DeepSeekで調査',
     icon:        '🔍',
+    slideType:   'insight',
     dataSource:  'serper',
     requiredParams: ['customQuery'],
   },
@@ -252,4 +294,4 @@ const MODULE_TYPES = {
 // モジュールIDの配列（DeepSeekへのプロンプト用）
 const MODULE_ID_LIST = Object.keys(MODULE_TYPES);
 
-module.exports = { MODULE_TYPES, MODULE_ID_LIST };
+module.exports = { MODULE_TYPES, MODULE_ID_LIST, SLIDE_TYPE_META };
