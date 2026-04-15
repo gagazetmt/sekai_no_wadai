@@ -4,19 +4,23 @@
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '..', '.env'), quiet: true });
 
-async function fetchSerper(query, moduleId = '', lang = 'en') {
+// tbs オプション例: 'qdr:d'=24h, 'qdr:w'=1週間, 'qdr:m'=1ヶ月, 'qdr:y'=1年
+async function fetchSerper(query, moduleId = '', lang = 'en', tbs = null) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return { ok: false, error: 'SERPER_API_KEY が設定されていません' };
   if (!query)  return { ok: false, error: '検索クエリが未指定' };
 
   try {
+    const body = { q: query, num: 6, hl: lang, gl: lang === 'ja' ? 'jp' : 'us' };
+    if (tbs) body.tbs = tbs;
+
     const res = await fetch('https://google.serper.dev/search', {
       method:  'POST',
       headers: {
         'X-API-Key':    apiKey,
         'Content-Type': 'application/json',
       },
-      body:   JSON.stringify({ q: query, num: 6, hl: lang, gl: lang === 'ja' ? 'jp' : 'us' }),
+      body:   JSON.stringify(body),
       signal: AbortSignal.timeout(12000),
     });
 

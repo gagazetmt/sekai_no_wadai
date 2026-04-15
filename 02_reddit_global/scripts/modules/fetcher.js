@@ -10,8 +10,9 @@ const { enrichSerperWithArticles }   = require('./fetchers/article_fetcher');
 const { callAI }                     = require('../ai_client');
 
 // Serper検索 + 記事本文取得をセットで行うヘルパー
-async function serperWithArticles(query, moduleId, lang) {
-  const result = await fetchSerper(query, moduleId, lang);
+// tbs: 'qdr:d'=24h, 'qdr:w'=1週間, 'qdr:m'=1ヶ月（日付フィルター）
+async function serperWithArticles(query, moduleId, lang, tbs = null) {
+  const result = await fetchSerper(query, moduleId, lang, tbs);
   return await enrichSerperWithArticles(result);
 }
 
@@ -132,7 +133,7 @@ async function fetchModuleData(module, post) {
 
       case 'transfer_rumor':
         return await serperWithArticles(
-          `${params.playerNameEn} transfer rumor latest 2025 2026`, id
+          `${params.playerNameEn} transfer rumor latest 2025 2026`, id, 'en', 'qdr:m'
         );
 
       case 'player_episode':
@@ -142,7 +143,7 @@ async function fetchModuleData(module, post) {
 
       case 'injury_report':
         return await serperWithArticles(
-          `${params.playerNameEn} injury latest update return`, id
+          `${params.playerNameEn} injury latest update return`, id, 'en', 'qdr:m'
         );
 
       case 'club_current_season':
