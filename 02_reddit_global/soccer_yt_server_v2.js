@@ -519,6 +519,46 @@ const MIA_SYSTEM = `あなたは「ミア」。サッカーYouTube動画を半�
 
 const miaHistory = {};
 
+// ─── CLI直結キュー ─────────────────────────────────────────────────────────────
+let cliStore = { pending: null, reply: null, lastPoll: 0 };
+
+// ブラウザ→CLIへメッセージ送信
+app.post('/api/v2/cli-message', (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'message が必要です' });
+  cliStore.pending = { id: Date.now(), message };
+  cliStore.reply   = null;
+  log(`CLI受信: ${message.slice(0, 60)}`);
+  res.json({ ok: true, id: cliStore.pending.id });
+});
+
+// CLI→未処理メッセージ取得（ポーリング用）
+app.get('/api/v2/cli-pending', (req, res) => {
+  cliStore.lastPoll = Date.now();
+  if (cliStore.pending) {
+    const msg = cliStore.pending;
+    cliStore.pending = null;
+    res.json({ message: msg });
+  } else {
+    res.json({ message: null });
+  }
+});
+
+// CLI→返信を投稿
+app.post('/api/v2/cli-reply', (req, res) => {
+  const { id, text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text が必要です' });
+  cliStore.reply = { id, text, timestamp: Date.now() };
+  log(`CLI返信: ${text.slice(0, 60)}`);
+  res.json({ ok: true });
+});
+
+// ブラウザ→返信＋CLIオンライン状態を取得
+app.get('/api/v2/cli-status', (req, res) => {
+  const sec = cliStore.lastPoll ? Math.floor((Date.now() - cliStore.lastPoll) / 1000) : null;
+  res.json({ reply: cliStore.reply, online: sec !== null && sec < 120, lastSeen: sec });
+});
+
 app.post('/api/v2/mia-chat', async (req, res) => {
   const { message, sessionId = 'default' } = req.body;
   if (!message) return res.status(400).json({ error: 'message が必要です' });
@@ -663,10 +703,16 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 /* Mia チャット */
 #miaPanel{position:fixed;bottom:20px;right:20px;width:min(340px,calc(100vw - 32px));background:#161b2e;border:1px solid #2a3050;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:1000;display:flex;flex-direction:column;transition:height .25s}
 #miaPanel.collapsed{height:52px;overflow:hidden}
-.mia-header{padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.mia-header{padding:10px 14px;display:flex;align-items:center;gap:8px;user-select:none}
+.mia-header-left{display:flex;align-items:center;gap:8px;flex:1;cursor:pointer}
 .mia-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#1a6ef5,#5eb3ff);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
-.mia-title{font-size:14px;font-weight:700;color:#7dc8ff;flex:1}
-.mia-toggle{font-size:13px;color:#4a6080;transition:transform .25s}
+.mia-title{font-size:14px;font-weight:700;color:#7dc8ff}
+.mia-mode-btn{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;border:1px solid #2a4060;background:#1a2a40;color:#7dc8ff;cursor:pointer;flex-shrink:0;white-space:nowrap}
+.mia-mode-btn.cli{background:#1a3a20;border-color:#2a5030;color:#5ed4a0}
+.mia-online{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:none}
+.mia-online.on{background:#5ed4a0;display:block}
+.mia-online.off{background:#e06060;display:block}
+.mia-toggle{font-size:13px;color:#4a6080;transition:transform .25s;cursor:pointer}
 #miaPanel.collapsed .mia-toggle{transform:rotate(180deg)}
 .mia-messages{height:220px;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #1e2a42}
 .mia-bubble{max-width:88%;padding:8px 12px;border-radius:14px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
@@ -796,13 +842,17 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
 
 <!-- ───── Mia チャットパネル ───── -->
 <div id="miaPanel">
-  <div class="mia-header" onclick="toggleMia()">
-    <div class="mia-avatar">🤖</div>
-    <span class="mia-title">Mia</span>
-    <span class="mia-toggle">▼</span>
+  <div class="mia-header">
+    <div class="mia-header-left" onclick="toggleMia()">
+      <div class="mia-avatar">🤖</div>
+      <span class="mia-title">Mia</span>
+    </div>
+    <span class="mia-online" id="miaOnline"></span>
+    <button class="mia-mode-btn" id="miaModeBtn" onclick="toggleMiaMode()">Haiku</button>
+    <span class="mia-toggle" onclick="toggleMia()">▼</span>
   </div>
   <div class="mia-messages" id="miaMessages">
-    <div class="mia-bubble mia">相棒！何でも聞いて！ネタ選びでも操作方法でも気軽に話しかけてね！</div>
+    <div class="mia-bubble mia">相棒！何でも聞いて！右上でHaiku⇄CLI直結を切り替えできるよ！</div>
   </div>
   <div class="mia-footer">
     <textarea class="mia-input" id="miaInput" placeholder="メッセージ..." rows="1"
@@ -1194,12 +1244,64 @@ async function loadVideoResult() {
 }
 
 // ─── Mia チャット ────────────────────────────────────────────────────────────
-const miaSid = 'sid_' + Date.now();
-let miaOpen = true;
+const miaSid  = 'sid_' + Date.now();
+let miaOpen   = true;
+let miaMode   = 'haiku';   // 'haiku' | 'cli'
+let cliTimer  = null;
+let cliWaitId = null;       // 返信待ちのメッセージID
+
+function addBubble(type, text) {
+  const box = document.getElementById('miaMessages');
+  box.innerHTML += \`<div class="mia-bubble \${type}">\${esc(text)}</div>\`;
+  box.scrollTop = box.scrollHeight;
+}
 
 function toggleMia() {
   miaOpen = !miaOpen;
   document.getElementById('miaPanel').classList.toggle('collapsed', !miaOpen);
+}
+
+function toggleMiaMode() {
+  miaMode = miaMode === 'haiku' ? 'cli' : 'haiku';
+  const btn = document.getElementById('miaModeBtn');
+  btn.textContent = miaMode === 'cli' ? 'CLI直結' : 'Haiku';
+  btn.classList.toggle('cli', miaMode === 'cli');
+  if (miaMode === 'cli') {
+    startCliStatusPoll();
+    addBubble('mia', 'CLIモードに切り替えたよ！\\nPCのClaude Codeが応答するよ。少し待ってね。');
+  } else {
+    stopCliStatusPoll();
+    setCliOnline(null);
+    addBubble('mia', 'Haikuモードに戻ったよ！');
+  }
+}
+
+function setCliOnline(state) {
+  const dot = document.getElementById('miaOnline');
+  dot.className = 'mia-online' + (state === true ? ' on' : state === false ? ' off' : '');
+}
+
+// CLIオンライン状態を10秒おきに確認
+function startCliStatusPoll() {
+  stopCliStatusPoll();
+  const check = async () => {
+    try {
+      const d = await fetch('/api/v2/cli-status').then(r => r.json());
+      setCliOnline(d.online);
+      // 返信待ち中に返信が届いたら表示
+      if (cliWaitId && d.reply && d.reply.id >= cliWaitId) {
+        document.getElementById('cliWait_' + cliWaitId)?.remove();
+        addBubble('mia', d.reply.text);
+        cliWaitId = null;
+        document.getElementById('miaSendBtn').disabled = false;
+      }
+    } catch (_) { setCliOnline(false); }
+  };
+  check();
+  cliTimer = setInterval(check, 10000);
+}
+function stopCliStatusPoll() {
+  if (cliTimer) { clearInterval(cliTimer); cliTimer = null; }
 }
 
 function miaKeyDown(e) {
@@ -1210,34 +1312,51 @@ async function sendMia() {
   const input = document.getElementById('miaInput');
   const msg   = input.value.trim();
   if (!msg) return;
+  input.value = '';
+  input.style.height = 'auto';
 
   const box = document.getElementById('miaMessages');
   const btn = document.getElementById('miaSendBtn');
-
   box.innerHTML += \`<div class="mia-bubble user">\${esc(msg)}</div>\`;
-  input.value = '';
-  input.style.height = 'auto';
+  box.scrollTop = box.scrollHeight;
   btn.disabled = true;
 
-  const thinkId = 'tk' + Date.now();
-  box.innerHTML += \`<div class="mia-bubble thinking" id="\${thinkId}">⌛ 考え中...</div>\`;
-  box.scrollTop = box.scrollHeight;
-
-  try {
-    const r = await fetch('/api/v2/mia-chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, sessionId: miaSid }),
-    });
-    const d = await r.json();
-    document.getElementById(thinkId)?.remove();
-    box.innerHTML += \`<div class="mia-bubble mia">\${esc(d.reply || d.error || '通信エラー')}</div>\`;
-  } catch (e) {
-    document.getElementById(thinkId)?.remove();
-    box.innerHTML += \`<div class="mia-bubble thinking">❌ \${esc(e.message)}</div>\`;
+  if (miaMode === 'cli') {
+    // CLIモード：VPSキューに送って返信をポーリング待ち
+    try {
+      const r = await fetch('/api/v2/cli-message', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg }),
+      });
+      const d = await r.json();
+      cliWaitId = d.id;
+      const wid = 'cliWait_' + cliWaitId;
+      box.innerHTML += \`<div class="mia-bubble thinking" id="\${wid}">⌛ CLIが応答中...</div>\`;
+      box.scrollTop = box.scrollHeight;
+      // ポーリングが拾うのでbtnはそのまま無効
+    } catch (e) {
+      addBubble('thinking', '❌ 送信失敗: ' + e.message);
+      btn.disabled = false;
+    }
+  } else {
+    // Haikuモード
+    const thinkId = 'tk' + Date.now();
+    box.innerHTML += \`<div class="mia-bubble thinking" id="\${thinkId}">⌛ 考え中...</div>\`;
+    box.scrollTop = box.scrollHeight;
+    try {
+      const r = await fetch('/api/v2/mia-chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, sessionId: miaSid }),
+      });
+      const d = await r.json();
+      document.getElementById(thinkId)?.remove();
+      addBubble('mia', d.reply || d.error || '通信エラー');
+    } catch (e) {
+      document.getElementById(thinkId)?.remove();
+      addBubble('thinking', '❌ ' + e.message);
+    }
+    btn.disabled = false;
   }
-
-  btn.disabled = false;
-  box.scrollTop = box.scrollHeight;
 }
 
 function esc(s) {
