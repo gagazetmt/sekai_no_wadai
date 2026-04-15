@@ -20,8 +20,8 @@ const SLIDE_TYPE_META = {
   insight:   { label: 'インサイト',   color: '#1a4030', textColor: '#5ed4a0' },
   stats:     { label: 'スタッツ',     color: '#3a3010', textColor: '#e0c060' },
   formation: { label: '戦術ボード',   color: '#3a1010', textColor: '#e07070' },
-  type1:     { label: 'スタッツA',    color: '#1a3a2a', textColor: '#7dffc0' }, // 左:大画像 右:データ行+ミニ画像
-  type2:     { label: 'スタッツB',    color: '#2a1a3a', textColor: '#c07dff' }, // 左:データ行 右:大画像
+  type1:     { label: 'プロフィール型', color: '#1a3a2a', textColor: '#7dffc0' }, // 左:大画像 右:データ行（選手・クラブ・移籍向け）
+  type2:     { label: 'トピック型',    color: '#2a1a3a', textColor: '#c09dff' }, // 左:データ行 右:画像（ケガ・話題・汎用）
 };
 
 const MODULE_TYPES = {

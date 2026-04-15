@@ -792,8 +792,8 @@ input[type=date]:focus,input[type=text]:focus{border-color:#1a6ef5}
             <option value="insight">インサイト</option>
             <option value="story">ストーリー</option>
             <option value="stats">スタッツ</option>
-            <option value="type1">スタッツA（左:画像 右:データ）</option>
-            <option value="type2">スタッツB（左:データ 右:画像）</option>
+            <option value="type1">プロフィール型（選手・クラブ・移籍）</option>
+            <option value="type2">トピック型（ケガ・話題・汎用）</option>
           </select>
         </div>
         <!-- statsRows入力エリア（type1/type2選択時のみ表示） -->
@@ -1008,6 +1008,8 @@ function renderModuleCards(modules) {
   grid.innerHTML = modules.map((mod, i) => {
     const st = mod.slideType || 'story';
     const stLabel = SLIDE_TYPE_LABELS[st] || st;
+    const hasStats = st === 'type1' || st === 'type2';
+    const rows = mod.statsRows || [];
     return \`
     <div class="module-card \${mod.alwaysInclude ? 'always selected' : (mod.selected ? 'selected' : '')}"
          id="mc_\${i}" onclick="toggleModule(\${i})">
@@ -1016,14 +1018,39 @@ function renderModuleCards(modules) {
              \${mod.alwaysInclude ? 'disabled' : ''}
              onclick="event.stopPropagation();toggleModule(\${i})">
       <div class="module-icon">\${mod.icon || '📌'}</div>
-      <div class="module-info">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+      <div class="module-info" style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
           <div class="module-label" style="margin-bottom:0">\${esc(mod.label)}</div>
-          <span class="slide-type-badge slide-type-\${st}" style="font-size:9px;padding:1px 6px">\${stLabel}</span>
+          <select class="slide-type-badge slide-type-\${st}"
+                  style="font-size:10px;padding:2px 6px;border:none;cursor:pointer;border-radius:8px;font-weight:700"
+                  onclick="event.stopPropagation()"
+                  onchange="event.stopPropagation();changeModuleSlideType(\${i}, this.value)">
+            \${Object.entries(SLIDE_TYPE_LABELS).map(([val, lbl]) =>
+              \`<option value="\${val}" \${val === st ? 'selected' : ''} style="background:#111827;color:#e0e8ff">\${lbl}</option>\`
+            ).join('')}
+          </select>
         </div>
         <div class="module-desc">\${esc(mod.description || '')}</div>
         \${mod.reason ? \`<div class="module-reason">💡 \${esc(mod.reason)}</div>\` : ''}
         <div class="module-source">データ: \${esc(mod.dataSource || '')}</div>
+        \${hasStats ? \`
+          <div id="statsRowsCard_\${i}" style="margin-top:8px;background:#0d1220;border:1px solid #2a3560;border-radius:6px;padding:8px" onclick="event.stopPropagation()">
+            <div style="font-size:11px;color:#6070a0;margin-bottom:6px">📊 データ行（ラベル指定→Serper調査）</div>
+            <div id="cardRowsList_\${i}">
+              \${rows.map((row, ri) => \`
+                <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center" id="cardRow_\${i}_\${ri}">
+                  <input type="text" value="\${esc(row.label || '')}" placeholder="調べる項目名"
+                         style="flex:1;font-size:11px;padding:4px 7px;background:#1a2040;color:#e0e8ff;border:1px solid #3a4570;border-radius:4px"
+                         onchange="updateStatsRowLabel(\${i}, \${ri}, this.value)">
+                  <button onclick="removeStatsRow(\${i}, \${ri})"
+                          style="background:#3a1010;color:#e07070;border:none;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>
+                </div>
+              \`).join('')}
+            </div>
+            <button onclick="addCardStatsRow(\${i})"
+                    style="font-size:11px;background:#2a3560;color:#9bb5e0;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;margin-top:2px">＋ 行追加</button>
+          </div>
+        \` : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:2px">
         <button class="move-btn" onclick="event.stopPropagation();moveModule(\${i},-1)">▲</button>
@@ -1033,6 +1060,34 @@ function renderModuleCards(modules) {
     </div>
   \`;
   }).join('');
+}
+
+function changeModuleSlideType(i, newType) {
+  const mods = state.proposedModules.modules;
+  mods[i].slideType = newType;
+  // type1/type2に切り替えたとき、statsRowsがなければ空配列を初期化
+  if ((newType === 'type1' || newType === 'type2') && !mods[i].statsRows?.length) {
+    mods[i].statsRows = [{ label: '' }, { label: '' }, { label: '' }];
+  }
+  renderModuleCards(mods);
+}
+
+function addCardStatsRow(i) {
+  const mods = state.proposedModules.modules;
+  if (!mods[i].statsRows) mods[i].statsRows = [];
+  mods[i].statsRows.push({ label: '' });
+  renderModuleCards(mods);
+}
+
+function removeStatsRow(i, ri) {
+  const mods = state.proposedModules.modules;
+  mods[i].statsRows.splice(ri, 1);
+  renderModuleCards(mods);
+}
+
+function updateStatsRowLabel(i, ri, value) {
+  const mods = state.proposedModules.modules;
+  if (mods[i].statsRows?.[ri]) mods[i].statsRows[ri].label = value;
 }
 
 function toggleCustomArea() {
@@ -1160,8 +1215,8 @@ const SLIDE_TYPE_LABELS = {
   insight:   'インサイト',
   stats:     'スタッツ',
   formation: '戦術ボード',
-  type1:     'スタッツA',
-  type2:     'スタッツB',
+  type1:     'プロフィール型',
+  type2:     'トピック型',
 };
 
 function renderScenario(scenario) {
