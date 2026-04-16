@@ -49,6 +49,8 @@ async function fetchModuleData(module, post) {
     switch (id) {
 
       // ── 既存コンテンツ（追加フェッチなし） ──────────────────────────
+      case 'opening':
+      case 'ending':
       case 'news_overview':
       case 'reddit_reaction':
         return extractFromPost(id, post);

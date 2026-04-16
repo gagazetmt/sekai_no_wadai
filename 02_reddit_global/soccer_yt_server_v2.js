@@ -201,24 +201,28 @@ ${moduleTexts}
 {
   "youtubeTitle": "（70字以内・日本語・SEO意識）",
   "hashtagsText": "#サッカー #○○ （主要5個スペース区切り）",
-  "outroTelop": "（エンディングの一言テロップ・30字以内）",
   "modules": [
     {
       "id": "上記モジュール構成のidをそのまま使用",
-      "narration": "（150〜350字。自然な日本語。）",
-      "keyPoints": ["表示用の箇条書き2〜4個"],
+      "narration": "（150〜350字。自然な日本語。openingは30〜80字の掴みの一言、endingはチャンネル登録訴求50〜100字）",
+      "catchLine": "（openingのみ: スライドに大きく表示するキャッチコピー・20字以内）",
+      "telop": "（endingのみ: アウトロに表示する締めの一言・30字以内）",
+      "keyPoints": ["表示用の箇条書き2〜4個（opening/endingは省略可）"],
       "imageQuery": "（英語の画像検索クエリ・10語以内）"
     }
   ]
 }
 
 【重要】modules配列は上記【モジュール構成】の全${modulesWithData.length}個を必ず含めること。1つも省略しないこと。
+opening（先頭）とending（末尾）は必ず含める。
 
 【ナレーション指示】
 - トーン: ニュースキャスターが少し砕けた感じ（堅すぎず、崩れすぎず）
 - 各モジュールは自然な流れでつながるように書く
 - 数字・固有名詞は正確に
 - 視聴者が「へー！」と思える具体的な情報を盛り込む
+- opening: 「今回は〇〇について解説します！」のような掴みの一言
+- ending: 「チャンネル登録・高評価よろしくお願いします！」のような締め
 
 【ハルシネーション防止ルール（厳守）】
 - 使用できる事実・数字は、上記モジュールデータに明示されたものだけ
@@ -260,6 +264,8 @@ ${moduleTexts}
       slideType:   orig.slideType  || 'story',
       statsRows:   orig.statsRows  || null,
       scriptNote:  orig.scriptNote || null,
+      catchLine:   sm.catchLine    || null,
+      telop:       sm.telop        || null,
       fetchedData: orig.fetchedData || {},
     };
   });
@@ -280,6 +286,8 @@ ${moduleTexts}
         slideType:  orig.slideType  || 'story',
         statsRows:  orig.statsRows  || null,
         scriptNote: orig.scriptNote || null,
+        catchLine:  null,
+        telop:      null,
         fetchedData: orig.fetchedData || {},
       });
     }

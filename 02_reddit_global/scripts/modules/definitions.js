@@ -22,6 +22,8 @@ const SLIDE_TYPE_META = {
   formation: { label: '戦術ボード',   color: '#3a1010', textColor: '#e07070' },
   type1:     { label: 'プロフィール型', color: '#1a3a2a', textColor: '#7dffc0' }, // 左:大画像 右:データ行（選手・クラブ・移籍向け）
   type2:     { label: 'トピック型',    color: '#2a1a3a', textColor: '#c09dff' }, // 左:データ行 右:画像（ケガ・話題・汎用）
+  opening:   { label: 'オープニング',  color: '#0d1528', textColor: '#ffd700' }, // タイトルカード
+  ending:    { label: 'エンディング',  color: '#0d1528', textColor: '#e0c060' }, // アウトロ
 };
 
 const MODULE_TYPES = {
@@ -30,14 +32,25 @@ const MODULE_TYPES = {
   // 共通（どんなトピックにも使える）
   // ══════════════════════════════════════════════════════
 
+  opening: {
+    id:          'opening',
+    label:       'オープニング',
+    description: 'タイトルカード・動画の掴み・今回の話題を一言で紹介',
+    icon:        '🎬',
+    slideType:   'opening',
+    dataSource:  'existing',
+    alwaysInclude: true,
+    requiredParams: [],
+  },
+
   news_overview: {
     id:          'news_overview',
     label:       'ニュース概要',
     description: '今回の話題の背景・経緯・何が起きたか',
     icon:        '📰',
     slideType:   'story',
-    dataSource:  'existing',   // 既存コンテンツから生成。追加フェッチ不要
-    alwaysInclude: true,       // 必ず含める
+    dataSource:  'existing',
+    alwaysInclude: true,
     requiredParams: [],
   },
 
@@ -290,6 +303,17 @@ const MODULE_TYPES = {
     slideType:   'insight',
     dataSource:  'serper',
     requiredParams: ['customQuery'],
+  },
+
+  ending: {
+    id:          'ending',
+    label:       'エンディング',
+    description: 'アウトロ・締めの一言テロップ・チャンネル登録訴求',
+    icon:        '🏁',
+    slideType:   'ending',
+    dataSource:  'existing',
+    alwaysInclude: true,
+    requiredParams: [],
   },
 };
 

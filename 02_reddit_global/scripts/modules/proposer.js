@@ -107,8 +107,11 @@ ${MODULE_LIST_TEXT}
   }
 
   // モジュール定義情報をマージ
-  const enriched = (result.modules || [])
+  const enrichedMiddle = (result.modules || [])
     .map(mod => {
+      // opening/endingはDeepSeekに提案させない（後で自動付与）
+      if (mod.id === 'opening' || mod.id === 'ending') return null;
+
       const def = MODULE_TYPES[mod.id];
       if (!def) {
         console.warn(`[proposer] 未定義のモジュールID: ${mod.id} をスキップ`);
@@ -121,25 +124,32 @@ ${MODULE_LIST_TEXT}
         return null;
       }
 
-      const enriched = {
+      // paramsのundefined値をフィルタ（"undefined"文字列も除去）
+      const cleanParams = Object.fromEntries(
+        Object.entries(mod.params || {}).filter(([, v]) => v && v !== 'undefined')
+      );
+
+      const built = {
         ...def,
         reason:   mod.reason   || '',
-        params:   mod.params   || {},
+        params:   cleanParams,
         selected: true,
       };
-      // DeepSeekが提案したslideTypeで上書き（type1/type2対応）
-      if (mod.slideType) enriched.slideType = mod.slideType;
-      // statsRows（type1/type2の時のみ）
-      if (mod.statsRows?.length) enriched.statsRows = mod.statsRows;
-      return enriched;
+      if (mod.slideType) built.slideType = mod.slideType;
+      if (mod.statsRows?.length) built.statsRows = mod.statsRows;
+      return built;
     })
     .filter(Boolean);
 
+  // opening を先頭、ending を末尾に必ず付与
+  const openingMod = { ...MODULE_TYPES['opening'], params: {}, selected: true, reason: '固定' };
+  const endingMod  = { ...MODULE_TYPES['ending'],  params: {}, selected: true, reason: '固定' };
+
   return {
-    topicSummary: result.topicSummary || '',
-    topicType:    result.topicType    || 'other',
+    topicSummary:  result.topicSummary || '',
+    topicType:     result.topicType    || 'other',
     hasRealReddit: redditCmts.length >= 3,
-    modules:      enriched,
+    modules:       [openingMod, ...enrichedMiddle, endingMod],
   };
 }
 
