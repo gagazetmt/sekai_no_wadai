@@ -1,0 +1,1591 @@
+{
+  "youtubeTitle": "三笘薫、足のけいれん状態で決めた圧巻ボレー！監督がチェルシー戦に「出場可能」と明言【データで検証】",
+  "hashtagsText": "#三笘薫 #ブライトン #プレミアリーグ #チェルシー #サッカー",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "緊急出場、そして緊急交代。トッテナム戦で劇的なゴールを決めながら、足を気にする様子を見せた三笘薫。その真相は、まさかの『足のけいれん』だった。しかし、監督は続くチェルシー戦にゴーサインを出した。その全真相を、試合データと海外の反応を交えて徹底解説します。",
+      "keyPoints": [],
+      "imageQuery": "Kaoru Mitoma Brighton goal Tottenham",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "三笘薫、足のけいれん状態で決めた圧巻ボレー！監督がチェルシー戦に「出場可能」と明言",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "現地時間4月18日、プレミアリーグ第33節、トッテナム・ホットスパー対ブライトン・アンド・ホーヴ・アルビオン。三笘薫はベンチスタートでしたが、試合開始わずか20分でチームメイトのディエゴ・ゴメスが負傷。緊急出場を余儀なくされます。実はこの時、ウォーミングアップ中から足にけいれんを感じていたと、後にヒュルツェラー監督が明かしました。それでも、前半アディショナルタイムの45分+3、パスカル・グロスのクロスを左足でダイレクトボレー。見事な同点ゴールを決めます。しかし、後半75分、自らピッチに座り込み、交代を余儀なくされました。そのわずか2分後、トッテナムが勝ち越し点を奪うという緊迫の展開に。",
+      "keyPoints": [
+        "緊急出場: 試合開始20分で交代出場",
+        "ゴール: 前半45分+3に左足ダイレクトボレーで同点弾",
+        "交代: 後半75分に自ら座り込み交代",
+        "監督発言: ウォーミングアップ時から足にけいれんを感じていた"
+      ],
+      "imageQuery": "Mitoma substitution Tottenham match",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "news_overview",
+        "query": "Kaoru Mitoma",
+        "organic": [
+          {
+            "title": "Kaoru Mitoma's THUNDEROUS volley brings Brighton level with Spurs",
+            "snippet": "Kaoru Mitoma doesn't need a touch as he unleashes a venomous first-time strike into the back of the net to bring Brighton back to level terms with Spurs.",
+            "link": "https://www.youtube.com/watch?v=xOtt0wohGuY",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Tottenham 1 - [1] Brighton - Kaoru Mitoma 45+3' : r/soccer - Reddit",
+            "snippet": "Him buying new legs on wish the guy is made of glass sadly otherwise he wouldnt be with us. Its 100% the reason bayern bought diaz instead of Mitoma last ...",
+            "link": "https://www.reddit.com/r/soccer/comments/1sp3j9a/tottenham_1_1_brighton_kaoru_mitoma_453/",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Spurs vs Brighton: Kaoru Mitoma's exquisite volley levels for Seagulls",
+            "snippet": "Fullscreen. Kaoru Mitoma's exquisite volley brings Brighton level in their Premier League clash with Tottenham. Watch Next. Tim Sherwood: Erling Haaland ...",
+            "link": "https://www.skysports.com/football/video/12606/13533536/goal-k-mitoma-45-3-tottenham-hotspur-1-1-brighton",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Kaoru Mitoma Juan Mata The technique on these volleys",
+            "snippet": "Niakaté JordanNiakaté Jordan but ordegaards team is on the able of premier league bruno with his statistics they are behind oedegaard with 12pts.",
+            "link": "https://www.facebook.com/premierleague/videos/kaoru-mitoma-juan-matathe-technique-on-these-volleys-/35031047723208377/",
+            "date": "2 days ago"
+          },
+          {
+            "title": "KAORU MITOMA, ARE YOU SERIOUS? Brighton's star finishes ...",
+            "snippet": "Kaoru Mitoma a brillé lors du match de Premier League opposant Brighton à Tottenham. L'international japonais a inscrit un but remarquable d'une volée, ...",
+            "link": "https://www.instagram.com/p/DXSPXClElob/",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Kaoru Mitoma Injury: Scores before limping off - RotoWire",
+            "snippet": "He was injured and subbed out in the 75th minute. Mitoma did not start Saturday's contest, but he was brought onto the pitch in the 20th minute to replace the ...",
+            "link": "https://www.rotowire.com/soccer/headlines/kaoru-mitoma-injury-scores-before-limping-off-511220",
+            "date": "10 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=xOtt0wohGuY]\nKaoru Mitoma's THUNDEROUS volley brings Brighton level with Spurs | Premier League | NBC Sports - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "injury_report",
+      "label": "試合概要",
+      "icon": "🏥",
+      "narration": "試合後、大きな懸念となった三笘の状態。しかし、4月20日に行われたチェルシー戦前の監督会見で、ヒュルツェラー監督は明確なゴーサインを示しました。『薫は足にけいれんがあった。ウォーミングアップで感じていましたが、ピッチ上で非常に効果的なパフォーマンスを見せた。明日は出場可能』。これにより、深刻な負傷ではなく、いわゆる『こむら返り』によるものと判明。6月に開幕するW杯北中米大会を控えた日本代表、森保ジャパンにとっても大きな朗報となりました。一方、同じ試合で負傷したディエゴ・ゴメスについては、膝の状態は『それほどひどくない』とされながらも、再検査が必要とされています。",
+      "keyPoints": [
+        "診断: 足のけいれん（こむら返り）",
+        "チェルシー戦: 監督が「出場可能」と明言",
+        "W杯影響: 深刻な負傷ではないため懸念払拭",
+        "ゴメス: 膝の再検査が必要"
+      ],
+      "imageQuery": "Fabian Hurzeller press conference Brighton",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Kaoru Mitoma",
+          "url": "https://www.sofascore.com/player/936849",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "key": "custom1",
+          "label": "カスタム1",
+          "value": ""
+        },
+        {
+          "key": "custom2",
+          "label": "カスタム2",
+          "value": ""
+        },
+        {
+          "key": "custom3",
+          "label": "カスタム3",
+          "value": ""
+        },
+        {
+          "key": "custom4",
+          "label": "カスタム4",
+          "value": ""
+        }
+      ],
+      "scriptNote": "この試合の結果と概要、両チームにとってこの勝ち点がどのような意味を持つかを説明",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 936849,
+        "name": "Kaoru Mitoma",
+        "position": "M",
+        "team": "Brighton & Hove Albion",
+        "nationality": "Japan",
+        "dateOfBirth": "1997-05-20T00:00:00+00:00",
+        "age": 28,
+        "height": 178,
+        "weight": 71,
+        "shirtNumber": "22",
+        "preferredFoot": "Right",
+        "marketValue": "€23M",
+        "contractUntil": "2027-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 120,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 22,
+          "goals": 3,
+          "assists": 1,
+          "rating": 6.81,
+          "minutesPlayed": 1491,
+          "yellowCards": 3,
+          "redCards": 0,
+          "expectedGoals": 3.38,
+          "keyPasses": 27
+        },
+        "positionStats": {
+          "keyPasses": 27,
+          "successfulDribbles": 23,
+          "bigChancesCreated": 3,
+          "tackles": 16,
+          "interceptions": 9,
+          "accuratePassesPct": 81.31
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-20"
+      }
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "試合はトッテナムが39分にペドロ・ポロのゴールで先制。しかし、その流れを断ち切ったのが三笘薫でした。前半ロスタイム、右サイドから上がったグロスのクロスを、ファーサイドで待ち構えていた三笘が、トラップせずに左足でダイレクトボレー。ボールは完璧な軌道でネットに突き刺さり、スタジアムを静寂に包みました。このゴールは、今シーズン3得点目。プレミアリーグでのゴールは、1月7日のマンチェスター・シティ戦以来となります。試合はその後、77分にシャビ・シモンズのゴールでトッテナムが再リードするも、90分+5にジョルジニオ・ルターの劇的な同点弾で2-2のドローに終わりました。直近5試合の対戦成績は、ブライトンが0勝1分0敗と苦しんでいます。",
+      "keyPoints": [
+        "試合結果: トッテナム 2 - 2 ブライトン",
+        "三笘弾: 前半45分+3、左足ダイレクトボレーで同点",
+        "今季3得点目: PLでは1月のマンチェスターC戦以来",
+        "H2H: 直近5試合でブライトン0勝1分0敗"
+      ],
+      "imageQuery": "Mitoma volley goal vs Tottenham 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": "ノートラップボレーの場面を詳述。「あの弾道を生み出せる精度と胆力」という視点で語り、技術的異常さを際立たせる",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "matchId": 14025042,
+        "homeTeam": "Tottenham Hotspur",
+        "awayTeam": "Brighton & Hove Albion",
+        "homeScore": 2,
+        "awayScore": 2,
+        "matchDate": "2026-04-18",
+        "tournament": "Premier League",
+        "venue": "Tottenham Hotspur Stadium",
+        "attendance": null,
+        "homeTeamLast5": "△●●●△",
+        "awayTeamLast5": "△○●●○",
+        "h2hSummary": "0勝1分0敗",
+        "goals": [
+          {
+            "time": 39,
+            "timeStr": "39'",
+            "player": "Pedro Porro",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "type": "通常"
+          },
+          {
+            "time": 45,
+            "timeStr": "45+3'",
+            "player": "Kaoru Mitoma",
+            "isHome": false,
+            "team": "Brighton & Hove Albion",
+            "type": "通常"
+          },
+          {
+            "time": 77,
+            "timeStr": "77'",
+            "player": "Xavi Simons",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "type": "通常"
+          },
+          {
+            "time": 90,
+            "timeStr": "90+5'",
+            "player": "Georginio Rutter",
+            "isHome": false,
+            "team": "Brighton & Hove Albion",
+            "type": "通常"
+          }
+        ],
+        "cards": [
+          {
+            "time": 34,
+            "timeStr": "34'",
+            "player": "Yves Bissouma",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "color": "イエロー"
+          },
+          {
+            "time": 37,
+            "timeStr": "37'",
+            "player": "Mats Wieffer",
+            "isHome": false,
+            "team": "Brighton & Hove Albion",
+            "color": "イエロー"
+          },
+          {
+            "time": 65,
+            "timeStr": "65'",
+            "player": "Kevin Danso",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "color": "イエロー"
+          },
+          {
+            "time": 78,
+            "timeStr": "78'",
+            "player": "Xavi Simons",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "color": "イエロー"
+          }
+        ],
+        "stats": {
+          "Ball possession": {
+            "home": "42%",
+            "away": "58%"
+          },
+          "Expected goals": {
+            "home": "1.09",
+            "away": "0.82"
+          },
+          "Big chances": {
+            "home": "3",
+            "away": "2"
+          },
+          "Total shots": {
+            "home": "13",
+            "away": "10"
+          },
+          "Goalkeeper saves": {
+            "home": "1",
+            "away": "4"
+          },
+          "Corner kicks": {
+            "home": "7",
+            "away": "5"
+          },
+          "Fouls": {
+            "home": "14",
+            "away": "14"
+          },
+          "Passes": {
+            "home": "328",
+            "away": "435"
+          },
+          "Tackles": {
+            "home": "14",
+            "away": "14"
+          },
+          "Free kicks": {
+            "home": "14",
+            "away": "14"
+          },
+          "Yellow cards": {
+            "home": "3",
+            "away": "1"
+          },
+          "Shots on target": {
+            "home": "6",
+            "away": "3"
+          },
+          "Hit woodwork": {
+            "home": "1",
+            "away": "1"
+          },
+          "Shots off target": {
+            "home": "4",
+            "away": "4"
+          },
+          "Blocked shots": {
+            "home": "3",
+            "away": "3"
+          },
+          "Shots inside box": {
+            "home": "10",
+            "away": "8"
+          },
+          "Shots outside box": {
+            "home": "3",
+            "away": "2"
+          },
+          "Big chances scored": {
+            "home": "1",
+            "away": "0"
+          },
+          "Big chances missed": {
+            "home": "2",
+            "away": "2"
+          },
+          "Touches in penalty area": {
+            "home": "32",
+            "away": "30"
+          },
+          "Fouled in final third": {
+            "home": "1",
+            "away": "2"
+          },
+          "Offsides": {
+            "home": "2",
+            "away": "0"
+          },
+          "Accurate passes": {
+            "home": "263",
+            "away": "364"
+          },
+          "Throw-ins": {
+            "home": "15",
+            "away": "20"
+          },
+          "Final third entries": {
+            "home": "34",
+            "away": "59"
+          },
+          "Final third phase": {
+            "home": "51/76 (67%)",
+            "away": "96/134 (72%)"
+          },
+          "Long balls": {
+            "home": "12/42 (29%)",
+            "away": "14/35 (40%)"
+          },
+          "Crosses": {
+            "home": "3/14 (21%)",
+            "away": "8/28 (29%)"
+          },
+          "Duels": {
+            "home": "49%",
+            "away": "51%"
+          },
+          "Dispossessed": {
+            "home": "6",
+            "away": "10"
+          },
+          "Ground duels": {
+            "home": "40/73 (55%)",
+            "away": "33/73 (45%)"
+          },
+          "Aerial duels": {
+            "home": "13/36 (36%)",
+            "away": "23/36 (64%)"
+          },
+          "Dribbles": {
+            "home": "13/21 (62%)",
+            "away": "5/9 (56%)"
+          },
+          "Tackles won": {
+            "home": "71%",
+            "away": "50%"
+          },
+          "Total tackles": {
+            "home": "14",
+            "away": "14"
+          },
+          "Interceptions": {
+            "home": "11",
+            "away": "8"
+          },
+          "Recoveries": {
+            "home": "40",
+            "away": "40"
+          },
+          "Clearances": {
+            "home": "32",
+            "away": "28"
+          },
+          "Errors lead to a goal": {
+            "home": "1",
+            "away": "2"
+          },
+          "Total saves": {
+            "home": "1",
+            "away": "4"
+          },
+          "Goals prevented": {
+            "home": "-0.94",
+            "away": "-0.40"
+          },
+          "Big saves": {
+            "home": "1",
+            "away": "0"
+          },
+          "Punches": {
+            "home": "1",
+            "away": "1"
+          },
+          "Goal kicks": {
+            "home": "7",
+            "away": "6"
+          }
+        },
+        "topPlayers": [
+          {
+            "name": "Xavi Simons",
+            "rating": 8.3
+          },
+          {
+            "name": "Yankuba Minteh",
+            "rating": 7.8
+          },
+          {
+            "name": "Pedro Porro",
+            "rating": 7.7
+          },
+          {
+            "name": "Kaoru Mitoma",
+            "rating": 7.6
+          },
+          {
+            "name": "Georginio Rutter",
+            "rating": 7.5
+          }
+        ],
+        "playerStats": {
+          "Antonín Kinský": {
+            "rating": 6.4,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 35,
+            "passAccuracy": 46,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 44,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Pedro Porro": {
+            "rating": 7.7,
+            "minutesPlayed": 90,
+            "goals": 1,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": 2,
+            "keyPasses": 1,
+            "passes": 38,
+            "passAccuracy": 74,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 72,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": 0.18,
+            "bigChanceCreated": null
+          },
+          "Kevin Danso": {
+            "rating": 5.9,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 33,
+            "passAccuracy": 88,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 51,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Micky van de Ven": {
+            "rating": 6.7,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 44,
+            "passAccuracy": 89,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 57,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Destiny Udogie": {
+            "rating": 6.4,
+            "minutesPlayed": 76,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 15,
+            "passAccuracy": 87,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 34,
+            "fouls": 1,
+            "wasFouled": 3,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Conor Gallagher": {
+            "rating": 7.1,
+            "minutesPlayed": 76,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 25,
+            "passAccuracy": 88,
+            "dribbles": 3,
+            "dribblesWon": 3,
+            "touches": 42,
+            "fouls": 1,
+            "wasFouled": 2,
+            "expectedGoals": 0.04,
+            "bigChanceCreated": 1
+          },
+          "Rodrigo Bentancur": {
+            "rating": 6.6,
+            "minutesPlayed": 67,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 35,
+            "passAccuracy": 86,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 51,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.01,
+            "bigChanceCreated": null
+          },
+          "Yves Bissouma": {
+            "rating": 6.3,
+            "minutesPlayed": 57,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 24,
+            "passAccuracy": 92,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 29,
+            "fouls": 3,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Randal Kolo Muani": {
+            "rating": 6.5,
+            "minutesPlayed": 57,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 9,
+            "passAccuracy": 89,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 19,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": 0.07,
+            "bigChanceCreated": null
+          },
+          "Dominic Solanke": {
+            "rating": 7.3,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": 1,
+            "keyPasses": 1,
+            "passes": 18,
+            "passAccuracy": 78,
+            "dribbles": 4,
+            "dribblesWon": 2,
+            "touches": 34,
+            "fouls": 1,
+            "wasFouled": 2,
+            "expectedGoals": 0.05,
+            "bigChanceCreated": 1
+          },
+          "Xavi Simons": {
+            "rating": 8.3,
+            "minutesPlayed": 90,
+            "goals": 1,
+            "assists": 1,
+            "shots": 4,
+            "shotsOnTarget": 1,
+            "keyPasses": 2,
+            "passes": 27,
+            "passAccuracy": 85,
+            "dribbles": 4,
+            "dribblesWon": 2,
+            "touches": 51,
+            "fouls": 2,
+            "wasFouled": 4,
+            "expectedGoals": 0.63,
+            "bigChanceCreated": 1
+          },
+          "Archie Gray": {
+            "rating": 6.5,
+            "minutesPlayed": 33,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 8,
+            "passAccuracy": 75,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 13,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.04,
+            "bigChanceCreated": null
+          },
+          "Mathys Tel": {
+            "rating": 6.6,
+            "minutesPlayed": 33,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 9,
+            "passAccuracy": 89,
+            "dribbles": 3,
+            "dribblesWon": 2,
+            "touches": 17,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Joao Palhinha": {
+            "rating": 6.8,
+            "minutesPlayed": 23,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 5,
+            "passAccuracy": 60,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 8,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.12,
+            "bigChanceCreated": null
+          },
+          "Djed Spence": {
+            "rating": 6.3,
+            "minutesPlayed": 14,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 1,
+            "passAccuracy": 0,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 4,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Lucas Bergvall": {
+            "rating": 6.9,
+            "minutesPlayed": 14,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 2,
+            "passAccuracy": 100,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 8,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Brandon Austin": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Radu Drăguşin": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "James Maddison": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Richarlison": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Bart Verbruggen": {
+            "rating": 6.3,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 34,
+            "passAccuracy": 74,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 47,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Mats Wieffer": {
+            "rating": 5.9,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 20,
+            "passAccuracy": 85,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 46,
+            "fouls": 3,
+            "wasFouled": 4,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Jan Paul van Hecke": {
+            "rating": 7,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 1,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 66,
+            "passAccuracy": 89,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 88,
+            "fouls": 2,
+            "wasFouled": 1,
+            "expectedGoals": 0.06,
+            "bigChanceCreated": null
+          },
+          "Olivier Boscagli": {
+            "rating": 7.1,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 76,
+            "passAccuracy": 86,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 90,
+            "fouls": null,
+            "wasFouled": 2,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Ferdi Kadıoğlu": {
+            "rating": 5.7,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 30,
+            "passAccuracy": 80,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 52,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.14,
+            "bigChanceCreated": null
+          },
+          "Yasin Ayari": {
+            "rating": 6.4,
+            "minutesPlayed": 82,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 33,
+            "passAccuracy": 88,
+            "dribbles": 2,
+            "dribblesWon": 1,
+            "touches": 44,
+            "fouls": 1,
+            "wasFouled": 3,
+            "expectedGoals": 0.09,
+            "bigChanceCreated": null
+          },
+          "Pascal Groß": {
+            "rating": 6.9,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 4,
+            "passes": 68,
+            "passAccuracy": 93,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 81,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": 1
+          },
+          "Diego Gómez": {
+            "rating": 6.5,
+            "minutesPlayed": 20,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 4,
+            "passAccuracy": 0,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 5,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Jack Hinshelwood": {
+            "rating": 6.3,
+            "minutesPlayed": 75,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 26,
+            "passAccuracy": 77,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 31,
+            "fouls": 1,
+            "wasFouled": 1,
+            "expectedGoals": 0.04,
+            "bigChanceCreated": null
+          },
+          "Yankuba Minteh": {
+            "rating": 7.8,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 25,
+            "passAccuracy": 52,
+            "dribbles": 5,
+            "dribblesWon": 3,
+            "touches": 53,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Danny Welbeck": {
+            "rating": 6.2,
+            "minutesPlayed": 75,
+            "goals": null,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 11,
+            "passAccuracy": 73,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 16,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.21,
+            "bigChanceCreated": null
+          },
+          "Kaoru Mitoma": {
+            "rating": 7.6,
+            "minutesPlayed": 55,
+            "goals": 1,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 14,
+            "passAccuracy": 100,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 34,
+            "fouls": 2,
+            "wasFouled": 2,
+            "expectedGoals": 0.09,
+            "bigChanceCreated": null
+          },
+          "Maxim De Cuyper": {
+            "rating": 6.2,
+            "minutesPlayed": 15,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 10,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 13,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Georginio Rutter": {
+            "rating": 7.5,
+            "minutesPlayed": 15,
+            "goals": 1,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 5,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 11,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.08,
+            "bigChanceCreated": null
+          },
+          "Matt O'Riley": {
+            "rating": 6.5,
+            "minutesPlayed": 15,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 6,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 8,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Charalampos Kostoulas": {
+            "rating": 6.5,
+            "minutesPlayed": 8,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 7,
+            "passAccuracy": 86,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 9,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.1,
+            "bigChanceCreated": 1
+          },
+          "Jason Steele": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Igor Júlio": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Joel Veltman": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Carlos Baleba": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          }
+        },
+        "scoreline": "Tottenham Hotspur 2 - 2 Brighton & Hove Albion",
+        "summary": "【試合結果】Tottenham Hotspur 2 - 2 Brighton & Hove Albion（2026-04-18 / Premier League）\n【得点】39' Pedro Porro（Tottenham Hotspur）, 45+3' Kaoru Mitoma（Brighton & Hove Albion）, 77' Xavi Simons（Tottenham Hotspur）, 90+5' Georginio Rutter（Brighton & Hove Albion）\n【カード】34' Yves Bissouma（Tottenham Hotspur）イエロー, 37' Mats Wieffer（Brighton & Hove Albion）イエロー, 65' Kevin Danso（Tottenham Hotspur）イエロー, 78' Xavi Simons（Tottenham Hotspur）イエロー\n【H2H直近5試合】0勝1分0敗"
+      },
+      "presetValues": {
+        "top_player": "Xavi Simons（8.3）",
+        "top2_players": "Xavi Simons 8.3 / Yankuba Minteh 7.8",
+        "possession": "42% vs 58%",
+        "total_shots": "13 vs 10",
+        "shots_on_target": "6 vs 3",
+        "xg": "1.09 vs 0.82",
+        "passes": "328 vs 435",
+        "pass_accuracy": "263 vs 364",
+        "fouls": "14 vs 14",
+        "corners": "7 vs 5",
+        "yellow_cards": "3 vs 1",
+        "h2h": "0勝1分0敗",
+        "match_date": "2026-04-18",
+        "tournament": "Premier League",
+        "venue": "Tottenham Hotspur Stadium",
+        "last5_home": "△●●●△",
+        "last5_away": "△○●●○",
+        "h2h_last5": "0勝1分0敗"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "今シーズンの三笘薫のパフォーマンスをデータで見てみましょう。プレミアリーグ25/26シーズン、これまでの出場は22試合。累計プレー時間は1491分です。ゴールは先ほどの1点を含む3得点、アシストは1。期待ゴール（xG）は3.38と、得点数とほぼ同等の数字です。SofaScoreの総合評価は6.81。ポジション特有のデータを見ると、キーパスが27回、ドリブル成功が23回、ビッグチャンス創出が3回と、攻撃の起点としての役割を果たしています。守備面でも、タックル16回、インターセプト9回を記録。パス成功率は81.31%と高い精度を維持。市場価値は2300万ユーロ、契約は2027年6月までとなっています。限られた出場時間の中で、攻守に渡って確かな影響力を与え続けている証左です。",
+      "keyPoints": [
+        "出場: 22試合 (1491分)",
+        "得点・アシスト: 3得点, 1アシスト (xG: 3.38)",
+        "攻撃指標: キーパス27回, 成功ドリブル23回",
+        "評価・価値: SofaScore評価6.81, 市場価値€23M"
+      ],
+      "imageQuery": "Kaoru Mitoma stats 2025 2026 season",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Kaoru Mitoma",
+          "url": "https://www.sofascore.com/player/936849",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "key": "season_summary",
+          "label": "今期GOAL&ASSIST",
+          "value": "22試合 3G 1A",
+          "entitySource": "三笘薫"
+        },
+        {
+          "key": "appearances",
+          "label": "今期出場試合数",
+          "value": "22試合",
+          "entitySource": "三笘薫"
+        },
+        {
+          "key": "rating",
+          "label": "今期平均評価点",
+          "value": "6.81",
+          "entitySource": "三笘薫"
+        },
+        {
+          "key": "market_value",
+          "label": "市場価格",
+          "value": "€23M",
+          "entitySource": "三笘薫"
+        },
+        {
+          "key": "key_passes",
+          "label": "キーパス",
+          "value": "27本",
+          "entitySource": "三笘薫"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 936849,
+        "name": "Kaoru Mitoma",
+        "position": "M",
+        "team": "Brighton & Hove Albion",
+        "nationality": "Japan",
+        "dateOfBirth": "1997-05-20T00:00:00+00:00",
+        "age": 28,
+        "height": 178,
+        "weight": 71,
+        "shirtNumber": "22",
+        "preferredFoot": "Right",
+        "marketValue": "€23M",
+        "contractUntil": "2027-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 120,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 22,
+          "goals": 3,
+          "assists": 1,
+          "rating": 6.81,
+          "minutesPlayed": 1491,
+          "yellowCards": 3,
+          "redCards": 0,
+          "expectedGoals": 3.38,
+          "keyPasses": 27
+        },
+        "positionStats": {
+          "keyPasses": 27,
+          "successfulDribbles": 23,
+          "bigChancesCreated": 3,
+          "tackles": 16,
+          "interceptions": 9,
+          "accuratePassesPct": 81.31
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-20"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のファン掲示板では、三笘の交代劇とその後の情報更新に大きな関心が集まりました。当初は「太モモの怪我かと思った」という声もありましたが、情報が更新されるにつれ「ふくらはぎ（こむら返り）だった」「アップ不足で攣っただけなら安心」と安堵のコメントが多数を占めました。特に、監督会見を待ち、「三笘出場可能です」というBBCの速報が共有されると、「チェルシー戦も出られるかも」と期待する声が上がりました。また、「あの時間で下げてくれたのはチェルシー戦を考えればありがたい」と、交代判断を評価する意見や、この時期の怪我を心配する声も見られました。",
+      "keyPoints": [
+        {
+          "text": "[👍15] 太モモじゃない、ふくらはぎ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍14] 昨日は何か全体的に身体重そうだったしまた腰やったかと思ったけど違うなら取り敢えず安心",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍13] 軽症だと思うけど飴戦は厳しいかもな",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍12] まだ交代のはっきりとした話は無いのかただ足が痙攣しただけかな?突然の出場だったから",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍11] 今ちょうど監督会見してるみたいだから怪我情報出て来るだろ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍10] 三笘出場可能です BBC Sport Sussex @BBCSussexSport (2026/04/20 17:07:54) &#128680; Brighton HA winger Kaoru Mitoma ‘is available’ (cramp) for Chelsea (H) tuesday. #bhafc #cfc Diego Gomez out. It’s ‘not that bad’. (Knee). Needs re- scan. https://pbs.twimg.com/media/HGVYXvSXwAIKxEg.jpg",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍9] 良かったこむら返りね Xで三笘がこむら返りと言ってた人がいた やっぱりそうだったんだね ありがとう",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍8] 三笘クラスでもアップしないとやっぱり攣るんだなぁ チェルシー戦考えたらあの時間で下げてくれたのむしろありがたいかも",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍7] 情報ありがとうゴメスも深刻じゃないんだね",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍6] こうなるとWGの控えいないし三笘スタメンで行くだろうな～",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍5] こむら返りか情報ありがとう 十分なアップも出来ず出場したからしゃーないわな これならチェルシー戦もどこかで出るかもね",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍4] もうこの時期になると怪我だけが心配だから定期的に出場できてるならお休みでもいいくらいだわ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍3] この時期は特にラフプレーや接触はうまく避けないとな 最近ウィーファーがギリギリのタックルしがちだけどカイセドやヘッケみたく基本はねちっこくクリーンにボールに行けないと厳しいんじゃないかと思う ヘッケも球際だとたまにすごい勢いでかますけど",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "imageQuery": "Brighton fans reaction Reddit Mitoma",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍15] 太モモじゃない、ふくらはぎ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍14] 昨日は何か全体的に身体重そうだったしまた腰やったかと思ったけど違うなら取り敢えず安心",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍13] 軽症だと思うけど飴戦は厳しいかもな",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍12] まだ交代のはっきりとした話は無いのかただ足が痙攣しただけかな?突然の出場だったから",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍11] 今ちょうど監督会見してるみたいだから怪我情報出て来るだろ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍10] 三笘出場可能です BBC Sport Sussex @BBCSussexSport (2026/04/20 17:07:54) &#128680; Brighton HA winger Kaoru Mitoma ‘is available’ (cramp) for Chelsea (H) tuesday. #bhafc #cfc Diego Gomez out. It’s ‘not that bad’. (Knee). Needs re- scan. https://pbs.twimg.com/media/HGVYXvSXwAIKxEg.jpg",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍9] 良かったこむら返りね Xで三笘がこむら返りと言ってた人がいた やっぱりそうだったんだね ありがとう",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍8] 三笘クラスでもアップしないとやっぱり攣るんだなぁ チェルシー戦考えたらあの時間で下げてくれたのむしろありがたいかも",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍7] 情報ありがとうゴメスも深刻じゃないんだね",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍6] こうなるとWGの控えいないし三笘スタメンで行くだろうな～",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍5] こむら返りか情報ありがとう 十分なアップも出来ず出場したからしゃーないわな これならチェルシー戦もどこかで出るかもね",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍4] もうこの時期になると怪我だけが心配だから定期的に出場できてるならお休みでもいいくらいだわ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍3] この時期は特にラフプレーや接触はうまく避けないとな 最近ウィーファーがギリギリのタックルしがちだけどカイセドやヘッケみたく基本はねちっこくクリーンにボールに行けないと厳しいんじゃないかと思う ヘッケも球際だとたまにすごい勢いでかますけど",
+            "source": "reddit",
+            "score": null
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "next_match_preview",
+      "label": "次節プレビュー",
+      "icon": "🔭",
+      "narration": "さて、気になる次節は、現地時間4月21日、ブライトンのホームでのチェルシー戦です。ヒュルツェラー監督がゴーサインを出した三笘薫は、果たしてどのような形でピッチに立つのでしょうか。相手チェルシーには、今季22試合で9得点1アシスト、評価点7.07のコール・パーマーがいます。市場価値は1億100万ユーロと、三笘の2300万ユーロを大きく上回ります。三笘が今季成功させてきたドリブル23回、キーパス27回という武器が、チェルシーの堅い守備を切り裂けるかが焦点の一つ。足のけいれんというハンディを抱えながらも、彼がピッチに立つだけで相手ディフェンスに与える脅威は計り知れません。ブライトンは、この直接対決で貴重な勝ち点を奪えるか、注目です。",
+      "keyPoints": [
+        "次節: 4月21日 ブライトン vs チェルシー (ホーム)",
+        "三笘: 監督が「出場可能」と表明",
+        "相手の星: コール・パーマー (9得点1アシスト, 評価7.07)",
+        "対決の鍵: 三笘のドリブル(23成功)・キーパス(27回)"
+      ],
+      "imageQuery": "Brighton vs Chelsea preview 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Real Sociedad U21 vs Borussia Dortmund U21 | Season 2025/2026",
+          "url": "https://www.premierleague.com/en/match/2633595/real-sociedad-u21-vs-borussia-dortmund-u21",
+          "date": "2 days ago"
+        },
+        {
+          "label": "Official NBA Stats | Stats | NBA.com",
+          "url": "https://www.nba.com/stats",
+          "date": "1 day ago"
+        },
+        {
+          "label": "Preview - The Way Home - Blinded by the Light - Hallmark Channel",
+          "url": "https://www.hallmarkchannel.com/the-way-home/videos/preview-the-way-home-blinded-by-the-light",
+          "date": "11 hours ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "next_match_preview",
+        "query": "undefined next match fixture preview 2026",
+        "organic": [
+          {
+            "title": "Real Sociedad U21 vs Borussia Dortmund U21 | Season 2025/2026",
+            "snippet": "Read the match preview & report for Real Sociedad U21 vs Borussia Dortmund U21 in the Premier League International Cup 2025/2026 season, including match ...",
+            "link": "https://www.premierleague.com/en/match/2633595/real-sociedad-u21-vs-borussia-dortmund-u21",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Official NBA Stats | Stats | NBA.com",
+            "snippet": "Check out the wide variety of shot charts available - shot plot, hex map, shot zones, heat map, stream - to visualize some incredible shooting performances.",
+            "link": "https://www.nba.com/stats",
+            "date": "1 day ago"
+          },
+          {
+            "title": "Preview - The Way Home - Blinded by the Light - Hallmark Channel",
+            "snippet": "When Kat finds herself in a new era of Port Haven history, new mysteries unfold. Meanwhile, Alice revisits a familiar time, and Del tries to help Elliot.",
+            "link": "https://www.hallmarkchannel.com/the-way-home/videos/preview-the-way-home-blinded-by-the-light",
+            "date": "11 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.premierleague.com/en/match/2633595/real-sociedad-u21-vs-borussia-dortmund-u21]\nReal Sociedad U21 vs Borussia Dortmund U21 Match Preview & Report | 2025/2026 | Premier League International Cup element --> Skip to main content\n\n---\n\n[出典: https://www.nba.com/stats]\nOfficial NBA Stats | Stats | NBA.com Schedule Playoffs BAL 2026 League Pass Games Watch News Stats Standings Teams Players NBA Play Fantasy Store Tickets Affiliates Stats Home Players See All Player Stats Yesterday’s Leaders SEASON LEADERS 04/19/2026 Points 1 . Cade Cunningham DET 39 2 . Victor Wembanyama SAS 35 3 . Deni Avdija POR 30 4 . Jaylen Brown BOS 26 5 . Shai Gilgeous-Alexander OKC 25 Rebounds 1 . Jayson Tatum BOS 11 2 . Deni Avdija POR 10 3 . Paolo Banchero ORL 9 3 . Oso Ighodaro PHX 9 5 . Isaiah Hartenstein OKC 8 Assists 1 . Jrue Holiday POR 11 2 . De&#x27;Aaron Fox SAS 8 2 . Tyrese Maxey PHI 8 4 . Stephon Castle SAS 7 4 . Shai Gilgeous-Alexander OKC 7 Blocks 1 . Goga Bitadze ORL 2 1 . Anthony Black ORL 2 1 . Shai Gilgeous-Alexander OKC 2 1 . Tobias Harris DET 2 1 . Isaiah Hartenstein OKC 2 Steals 1 . Jaylin Williams OKC 4 2 . Julian Champagnie SAS 3 2 . Jalen Suggs ORL 3 2 . Ausar Thompson DET 3 5 . Desmond Bane ORL 2 Turnovers 1 . Victor Wembanyama SAS 4 2 . Paolo Banchero ORL 3 2 . Devin Booker PHX 3 2 . Stephon Castle SAS 3 2 . Cade Cunningham DET 3 Three Pointers Made 1 . Victor Wembanyama SAS 5 2 . Sam Hauser BOS 4 2 . Devin Vassell SAS 4 4 . Dillon Brooks PHX 3 4 . Cade Cunningham DET 3 Free Throws Made 1 . Shai Gilgeous-Alexander OKC 15 2 . Cade Cunningham DET 10 3 . Stephon Castle SAS 8 3 . Paul George PHI 8 5 . Tobias Harris DET 6 Fantasy Points 1 . Jayson Tatum BOS 53.7 2 . Deni Avdija POR 53.5 3 . Cade Cunningham DET 48.0 4 . Shai Gilgeous-Alexander OKC "
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？データを元に三笘薫選手の最新情報をお届けしました。けいれんというハンディを抱えながらもゴールを決めるその精神力と技術は、まさに世界クラス。チェルシー戦での活躍にも期待が高まります。このチャンネルでは、サッカーの速報をいち早く、そして数字で深堀りしてお届けします。最新情報を見逃さないよう、チャンネル登録と高評価のほど、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Kaoru Mitoma Brighton training",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-21",
+    "postId": "1",
+    "originalTitle": "三笘薫、トッテナム戦の交代は足のけいれん…監督は21日チェルシー戦にゴーサイン「出場可能」",
+    "generatedAt": "2026-04-20T15:42:38.041Z",
+    "mainImagePath": null
+  }
+}

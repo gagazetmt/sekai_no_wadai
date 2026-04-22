@@ -1,0 +1,334 @@
+{
+  "youtubeTitle": "18歳ラミン・ヤマルがCLでハーランド超え！新記録樹立の全貌とメッシとの衝撃比較",
+  "hashtagsText": "#サッカー #バルセロナ #ラミンヤマル #チャンピオンズリーグ #メッシ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "衝撃の新記録が誕生！バルセロナの至宝、ラミン・ヤマルが今季のチャンピオンズリーグで、エルリング・ハーランドが持っていた金字塔を打ち破りました。18歳で成し遂げた歴史的瞬間の全真相を、詳細データと共に徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Lamine Yamal Champions League record",
+      "imagePath": "/images/01.jpg",
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "18歳の怪物がハーランドを超えた！",
+      "telop": "18歳の怪物がCL新記録！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "バルセロナのラミン・ヤマルが、今季のチャンピオンズリーグに別れを告げました。去り際に、またしても歴史に名を刻む記録を樹立。18歳の若さで、エルリング・ハーランドが持っていたある金字塔を打ち破ったのです。具体的には、今季のCLにおける評価点の記録を更新。ヤマルは出場10試合で評価点8.08を記録し、ハーランドの7.26を上回りました。これは単なる数字の更新ではなく、攻守に渡る総合的なパフォーマンスの高さを証明するデータです。",
+      "keyPoints": [
+        "ヤマルCL評価点: 8.08",
+        "ハーランドCL評価点: 7.26",
+        "出場試合数: 10試合"
+      ],
+      "imageQuery": "Yamal vs Haaland stats comparison",
+      "imagePath": "/images/02.jpg",
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "ヤマル評価点8.08 vs ハーランド7.26",
+      "fetchedData": {
+        "ok": true,
+        "text": "バルセロナの至宝、ラミン・ヤマルが今季のチャンピオンズリーグに別れを告げました。去り際に、またしても歴史に名を刻む記録を樹立。18歳の若さで、エルリング・ハーランドが持っていたある金字塔を打ち破ったのです。その内容と、海外ファンの反応を深掘りします。",
+        "source": "existing"
+      }
+    },
+    {
+      "id": "historical_record",
+      "label": "歴史的記録・節目",
+      "icon": "📜",
+      "narration": "ヤマルが塗り替えた記録は、今シーズンのチャンピオンズリーグにおける選手評価点です。彼は出場10試合で平均評価点8.08をマーク。これは、同じく今季CLで活躍したマンチェスター・シティのエース、エルリング・ハーランドの評価点7.26を上回る数字です。ハーランドは今季プレミアリーグで30試合出場22ゴール7アシスト、評価点7.32という圧倒的な数字を残している怪物ストライカー。そのハーランドがCLで記録した評価点を、18歳のヤマルが超えたという事実は、いかに驚異的かがわかります。ハーランドはCLで10試合8ゴール、プレー時間やxG（21.59）などストライカーとしての数字は突出していますが、総合評価ではヤマルに軍配が上がりました。",
+      "keyPoints": [
+        "ハーランドPL成績: 30試合22G7A 評価点7.32",
+        "ハーランドCL成績: 10試合8G0A 評価点7.26",
+        "ヤマル評価点8.08で更新"
+      ],
+      "imageQuery": "Erling Haaland 2026 stats",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Erling Haaland",
+          "url": "https://www.sofascore.com/player/839956",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": "ヤマルがCLで塗り替えた新たな記録の概要。また塗り替える前は誰が持っていた記録か",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 839956,
+        "name": "Erling Haaland",
+        "position": "F",
+        "team": "Manchester City",
+        "nationality": "Norway",
+        "dateOfBirth": "2000-07-21T00:00:00+00:00",
+        "height": 194,
+        "preferredFoot": "Left",
+        "marketValue": "€218M",
+        "contractUntil": null,
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 30,
+          "goals": 22,
+          "assists": 7,
+          "rating": 7.32,
+          "minutesPlayed": 2508,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 21.59,
+          "keyPasses": 21
+        },
+        "positionStats": {
+          "shotsOnTarget": 50,
+          "bigChancesMissed": 24,
+          "bigChancesCreated": 8,
+          "successfulDribbles": 13,
+          "expectedGoals": 21.59
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 10,
+          "goals": 8,
+          "assists": 0,
+          "rating": 7.26
+        }
+      }
+    },
+    {
+      "id": "player_profile",
+      "label": "選手プロフィール",
+      "icon": "👤",
+      "narration": "記録を打ち立てたラミン・ヤマルとは何者なのか。ウィキペディアによれば、スペイン人プロサッカー選手で、右ウィンガーまたは右ミッドフィールダーとしてバルセロナとスペイン代表でプレー。その特徴は、フレア、チャンスメイキング、そして長距離からのカールするシュートにあります。世界的に最高の選手の一人と広く見なされている、まさに現代サッカーを代表する若きスターです。",
+      "keyPoints": [
+        "ポジション: 右WG / 右MF",
+        "特徴: フレア、チャンスメイク、長距離シュート",
+        "評価: 世界最高の選手の一人"
+      ],
+      "imageQuery": "Lamine Yamal Barcelona skills",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Lamine_Yamal_in_2025.jpg/330px-Lamine_Yamal_in_2025.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Lamine Yamal",
+          "url": "https://en.wikipedia.org/wiki/Lamine_Yamal",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "生年月日",
+          "value": "拉明·耶馬·納斯拉維·埃巴納（西班牙語：Lamine Yamal Nasraoui Ebana；2007年7月13日—），是西班牙男子職業足球運動員，司職邊鋒，現效力於西班牙甲級足球聯賽俱樂部巴塞隆納， ..."
+        },
+        {
+          "label": "国籍",
+          "value": "‍ Basic Info Lamine Yamal Age: 18 (born 2007) Nationality: Spain Club: FC Barcelona Position: Right Winger Kylian Mbappé"
+        },
+        {
+          "label": "身長・体重",
+          "value": "FCバルセロナの育成組織であるラ・マシア出身で、2023–24シーズンにトップチーム昇格。17歳でバロンドールに史上最年少でノミネートされ、翌年には全体で2位にランクイン ..."
+        },
+        {
+          "label": "ラリーガでの出場記録と得点数、アシスト数",
+          "value": "FCバルセロナでプレーするLamine Yamal選手のパフォーマンスデータです。Lamine Yamal ... Lamine Yamalは合計で173試合に出場し、52ゴール、29アシストを記録しています。"
+        },
+        {
+          "label": "市場価値",
+          "value": "フルネーム: Lamine Yamal Nasraoui Ebana 生年月日/年齢: 2007/07/13 (18) 出生地: Esplugues de Llobregat Spain (Barcelona) 身長: 1,80 m 国籍:"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Lamine Yamal",
+        "description": "Spanish footballer (born 2007)",
+        "extract": "Lamine Yamal Nasraoui Ebana is a Spanish professional footballer who plays as a right winger or right midfielder for La Liga club Barcelona and the Spain national team. Known for his flair, chance creation, and long-distance curling goals, he is widely regarded as one of the best players in the world.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Lamine_Yamal_in_2025.jpg/330px-Lamine_Yamal_in_2025.jpg",
+        "url": "https://en.wikipedia.org/wiki/Lamine_Yamal",
+        "type": "standard"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外サッカーファンからの反応を見てみましょう。Redditでは、『間違いなく世代を代表する才能。ハンス・フリック監督の下でのバルセロナのプレーは、エンターテイメントの傑作だ』という称賛の声。また、『優勝だけが全てじゃない。#価値』と、結果以上にパフォーマンスを評価するコメントも。皮肉交じりに『18歳でCLから引退か、厳しい決断だ』というユーモアや、『世界最高の選手への道。18歳で3度目のリーグ制覇。CLでは不運だったが、いずれ必ず掴むだろう』という未来への期待も寄せられています。",
+      "keyPoints": [
+        "「世代を代表する才能」",
+        "「優勝だけが全てじゃない」",
+        "「18歳でCL引退か」"
+      ],
+      "imageQuery": "Lamine Yamal Reddit reaction",
+      "imagePath": "/images/03.jpg",
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍11] Who said football is just about winning matches? #valors",
+          "[👍1] **This is a stats thread. Remember that there's only one stat post allowed per match/team, so new stats about the same will be removed. Feel free to comment other stats as a reply to this comment so users can see them too!**\n\n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "[👍1] hang the banner",
+          "[👍1] Retiring from Champions League at 18, tough decision.",
+          "[👍1] He’s defenitely a generational talent. I appreciate good, attractive football and what barca is playing with herr flick is a masterpiece of entertainment.",
+          "[👍1] Best player in the world on his way to win his 3rd league title at 18 years old.\n\nVery unlucky in Champions, he really deserved it. But he will definitely get it too eventually.",
+          "[👍-2] Visca Lamine!",
+          "18歳でCLから引退か、厳しい決断だ。",
+          "間違いなく世代を代表する才能。\nハンス・フリック監督の下でのバルセロナのプレーは、エンターテイメントの傑作だ。",
+          "優勝だけが全てじゃない。#価値",
+          "これは統計スレッドです。\n同一試合・チームの統計投稿は1つのみ。",
+          "バナーを飾れよ。",
+          "世界最高の選手への道。18歳で3度目のリーグ制覇。\nCLでは不運だったが、いずれ必ず掴むだろう。",
+          "ビスカ・ラミン！",
+          "ニコ・パスがラミン・ヤマルの質の1％でも持てばいいのに。",
+          "「両親は、男の言葉は必ず果たすものだと教えてくれた…\nそして我々はそれをバルセロナに持ち帰る」",
+          "パニニセレクト開封！ヤマル当たり！",
+          "4月の月間最優秀選手候補にラミン・ヤマル。",
+          "ワールドカップでは幼少期のアイドル、ネイマールに会いたいとヤマル。",
+          "1分でわかる選手図鑑：ラミン・ヤマル。",
+          "ワールドカップ開催年は、出場者なら誰でもバロンドールを獲れる。"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "メッシとの比較",
+      "icon": "📊",
+      "narration": "では、この18歳の怪物は、同じバルセロナで伝説となったリオネル・メッシと比べてどうなのか。現時点でのデータを比較してみましょう。今シーズン（25/26）のヤマルは、リーガで27試合出場15ゴール11アシスト、驚異的な評価点7.92を記録。CLでは先述の通り10試合6ゴール4アシスト、評価点8.08です。特に注目すべきは、キーパス72回、成功ドリブル133回、ビッグチャンス創出25回という、ウィンガーとしての創造性を数字で証明するデータ。対するメッシの18歳時（2005/06シーズン）は、バルセロナでの出場機会はまだ限定的でした。メッシがバルセロナで初出場したのは2004年10月16日、17歳114日。初得点は2005年5月1日、17歳331日でした。一方ヤマルは、バルセロナでのトップチームデビューがさらに若く、代表デビューと初得点も早い段階で果たしています。数字だけを見れば、18歳時点でのクラブでの影響力は、ヤマルがメッシを上回っていると言えるかもしれません。",
+      "keyPoints": [
+        "ヤマル今季: 27試合15G11A 評価点7.92",
+        "CL: 10試合6G4A 評価点8.08",
+        "キーパス72回、成功ドリブル133回"
+      ],
+      "imageQuery": "Lamine Yamal vs Lionel Messi age 18",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Lamine Yamal",
+          "url": "https://www.sofascore.com/player/1402912",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "story",
+      "statsRows": [
+        {
+          "label": "代表キャップ数比較"
+        },
+        {
+          "label": "クラブ試合数比較"
+        },
+        {
+          "label": ""
+        },
+        {
+          "label": ""
+        }
+      ],
+      "scriptNote": "18歳時点でのヤマルとメッシの成績比較。メッシ、ヤマルの代表デビュー、初得点、バルセロナでの初出場と初得点など、様々な視点から比較",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1402912,
+        "name": "Lamine Yamal",
+        "position": "M",
+        "team": "FC Barcelona",
+        "nationality": "Spain",
+        "dateOfBirth": "2007-07-13T00:00:00+00:00",
+        "height": 180,
+        "preferredFoot": "Left",
+        "marketValue": "€215M",
+        "contractUntil": null,
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 27,
+          "goals": 15,
+          "assists": 11,
+          "rating": 7.92,
+          "minutesPlayed": 2224,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 11.9,
+          "keyPasses": 72
+        },
+        "positionStats": {
+          "keyPasses": 72,
+          "successfulDribbles": 133,
+          "bigChancesCreated": 25,
+          "tackles": 35,
+          "interceptions": 10,
+          "accuratePassesPct": 81.03
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 10,
+          "goals": 6,
+          "assists": 4,
+          "rating": 8.08
+        }
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？データが物語るラミン・ヤマルの驚異的な成長。18歳でCLの評価点記録を更新し、メッシをも凌ぐ勢いを見せるその軌跡は、まさに歴史の一部です。今後の活躍から目が離せません。この動画が気に入ったら、高評価とチャンネル登録をお願いします！次回の「速報！サッカーニュース」もお楽しみに！",
+      "keyPoints": [],
+      "imageQuery": "Lamine Yamal future",
+      "imagePath": "/images/01.jpg",
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "データが証明する 18歳の新王者",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-16",
+    "postId": "23",
+    "originalTitle": "Lamine Yamal bids farewell to the Champions League with another record",
+    "generatedAt": "2026-04-16T10:32:11.468Z",
+    "mainImagePath": null
+  }
+}

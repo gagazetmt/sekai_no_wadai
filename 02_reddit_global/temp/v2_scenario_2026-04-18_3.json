@@ -1,0 +1,319 @@
+{
+  "youtubeTitle": "衝撃の2033年契約！カイセドをチェルシーが超長期縛り！その理由はタックル77・パス成功率92%の圧倒的スタッツにあった",
+  "hashtagsText": "#サッカー #チェルシー #カイセド #プレミアリーグ #モイセスカイセド",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "チェルシーが、昨夏1億ポンドで獲得した大物MFモイセス・カイセドと、なんと2033年までの超長期契約を締結しました。既存契約に5年残っていたにも関わらず、さらに延長するという異常事態。なぜクラブはここまで彼を手放したくないのか？その全真相を、圧倒的な数字と共に徹底解説します！",
+      "keyPoints": [
+        "契約延長: 2033年まで",
+        "既存契約: あと5年残っていた状態からの延長",
+        "獲得額: 1億ポンド"
+      ],
+      "imageQuery": "Moises Caicedo Chelsea new contract 2033",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "5年残ってるのにさらに延長！カイセド2033年縛りの衝撃",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "チェルシーは公式発表で、モイセス・カイセドとの新契約締結を明らかにしました。契約期間は2033年まで。彼は昨年夏、1億ポンドというプレミアリーグ史上最高額クラスの移籍金でブライトンから加入。加入からわずか1年半で、既存契約をさらに5年延長するという、クラブの強いコミットメントを示す内容です。チェルシーでの公式戦出場はすでに140試合を超え、現在の市場価値は1億1500万ユーロ。クラブが「手放せない」と判断するだけの価値を、すでに証明しているのです。",
+      "keyPoints": [
+        "新契約期間: 2033年まで",
+        "チェルシーでの出場: 140試合以上",
+        "現在の市場価値: €115M",
+        "獲得時の移籍金: 1億ポンド"
+      ],
+      "imageQuery": "Chelsea official announcement Caicedo contract",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-17"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "チェルシーが、昨夏の大型補強の目玉の一人、モイセス・カイセドと新たな契約を結びました。発表された契約期間は、なんと2033年まで。既存契約に5年残っていたにも関わらず、さらに延長するという、クラブの強いコミットメントを示す内容です。",
+        "source": "existing"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "では、なぜここまで手放せないのか？その答えは、今シーズンの圧倒的なスタッツにあります。プレミアリーグ25/26シーズン、カイセドは27試合に出場し、3ゴール1アシスト、平均評価点7.19を記録。しかし、真の価値は守備にあります。タックル成功数は77、インターセプトは52。これはプレミアリーグの守備的MFの中でもトップクラスの数字です。さらに、パス成功率は91.92%と、ボール回収から正確なビルドアップへの貢献度も極めて高い。一方で、xG（期待ゴール）は1.31に対して実際のゴールは3と、得点決定力でも上回るパフォーマンスを見せています。チャンピオンズリーグでも10試合2ゴール、評価点7.12と、ビッグマッチでも確実に結果を出しているのです。",
+      "keyPoints": [
+        "今季PL: 27試合3G1A 評価7.19",
+        "守備貢献: タックル77 インターセプト52",
+        "パス成功率: 91.92%",
+        "CL: 10試合2G 評価7.12"
+      ],
+      "imageQuery": "Moises Caicedo stats tackles interceptions 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Moisés Caicedo",
+          "url": "https://www.sofascore.com/player/987650",
+          "date": "2026-04-17"
+        }
+      ],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 987650,
+        "name": "Moisés Caicedo",
+        "position": "M",
+        "team": "Chelsea",
+        "nationality": "Ecuador",
+        "dateOfBirth": "2001-11-02T00:00:00+00:00",
+        "height": 178,
+        "preferredFoot": "Right",
+        "marketValue": "€115M",
+        "contractUntil": null,
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 27,
+          "goals": 3,
+          "assists": 1,
+          "rating": 7.19,
+          "minutesPlayed": 2267,
+          "yellowCards": 9,
+          "redCards": 1,
+          "expectedGoals": 1.31,
+          "keyPasses": 14
+        },
+        "positionStats": {
+          "keyPasses": 14,
+          "successfulDribbles": 11,
+          "bigChancesCreated": 3,
+          "tackles": 77,
+          "interceptions": 52,
+          "accuratePassesPct": 91.92
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 10,
+          "goals": 2,
+          "assists": 0,
+          "rating": 7.12
+        }
+      }
+    },
+    {
+      "id": "player_career",
+      "label": "選手の来歴",
+      "icon": "📋",
+      "narration": "この超長期契約の背景には、カイセドのサクセスストーリーがあります。エクアドルの貧困地区サント・ドミンゴに生まれたカイセドは、地元クラブを経て、2019年にブライトン・アンド・ホーヴ・アルビオンに移籍。プレミアリーグでその才能を開花させ、2023年夏にはアーセナルとチェルシーの争奪戦の末、1億ポンドという大金でスタンフォード・ブリッジにやってきました。ワールドクラスの守備的MFと称される彼のプレーは、正確なパスと鋭いインターセプトが特徴。この「逆境からの這い上がり」というストーリーと、類まれな守備能力こそが、クラブが2033年まで、彼をチームの要として据えたいと考える理由なのです。",
+      "keyPoints": [
+        "出身: エクアドル サント・ドミンゴ",
+        "プレミア移籍: 2019年 ブライトンへ",
+        "チェルシー移籍: 2023年夏 1億ポンド",
+        "評価: 世界トップクラスの守備的MF"
+      ],
+      "imageQuery": "Moises Caicedo childhood Ecuador Brighton",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Moises_Caicedo_2022_%28cropped%29.jpg/330px-Moises_Caicedo_2022_%28cropped%29.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Moisés Caicedo",
+          "url": "https://en.wikipedia.org/wiki/Mois%C3%A9s_Caicedo",
+          "date": "2026-04-17"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Moisés Caicedo",
+        "description": "Ecuadorian footballer (born 2001)",
+        "extract": "Moisés Isaac Caicedo Corozo is an Ecuadorian professional footballer who plays as a midfielder for Premier League club Chelsea and the Ecuador national team. Often considered one of the best defensive midfielders in the world, Caicedo is known for his passing and interceptions.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Moises_Caicedo_2022_%28cropped%29.jpg/330px-Moises_Caicedo_2022_%28cropped%29.jpg",
+        "url": "https://en.wikipedia.org/wiki/Mois%C3%A9s_Caicedo",
+        "type": "standard"
+      }
+    },
+    {
+      "id": "transfer_rumor",
+      "label": "移籍の噂",
+      "icon": "🔄",
+      "narration": "この超長期契約には、移籍市場からの関心を断ち切るという明確な意図も感じられます。獲得時に1億ポンドを投じたカイセドは、現在でも市場価値1億1500万ユーロというクラブの最重要資産。特に、中盤の若返りを図るレアル・マドリードからの関心が報じられており、クラブとしてはこの潜在的な移籍リスクを2033年という長期契約で完全にシャットアウトしたいという思惑があったのでしょう。『カイセドが新契約に合意、大幅な給与アップと新しい契約満了日によりチェルシーに大きな後押しを与える』といった海外メディアの報道も、クラブが彼を中心に長期的な計画を立てていることを示唆しています。",
+      "keyPoints": [
+        "現在の市場価値: €115M",
+        "潜在的な関心: レアル・マドリードなど",
+        "クラブの意図: 最重要資産の長期確保",
+        "メディア報道: 大幅な給与アップと長期契約"
+      ],
+      "imageQuery": "Real Madrid interest Moises Caicedo transfer rumor",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "'I told him' - Anthony Joshua REJECTED UFC boss Dana White's ...",
+          "url": "https://www.thesun.co.uk/sport/38812139/anthony-joshua-dana-white-zuffa-boxing-eddie-hearn/",
+          "date": "3 days ago"
+        },
+        {
+          "label": "Real Madrid PECAT Arbeloa Usai Tersing Dari UCL? Inzaghi ...",
+          "url": "https://www.youtube.com/watch?v=23QjhAjoQUk",
+          "date": "19 hours ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "transfer_rumor",
+        "query": "Moises Caicedo transfer rumor latest 2025 2026",
+        "organic": [
+          {
+            "title": "'I told him' - Anthony Joshua REJECTED UFC boss Dana White's ...",
+            "snippet": "... 2025, with the American start-up ... Moises Caicedo set to give Liam Rosenior huge boost by signing new Chelsea deal with huge wage boost and new expiry date ...",
+            "link": "https://www.thesun.co.uk/sport/38812139/anthony-joshua-dana-white-zuffa-boxing-eddie-hearn/",
+            "date": "3 days ago"
+          },
+          {
+            "title": "Real Madrid PECAT Arbeloa Usai Tersing Dari UCL? Inzaghi ...",
+            "snippet": "Moises Caicedo Sepakati Kontrak Baru dengan Chelsea hingga 2033 16. ... Deretan Transfer Terburuk Liga-Liga Top Eropa 2025/26. Starting Eleven. New.",
+            "link": "https://www.youtube.com/watch?v=23QjhAjoQUk",
+            "date": "19 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.thesun.co.uk/sport/38812139/anthony-joshua-dana-white-zuffa-boxing-eddie-hearn/]\nVerifying Device Verifying your device, please wait Verification failed. Please try again. Try Again Verification failed. Please try again.\n\n---\n\n[出典: https://www.youtube.com/watch?v=23QjhAjoQUk]\nReal Madrid PECAT Arbeloa Usai Tersing Dari UCL? 😱 Inzaghi Gantikan Allegri🔥 Messi Beli Klub Spanyol - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "このニュースに対する海外サッカーファンの反応は、驚きと皮肉、そして愛情が入り混じったものになっています。『2033年？！マジで長い契約だな』『3033年じゃなくてちょっと驚いたよ』という驚きの声。『2033年まで？もし無料で去られたらチェルシーはどうするんだ！』『この長期契約やめるって言ってたんじゃ…』という、チェルシーの長期契約戦略を揶揄するコメントも。しかし、『チェルシーのCはカイセドのCだからね』『カイセドはクラブへの強いコミットメントを示した』という肯定的な見方も多く、複雑な感情が伝わってきます。",
+      "keyPoints": [
+        "驚きの声: \"2033?! Jesus that's a long contract\"",
+        "皮肉: \"Only until 2033? What will Chelsea do if he leaves on a free!!\"",
+        "肯定的意見: \"Caicedo showed strong commitment to the club\""
+      ],
+      "imageQuery": "social media reaction Caicedo contract Chelsea",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-17"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍100] Caicedo in 6 months: Madrid reminds me of Ecuador",
+          "[👍61] 2033?! Jesus that's a long contract",
+          "[👍25] im a little shocked its not 3033",
+          "[👍11] What?",
+          "[👍9] Only until 2033? What will Chelsea do if he leaves on a free!!",
+          "[👍3] LMAO",
+          "[👍2] thought they were stopping these long contracts.....",
+          "[👍1] so enzo ....?",
+          "[👍1] Chelsea are an absolute mockery of a football club",
+          "2033年?! マジで長い契約だな",
+          "3033年じゃなくてちょっと驚いたよ\n（笑い・皮肉）",
+          "2033年まで？もし無料で去られたらチェルシーはどうするんだ！",
+          "この長期契約やめるって言ってたんじゃ…\n（驚き・皮肉）",
+          "チェルシーのCはカイセドのCだからね",
+          "6ヶ月後のカイセド「マドリードはエクアドルを思い出す」\n（鋭い皮肉）",
+          "チェルシーは完全に茶番劇だ",
+          "エンソ「最高のチームになる」\nカイセド「100％同意」",
+          "届いた！25-26ホームはカイセド！\n今年も頼みます！",
+          "カイセドはクラブへの強いコミットメントを示した",
+          "エンソ・フェルナンデス、これが噂を\n完全に打ち消す方法だ（共感）",
+          "マジで疲れる議論だよね。結局みんな満足ってことだ",
+          "ということはエンソは…？\n（驚き・皮肉）",
+          "「チェルシーの大物になりたい」\n- モイセス・カイセド"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "stats_comparison",
+      "label": "スタッツ比較",
+      "icon": "📊",
+      "narration": "スタッツ比較の詳細データは現在取得中ですが、先ほどご紹介したタックル77、インターセプト52、パス成功率92%という数字は、プレミアリーグの守備的ミッドフィールダーの中で間違いなくトップクラスに位置します。このような圧倒的な守備貢献とビルドアップ能力を併せ持つ選手は非常に稀です。チェルシーが、たとえ既存契約に年数が残っていても、彼を2033年まで縛りたいと考えるのは、この客観的なパフォーマンスデータがすべてを物語っていると言えるでしょう。彼はすでに、世界最高水準の守備的MFの一人なのです。",
+      "keyPoints": [
+        "守備指標: タックル・インターセプト数はPLトップクラス",
+        "ビルドアップ: パス成功率92%はMFとして極めて高い",
+        "総合評価: 世界トップクラスの守備的MFの証拠"
+      ],
+      "imageQuery": "Premier League defensive midfielder stats comparison 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "stats_comparison: homeTeam/awayTeam または playerNameEn/subject2En が必要です"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？1億ポンドの大器、モイセス・カイセドを2033年まで縛り付けたチェルシーの決断。その背景には、タックル77、インターセプト52という圧倒的な守備データと、クラブの最重要資産を守りたいという強い意志がありました。今後も「速報！サッカーニュース」では、数字で納得できるサッカー情報をお届けします。チャンネル登録と高評価、そしてコメントでのご意見お待ちしています！それでは、また次のニュースでお会いしましょう！",
+      "keyPoints": [],
+      "imageQuery": "Chelsea team celebration 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-18",
+    "postId": "3",
+    "originalTitle": "[Official] Chelsea is delighted to announce Moises Caicedo has signed a new contract with the club until 2033.",
+    "generatedAt": "2026-04-17T17:09:33.144Z",
+    "mainImagePath": null
+  }
+}

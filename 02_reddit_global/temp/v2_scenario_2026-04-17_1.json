@@ -1,0 +1,474 @@
+{
+  "youtubeTitle": "ケインがレアルに放った「過去も色々あっただろ」発言が物議！カマビンガ退場の真相と海外の反応を徹底解説",
+  "hashtagsText": "#サッカー #バイエルン #レアルマドリード #ハリーケイン #チャンピオンズリーグ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "レアル・マドリードが激怒したカマビンガの退場。その直後、対戦相手のエース、ハリー・ケインが放った一言が、サッカー界を揺るがしています。『彼らは確かに怒ってるだろう。でも、長年、彼らに都合のいいことはたくさんあったからな…』。この発言の真意と、試合の全真相を、数字とデータで徹底解剖します。",
+      "keyPoints": [],
+      "imageQuery": "Harry Kane interview angry Real Madrid",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "ケインがレアルに放った「過去も色々あっただろ」発言が物議！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "2026年4月15日、UEFAチャンピオンズリーグ準決勝、バイエルン・ミュンヘン対レアル・マドリード。試合は4対3という激戦の末、バイエルンの勝利に終わりました。しかし、試合終盤の86分、レアルのエドゥアルド・カマビンガが2枚目のイエローカードを受けて退場となったシーンが大きな議論を呼びます。レアルの選手や関係者はこの判定に激怒。ところが、その直後のインタビューで、バイエルンのエース、ハリー・ケインはこう切り返しました。『レアルはとても怒っているでしょう。でも、長年にわたって彼らに都合のいいことはたくさんあったからね…』。この一言が、単なる試合後のコメントを超え、過去の因縁まで含めた大きな論争に発展しているのです。",
+      "keyPoints": [
+        "試合結果: FC Bayern München 4 - 3 Real Madrid",
+        "カマビンガ退場: 86分 (2枚目イエロー)",
+        "ケイン発言: \"they got many things go their way over the years\""
+      ],
+      "imageQuery": "Camavinga red card Bayern Real Madrid 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-17"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "チャンピオンズリーグ準決勝、バイエルン・ミュンヘン対レアル・マドリード。試合終盤、エドゥアルド・カマビンガが2枚目のイエローカードを受けて退場となるシーンは大きな議論を呼びました。レアル陣営が審判の判定に激怒する中、対戦相手のエース、ハリー・ケインがインタビューで放った一言が、海外サッカーファンの間で大きな反響を呼んでいます。",
+        "source": "existing"
+      }
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "では、カマビンガの退場は本当に不当な判定だったのでしょうか？データで振り返ります。カマビンガは78分に1枚目のイエローカードを受けています。そして86分、時間稼ぎと見なされる行為で2枚目のイエロー。ルール上は明確な退場理由です。問題は、審判が1枚目のイエローを一時的に忘れ、2枚目を提示する際に混乱があったという点。しかし、これは審判の手続き上の問題であり、カード自体の正当性を否定するものではありません。この試合では、レアルのエデル・ミリタンが40分、アントニオ・リュディガーが70分にイエローを受けるなど、両チーム合わせて合計5枚のイエローカードが提示されています。カマビンガの2枚目は、この流れの中で特に突出した判定とは言えません。『ルール通りの退場なのになぜレアルだけがこれほど怒るのか？』 ケインの発言は、この矛盾を鋭く突いているのです。",
+      "keyPoints": [
+        "カマビンガ イエロー: 78分 (1枚目), 86分 (2枚目→退場)",
+        "試合全体のイエローカード: 合計5枚",
+        "レアルのイエロー: ミリタン(40'), リュディガー(70'), カマビンガx2"
+      ],
+      "imageQuery": "Camavinga second yellow card 86 minute",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "matchId": 15632088,
+        "homeTeam": "FC Bayern München",
+        "awayTeam": "Real Madrid",
+        "homeScore": 4,
+        "awayScore": 3,
+        "matchDate": "2026-04-15",
+        "tournament": "UEFA Champions League, Knockout stage",
+        "goals": [
+          {
+            "time": 1,
+            "timeStr": "1'",
+            "player": "Arda Güler",
+            "isHome": false,
+            "team": "Real Madrid",
+            "type": "通常"
+          },
+          {
+            "time": 6,
+            "timeStr": "6'",
+            "player": "Aleksandar Pavlović",
+            "isHome": true,
+            "team": "FC Bayern München",
+            "type": "通常"
+          },
+          {
+            "time": 29,
+            "timeStr": "29'",
+            "player": "Arda Güler",
+            "isHome": false,
+            "team": "Real Madrid",
+            "type": "通常"
+          },
+          {
+            "time": 38,
+            "timeStr": "38'",
+            "player": "Harry Kane",
+            "isHome": true,
+            "team": "FC Bayern München",
+            "type": "通常"
+          },
+          {
+            "time": 42,
+            "timeStr": "42'",
+            "player": "Kylian Mbappé",
+            "isHome": false,
+            "team": "Real Madrid",
+            "type": "通常"
+          },
+          {
+            "time": 89,
+            "timeStr": "89'",
+            "player": "Luis Díaz",
+            "isHome": true,
+            "team": "FC Bayern München",
+            "type": "通常"
+          },
+          {
+            "time": 90,
+            "timeStr": "90+4'",
+            "player": "Michael Olise",
+            "isHome": true,
+            "team": "FC Bayern München",
+            "type": "通常"
+          }
+        ],
+        "cards": [
+          {
+            "time": 29,
+            "timeStr": "29'",
+            "player": "Josip Stanišić",
+            "isHome": true,
+            "team": "FC Bayern München",
+            "color": "イエロー"
+          },
+          {
+            "time": 40,
+            "timeStr": "40'",
+            "player": "Éder Militão",
+            "isHome": false,
+            "team": "Real Madrid",
+            "color": "イエロー"
+          },
+          {
+            "time": 70,
+            "timeStr": "70'",
+            "player": "Antonio Rudiger",
+            "isHome": false,
+            "team": "Real Madrid",
+            "color": "イエロー"
+          },
+          {
+            "time": 78,
+            "timeStr": "78'",
+            "player": "Eduardo Camavinga",
+            "isHome": false,
+            "team": "Real Madrid",
+            "color": "イエロー"
+          },
+          {
+            "time": 86,
+            "timeStr": "86'",
+            "player": "Eduardo Camavinga",
+            "isHome": false,
+            "team": "Real Madrid",
+            "color": "2枚目イエロー→退場"
+          }
+        ],
+        "scoreline": "FC Bayern München 4 - 3 Real Madrid",
+        "summary": "【試合結果】FC Bayern München 4 - 3 Real Madrid（2026-04-15 / UEFA Champions League, Knockout stage）\n【得点】1' Arda Güler（Real Madrid）, 6' Aleksandar Pavlović（FC Bayern München）, 29' Arda Güler（Real Madrid）, 38' Harry Kane（FC Bayern München）, 42' Kylian Mbappé（Real Madrid）, 89' Luis Díaz（FC Bayern München）, 90+4' Michael Olise（FC Bayern München）\n【カード】29' Josip Stanišić（FC Bayern München）イエロー, 40' Éder Militão（Real Madrid）イエロー, 70' Antonio Rudiger（Real Madrid）イエロー, 78' Eduardo Camavinga（Real Madrid）イエロー, 86' Eduardo Camavinga（Real Madrid）2枚目イエロー→退場"
+      }
+    },
+    {
+      "id": "historical_record",
+      "label": "歴史的記録・節目",
+      "icon": "📜",
+      "narration": "ケインが言う『長年にわたって都合のいいこと』とは何か？歴史を紐解けば、レアル・マドリードがUEFAチャンピオンズリーグで物議を醸す判定に救われた場面は少なくありません。例えば、過去の対戦では、オフサイド疑惑のあるゴールが認められたり、相手選手へのレッドカードが過剰だと批判されたケースが複数報告されています。また、2026年現在でも、スペインのメディア『デフェンサ・セントラル』は、レアルのライバルであるバルセロナが今シーズン、少なくとも9つの論議を呼ぶ判定で有利になったと主張するレポートを発表。逆に言えば、レアル側も常に判定に不満を抱いているわけです。しかし、CLの大舞台では、しばしばレアルに『魔物』がついていると言われるように、接戦を制する幸運に恵まれてきたのも事実。ケインの発言は、こうした歴史的コンテクストを背景に、非常に重みを持つものとなっています。",
+      "keyPoints": [
+        "歴史的論争: レアルのCLにおける複数の物議判定",
+        "2026年報道: バルセロナ有利な判定が「9事例」と指摘",
+        "ケイン発言の背景: 長年の因縁と「魔物」の伝説"
+      ],
+      "imageQuery": "Real Madrid controversial Champions League decisions history",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Wikipedia: Real Madrid v FC Barcelona (1943 Copa del Generalísimo)",
+          "url": "https://en.wikipedia.org/wiki/Real_Madrid_v_FC_Barcelona_(1943_Copa_del_General%C3%ADsimo)",
+          "date": "2026-04-17"
+        },
+        {
+          "label": "Real Madrid are furious... 10 controversial decisions have handed ...",
+          "url": "https://www.goal.com/en-us/news/real-madrid-are-furious-10-controversial-decisions-have-handed-barcelona-the-lead/blt7226e4d0e3e50b63",
+          "date": "Apr 6, 2026"
+        },
+        {
+          "label": "Real Madrid's history of controversial comebacks in the Champions ...",
+          "url": "https://www.facebook.com/groups/178422083549866/posts/1962359275156129/",
+          "date": "2 days ago"
+        }
+      ],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "wiki": {
+          "ok": true,
+          "title": "Real Madrid v FC Barcelona (1943 Copa del Generalísimo)",
+          "description": "Football match",
+          "extract": "Real Madrid 11 – 1 Barcelona was an association football match played on 13 June 1943 in the second leg of the Copa del Generalísimo semi-finals, the Spanish Cup having been renamed in honor of General Francisco Franco.",
+          "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/Marca_portada_rmadrid_11_vs_1_barcelona.jpg/330px-Marca_portada_rmadrid_11_vs_1_barcelona.jpg",
+          "url": "https://en.wikipedia.org/wiki/Real_Madrid_v_FC_Barcelona_(1943_Copa_del_General%C3%ADsimo)",
+          "type": "standard"
+        },
+        "serper": {
+          "ok": true,
+          "moduleId": "historical_record",
+          "query": "Real Madrid controversial referee decisions Champions League history",
+          "organic": [
+            {
+              "title": "Real Madrid are furious... 10 controversial decisions have handed ...",
+              "snippet": "5 - The referee failed to send off Pau Kubarsi in the match against Athletic Bilbao following a violent challenge on Williams. 6 - Failure to ...",
+              "link": "https://www.goal.com/en-us/news/real-madrid-are-furious-10-controversial-decisions-have-handed-barcelona-the-lead/blt7226e4d0e3e50b63",
+              "date": "Apr 6, 2026"
+            },
+            {
+              "title": "Real Madrid's history of controversial comebacks in the Champions ...",
+              "snippet": "OCR: Wrong decision confirmed UEFA referee analyst has confirmed that there was no contact between Stonisic and Brahim Díaz before Real ...",
+              "link": "https://www.facebook.com/groups/178422083549866/posts/1962359275156129/",
+              "date": "2 days ago"
+            },
+            {
+              "title": "Single worst refereeing decision in UCL history? : r/championsleague",
+              "snippet": "The two that come to mind are the no call on the Diego Militao offside goal vs Barcelona in 2010 or the abidal red card in 2009 for the ...",
+              "link": "https://www.reddit.com/r/championsleague/comments/1m9qorl/single_worst_refereeing_decision_in_ucl_history/",
+              "date": "Jul 26, 2025"
+            },
+            {
+              "title": "4 times refereeing decisions went in Real Madrid's favour",
+              "snippet": "Here we look at 5 times refereeing decisions went in Real Madrid's favour in big Champions League matches.",
+              "link": "https://www.sportskeeda.com/football/champions-league-4-times-refereeing-decisions-went-in-real-madrid-s-favour",
+              "date": "May 7, 2018"
+            },
+            {
+              "title": "The BIGGEST referee mistakes in favor of Real Madrid ... - YouTube",
+              "snippet": "Comments · 8 Referee Mistakes that CHANGED Champions League History · 20 Times Referees RUINED Football.. · 10 Most Controversial Matches in the ...",
+              "link": "https://www.youtube.com/watch?v=1QZhZ0mObTQ",
+              "date": "May 12, 2024"
+            },
+            {
+              "title": "How many times has Real Madrid won a UCL knock-out match ...",
+              "snippet": "How many times has Real Madrid won a UCL knock-out match thanks to bad referee's decisions? All related (33).",
+              "link": "https://www.quora.com/How-many-times-has-Real-Madrid-won-a-UCL-knock-out-match-thanks-to-bad-referees-decisions",
+              "date": "May 1, 2018"
+            }
+          ],
+          "answerBox": null,
+          "knowledgeGraph": null,
+          "topStories": [],
+          "articleContent": "[出典: https://www.goal.com/en-us/news/real-madrid-are-furious-10-controversial-decisions-have-handed-barcelona-the-lead/blt7226e4d0e3e50b63]\nReal Madrid are furious... 10 controversial decisions have handed Barcelona the lead! | Goal.com US This page contains affiliate links. When you purchase through the links provided, we may earn a commission. Getty Images Sport Abdelmawgood Samir Apr 06, 2026 06:59+09:00 Translated by Real Madrid Barcelona LaLiga Spain Things are getting worse The Spanish website ‘Defensa Central’, known for its clear allegiance to Real Madrid, has reignited the debate over the fairness of competition in La Liga, after publishing a lengthy report accusing referees of “favouring Barcelona” during the current season, asserting that the Catalan side has benefited from a series of controversial refereeing decisions that have helped them top the table, seven points clear of their Royal rivals. The Madrid-based website pointed out that the difference in the two teams’ performances does not justify this lead, arguing that the “consistently favourable refereeing” enjoyed by Barcelona for years is the real reason behind its dominance, as it put it. It added that the cases identified are merely “the tip of the iceberg”, referring to the existence of other instances that have not been counted. The report compiled nine refereeing incidents, which it claimed favoured Barcelona, including controversial penalties, a red card that was not shown, and decisions that influenced match results. The most notable cases cited by the website were as follows: LaLiga Real Madrid RMA 22 Apr 2026 04:30 Deportivo Alaves AL"
+        }
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外サッカーファン、特にRedditでの反応はケインに同調する声が多数です。『みんなレアルを糾弾してるな（笑）』というコメントが3160もの高評価を獲得。カマビンガの退場については、『完全に当然の2枚目のイエローだ。審判が1枚目を忘れてたからこそ』と指摘する声も。レアルの態度を批判するコメントでは、『ビニシウス、ジュード、ギュレルの審判詰め寄りは恥ずかしい』『このチームはスポーツマンシップのかけらもない』といった厳しい意見が並びます。ユーモアを交えた反応も多く、『RMTV（レアルマドリードTV）によるケイン誹謗中傷動画、制作中』や『ハリー、コミュニカード・オフィシャル（公式抗議文）待ったなし』といったコメントが笑いを誘っています。『彼は間違ってないけど、公の場で言うなんてマジでやばいよ🤣』というコメントが象徴するように、多くのファンがケインの率直すぎる発言に驚きながらも、その内容には納得している様子です。",
+      "keyPoints": [
+        "最多高評価コメント: \"Everyone calling out real Madrid lol\" (👍3160)",
+        "カード判定評価: \"super deserved second yellow\" (👍2314)",
+        "ユーモア反応: \"RMTV slander piece on Kane in production\""
+      ],
+      "imageQuery": "r soccer reaction Kane Real Madrid comment",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-17"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍3160] Everyone calling out real Madrid lol",
+          "[👍2662] RMTV slander piece on Kane in production as we speak.",
+          "[👍2314] super deserved second yellow precisely because the ref forgot about the first one.",
+          "[👍1403] A ref follows the rules of the game. \n\nReal Madrid players : why is this man against us?",
+          "[👍881] This team is actually frustrating as a supporter. And Kane is absolutely right here - just for once, look inwards. Camavinga gave a brain dead performance and the team reaped its reward for not keeping a check on its players.\n \nIt’s upsetting for this team to not have an ounce of sportsmanship. Vini, Jude, Guler are embarrassing with how they hounded the referee. Rudiger is a loose cannon and wild on the pitch where he endangers other players. Valverde as the captain shows no leadership in holdi",
+          "[👍341] Harry Kane has very old-school hair.\n\nNot a criticism, just an observation.",
+          "[👍190] Something I have noted: Kane seems to have more personality about him nowadays right?! As good as he has always been on the pitch he always came across slightly boring off it. Bayern really has done wonders for him",
+          "[👍180] This gonna get removed just like Kahn's quote, someone has to reupload Kahn's",
+          "[👍128] How can they even be angry with the ref? Second goal resulted from a dive. Third goal there was a foul from Rüdiger in the buildup. \n\nIn Madrid Olise got fouled last minute and there was no penalty. If anything the decisions went in their favor.\n\nAnd I have yet to see a comment explaining why time wasting is not a yellow anymore.",
+          "[👍100] So many things went their way in this tie too",
+          "[👍79] Over the years? Ref mistakes gave them two goals in the same game. ",
+          "[👍75] Wake up, babe.  We're shitting on RM.",
+          "[👍60] He’s not wrong but saying that publicly is crazy 🤣",
+          "[👍49] GET READY FOR COMUNICADO OFICIAL HARRY",
+          "[👍48] Blaming Camavinga is just a scapegoat. Maybe it was the final nail in the coffin sure, but let’s not act like Bayern didn’t dominate both ties, they were clearly the better team.\n",
+          "[👍29] \"over the years\" yes, they did. But Kane can literally point out the robbery in the tie itself. Someone please explain how Vini didn't get a single card?",
+          "[👍19] Don’t even need to go down this route. It’s a clear red regardless. ",
+          "[👍18] Wait does anyone actually think Real were hard done by there? Was the most obvious and stupid second yellow I've seen in ages. Even Real fans must realise that right?",
+          "[👍15] KAAAANE BALON D ORRRR",
+          "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "みんなレアルを糾弾してるな（笑）",
+          "彼は間違ってないけど、公の場で言うなんて\nマジでやばいよ🤣",
+          "ハリー、コミュニカード・オフィシャル待ったなし",
+          "目を覚ませ、ベイビー。\nレアルをdisる時間だよ。",
+          "この一戦だって有利な判定はあった",
+          "何年も？同じ試合で審判のミスが\n彼らに2点をもたらしたんだ。",
+          "カマビンガを責めるのはスケープゴートだ",
+          "RMTVによるケイン誹謗中傷動画制作中",
+          "このチームはサポーターとしてもイライラする。\nケインは正しい。一度でいいから内省を。",
+          "審判はルールに従ってるだけだ",
+          "ビニ、ジュード、ギュレルの審判詰め寄りは\n恥ずかしい。",
+          "完全に当然の2枚目のイエローだ",
+          "最近のケイン、より個性が出てるよね？\nバイエルンが彼を変えたんだ。",
+          "スポーツマンシップのかけらもない"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "player_episode",
+      "label": "選手エピソード",
+      "icon": "✨",
+      "narration": "この発言をしたハリー・ケインといえば、温厚で紳士的、常に模範的なインタビュー対応で知られる選手です。その彼が、これほどストレートに、しかも皮肉を込めて対戦相手を牽制する発言を公の場でしたことは極めて異例。普段は『2018年ワールドカップでのゴールデンブーツ獲得』や『トッテナムでのクラブ歴代最多得点記録』といった輝かしい実績で語られるケインですが、今回見せたのは別の一面でした。『最近のケイン、より個性が出てるよね？バイエルンが彼を変えたんだ』という海外ファンの観察通り、ドイツ移籍後、よりオープンで芯の強いキャラクターを覗かせています。『紳士』が放った、だからこそ刺さる一言。それがこの発言にさらに説得力とインパクトを与えているのです。",
+      "keyPoints": [
+        "ケインのイメージ: 温厚で紳士的、模範的インタビュー",
+        "異例の発言: 皮肉を込めた対戦相手牽制",
+        "海外ファン観察: \"Bayern really has done wonders for him\""
+      ],
+      "imageQuery": "Harry Kane gentleman interview personality",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Harry Kane, What are his best and worst footballing moments?",
+          "url": "https://www.reddit.com/r/football/comments/k0eykw/harry_kane_what_are_his_best_and_worst/",
+          "date": "Nov 24, 2020"
+        },
+        {
+          "label": "Harry Kane Top 10 Goals That Shocked Bayern Fans - YouTube",
+          "url": "https://www.youtube.com/watch?v=65yP7QaedIE",
+          "date": "Jan 12, 2026"
+        },
+        {
+          "label": "Harry Kane's most iconic moments for Tottenham and England",
+          "url": "https://www.planetsport.com/soccer/feature/harry-kane-most-iconic-moments-tottenham-england",
+          "date": "Feb 5, 2023"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "player_episode",
+        "query": "Harry Kane famous moment story",
+        "organic": [
+          {
+            "title": "Harry Kane, What are his best and worst footballing moments?",
+            "snippet": "His best moment either has to be winning the Golden Boot in the 2018 World Cup or THAT GOAL against Arsenal a few years back when he was wearing the mask.",
+            "link": "https://www.reddit.com/r/football/comments/k0eykw/harry_kane_what_are_his_best_and_worst/",
+            "date": "Nov 24, 2020"
+          },
+          {
+            "title": "Harry Kane Top 10 Goals That Shocked Bayern Fans - YouTube",
+            "snippet": "They were all great, but the one that really makes me smile is the one where he catches the ball with his foot high, taps the ball to stop ...",
+            "link": "https://www.youtube.com/watch?v=65yP7QaedIE",
+            "date": "Jan 12, 2026"
+          },
+          {
+            "title": "Harry Kane's most iconic moments for Tottenham and England",
+            "snippet": "Harry Kane became Tottenham's record goalscorer with his 267th goal against Manchester City. Planet Sport looks at the best and worst ...",
+            "link": "https://www.planetsport.com/soccer/feature/harry-kane-most-iconic-moments-tottenham-england",
+            "date": "Feb 5, 2023"
+          },
+          {
+            "title": "Harry Kane's best moments at Tottenham Hotspur - OneFootball",
+            "snippet": "He put Spurs 1-0 up with a close-range header from Christian Eriksen's free-kick, and got a second before half-time from Heung-min Son's square ball. And ...",
+            "link": "https://onefootball.com/es/noticias/harry-kanes-best-moments-at-tottenham-hotspur-36745975",
+            "date": null
+          },
+          {
+            "title": "Harry Kane reflects on 'perfect moment' to break record - YouTube",
+            "snippet": "... best-in-class talent and extensive surrounding coverage all week long, NBC Sports Group has become the ultimate destination for new and ...",
+            "link": "https://www.youtube.com/watch?v=BV7PNLuloHQ",
+            "date": "Feb 5, 2023"
+          },
+          {
+            "title": "Harry Kane: The making of England's number nine | London Museum",
+            "snippet": "Harry Kane was released from the Arsenal academy aged eight. But he worked hard, learned, improved and believed in himself. He's now one of the world's best ...",
+            "link": "https://www.londonmuseum.org.uk/collections/london-stories/harry-kane-the-making-of-englands-number-nine/",
+            "date": null
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=65yP7QaedIE]\nHarry Kane Top 10 Goals That Shocked Bayern Fans - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      }
+    },
+    {
+      "id": "head_to_head",
+      "label": "直近の対戦成績",
+      "icon": "📉",
+      "narration": "バイエルン・ミュンヘンとレアル・マドリードの直近の対戦成績の詳細データは現在取得中ですが、両者はCLの歴史を通じて幾度となく激突してきた因縁のライバルです。特に近年の対戦では、劇的な逆転や僅差の勝負が繰り広げられ、その度に判定が話題に上ることが多々ありました。今回の4対3というスコアも、両者の力が伯仲していることを示しています。ケインの発言は、こうした一連の因縁の中での『積み重ね』に対する、選手としての本音の表れと言えるでしょう。数字上の対戦成績だけでなく、そこに込められた感情と歴史が、この一言を特別なものにしているのです。",
+      "keyPoints": [
+        "最新対戦: 2026-04-15, Bayern 4-3 Real Madrid (CL準決勝)",
+        "因縁: CL歴史を通じた繰り返される激突",
+        "スコア示す力関係: 伯仲した激戦"
+      ],
+      "imageQuery": "Bayern Munich vs Real Madrid head to head history",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "SofaScore: 選手名またはチーム名が必要です（参考ワードに入力してください）"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？ハリー・ケインの一言は、単なる試合後のコメントを超え、サッカーの歴史、審判判定、そしてライバル心理までを含んだ深い発言でした。データと事実に基づいて解説することで、その背景にある『納得』をお届けできたなら幸いです。チャンネル登録と高評価が、次の『速報！』の力になります。みなさんのご意見や、気になるサッカー論争もコメントでお待ちしています！それでは、また次のニュースでお会いしましょう。",
+      "keyPoints": [],
+      "imageQuery": "subscribe football news channel",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録 & 高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-17",
+    "postId": "1",
+    "originalTitle": "[@Welt] Interviewer: \"Real Madrid are very very angry (about Camavinga's red card).. \"\n\nHarry Kane: \"I'm sure they are, but they got many things go their way over the years, so...\"",
+    "generatedAt": "2026-04-17T15:54:16.291Z",
+    "mainImagePath": null
+  }
+}

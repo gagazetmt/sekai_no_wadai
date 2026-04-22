@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>型４ — 対比スライドプレビュー</title>
+<style>
+/* ── リセット ── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+/* ── プレビューラッパー（縮小表示用） ── */
+.preview-wrap {
+  width: 960px;   /* 1920 × 0.5 */
+  height: 540px;  /* 1080 × 0.5 */
+  transform-origin: top left;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* ======================================================
+   スライド本体（1920×1080 固定、0.5スケール表示）
+   ====================================================== */
+.slide {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  transform: scale(0.5);
+  transform-origin: top left;
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  background: #081220;
+}
+
+/* ── 上部バナー ── */
+.top-banner {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 90px;
+  background: rgba(0,0,0,0.82);
+  border-bottom: 4px solid #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.top-banner .module-label {
+  color: #f59e0b;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+
+/* ── 字幕バー ── */
+.sub-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 110px;
+  background: rgba(0,0,0,0.90);
+  border-top: 3px solid rgba(245,158,11,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.sub-bar .sub-text {
+  color: #fff;
+  font-size: 46px;
+  font-weight: 800;
+  text-align: center;
+  padding: 0 80px;
+  line-height: 1.4;
+}
+
+/* ── 左パネル（選手Aの画像） ── */
+.panel-left {
+  width: 30%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ── 右パネル（選手Bの画像） ── */
+.panel-right {
+  width: 30%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ── 背景画像 ── */
+.panel-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+}
+/* 左パネル：右端をセンターに自然につなぐグラデーション */
+.panel-left .panel-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(8,18,32,0.10) 0%,
+    rgba(8,18,32,0.60) 70%,
+    rgba(8,18,32,1.00) 100%
+  );
+}
+/* 右パネル：左端をセンターに自然につなぐグラデーション */
+.panel-right .panel-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to left,
+    rgba(8,18,32,0.10) 0%,
+    rgba(8,18,32,0.60) 70%,
+    rgba(8,18,32,1.00) 100%
+  );
+}
+/* 上下の遮蔽（バナー・字幕バーと重なる部分） */
+.panel-left .panel-top-fade,
+.panel-right .panel-top-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(8,18,32,0.80) 0%,
+    transparent 12%,
+    transparent 72%,
+    rgba(8,18,32,0.90) 100%
+  );
+}
+
+/* ── 名前オーバーレイ ── */
+.name-tag {
+  position: absolute;
+  bottom: 125px;
+  left: 0; right: 0;
+  text-align: center;
+  padding: 0 20px;
+}
+.name-tag .player-name {
+  font-size: 42px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.9);
+  line-height: 1.2;
+}
+.name-tag .team-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-top: 6px;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.8);
+}
+
+/* ── 中央パネル（データ比較） ── */
+.panel-center {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 110px 0 120px;
+  position: relative;
+  z-index: 10;
+  /* 背景は両サイドのグラデーションに任せる（透過） */
+}
+
+/* VS バッジ */
+.vs-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 88px; height: 88px;
+  background: #f59e0b;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34px;
+  font-weight: 900;
+  color: #000;
+  z-index: 30;
+  box-shadow: 0 0 0 6px rgba(245,158,11,0.25), 0 0 0 12px rgba(245,158,11,0.10);
+}
+
+/* ── データ行 ── */
+.data-rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 0;
+}
+
+.data-row {
+  display: flex;
+  align-items: center;
+  height: 120px;
+  width: 100%;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  position: relative;
+}
+.data-row:last-child { border-bottom: none; }
+
+/* 数値（左・右） */
+.val {
+  width: 35%;
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1;
+  transition: color 0.3s;
+}
+.val-left {
+  text-align: right;
+  padding-right: 40px;
+  color: #93c5fd; /* 青系 = 左選手 */
+}
+.val-right {
+  text-align: left;
+  padding-left: 40px;
+  color: #fca5a5; /* 赤系 = 右選手 */
+}
+/* 勝ってる方を白くして目立たせる */
+.val.win { color: #fff; font-size: 72px; }
+.val.lose { opacity: 0.55; font-size: 56px; }
+
+/* ラベル列（中央） */
+.label-col {
+  width: 30%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.label-text {
+  color: #94a3b8;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+/* 比較バー */
+.bar-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.bar-left-fill {
+  position: absolute;
+  right: 50%;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(to left, #3b82f6, #1d4ed8);
+  border-radius: 4px 0 0 4px;
+  transition: width 0.5s ease;
+}
+.bar-right-fill {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(to right, #ef4444, #b91c1c);
+  border-radius: 0 4px 4px 0;
+  transition: width 0.5s ease;
+}
+
+/* ── 編集UI（プレビュー下部） ── */
+.editor {
+  width: 960px;
+  margin-top: 24px;
+  background: #1a1f35;
+  border-radius: 12px;
+  padding: 20px;
+  color: #c0d0f0;
+  font-size: 13px;
+}
+.editor h3 { color: #f59e0b; margin-bottom: 12px; font-size: 14px; }
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.editor-section { background: #0d1220; border-radius: 8px; padding: 12px; }
+.editor-section h4 { color: #60a0d0; margin-bottom: 8px; font-size: 12px; }
+.row-editor {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+.row-editor label { width: 80px; color: #6070a0; flex-shrink: 0; }
+.row-editor input {
+  flex: 1;
+  background: #1a2040;
+  border: 1px solid #2a3560;
+  color: #e0e8ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.btn-update {
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: #f59e0b;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+}
+</style>
+</head>
+<body>
+
+<!-- ── プレビュー ── -->
+<div class="preview-wrap">
+  <div class="slide" id="slide">
+
+    <!-- 上部バナー -->
+    <div class="top-banner">
+      <div class="module-label" id="bannerLabel">⚔️ 選手対比</div>
+    </div>
+
+    <!-- 左パネル（選手A） -->
+    <div class="panel-left" id="panelLeft">
+      <div class="panel-bg" id="bgLeft"
+           style="background-image:url('stock/3-1.jpg');"></div>
+      <div class="panel-fade"></div>
+      <div class="panel-top-fade"></div>
+      <div class="name-tag">
+        <div class="player-name" id="nameA">Arda Güler</div>
+        <div class="team-name" id="teamA">Real Madrid</div>
+      </div>
+    </div>
+
+    <!-- 中央パネル（データ） -->
+    <div class="panel-center">
+      <div class="data-rows" id="dataRows">
+        <!-- JS が生成 -->
+      </div>
+    </div>
+
+    <!-- 右パネル（選手B） -->
+    <div class="panel-right" id="panelRight">
+      <div class="panel-bg" id="bgRight"
+           style="background-image:url('stock/3-2.jpg');"></div>
+      <div class="panel-fade"></div>
+      <div class="panel-top-fade"></div>
+      <div class="name-tag">
+        <div class="player-name" id="nameB">Michael Olise</div>
+        <div class="team-name" id="teamB">FC Bayern München</div>
+      </div>
+    </div>
+
+    <!-- VS バッジ -->
+    <div class="vs-badge">VS</div>
+
+    <!-- 字幕バー -->
+    <div class="sub-bar">
+      <div class="sub-text" id="subText">
+        2ゴールのギュレル vs 決勝弾オリセ — データが示す両ヒーローの真価
+      </div>
+    </div>
+
+  </div><!-- /.slide -->
+</div><!-- /.preview-wrap -->
+
+
+<!-- ── 編集UI ── -->
+<div class="editor">
+  <h3>📝 スライドデータ編集</h3>
+  <div class="editor-grid">
+
+    <!-- 左：選手A -->
+    <div class="editor-section">
+      <h4>👤 左（選手A）</h4>
+      <div class="row-editor"><label>名前</label><input id="eNameA" value="Arda Güler"></div>
+      <div class="row-editor"><label>チーム</label><input id="eTeamA" value="Real Madrid"></div>
+      <div class="row-editor"><label>画像URL</label><input id="eBgLeft" value="stock/3-1.jpg"></div>
+    </div>
+
+    <!-- 右：選手B -->
+    <div class="editor-section">
+      <h4>👤 右（選手B）</h4>
+      <div class="row-editor"><label>名前</label><input id="eNameB" value="Michael Olise"></div>
+      <div class="row-editor"><label>チーム</label><input id="eTeamB" value="FC Bayern München"></div>
+      <div class="row-editor"><label>画像URL</label><input id="eBgRight" value="stock/3-2.jpg"></div>
+    </div>
+
+    <!-- 比較データ -->
+    <div class="editor-section" style="grid-column:1/-1">
+      <h4>📊 比較データ行（ラベル / 左の値 / 右の値）</h4>
+      <div id="rowEditors"></div>
+      <button onclick="addRow()" style="margin-top:8px;padding:4px 12px;background:#2a3560;color:#9bb5e0;border:none;border-radius:4px;cursor:pointer;font-size:12px">＋ 行追加</button>
+    </div>
+
+    <!-- 字幕 -->
+    <div class="editor-section" style="grid-column:1/-1">
+      <h4>💬 字幕テキスト</h4>
+      <div class="row-editor"><label>字幕</label><input id="eSubText" value="2ゴールのギュレル vs 決勝弾オリセ — データが示す両ヒーローの真価"></div>
+      <div class="row-editor"><label>バナー</label><input id="eBanner" value="⚔️ 選手対比"></div>
+    </div>
+
+  </div>
+  <button class="btn-update" onclick="applyEdit()">▶ プレビューに反映</button>
+</div>
+
+
+<script>
+// ── デフォルトデータ ──────────────────────────────────────────
+let rows = [
+  { label: 'ゴール',     left: '2',    right: '1'    },
+  { label: 'アシスト',   left: '0',    right: '1'    },
+  { label: 'チャンス創出', left: '3',  right: '2'    },
+  { label: '評価点',     left: '8.70', right: '8.50' },
+  { label: 'プレー時間', left: '62',   right: '75'   },
+];
+
+// ── 数値変換（数字以外はハッシュ比較で同点扱い） ─────────────
+function toNum(v) {
+  const n = parseFloat(String(v).replace(/[^\d.]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+// ── データ行 HTML 生成 ─────────────────────────────────────────
+function buildRows(rows) {
+  return rows.map(r => {
+    const lv = toNum(r.left);
+    const rv = toNum(r.right);
+    const total = lv + rv;
+    const lPct  = total > 0 ? Math.round((lv / total) * 50) : 25;
+    const rPct  = total > 0 ? Math.round((rv / total) * 50) : 25;
+
+    const lWin = lv > rv ? 'win' : (lv < rv ? 'lose' : '');
+    const rWin = rv > lv ? 'win' : (rv < lv ? 'lose' : '');
+
+    return `
+      <div class="data-row">
+        <div class="val val-left ${lWin}">${r.left}</div>
+        <div class="label-col">
+          <div class="label-text">${r.label}</div>
+          <div class="bar-track">
+            <div class="bar-left-fill"  style="width:${lPct}%"></div>
+            <div class="bar-right-fill" style="width:${rPct}%"></div>
+          </div>
+        </div>
+        <div class="val val-right ${rWin}">${r.right}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── 行エディタ HTML 生成 ──────────────────────────────────────
+function buildRowEditors(rows) {
+  return rows.map((r, i) => `
+    <div class="row-editor" id="re_${i}">
+      <label style="color:#60a0d0;width:22px;flex-shrink:0">${i+1}</label>
+      <input style="flex:2" placeholder="ラベル" value="${r.label}" oninput="rows[${i}].label=this.value">
+      <input style="flex:1" placeholder="左" value="${r.left}"  oninput="rows[${i}].left=this.value">
+      <input style="flex:1" placeholder="右" value="${r.right}" oninput="rows[${i}].right=this.value">
+      <button onclick="removeRow(${i})" style="background:#3a1010;color:#e07070;border:none;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>
+    </div>`).join('');
+}
+
+function addRow() {
+  rows.push({ label: '項目', left: '0', right: '0' });
+  refresh();
+}
+function removeRow(i) {
+  rows.splice(i, 1);
+  refresh();
+}
+
+// ── プレビュー更新 ─────────────────────────────────────────────
+function refresh() {
+  document.getElementById('dataRows').innerHTML = buildRows(rows);
+  document.getElementById('rowEditors').innerHTML = buildRowEditors(rows);
+}
+
+// ── 編集UI → プレビュー反映 ──────────────────────────────────
+function applyEdit() {
+  document.getElementById('nameA').textContent  = document.getElementById('eNameA').value;
+  document.getElementById('teamA').textContent  = document.getElementById('eTeamA').value;
+  document.getElementById('nameB').textContent  = document.getElementById('eNameB').value;
+  document.getElementById('teamB').textContent  = document.getElementById('eTeamB').value;
+  document.getElementById('bgLeft').style.backgroundImage  = `url('${document.getElementById('eBgLeft').value}')`;
+  document.getElementById('bgRight').style.backgroundImage = `url('${document.getElementById('eBgRight').value}')`;
+  document.getElementById('subText').textContent   = document.getElementById('eSubText').value;
+  document.getElementById('bannerLabel').textContent = document.getElementById('eBanner').value;
+  document.getElementById('dataRows').innerHTML = buildRows(rows);
+}
+
+// ── 初期表示 ────────────────────────────────────────────────────
+window.onload = () => refresh();
+</script>
+</body>
+</html>

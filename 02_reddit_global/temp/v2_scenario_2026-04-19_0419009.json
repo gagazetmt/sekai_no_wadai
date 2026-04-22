@@ -1,0 +1,449 @@
+{
+  "youtubeTitle": "衝撃のカムバックか!? モウリーニョ再びマドリー指揮官へ! ペレス会長が交渉開始、ヴィニ・エムバペとの相性は？",
+  "hashtagsText": "#サッカー #レアルマドリード #モウリーニョ #ヴィニシウス #エムバペ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "緊急速報です！ レアル・マドリードが2シーズン連続無冠に終わった今、フロレンティーノ・ペレス会長が取るべき一手は、かつて袂を分かった因縁の男、ジョゼ・モウリーニョのカムバックだと報じられています。噂は本当なのか？ その全真相を徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Jose Mourinho Real Madrid return news",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "モウリーニョ、マドリーに舞い戻る!?",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "レアル・マドリードが2シーズン無冠に終わった今、フロレンティーノ・ペレス会長は大胆な選択を模索しています。ジネディーヌ・ジダン、ユルゲン・クロップ、ディディエ・デシャン、リオネル・スカローニ、マウリシオ・ポチェッティーノ…名だたる候補が名を連ねる中、今、最も熱い噂となっているのは、あの“特別なひとり”のカムバックです。複数のメディアが、ペレス会長とモウリーニョの間に関心が相互に存在し、近く契約条件についての会合が持たれる可能性を報じています。これは、プライドを捨てた会長の決断と言えるでしょう。かつて確執を生み、退任に至った監督を再び招き入れるという、逆説的かつ劇的なシナリオが現実味を帯びてきました。",
+      "keyPoints": [
+        "レアル・マドリード2シーズン連続無冠",
+        "ペレス会長がモウリーニョと交渉へ",
+        "ジダン、クロップら5名も候補に"
+      ],
+      "imageQuery": "Florentino Perez Jose Mourinho meeting",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "レアル・マドリードが2シーズン無冠に終わった今、フロレンティーノ・ペレス会長は大胆な選択を模索しています。ジネディーヌ・ジダン、ユルゲン・クロップ、ディディエ・デシャン、リオネル・スカローニ、マウリシオ・ポチェッティーノ…名だたる候補が名を連ねる中、今、最も熱い噂となっているのは、あの“特別なひとり”のカムバックです。",
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "player_career",
+      "label": "監督の来歴",
+      "icon": "📋",
+      "narration": "ジョゼ・モウリーニョ。彼は4か国でリーグ優勝を果たし、2つのクラブでUEFAチャンピオンズリーグを制した、史上最も成功した監督の一人です。しかし、彼のレアル・マドリード時代（2010-2013年）は、成功と確執が入り混じった複雑なものでした。就任1年目にコパ・デル・レイを、2年目にはリーガ・エスパニョーラを制覇し、確かな結果を残しました。しかし、3年目には更衣室内での対立、特にイケル・カシージャスとの確執が表面化。ペレス会長との関係も悪化し、シーズン終了後に退任しました。『なぜ一度は決裂したのか』その核心は、強力な個性を持つ監督と、スター選手がひしめくクラブの文化との衝突にありました。その因縁の相手に再び白羽の矢が立つというのは、まさに衝撃的な展開です。",
+      "keyPoints": [
+        "マドリー在籍: 2010-2013年",
+        "獲得タイトル: リーガ1回、コパ・デル・レイ1回",
+        "退任原因: カシージャス問題、ペレス会長との確執"
+      ],
+      "imageQuery": "Mourinho Casillas conflict Real Madrid",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Jos%C3%A9_Mourinho_20250206_%281%29.jpg/330px-Jos%C3%A9_Mourinho_20250206_%281%29.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: José Mourinho",
+          "url": "https://en.wikipedia.org/wiki/Jos%C3%A9_Mourinho",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "José Mourinho",
+        "description": "Portuguese football manager (born 1963)",
+        "extract": "José Mário dos Santos Mourinho Félix is a Portuguese professional football manager and former player, who is currently the head coach of Primeira Liga club Benfica. Self Nicknamed \"the Special One\", he is one of the most decorated managers of all time. Mourinho has won league championships in four countries, is one of only seven managers to have won the European Cup with two clubs, and is the only manager to have won all three current UEFA club competitions.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Jos%C3%A9_Mourinho_20250206_%281%29.jpg/330px-Jos%C3%A9_Mourinho_20250206_%281%29.jpg",
+        "url": "https://en.wikipedia.org/wiki/Jos%C3%A9_Mourinho",
+        "type": "standard"
+      },
+      "presetValues": {
+        "season_summary": "?試合 ?G ?A"
+      }
+    },
+    {
+      "id": "stats_comparison",
+      "label": "マドリーでの成績",
+      "icon": "📊",
+      "narration": "では、モウリーニョのマドリー時代の成績は実際のところどうだったのでしょうか？ データで冷静に見てみましょう。在任3シーズンで、公式戦178試合、128勝、28分、22敗。勝率は71.9%という非常に高い数字です。リーガ優勝1回、コパ・デル・レイ優勝1回、スーペルコパ・デ・エスパーニャ1回を獲得。この成績は、実は悪くありません。比較として、カルロ・アンチェロッティの2度の任期を合わせた勝率は約72%、ジネディーヌ・ジダンの1期目は約70%でした。モウリーニョの成績は、歴代の名将たちに引けを取らない水準だったのです。問題は、常にUEFAチャンピオンズリーグでの突破、特にバルセロナとの激しいライバル関係の中で、より高い成果が求められた点にありました。数字だけを見れば、『実は悪くなかった』という意外な真実が浮かび上がります。",
+      "keyPoints": [
+        "在任3シーズン勝率: 71.9% (128勝)",
+        "獲得タイトル: 3つ (リーガ、コパ、スーペルコパ)",
+        "アンチェロッティ勝率: 約72% (比較対象)"
+      ],
+      "imageQuery": "Jose Mourinho Real Madrid win percentage stats",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Wikipedia: 2025–26 NFL playoffs",
+          "url": "https://en.wikipedia.org/wiki/2025%E2%80%9326_NFL_playoffs",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "key": "",
+          "label": "",
+          "value": "Pos, チーム, P, W, D, L, F, A, +/-, 勝点, フォーム. 1, バルセロナ crest BAR, 31, 26, 1, 4, 84, 30, 54, 79. 勝; 勝; 勝; 勝; 勝. 2, レアル・マドリー "
+        },
+        {
+          "key": "",
+          "label": "",
+          "value": "Pos, チーム, P, W, D, L, F, A, +/-, 勝点, フォーム. 1, バルセロナ crest BAR, 31, 26, 1, 4, 84, 30, 54, 79. 勝; 勝; 勝; 勝; 勝. 2, レアル・マドリー "
+        },
+        {
+          "key": "",
+          "label": "",
+          "value": "Pos, チーム, P, W, D, L, F, A, +/-, 勝点, フォーム. 1, バルセロナ crest BAR, 31, 26, 1, 4, 84, 30, 54, 79. 勝; 勝; 勝; 勝; 勝. 2, レアル・マドリー "
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "2025–26 NFL playoffs",
+        "description": "American football tournament",
+        "extract": "The National Football League playoffs for the 2025 season began on January 10, 2026, and concluded with Super Bowl LX on February 8 at Levi's Stadium in Santa Clara, California.",
+        "thumbnail": null,
+        "url": "https://en.wikipedia.org/wiki/2025%E2%80%9326_NFL_playoffs",
+        "type": "standard"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "ヴィニシウスの監督ごとの成績",
+      "icon": "🔍",
+      "narration": "次に、現在のマドリーを支えるスター、ヴィニシウス・ジュニオールが、もしモウリーニョの指導を受けることになったらどうなるのか、データから考察します。今シーズン（25/26）のヴィニシウスは、リーガで30試合出場、11ゴール、5アシスト、SofaScore評価点7.41を記録。CLでは14試合5ゴール5アシスト、評価点7.26です。注目すべきは、成功ドリブル75回、ビッグチャンス創出6回という数字。彼の突破力とチャンスメイク能力はチームの生命線です。モウリーニョは過去、クリスティアーノ・ロナウドのような攻撃的ウィンガーを高いパフォーマンスで使いこなした実績があります。しかし、その一方で、守備への貢献度も強く求めます。評価点7.41という高い数字を維持しているヴィニシウスですが、モウリーニョのシステムにどこまで順応できるかが最大の焦点となるでしょう。",
+      "keyPoints": [
+        "今季リーガ: 30試合11G5A 評価点7.41",
+        "CL: 14試合5G5A 評価点7.26",
+        "成功ドリブル: 75回 (シーズン)"
+      ],
+      "imageQuery": "Vinicius Junior stats 2025 2026 Real Madrid",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Vinicius Júnior",
+          "url": "https://www.sofascore.com/player/868812",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "key": "",
+          "label": "A監督時の成績",
+          "value": "O atacante brasileiro do Real Madrid, Vinicius Junior, estara no setimo lugar a partir da proxima temporada. Anteriormen"
+        },
+        {
+          "key": "",
+          "label": "B監督時の成績",
+          "value": "（データ取得失敗）"
+        },
+        {
+          "key": "",
+          "label": "C監督時の成績",
+          "value": "フランク・リベリーのキャリアを辿り、彼のプレースタイルや影響力について深く掘り下げます。 #サッカー #リベリー #フランス代表. Keywords: フランク・ ..."
+        }
+      ],
+      "scriptNote": "ヴィニシウスのマドリーでの個人成績を、指導監督事に提示する。",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 868812,
+        "name": "Vinicius Júnior",
+        "position": "F",
+        "team": "Real Madrid",
+        "nationality": "Brazil",
+        "dateOfBirth": "2000-07-12T00:00:00+00:00",
+        "height": 176,
+        "preferredFoot": "Right",
+        "marketValue": "€156M",
+        "contractUntil": null,
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 30,
+          "goals": 11,
+          "assists": 5,
+          "rating": 7.41,
+          "minutesPlayed": 2304,
+          "yellowCards": 7,
+          "redCards": 0,
+          "expectedGoals": 11.68,
+          "keyPasses": 54
+        },
+        "positionStats": {
+          "shotsOnTarget": 38,
+          "bigChancesMissed": 12,
+          "bigChancesCreated": 6,
+          "successfulDribbles": 75,
+          "expectedGoals": 11.68
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 14,
+          "goals": 5,
+          "assists": 5,
+          "rating": 7.26
+        }
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "エムバペの監督ごとの成績",
+      "icon": "🔍",
+      "narration": "もう一人の超大物、キリアン・エムバペのケースを見てみましょう。今シーズン、マドリーに加入したエムバペは、リーガ26試合で23ゴール4アシスト、驚異的な評価点7.67をマーク。CLでは11試合15ゴール1アシスト、評価点8.05と、文字通り怪物のようなパフォーマンスです。シュートオンターゲット56回、xG（期待ゴール）22.24という数字は、その得点能力の高さを如実に物語っています。モウリーニョは、ディディエ・ドログバやディエゴ・ミリートなど、強力なセンターフォワードを戦術の要として成功に導いてきました。エムバペは、そのスピードと決定力において、モウリーニョが過去に指揮したどのストライカーとも異なるタイプです。彼の圧倒的な個人能力を、モウリーニョがどのように戦術に組み込み、最大化できるか。あるいは、その自由なプレースタイルと、モウリーニョの要求する組織的な守備との間に齟齬が生じるか。これが実現すれば、世界最高の攻撃手と、最も戦術的な監督の組み合わせという、興味尽きない図式が誕生します。",
+      "keyPoints": [
+        "今季リーガ: 26試合23G4A 評価点7.67",
+        "CL: 11試合15G1A 評価点8.05",
+        "シュートオンターゲット: 56回 (シーズン)"
+      ],
+      "imageQuery": "Kylian Mbappe stats 2025 2026 Real Madrid",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Kylian Mbappé",
+          "url": "https://www.sofascore.com/player/826643",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "A監督時の成績",
+          "value": "個人成績 ; パリ・サンジェルマン · リーグ・アン, 2017-18, 27, 13 ..."
+        },
+        {
+          "label": "B監督時の成績",
+          "value": "モナコの旗 モナコB, 12, (4). 2015-2018, モナコの旗 モナコ, 41, (16). 2017–2018 ... キリアン・エムバペ - FIFA主催大会成績 (英語) Edit on Wikidata · キリアン ."
+        },
+        {
+          "label": "C監督時の成績",
+          "value": "個人成績 ; パリ・サンジェルマン · リーグ・アン, 2017-18, 27, 13 ..."
+        }
+      ],
+      "scriptNote": "エムバペのマドリーでの個人成績を、指導監督ごとに提示する。",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 826643,
+        "name": "Kylian Mbappé",
+        "position": "F",
+        "team": "Real Madrid",
+        "nationality": "France",
+        "dateOfBirth": "1998-12-20T00:00:00+00:00",
+        "height": 180,
+        "preferredFoot": "Right",
+        "marketValue": "€212M",
+        "contractUntil": null,
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 26,
+          "goals": 23,
+          "assists": 4,
+          "rating": 7.67,
+          "minutesPlayed": 2232,
+          "yellowCards": 4,
+          "redCards": 0,
+          "expectedGoals": 22.24,
+          "keyPasses": 57
+        },
+        "positionStats": {
+          "shotsOnTarget": 56,
+          "bigChancesMissed": 18,
+          "bigChancesCreated": 8,
+          "successfulDribbles": 68,
+          "expectedGoals": 22.24
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 11,
+          "goals": 15,
+          "assists": 1,
+          "rating": 8.05
+        }
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "マドリー就任監督候補の比較",
+      "icon": "🔍",
+      "narration": "ペレス会長が評価しているとされる他の候補者たち、ジダン、クロップ、デシャン、スカローニ、ポチェッティーノについて、マドリー就任の可能性をデータと状況から格付けします。まずジダンは、過去2度の成功があり、ファンと選手からの支持は厚いですが、3度目の就任には本人が消極的との見方が強いです。ユルゲン・クロップは、リバプール退任後は休息を表明しており、即戦力での復帰は難しく、可能性は低いでしょう。ディディエ・デシャンはフランス代表監督として2026W杯まで契約があり、大会後まで動きはないと見られます。リオネル・スカローニもアルゼンチン代表とともにW杯に集中するため、即時就任は現実的ではありません。マウリシオ・ポチェッティーノは現在無所属で即戦力として可能ですが、ビッグクラブでの実績に対する疑問符が付きます。このように、各候補には就任を阻む明確なハードルがあり、その点で無所属で即対応可能なモウリーニョが「強い候補」として浮上している背景が理解できます。詳細な比較データは現在取得中ですが、状況分析からはモウリーニョの現実味が際立っています。",
+      "keyPoints": [
+        "ジダン: ファン人気高も3度目は不透明",
+        "クロップ・デシャン・スカローニ: W杯関連で即就任困難",
+        "ポチェッティーノ: 無所属だが実績に疑問"
+      ],
+      "imageQuery": "Zidane Klopp Deschamps Real Madrid manager candidates",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": "ジダン・クロップ・デシャン・スカローニ・ポチェッティーノの候補5名を一覧比較し、それぞれがマドリーを断る/引き受ける可能性を根拠付きで格付けする",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "カスタムクエリが未指定"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "この報せに対する海外サッカーファンの反応は、批判でも盲信でもなく、『エンターテインメントとして最高』という一種の熱狂に包まれています。あるユーザーは『神よ、これが実現しますように。モウリーニョとあのスター軍団は天国の組み合わせだ。たとえ3ヶ月しか続かなくても、サッカー界は大騒ぎになるさ』と期待。別のユーザーは『モウリーニョ対ビニシウス・ジュニオール。Netflixの特別番組が近日公開だな』と、すでにドキュメンタリー化を予想しています。『審判にもついていく唯一の違いがあるな』という皮肉も。より深く分析するユーザーは『あの更衣室に規律を確立できる人物がいるとすれば、それはモウリーニョだ』と指摘する一方で、『もし彼ですら失敗したら？』と危惧する声も。総じて『これはまさに“シネマ”だ。私は観戦する側につくよ』というコメントに集約されるように、サッカー界が一大スペクタクルを待ち望んでいることが伝わってきます。",
+      "keyPoints": [
+        "「Netflix特別番組確定」の声",
+        "「3ヶ月しか続かなくてもエンタメ」",
+        "「規律を確立できるのはモウリーニョ」の分析"
+      ],
+      "imageQuery": "Mourinho Vini Jr meme Netflix documentary",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍3328] Oh god please let me have this. Mourinho with that diva ensemble, it's a match made in heaven. Football world is going to *feast* for the 3 months it'll last.",
+          "[👍966] Mourinho vs Vini Jr : Netflix special coming soon",
+          "[👍474] Only difference would be that Mourinho also follows the ref after a loss",
+          "[👍406] Can’t imagine the shit storm when vini gets subbed off as a substitute",
+          "[👍252] I’d agree to this, but only if we get an Amazon film crew behind closed doors",
+          "[👍221] Mourinho is super washed, but the theater would be incredible ",
+          "[👍170] This news only exists for scaring Vini into listening to the next manager ",
+          "[👍101] Rudiger getting extended... Jose will have his WMD",
+          "[👍43] It would be cinema. I'm sat for it",
+          "[👍28] Surely some bridges are too burnt albeit he came back to us",
+          "[👍23] I mean if someone can establish some discipline in that dressing room, it's Mourinho. But then what if even he fails to do that? Madrid are then hopeless, and they need a better President than Perez, for all the success he's brought, he's the one responsible for this culture of entitlement which has seeped into all of his players.",
+          "[👍21] Pochettino??? Huh?",
+          "[👍19] Yes lord make this happen! Please yes!",
+          "[👍15] The source is terrible but at this point do it. Just like it happened with the first Galácticos, if you are not gonna bring entertainment in the pitch at least bring it outside of it.",
+          "[👍14] Let's be honest, we all want to see Mourinho v Vini Jr for the chaos ",
+          "[👍10] I’ve never wanted anything more to happen than this ",
+          "[👍10] Please Madrid. Id watch every game and every press conference if you make this happen.",
+          "[👍10] Please take him",
+          "[👍9] Grandpa just wants to burn it all to the ground before he departs lmao",
+          "[👍9] Please let it happen. It'll be a complete car crash that I'll enjoy.",
+          "神よ、これが実現しますように。",
+          "モウリーニョとあのスター軍団は\n天国の組み合わせだ。たとえ3ヶ月しか続かなくても、サッカー界は大騒ぎになるさ。",
+          "モウリーニョ対ビニシウス・ジュニオール。",
+          "Netflixの特別番組が\n近日公開だな。",
+          "これはまさに“シネマ”だ。",
+          "私は観戦する側に\nつくよ。",
+          "ルディガーが長期契約…。",
+          "焼け落ちた橋もあるだろう。",
+          "あの更衣室に規律を\n確立できる人物がいるとすれば、それはモウリーニョだ。",
+          "ポチェッティーノ？？ は？",
+          "情報源は怪しいけど\nやるなら今だ。",
+          "ピッチでエンタメを\n提供できないなら、せめて外では提供しろ。",
+          "正直、みんな混沌を\n見たいんだ。",
+          "モウリーニョ対ビニシウス。"
+        ],
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？ データを紐解けば紐解くほど、モウリーニョのカムバックは単なる噂ではなく、数ある選択肢の中でも現実味を帯びたオプションとして浮かび上がってきます。もし実現すれば、世界最高のスター軍団と、最もカリスマ性のある指揮官の組み合わせが誕生し、サッカー界に新たな伝説が刻まれることでしょう。このチャンネルでは、今後も速報と詳細なデータ分析でサッカー情報をお届けします。見逃さないよう、チャンネル登録と高評価のほど、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Subscribe for more football news analysis",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "1",
+    "originalTitle": "José Mourinho could return to Real Madrid. The interest is mutual. Florentino Pérez could meet with him soon to discuss the terms of his potential contract. Pérez continues to evaluate several names, such as Zidane, Klopp, Deschamps, Scaloni or Pochettino, but Mourinho remains a strong candidate",
+    "generatedAt": "2026-04-18T20:10:39.699Z",
+    "mainImagePath": null
+  }
+}

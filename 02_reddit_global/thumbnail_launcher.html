@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>🖼 サムネイル改善ランチャー v3.1</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      background:#0d0d0d;color:#e8e8e8;
+      font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+      display:flex;height:100vh;overflow:hidden;
+    }
+
+    /* ── 左パネル ── */
+    #panel{
+      width:360px;min-width:360px;background:#141414;
+      border-right:1px solid #222;overflow-y:auto;
+      padding:14px;display:flex;flex-direction:column;gap:12px;
+    }
+    #panel h1{font-size:12px;color:#666;letter-spacing:1px;text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid #222;}
+    .stitle{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;}
+    label{font-size:12px;color:#999;display:block;margin-bottom:3px;}
+    textarea,input[type=text]{
+      width:100%;background:#0a0a0a;border:1px solid #2a2a2a;
+      color:#e8e8e8;border-radius:5px;padding:7px 9px;
+      font-size:13px;font-family:inherit;resize:vertical;
+    }
+    textarea:focus,input:focus{outline:none;border-color:#e5a000;}
+    select{
+      width:100%;background:#0a0a0a;border:1px solid #2a2a2a;
+      color:#e8e8e8;border-radius:5px;padding:6px 9px;
+      font-size:12px;font-family:inherit;cursor:pointer;
+    }
+    select:focus{outline:none;border-color:#e5a000;}
+    input[type=range]{width:100%;accent-color:#e5a000;}
+    .row{display:flex;gap:8px;align-items:center;}
+    .row label{white-space:nowrap;margin:0;}
+    .val{font-size:11px;color:#555;min-width:38px;text-align:right;font-family:monospace;}
+    hr{border:none;border-top:1px solid #1e1e1e;}
+
+    /* ── カラーバリアント ── */
+    .var-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+    .var-btn{
+      padding:8px 4px;border:2px solid #252525;border-radius:6px;
+      background:#0f0f0f;color:#999;cursor:pointer;font-family:inherit;
+      font-size:11px;font-weight:700;text-align:center;transition:all .15s;
+    }
+    .var-btn:hover{border-color:#444;}
+    .var-btn.active{border-color:#e5a000;color:#e5a000;background:#110e00;}
+    .sw{width:100%;height:8px;border-radius:2px;margin-bottom:4px;}
+
+    /* ── ヒントボックス ── */
+    .hint{
+      background:#0f0e00;border:1px solid #3a3000;border-radius:6px;
+      padding:9px 11px;font-size:11px;color:#aa8800;line-height:1.7;
+    }
+    .hint b{color:#e5a000;}
+    .hint code{background:#1a1800;padding:1px 5px;border-radius:3px;color:#d4c060;font-family:monospace;font-size:11px;}
+
+    /* ── ボタン ── */
+    .btn{padding:10px 14px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;transition:opacity .15s;}
+    .btn:hover{opacity:.85;}
+    .btn-ex{background:#1e4d2b;color:#6fcf97;width:100%;font-size:14px;padding:12px;}
+    .btn-rs{background:#2e1515;color:#f28b82;flex:1;}
+
+    /* ── ドロップゾーン ── */
+    #dz{border:2px dashed #2e2e2e;border-radius:6px;padding:12px;text-align:center;cursor:pointer;color:#555;font-size:12px;transition:all .2s;}
+    #dz:hover,#dz.ov{border-color:#e5a000;background:rgba(229,160,0,.04);color:#e5a000;}
+    #dz.ok{border-color:#4caf50;color:#4caf50;}
+
+    /* ── 右パネル ── */
+    #main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:20px;overflow:auto;}
+    #si{font-size:11px;color:#3a3a3a;}
+    #pw{position:relative;box-shadow:0 6px 40px rgba(0,0,0,.7);border-radius:4px;overflow:hidden;}
+    #pf{border:none;display:block;}
+
+    /* ── コードモーダル ── */
+    #cm{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99;align-items:center;justify-content:center;}
+    #cm.open{display:flex;}
+    .ci{background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:20px;width:860px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;gap:10px;}
+    .ci h2{font-size:14px;color:#e5a000;}
+    .ci p{font-size:11px;color:#555;}
+    #co{background:#080808;border:1px solid #222;border-radius:5px;padding:12px;font-family:monospace;font-size:10.5px;color:#9cdcfe;overflow-y:auto;white-space:pre;flex:1;max-height:56vh;}
+    .cf{display:flex;gap:8px;justify-content:flex-end;}
+    .btncp{background:#1e4d2b;color:#6fcf97;}
+    .btncl{background:#222;color:#999;}
+  </style>
+</head>
+<body>
+
+<!-- 左パネル -->
+<div id="panel">
+  <h1>🖼 サムネ改善ランチャー</h1>
+
+  <!-- レイアウト選択 -->
+  <div>
+    <div class="stitle">📐 レイアウト</div>
+    <div style="height:4px"></div>
+    <div class="var-grid" id="pat-grid">
+      <button class="var-btn active" id="pb1" onclick="selPat(1)">P1</button>
+      <button class="var-btn" id="pb2" onclick="selPat(2)">P2</button>
+      <button class="var-btn" id="pb3" onclick="selPat(3)">P3</button>
+      <button class="var-btn" id="pb4" onclick="selPat(4)">P4</button>
+      <button class="var-btn" id="pb5" onclick="selPat(5)">P5</button>
+      <button class="var-btn" id="pb6" onclick="selPat(6)">P6</button>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- カラーバリアント -->
+  <div>
+    <div class="stitle">🎨 カラーバリアント</div>
+    <div style="height:4px"></div>
+    <div class="var-grid">
+      <button class="var-btn active" id="vb1" onclick="selVar('A1')">
+        <div class="sw" style="background:#fff001"></div>金黄
+      </button>
+      <button class="var-btn" id="vb2" onclick="selVar('A2')">
+        <div class="sw" style="background:#0088AA"></div>青緑
+      </button>
+      <button class="var-btn" id="vb3" onclick="selVar('A3')">
+        <div class="sw" style="background:#AA0000"></div>情熱赤
+      </button>
+      <button class="var-btn" id="vb4" onclick="selVar('A4')">
+        <div class="sw" style="background:#1a1a1a"></div>漆黒
+      </button>
+      <button class="var-btn" id="vb5" onclick="selVar('A5')">
+        <div class="sw" style="background:#005522"></div>深緑
+      </button>
+      <button class="var-btn" id="vb6" onclick="selVar('A6')">
+        <div class="sw" style="background:#001a88"></div>紺青
+      </button>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- 画像 -->
+  <div>
+    <div class="stitle">📸 背景画像</div>
+    <div style="height:4px"></div>
+    <div id="dz" onclick="document.getElementById('fi').click()">クリックまたはドラッグ＆ドロップで画像を読み込む</div>
+    <input type="file" id="fi" accept="image/*" style="display:none">
+    <div style="height:6px"></div>
+    <div class="row"><label style="width:54px">ズーム</label><input type="range" id="zoom" min="1" max="3" step="0.05" value="1"><span class="val" id="zv">1.00</span></div>
+    <div class="row"><label style="width:54px">X位置</label><input type="range" id="px" min="0" max="100" step="1" value="50"><span class="val" id="pxv">50</span></div>
+    <div class="row"><label style="width:54px">Y位置</label><input type="range" id="py" min="0" max="100" step="1" value="50"><span class="val" id="pyv">50</span></div>
+  </div>
+
+  <hr>
+
+  <!-- 暗化オーバーレイ -->
+  <div>
+    <div class="stitle">🌑 暗化オーバーレイ</div>
+    <div style="height:4px"></div>
+    <div class="hint" style="font-size:10px;line-height:1.6;">
+      <b>人物を引き立てるグラデ暗化</b><br>
+      左暗め = 左にテキスト / 右に人物<br>
+      右暗め = 右にテキスト / 左に人物
+    </div>
+    <div style="height:6px"></div>
+    <div class="row" style="gap:10px;">
+      <label style="flex:1;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="darkEn" style="accent-color:#e5a000;width:auto;">
+        <span>有効にする</span>
+      </label>
+    </div>
+    <div style="height:6px"></div>
+    <div>
+      <label>グラデ方向</label>
+      <select id="darkDir">
+        <option value="right">← 左暗め（右に人物）</option>
+        <option value="left">右暗め →（左に人物）</option>
+        <option value="bottom">上暗め ↓</option>
+        <option value="top">下暗め ↑</option>
+      </select>
+    </div>
+    <div style="height:4px"></div>
+    <div class="row"><label style="width:80px">焦点位置</label><input type="range" id="darkX" min="10" max="90" step="1" value="55"><span class="val" id="darkXv">55</span><label>%</label></div>
+    <div class="row"><label style="width:80px">暗さ</label><input type="range" id="darkA" min="10" max="90" step="5" value="55"><span class="val" id="darkAv">55</span><label>%</label></div>
+  </div>
+
+  <hr>
+
+  <!-- テキスト -->
+  <div>
+    <div class="stitle">📝 テキスト</div>
+    <div style="height:4px"></div>
+    <div class="hint">
+      <b>テキスト入力ルール：</b><br>
+      <b style="color:#e5a000;">1行目</b> → 青地上段（短めに）<br>
+      <b style="color:#e55050;">2行目以降</b> → 赤文字下段（メイン）<br>
+      例：<code>韓国メディアが報道</code>（← 1行目・青）<br>
+      　　<code>日本代表の</code>（← 2行目以降・赤）<br>
+      　　<code>衝撃の真実</code>
+    </div>
+    <div style="height:6px"></div>
+    <label>タイトル（1行目=青上段 / 2行目以降=赤下段）</label>
+    <textarea id="catch" rows="4">韓国メディアが報道
+日本代表の
+衝撃の真実</textarea>
+    <div style="height:6px"></div>
+    <label>サブボックス <span style="color:#555;font-size:10px;">（白地・赤文字の小タグ）</span></label>
+    <input type="text" id="subtitle" value="【速報】">
+    <div style="height:4px"></div>
+    <div class="row">
+      <label style="width:80px">サブ文字サイズ</label>
+      <input type="range" id="subfs" min="18" max="64" step="1" value="40">
+      <span class="val" id="subfsv">40</span><label>px</label>
+    </div>
+    <div style="height:6px"></div>
+    <div class="row">
+      <label style="width:80px">全体スケール</label>
+      <input type="range" id="fs" min="40" max="160" step="1" value="95">
+      <span class="val" id="fsv">95</span><label>%</label>
+    </div>
+  </div>
+
+  <hr>
+
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    <button class="btn btn-ex" onclick="openCode()">📋 このデザインのコードをコピー（VPS移植用）</button>
+    <div class="row"><button class="btn btn-rs" onclick="resetAll()">🔄 リセット</button></div>
+  </div>
+</div>
+
+<!-- 右パネル -->
+<div id="main">
+  <div id="si">プレビュー倍率: 計算中...</div>
+  <div id="pw"><iframe id="pf" scrolling="no"></iframe></div>
+  <div style="font-size:10px;color:#333;text-align:center">1280 × 720 px</div>
+</div>
+
+<!-- コードモーダル -->
+<div id="cm">
+  <div class="ci">
+    <h2>📋 VPS移植コード</h2>
+    <p>soccer_yt_server.js の buildThumbnailHtml 関数全体をこれで置き換えてください</p>
+    <div id="co"></div>
+    <div class="cf">
+      <button class="btn btncp" onclick="doCopy()">コピー</button>
+      <button class="btn btncl" onclick="closeCode()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 状態 ──────────────────────────────────────────────────
+let B64=null, MIME="image/jpeg", VAR="A1", PAT=1;
+
+// ── カラーパレット ─────────────────────────────────────────
+// P1用: upperBg / upperTx / lowerBg / lowerTx / subBg / subTx
+// P2-P4用: p1bg / p1tx / p2bg / p2tx / p3bg / p3tx
+const V = {
+  A1:{
+    upperBg:"#fff001", upperTx:"#2104fc", lowerBg:"#fff001", lowerTx:"#fb0002", subBg:"#fdfcff", subTx:"#c7342d", lbl:"#cc0000", stroke:"#cc0000",
+    p1bg:"#fff001", p1tx:"#2104fc", p2bg:"#fff001", p2tx:"#fb0002", p3bg:"#fdfcff", p3tx:"#c7342d"
+  }, // プレミア金黄
+  A2:{
+    upperBg:"#0088AA", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#0088AA", stroke:"#0088AA",
+    p1bg:"#0088AA", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 青緑×金
+  A3:{
+    upperBg:"#AA0000", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#1a1a1a", subBg:"#ffffff", subTx:"#DD0000", lbl:"#AA0000", stroke:"#AA0000",
+    p1bg:"#AA0000", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#1a1a1a", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 赤×金
+  A4:{
+    upperBg:"#1a1a1a", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#1a1a1a", stroke:"#1a1a1a",
+    p1bg:"#1a1a1a", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 黒×金
+  A5:{
+    upperBg:"#005522", upperTx:"#ffffff", lowerBg:"#ffffff", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#005522", stroke:"#005522",
+    p1bg:"#005522", p1tx:"#ffffff", p2bg:"#ffffff", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 緑×白
+  A6:{
+    upperBg:"#001a88", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#001a88", stroke:"#001a88",
+    p1bg:"#001a88", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 紺×金
+};
+
+// ── ユーティリティ ─────────────────────────────────────────
+const g = id => document.getElementById(id);
+function esc(s){ return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escL(s){ return esc(s).replace(/\n/g,"<br>"); }
+function phrases(){ return g("catch").value.split("\n").map(s=>s.trim()).filter(Boolean); }
+function params(){
+  const v=V[VAR], zoom=parseFloat(g("zoom").value), px=parseFloat(g("px").value), py=parseFloat(g("py").value);
+  const bg=B64
+    ? `background-image:url('data:${MIME};base64,${B64}');background-size:${zoom*100}%;background-position:${px}% ${py}%;background-repeat:no-repeat;background-color:#111;`
+    : `background:linear-gradient(135deg,#0a0a2a,#1a1a4a);`;
+  const darkEn=g("darkEn").checked;
+  const darkDir=g("darkDir").value;
+  const darkX=parseInt(g("darkX").value);
+  const darkA=(parseInt(g("darkA").value)/100).toFixed(2);
+  const darkGrad=darkEn
+    ? `background:linear-gradient(to ${darkDir}, rgba(0,0,0,${darkA}) 0%, rgba(0,0,0,0) ${darkX}%);`
+    : ``;
+  return { bg, v, fs:parseInt(g("fs").value), lbl:g("lbl")?.value||"【速報】", phrases:phrases(), darkGrad };
+}
+
+// ──────────────────────────────────────────────────────────
+//  P1: 2段テキストボックス型（参考画像完全再現）
+//  ・下45%を2段ボックス（上段：青緑地白文字 / 下段：黄色地赤文字）
+//  ・サブボックス（白地・赤文字）が上段の上端に少し重なる
+//  ・フォントは行高いっぱいに最大化
+// ──────────────────────────────────────────────────────────
+function buildP1(p){
+  const {bg, v, fs, phrases: ph} = p;
+  const subtitle = g("subtitle")?.value || "【速報】";
+
+  // ── レイアウト ──
+  const BOX_H   = Math.round(720 * 0.45);          // 全体の45% ≈ 324px
+  const UPPER_H = Math.round(BOX_H * 0.44);        // 上段 ≈ 143px
+  const LOWER_H = BOX_H - UPPER_H;                 // 下段 ≈ 181px（視覚的に広め）
+  const SUB_OVL = 28;                               // サブボックスが上段上端より上にはみ出す量
+
+  // ── テキスト（各1行のみ） ──
+  const upperText = ph[0] || "上段テキスト";
+  const lowerText = ph.slice(1).join('　') || "下段テキスト";  // 2行目以降を結合
+  const subFsVal  = parseInt(g("subfs")?.value || 40);
+
+  // ── 横幅圧縮 → フォント縮小の自動計算 ──
+  const PAD     = 14;
+  const AVAIL_W = 1280 - PAD * 2;   // 利用可能幅 1252px
+  const MIN_SX  = 0.65;             // 横圧縮の下限（これ以上縮めると不自然）
+
+  // 全角=1.0幅、半角=0.55幅
+  function charW(s){ return [...s].reduce((n,c)=>n+(c.charCodeAt(0)>127?1.0:0.55),0); }
+
+  // 行高から最大フォント → 文字数が多ければ横圧縮 → 圧縮限界ならフォント縮小
+  function calcStyle(text, rowH){
+    const cw = charW(text);
+    const fsByH  = Math.floor((rowH - 8) / 1.05);   // 行高いっぱいのサイズ
+    if(!cw) return {fs:fsByH, sx:1.0};
+    const natW = cw * fsByH * 0.91;                 // 自然な文字幅の合計
+    if(natW <= AVAIL_W) return {fs:fsByH, sx:1.0};  // 収まる → そのまま
+    const sx = AVAIL_W / natW;
+    if(sx >= MIN_SX) return {fs:fsByH, sx:parseFloat(sx.toFixed(3))}; // 圧縮で対応
+    // 圧縮限界 → フォントサイズを縮小
+    return {fs: Math.floor(AVAIL_W / (cw * 0.91 * MIN_SX)), sx: MIN_SX};
+  }
+
+  const scale  = fs / 95;  // 全体スケール（fsスライダー）
+  const uCalc  = calcStyle(upperText, UPPER_H);
+  const lCalc  = calcStyle(lowerText, UPPER_H); // 下段も上段と同じ基準（128px相当）で計算する
+  const upperFs = Math.round(uCalc.fs * scale);
+  const lowerFs = Math.round(lCalc.fs * scale);
+  const uSX     = uCalc.sx;
+  const lSX     = lCalc.sx;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:1280px;height:720px;overflow:hidden;
+  font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+.wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+.bg-img{position:absolute;inset:0;${bg}}
+.overlay{position:absolute;inset:0;background:rgba(0,0,0,0.08);}
+/* ── 2段メインボックス ── */
+.main-box{
+  position:absolute;bottom:0;left:0;right:0;
+  height:${BOX_H}px;
+  display:flex;flex-direction:column;
+}
+/* 上段・下段 共通 */
+.upper-row, .lower-row{
+  flex-shrink:0;
+  padding:0 ${PAD}px;
+  display:flex;align-items:center;
+  overflow:hidden;
+}
+.upper-row{
+  height:${UPPER_H}px;
+  background:${v.upperBg};
+  color:${v.upperTx};
+  font-size:${upperFs}px;
+  font-weight:900;
+}
+.lower-row{
+  height:${LOWER_H}px;
+  background:${v.lowerBg};
+  color:${v.lowerTx};
+  font-size:${lowerFs}px;
+  font-weight:900;
+}
+/* テキスト横幅圧縮用 span */
+.tx{display:inline-block;white-space:nowrap;line-height:1.0;}
+/* ── サブテキストボックス（白地・赤文字） ── */
+/* bottom = BOX_H - SUB_OVL → サブボックスが上段上端の SUB_OVL px だけ上にはみ出す */
+.sub-box{
+  position:absolute;
+  bottom:${BOX_H - SUB_OVL}px;
+  left:16px;
+  background:${v.subBg};
+  color:${v.subTx};
+  font-size:${subFsVal}px;
+  font-weight:900;
+  padding:4px 20px 5px 14px;
+  border:3px solid ${v.subTx};
+  white-space:nowrap;
+  letter-spacing:1px;
+  box-shadow:2px 3px 12px rgba(0,0,0,0.5);
+}
+</style></head><body><div class="wrap">
+<div class="bg-img"></div>
+<div class="overlay"></div>
+${p.darkGrad ? `<div style="position:absolute;inset:0 0 ${BOX_H}px 0;${p.darkGrad}"></div>` : ''}
+<div class="main-box">
+  <div class="upper-row"><span class="tx" style="transform:scaleX(${uSX});transform-origin:left center;">${esc(upperText)}</span></div>
+  <div class="lower-row"><span class="tx" style="transform:scaleX(${lSX});transform-origin:left center;">${esc(lowerText)}</span></div>
+</div>
+<div class="sub-box" style="font-size:${subFsVal}px;">${esc(subtitle)}</div>
+</div></body></html>`;
+}
+
+// ── (以下 P2〜P6 は未使用・参考用) ────────────────────────
+function buildP2(p){
+  const {bg,v,fs,lbl,phrases:ph}=p;
+  const colors=[
+    {bg:v.p1bg,tx:v.p1tx},
+    {bg:v.p2bg,tx:v.p2tx},
+    {bg:v.p3bg,tx:v.p3tx},
+  ];
+  const panelFs = Math.round(fs*0.82);
+  const boxes = ph.map((t,i)=>{
+    const c=colors[i%colors.length];
+    return `<div style="background:${c.bg};color:${c.tx};font-size:${panelFs}px;font-weight:900;padding:10px 20px;line-height:1.22;letter-spacing:0.5px;width:100%;">${esc(t)}</div>`;
+  }).join("\n");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+.wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+.img{position:absolute;inset:0;${bg}}
+.panel{position:absolute;top:0;left:0;width:480px;height:100%;
+  background:rgba(8,8,8,0.82);
+  display:flex;flex-direction:column;justify-content:center;
+  padding:36px 0 36px 0;gap:0;}
+.edge{position:absolute;top:0;left:480px;width:4px;height:100%;background:${v.p1bg};}
+.lbl-tag{background:${v.lbl};color:#fff;font-size:28px;font-weight:900;
+  padding:7px 20px;letter-spacing:1px;margin-bottom:14px;width:fit-content;margin-left:28px;}
+.boxes{display:flex;flex-direction:column;gap:6px;padding:0 28px;}
+</style></head><body><div class="wrap">
+<div class="img"></div>
+${p.darkGrad ? `<div style="position:absolute;inset:0;${p.darkGrad}"></div>` : ''}
+<div class="panel">
+  <div class="lbl-tag">${esc(lbl)}</div>
+  <div class="boxes">${boxes}</div>
+</div>
+<div class="edge"></div>
+</div></body></html>`;
+}
+
+// ──────────────────────────────────────────────────────────
+//  P3: センター積み型
+//  フレーズを画面中央に縦積み・ビネット効果
+// ──────────────────────────────────────────────────────────
+function buildP3(p){
+  const {bg,v,fs,lbl,phrases:ph}=p;
+  const colors=[
+    {bg:v.p1bg,tx:v.p1tx},
+    {bg:v.p2bg,tx:v.p2tx},
+    {bg:v.p3bg,tx:v.p3tx},
+  ];
+  const centerFs = Math.round(fs*0.95);
+  const boxes = ph.map((t,i)=>{
+    const c=colors[i%colors.length];
+    return `<div style="display:inline-block;background:${c.bg};color:${c.tx};font-size:${centerFs}px;font-weight:900;padding:11px 28px;line-height:1.2;letter-spacing:1px;">${esc(t)}</div>`;
+  }).join("\n");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+.wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+.img{position:absolute;inset:0;${bg}}
+.vig{position:absolute;inset:0;background:radial-gradient(ellipse 90% 85% at 50% 50%,transparent 15%,rgba(0,0,0,.5) 60%,rgba(0,0,0,.88) 100%);}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px;}
+.lbl-tag{background:${v.lbl};color:#fff;font-size:30px;font-weight:900;padding:5px 22px;border-radius:4px;letter-spacing:1px;margin-bottom:8px;}
+</style></head><body><div class="wrap">
+<div class="img"></div><div class="vig"></div>
+${p.darkGrad ? `<div style="position:absolute;inset:0;${p.darkGrad}"></div>` : ''}
+<div class="center">
+  <div class="lbl-tag">${esc(lbl)}</div>
+  ${boxes}
+</div>
+</div></body></html>`;
+}
+
+// ──────────────────────────────────────────────────────────
+//  P4: 全幅バンド積み型
+//  色違いの全幅バンドを下部に積む・視認性最高
+// ──────────────────────────────────────────────────────────
+function buildP4(p){
+  const {bg,v,fs,lbl,phrases:ph}=p;
+  const colors=[
+    {bg:v.p3bg,tx:v.p3tx},  // 一番上のバンド（ラベル色）
+    {bg:v.p1bg,tx:v.p1tx},  // メインバンド
+    {bg:v.p2bg,tx:v.p2tx},  // サブバンド
+  ];
+  // フレーズ0をメイン（大きめ）、残りを小さく
+  const mainPh = ph[0]||"タイトル";
+  const subPhs = ph.slice(1);
+  const mainFs = fs;
+  const subFs  = Math.round(fs*0.62);
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+.wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+.img{position:absolute;inset:0;${bg}}
+.bands{position:absolute;bottom:0;left:0;right:0;display:flex;flex-direction:column;}
+.lbl-band{background:${v.lbl};color:#fff;font-size:28px;font-weight:900;
+  padding:6px 40px;letter-spacing:2px;display:flex;align-items:center;gap:30px;}
+.lbl-main{font-size:28px;font-weight:900;}
+.lbl-sub{font-size:18px;font-weight:700;opacity:.85;}
+.main-band{background:${v.p1bg};color:${v.p1tx};font-size:${mainFs}px;font-weight:900;
+  padding:18px 40px;line-height:1.2;letter-spacing:1px;}
+.sub-band{background:${v.p2bg};color:${v.p2tx};font-size:${subFs}px;font-weight:900;
+  padding:8px 40px;letter-spacing:1px;display:flex;gap:20px;}
+</style></head><body><div class="wrap">
+<div class="img"></div>
+${p.darkGrad ? `<div style="position:absolute;inset:0;${p.darkGrad}"></div>` : ''}
+<div class="bands">
+  <div class="lbl-band">
+    <span class="lbl-main">${esc(lbl)}</span>
+    ${subPhs.length>0?`<span class="lbl-sub">${esc(subPhs.join(" ／ "))}</span>`:""}
+  </div>
+  <div class="main-band">${esc(mainPh)}</div>
+</div>
+</div></body></html>`;
+}
+
+// ──────────────────────────────────────────────────────────
+//  P5: 縁取り大文字型
+//  ブロックなし・白文字＋赤縁取りで視認性確保
+// ──────────────────────────────────────────────────────────
+function buildP5(p){
+  const {bg,v,fs,lbl,phrases:ph}=p;
+  const strokeW = Math.round(fs*0.08);
+  const lineHtml = ph.map(t=>
+    `<div class="line">${esc(t)}</div>`
+  ).join("\n");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+.wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+.img{position:absolute;inset:0;${bg}}
+.grad{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 20%,rgba(0,0,0,.52) 100%);}
+.bottom{position:absolute;bottom:36px;left:36px;right:36px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+.lbl-tag{background:${v.lbl};color:#fff;font-size:28px;font-weight:900;
+  padding:5px 18px;border-radius:4px;letter-spacing:1px;margin-bottom:6px;}
+.lines{display:flex;flex-direction:column;gap:0;}
+.line{
+  font-size:${fs}px;font-weight:900;line-height:1.18;
+  color:#ffffff;
+  -webkit-text-stroke:${strokeW}px ${v.stroke};
+  text-stroke:${strokeW}px ${v.stroke};
+  paint-order:stroke fill;
+  letter-spacing:1px;
+  filter:drop-shadow(2px 4px 8px rgba(0,0,0,.9));
+}
+</style></head><body><div class="wrap">
+<div class="img"></div><div class="grad"></div>
+${p.darkGrad ? `<div style="position:absolute;inset:0;${p.darkGrad}"></div>` : ''}
+<div class="bottom">
+  <div class="lbl-tag">${esc(lbl)}</div>
+  <div class="lines">${lineHtml}</div>
+</div>
+</div></body></html>`;
+}
+
+// ──────────────────────────────────────────────────────────
+//  P6: 浮き文字＋サブバー型
+//  右暗めグラデ + 金縁取り発光テキスト + 下部スラッシュバー
+// ──────────────────────────────────────────────────────────
+function buildP6(p){
+  const {bg,fs,lbl,phrases:ph}=p;
+  const subtitle=g("subtitle")?.value||"サブタイトル";
+  const strokeW=Math.max(3,Math.round(fs*0.055));
+  const subFs=Math.round(fs*0.62);
+
+  // タイトル行HTML（浮き文字スタイル）
+  const titleLines=ph.map(t=>
+    `<div class="fl">${esc(t)}</div>`
+  ).join("\n");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{width:1280px;height:720px;overflow:hidden;
+  font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+.wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+.img{position:absolute;inset:0;${bg}}
+/* 右側を少し暗くするグラデ */
+.right-dark{position:absolute;inset:0;
+  background:linear-gradient(to right,
+    transparent 0%,
+    transparent 25%,
+    rgba(0,0,0,.18) 50%,
+    rgba(0,0,0,.40) 75%,
+    rgba(0,0,0,.55) 100%);}
+/* 全体の軽いビネット */
+.vig{position:absolute;inset:0;
+  background:radial-gradient(ellipse 110% 100% at 55% 50%,
+    transparent 40%,rgba(0,0,0,.30) 80%,rgba(0,0,0,.60) 100%);}
+/* タイトルエリア（右60%・縦中央） */
+.title-area{
+  position:absolute;
+  top:50%;right:0;
+  width:70%;
+  transform:translateY(-58%);
+  padding:0 50px 0 30px;
+  display:flex;flex-direction:column;
+  align-items:flex-start;gap:4px;}
+/* 浮き文字スタイル */
+.fl{
+  font-size:${fs}px;font-weight:900;
+  color:#ffffff;
+  -webkit-text-stroke:${strokeW}px #b8760a;
+  paint-order:stroke fill;
+  text-shadow:
+    0 0 8px  rgba(230,175,0,1),
+    0 0 18px rgba(220,160,0,.95),
+    0 0 36px rgba(200,140,0,.80),
+    0 0 70px rgba(180,120,0,.50),
+    4px 6px 22px rgba(0,0,0,1),
+    2px 3px  8px rgba(0,0,0,1);
+  line-height:1.15;
+  letter-spacing:1px;}
+/* サブタイトルバー（下部） */
+.sub-wrap{
+  position:absolute;
+  bottom:34px;right:40px;
+  display:flex;align-items:stretch;
+  box-shadow:3px 4px 16px rgba(0,0,0,.7);}
+.sub-slash{
+  width:${Math.round(subFs*0.7)}px;
+  background:#cc0000;
+  clip-path:polygon(30% 0%,100% 0%,70% 100%,0% 100%);
+  flex-shrink:0;}
+.sub-bar{
+  background:rgba(240,240,240,.96);
+  padding:10px 28px 10px 16px;
+  display:flex;align-items:center;}
+.sub-txt{
+  font-size:${subFs}px;font-weight:900;
+  color:#111111;letter-spacing:2px;}
+</style></head><body><div class="wrap">
+<div class="img"></div>
+<div class="right-dark"></div>
+<div class="vig"></div>
+${p.darkGrad ? `<div style="position:absolute;inset:0;${p.darkGrad}"></div>` : ''}
+<div class="title-area">${titleLines}</div>
+<div class="sub-wrap">
+  <div class="sub-slash"></div>
+  <div class="sub-bar"><div class="sub-txt">${esc(subtitle)}</div></div>
+</div>
+</div></body></html>`;
+}
+
+// ── プレビュー ─────────────────────────────────────────────
+function updatePreview(){
+  const html=window["buildP"+PAT](params());
+  const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const fr=g("pf"),old=fr.src;
+  fr.src=url;
+  if(old&&old.startsWith("blob:")) URL.revokeObjectURL(old);
+}
+function selPat(p){PAT=p;["pb1","pb2","pb3","pb4","pb5","pb6"].forEach((k,i)=>g(k).classList.toggle("active",(i+1)===p));updatePreview();}
+function selVar(v){VAR=v;["vb1","vb2","vb3","vb4","vb5","vb6"].forEach((k,i)=>g(k).classList.toggle("active",["A1","A2","A3","A4","A5","A6"][i]===v));updatePreview();}
+
+function resize(){
+  const m=g("main"),maxW=m.clientWidth-40,maxH=m.clientHeight-70;
+  const s=Math.min(maxW/1280,maxH/720,1);
+  const fr=g("pf");
+  fr.width=1280;fr.height=720;
+  fr.style.transform=`scale(${s})`;
+  fr.style.transformOrigin="top left";
+  g("pw").style.width=Math.round(1280*s)+"px";
+  g("pw").style.height=Math.round(720*s)+"px";
+  g("si").textContent=`倍率 ${Math.round(s*100)}%  |  1280 × 720 px`;
+  }
+
+  // ── イベント ───────────────────────────────────────────────
+
+document.querySelectorAll("input:not([type=file]),textarea").forEach(el=>{
+  el.addEventListener("input",()=>{
+    if(el.id==="zoom")  g("zv").textContent=parseFloat(el.value).toFixed(2);
+    if(el.id==="px")    g("pxv").textContent=el.value;
+    if(el.id==="py")    g("pyv").textContent=el.value;
+    if(el.id==="fs")    g("fsv").textContent=el.value;
+    if(el.id==="darkX")  g("darkXv").textContent=el.value;
+    if(el.id==="darkA")  g("darkAv").textContent=el.value;
+    if(el.id==="subfs")  g("subfsv").textContent=el.value;
+    updatePreview();
+  });
+});
+// 暗化オーバーレイ コントロール
+g("darkEn").addEventListener("change", updatePreview);
+g("darkDir").addEventListener("change", updatePreview);
+// subtitle入力もリアルタイム更新
+g("subtitle").addEventListener("input", updatePreview);
+const dz=g("dz");
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("ov");});
+dz.addEventListener("dragleave",()=>dz.classList.remove("ov"));
+dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("ov");if(e.dataTransfer.files[0])loadImg(e.dataTransfer.files[0]);});
+g("fi").addEventListener("change",e=>{if(e.target.files[0])loadImg(e.target.files[0]);});
+function loadImg(f){
+  MIME=f.type||"image/jpeg";
+  const r=new FileReader();
+  r.onload=ev=>{B64=ev.target.result.split(",")[1];dz.textContent="✅ "+f.name;dz.classList.add("ok");updatePreview();};
+  r.readAsDataURL(f);
+}
+
+// ── VPS移植コード ──────────────────────────────────────────
+const PNAMES={1:"縦積みフレーズ型",2:"左テキスト＋右人物型",3:"センター積み型",4:"全幅バンド積み型",5:"縁取り大文字型",6:"浮き文字＋サブバー型"};
+const VNAMES={A1:"金×赤",A2:"白×赤",A3:"赤×金"};
+
+function buildVpsCode(){
+  const v=V[VAR], fs=g("fs").value;
+  const pn=PNAMES[PAT], vn=VNAMES[VAR];
+  const c=`// P${PAT}: ${pn} / ${vn}
+// soccer_yt_server.js の buildThumbnailHtml を下記で置き換え
+function buildThumbnailHtml(post) {
+  const TW=1280, TH=720;
+  const {b64,mime}=imgBase64(post.mainImagePath);
+  const iz=getImgZoom(post,'tn');
+  const label=getLabel(post);
+  const lines=(post.catchLine1||"").split("\\n").map(s=>s.trim()).filter(Boolean);
+  const bgStyle=b64
+    ? \`background-image:url('data:\${mime};base64,\${b64}');background-size:\${iz.zoom*100}%;background-position:\${iz.x}% \${iz.y}%;background-repeat:no-repeat;background-color:#111;\`
+    : \`background:linear-gradient(135deg,#0a0a2a,#1a1a4a);\`;
+
+  // カラーパレット
+  const C=[
+    {bg:"${v.p1bg}",tx:"${v.p1tx}"},
+    {bg:"${v.p2bg}",tx:"${v.p2tx}"},
+    {bg:"${v.p3bg}",tx:"${v.p3tx}"},
+  ];
+  const lbl="${v.lbl}", stroke="${v.stroke}";
+  const fs=${fs};
+
+${getVpsBody(v,fs)}
+}`;
+  return c;
+}
+
+function getVpsBody(v,fs){
+  const subtitle=g("subtitle")?.value||"サブタイトル";
+  const bodies={
+    1:`  // P1: 現在のVPS本番デザイン（改善版）
+  // バッジfont: 36×1.3×1.2=56px / タイトルfont: 55×1.2=66px / ボックス縦padding: 32×1.2=38px
+  const SAFE=40, margin=32;
+  const badgeFs=Math.round(fs*0.848);
+  const boxPadV=Math.round(fs*0.576);
+  return \`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{width:\${TW}px;height:\${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+  .bg{width:\${TW}px;height:\${TH}px;position:relative;overflow:hidden;}
+  .bg-img{position:absolute;inset:0;\${bgStyle}}
+  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.12);}
+  .title-area{position:absolute;bottom:\${SAFE}px;left:0;right:0;display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
+  .badges{display:flex;flex-direction:row;gap:40px;align-items:center;padding-left:\${SAFE}px;}
+  .badge-item{display:inline-block;font-size:\${badgeFs}px;font-weight:900;padding:4px 30px;border-radius:8px;letter-spacing:2px;color:#fff;width:fit-content;}
+  .badge-primary{background:rgba(200,0,0,0.95);}
+  .title-main{color:#1a1a1a;font-size:\${fs}px;font-weight:900;line-height:1.3;background:#D4A800;
+    padding:\${boxPadV}px 30px;margin-left:\${margin}px;margin-right:\${margin}px;
+    width:calc(100% - \${margin*2}px);overflow-wrap:break-word;word-break:break-all;}
+  </style></head><body><div class="bg">
+  <div class="bg-img"></div><div class="overlay"></div>
+  <div class="title-area">
+    <div class="badges"><div class="badge-item badge-primary">\${esc(label)}</div></div>
+    <div class="title-main">\${escLine(lines.join("\\n"))}</div>
+  </div>
+  </div></body></html>\`;`,
+
+    2:`  // P2: 左テキスト＋右人物型
+  const panelFs=Math.round(fs*0.82);
+  const boxes=lines.map((t,i)=>{
+    const c=C[i%C.length];
+    return \`<div style="background:\${c.bg};color:\${c.tx};font-size:\${panelFs}px;font-weight:900;padding:10px 20px;line-height:1.22;width:100%;">\${esc(t)}</div>\`;
+  }).join("\\n");
+  return \`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{width:\${TW}px;height:\${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+  .wrap{width:\${TW}px;height:\${TH}px;position:relative;overflow:hidden;}
+  .img{position:absolute;inset:0;\${bgStyle}}
+  .panel{position:absolute;top:0;left:0;width:480px;height:100%;background:rgba(8,8,8,.82);display:flex;flex-direction:column;justify-content:center;padding:36px 0;}
+  .edge{position:absolute;top:0;left:480px;width:4px;height:100%;background:${v.p1bg};}
+  .lbl-tag{background:\${lbl};color:#fff;font-size:28px;font-weight:900;padding:7px 20px;letter-spacing:1px;margin-bottom:14px;margin-left:28px;}
+  .boxes{display:flex;flex-direction:column;gap:6px;padding:0 28px;}
+  </style></head><body><div class="wrap">
+  <div class="img"></div>
+  <div class="panel"><div class="lbl-tag">\${esc(label)}</div><div class="boxes">\${boxes}</div></div>
+  <div class="edge"></div>
+  </div></body></html>\`;`,
+
+    3:`  // P3: センター積み型
+  const centerFs=Math.round(fs*0.95);
+  const boxes=lines.map((t,i)=>{
+    const c=C[i%C.length];
+    return \`<div style="display:inline-block;background:\${c.bg};color:\${c.tx};font-size:\${centerFs}px;font-weight:900;padding:11px 28px;line-height:1.2;">\${esc(t)}</div>\`;
+  }).join("\\n");
+  return \`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{width:\${TW}px;height:\${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+  .wrap{width:\${TW}px;height:\${TH}px;position:relative;overflow:hidden;}
+  .img{position:absolute;inset:0;\${bgStyle}}
+  .vig{position:absolute;inset:0;background:radial-gradient(ellipse 90% 85% at 50% 50%,transparent 15%,rgba(0,0,0,.5) 60%,rgba(0,0,0,.88) 100%);}
+  .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px;}
+  .lbl-tag{background:\${lbl};color:#fff;font-size:30px;font-weight:900;padding:5px 22px;border-radius:4px;letter-spacing:1px;margin-bottom:8px;}
+  </style></head><body><div class="wrap">
+  <div class="img"></div><div class="vig"></div>
+  <div class="center"><div class="lbl-tag">\${esc(label)}</div>\${boxes}</div>
+  </div></body></html>\`;`,
+
+    4:`  // P4: 全幅バンド積み型
+  const mainPh=lines[0]||"タイトル", subPhs=lines.slice(1);
+  return \`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{width:\${TW}px;height:\${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+  .wrap{width:\${TW}px;height:\${TH}px;position:relative;overflow:hidden;}
+  .img{position:absolute;inset:0;\${bgStyle}}
+  .bands{position:absolute;bottom:0;left:0;right:0;display:flex;flex-direction:column;}
+  .lbl-band{background:\${lbl};color:#fff;font-size:28px;font-weight:900;padding:6px 40px;letter-spacing:2px;display:flex;align-items:center;gap:30px;}
+  .main-band{background:${v.p1bg};color:${v.p1tx};font-size:\${fs}px;font-weight:900;padding:18px 40px;line-height:1.2;letter-spacing:1px;}
+  </style></head><body><div class="wrap">
+  <div class="img"></div>
+  <div class="bands">
+    <div class="lbl-band">\${esc(label)}\${subPhs.length?\`<span style="font-size:18px;opacity:.85">\${esc(subPhs.join(' / '))}</span>\`:""}</div>
+    <div class="main-band">\${esc(mainPh)}</div>
+  </div>
+  </div></body></html>\`;`,
+
+    5:`  // P5: 縁取り大文字型
+  const strokeW=Math.round(fs*0.08);
+  const lineHtml=lines.map(t=>\`<div class="line">\${esc(t)}</div>\`).join("\\n");
+  return \`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{width:\${TW}px;height:\${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+  .wrap{width:\${TW}px;height:\${TH}px;position:relative;overflow:hidden;}
+  .img{position:absolute;inset:0;\${bgStyle}}
+  .grad{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 20%,rgba(0,0,0,.52) 100%);}
+  .bottom{position:absolute;bottom:36px;left:36px;right:36px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+  .lbl-tag{background:\${lbl};color:#fff;font-size:28px;font-weight:900;padding:5px 18px;border-radius:4px;letter-spacing:1px;margin-bottom:6px;}
+  .line{font-size:\${fs}px;font-weight:900;line-height:1.18;color:#fff;-webkit-text-stroke:\${strokeW}px \${stroke};paint-order:stroke fill;filter:drop-shadow(2px 4px 8px rgba(0,0,0,.9));}
+  </style></head><body><div class="wrap">
+  <div class="img"></div><div class="grad"></div>
+  <div class="bottom"><div class="lbl-tag">\${esc(label)}</div><div>\${lineHtml}</div></div>
+  </div></body></html>\`;`,
+
+    6:`  // P6: 浮き文字＋サブバー型
+  const strokeW=Math.max(3,Math.round(fs*0.055));
+  const subFs=Math.round(fs*0.62);
+  const subtitle="${subtitle}"; // ← ランチャーで設定した値。必要に応じて post.subtitle 等に変更
+  const titleLines=lines.map(t=>\`<div class="fl">\${esc(t)}</div>\`).join("\\n");
+  return \`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{width:\${TW}px;height:\${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+  .wrap{width:\${TW}px;height:\${TH}px;position:relative;overflow:hidden;}
+  .img{position:absolute;inset:0;\${bgStyle}}
+  .right-dark{position:absolute;inset:0;background:linear-gradient(to right,transparent 0%,transparent 25%,rgba(0,0,0,.18) 50%,rgba(0,0,0,.40) 75%,rgba(0,0,0,.55) 100%);}
+  .vig{position:absolute;inset:0;background:radial-gradient(ellipse 110% 100% at 55% 50%,transparent 40%,rgba(0,0,0,.30) 80%,rgba(0,0,0,.60) 100%);}
+  .title-area{position:absolute;top:50%;right:0;width:70%;transform:translateY(-58%);padding:0 50px 0 30px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+  .fl{font-size:\${fs}px;font-weight:900;color:#ffffff;-webkit-text-stroke:\${strokeW}px #b8760a;paint-order:stroke fill;text-shadow:0 0 8px rgba(230,175,0,1),0 0 18px rgba(220,160,0,.95),0 0 36px rgba(200,140,0,.80),0 0 70px rgba(180,120,0,.50),4px 6px 22px rgba(0,0,0,1);line-height:1.15;letter-spacing:1px;}
+  .sub-wrap{position:absolute;bottom:34px;right:40px;display:flex;align-items:stretch;box-shadow:3px 4px 16px rgba(0,0,0,.7);}
+  .sub-slash{width:\${Math.round(subFs*0.7)}px;background:#cc0000;clip-path:polygon(30% 0%,100% 0%,70% 100%,0% 100%);flex-shrink:0;}
+  .sub-bar{background:rgba(240,240,240,.96);padding:10px 28px 10px 16px;display:flex;align-items:center;}
+  .sub-txt{font-size:\${subFs}px;font-weight:900;color:#111;letter-spacing:2px;}
+  </style></head><body><div class="wrap">
+  <div class="img"></div><div class="right-dark"></div><div class="vig"></div>
+  <div class="title-area">\${titleLines}</div>
+  <div class="sub-wrap">
+    <div class="sub-slash"></div>
+    <div class="sub-bar"><div class="sub-txt">\${esc(subtitle)}</div></div>
+  </div>
+  </div></body></html>\`;`,
+  };
+  return bodies[PAT]||bodies[1];
+}
+
+function openCode(){g("co").textContent=buildVpsCode();g("cm").classList.add("open");}
+function closeCode(){g("cm").classList.remove("open");}
+function doCopy(){
+  navigator.clipboard.writeText(g("co").textContent)
+    .then(()=>alert("✅ コピー完了！\nbuildThumbnailHtml 関数と置き換えてください。"))
+    .catch(()=>alert("手動でコピーしてください"));
+}
+g("cm").addEventListener("click",e=>{if(e.target===e.currentTarget)closeCode();});
+
+function resetAll(){
+  g("zoom").value="1";g("px").value="50";g("py").value="50";g("fs").value="66";
+  g("zv").textContent="1.00";g("pxv").textContent="50";g("pyv").textContent="50";g("fsv").textContent="66";
+  g("catch").value="FIFAが目指す\nW杯の姿が\nコチラです";
+  if(g("lbl")) g("lbl").value="【悲報】";
+  g("subtitle").value="意外な答え";
+  B64=null;MIME="image/jpeg";
+  dz.textContent="クリックまたはドラッグ＆ドロップで画像を読み込む";
+  dz.classList.remove("ok");
+  selVar("A1");
+}
+
+window.addEventListener("load",()=>{resize();updatePreview();});
+window.addEventListener("resize",resize);
+</script>
+</body>
+</html>

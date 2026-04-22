@@ -1,0 +1,563 @@
+{
+  "proposed": {
+    "topicSummary": "バイエルン劇的逆転勝利",
+    "keyAngle": "退場・アディショナルタイム弾で4-3逆転！死闘の舞台裏",
+    "modules": [
+      {
+        "id": "opening",
+        "label": "オープニング",
+        "description": "タイトルカード・動画の掴み・今回の話題を一言で紹介",
+        "icon": "🎬",
+        "slideType": "opening",
+        "dataSource": "existing",
+        "alwaysInclude": true,
+        "requiredParams": [],
+        "scriptDirection": "「FC Bayern München 4 - 3 Real Madrid」衝撃の一戦。何が起きたのか、今すぐ解説します",
+        "params": {},
+        "selected": true
+      },
+      {
+        "id": "match_key_moment",
+        "slideType": "type1",
+        "scriptDirection": "1分先制→同点→再リード→追いつき→Mbappe勝ち越しと激動の90分を時系列で再現。89分Díaz・90+4分Oliseの2連弾で奇跡の逆転が生まれた瞬間の狂熱を最大限に煽る",
+        "params": {
+          "homeTeam": "FC Bayern München",
+          "awayTeam": "Real Madrid",
+          "score": "4-3",
+          "goals": [
+            {
+              "minute": 1,
+              "player": "Arda Güler",
+              "team": "Real Madrid"
+            },
+            {
+              "minute": 6,
+              "player": "Aleksandar Pavlović",
+              "team": "FC Bayern München"
+            },
+            {
+              "minute": 29,
+              "player": "Arda Güler",
+              "team": "Real Madrid"
+            },
+            {
+              "minute": 38,
+              "player": "Harry Kane",
+              "team": "FC Bayern München"
+            },
+            {
+              "minute": 42,
+              "player": "Kylian Mbappé",
+              "team": "Real Madrid"
+            },
+            {
+              "minute": 89,
+              "player": "Luis Díaz",
+              "team": "FC Bayern München"
+            },
+            {
+              "minute": "90+4",
+              "player": "Michael Olise",
+              "team": "FC Bayern München"
+            }
+          ]
+        },
+        "reason": "試合の劇的展開が最大の武器"
+      },
+      {
+        "id": "player_profile",
+        "slideType": "type2",
+        "scriptDirection": "2ゴール・評価8.70のArda Gülerに焦点。22歳トルコの天才が欧州最高峰の舞台で放った輝きを称えつつ、勝利を消された悲劇のヒーローとして感情的に語る",
+        "params": {
+          "playerName": "Arda Güler",
+          "club": "Real Madrid",
+          "highlightStat": "2G / 評価8.70",
+          "matchContext": "UCL 2026-04-15"
+        },
+        "reason": "敵方MVPの悲運が感情を揺さぶる"
+      },
+      {
+        "id": "tactical_analysis",
+        "slideType": "simple",
+        "scriptDirection": "69%ポゼッション・xG2.25を誇りながら負けたRealの戦術崩壊を解説。Camavingaの2枚目イエロー退場が守備バランスを破壊し、Bayernがパワープレーで逆転した流れを図解で示す",
+        "params": {
+          "homeTeam": "FC Bayern München",
+          "awayTeam": "Real Madrid",
+          "possession": "69% vs 31%",
+          "xG": "2.14 vs 2.25",
+          "keyEvent": "Camavinga退場86分",
+          "angle": "退場後の数的優位と戦術変化"
+        },
+        "reason": "退場→逆転の因果関係が視聴者の知的好奇心を刺激"
+      },
+      {
+        "id": "stats_comparison",
+        "slideType": "stats",
+        "scriptDirection": "xG2.25で負けたRealと、xG2.14で勝ったBayernのスタッツ逆転現象を強調。『数字が示す支配者』と『勝利をつかんだ者』の皮肉な対比で視聴者の驚きを引き出す",
+        "params": {
+          "teamA": "FC Bayern München",
+          "teamB": "Real Madrid",
+          "metrics": {
+            "possession": "69% vs 31%",
+            "shots": "21 vs 12",
+            "xG": "2.14 vs 2.25",
+            "passes": "640 vs 294"
+          }
+        },
+        "reason": "xG逆転現象がデータ好きに刺さる"
+      },
+      {
+        "id": "player_season_stats",
+        "slideType": "type2",
+        "scriptDirection": "90+4分決勝弾のMichael Oliseに注目。評価8.50の今季成績を紹介しながら『最後の男』としてCLの大舞台で歴史を刻んだことを熱量高く語り、若き英雄像を演出する",
+        "params": {
+          "playerName": "Michael Olise",
+          "club": "FC Bayern München",
+          "stat": "1G / 評価8.50",
+          "matchMinute": "90+4",
+          "competition": "UEFA Champions League 2025-26"
+        },
+        "reason": "決勝弾の主役で締め前の感動を最大化"
+      },
+      {
+        "id": "head_to_head",
+        "slideType": "stats",
+        "scriptDirection": "通算3勝2分5敗と分の悪いBayernがRealを撃破した歴史的意味を解説。過去の名勝負を引きながら『ジャイアントキリング』の文脈でこの勝利の重みを視聴者に刻み込む",
+        "params": {
+          "teamA": "FC Bayern München",
+          "teamB": "Real Madrid",
+          "record": "3W 2D 5L",
+          "competition": "UEFA Champions League",
+          "angle": "歴史的苦手相手への逆転勝利の価値"
+        },
+        "reason": "H2H文脈が勝利の価値を底上げする"
+      },
+      {
+        "id": "ending",
+        "label": "エンディング",
+        "description": "アウトロ・締めの一言テロップ・チャンネル登録訴求",
+        "icon": "🏁",
+        "slideType": "ending",
+        "dataSource": "existing",
+        "alwaysInclude": true,
+        "requiredParams": [],
+        "scriptDirection": "チャンネル登録・コメントを促す締め",
+        "params": {},
+        "selected": true
+      }
+    ],
+    "matchData": {
+      "scoreline": "FC Bayern München 4 - 3 Real Madrid",
+      "matchDate": "2026-04-15",
+      "homeTeam": "Bayern Munich",
+      "awayTeam": "Real Madrid"
+    },
+    "sharedData": {
+      "scoreline": "FC Bayern München 4 - 3 Real Madrid",
+      "matchDate": "2026-04-15",
+      "tournament": "UEFA Champions League, Knockout stage",
+      "goals": [
+        {
+          "time": 1,
+          "timeStr": "1'",
+          "player": "Arda Güler",
+          "isHome": false,
+          "team": "Real Madrid",
+          "type": "通常"
+        },
+        {
+          "time": 6,
+          "timeStr": "6'",
+          "player": "Aleksandar Pavlović",
+          "isHome": true,
+          "team": "FC Bayern München",
+          "type": "通常"
+        },
+        {
+          "time": 29,
+          "timeStr": "29'",
+          "player": "Arda Güler",
+          "isHome": false,
+          "team": "Real Madrid",
+          "type": "通常"
+        },
+        {
+          "time": 38,
+          "timeStr": "38'",
+          "player": "Harry Kane",
+          "isHome": true,
+          "team": "FC Bayern München",
+          "type": "通常"
+        },
+        {
+          "time": 42,
+          "timeStr": "42'",
+          "player": "Kylian Mbappé",
+          "isHome": false,
+          "team": "Real Madrid",
+          "type": "通常"
+        },
+        {
+          "time": 89,
+          "timeStr": "89'",
+          "player": "Luis Díaz",
+          "isHome": true,
+          "team": "FC Bayern München",
+          "type": "通常"
+        },
+        {
+          "time": 90,
+          "timeStr": "90+4'",
+          "player": "Michael Olise",
+          "isHome": true,
+          "team": "FC Bayern München",
+          "type": "通常"
+        }
+      ],
+      "cards": [
+        {
+          "time": 29,
+          "timeStr": "29'",
+          "player": "Josip Stanišić",
+          "isHome": true,
+          "team": "FC Bayern München",
+          "color": "イエロー"
+        },
+        {
+          "time": 40,
+          "timeStr": "40'",
+          "player": "Éder Militão",
+          "isHome": false,
+          "team": "Real Madrid",
+          "color": "イエロー"
+        },
+        {
+          "time": 70,
+          "timeStr": "70'",
+          "player": "Antonio Rudiger",
+          "isHome": false,
+          "team": "Real Madrid",
+          "color": "イエロー"
+        },
+        {
+          "time": 78,
+          "timeStr": "78'",
+          "player": "Eduardo Camavinga",
+          "isHome": false,
+          "team": "Real Madrid",
+          "color": "イエロー"
+        },
+        {
+          "time": 86,
+          "timeStr": "86'",
+          "player": "Eduardo Camavinga",
+          "isHome": false,
+          "team": "Real Madrid",
+          "color": "2枚目イエロー→退場"
+        }
+      ],
+      "stats": {
+        "Ball possession": {
+          "home": 69,
+          "away": 31
+        },
+        "Distance covered": {
+          "home": 111.14776,
+          "away": 105.38747
+        },
+        "Expected goals": {
+          "home": 2.14,
+          "away": 2.25
+        },
+        "Big chances": {
+          "home": 2,
+          "away": 3
+        },
+        "Total shots": {
+          "home": 21,
+          "away": 12
+        },
+        "Goalkeeper saves": {
+          "home": 2,
+          "away": 4
+        },
+        "Number of sprints": {
+          "home": 127,
+          "away": 96
+        },
+        "Corner kicks": {
+          "home": 9,
+          "away": 2
+        },
+        "Fouls": {
+          "home": 10,
+          "away": 12
+        },
+        "Passes": {
+          "home": 640,
+          "away": 294
+        },
+        "Tackles": {
+          "home": 16,
+          "away": 15
+        },
+        "Free kicks": {
+          "home": 12,
+          "away": 10
+        },
+        "Yellow cards": {
+          "home": 1,
+          "away": 7
+        },
+        "Red cards": {
+          "home": 0,
+          "away": 2
+        },
+        "Shots on target": {
+          "home": 9,
+          "away": 5
+        },
+        "Hit woodwork": {
+          "home": 0,
+          "away": 1
+        },
+        "Shots off target": {
+          "home": 5,
+          "away": 4
+        },
+        "Blocked shots": {
+          "home": 7,
+          "away": 3
+        },
+        "Shots inside box": {
+          "home": 15,
+          "away": 7
+        },
+        "Shots outside box": {
+          "home": 6,
+          "away": 5
+        },
+        "Big chances scored": {
+          "home": 1,
+          "away": 1
+        },
+        "Big chances missed": {
+          "home": 1,
+          "away": 2
+        },
+        "Through balls": {
+          "home": 0,
+          "away": 1
+        },
+        "Touches in penalty area": {
+          "home": 43,
+          "away": 22
+        },
+        "Fouled in final third": {
+          "home": 2,
+          "away": 1
+        },
+        "Offsides": {
+          "home": 2,
+          "away": 1
+        },
+        "Accurate passes": {
+          "home": 565,
+          "away": 229
+        },
+        "Throw-ins": {
+          "home": 17,
+          "away": 8
+        },
+        "Final third entries": {
+          "home": 73,
+          "away": 42
+        },
+        "Final third phase": {
+          "home": 212,
+          "away": 46
+        },
+        "Long balls": {
+          "home": 26,
+          "away": 16
+        },
+        "Crosses": {
+          "home": 7,
+          "away": 2
+        },
+        "Duels": {
+          "home": 47,
+          "away": 53
+        },
+        "Dispossessed": {
+          "home": 9,
+          "away": 10
+        },
+        "Ground duels": {
+          "home": 34,
+          "away": 35
+        },
+        "Aerial duels": {
+          "home": 8,
+          "away": 12
+        },
+        "Dribbles": {
+          "home": 6,
+          "away": 10
+        },
+        "Tackles won": {
+          "home": 13,
+          "away": 7
+        },
+        "Total tackles": {
+          "home": 16,
+          "away": 15
+        },
+        "Interceptions": {
+          "home": 6,
+          "away": 6
+        },
+        "Recoveries": {
+          "home": 48,
+          "away": 48
+        },
+        "Clearances": {
+          "home": 11,
+          "away": 25
+        },
+        "Errors lead to a goal": {
+          "home": 1,
+          "away": 0
+        },
+        "Total saves": {
+          "home": 2,
+          "away": 4
+        },
+        "Goals prevented": {
+          "home": -0.5434,
+          "away": -0.9168
+        },
+        "Big saves": {
+          "home": 0,
+          "away": 3
+        },
+        "High claims": {
+          "home": 0,
+          "away": 1
+        },
+        "Punches": {
+          "home": 1,
+          "away": 0
+        },
+        "Goal kicks": {
+          "home": 3,
+          "away": 7
+        }
+      },
+      "topPlayers": [
+        {
+          "name": "Arda Güler",
+          "team": "Real Madrid",
+          "rating": "8.70",
+          "goals": 2,
+          "assists": 0
+        },
+        {
+          "name": "Joshua Kimmich",
+          "team": "Bayern Munich",
+          "rating": "8.60",
+          "goals": 0,
+          "assists": 0
+        },
+        {
+          "name": "Michael Olise",
+          "team": "Bayern Munich",
+          "rating": "8.50",
+          "goals": 1,
+          "assists": 0
+        }
+      ],
+      "h2hSummary": "通算 3W 2D 5L"
+    }
+  },
+  "scenario": {
+    "youtubeTitle": "【衝撃の逆転劇】Bayern 4-3 Real Madrid！ 89分・90+4分の2連弾で歴史的大逆転！ データで検証する奇跡の真実",
+    "hashtagsText": "#サッカー #バイエルンミュンヘン #レアルマドリード #チャンピオンズリーグ #逆転",
+    "modules": [
+      {
+        "id": "opening",
+        "narration": "衝撃の一戦が幕を開けました。FC Bayern München 4 - 3 Real Madrid。序盤からゴールが乱れ飛び、最終盤に奇跡の大逆転が起こったこの試合。一体何が起きたのか？ 数字とデータで徹底解剖します。",
+        "catchLine": "FC Bayern München 4 - 3 Real Madrid 衝撃の一戦。何が起きたのか、今すぐ解説します",
+        "keyPoints": [],
+        "imageQuery": "Bayern Munich Real Madrid 2026 Champions League"
+      },
+      {
+        "id": "match_key_moment",
+        "narration": "2026年4月15日、UEFAチャンピオンズリーグ決勝トーナメントで繰り広げられた、息もつかせぬ7ゴールの攻防戦。試合は開始1分でレアル・マドリードのアルダ・ギュレルの先制ゴールで幕開け。しかし、バイエルンは6分にアレクサンダル・パヴロヴィッチで同点に追いつきます。29分、再びアルダ・ギュレルがゴールを決めレアルがリード。38分にはハリー・ケインがバイエルンの2点目を叩き込み同点に。その4分後、42分にキリアン・エムバペがレアルの3点目を決め、前半だけで5ゴールという異常事態。後半は膠着状態が続きましたが、86分にエドゥアルド・カマヴィンガが2枚目のイエローカードで退場。この人数差が勝敗を分けました。89分、ルイス・ディアスが同点ゴールを決め、そしてロスタイム90+4分、マイケル・オリセが劇的な決勝点を叩き込み、バイエルン・ミュンヘンが4-3での大逆転勝利を収めたのです。",
+        "keyPoints": [
+          "1分先制→6分同点→29分再リード→38分同点→42分勝ち越しと激動の前半",
+          "86分カマヴィンガ退場がターニングポイント",
+          "89分ディアス、90+4分オリセの2連弾で奇跡の逆転"
+        ],
+        "imageQuery": "Arda Guler goal 2026 Bayern Real"
+      },
+      {
+        "id": "player_profile",
+        "narration": "この一戦で最も輝いたのは、敗戦側でありながら2ゴールを挙げ、SofaScoreの評価点で8.70を記録したレアル・マドリードのアルダ・ギュレルでした。わずか22歳のトルコ人天才は、欧州最高峰の舞台であるチャンピオンズリーグの決勝トーナメントで、開始1分と29分にゴールを奪い、チームをリードさせ続けました。2ゴールという輝かしい活躍は、勝利に直結するはずのパフォーマンス。しかし、チームは最終盤に逆転を許し、彼の偉業は勝利という形で報われることはありませんでした。数字が示す『最高のプレーヤー』が、試合結果という『最も残酷な現実』に直面した、悲劇のヒーロー像がここにあります。",
+        "keyPoints": [
+          "アルダ・ギュレル（22歳）が2ゴールでマンオブザマッチ級の活躍",
+          "SofaScore評価点8.70は両チーム最高",
+          "勝利を逃した悲劇のヒーロー"
+        ],
+        "imageQuery": "Arda Guler Real Madrid 2026"
+      },
+      {
+        "id": "tactical_analysis",
+        "narration": "数字が語る皮肉な現実。この試合、ポゼッションはバイエルン69%対レアル31%、シュート数は21対12と、バイエルンが圧倒的にゲームを支配していました。しかし、得点に直結するチャンスの質を示すExpected Goals（xG）は、レアル2.25対バイエルン2.14と、レアルがわずかに上回っていたのです。レアルは限られたボールから高い決定力で3得点を挙げ、勝利に王手をかけました。しかし、戦術的均衡を破ったのは86分の退場劇でした。エドゥアルド・カマヴィンガが2枚目のイエローカードで退場し、レアルは終盤の10分間を10人で戦うことを余儀なくされます。この人数的優位を最大限に利用したバイエルンは、最終ラインへのプレッシャーを増幅。その結果、89分と90+4分に立て続けにゴールを奪い、数字上の優位（ポゼッション、シュート数）を遂に勝利に結びつけたのです。1枚のカードが戦術バランスを崩し、試合の流れを決定的に変えました。",
+        "keyPoints": [
+          "ポゼッション69% vs 31%、シュート21 vs 12でバイエルンが支配",
+          "xGは逆にレアル2.25 vs バイエルン2.14",
+          "86分カマヴィンガ退場が守備バランスを崩壊させ逆転を許す"
+        ],
+        "imageQuery": "Camavinga red card Bayern Real 2026 tactical"
+      },
+      {
+        "id": "stats_comparison",
+        "narration": "この試合を象徴する、数字と結果の逆転現象を比較してみましょう。レアル・マドリードは、Expected Goals（xG）2.25を記録しました。これは、得点チャンスの質が高く、平均すれば2.25得点が見込まれることを意味します。実際に彼らは3得点を挙げ、xGを上回る効率的な得点力を発揮しました。一方、バイエルン・ミュンヘンのxGは2.14。レアルよりも低い数字です。しかし、最終的なスコアは4-3。バイエルンがより多くの得点を挙げたのです。これは、特に終盤の人数有利状況で生み出された超絶的な決定力の結果と言えます。ポゼッション69%、シュート21本という『支配の数字』を誇りながら、xGでは劣っていたバイエルン。しかし、彼らは『勝利という唯一無二の数字』を手中に収めました。サッカーにおいて、ピッチを支配する者と、勝ち点を奪う者は必ずしも一致しないという、残酷で美しい真実をデータが如実に物語っています。",
+        "keyPoints": [
+          "xG比較: レアル2.25 vs バイエルン2.14",
+          "実際の得点: レアル3 vs バイエルン4",
+          "「チャンスの質」の勝者と「勝利」の勝者の不一致"
+        ],
+        "imageQuery": "Bayern Munich vs Real Madrid 2026 stats xG comparison"
+      },
+      {
+        "id": "player_season_stats",
+        "narration": "劇的な決勝点を90+4分に決め、ヒーローとなったのはバイエルン・ミュンヘンのマイケル・オリセです。SofaScoreの評価点8.50は、アルダ・ギュレル、ヨシュア・キミヒに次ぐ高い数値。この一撃が、チームを歴史的逆転勝利へと導きました。チャンピオンズリーグという最もプレッシャーのかかる大舞台で、試合終了間際にこれほど冷静な決定力を発揮できることこそ、真のエリートの証です。22歳の若きウィンガーは、この1ゴールで自らの名前をサッカー史に刻み込みました。『最後の男』としてピッチに残り、チームに勝利をもたらす。サッカーにおいて、これ以上に栄光に満ちた役割はありません。この瞬間、マイケル・オリセは単なる有望株から、クラブの伝説の一部を担う選手へとその階段を駆け上ったのです。",
+        "keyPoints": [
+          "90+4分決勝点のマイケル・オリセがヒーローに",
+          "SofaScore評価点8.50を記録",
+          "大舞台で歴史を刻んだ若きエリート"
+        ],
+        "imageQuery": "Michael Olise Bayern Munich goal 90+4 2026"
+      },
+      {
+        "id": "head_to_head",
+        "narration": "この勝利がどれほど価値のあるものだったか、両チームの対戦歴史（H2H）を紐解くと明らかになります。これまでの通算成績は、バイエルン・ミュンヘンが3勝、2分け、5敗。明らかにレアル・マドリードが優勢であり、バイエルンにとっては分の悪いマッチアップでした。過去の名勝負、特にレアルが何度もバイエルンの前に立ちはだかった苦い記憶が蘇る中でのこの勝利。4-3というスコアは、単なる1勝を超える意味を持ちます。これは、歴史的に苦手とする巨人を、自らのホームで、しかも劇的な逆転で打ち負かした『ジャイアントキリング』なのです。通算勝ち星を3勝6敗に、そしておそらくは心理的な劣勢を一掃する、記念碑的な一戦として長く語り継がれることでしょう。データが示す過去の不利を、熱意と執念で塗り替えた瞬間でした。",
+        "keyPoints": [
+          "通算H2H: バイエルン 3勝2分5敗でレアルが優勢",
+          "苦手相手に対する歴史的逆転勝利",
+          "「ジャイアントキリング」としての重み"
+        ],
+        "imageQuery": "Bayern Munich Real Madrid head to head history"
+      },
+      {
+        "id": "ending",
+        "narration": "いかがでしたか？ データが明らかにするのは、単なるサッカーの試合を超えた、数字と情熱、戦術と運が交錯するドラマです。このチャンネルでは、そんなサッカーの深層を、常に最新のデータと共にお届けします。次の驚きの試合分析もお見逃しなく！ 高評価とチャンネル登録、そしてコメントでのご意見をお待ちしています。",
+        "telop": "チャンネル登録＆高評価で次の分析を待て！",
+        "keyPoints": [],
+        "imageQuery": "Soccer data analysis stats YouTube"
+      }
+    ]
+  }
+}

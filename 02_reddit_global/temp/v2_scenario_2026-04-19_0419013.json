@@ -1,0 +1,418 @@
+{
+  "youtubeTitle": "リバプール参戦！22歳ウォートン争奪戦に新展開！要求額は驚愕の80億円！レアル・マンUも狙う静かなる支配者",
+  "hashtagsText": "#サッカー #リバプール #クリスタルパレス #移籍 #プレミアリーグ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "衝撃の移籍情報です！レアル・マドリー、マンチェスター・ユナイテッドという超名門が狙う22歳の天才MFに、新たな巨人が参戦しました。要求額は驚愕の80億円！その全真相を、詳細なデータと共に徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Adam Wharton Liverpool transfer news",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "リバプールが80億円の22歳天才MF争奪戦に参戦！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "ESPNなど複数のメディアが報じたこのニュース。クリスタル・パレスに所属する22歳のイングランド人MF、アダム・ウォートンを巡る争奪戦に、リバプールが本格的に参戦したとのことです。これまでにレアル・マドリー、マンチェスター・ユナイテッドの名が挙がっていましたが、まさかの三つ巴の戦いに発展。しかし、最大の障壁はその移籍金。パレス側は、契約が2029年6月まで残っていることを背景に、少なくとも8000万ポンド、日本円で約150億円という驚愕の金額を要求していると報じられています。市場価値が約6300万ユーロ（約105億円）の選手に対して、約9300万ユーロ（約155億円）もの要求額。なぜここまで高騰したのか、その背景を探ります。",
+      "keyPoints": [
+        "移籍要求額：8000万ポンド（約150億円）",
+        "参戦クラブ：リバプール、レアル・マドリー、マンチェスター・ユナイテッド",
+        "契約残り：2029年6月まで",
+        "市場価値との差額：約3000万ユーロ（約50億円）"
+      ],
+      "imageQuery": "Adam Wharton Crystal Palace 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "22歳のイングランド人MF、アダム・ウォートンを巡る争奪戦に、新たな巨人が名乗りを上げました。レアル・マドリー、マンチェスター・ユナイテッドという名門の名が挙がる中、今度はリバプールが本格的に動き始めたとの情報です。しかし、その移籍金は驚愕の額に設定されています。",
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "player_profile",
+      "label": "選手プロフィール",
+      "icon": "👤",
+      "narration": "では、このアダム・ウォートンとは一体どんな選手なのか？データで徹底解剖します。今シーズン、プレミアリーグで28試合に出場。数字だけ見ると、ゴール0、アシスト5と、派手な攻撃数字は目立ちません。しかし、その評価点は7.05。ここに秘密があります。彼の真価は守備とゲームメイク。今季、タックルは60回、インターセプトは23回を記録。中盤の底で静かにゲームを支配する、まさに『静かなる支配者』タイプの選手です。さらに、ビッグチャンス創出は11回、キーパスは32回と、攻撃の起点としても確実に機能。身長182cmのイングランド人、22歳という若さも大きな魅力です。名前は知らなくても、数字が物語る実力者、それがアダム・ウォートンなのです。",
+      "keyPoints": [
+        "今季スタッツ：出場28試合 0G 5A 評価点7.05",
+        "守備力：タックル60回、インターセプト23回",
+        "ゲームメイク：ビッグチャンス創出11回、キーパス32回",
+        "基本データ：22歳、イングランド人、身長182cm"
+      ],
+      "imageQuery": "Adam Wharton stats 2026 tackles",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Adam Wharton",
+          "url": "https://www.sofascore.com/player/1109771",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "今期出場試合数",
+          "value": "一塁手 ; 1, 大山 悠輔(神) .995 ; 2, ボスラー(中) .995 ; 3, オスナ(ヤ) .994 ; 4, モンテロ(広) .991 ..."
+        },
+        {
+          "label": "今期平均評価点",
+          "value": "オフィシャルHPの今期得点は、直近4ヶ月の平均競走得点が示されています。例えば今日現在で表示されている今期得点は昨年の10月開催から昨日までに ..."
+        },
+        {
+          "label": "市場価値",
+          "value": "Die wertvollsten Spieler der Welt ; 1. Lamine Yamal. 右ウィンガー. 18 ; 2. Erling Haaland. センターフォワード. 25 ; 3. Kylian Mbappé. セ"
+        },
+        {
+          "label": "年齢",
+          "value": "順位, 選手名, チーム, 年齢, 生年月日, 年数, 守備, 身長, 体重, 血液型, 投打, 出身地, 年俸(推定). 1, 山本昌, 中日, 50歳, 1965/08/11, 32年, 投手, 186cm, 87kg ..."
+        },
+        {
+          "label": "身長",
+          "value": "野手（179.4cm）より投手（182.3cm）のほうが身長が高い · 左投手（180.6㎝）より右投手（183.0㎝）のほうが身長が高い · 12球団別の身長ランキングでは北海道日本ハム ..."
+        },
+        {
+          "label": "ポジション",
+          "value": "DFであれば、中央でプレーする選手を「センターバック」（③④）、サイドでプレーする選手は「サイドバック」（②⑤）と言います。 MFは中央でプレーする選手を「センターハーフ」（ ..."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1109771,
+        "name": "Adam Wharton",
+        "position": "M",
+        "team": "Crystal Palace",
+        "nationality": "England",
+        "dateOfBirth": "2004-02-06T00:00:00+00:00",
+        "height": 182,
+        "preferredFoot": "Left",
+        "marketValue": "€63M",
+        "contractUntil": "2029-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 28,
+          "goals": 0,
+          "assists": 5,
+          "rating": 7.05,
+          "minutesPlayed": 2200,
+          "yellowCards": 5,
+          "redCards": 1,
+          "expectedGoals": 1.34,
+          "keyPasses": 32
+        },
+        "positionStats": {
+          "keyPasses": 32,
+          "successfulDribbles": 11,
+          "bigChancesCreated": 11,
+          "tackles": 60,
+          "interceptions": 23,
+          "accuratePassesPct": 79.1
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season_summary": "28試合 0G 5A",
+        "goals": "0点",
+        "assists": "5本",
+        "goal_assist_total": "5",
+        "appearances": "28試合",
+        "minutes_played": "2200分",
+        "ga_per90": "0.20",
+        "expected_goals": "1.34",
+        "key_passes": "32本",
+        "dribbles": "11回",
+        "tackles": "60回",
+        "rating": "7.05",
+        "market_value": "€63M",
+        "contract_until": "〜2029-06",
+        "nationality": "England",
+        "height": "182cm",
+        "position": "M",
+        "team": "Crystal Palace",
+        "league": "Premier League 25/26"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "各チームの中盤状況",
+      "icon": "📊",
+      "narration": "なぜ、これほどのクラブがウォートンを欲しがるのか？各チームの中盤事情をデータで見てみましょう。まず、レアル・マドリー。クロースの引退後、中盤の世代交代は最重要課題。若くして守備的要素と正確なパス（成功率79.1%）を兼ね備えたウォートンは、カマビンガやバルベルデと組む理想的なピースになり得ます。次にマンチェスター・ユナイテッド。中盤の守備力と安定性は長年の悩みの種。カゼミロの後継者として、タックル60回の守備力とイングランド人という点が大きく評価されています。最後にリバプール。遠藤航の年齢を考えると、守備的MFの長期的な補強は必須課題。特に、プレッシング後のボール回収とビルドアップを担える選手は貴重です。どのクラブも、自チームの弱点を補完する『最後のピース』として、ウォートンに注目しているのです。",
+      "keyPoints": [
+        "レアル：クロース後継、正確なパス（成功率79.1%）が評価",
+        "マンU：中盤守備力強化、カゼミロ後継候補",
+        "リバプール：守備的MFの長期的補強が課題",
+        "共通点：弱点補完の「最後のピース」として注目"
+      ],
+      "imageQuery": "Real Madrid Manchester United Liverpool midfield 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Adam Wharton",
+          "url": "https://www.sofascore.com/player/1109771",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": "移籍候補にあがっているマドリー、マンU、リヴァプール、それぞれのチームの中盤の状況や補強が必要な理由を解説",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1109771,
+        "name": "Adam Wharton",
+        "position": "M",
+        "team": "Crystal Palace",
+        "nationality": "England",
+        "dateOfBirth": "2004-02-06T00:00:00+00:00",
+        "height": 182,
+        "preferredFoot": "Left",
+        "marketValue": "€63M",
+        "contractUntil": "2029-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 28,
+          "goals": 0,
+          "assists": 5,
+          "rating": 7.05,
+          "minutesPlayed": 2200,
+          "yellowCards": 5,
+          "redCards": 1,
+          "expectedGoals": 1.34,
+          "keyPasses": 32
+        },
+        "positionStats": {
+          "keyPasses": 32,
+          "successfulDribbles": 11,
+          "bigChancesCreated": 11,
+          "tackles": 60,
+          "interceptions": 23,
+          "accuratePassesPct": 79.1
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "transfer_rumor",
+      "label": "移籍の噂",
+      "icon": "🔄",
+      "narration": "移籍の可能性を、数字で冷静に分析します。最大の焦点は、市場価値6300万ユーロ（約105億円）に対する、8000万ポンド（約9300万ユーロ、155億円）という要求額の巨大な乖離です。約3000万ユーロ、日本円で約50億円もの差があります。パレスがここまで強気な交渉姿勢を見せる背景には、2029年6月までという長い契約期間が最大の武器になっています。つまり、売らなければならない切迫した事情がなく、買い手側のオファー次第という構図。特にレアル・マドリーのような超名門が名乗りを上げたことで、選手の価値が吊り上がっている側面もあります。移籍が成立するか否かは、この30億円超の価格差を、いかにして埋めるか。買い手クラブの本気度と、パレスの折衝次第で、夏の市場を大きく揺るがす大型移籍になる可能性を秘めています。",
+      "keyPoints": [
+        "価格差：要求額（約9300万ユーロ） - 市場価値（6300万ユーロ） = 約3000万ユーロ",
+        "パレスの強気の理由：契約残り約3年（2029年6月まで）",
+        "買い手の本気度が価格差を埋める鍵",
+        "レアル参戦で選手価値が吊り上がる可能性"
+      ],
+      "imageQuery": "Crystal Palace transfer demand 80 million",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Liverpool eye Wharton amid Man United, Real Madrid interest - ESPN",
+          "url": "https://www.espn.com/soccer/story/_/id/48519827/transfer-rumors-news-liverpool-eye-wharton-amid-man-united-real-madrid-interest",
+          "date": "8 hours ago"
+        },
+        {
+          "label": "Adam Wharton to Liverpool: Reds 'Register Interest' in £80m CM",
+          "url": "https://www.thisisanfield.com/2026/04/adam-wharton-liverpool-transfer-interest-crystal-palace-2026/",
+          "date": "1 day ago"
+        },
+        {
+          "label": "Liverpool in for Wharton as Arsenal eye wonderkid | Transfermarkt",
+          "url": "https://www.transfermarkt.us/transfer-news-live-liverpool-join-adam-wharton-race-as-arsenal-keep-tabs-on-wonderkid-16/view/news/445145",
+          "date": "5 hours ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "transfer_rumor",
+        "query": "Adam Wharton transfer rumor latest 2025 2026",
+        "organic": [
+          {
+            "title": "Liverpool eye Wharton amid Man United, Real Madrid interest - ESPN",
+            "snippet": "Liverpool face competition from Manchester United and Real Madrid to sign Crystal Palace midfielder Adam Wharton, while Arsenal want Leicester City ...",
+            "link": "https://www.espn.com/soccer/story/_/id/48519827/transfer-rumors-news-liverpool-eye-wharton-amid-man-united-real-madrid-interest",
+            "date": "8 hours ago"
+          },
+          {
+            "title": "Adam Wharton to Liverpool: Reds 'Register Interest' in £80m CM",
+            "snippet": "Liverpool have reportedly registered interest in Crystal Palace midfielder Adam Wharton, with the club weighing up a £80m summer move.",
+            "link": "https://www.thisisanfield.com/2026/04/adam-wharton-liverpool-transfer-interest-crystal-palace-2026/",
+            "date": "1 day ago"
+          },
+          {
+            "title": "Liverpool in for Wharton as Arsenal eye wonderkid | Transfermarkt",
+            "snippet": "Liverpool will reportedly battle it out with Manchester United to sign Crystal Palace midfielder Adam Wharton. The 22-year-old is expected to leave Selhurst ...",
+            "link": "https://www.transfermarkt.us/transfer-news-live-liverpool-join-adam-wharton-race-as-arsenal-keep-tabs-on-wonderkid-16/view/news/445145",
+            "date": "5 hours ago"
+          },
+          {
+            "title": "England midfielder is coming to Liverpool in club record deal",
+            "snippet": "Wharton - a former Blackburn Rovers player - is understood to be willing to move back to the North West according to a report in TEAMtalk. The same report also ...",
+            "link": "https://www.anfieldwatch.co.uk/liverpool-fc/news/liverpool-transfer-news-adam-wharton-crystal-palace-england-midfielder-is-coming-club-record-deal/",
+            "date": "3 hours ago"
+          },
+          {
+            "title": "Liverpool In Race For £80m Premier League Midfielder - Yahoo Sports",
+            "snippet": "Liverpool Eye Adam Wharton as Midfield Plans Take Shape. Liverpool's summer rebuild continues to gather pace, with fresh reporting from GiveMeSport ...",
+            "link": "https://sports.yahoo.com/articles/liverpool-race-80m-premier-league-192500957.html",
+            "date": "3 hours ago"
+          },
+          {
+            "title": "Liverpool-linked Adam Wharton 'expected to leave' Crystal Palace",
+            "snippet": "Liverpool are reportedly showing an interest in Adam Wharton, who 'is expected to leave' Crystal Palace at the end of the season.",
+            "link": "https://www.empireofthekop.com/2026/04/17/80m-liverpool-target-is-expected-to-leave-current-club-could-be-perfect-for-reds/",
+            "date": "1 day ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.espn.com/soccer/story/_/id/48519827/transfer-rumors-news-liverpool-eye-wharton-amid-man-united-real-madrid-interest]\nTransfer rumors, news: Liverpool eye Wharton amid Man United, Real Madrid interest - ESPN Transfer rumors, news: Liverpool eye Wharton amid Man United, Real Madrid interest --> Skip to main content Skip to navigation < > Transfer rumors, news: Liverpool eye Wharton amid Man United, Real Madrid interest 8h ESPN What did the USWNT learn ahead of World Cup after Japan series? 14h Jeff Kassouf Man City vs. Arsenal: What to watch for in Premier League title showdown 1d Rob Dawson, James Olley Life after Pochettino: USMNT needs ambitious post-World Cup succession plan 2d Jeff Carlisle play How will Liverpool cope without Hugo Ekitike? (3:05) The 'FC TV' crew debate react to the news of Hugo Ekitike rupturing his Achilles against Paris Saint Germain in the UEFA Champions League. (3:05) ESPN Multiple Authors Apr 18, 2026, 11:19 AM ET Email Print Open Extended Reactions Liverpool face competition from Manchester United and Real Madrid to sign Crystal Palace midfielder Adam Wharton , while Arsenal want Leicester City wonderkid Jeremy Monga . Join us for the latest transfer news and rumors from around the globe. Transfers home page | Men's winter grades | Women's grades Trending rumors Crystal Palace midfielder Adam Wharton is wanted by a host of clubs. Photo by Justin Setterfield/Getty Images - Liverpool lead the race to sign Crystal Palace midfielder Adam Wharton , TalkSPORT reports. Liverpool face strong competition from Manchester United and Real Madrid for the England international"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外サッカーファンはこの移籍劇をどう見ているのか？代表的な反応をご紹介します。まずは天才的なコメントから。『ウォートンとヴィルツ、3人目はバットマンが必要だ』。リバプールの噂を皮肉ったこのコメントには74の高評価が。多くのファンが金額に驚いています。『素晴らしい選手だが、80はとんでもなく高い』、『80m….by Christ（呆然）』という声。具体的な比較では、『ボーンマスからヒルとスコットを買ってもまだお釣りがくる額だ』という指摘も。クラブ選択については、『レアルが本気で来れば、他を選ぶ理由はない』という意見がある一方、皮肉を込めて『もしウォートンにリーグやCLを勝つ野心がなければ、マンUが明らかな選択だ』という声も。あなたは、80億円の価値があると思いますか？コメントで教えてください。",
+      "keyPoints": [
+        "「ウォートンとヴィルツ、3人目はバットマン」に74高評価",
+        "多数派意見：「80億円は高すぎる」",
+        "比較論：「ボーンマスから2人買える額」",
+        "行先予想：「レアル本気なら他は選ばない」vs「勝ちたいならマンU以外」"
+      ],
+      "imageQuery": "Reddit soccer transfer reaction Wharton",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍74] Wharton and Wirtz, the 3rd midfielder must be Batman.",
+          "[👍52] Is their plan to just buy for obscene fees until they learn to play football again? ",
+          "[👍36] (According to Talksport)",
+          "[👍12] He's great but 80 is steep as fuck",
+          "[👍8] Good player, but their midfield might be soft with him",
+          "[👍2] Looking forward to a whole summer of rumours like this",
+          "[👍1] \nTo reduce the spam of reports regarding the same move during transfer windows we try to allow **only one submission about each transfer saga per day**. The submission in question also needs to contain relevant new information regarding the potential move, and not just being a \"no/minor developments\" report.   \n\nIf there are important/official developments or new valuable information about a saga, we will allow extra threads in the same day, but for the rest of minor news please just comment the",
+          "[👍1] Real Madrid wants to become an EPL side with the names it's linked to nowadays",
+          "[👍1] Is he that good that he's worth £80 mil?",
+          "[👍1] 80m….by Christ",
+          "[👍1] Can’t see why he would choose other teams if Madrid actually come in for him. Don’t see it happening though in fairness. ",
+          "[👍1] Please utd ... this is all I ask of you",
+          "[👍1] Could sign Hill and Scott from Bournemouth and have money left over for that cost. \n\nWharton is a great progressive passer, but he plays in front of a back 3 where he’s less exposed for his lack of pace. I don’t see how under our current system he wouldn’t just be a younger English Macca",
+          "[👍1] If Wharton has no ambition to win league or CL, then Man Utd are clear choice for him.",
+          "[👍0] Real Madrid &amp; Man Utd are even choices. Wharton could go either way.",
+          "[👍-8] They have spent around 400 mil in the summer, no champions league where is this money coming from?",
+          "80億円は高すぎやしないか？",
+          "素晴らしい選手だが、80はとんでもなく\n高い。彼はそれだけの価値があるのか？",
+          "80m….by Christ（呆然）",
+          "ボーンマスからヒルとスコットを\n買ってもまだお釣りがくる額だ。",
+          "彼らの計画は、またプレーを覚えるまで法外な金を払い続けることか？",
+          "リバプールにまだ金が残ってるとは\n驚きだ。噂の夏が始まると思うと楽しみだ。",
+          "ウォートンとヴィルツ、3人目はバットマンか",
+          "レアルが本気で来れば、他を選ぶ理由はない",
+          "レアル・マドリーとマンUは\n互角の選択肢。どちらにも行きうる。",
+          "ユナイテッド、頼む…これだけはお願いだ",
+          "もしウォートンにリーグやCLを\n勝つ野心がなければ、マンUが明らかな選択だ。",
+          "レアル・マドリーは最近リンクされる名前からしてEPLチームになりたいのか",
+          "ユナイテッドとリバプールが、彼が市場に残る\n最後の良質な中盤かのように嗅ぎ回っている。",
+          "リバプールの関心は本物。本人も移籍を希望"
+        ],
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？データが物語るアダム・ウォートンの実力と、驚愕の80億円移籍劇の行方。この争奪戦は、夏の移籍市場の中心の一つになるでしょう。最新情報が入り次第、またデータを交えてお伝えします。チャンネル登録と高評価ボタン、よろしくお願いします！コメントもお待ちしています！",
+      "keyPoints": [],
+      "imageQuery": "Subscribe football news channel",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "最新情報を待て！\nチャンネル登録＆高評価で応援を！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-18"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "14",
+    "originalTitle": "[ESPN] Liverpool join race to sign 22-year-old Crystal Palace midfielder Adam Wharton amid Real Madrid, Manchester United interest. He is under contract until June 2029 and Palace are demanding a fee of at least £80 million",
+    "generatedAt": "2026-04-18T22:52:20.266Z",
+    "mainImagePath": null
+  }
+}

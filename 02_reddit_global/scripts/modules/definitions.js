@@ -22,6 +22,8 @@ const SLIDE_TYPE_META = {
   formation: { label: '戦術ボード',   color: '#3a1010', textColor: '#e07070' },
   type1:     { label: 'プロフィール型', color: '#1a3a2a', textColor: '#7dffc0' }, // 左:大画像 右:データ行（選手・クラブ・移籍向け）
   type2:     { label: 'トピック型',    color: '#2a1a3a', textColor: '#c09dff' }, // 左:データ行 右:画像（ケガ・話題・汎用）
+  type3:     { label: 'プロフィールV2', color: '#3a2a1a', textColor: '#ffb07d' }, // カードグリッド形式（ヒーローカードあり）
+  type4:     { label: '対比型',       color: '#1a2a3a', textColor: '#7dc8ff' }, // 左右の比較用
   opening:   { label: 'オープニング',  color: '#0d1528', textColor: '#ffd700' }, // タイトルカード
   ending:    { label: 'エンディング',  color: '#0d1528', textColor: '#e0c060' }, // アウトロ
 };
@@ -139,6 +141,16 @@ const MODULE_TYPES = {
     requiredParams: ['playerNameEn'],
   },
 
+  manager_profile: {
+    id:          'manager_profile',
+    label:       '監督プロフィール',
+    description: '年齢・国籍・現所属クラブ・今季の勝率など',
+    icon:        '👔',
+    slideType:   'type1',
+    dataSource:  'sofascore',
+    requiredParams: ['managerName'],
+  },
+
   // ══════════════════════════════════════════════════════
   // クラブ関連
   // ══════════════════════════════════════════════════════
@@ -171,6 +183,16 @@ const MODULE_TYPES = {
     slideType:   'insight',
     dataSource:  'sofascore',
     requiredParams: ['clubName'], // チーム名（SofaScore検索用）
+  },
+
+  club_profile: {
+    id:          'club_profile',
+    label:       'クラブプロフィール',
+    description: '所属リーグ・現在の順位・監督・直近の勝敗傾向など',
+    icon:        '🏢',
+    slideType:   'type2',
+    dataSource:  'sofascore',
+    requiredParams: ['clubNameEn'],
   },
 
   club_rival_history: {

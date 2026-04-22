@@ -1,0 +1,581 @@
+{
+  "youtubeTitle": "久保建英、プロ初タイトル獲得！ソシエダがPK戦でアトレティコ撃破し国王杯優勝！日本人初の快挙をデータで徹底解説",
+  "hashtagsText": "#サッカー #久保建英 #レアルソシエダ #国王杯 #スペイン",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "緊急速報です！セビージャの夜、歴史が動きました。レアル・ソシエダがアトレティコ・マドリードをPK戦の末に下し、6年ぶりに国王杯を制覇！そして、日本人選手・久保建英が待望のプロ初タイトルを獲得しました。この感動の舞台裏を、詳細なデータと共に徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Real Sociedad Copa del Rey celebration 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "日本人初！スペイン国内タイトル獲得の瞬間！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "2026年1月4日、セビージャのエスタディオ・ラ・カルトゥハで行われた国王杯決勝。レアル・ソシエダとアトレティコ・マドリードが激突しました。試合は50分にアトレティコのアレクサンダー・ソルロスが先制するも、55分にソシエダのゴンサロ・ゲデスが同点に追いつき、1-1で延長戦へ。その後のPK戦をソシエダが制し、6シーズンぶり4度目の優勝を果たしました。シーズン序盤は残留争いに巻き込まれていたチームが、国内タイトルとヨーロッパリーグ出場権を手にした、まさにサプライズ優勝です。",
+      "keyPoints": [
+        "試合結果: Real Sociedad 1 - 1 Atlético Madrid (PK戦でソシエダ勝利)",
+        "得点: 50' Sorloth (ATM), 55' Guedes (RSO)",
+        "ソシエダ、6年ぶり4度目の国王杯優勝"
+      ],
+      "imageQuery": "Copa del Rey final 2026 Sevilla stadium",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "news_overview",
+        "query": "copa del rey",
+        "organic": [
+          {
+            "title": "Real Sociedad takes down Atletico Madrid in penalties - YouTube",
+            "snippet": "Following a back and forth 2-2 draw, Real Sociedad defeated Atletico Madrid in penalties to be crowned Copa Del Rey champions. Phil Kitromilides joins Alex ...",
+            "link": "https://www.youtube.com/watch?v=QhXeKS6eZTI",
+            "date": "8 hours ago"
+          },
+          {
+            "title": "Copa del Rey Final: Atletico Madrid vs. Real Sociedad | ESPN FC",
+            "snippet": "Watch the highlights as Real Sociedad defeat Atletico Madrid, 2-2 (4-3 on penalties), to win the Copa del Rey Final. ✔️ Subscribe to ESPN Unlimited: ...",
+            "link": "https://www.youtube.com/watch?v=pqOI52zaMN4",
+            "date": "9 hours ago"
+          },
+          {
+            "title": "Real Sociedad's thrilling Copa del Rey win over Atletico Madrid + ...",
+            "snippet": "Real Sociedad's thrilling Copa del Rey win over Atletico Madrid + Premier League roundup | ESPN FC · Comments.",
+            "link": "https://www.youtube.com/watch?v=PnPwZn9G3jE",
+            "date": "7 hours ago"
+          },
+          {
+            "title": "Atletico de Madrid 3-4 Real Sociedad on penalties | Final - FanCode",
+            "snippet": "Atletico de Madrid 3-4 Real Sociedad on penalties | Final · ISL 2025-26 · Copa del Rey, 2025-26 · LALIGA 2025-26 · Roshn Saudi League 2025-2026 · A League 2025-26.",
+            "link": "https://www.fancode.com/football/tour/copa-del-rey-202526-19253270/video-highlights/atletico-de-madrid-34-real-sociedad-on-penalties-final-217267",
+            "date": "2 hours ago"
+          },
+          {
+            "title": "Atletico Madrid vs. Real Sociedad - Copa del Rey Final - YouTube",
+            "snippet": "Atlético Madrid fall short in a dramatic Copa del Rey Final after a 2-2 draw against Real Sociedad, losing 4-3 on penalties. Despite dominating chances and ...",
+            "link": "https://www.youtube.com/watch?v=AdmxqRlMIig",
+            "date": "9 hours ago"
+          },
+          {
+            "title": "Real Sociedad wins Copa del Rey in penalty shootout vs. Atletico ...",
+            "snippet": "FULL REACTION: Real Sociedad wins Copa del Rey in penalty shootout vs. Atletico Madrid | ESPN FC · Comments.",
+            "link": "https://www.youtube.com/watch?v=2QVwKhkK9SQ",
+            "date": "8 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=QhXeKS6eZTI]\nCopa Del Rey CHAMPIONS | Real Sociedad takes down Atletico Madrid in penalties - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC\n\n---\n\n[出典: https://www.youtube.com/watch?v=pqOI52zaMN4]\nCopa del Rey Final: Atletico Madrid vs. Real Sociedad | Copa del Rey Highlights | ESPN FC - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "historical_record",
+      "label": "ソシエダの成績",
+      "icon": "📜",
+      "narration": "この優勝で、レアル・ソシエダは国王杯通算4回目の優勝となりました。前回優勝は2019/20シーズン。まさに6年ぶりの王座奪還です。さらに重要なのは、このタイトルが日本人選手・久保建英にとって、プロキャリア初の主要タイトルとなったことです。スペインの国内カップ戦で日本人選手が優勝メンバーとなるのは史上初の快挙。Jリーグで同年代の選手たちが国内リーグを戦っている中、21歳でスペインの伝統あるカップ戦の頂点に立った久保の足跡は、日本のサッカー史に新たな1ページを刻みました。",
+      "keyPoints": [
+        "ソシエダ国王杯優勝: 通算4回目 (前回は2019/20)",
+        "久保建英、プロキャリア初の主要タイトル獲得",
+        "日本人選手としてスペイン国内カップ戦初優勝"
+      ],
+      "imageQuery": "Real Sociedad trophy history Copa del Rey",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Takefusa Kubo",
+          "url": "https://www.sofascore.com/player/880218",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "リーグ順位",
+          "value": "—"
+        },
+        {
+          "label": "ポイント",
+          "value": "—"
+        },
+        {
+          "label": "直近5試合",
+          "value": "—"
+        },
+        {
+          "label": "監督名",
+          "value": "—"
+        },
+        {
+          "label": "スカッド総額",
+          "value": "—"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 880218,
+        "name": "Takefusa Kubo",
+        "position": "M",
+        "team": "Real Sociedad",
+        "nationality": "Japan",
+        "dateOfBirth": "2001-06-04T00:00:00+00:00",
+        "height": 174,
+        "preferredFoot": "Left",
+        "marketValue": "€31M",
+        "contractUntil": "2029-06",
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 19,
+          "goals": 2,
+          "assists": 4,
+          "rating": 7.13,
+          "minutesPlayed": 1219,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 2.28,
+          "keyPasses": 29
+        },
+        "positionStats": {
+          "keyPasses": 29,
+          "successfulDribbles": 28,
+          "bigChancesCreated": 6,
+          "tackles": 25,
+          "interceptions": 7,
+          "accuratePassesPct": 79.43
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "player_career",
+      "label": "選手の来歴",
+      "icon": "📋",
+      "narration": "この栄光の背景には、久保建英の紆余曲折に満ちたキャリアがありました。バルセロナのカンテラで「日本のメッシ」と称された天才少年は、複雑な事情でスペインを離脱。再びスペインに戻ってからは、レアル・マドリード傘下ながら、マジョルカ、ビジャレアル、ヘタフェとレンタル移籍を繰り返す「流浪の時代」を経験します。タイトルから遠ざかり、そのポテンシャルを十分に発揮できない日々が続きました。しかし、2022年にレアル・ソシエダに完全移籍したことが転機となります。そこで覚醒を果たした久保は、ついにこの日、プロ生活で初めて優勝という栄冠を手にしたのです。かつての不安や苦悩があったからこそ、この瞬間の輝きはひとしおです。",
+      "keyPoints": [
+        "バルセロナ・カンテラ出身、「日本のメッシ」の異名",
+        "レアル・マドリード傘下で複数クラブへのレンタル移籍を経験",
+        "2022年レアル・ソシエダへの完全移籍が転機"
+      ],
+      "imageQuery": "Takefusa Kubo career timeline Barcelona Real Sociedad",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Takefusa_Kubo_2019.png/330px-Takefusa_Kubo_2019.png",
+      "sources": [
+        {
+          "label": "Wikipedia: Takefusa Kubo",
+          "url": "https://en.wikipedia.org/wiki/Takefusa_Kubo",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Takefusa Kubo",
+        "description": "Japanese footballer (born 2001)",
+        "extract": "Takefusa Kubo, commonly known as Take Kubo, is a Japanese professional footballer who plays as a right winger for La Liga club Real Sociedad and the Japan national team. He has been dubbed \"Japanese Messi\" by Japanese football fans because of his technical ability.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Takefusa_Kubo_2019.png/330px-Takefusa_Kubo_2019.png",
+        "url": "https://en.wikipedia.org/wiki/Takefusa_Kubo",
+        "type": "standard"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "では、優勝を飾った今シーズン、久保建英はどのようなパフォーマンスを発揮してきたのでしょうか？ SofaScoreのデータを見てみましょう。2025/26シーズンのラ・リーガでは、これまでに19試合に出場。ゴール2、アシスト4を記録し、平均評価点は7.13です。さらに詳細なデータを掘り下げると、チャンスを生み出すキーパスは29本、成功ドリブルは28回、ビッグチャンス創出は6回と、攻撃の起点としての役割を果たしています。守備面でもタックル25回、インターセプト7回と貢献。パス成功率は79.43%です。驚くべきは、これらの数字が、実は74日間に及ぶ負傷離脱からの復帰後、限られた時間で叩き出したスタッツだということ。フルシーズン戦えたら、どれほどの数字を残せたのか、想像が膨らみます。",
+      "keyPoints": [
+        "今季ラ・リーガ: 出場19試合、2ゴール、4アシスト、評価点7.13",
+        "攻撃貢献: キーパス29本、成功ドリブル28回、ビッグチャンス創出6回",
+        "守備貢献: タックル25回、インターセプト7回",
+        "74日間の負傷離脱からの復帰後スタッツ"
+      ],
+      "imageQuery": "Takefusa Kubo stats 2025 2026 La Liga",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Takefusa Kubo",
+          "url": "https://www.sofascore.com/player/880218",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "今期成績（G+A）",
+          "value": "6"
+        },
+        {
+          "label": "今期出場試合数",
+          "value": "19"
+        },
+        {
+          "label": "今期平均評価点",
+          "value": "7.13"
+        },
+        {
+          "label": "キーパス",
+          "value": "29"
+        },
+        {
+          "label": "市場価値",
+          "value": "€31M"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 880218,
+        "name": "Takefusa Kubo",
+        "position": "M",
+        "team": "Real Sociedad",
+        "nationality": "Japan",
+        "dateOfBirth": "2001-06-04T00:00:00+00:00",
+        "height": 174,
+        "preferredFoot": "Left",
+        "marketValue": "€31M",
+        "contractUntil": "2029-06",
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 19,
+          "goals": 2,
+          "assists": 4,
+          "rating": 7.13,
+          "minutesPlayed": 1219,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 2.28,
+          "keyPasses": 29
+        },
+        "positionStats": {
+          "keyPasses": 29,
+          "successfulDribbles": 28,
+          "bigChancesCreated": 6,
+          "tackles": 25,
+          "interceptions": 7,
+          "accuratePassesPct": 79.43
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "決勝戦そのものにおける久保の出番は、劇的なものでした。負傷から復帰して間もないこともあり、スターティングメンバーではなく、ベンチからのスタート。そして、その起用は非常に遅く、後半88分という、延長戦目前のタイミングでの途中出場でした。74日ぶりの実戦復帰、しかも国王杯決勝という大舞台。PK戦ではキッカーに選ばれませんでしたが、それでも120分間の死闘を戦い抜き、ピッチの上でチームメイトと優勝の瞬間を共有しました。不完全で、計画通りではないかもしれない。しかし、そのような状況下でもピッチに立ち、チームの一員として勝利に貢献した事実が、この優勝をよりリアルで感動的なものにしています。",
+      "keyPoints": [
+        "決勝戦: 後半88分に途中出場 (74日ぶりの実戦復帰)",
+        "試合は1-1で延長戦、PK戦に突入",
+        "PKキッカーには選ばれずも、ピッチ上で優勝を経験"
+      ],
+      "imageQuery": "Kubo substitution Copa del Rey final 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "matchId": 14083201,
+        "homeTeam": "Real Sociedad",
+        "awayTeam": "Atlético Madrid",
+        "homeScore": 1,
+        "awayScore": 1,
+        "matchDate": "2026-01-04",
+        "tournament": "LaLiga",
+        "goals": [
+          {
+            "time": 50,
+            "timeStr": "50'",
+            "player": "Alexander Sorloth",
+            "isHome": false,
+            "team": "Atlético Madrid",
+            "type": "通常"
+          },
+          {
+            "time": 55,
+            "timeStr": "55'",
+            "player": "Goncalo Guedes",
+            "isHome": true,
+            "team": "Real Sociedad",
+            "type": "通常"
+          }
+        ],
+        "cards": [
+          {
+            "time": 13,
+            "timeStr": "13'",
+            "player": "Goncalo Guedes",
+            "isHome": true,
+            "team": "Real Sociedad",
+            "color": "イエロー"
+          },
+          {
+            "time": 44,
+            "timeStr": "44'",
+            "player": "Matteo Ruggeri",
+            "isHome": false,
+            "team": "Atlético Madrid",
+            "color": "イエロー"
+          },
+          {
+            "time": 45,
+            "timeStr": "45+2'",
+            "player": "Duje Caleta-Car",
+            "isHome": true,
+            "team": "Real Sociedad",
+            "color": "イエロー"
+          },
+          {
+            "time": 75,
+            "timeStr": "75'",
+            "player": "Mikel Oyarzabal",
+            "isHome": true,
+            "team": "Real Sociedad",
+            "color": "イエロー"
+          },
+          {
+            "time": 78,
+            "timeStr": "78'",
+            "player": "Giacomo Raspadori",
+            "isHome": false,
+            "team": "Atlético Madrid",
+            "color": "イエロー"
+          }
+        ],
+        "scoreline": "Real Sociedad 1 - 1 Atlético Madrid",
+        "summary": "【試合結果】Real Sociedad 1 - 1 Atlético Madrid（2026-01-04 / LaLiga）\n【得点】50' Alexander Sorloth（Atlético Madrid）, 55' Goncalo Guedes（Real Sociedad）\n【カード】13' Goncalo Guedes（Real Sociedad）イエロー, 44' Matteo Ruggeri（Atlético Madrid）イエロー, 45+2' Duje Caleta-Car（Real Sociedad）イエロー, 75' Mikel Oyarzabal（Real Sociedad）イエロー, 78' Giacomo Raspadori（Atlético Madrid）イエロー"
+      },
+      "presetValues": {
+        "scoreline": "Real Sociedad 1 - 1 Atlético Madrid",
+        "match_date": "2026-01-04",
+        "tournament": "LaLiga"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のサッカーファン、特にRedditなどの掲示板では、このサプライズ優勝に大きな驚きの声が上がっています。多くのユーザーが「シーズン中は残留争いをしていたチームが、まさか国内タイトルとEL出場権を獲得するとは」とその躍進を称えています。また、「チャンピオンズリーグベスト4の実力を持つアトレティコ・マドリードに勝った」という点も、ソシエダの勝利の価値を高く評価する意見として多く見られました。久保建英に関しては、初タイトル獲得を祝福するコメントが多数を占める一方で、88分という遅い出場タイミングや、ボール供給が少ない中でも何度か局面を打開するプレーを見せた点について言及する声もありました。",
+      "keyPoints": [
+        {
+          "text": "[👍15] タイトルおめ！",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍14] 久保くんキッカーに選ばれなかったの残念、何人目だったか知らんけど まぁ何にせよオメ",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍13] チャンピオンズリーグベスト4 アトレチコ・マドリードに勝った",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍12] 残留争いしてたはずなのに、まさか国内タイトルとEL出場権を獲ってしまうとは",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍11] 途中出場は決まってたけど、88分とかずいぶん遅かったんだな。 まだ回復してないんかな？",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍10] 国王杯決勝はいいよな 両サポーターが真っ二つに分かれててスタジアムの熱気が伝わる",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍9] ボールがあまり来なかったけど押されてた時間帯に何度かやり返すプレーして チームに流れを戻してたな",
+          "source": "reddit"
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍8] アトレティコとの日程差が結構聞いたな アトレティコは重くて足元ばっかのパスばかりでPKも甘かった 久保は効いてたが供給源なさすぎやねー",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍7] マタラッツォ名将過ぎるだろ フランシスコは論外としてイマノルよりも遥か上だな",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍6] オスカルソンは外すと思ったよ 駒野が外した時と同じ雰囲気があった",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍5] 久保は初タイトルか おめでとう",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍4] 初なんだちょっと意外",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍3] 応援スレでは久保の起用のタイミングについて監督をボロクソ言っていたが、延長に元気な久保残せたし、結果的に良い采配だったと思った",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍2] 久保すげえドリブルとかスルーパスしてたな 怪我の影響なさそうでよかった",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] 久保1人に3人付いてて草",
+          "source": "reddit"
+        }
+      ],
+      "imageQuery": "Reddit reaction Real Sociedad Copa del Rey win",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍15] タイトルおめ！",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍14] 久保くんキッカーに選ばれなかったの残念、何人目だったか知らんけど まぁ何にせよオメ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍13] チャンピオンズリーグベスト4 アトレチコ・マドリードに勝った",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍12] 残留争いしてたはずなのに、まさか国内タイトルとEL出場権を獲ってしまうとは",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍11] 途中出場は決まってたけど、88分とかずいぶん遅かったんだな。 まだ回復してないんかな？",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍10] 国王杯決勝はいいよな 両サポーターが真っ二つに分かれててスタジアムの熱気が伝わる",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍9] ボールがあまり来なかったけど押されてた時間帯に何度かやり返すプレーして チームに流れを戻してたな",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍8] アトレティコとの日程差が結構聞いたな アトレティコは重くて足元ばっかのパスばかりでPKも甘かった 久保は効いてたが供給源なさすぎやねー",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍7] マタラッツォ名将過ぎるだろ フランシスコは論外としてイマノルよりも遥か上だな",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍6] オスカルソンは外すと思ったよ 駒野が外した時と同じ雰囲気があった",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍5] 久保は初タイトルか おめでとう",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍4] 初なんだちょっと意外",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍3] 応援スレでは久保の起用のタイミングについて監督をボロクソ言っていたが、延長に元気な久保残せたし、結果的に良い采配だったと思った",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍2] 久保すげえドリブルとかスルーパスしてたな 怪我の影響なさそうでよかった",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] 久保1人に3人付いてて草",
+            "source": "reddit"
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？データが物語る、久保建英とレアル・ソシエダの歴史的優勝。日本人として初のスペイン国内タイトルは、今後のキャリアにも大きな弾みとなるでしょう。『速報！サッカーニュース』では、今後もこうしたサッカー界の最新情報を、数字と事実に基づいてお届けします。チャンネル登録と高評価、そしてコメントでのご意見をお待ちしています！次回の動画もお楽しみに！",
+      "keyPoints": [],
+      "imageQuery": "Takefusa Kubo holding Copa del Rey trophy",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価で最新ニュースをチェック！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "9",
+    "originalTitle": "久保建英、プロ初タイトル獲得！ソシエダはアトレティコにPK戦の末に勝利し国王杯を優勝（関連まとめ）",
+    "generatedAt": "2026-04-19T07:47:51.779Z",
+    "mainImagePath": null
+  }
+}

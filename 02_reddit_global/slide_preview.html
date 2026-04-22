@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>スライドテンプレート一覧</title>
+<style>
+/* ══ リセット ══════════════════════════════════════════════════════ */
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#0a0e1a; color:#c0d0f0;
+  font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+  min-height:100vh;
+}
+
+/* ══ ヘッダー ══════════════════════════════════════════════════════ */
+.page-header {
+  padding:18px 32px 0;
+  border-bottom:1px solid #1a2040;
+}
+.page-header h1 {
+  font-size:18px; font-weight:700; color:#f59e0b; margin-bottom:14px;
+  letter-spacing:1px;
+}
+
+/* ══ タブナビ ══════════════════════════════════════════════════════ */
+.tab-nav {
+  display:flex; gap:4px; flex-wrap:wrap;
+}
+.tab-btn {
+  padding:8px 18px; border:none; border-radius:8px 8px 0 0;
+  cursor:pointer; font-size:13px; font-weight:700; letter-spacing:0.5px;
+  background:#131830; color:#6080b0;
+  border-bottom:3px solid transparent;
+  transition:all 0.15s;
+}
+.tab-btn:hover { color:#9bb5e0; background:#1a2040; }
+.tab-btn.active {
+  background:#1a2040; color:#f59e0b;
+  border-bottom:3px solid #f59e0b;
+}
+
+/* ══ タブコンテンツ ══════════════════════════════════════════════ */
+.tab-content { display:none; padding:24px 32px 40px; }
+.tab-content.active { display:block; }
+
+/* ══ プレビューラッパー（0.5倍表示） ══════════════════════════════ */
+.preview-wrap {
+  width:960px; height:540px;
+  position:relative; overflow:hidden;
+  box-shadow:0 0 0 1px #2a3560, 0 8px 40px rgba(0,0,0,0.6);
+  border-radius:4px;
+  margin-bottom:20px;
+  flex-shrink:0;
+}
+
+/* ══ スライド共通（1920×1080） ══════════════════════════════════ */
+.slide {
+  width:1920px; height:1080px;
+  position:relative; overflow:hidden;
+  transform:scale(0.5); transform-origin:top left;
+  background:#060e1c;
+  font-family: "Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+}
+
+/* 上部バナー */
+.top-banner {
+  position:absolute; top:0; left:0; right:0; height:90px;
+  background:rgba(0,0,0,0.82); border-bottom:4px solid #f59e0b;
+  display:flex; align-items:center; padding:0 60px; gap:16px; z-index:20;
+}
+.banner-icon { font-size:36px; }
+.banner-title { color:#fff; font-size:34px; font-weight:900; }
+.banner-sub { color:#f59e0b; font-size:22px; font-weight:700; margin-left:auto; }
+
+/* 字幕バー */
+.sub-bar {
+  position:absolute; bottom:0; left:0; right:0; height:110px;
+  background:rgba(0,0,0,0.90); border-top:3px solid rgba(245,158,11,0.50);
+  display:flex; align-items:center; justify-content:center; z-index:20;
+}
+.sub-bar .sub-text {
+  color:#fff; font-size:46px; font-weight:800;
+  text-align:center; padding:0 80px; line-height:1.4;
+}
+
+/* ══ ① Opening ════════════════════════════════════════════════ */
+.slide-opening .bg-img {
+  position:absolute; inset:0;
+  background-size:cover; background-position:center;
+}
+.slide-opening .bg-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.30) 50%, rgba(0,0,0,0.10) 100%);
+}
+.slide-opening .badge {
+  position:absolute; bottom:260px; left:60px;
+  background:rgba(200,0,0,0.92); color:#fff;
+  font-size:38px; font-weight:900; padding:6px 28px; border-radius:6px;
+}
+.slide-opening .title-main {
+  position:absolute; bottom:130px; left:0; right:0;
+  color:#fff; font-size:80px; font-weight:900; line-height:1.3;
+  background:rgba(0,0,0,0.68); padding:36px 60px;
+}
+
+/* ══ ② Simple (ナレーション) ═══════════════════════════════════ */
+.slide-simple .bg-img {
+  position:absolute; inset:0;
+  background-size:cover; background-position:center;
+}
+.slide-simple .bg-overlay {
+  position:absolute; inset:0;
+  background:linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.28) 55%, rgba(0,0,0,0.05) 100%);
+}
+.slide-simple .slide-label {
+  position:absolute; top:48px; left:60px;
+  background:rgba(0,0,0,0.65); color:rgba(255,255,255,0.85);
+  font-size:30px; font-weight:700; padding:8px 22px;
+  border-radius:6px; border-left:5px solid #f59e0b;
+}
+
+/* ══ ③ Reaction (海外の反応) ════════════════════════════════ */
+/* V1 buildCommentSlide ベース（カラフルバブル・黒テキスト）   */
+.slide-reaction .bg-img {
+  position:absolute; inset:0;
+  background-size:cover; background-position:center;
+}
+.slide-reaction .overlay {
+  position:absolute; inset:0;
+  background:rgba(0,0,0,0.15);
+}
+.slide-reaction .comments-area {
+  position:absolute; top:120px; bottom:115px;
+  left:60px; right:60px;
+  display:flex; flex-direction:column; justify-content:flex-start; gap:18px;
+}
+.slide-reaction .c-card {
+  border:3px solid #000; border-radius:8px;
+  padding:10px 18px; width:fit-content; max-width:90%;
+}
+.slide-reaction .c-card.hl { border:4px solid #000; }
+.slide-reaction .c-text {
+  color:#111; font-size:48px; font-weight:700;
+  line-height:1.4; overflow-wrap:break-word;
+}
+.slide-reaction .c-card.hl .c-text { color:#000; font-weight:900; }
+.slide-reaction .sub-box {
+  position:absolute; bottom:0; left:0; right:0; min-height:110px;
+  background:rgba(0,0,0,0.88); border-top:1px solid rgba(255,255,255,0.08);
+  display:flex; align-items:center; justify-content:center;
+}
+.slide-reaction .sub-box .sub-text {
+  color:#fff; font-size:46px; font-weight:800;
+  text-align:center; padding:16px 80px; line-height:1.5;
+}
+
+/* ══ ④ 型１ (左=画像＋タイトル / 右=データ行) ══════════════ */
+.slide-type1 { display:flex; }
+.slide-type1 .col-left {
+  width:40%; height:100%; display:flex; flex-direction:column;
+  background:#012c36;
+}
+.slide-type1 .col-left .title-box {
+  height:200px; display:flex; align-items:center; justify-content:center;
+  font-size:46px; font-weight:900; color:#fff; padding:20px 30px;
+  text-align:center; border-bottom:2px solid rgba(255,255,255,0.1);
+}
+.slide-type1 .col-left .img-box {
+  flex:1; overflow:hidden; background-size:cover; background-position:center;
+}
+.slide-type1 .col-right {
+  width:60%; height:100%; display:flex; flex-direction:column;
+  background:#012c36;
+}
+.slide-type1 .mini-row {
+  height:38%; display:flex; border-bottom:2px solid rgba(255,255,255,0.1);
+}
+.slide-type1 .mini-cell {
+  flex:1; display:flex; flex-direction:column; border-right:1px solid rgba(255,255,255,0.1);
+}
+.slide-type1 .mini-label {
+  height:10%; display:flex; align-items:center; justify-content:center;
+  font-size:20px; font-weight:700; color:#f59e0b;
+}
+.slide-type1 .mini-img {
+  flex:1; background-size:cover; background-position:center; overflow:hidden;
+}
+.slide-type1 .data-rows { flex:1; display:flex; flex-direction:column; }
+.slide-type1 .data-row {
+  flex:1; display:flex; align-items:center;
+  border-top:1px solid rgba(255,255,255,0.08);
+}
+.slide-type1 .d-left {
+  width:32%; text-align:center; font-size:26px; font-weight:700;
+  color:#f59e0b; padding:0 16px;
+}
+.slide-type1 .d-right {
+  flex:1; font-size:30px; font-weight:700; color:#fff;
+  padding:0 20px; border-left:1px solid rgba(255,255,255,0.1);
+}
+
+/* ══ ⑤ 型２ (左=データ行 / 右=画像) ═══════════════════════ */
+.slide-type2 { display:flex; }
+.slide-type2 .col-left {
+  width:40%; height:100%; display:flex; flex-direction:column;
+  background:#012c36;
+}
+.slide-type2 .data-rows { flex:1; display:flex; flex-direction:column; }
+.slide-type2 .data-row {
+  flex:1; display:flex; align-items:center;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.slide-type2 .d-left {
+  width:38%; text-align:center; font-size:26px; font-weight:700;
+  color:#f59e0b; padding:0 16px;
+}
+.slide-type2 .d-right {
+  flex:1; font-size:28px; font-weight:700; color:#fff;
+  padding:0 20px; border-left:1px solid rgba(255,255,255,0.1);
+}
+.slide-type2 .col-right {
+  width:60%; height:100%; display:flex; flex-direction:column;
+  background:#012c36;
+}
+.slide-type2 .col-right .title-box {
+  height:180px; display:flex; align-items:center; justify-content:center;
+  font-size:44px; font-weight:900; color:#fff; padding:20px 30px;
+  text-align:center; border-bottom:2px solid rgba(255,255,255,0.1);
+}
+.slide-type2 .col-right .img-box {
+  flex:1; background-size:cover; background-position:center;
+}
+
+/* ══ ⑥ 型３ (左=画像 / 右=データカードグリッド) ══════════ */
+.slide-type3 { display:flex; }
+.slide-type3 .panel-img {
+  width:40%; height:100%; position:relative; overflow:hidden; flex-shrink:0;
+}
+.slide-type3 .panel-img .img-bg {
+  position:absolute; inset:0; background-size:cover; background-position:center top;
+}
+.slide-type3 .panel-img .img-fade {
+  position:absolute; inset:0;
+  background:linear-gradient(to right,transparent 0%,transparent 55%,rgba(6,14,28,.70) 80%,rgba(6,14,28,1) 100%);
+}
+.slide-type3 .panel-img .img-vfade {
+  position:absolute; inset:0;
+  background:linear-gradient(to bottom,rgba(6,14,28,.85) 0%,transparent 10%,transparent 75%,rgba(6,14,28,.95) 100%);
+}
+.slide-type3 .img-name {
+  position:absolute; bottom:130px; left:0; right:0; padding:0 40px;
+}
+.slide-type3 .img-name .player-name {
+  font-size:50px; font-weight:900; color:#fff;
+  text-shadow:0 2px 14px rgba(0,0,0,.9); line-height:1.2;
+}
+.slide-type3 .img-name .player-sub {
+  font-size:26px; font-weight:700; color:#f59e0b; margin-top:6px;
+}
+.slide-type3 .panel-data {
+  flex:1; height:100%; display:flex; flex-direction:column;
+  padding:108px 56px 124px 36px; gap:16px;
+}
+.slide-type3 .card-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:18px; flex:1;
+}
+.slide-type3 .data-card {
+  background:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.018));
+  border:1px solid rgba(255,255,255,.10); border-radius:16px;
+  padding:26px 30px; display:flex; flex-direction:column;
+  justify-content:center; gap:8px; position:relative; overflow:hidden;
+}
+.slide-type3 .data-card::before {
+  content:''; position:absolute; top:0; left:0;
+  width:5px; height:100%; background:var(--ac,#f59e0b);
+  border-radius:4px 0 0 4px;
+}
+.slide-type3 .card-label { font-size:22px; font-weight:700; color:#6080b0; letter-spacing:1px; }
+.slide-type3 .card-value { font-size:70px; font-weight:900; color:#fff; line-height:1; }
+.slide-type3 .card-sub   { font-size:20px; font-weight:600; color:#60a0d0; }
+.slide-type3 .data-card.hero {
+  grid-column:1/-1; flex-direction:row; align-items:center; gap:32px; padding:28px 40px;
+  background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(245,158,11,.04));
+  border-color:rgba(245,158,11,.30);
+}
+.slide-type3 .data-card.hero::before { background:#f59e0b; }
+.slide-type3 .data-card.hero .card-value { font-size:100px; color:#f59e0b; }
+.slide-type3 .data-card.hero .card-label { font-size:28px; }
+
+/* ══ ⑦ 型４ (左画像 | 中央比較バー | 右画像) ══════════════ */
+.slide-type4 { display:flex; background:#081220; }
+.slide-type4 .panel-side {
+  width:30%; height:100%; position:relative; overflow:hidden; flex-shrink:0;
+}
+.slide-type4 .panel-side .img-bg {
+  position:absolute; inset:0; background-size:cover; background-position:center top;
+}
+.slide-type4 .panel-side.left .img-fade {
+  position:absolute; inset:0;
+  background:linear-gradient(to right,rgba(8,18,32,.10) 0%,rgba(8,18,32,.60) 70%,rgba(8,18,32,1) 100%);
+}
+.slide-type4 .panel-side.right .img-fade {
+  position:absolute; inset:0;
+  background:linear-gradient(to left,rgba(8,18,32,.10) 0%,rgba(8,18,32,.60) 70%,rgba(8,18,32,1) 100%);
+}
+.slide-type4 .panel-side .img-vfade {
+  position:absolute; inset:0;
+  background:linear-gradient(to bottom,rgba(8,18,32,.80) 0%,transparent 12%,transparent 72%,rgba(8,18,32,.90) 100%);
+}
+.slide-type4 .name-tag {
+  position:absolute; bottom:125px; left:0; right:0; text-align:center; padding:0 20px;
+}
+.slide-type4 .name-tag .player-name { font-size:42px; font-weight:900; color:#fff; line-height:1.2; text-shadow:0 2px 12px rgba(0,0,0,.9); }
+.slide-type4 .name-tag .team-name   { font-size:24px; font-weight:700; color:#f59e0b; margin-top:6px; }
+.slide-type4 .panel-center {
+  flex:1; height:100%; display:flex; flex-direction:column;
+  justify-content:center; padding:108px 0 124px; position:relative; z-index:10;
+}
+.slide-type4 .vs-badge {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:88px; height:88px; background:#f59e0b; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:34px; font-weight:900; color:#000; z-index:30;
+  box-shadow:0 0 0 6px rgba(245,158,11,.25),0 0 0 12px rgba(245,158,11,.10);
+}
+.slide-type4 .data-rows { display:flex; flex-direction:column; width:100%; }
+.slide-type4 .data-row {
+  display:flex; align-items:center; height:118px; width:100%;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.slide-type4 .data-row:last-child { border-bottom:none; }
+.slide-type4 .val {
+  width:35%; font-size:62px; font-weight:900; line-height:1;
+}
+.slide-type4 .val-left  { text-align:right; padding-right:40px; color:#93c5fd; }
+.slide-type4 .val-right { text-align:left;  padding-left:40px;  color:#fca5a5; }
+.slide-type4 .val.win  { color:#fff; font-size:70px; }
+.slide-type4 .val.lose { opacity:.55; font-size:54px; }
+.slide-type4 .label-col { width:30%; display:flex; flex-direction:column; align-items:center; gap:10px; }
+.slide-type4 .label-text { color:#94a3b8; font-size:22px; font-weight:700; letter-spacing:2px; text-align:center; }
+.slide-type4 .bar-track {
+  width:100%; height:8px; background:rgba(255,255,255,.08);
+  border-radius:4px; position:relative; overflow:hidden;
+}
+.slide-type4 .bar-l { position:absolute; right:50%; top:0; height:100%; background:linear-gradient(to left,#3b82f6,#1d4ed8); border-radius:4px 0 0 4px; }
+.slide-type4 .bar-r { position:absolute; left:50%;  top:0; height:100%; background:linear-gradient(to right,#ef4444,#b91c1c); border-radius:0 4px 4px 0; }
+
+/* ══ ⑧ Ending ══════════════════════════════════════════════ */
+.slide-ending .bg-img   { position:absolute; inset:0; background-size:cover; background-position:center; filter:brightness(0.5); }
+.slide-ending .end-wrap {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:40px; padding:90px 80px 110px;
+}
+.slide-ending .end-main {
+  color:#fff; font-size:72px; font-weight:900; text-align:center; line-height:1.4;
+  text-shadow:0 2px 20px rgba(0,0,0,.8);
+}
+.slide-ending .end-telop {
+  background:#f59e0b; color:#000;
+  font-size:44px; font-weight:900; padding:16px 56px; border-radius:60px;
+}
+.slide-ending .end-icons {
+  display:flex; gap:60px; margin-top:10px;
+}
+.slide-ending .end-icon {
+  display:flex; flex-direction:column; align-items:center; gap:12px; color:rgba(255,255,255,.75);
+}
+.slide-ending .end-icon span { font-size:64px; }
+.slide-ending .end-icon p    { font-size:26px; font-weight:700; }
+
+/* ══ 編集パネル ════════════════════════════════════════════ */
+.layout-row { display:flex; gap:24px; align-items:flex-start; flex-wrap:wrap; }
+.editor-panel {
+  background:#0d1528; border:1px solid #1e2d50; border-radius:12px;
+  padding:16px 20px; min-width:300px; flex:1;
+}
+.editor-panel h3 { font-size:13px; color:#f59e0b; margin-bottom:10px; font-weight:700; }
+.field-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.field-row label { width:80px; font-size:12px; color:#5070a0; flex-shrink:0; }
+.field-row input, .field-row textarea {
+  flex:1; background:#1a2040; border:1px solid #2a3560;
+  color:#e0e8ff; padding:5px 9px; border-radius:5px; font-size:12px;
+}
+.field-row textarea { min-height:52px; resize:vertical; line-height:1.4; }
+.rows-editor { margin-top:6px; }
+.rows-editor .re {
+  display:flex; gap:6px; margin-bottom:5px; align-items:center;
+}
+.rows-editor .re input { background:#1a2040; border:1px solid #2a3560; color:#e0e8ff; padding:4px 7px; border-radius:4px; font-size:11px; }
+.rows-editor .re .ri { width:22px; color:#3a5090; flex-shrink:0; font-size:11px; }
+.rows-editor .re .rb {
+  background:#2a1010; color:#c06060; border:none;
+  padding:2px 7px; border-radius:4px; cursor:pointer; font-size:11px;
+}
+.btn-add  { margin-top:6px; padding:4px 12px; background:#1e2d50; color:#7090c0; border:none; border-radius:4px; cursor:pointer; font-size:11px; }
+.btn-apply { padding:9px 24px; background:#f59e0b; color:#000; border:none; border-radius:7px; font-weight:700; cursor:pointer; font-size:13px; }
+.slide-type-tag {
+  display:inline-block; padding:2px 10px; border-radius:20px;
+  background:#1a2d50; color:#60a0e0; font-size:11px; font-weight:600;
+  margin-bottom:12px;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ ヘッダー ══════════════════════════════════════════════════ -->
+<div class="page-header">
+  <h1>🎬 スライドテンプレート一覧</h1>
+  <div class="tab-nav">
+    <button class="tab-btn active"   onclick="showTab('opening')">🎬 Opening</button>
+    <button class="tab-btn"          onclick="showTab('simple')">📰 Simple</button>
+    <button class="tab-btn"          onclick="showTab('reaction')">💬 Reaction</button>
+    <button class="tab-btn"          onclick="showTab('type1')">🖼 型１</button>
+    <button class="tab-btn"          onclick="showTab('type2')">📊 型２</button>
+    <button class="tab-btn"          onclick="showTab('type3')">🃏 型３</button>
+    <button class="tab-btn"          onclick="showTab('type4')">⚔️ 型４</button>
+    <button class="tab-btn"          onclick="showTab('ending')">🎤 Ending</button>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ① Opening
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-opening">
+  <div class="slide-type-tag">slideType: "opening"</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-opening" id="s-opening">
+          <div class="bg-img" id="op-bg" style="background-image:url('stock/3-1.jpg')"></div>
+          <div class="bg-overlay"></div>
+          <div class="badge" id="op-badge">【速報】</div>
+          <div class="title-main" id="op-title">バイエルン 4-3 レアルマドリード！<br>89分・90+4分の2連弾で歴史的大逆転！</div>
+          <div class="sub-bar"><div class="sub-text" id="op-sub">衝撃の一戦。何が起きたのか、今すぐ解説します</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ Opening 編集</h3>
+      <div class="field-row"><label>背景画像</label><input id="e-op-bg" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>バッジ</label><input id="e-op-badge" value="【速報】"></div>
+      <div class="field-row"><label>タイトル</label><textarea id="e-op-title">バイエルン 4-3 レアルマドリード！\n89分・90+4分の2連弾で歴史的大逆転！</textarea></div>
+      <div class="field-row"><label>字幕</label><input id="e-op-sub" value="衝撃の一戦。何が起きたのか、今すぐ解説します"></div>
+      <button class="btn-apply" onclick="applyOpening()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ② Simple
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-simple">
+  <div class="slide-type-tag">slideType: "simple"</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-simple" id="s-simple">
+          <div class="bg-img" id="si-bg" style="background-image:url('stock/3-1.jpg')"></div>
+          <div class="bg-overlay"></div>
+          <div class="slide-label" id="si-label">⚔️ 戦術分析</div>
+          <div class="sub-bar"><div class="sub-text" id="si-sub">ポゼッション69%を誇りながら負けかけたレアルの守備崩壊。カマヴィンガ退場が全てを変えた</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ Simple 編集</h3>
+      <div class="field-row"><label>背景画像</label><input id="e-si-bg" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>スライドラベル</label><input id="e-si-label" value="⚔️ 戦術分析"></div>
+      <div class="field-row"><label>字幕</label><textarea id="e-si-sub">ポゼッション69%を誇りながら負けかけたレアルの守備崩壊。カマヴィンガ退場が全てを変えた</textarea></div>
+      <button class="btn-apply" onclick="applySimple()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ③ Reaction
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-reaction">
+  <div class="slide-type-tag">slideType: "reaction"</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-reaction" id="s-reaction">
+          <div class="bg-img" id="re-bg" style="background-image:url('stock/3-2.jpg')"></div>
+          <div class="overlay"></div>
+          <div class="comments-area" id="re-cmts"></div>
+          <div class="sub-box"><div class="sub-text" id="re-sub">世界中のファンが震えた瞬間</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ Reaction 編集</h3>
+      <div class="field-row"><label>背景画像</label><input id="e-re-bg" value="stock/3-2.jpg"></div>
+      <div class="field-row"><label>字幕</label><input id="e-re-sub" value="世界中のファンが震えた瞬間"></div>
+      <div style="font-size:11px;color:#5070a0;margin:8px 0 4px">コメント（1行1件）</div>
+      <div class="rows-editor" id="re-editor"></div>
+      <button class="btn-add" onclick="reAddRow()">＋ コメント追加</button><br><br>
+      <button class="btn-apply" onclick="applyReaction()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ④ 型１
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-type1">
+  <div class="slide-type-tag">slideType: "type1" — 左=画像+タイトル / 右=画像2枚+データ行</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-type1" id="s-type1">
+          <div class="col-left">
+            <div class="title-box" id="t1-title">ハリー・ケイン<br>今季スタッツ</div>
+            <div class="img-box" id="t1-img" style="background-image:url('stock/3-1.jpg')"></div>
+          </div>
+          <div class="col-right">
+            <div class="mini-row">
+              <div class="mini-cell">
+                <div class="mini-label" id="t1-ml1">PL</div>
+                <div class="mini-img" id="t1-mi1" style="background-image:url('stock/3-1.jpg')"></div>
+              </div>
+              <div class="mini-cell">
+                <div class="mini-label" id="t1-ml2">CL</div>
+                <div class="mini-img" id="t1-mi2" style="background-image:url('stock/3-2.jpg')"></div>
+              </div>
+            </div>
+            <div class="data-rows" id="t1-rows"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ 型１ 編集</h3>
+      <div class="field-row"><label>タイトル</label><textarea id="e-t1-title">ハリー・ケイン\n今季スタッツ</textarea></div>
+      <div class="field-row"><label>左画像</label><input id="e-t1-img" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>右画像1ラベル</label><input id="e-t1-ml1" value="PL"></div>
+      <div class="field-row"><label>右画像1</label><input id="e-t1-mi1" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>右画像2ラベル</label><input id="e-t1-ml2" value="CL"></div>
+      <div class="field-row"><label>右画像2</label><input id="e-t1-mi2" value="stock/3-2.jpg"></div>
+      <div style="font-size:11px;color:#5070a0;margin:8px 0 4px">データ行（ラベル / 値）</div>
+      <div class="rows-editor" id="t1-editor"></div>
+      <button class="btn-add" onclick="t1AddRow()">＋ 行追加</button><br><br>
+      <button class="btn-apply" onclick="applyType1()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ⑤ 型２
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-type2">
+  <div class="slide-type-tag">slideType: "type2" — 左=データ行 / 右=タイトル+画像</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-type2" id="s-type2">
+          <div class="col-left">
+            <div class="data-rows" id="t2-rows"></div>
+          </div>
+          <div class="col-right">
+            <div class="title-box" id="t2-title">バイエルン vs レアル<br>スタッツ比較</div>
+            <div class="img-box" id="t2-img" style="background-image:url('stock/3-2.jpg')"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ 型２ 編集</h3>
+      <div class="field-row"><label>右タイトル</label><textarea id="e-t2-title">バイエルン vs レアル\nスタッツ比較</textarea></div>
+      <div class="field-row"><label>右画像</label><input id="e-t2-img" value="stock/3-2.jpg"></div>
+      <div style="font-size:11px;color:#5070a0;margin:8px 0 4px">データ行（ラベル / 値）</div>
+      <div class="rows-editor" id="t2-editor"></div>
+      <button class="btn-add" onclick="t2AddRow()">＋ 行追加</button><br><br>
+      <button class="btn-apply" onclick="applyType2()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ⑥ 型３
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-type3">
+  <div class="slide-type-tag">slideType: "type3" — 左=画像+名前 / 右=データカードグリッド（新規）</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-type3" id="s-type3">
+          <div class="top-banner">
+            <div class="banner-icon" id="t3-icon">🏃</div>
+            <div class="banner-title" id="t3-title">選手プロフィール</div>
+            <div class="banner-sub" id="t3-sub">2025-26シーズン</div>
+          </div>
+          <div class="panel-img">
+            <div class="img-bg" id="t3-img" style="background-image:url('stock/3-1.jpg')"></div>
+            <div class="img-fade"></div>
+            <div class="img-vfade"></div>
+            <div class="img-name">
+              <div class="player-name" id="t3-name">Arda Güler</div>
+              <div class="player-sub"  id="t3-psub">Real Madrid | トルコ代表</div>
+            </div>
+          </div>
+          <div class="panel-data">
+            <div class="card-grid" id="t3-cards"></div>
+          </div>
+          <div class="sub-bar"><div class="sub-text" id="t3-narr">22歳の天才が刻んだ数字—欧州最高峰での輝きをデータで証明する</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ 型３ 編集</h3>
+      <div class="field-row"><label>アイコン</label><input id="e-t3-icon" value="🏃"></div>
+      <div class="field-row"><label>タイトル</label><input id="e-t3-title" value="選手プロフィール"></div>
+      <div class="field-row"><label>サブ</label><input id="e-t3-sub" value="2025-26シーズン"></div>
+      <div class="field-row"><label>画像</label><input id="e-t3-img" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>名前</label><input id="e-t3-name" value="Arda Güler"></div>
+      <div class="field-row"><label>所属</label><input id="e-t3-psub" value="Real Madrid | トルコ代表"></div>
+      <div class="field-row"><label>字幕</label><input id="e-t3-narr" value="22歳の天才が刻んだ数字—欧州最高峰での輝きをデータで証明する"></div>
+      <div style="font-size:11px;color:#5070a0;margin:8px 0 4px">カード（ラベル / 値 / 補足 / [H]=Hero）</div>
+      <div class="rows-editor" id="t3-editor"></div>
+      <button class="btn-add" onclick="t3AddCard()">＋ カード追加</button><br><br>
+      <button class="btn-apply" onclick="applyType3()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ⑦ 型４
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-type4">
+  <div class="slide-type-tag">slideType: "type4" — 左画像 | 中央比較バー | 右画像（新規）</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-type4" id="s-type4">
+          <div class="top-banner">
+            <div class="banner-icon">⚔️</div>
+            <div class="banner-title" id="t4-title">選手対比</div>
+            <div class="banner-sub" id="t4-sub">この試合のパフォーマンス</div>
+          </div>
+          <div class="panel-side left">
+            <div class="img-bg" id="t4-imgL" style="background-image:url('stock/3-1.jpg')"></div>
+            <div class="img-fade"></div>
+            <div class="img-vfade"></div>
+            <div class="name-tag">
+              <div class="player-name" id="t4-nameA">Arda Güler</div>
+              <div class="team-name"   id="t4-teamA">Real Madrid</div>
+            </div>
+          </div>
+          <div class="panel-center">
+            <div class="data-rows" id="t4-rows"></div>
+          </div>
+          <div class="panel-side right">
+            <div class="img-bg" id="t4-imgR" style="background-image:url('stock/3-2.jpg')"></div>
+            <div class="img-fade"></div>
+            <div class="img-vfade"></div>
+            <div class="name-tag">
+              <div class="player-name" id="t4-nameB">Michael Olise</div>
+              <div class="team-name"   id="t4-teamB">FC Bayern München</div>
+            </div>
+          </div>
+          <div class="vs-badge">VS</div>
+          <div class="sub-bar"><div class="sub-text" id="t4-narr">2ゴールのギュレル vs 決勝弾オリセ — データが示す両ヒーローの真価</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ 型４ 編集</h3>
+      <div class="field-row"><label>バナー</label><input id="e-t4-title" value="選手対比"></div>
+      <div class="field-row"><label>バナーサブ</label><input id="e-t4-sub" value="この試合のパフォーマンス"></div>
+      <div class="field-row"><label>左名前</label><input id="e-t4-nameA" value="Arda Güler"></div>
+      <div class="field-row"><label>左チーム</label><input id="e-t4-teamA" value="Real Madrid"></div>
+      <div class="field-row"><label>左画像</label><input id="e-t4-imgL" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>右名前</label><input id="e-t4-nameB" value="Michael Olise"></div>
+      <div class="field-row"><label>右チーム</label><input id="e-t4-teamB" value="FC Bayern München"></div>
+      <div class="field-row"><label>右画像</label><input id="e-t4-imgR" value="stock/3-2.jpg"></div>
+      <div class="field-row"><label>字幕</label><input id="e-t4-narr" value="2ゴールのギュレル vs 決勝弾オリセ — データが示す両ヒーローの真価"></div>
+      <div style="font-size:11px;color:#5070a0;margin:8px 0 4px">比較行（ラベル / 左値 / 右値）</div>
+      <div class="rows-editor" id="t4-editor"></div>
+      <button class="btn-add" onclick="t4AddRow()">＋ 行追加</button><br><br>
+      <button class="btn-apply" onclick="applyType4()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     ⑧ Ending
+═══════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-ending">
+  <div class="slide-type-tag">slideType: "ending"</div>
+  <div class="layout-row">
+    <div>
+      <div class="preview-wrap">
+        <div class="slide slide-ending" id="s-ending">
+          <div class="bg-img" id="en-bg" style="background-image:url('stock/3-1.jpg')"></div>
+          <div class="end-wrap">
+            <div class="end-main" id="en-main">いかがでしたか？<br>次の分析もお見逃しなく！</div>
+            <div class="end-telop" id="en-telop">チャンネル登録＆高評価で次の分析を待て！</div>
+            <div class="end-icons">
+              <div class="end-icon"><span>👍</span><p>高評価</p></div>
+              <div class="end-icon"><span>🔔</span><p>チャンネル登録</p></div>
+              <div class="end-icon"><span>💬</span><p>コメント</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="editor-panel">
+      <h3>✏️ Ending 編集</h3>
+      <div class="field-row"><label>背景画像</label><input id="e-en-bg" value="stock/3-1.jpg"></div>
+      <div class="field-row"><label>本文</label><textarea id="e-en-main">いかがでしたか？\n次の分析もお見逃しなく！</textarea></div>
+      <div class="field-row"><label>テロップ</label><input id="e-en-telop" value="チャンネル登録＆高評価で次の分析を待て！"></div>
+      <button class="btn-apply" onclick="applyEnding()">▶ 反映</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════
+     JavaScript
+═══════════════════════════════════════════════════════════════ -->
+<script>
+// ── タブ切り替え ───────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── ユーティリティ ─────────────────────────────────────────────
+const v = id => document.getElementById(id).value;
+const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+const setBg = (id, url) => { const el = document.getElementById(id); if (el) el.style.backgroundImage = `url('${url}')`; };
+const toNum = s => { const n = parseFloat(String(s).replace(/[^\d.]/g,'')); return isNaN(n) ? 0 : n; };
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// ── ① Opening ──────────────────────────────────────────────────
+function applyOpening() {
+  setBg('op-bg', v('e-op-bg'));
+  set('op-badge', v('e-op-badge'));
+  document.getElementById('op-title').innerHTML = v('e-op-title').replace(/\\n/g,'<br>');
+  set('op-sub', v('e-op-sub'));
+}
+
+// ── ② Simple ───────────────────────────────────────────────────
+function applySimple() {
+  setBg('si-bg', v('e-si-bg'));
+  set('si-label', v('e-si-label'));
+  set('si-sub', v('e-si-sub'));
+}
+
+// ── ③ Reaction ─────────────────────────────────────────────────
+// V1準拠バブルカラー
+const CMT_BG    = ['#FFF9C4','#C8EEFF','#D4F5D4','#EDD5FF','#FFE8CC','#FFD5EA'];
+const CMT_BG_HL = ['#FFD700','#5BB8F5','#5ED45E','#B86FFF','#FF9F43','#FF70A6'];
+let reRows = [
+  { text: 'This match was INSANE 🔥 Bayern comeback legend!', hl: false },
+  { text: 'Güler played like a god and still lost... football is cruel', hl: false },
+  { text: 'Olise 90+4 min 😭 my heart cannot take this', hl: true },
+  { text: 'Real Madrid fans in shambles rn lmao', hl: false },
+  { text: 'That Camavinga red card changed everything', hl: false },
+];
+function reRender() {
+  document.getElementById('re-cmts').innerHTML = reRows.map((c,i) => {
+    const side = i % 2 === 0 ? 'flex-start' : 'flex-end';
+    const bg   = c.hl ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
+    return `<div class="c-card ${c.hl?'hl':''}"
+      style="align-self:${side};background:${bg}">
+      <div class="c-text">${esc(c.text)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('re-editor').innerHTML = reRows.map((c,i) => `
+    <div class="re">
+      <span class="ri">${i+1}</span>
+      <input style="flex:1" value="${esc(c.text)}" oninput="reRows[${i}].text=this.value">
+      <label style="display:flex;align-items:center;gap:3px;color:#f59e0b;font-size:10px;flex-shrink:0">
+        <input type="checkbox" ${c.hl?'checked':''} onchange="reRows[${i}].hl=this.checked">HL
+      </label>
+      <button class="rb" onclick="reRows.splice(${i},1);reRender()">✕</button>
+    </div>`).join('');
+}
+function reAddRow() { reRows.push({ text: 'コメントを入力', hl: false }); reRender(); }
+function applyReaction() {
+  setBg('re-bg', v('e-re-bg'));
+  set('re-sub', v('e-re-sub'));
+  reRender();
+}
+
+// ── ④ 型１ ─────────────────────────────────────────────────────
+let t1Rows = [
+  { l:'今季ゴール', r:'36' },
+  { l:'アシスト',   r:'12' },
+  { l:'出場試合',   r:'44' },
+  { l:'評価点',     r:'7.85' },
+];
+function t1Render() {
+  document.getElementById('t1-rows').innerHTML = t1Rows.map(r =>
+    `<div class="data-row"><div class="d-left">${esc(r.l)}</div><div class="d-right">${esc(r.r)}</div></div>`
+  ).join('');
+  document.getElementById('t1-editor').innerHTML = t1Rows.map((r,i) => `
+    <div class="re">
+      <span class="ri">${i+1}</span>
+      <input style="flex:1.5" value="${esc(r.l)}" oninput="t1Rows[${i}].l=this.value">
+      <input style="flex:1" value="${esc(r.r)}" oninput="t1Rows[${i}].r=this.value">
+      <button class="rb" onclick="t1Rows.splice(${i},1);t1Render()">✕</button>
+    </div>`).join('');
+}
+function t1AddRow() { t1Rows.push({l:'項目',r:'値'}); t1Render(); }
+function applyType1() {
+  document.getElementById('t1-title').innerHTML = v('e-t1-title').replace(/\\n/g,'<br>');
+  setBg('t1-img',  v('e-t1-img'));
+  set('t1-ml1', v('e-t1-ml1')); setBg('t1-mi1', v('e-t1-mi1'));
+  set('t1-ml2', v('e-t1-ml2')); setBg('t1-mi2', v('e-t1-mi2'));
+  t1Render();
+}
+
+// ── ⑤ 型２ ─────────────────────────────────────────────────────
+let t2Rows = [
+  { l:'ポゼッション', r:'Bayern 69% / Real 31%' },
+  { l:'シュート数',   r:'21 vs 12' },
+  { l:'xG',           r:'2.14 vs 2.25' },
+  { l:'パス成功率',   r:'89% vs 82%' },
+  { l:'コーナー',     r:'7 vs 3' },
+];
+function t2Render() {
+  document.getElementById('t2-rows').innerHTML = t2Rows.map(r =>
+    `<div class="data-row"><div class="d-left">${esc(r.l)}</div><div class="d-right">${esc(r.r)}</div></div>`
+  ).join('');
+  document.getElementById('t2-editor').innerHTML = t2Rows.map((r,i) => `
+    <div class="re">
+      <span class="ri">${i+1}</span>
+      <input style="flex:1" value="${esc(r.l)}" oninput="t2Rows[${i}].l=this.value">
+      <input style="flex:1.5" value="${esc(r.r)}" oninput="t2Rows[${i}].r=this.value">
+      <button class="rb" onclick="t2Rows.splice(${i},1);t2Render()">✕</button>
+    </div>`).join('');
+}
+function t2AddRow() { t2Rows.push({l:'項目',r:'値'}); t2Render(); }
+function applyType2() {
+  document.getElementById('t2-title').innerHTML = v('e-t2-title').replace(/\\n/g,'<br>');
+  setBg('t2-img', v('e-t2-img'));
+  t2Render();
+}
+
+// ── ⑥ 型３ ─────────────────────────────────────────────────────
+const ACCENTS = ['#f59e0b','#3b82f6','#8b5cf6','#10b981','#ef4444','#06b6d4'];
+let t3Cards = [
+  { label:'評価点',     value:'8.70', sub:'今試合 最高評価',  ac:'#f59e0b', hero:true  },
+  { label:'ゴール',     value:'2',    sub:'開始1分 & 29分',  ac:'#3b82f6', hero:false },
+  { label:'アシスト',   value:'0',    sub:'チャンス創出 3回', ac:'#8b5cf6', hero:false },
+  { label:'今季CL',     value:'4G',   sub:'出場7試合',        ac:'#10b981', hero:false },
+  { label:'プレー時間', value:"62'",  sub:'62分でベンチへ',   ac:'#ef4444', hero:false },
+];
+function t3Render() {
+  document.getElementById('t3-cards').innerHTML = t3Cards.map(c => `
+    <div class="data-card ${c.hero?'hero':''}" style="--ac:${c.ac}">
+      <div class="card-label">${esc(c.label)}</div>
+      <div class="card-value">${esc(c.value)}</div>
+      ${c.sub?`<div class="card-sub">${esc(c.sub)}</div>`:''}
+    </div>`).join('');
+  document.getElementById('t3-editor').innerHTML = t3Cards.map((c,i) => `
+    <div class="re">
+      <span class="ri">${i+1}</span>
+      <input style="flex:1.2" placeholder="ラベル" value="${esc(c.label)}" oninput="t3Cards[${i}].label=this.value">
+      <input style="flex:0.8" placeholder="値"    value="${esc(c.value)}" oninput="t3Cards[${i}].value=this.value">
+      <input style="flex:1.4" placeholder="補足"  value="${esc(c.sub)}"   oninput="t3Cards[${i}].sub=this.value">
+      <label style="display:flex;align-items:center;gap:3px;color:#9bb5e0;font-size:10px;flex-shrink:0">
+        <input type="checkbox" ${c.hero?'checked':''} onchange="t3Cards[${i}].hero=this.checked">H
+      </label>
+      <button class="rb" onclick="t3Cards.splice(${i},1);t3Render()">✕</button>
+    </div>`).join('');
+}
+function t3AddCard() { t3Cards.push({label:'項目',value:'—',sub:'',ac:'#3b82f6',hero:false}); t3Render(); }
+function applyType3() {
+  set('t3-icon',  v('e-t3-icon'));  set('t3-title', v('e-t3-title'));
+  set('t3-sub',   v('e-t3-sub'));   setBg('t3-img',  v('e-t3-img'));
+  set('t3-name',  v('e-t3-name'));  set('t3-psub',   v('e-t3-psub'));
+  set('t3-narr',  v('e-t3-narr'));  t3Render();
+}
+
+// ── ⑦ 型４ ─────────────────────────────────────────────────────
+let t4Rows = [
+  { label:'ゴール',     lv:'2',    rv:'1'    },
+  { label:'アシスト',   lv:'0',    rv:'1'    },
+  { label:'チャンス創出', lv:'3',  rv:'2'    },
+  { label:'評価点',     lv:'8.70', rv:'8.50' },
+  { label:'プレー時間', lv:'62',   rv:'75'   },
+];
+function t4RowHtml(rows) {
+  return rows.map(r => {
+    const lv = toNum(r.lv), rv = toNum(r.rv), tot = lv + rv;
+    const lp = tot>0 ? Math.round(lv/tot*50) : 25;
+    const rp = tot>0 ? Math.round(rv/tot*50) : 25;
+    const lw = lv>rv?'win':lv<rv?'lose':'', rw = rv>lv?'win':rv<lv?'lose':'';
+    return `<div class="data-row">
+      <div class="val val-left ${lw}">${esc(r.lv)}</div>
+      <div class="label-col">
+        <div class="label-text">${esc(r.label)}</div>
+        <div class="bar-track">
+          <div class="bar-l" style="width:${lp}%"></div>
+          <div class="bar-r" style="width:${rp}%"></div>
+        </div>
+      </div>
+      <div class="val val-right ${rw}">${esc(r.rv)}</div>
+    </div>`;
+  }).join('');
+}
+function t4Render() {
+  document.getElementById('t4-rows').innerHTML = t4RowHtml(t4Rows);
+  document.getElementById('t4-editor').innerHTML = t4Rows.map((r,i) => `
+    <div class="re">
+      <span class="ri">${i+1}</span>
+      <input style="flex:1.2" placeholder="ラベル" value="${esc(r.label)}" oninput="t4Rows[${i}].label=this.value">
+      <input style="flex:0.8" placeholder="左"   value="${esc(r.lv)}"    oninput="t4Rows[${i}].lv=this.value">
+      <input style="flex:0.8" placeholder="右"   value="${esc(r.rv)}"    oninput="t4Rows[${i}].rv=this.value">
+      <button class="rb" onclick="t4Rows.splice(${i},1);t4Render()">✕</button>
+    </div>`).join('');
+}
+function t4AddRow() { t4Rows.push({label:'項目',lv:'0',rv:'0'}); t4Render(); }
+function applyType4() {
+  set('t4-title', v('e-t4-title')); set('t4-sub', v('e-t4-sub'));
+  set('t4-nameA', v('e-t4-nameA')); set('t4-teamA', v('e-t4-teamA')); setBg('t4-imgL', v('e-t4-imgL'));
+  set('t4-nameB', v('e-t4-nameB')); set('t4-teamB', v('e-t4-teamB')); setBg('t4-imgR', v('e-t4-imgR'));
+  set('t4-narr',  v('e-t4-narr'));  t4Render();
+}
+
+// ── ⑧ Ending ──────────────────────────────────────────────────
+function applyEnding() {
+  setBg('en-bg', v('e-en-bg'));
+  document.getElementById('en-main').innerHTML = v('e-en-main').replace(/\\n/g,'<br>');
+  set('en-telop', v('e-en-telop'));
+}
+
+// ── 初期描画 ───────────────────────────────────────────────────
+window.onload = () => {
+  reRender(); t1Render(); t2Render(); t3Render(); t4Render();
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,415 @@
+{
+  "youtubeTitle": "25年ぶりプレミア復活！コベントリー・シティ昇格決定の瞬間をデータで徹底解説",
+  "hashtagsText": "#サッカー #プレミアリーグ #コベントリー #フランクランパード #昇格",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "今夜、チャンピオンシップで歴史が動きました。ブラックバーンとの1-1ドローという地味な結果が、25年間待ち続けた奇跡を生んだのです。勝たなくても夢は叶う。コベントリー・シティ、プレミアリーグ復活の全真相を、数字で徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Coventry City promotion celebration",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "25年の歳月を経て、地獄から帰還！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "2026年5月某日、チャンピオンシップ第46節。コベントリー・シティはブラックバーン・ローヴァーズと対戦し、1-1の引き分けに終わりました。しかし、この1ポイントこそが、25年ぶりのプレミアリーグ復帰を決定づける、黄金の1ポイントとなったのです。フランク・ランパード監督率いるチームは、シーズンを通して安定した戦いを見せ、自動昇格圏内をキープ。この日のドローにより、2位以内が確定し、悲願のプレミア復帰が正式決定しました。昇格争いのライバルたちの結果を待つ必要もなく、自らの力で勝ち取った瞬間でした。",
+      "keyPoints": [
+        "ブラックバーン戦 1-1 ドロー",
+        "25年ぶりのプレミアリーグ復帰決定",
+        "ランパード監督指揮下での自動昇格"
+      ],
+      "imageQuery": "Coventry City 1-1 Blackburn Rovers",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "今夜、チャンピオンシップで歴史的な瞬間が訪れました。ブラックバーン・ローヴァーズとの1-1の引き分けが、コベントリー・シティにプレミアリーグへの切符を手渡したのです。25年という長い歳月、地獄と称される苦難を経ての復活劇。フランク・ランパード監督の手腕が光るシーズンでしたが、その裏にはクラブ存続の危機すらあった、壮絶な道のりがありました。",
+        "source": "existing"
+      }
+    },
+    {
+      "id": "club_history",
+      "label": "クラブの来歴",
+      "icon": "🏛️",
+      "narration": "コベントリー・シティの歴史は、栄光と転落の物語です。クラブのピークは1987年、FAカップを制覇した瞬間でした。しかし、その後の道のりは険しいものでした。2001年、プレミアリーグから降格。その後は財政危機に陥り、2013年には破産宣告（アドミニストレーション）の憂き目に。さらに、ホームスタジアムであるリコー・アリーナ（現 コベントリー・ビルディング・ソサエティ・アリーナ）を巡る争いから、2019年から2シーズンにわたり、本拠地コベントリーを離れ、バーミンガムやさらにはノーサンプトンでのホームゲームを強いられるという、ファンにとっては苦難の時代が続きました。文字通り「地獄」を経験したクラブが、25年の時を経て、頂点への階段を再び上り始めたのです。",
+      "keyPoints": [
+        "1987年 FAカップ優勝",
+        "2001年 プレミアリーグから降格",
+        "2013年 破産宣告（アドミニストレーション）",
+        "2019-21 ホームスタジアム喪失（他都市転戦）"
+      ],
+      "imageQuery": "Coventry City history FA Cup 1987",
+      "imagePath": "/images/2026-04-18/01.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Coventry City F.C.",
+          "url": "https://en.wikipedia.org/wiki/Coventry_City_F.C.",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Coventry City F.C.",
+        "description": "Association football club in England",
+        "extract": "Coventry City Football Club is an English professional football club based in Coventry, West Midlands. The club plays in the EFL Championship, the second tier of English football. The club is nicknamed the Sky Blues after the sky blue colours that have featured prominently throughout their history, which they have worn continuously since 1962.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/en/thumb/7/7b/Coventry_City_FC_crest.svg/330px-Coventry_City_FC_crest.svg.png",
+        "url": "https://en.wikipedia.org/wiki/Coventry_City_F.C.",
+        "type": "standard"
+      }
+    },
+    {
+      "id": "historical_record",
+      "label": "歴史的記録・節目",
+      "icon": "📜",
+      "narration": "コベントリーが最後にプレミアリーグのピッチに立ったのは、2000-01シーズンです。当時を振り返ると、ゴードン・ストラカン監督の下、クレイグ・ベラミー、ジョン・ハートソン、ムスタファ・ハジらが主力として活躍。しかし、シーズンを通して苦戦が続き、最終的に19位でプレミアリーグからの降格が決定しました。平均ホームゲーム観客動員数は20,535人。このシーズンが、34シーズン連続で続いたトップディビジョン在籍に終止符を打つこととなったのです。この2000-01シーズンに生まれた子供が、今では25歳。コベントリーのファンは、四半世紀もの間、トップリーグへの復帰を待ち続けてきたことになります。",
+      "keyPoints": [
+        "最後のPLシーズン: 2000-01",
+        "最終順位: 19位（降格）",
+        "当時の主力: ベラミー、ハートソン、ハジ",
+        "平均観客動員: 20,535人"
+      ],
+      "imageQuery": "Coventry City 2000-01 squad",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Wikipedia: 2000–01 FA Premier League",
+          "url": "https://en.wikipedia.org/wiki/2000%E2%80%9301_FA_Premier_League",
+          "date": "2026-04-18"
+        },
+        {
+          "label": "2000–01 Coventry City F.C. season - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/2000%E2%80%9301_Coventry_City_F.C._season",
+          "date": "2026-04-18"
+        },
+        {
+          "label": "Coventry City's incredible turnaround in recent years: 2000-01 ...",
+          "url": "https://www.facebook.com/100063639967770/posts/coventry-citys-incredible-turnaround-in-recent-years-2000-01-relegated-from-the-/1539734561491195/",
+          "date": "6 hours ago"
+        }
+      ],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "ご視聴ありがとうございました！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "wiki": {
+          "ok": true,
+          "title": "2000–01 FA Premier League",
+          "description": "Football season in England",
+          "extract": "The 2000–01 FA Premier League was the ninth FA Premier League season and the third season running which ended with Manchester United as champions and Arsenal as runners-up. Sir Alex Ferguson became the first manager to win three successive English league titles with the same club. Liverpool, meanwhile, managed a unique cup treble – winning the FA Cup, League Cup and UEFA Cup. They also finished third in the Premier League and qualified for the Champions League. Nike replaced Mitre as manufacturer of the official Premier League match ball, a contract that has since been extended multiple times, with the most recent renewal made in November 2018 to the end of the 2024–25 season.",
+          "thumbnail": null,
+          "url": "https://en.wikipedia.org/wiki/2000%E2%80%9301_FA_Premier_League",
+          "type": "standard"
+        },
+        "serper": {
+          "ok": true,
+          "moduleId": "historical_record",
+          "query": "Coventry City last Premier League season 2000-01 relegation history",
+          "organic": [
+            {
+              "title": "2000–01 Coventry City F.C. season - Wikipedia",
+              "snippet": "Chairman, Bryan Richardson ; Manager, Gordon Strachan ; Stadium, Highfield Road ; FA Premier League · 19th (relegated) ; FA Cup · Fourth round.",
+              "link": "https://en.wikipedia.org/wiki/2000%E2%80%9301_Coventry_City_F.C._season",
+              "date": null
+            },
+            {
+              "title": "Coventry City's incredible turnaround in recent years: 2000-01 ...",
+              "snippet": "Coventry City's incredible turnaround in recent years: 2000-01: Relegated from the Premier League ⬇️ 2011-12: Relegated to League One 2016- ...",
+              "link": "https://www.facebook.com/100063639967770/posts/coventry-citys-incredible-turnaround-in-recent-years-2000-01-relegated-from-the-/1539734561491195/",
+              "date": "6 hours ago"
+            },
+            {
+              "title": "What happened next? The last Coventry City side to play ... - Squawka",
+              "snippet": "Relegation was confirmed with a defeat to Aston Villa in Gameweek 37, but the Sky Blues officially bowed out of the Premier League with a ...",
+              "link": "https://www.squawka.com/en/cult-corner/coventry-city-premier-league-2001/",
+              "date": "7 hours ago"
+            },
+            {
+              "title": "2000-2001 Coventry City Stats, All Competitions - FBref.com",
+              "snippet": "Record: 8-10-20, 34 points (0.89 per game), 19th in Premier League (1st Tier) ; Relegated to Football League First Division ; Home Record: 4-7-8, 19 points Away ...",
+              "link": "https://fbref.com/en/squads/f7e3dfe9/2000-2001/Coventry-City-Stats",
+              "date": null
+            },
+            {
+              "title": "When were Coventry last in the Premier League? - BBC",
+              "snippet": "Coventry City last played in the Premier League in the 2000-01 season. ... In the 2011-12 season, they were relegated to League One, and ...",
+              "link": "https://www.bbc.com/sport/football/articles/c2dzxp5z7e3o",
+              "date": "Nov 26, 2025"
+            },
+            {
+              "title": "Coventry City's last Premier League season was 2000-01. They ...",
+              "snippet": "Coventry City's last Premier League season was 2000-01. They finished 19th and were relegated, ending 34 straight years in the top flight.",
+              "link": "https://x.com/grok/status/2045254893443674598",
+              "date": "6 hours ago"
+            }
+          ],
+          "answerBox": {
+            "snippet": "Coventry spent 34 straight years in England's top division and garnered a reputation for a series of dramatic escapes from Premier League relegation before finally succumbing to the drop in 2001. The club won their only major trophy with the FA Cup in 1987.",
+            "title": "Frank Lampard's Coventry City promoted to Premier League - ESPN",
+            "link": "https://global.espn.com/football/story/_/id/48493666/frank-lampard-coventry-city-promoted-premier-league-championship",
+            "date": "4 hours ago"
+          },
+          "knowledgeGraph": null,
+          "topStories": [
+            {
+              "title": "Coventry City return to the Premier League after 25 years away",
+              "link": "https://www.gazetaexpress.com/en/Coventry-City-returns-to-the-Premier-League-after-25-years-of-absence/",
+              "source": "Gazeta Express",
+              "date": "7 hours ago",
+              "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4Cw9vAwzqJIc8fzUWUX53c2BWonH9tM_xe4dvBkPj45--K5ZaspcjkQOOjw&s"
+            },
+            {
+              "title": "What happened next? The last Coventry City side to play in the Premier League",
+              "link": "https://www.squawka.com/en/cult-corner/coventry-city-premier-league-2001/",
+              "source": "Squawka",
+              "date": "7 hours ago",
+              "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRj3nNGepu6w_3PE0KuuexVZsPKvgHYAu5CI_WPY16QW2VJeQJTH2zK77_A2g&s"
+            },
+            {
+              "title": "Frank Lampard's Coventry City promoted to Premier League",
+              "link": "https://global.espn.com/football/story/_/id/48493666/frank-lampard-coventry-city-promoted-premier-league-championship",
+              "source": "ESPN Global",
+              "date": "5 hours ago",
+              "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTdw9Q0ORiPiMlNl2lsCpILTZPGoTVTOH-VHQWRdXBhNaX1BxbOFAYyPI5iKQ&s"
+            }
+          ],
+          "articleContent": "[出典: https://en.wikipedia.org/wiki/2000%E2%80%9301_Coventry_City_F.C._season]\n2000–01 Coventry City F.C. season - Wikipedia Jump to content From Wikipedia, the free encyclopedia Coventry City F.C. 2000–01 football season Coventry City F.C. 2000–01 season Chairman Bryan Richardson Manager Gordon Strachan Stadium Highfield Road FA Premier League 19th (relegated) FA Cup Fourth round League Cup Fourth round Top goalscorer League: Craig Bellamy / John Hartson / Moustapha Hadji (6) All: Craig Bellamy (8) Highest home attendance 23,063 vs Liverpool (28 April 2001, FA Premier League ) Lowest home attendance 7,425 vs Preston North End (27 September 2000, League Cup ) Average home league attendance 20,535 Home colours Away colours &#8592;&#160; 1999–2000 2001–02 &#160;&#8594; During the 2000–01 English football season, Coventry City F.C. competed in the FA Premier League . It was their 34th consecutive season in the top division, but this season saw the club relegated and they have not been in the top flight since. Season summary [ edit ] Coventry City 's season started promisingly. Despite an opening-day 3–1 home defeat to Middlesbrough , this was followed by back-to-back away victories at Southampton and Manchester City , which was the first time they had won an away league game since April 1999 and the first time they had won back-to-back away league games since February 1998. However, this burst of form instantly evaporated and by December 2000, Coventry had dropped into the relegation zone after obtaining only one more win (a 2–1 home win over Tottenham Hot"
+        }
+      }
+    },
+    {
+      "id": "player_career",
+      "label": "選手の来歴",
+      "icon": "📋",
+      "narration": "この歴史的昇格を導いたのは、プレミアリーグ史上最高のミッドフィルダーの一人と称される、フランク・ランパード監督です。現役時代はチェルシーで通算177ゴールを挙げ、ミッドフィルダーとしてのプレミアリーグ最多得点記録を樹立。しかし、監督としてのキャリアは順風満帆とは言えませんでした。チェルシー、エバートンでの指揮では期待通りの結果を残せず、一時は評価が低迷。しかし、2025年、チャンピオンシップのコベントリー・シティの指揮官に就任。かつての英雄が、苦難を乗り越え、辺境の地で再起を果たしたのです。海外の反応でも「スーパー・フランキー・ランパード再び！」と称賛される、劇的なカムバックストーリーとなりました。",
+      "keyPoints": [
+        "",
+        "",
+        ""
+      ],
+      "imageQuery": "Frank Lampard Coventry City manager",
+      "imagePath": "/images/2026-04-18/01.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Frank Lampard",
+          "url": "https://en.wikipedia.org/wiki/Frank_Lampard",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "項目1",
+          "value": "—"
+        },
+        {
+          "label": "項目2",
+          "value": "—"
+        },
+        {
+          "label": "項目3",
+          "value": "—"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Frank Lampard",
+        "description": "English football player and manager (born 1978)",
+        "extract": "Frank James Lampard is an English football manager and former midfielder who is the manager of EFL Championship club Coventry City. Widely regarded as one of the greatest midfielders of all time and one of Chelsea's and the Premier League’s greatest ever players, Lampard holds the record of the most Premier League goals (177) by a midfielder in its history.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Frank_Lampard_2019.jpg/330px-Frank_Lampard_2019.jpg",
+        "url": "https://en.wikipedia.org/wiki/Frank_Lampard",
+        "type": "standard"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "このニュースは、海外のサッカーファンにも大きな感動を与えています。Redditでは、以下のような祝福と共感のコメントが溢れました。\n\n「25年。地獄を経て帰ってきた。私たちの目には何かが…」\n\n「父と家族、全てのファンが嬉しくて仕方ない。戦後コベントリーに移り住んだ祖父母は、この日を見られずに逝ってしまったが、チームを誇りに思っているはずだ」\n\n「心から祝福する。我々は逆方向へ進むが、これほどの苦難を味わった正当なクラブの復活は、見ていて本当に気分がいい」\n\n「邪悪なオーナー、地獄への転落、ボイコットの年、ノーサンプトンへの追放を耐え抜き、25年ぶりの帰還だ」\n\n「おめでとう。オールド・トラッフォードで会おう」\n\n世界中のファンが、長い苦難の末にたどり着いた栄光を心から祝福しているのです。",
+      "keyPoints": [
+        "「25年。地獄を経て帰ってきた」",
+        "「祖父母はこの日を見られずに…」",
+        "「苦難を味わった正当なクラブの復活」",
+        "「オールド・トラッフォードで会おう」",
+        "",
+        "",
+        ""
+      ],
+      "imageQuery": "Coventry City fans celebration Reddit",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍677] Ridiculously happy for my dad and his side of the family, and all the fans. Shame my grandparents, huge fans since they moved there after the war, couldn’t see them go up before they moved on from this life, but I’m sure they are proud of the team as well.\n\n\nCongratulations! What a job by Lampard and the players.\n",
+          "[👍433] Condolences for your upcoming eviction from /r/Championship, lads. Welcome back to the other place 🫶",
+          "[👍349] 25 years. To hell and back.\n\nWe have something in our eye at r/ccfc 🩵🩵🩵",
+          "[👍182] Congratulations Coventry. Glad to see you promoted now Wolves are pissing off, I couldn't be pretending Forest is a local rivalry.\n\nThis also does great things for my Lampard &gt; Gerrard propaganda.",
+          "[👍173] Super Frankie Lampard strikes again",
+          "[👍164] It was effectively done last weekend but it’s now official. Welcome back Coventry City, we’ll see you at Old Trafford",
+          "[👍70] Man respect to Lampard",
+          "[👍53] I was living in Coventry during the really hard parts of their 25 years outside of the Prem - administration, relocation to Northampton and Birmingham and Burton, and the real risk that they'd just go under completely among their fans. The Ricoh as it was then was always really toxic or just empty, and I really thought they'd never get out of League Two, but here we are.\n\nFrank Lampard's done an incredible job and they're easily the best team in the Championship this year. Doug King is a great o",
+          "[👍52] Imagine if the 4th plane hit on 9/11\n\nThat's what this season is to us",
+          "[👍33] They had to endure a nefarious owner, a descent into hell, years of boycott (and a exile at Northampton!), and after 25 years, they are back. A staple in Division One football (35 consecutive years before going down), they are back. Congrats, Cov!",
+          "[👍23] In 24 years of supporting Cov I’ve witnessed relegation to League One, administration twice, three seasons played outside of Coventry and relegation to League Two. 9 years ago I was seriously worried I wouldn’t have a club to supported by the time I turned 30. Now I’ll be turning 30 this summer with us a Premier League club 🩵 thank you Doug King, Frank Lampard, Joe Edwards, Mark Robin, Adi Viveash, Dave Boddy and all the players who have played for us in the last 8 years. ",
+          "[👍22] Cov fans were loud tonight. Excited to see them back in the Prem and to see what Lampard can do with them.",
+          "[👍22] Congratulations. Nice to see a new team going up for a change. \n\nPure relegation fodder or massive spending required but I’m still happy for it. ",
+          "[👍22] Absolutely delighted for them. Unfortunately we're going the other way, but it's so good to see a proper club that's really been through the wringer back in the top flight. And kudos to Lampard - I really do think he can be a top manager with time. [I wouldn't have said this two years ago 😅]",
+          "[👍19] Super Frank",
+          "[👍16] Many congratulations. Well deserved, and extra kudos for doing it without parachute payments. That’s not an easy thing to achieve.",
+          "[👍16] No parachute payments. No billionaire owner. What a time to be alive. ",
+          "[👍14] Delighted to see them back, hope we batter them.",
+          "[👍14] Good to see teams rebuilding after being in the lower leagues for years and then get back to the PL. Feels at times like you might get stuck in the EFL forever.",
+          "[👍11] Hopefully they keep their weird rivalry with Sunderland up. Always funny when two teams hate each other for something that happened decades ago\n\nOlder Mackems talk about Jimmy Hill like he's Hitler",
+          "25年だ。地獄を経て帰ってきた。",
+          "父と家族、全てのファンが嬉しくて仕方ない。\n戦後コベントリーに移り住んだ祖父母は、この日を見られずに逝ってしまったが、チームを誇りに思っているはずだ。",
+          "おめでとう。オールド・トラッフォードで会おう。",
+          "心から祝福する。我々は逆方向へ進むが、\nこれほどの苦難を味わった正当なクラブの復活は、見ていて本当に気分がいい。",
+          "コベントリーファン、今夜は大声だったな。",
+          "お前の/r/Championshipからの立ち退きに哀悼の意を。\nようこそ、もう一つの場所へ。",
+          "新たなチームの昇格は見ていて気分がいい。",
+          "スーパー・フランキー・ランパード再び！",
+          "邪悪なオーナー、地獄への転落、ボイコットの年、\nノーサンプトンへの追放を耐え抜き、25年ぶりの帰還だ。",
+          "ランパードへの尊敬の念は大きい。",
+          "コベントリーに住んでいた時、彼らは本当に苦しんでいた。\n破綻、ノーサンプトンやバーミンガムへの移転、完全消滅のリスク。",
+          "フランク・ランパードは信じられない仕事をした。",
+          "24年間のサポートで、リーグ1降格、二度の破綻、\nコベントリー外での3シーズン、リーグ2降格を目撃した。",
+          "純粋な降格候補か、巨額支出が必要か。"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "club_current_season",
+      "label": "今シーズンの戦績",
+      "icon": "📈",
+      "narration": "では、今シーズンのコベントリーはどのような戦いを見せたのでしょうか？ シーズン前の予想では、昇格争いの本命とはほとんど見られていませんでした。しかし、フランク・ランパード監督の就任後、チームは変貌を遂げます。具体的な勝点推移の詳細データは現在取得中ですが、ランパード監督就任前後で明らかに勝ち点獲得ペースが向上し、シーズンを通して上位をキープ。堅実な守備と効率的な攻撃を武器に、最終的に自動昇格圏内の2位を死守する形でプレミアリーグへの切符を手にしました。また、チームの一員としてフランク・オニエカのような選手も、出場6試合で1アシストを記録するなど（評価点6.64）、チームに貢献しています。",
+      "keyPoints": [
+        "シーズン前の予想では昇格本命視薄し",
+        "ランパード監督就任後、戦績が向上",
+        "最終順位: チャンピオンシップ2位（自動昇格）",
+        "オニエカ: 出場6試合 1アシスト 評価点6.64"
+      ],
+      "imageQuery": "Coventry City 2025-26 Championship table",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Frank Onyeka",
+          "url": "https://www.sofascore.com/player/885864",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "stats",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 885864,
+        "name": "Frank Onyeka",
+        "position": "M",
+        "team": "Coventry City",
+        "nationality": "Nigeria",
+        "dateOfBirth": "1998-01-01T00:00:00+00:00",
+        "height": 183,
+        "preferredFoot": "Right",
+        "marketValue": "€7M",
+        "contractUntil": "2026-05",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 6,
+          "goals": 0,
+          "assists": 1,
+          "rating": 6.64,
+          "minutesPlayed": 88,
+          "yellowCards": 0,
+          "redCards": 0,
+          "expectedGoals": null,
+          "keyPasses": 1
+        },
+        "positionStats": {
+          "keyPasses": 1,
+          "successfulDribbles": 2,
+          "bigChancesCreated": 1,
+          "tackles": 2,
+          "interceptions": 0,
+          "accuratePassesPct": 77.78
+        },
+        "uclStats": null
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "25年間の長いトンネルを抜け、ついに光が見えたコベントリー・シティ。財政破綻、ホーム喪失という地獄を経験したからこそ、この喜びはひとしおです。来シーズンのプレミアリーグでは、どんな戦いを見せてくれるのでしょうか？ チャンネル登録と高評価で、この感動を応援してください！ 次の速報サッカーニュースもお楽しみに！",
+      "keyPoints": [],
+      "imageQuery": "Coventry City Premier League 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "ご視聴ありがとうございました！",
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-18",
+    "postId": "1",
+    "originalTitle": "As a result of their 1-1 draw tonight against Blackburn, Coventry City are now officially a Premier League club once again",
+    "generatedAt": "2026-04-18T03:48:32.183Z",
+    "mainImagePath": null
+  }
+}

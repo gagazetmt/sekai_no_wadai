@@ -1,0 +1,1594 @@
+{
+  "youtubeTitle": "衝撃の15分ハットトリック！ギブズ＝ホワイトが降格争いを一変させた瞬間【ノッティンガム・フォレスト】",
+  "hashtagsText": "#サッカー #プレミアリーグ #ノッティンガムフォレスト #ギブズホワイト #ハットトリック",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "衝撃の15分間が、プレミアリーグの降格争いを一変させました。ノッティンガム・フォレストのモーガン・ギブズ＝ホワイトが、バーンリー戦で77分から始まるハットトリックを達成。その全真相を徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Morgan Gibbs-White hat-trick celebration",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "衝撃の15分ハットトリック！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "2026年4月19日、シティ・グラウンドで行われたプレミアリーグ第34節、ノッティンガム・フォレスト対バーンリー。前半45+2分にバーンリーのジアン・フレミングに先制を許したフォレスト。しかし後半、モーガン・ギブズ＝ホワイトが劇的な15分間で試合をひっくり返します。62分に同点ゴール、69分に逆転ゴール、そして77分にハットトリックを達成。最終的に4-1での勝利を収め、降格圏から大きく離脱する重要な3ポイントを獲得しました。",
+      "keyPoints": [
+        "2026年4月19日 プレミアリーグ第34節",
+        "前半45+2分 バーンリー先制 (フレミング)",
+        "後半62分・69分・77分 ギブズ＝ホワイト3得点",
+        "最終スコア ノッティンガム・フォレスト 4-1 バーンリー"
+      ],
+      "imageQuery": "Nottingham Forest 4-1 Burnley scoreboard",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "衝撃的な15分間が、シーズン終盤のプレミアリーグに新たなドラマを生み出しました。ノッティンガム・フォレストのモーガン・ギブズ＝ホワイトが、バーンリー戦で77分から始まるハットトリックを達成。これにより、チームは降格圏から大きく離脱する重要な3ポイントを獲得します。",
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "試合の決定的瞬間は、後半62分から77分までの、わずか15分間に凝縮されました。まず62分、ギブズ＝ホワイトがフォレストの同点弾を決めます。7分後の69分、今度は逆転となる2点目を叩き込み、チームを沸かせました。そして、その8分後、77分。彼はハットトリックとなる3点目を決め、試合の決着をつけたのです。信じられますか？ 同点からダメ押しまで、たったの15分。この爆発的な得点力が、フォレストに劇的な勝利をもたらしました。さらに90+8分にはイゴール・ヘススが4点目を追加し、勝利を確実なものにしています。",
+      "keyPoints": [
+        "後半62分: ギブズ＝ホワイト 同点弾",
+        "後半69分: ギブズ＝ホワイト 逆転弾",
+        "後半77分: ギブズ＝ホワイト ハットトリック弾",
+        "15分間で3ゴールの爆発力"
+      ],
+      "imageQuery": "Gibbs-White hat-trick goals sequence",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "matchId": 14025041,
+        "homeTeam": "Nottingham Forest",
+        "awayTeam": "Burnley",
+        "homeScore": 4,
+        "awayScore": 1,
+        "matchDate": "2026-04-19",
+        "tournament": "Premier League",
+        "venue": "City Ground",
+        "attendance": null,
+        "goals": [
+          {
+            "time": 45,
+            "timeStr": "45+2'",
+            "player": "Zian Flemming",
+            "isHome": false,
+            "team": "Burnley",
+            "type": "通常"
+          },
+          {
+            "time": 62,
+            "timeStr": "62'",
+            "player": "Morgan Gibbs-White",
+            "isHome": true,
+            "team": "Nottingham Forest",
+            "type": "通常"
+          },
+          {
+            "time": 69,
+            "timeStr": "69'",
+            "player": "Morgan Gibbs-White",
+            "isHome": true,
+            "team": "Nottingham Forest",
+            "type": "通常"
+          },
+          {
+            "time": 77,
+            "timeStr": "77'",
+            "player": "Morgan Gibbs-White",
+            "isHome": true,
+            "team": "Nottingham Forest",
+            "type": "通常"
+          },
+          {
+            "time": 90,
+            "timeStr": "90+8'",
+            "player": "Igor Jesus",
+            "isHome": true,
+            "team": "Nottingham Forest",
+            "type": "通常"
+          }
+        ],
+        "cards": [
+          {
+            "time": 75,
+            "timeStr": "75'",
+            "player": "Florentino Luís",
+            "isHome": false,
+            "team": "Burnley",
+            "color": "イエロー"
+          },
+          {
+            "time": 80,
+            "timeStr": "80'",
+            "player": "Kyle Walker",
+            "isHome": false,
+            "team": "Burnley",
+            "color": "イエロー"
+          }
+        ],
+        "stats": {
+          "Ball possession": {
+            "home": "51%",
+            "away": "49%"
+          },
+          "Expected goals": {
+            "home": "1.19",
+            "away": "0.36"
+          },
+          "Big chances": {
+            "home": "2",
+            "away": "1"
+          },
+          "Total shots": {
+            "home": "10",
+            "away": "4"
+          },
+          "Goalkeeper saves": {
+            "home": "2",
+            "away": "1"
+          },
+          "Corner kicks": {
+            "home": "4",
+            "away": "4"
+          },
+          "Fouls": {
+            "home": "8",
+            "away": "12"
+          },
+          "Passes": {
+            "home": "474",
+            "away": "454"
+          },
+          "Tackles": {
+            "home": "22",
+            "away": "22"
+          },
+          "Free kicks": {
+            "home": "12",
+            "away": "8"
+          },
+          "Yellow cards": {
+            "home": "0",
+            "away": "2"
+          },
+          "Shots on target": {
+            "home": "4",
+            "away": "3"
+          },
+          "Hit woodwork": {
+            "home": "0",
+            "away": "0"
+          },
+          "Shots off target": {
+            "home": "4",
+            "away": "0"
+          },
+          "Blocked shots": {
+            "home": "2",
+            "away": "1"
+          },
+          "Shots inside box": {
+            "home": "8",
+            "away": "3"
+          },
+          "Shots outside box": {
+            "home": "2",
+            "away": "1"
+          },
+          "Big chances scored": {
+            "home": "2",
+            "away": "1"
+          },
+          "Through balls": {
+            "home": "1",
+            "away": "0"
+          },
+          "Touches in penalty area": {
+            "home": "23",
+            "away": "12"
+          },
+          "Fouled in final third": {
+            "home": "3",
+            "away": "1"
+          },
+          "Offsides": {
+            "home": "2",
+            "away": "0"
+          },
+          "Accurate passes": {
+            "home": "389",
+            "away": "373"
+          },
+          "Throw-ins": {
+            "home": "29",
+            "away": "21"
+          },
+          "Final third entries": {
+            "home": "59",
+            "away": "52"
+          },
+          "Final third phase": {
+            "home": "69/111 (62%)",
+            "away": "66/104 (63%)"
+          },
+          "Long balls": {
+            "home": "21/52 (40%)",
+            "away": "23/58 (40%)"
+          },
+          "Crosses": {
+            "home": "5/20 (25%)",
+            "away": "4/14 (29%)"
+          },
+          "Duels": {
+            "home": "55%",
+            "away": "45%"
+          },
+          "Dispossessed": {
+            "home": "13",
+            "away": "11"
+          },
+          "Ground duels": {
+            "home": "43/74 (58%)",
+            "away": "31/74 (42%)"
+          },
+          "Aerial duels": {
+            "home": "10/23 (43%)",
+            "away": "13/23 (57%)"
+          },
+          "Dribbles": {
+            "home": "9/18 (50%)",
+            "away": "2/13 (15%)"
+          },
+          "Tackles won": {
+            "home": "41%",
+            "away": "50%"
+          },
+          "Total tackles": {
+            "home": "22",
+            "away": "22"
+          },
+          "Interceptions": {
+            "home": "4",
+            "away": "12"
+          },
+          "Recoveries": {
+            "home": "51",
+            "away": "47"
+          },
+          "Clearances": {
+            "home": "14",
+            "away": "30"
+          },
+          "Errors lead to a goal": {
+            "home": "1",
+            "away": "1"
+          },
+          "Total saves": {
+            "home": "2",
+            "away": "1"
+          },
+          "Goals prevented": {
+            "home": "0.29",
+            "away": "-2.43"
+          },
+          "Big saves": {
+            "home": "2",
+            "away": "0"
+          },
+          "High claims": {
+            "home": "1",
+            "away": "3"
+          },
+          "Punches": {
+            "home": "0",
+            "away": "1"
+          },
+          "Goal kicks": {
+            "home": "1",
+            "away": "7"
+          }
+        },
+        "topPlayers": [
+          {
+            "name": "Morgan Gibbs-White",
+            "rating": 10
+          },
+          {
+            "name": "Igor Jesus",
+            "rating": 7.9
+          },
+          {
+            "name": "Zian Flemming",
+            "rating": 7.5
+          },
+          {
+            "name": "Neco Williams",
+            "rating": 7.4
+          },
+          {
+            "name": "Murillo",
+            "rating": 7.3
+          }
+        ],
+        "playerStats": {
+          "Matz Sels": {
+            "rating": 6.7,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 21,
+            "passAccuracy": 62,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 28,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Ola Aina": {
+            "rating": 6.6,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 50,
+            "passAccuracy": 84,
+            "dribbles": 2,
+            "dribblesWon": 1,
+            "touches": 73,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Nikola Milenković": {
+            "rating": 5.9,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 45,
+            "passAccuracy": 87,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 56,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Murillo": {
+            "rating": 7.3,
+            "minutesPlayed": 42,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 31,
+            "passAccuracy": 87,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 42,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Neco Williams": {
+            "rating": 7.4,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 44,
+            "passAccuracy": 80,
+            "dribbles": 4,
+            "dribblesWon": 2,
+            "touches": 83,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": 0.07,
+            "bigChanceCreated": null
+          },
+          "Ibrahim Sangaré": {
+            "rating": 7.2,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 51,
+            "passAccuracy": 86,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 63,
+            "fouls": 3,
+            "wasFouled": 2,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Elliot Anderson": {
+            "rating": 7.2,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 76,
+            "passAccuracy": 75,
+            "dribbles": 4,
+            "dribblesWon": 3,
+            "touches": 97,
+            "fouls": 2,
+            "wasFouled": 3,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Dilane Bakwa": {
+            "rating": 6.4,
+            "minutesPlayed": 45,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 12,
+            "passAccuracy": 83,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 21,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Morgan Gibbs-White": {
+            "rating": 10,
+            "minutesPlayed": 89,
+            "goals": 3,
+            "assists": 0,
+            "shots": 5,
+            "shotsOnTarget": 3,
+            "keyPasses": null,
+            "passes": 30,
+            "passAccuracy": 77,
+            "dribbles": 2,
+            "dribblesWon": null,
+            "touches": 50,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": 0.73,
+            "bigChanceCreated": null
+          },
+          "Omari Hutchinson": {
+            "rating": 6.8,
+            "minutesPlayed": 88,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 29,
+            "passAccuracy": 86,
+            "dribbles": 4,
+            "dribblesWon": 3,
+            "touches": 45,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Chris Wood": {
+            "rating": 6.4,
+            "minutesPlayed": 76,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 13,
+            "passAccuracy": 62,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 21,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": 0.15,
+            "bigChanceCreated": null
+          },
+          "Jair": {
+            "rating": 6.7,
+            "minutesPlayed": 48,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 32,
+            "passAccuracy": 88,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 39,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Igor Jesus": {
+            "rating": 7.9,
+            "minutesPlayed": 45,
+            "goals": 1,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 13,
+            "passAccuracy": 92,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 24,
+            "fouls": 1,
+            "wasFouled": 1,
+            "expectedGoals": 0.23,
+            "bigChanceCreated": null
+          },
+          "Ryan Yates": {
+            "rating": 6.9,
+            "minutesPlayed": 14,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 6,
+            "passAccuracy": 83,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 8,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Morato": {
+            "rating": 6.7,
+            "minutesPlayed": 11,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 9,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 10,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Nicolás Domínguez": {
+            "rating": 7.1,
+            "minutesPlayed": 10,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 12,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 16,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": 1
+          },
+          "Stefan Ortega": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Luca Netz": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "James McAtee": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Taiwo Awoniyi": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Martin Dúbravka": {
+            "rating": 5.2,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 45,
+            "passAccuracy": 73,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 56,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Kyle Walker": {
+            "rating": 6,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 53,
+            "passAccuracy": 89,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 72,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Hjalmar Ekdal": {
+            "rating": 5.9,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 49,
+            "passAccuracy": 88,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 64,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Maxime Estève": {
+            "rating": 6,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 42,
+            "passAccuracy": 83,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 60,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.06,
+            "bigChanceCreated": null
+          },
+          "Quilindschy Hartman": {
+            "rating": 6.4,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 51,
+            "passAccuracy": 76,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 72,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": 1
+          },
+          "James Ward-Prowse": {
+            "rating": 6.1,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": 1,
+            "passes": 66,
+            "passAccuracy": 86,
+            "dribbles": 2,
+            "dribblesWon": null,
+            "touches": 85,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": 0.04,
+            "bigChanceCreated": null
+          },
+          "Florentino Luís": {
+            "rating": 6,
+            "minutesPlayed": 83,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 33,
+            "passAccuracy": 88,
+            "dribbles": 3,
+            "dribblesWon": null,
+            "touches": 46,
+            "fouls": 4,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Marcus Edwards": {
+            "rating": 6.6,
+            "minutesPlayed": 64,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 18,
+            "passAccuracy": 83,
+            "dribbles": 2,
+            "dribblesWon": null,
+            "touches": 31,
+            "fouls": null,
+            "wasFouled": 2,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Lesley Ugochukwu": {
+            "rating": 6.3,
+            "minutesPlayed": 76,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 17,
+            "passAccuracy": 88,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 29,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Jaidon Anthony": {
+            "rating": 6.3,
+            "minutesPlayed": 83,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 31,
+            "passAccuracy": 77,
+            "dribbles": 3,
+            "dribblesWon": 1,
+            "touches": 43,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Zian Flemming": {
+            "rating": 7.5,
+            "minutesPlayed": 84,
+            "goals": 1,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 11,
+            "passAccuracy": 55,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 30,
+            "fouls": 4,
+            "wasFouled": 3,
+            "expectedGoals": 0.17,
+            "bigChanceCreated": null
+          },
+          "Lyle Foster": {
+            "rating": 6,
+            "minutesPlayed": 26,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 11,
+            "passAccuracy": 91,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 20,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.09,
+            "bigChanceCreated": null
+          },
+          "Jacob Bruun Larsen": {
+            "rating": 6.4,
+            "minutesPlayed": 14,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 6,
+            "passAccuracy": 83,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 11,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Josh Laurent": {
+            "rating": 6.6,
+            "minutesPlayed": 16,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 7,
+            "passAccuracy": 57,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 12,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Loum Tchaouna": {
+            "rating": 6.4,
+            "minutesPlayed": 16,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 11,
+            "passAccuracy": 73,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 13,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Armando Broja": {
+            "rating": 6.4,
+            "minutesPlayed": 15,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 3,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 4,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Max Weiss": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Joe Worrall": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Bashir Humphreys": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Mike Trésor": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          }
+        },
+        "scoreline": "Nottingham Forest 4 - 1 Burnley",
+        "summary": "【試合結果】Nottingham Forest 4 - 1 Burnley（2026-04-19 / Premier League）\n【得点】45+2' Zian Flemming（Burnley）, 62' Morgan Gibbs-White（Nottingham Forest）, 69' Morgan Gibbs-White（Nottingham Forest）, 77' Morgan Gibbs-White（Nottingham Forest）, 90+8' Igor Jesus（Nottingham Forest）\n【カード】75' Florentino Luís（Burnley）イエロー, 80' Kyle Walker（Burnley）イエロー"
+      },
+      "presetValues": {
+        "scoreline": "Nottingham Forest 4 - 1 Burnley",
+        "top_player": "Morgan Gibbs-White（10）",
+        "top2_players": "Morgan Gibbs-White 10 / Igor Jesus 7.9",
+        "possession": "51% vs 49%",
+        "total_shots": "10 vs 4",
+        "shots_on_target": "4 vs 3",
+        "xg": "1.19 vs 0.36",
+        "passes": "474 vs 454",
+        "pass_accuracy": "389 vs 373",
+        "fouls": "8 vs 12",
+        "corners": "4 vs 4",
+        "yellow_cards": "0 vs 2",
+        "match_date": "2026-04-19",
+        "tournament": "Premier League",
+        "venue": "City Ground"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "この活躍の背景には、ギブズ＝ホワイトの確かな今シーズンの成績があります。2025/26シーズン、彼はプレミアリーグで33試合に出場。12ゴール、2アシストを記録しています。評価点は6.83。注目すべきは、期待ゴール値xGが9.38であるのに対し、実際のゴール数が12と、実力以上のゴールを量産している点です。また、キーパス44回、成功ドリブル24回と、攻撃の起点としても機能。市場価値は5700万ユーロと評価されており、現在のプレミアリーグで最もコストパフォーマンスの高いミッドフィールダーの一人と言えるでしょう。",
+      "keyPoints": [],
+      "imageQuery": "Morgan Gibbs-White 2025/26 season stats",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Morgan Gibbs-White",
+          "url": "https://www.sofascore.com/player/865912",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "今期成績（G+A）",
+          "value": "防御率成績一覧. 勝利. 2026/4/19 13:51. 順位, 選手名, チーム名, 勝利. 1, J.ソリアーノ, エンゼルス, 5. 2, D.マーティン, Wソックス, 3. 2, G.ウィリアムズ ..."
+        },
+        {
+          "label": "今期出場試合数",
+          "value": "全試合の状況がひと目でわかる. あのシーンをもう一度！ リプレイ機能. プロ野球速報が速い、見やすい. 1球ごとの結果をリアルタイム表示. 全試合の状況がひと目でわかる."
+        },
+        {
+          "label": "今期平均評価点",
+          "value": "選手名, HIRO 柴田, 三浦 智博, 逢川 恵夢, 石井 一馬. 試合数, 28, 27, 26, 39. 総局数, 337, 336, 331, 449. ポイント, -405, -381.9, -114.3, 160.7."
+        },
+        {
+          "label": "市場価値",
+          "value": "Transfermarktデータベースの最近更新された市場価値です。 Key: = 市場価値 - キャリアハイ. ポジション: 全て, GK, DF, MF, FW. 主要ポジション:."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 865912,
+        "name": "Morgan Gibbs-White",
+        "position": "M",
+        "team": "Nottingham Forest",
+        "nationality": "England",
+        "dateOfBirth": "2000-01-27T00:00:00+00:00",
+        "age": 26,
+        "height": 171,
+        "preferredFoot": "Right",
+        "marketValue": "€57M",
+        "contractUntil": null,
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 120,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 33,
+          "goals": 12,
+          "assists": 2,
+          "rating": 6.83,
+          "minutesPlayed": 2819,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 9.38,
+          "keyPasses": 44
+        },
+        "positionStats": {
+          "keyPasses": 44,
+          "successfulDribbles": 24,
+          "bigChancesCreated": 3,
+          "tackles": 18,
+          "interceptions": 11,
+          "accuratePassesPct": 81.6
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "player_episode",
+      "label": "選手エピソード",
+      "icon": "✨",
+      "narration": "ギブズ＝ホワイトには、ある因縁深いニックネームがついています。それは『Spurs killer』。海外のサポーターたちは、彼がトッテナム・ホットスパーに対して異様な強さを発揮することに気づいています。彼の古巣ウルヴァーハンプトン時代から、スパーズ相手に重要なゴールを決める場面が多く、その度に熱狂的な祝福を相手サポーターの前で行ってきました。今回のハットトリックも、直接の対戦相手ではないものの、降格争いで競合するスパーズの順位を下げる結果に。『彼はスパーズを心底嫌っている』というコメントが溢れるほど、因縁の深さが感じられる選手なのです。",
+      "keyPoints": [
+        "海外サポから『Spurs killer』の異名",
+        "古巣ウルブス時代からスパーズに強かった因縁",
+        "今回の活躍がスパーズの降格危機に直結",
+        "敵対チームサポからの人気も高い"
+      ],
+      "imageQuery": "Morgan Gibbs-White Tottenham celebration",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Morgan Gibbs-White Reacts To His Best Forest Moments ❤️",
+          "url": "https://www.youtube.com/watch?v=LnRY4KrTxdI",
+          "date": "Feb 2, 2025"
+        },
+        {
+          "label": "Gibbs White? : r/WWFC - Reddit",
+          "url": "https://www.reddit.com/r/WWFC/comments/1hw9t5z/gibbs_white/",
+          "date": "Jan 8, 2025"
+        },
+        {
+          "label": "MORGAN GIBBS-WHITE CELEBRATES RIGHT IN FRONT OF THE ...",
+          "url": "https://www.instagram.com/reel/C5tMgmAtA7Z/",
+          "date": "Apr 13, 2024"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "player_episode",
+        "query": "Morgan Gibbs-White famous moment story",
+        "organic": [
+          {
+            "title": "Morgan Gibbs-White Reacts To His Best Forest Moments ❤️",
+            "snippet": "Watch Morgan Gibbs-White react to the best moments from his 100 appearances in a Nottingham Forest shirt. SUBSCRIBE NOW!",
+            "link": "https://www.youtube.com/watch?v=LnRY4KrTxdI",
+            "date": "Feb 2, 2025"
+          },
+          {
+            "title": "Gibbs White? : r/WWFC - Reddit",
+            "snippet": "Apparently an altercation between him, his Dad and a group of supporters at one of the games early that season (I think it was Leicester) where ...",
+            "link": "https://www.reddit.com/r/WWFC/comments/1hw9t5z/gibbs_white/",
+            "date": "Jan 8, 2025"
+          },
+          {
+            "title": "MORGAN GIBBS-WHITE CELEBRATES RIGHT IN FRONT OF THE ...",
+            "snippet": "5456 likes, 21 comments - meninblazers on April 13, 2024: \"MORGAN GIBBS-WHITE CELEBRATES RIGHT IN FRONT OF THE WOLVES FANS.",
+            "link": "https://www.instagram.com/reel/C5tMgmAtA7Z/",
+            "date": "Apr 13, 2024"
+          },
+          {
+            "title": "Morgan Gibbs-White - Wikipedia",
+            "snippet": "Morgan Anthony Gibbs-White (born 27 January 2000) is an English professional footballer who plays as an attacking midfielder for Premier League club Nottingham ...",
+            "link": "https://en.wikipedia.org/wiki/Morgan_Gibbs-White",
+            "date": null
+          },
+          {
+            "title": "Family tears over Gibbs-White England call up - BBC",
+            "snippet": "The grandfather of a footballer called up to play for England said the family had been in tears and the news had still not yet sunk in.",
+            "link": "https://www.bbc.com/news/articles/cwyw9xd49d6o",
+            "date": "Aug 30, 2024"
+          },
+          {
+            "title": "Morgan Gibbs-White had the perfect response to sick chants from ...",
+            "snippet": "Morgan Gibbs-White had the perfect response to sick chants from the Wolves fans aimed at his stunning influencer girlfriend last night.",
+            "link": "https://www.facebook.com/TheSunFootball/posts/morgan-gibbs-white-had-the-perfect-response-to-sick-chants-from-the-wolves-fans-/1128408478654737/",
+            "date": "Jan 7, 2025"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=LnRY4KrTxdI]\n'Am I Gonna Get Emotional?' 🥹 | Morgan Gibbs-White Reacts To His Best Forest Moments ❤️ - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "season_standings",
+      "label": "リーグ順位表",
+      "icon": "🏅",
+      "narration": "この勝利による3ポイントは、フォレストの順位に大きな影響を与えました。この試合前、フォレストは降格圏ぎりぎりの位置にいましたが、勝利により安全圏へと大きく前進。一方、この結果は降格争いのライバル、特にトッテナム・ホットスパーにとっては痛手となります。スパーズはフォレストに勝ち点で離され、降格の可能性がより現実味を帯びてきました。この試合のもう一人のヒーロー、イゴール・ヘススも今季32試合出場で4ゴール3アシスト、評価点6.56とチームに貢献。市場価値2300万ユーロの彼も、フォレストの残留に欠かせない戦力です。",
+      "keyPoints": [
+        "フォレスト: 勝利で降格圏から大きく離脱",
+        "トッテナム: フォレスト勝利で降格危機が深刻化",
+        "イゴール・ヘスス: 今季32試合4G3A 評価点6.56",
+        "リーグ下位の争いがさらに熱く"
+      ],
+      "imageQuery": "Premier League 25/26 relegation zone table",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Igor Jesus",
+          "url": "https://www.sofascore.com/player/981619",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "リーグ順位",
+          "value": "View the latest standings in the Premier League table for 2025/26 season, along with form guides and season archives, on"
+        },
+        {
+          "label": "成績（勝分負）",
+          "value": "Winless in 14 league matches, Tottenham incredibly finds itself in the Premier League's relegation zone with just six ma"
+        },
+        {
+          "label": "総得点",
+          "value": "Winless in 14 league matches, Tottenham incredibly finds itself in the Premier League's relegation zone with just six ma"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 981619,
+        "name": "Igor Jesus",
+        "position": "F",
+        "team": "Nottingham Forest",
+        "nationality": "Brazil",
+        "dateOfBirth": "2001-02-25T00:00:00+00:00",
+        "age": 25,
+        "height": 179,
+        "preferredFoot": "Right",
+        "marketValue": "€23M",
+        "contractUntil": "2029-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 120,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 32,
+          "goals": 4,
+          "assists": 3,
+          "rating": 6.56,
+          "minutesPlayed": 1951,
+          "yellowCards": 0,
+          "redCards": 0,
+          "expectedGoals": 5.18,
+          "keyPasses": 11
+        },
+        "positionStats": {
+          "shotsOnTarget": 14,
+          "bigChancesMissed": 3,
+          "bigChancesCreated": 5,
+          "successfulDribbles": 9,
+          "expectedGoals": 5.18
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "25/26"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のサッカーファン、特に掲示板では、このハットトリックが『スパーズ包囲網』の一環として熱狂的に受け止められています。『スパーズキラー』というニックネームが再び注目を集め、『彼はスパーズを心底嫌っている』という意見が多数。さらに、明日の試合でフォレストのライバルであるクリスタル・パレスと対戦するスパーズに対して、『パレスよ、正しいことをしてくれ（棄権しろ）』というユーモア交じりのコメントや、『ウェストハムも勝ってスパーズを4ポイント差に引き離せ』と、他クラブのサポーターまでがギブズ＝ホワイトの活躍を喜ぶ様子が見られました。",
+      "keyPoints": [
+        {
+          "text": "[👍1] ‪Someone start a petition for Crystal Palace to forfeit tomorrow’s game for the greater good‬",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Morgan Gibbs-Red",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Spurs killer",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] So a West Ham win tomorrow and Spurs would be 4 back, West Ham you gotta do it, Castellanos I believe",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] He fucking loathes Spurs ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] West Ham, please win tomorrow",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Good Lord lmaoooo",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍1] Lol, just lol",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] He hates spurs like the rest of us ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Bro really hates Tottenham 💀",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] That cross is outrageous and the header even better ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] This script is unreal",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] To quote the great philosopher u/NameTakken \"Of course it’s the guy who almost joined Spurs\"",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Yeah thats just great",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] PALACE!\n\nDo the right thing.",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Even if Spurs find form they've left it too late, I don't think Leeds, West Ham or Forest will let them catch them at this stage of the season. ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] THIS MAN HATES",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] If I were a topspur this would really really really hurt me",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Cruel, hilarious, poetry in motion",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] Gibbs-White hard carrying.",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "imageQuery": "Reddit reaction Gibbs-White hat-trick",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍1] ‪Someone start a petition for Crystal Palace to forfeit tomorrow’s game for the greater good‬",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Morgan Gibbs-Red",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Spurs killer",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] So a West Ham win tomorrow and Spurs would be 4 back, West Ham you gotta do it, Castellanos I believe",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] He fucking loathes Spurs ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] West Ham, please win tomorrow",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Good Lord lmaoooo",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Lol, just lol",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] He hates spurs like the rest of us ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Bro really hates Tottenham 💀",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] That cross is outrageous and the header even better ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] This script is unreal",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] To quote the great philosopher u/NameTakken \"Of course it’s the guy who almost joined Spurs\"",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Yeah thats just great",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] PALACE!\n\nDo the right thing.",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Even if Spurs find form they've left it too late, I don't think Leeds, West Ham or Forest will let them catch them at this stage of the season. ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] THIS MAN HATES",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] If I were a topspur this would really really really hurt me",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Cruel, hilarious, poetry in motion",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] Gibbs-White hard carrying.",
+            "source": "reddit",
+            "score": null
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "モーガン・ギブズ＝ホワイトの衝撃のハットトリックは、個人の活躍がチーム、そしてリーグ全体の命運を変える瞬間を見せつけました。プレミアリーグの降格争いは、残り数試合でさらに熱い展開が予想されます。今後も『速報！サッカーニュース』では、データで納得できる最新情報をお届けします。チャンネル登録と高評価、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Premier League dramatic finale",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録 & 高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-20",
+    "postId": "4",
+    "originalTitle": "Nottingham Forest [3] - 1 Burnley - Morgan Gibbs-White 77‎'‎ hat-trick",
+    "generatedAt": "2026-04-19T15:30:24.775Z",
+    "mainImagePath": null
+  }
+}

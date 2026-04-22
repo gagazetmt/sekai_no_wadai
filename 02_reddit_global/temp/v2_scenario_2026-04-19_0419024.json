@@ -1,0 +1,588 @@
+{
+  "youtubeTitle": "シャビ・シモンズ、劇的同点弾許し絶望の表情…トッテナム2-2ブライトンで勝ち点3を逃す",
+  "hashtagsText": "#サッカー #プレミアリーグ #トッテナム #シャビシモンズ #ブライトン",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "シャビ・シモンズが試合終了後、ピッチを去るその表情が全てを物語っていた。77分に劇的なゴールで勝利を掴みかけたトッテナムが、終了間際にブライトンに同点に追いつかれ、勝ち点3を逃した。その瞬間、シモンズに何が起きたのか？数字で徹底解説します。",
+      "keyPoints": [],
+      "imageQuery": "Xavi Simons crying full time",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "勝ちきれないトッテナム…シャビ・シモンズの絶望が示すチームの現実",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "2026年4月18日、プレミアリーグで行われたトッテナム・ホットスパー対ブライトン＆ホーヴ・アルビオンの一戦は、劇的な2-2の引き分けに終わりました。トッテナムは39分にペドロ・ポッロ、77分にシャビ・シモンズのゴールで2度リードするも、ブライトンは45+3分に三笘薫、そしてなんと90+5分にジョルジニオ・ルッターの同点弾で土壇場で勝ち点を奪い去ったのです。勝利目前から一転して勝ち点1。試合終了後、ピッチを去るシモンズの表情は、このチームが抱える「勝ちきれない」という根本的な問題を、無言で訴えかけていました。",
+      "keyPoints": [
+        "試合結果: トッテナム 2-2 ブライトン (2026-04-18)",
+        "トッテナム得点者: 39' ペドロ・ポッロ, 77' シャビ・シモンズ",
+        "ブライトン得点者: 45+3' 三笘薫, 90+5' ジョルジニオ・ルッター"
+      ],
+      "imageQuery": "Tottenham 2-2 Brighton 2026 highlights",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "トッテナム・ホットスパーが、またしても勝ちきれない試合を演じました。シャビ・シモンズの素晴らしいゴールとアシストで優位に立ちながら、終了間際にブライトンに同点にされ、勝ち点3を逃すという苦い結果。試合終了後、ピッチを去るシモンズの表情は、このチームの現状を如実に物語っていました。",
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "試合の決定的瞬間は、77分から90+5分までの、天国から地獄へと転落したわずか18分間に凝縮されていました。77分、シャビ・シモンズが芸術的なゴールを決め、トッテナムを2-1と再リード。スタジアムは歓喜に包まれ、シモンズ自身もユニフォームを脱ぐほどの熱狂的なパフォーマンスを見せました。しかし、その直後の78分、興奮冷めやらぬ中でシモンズ自身がイエローカードを受けるというアクシデント。そして迎えたアディショナルタイム、90+5分。ブライトンのジョルジニオ・ルッターが劇的な同点弾を叩き込み、スタジアムの空気は一瞬で凍りつきます。勝利を確信していたはずのトッテナムの選手たち、特にゴールを決めたばかりのシモンズの表情は、一気に絶望へと変わったのです。",
+      "keyPoints": [
+        "77分: シャビ・シモンズがゴールでトッテナムを2-1に再リード",
+        "78分: シモンズ、イエローカードを受ける",
+        "90+5分: ジョルジニオ・ルッターの同点弾で2-2に"
+      ],
+      "imageQuery": "Georginio Rutter 95th minute goal Brighton",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "matchId": 14025042,
+        "homeTeam": "Tottenham Hotspur",
+        "awayTeam": "Brighton & Hove Albion",
+        "homeScore": 2,
+        "awayScore": 2,
+        "matchDate": "2026-04-18",
+        "tournament": "Premier League",
+        "goals": [
+          {
+            "time": 39,
+            "timeStr": "39'",
+            "player": "Pedro Porro",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "type": "通常"
+          },
+          {
+            "time": 45,
+            "timeStr": "45+3'",
+            "player": "Kaoru Mitoma",
+            "isHome": false,
+            "team": "Brighton & Hove Albion",
+            "type": "通常"
+          },
+          {
+            "time": 77,
+            "timeStr": "77'",
+            "player": "Xavi Simons",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "type": "通常"
+          },
+          {
+            "time": 90,
+            "timeStr": "90+5'",
+            "player": "Georginio Rutter",
+            "isHome": false,
+            "team": "Brighton & Hove Albion",
+            "type": "通常"
+          }
+        ],
+        "cards": [
+          {
+            "time": 34,
+            "timeStr": "34'",
+            "player": "Yves Bissouma",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "color": "イエロー"
+          },
+          {
+            "time": 37,
+            "timeStr": "37'",
+            "player": "Mats Wieffer",
+            "isHome": false,
+            "team": "Brighton & Hove Albion",
+            "color": "イエロー"
+          },
+          {
+            "time": 65,
+            "timeStr": "65'",
+            "player": "Kevin Danso",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "color": "イエロー"
+          },
+          {
+            "time": 78,
+            "timeStr": "78'",
+            "player": "Xavi Simons",
+            "isHome": true,
+            "team": "Tottenham Hotspur",
+            "color": "イエロー"
+          }
+        ],
+        "scoreline": "Tottenham Hotspur 2 - 2 Brighton & Hove Albion",
+        "summary": "【試合結果】Tottenham Hotspur 2 - 2 Brighton & Hove Albion（2026-04-18 / Premier League）\n【得点】39' Pedro Porro（Tottenham Hotspur）, 45+3' Kaoru Mitoma（Brighton & Hove Albion）, 77' Xavi Simons（Tottenham Hotspur）, 90+5' Georginio Rutter（Brighton & Hove Albion）\n【カード】34' Yves Bissouma（Tottenham Hotspur）イエロー, 37' Mats Wieffer（Brighton & Hove Albion）イエロー, 65' Kevin Danso（Tottenham Hotspur）イエロー, 78' Xavi Simons（Tottenham Hotspur）イエロー"
+      },
+      "presetValues": {
+        "match_date": "2026-04-18",
+        "tournament": "Premier League"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "では、この試合で孤軍奮闘したシャビ・シモンズの今シーズンの数字を見てみましょう。プレミアリーグ25/26シーズン、彼は27試合に出場し、2ゴール5アシストを記録。評価点は6.9です。より詳細なデータを見ると、その攻撃的貢献度が浮かび上がります。キーパスは33本、ビッグチャンス創出は7回、ドリブル成功は28回。CLではさらに高いパフォーマンスを見せ、出場10試合で3ゴール1アシスト、評価点7.27をマークしています。市場価値5400万ユーロ、契約は2030年まで。これだけの数字を残す才能が、チームの低迷という現実に直面しているのです。",
+      "keyPoints": [],
+      "imageQuery": "Xavi Simons stats 2025 2026 Tottenham",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Xavi Simons",
+          "url": "https://www.sofascore.com/player/997183",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "今期成績（G+A）",
+          "value": "順位, 選手名, チーム名, 本塁打. 1, J.ウォーカー, カージナルス, 8. 2, S.スチュワート, レッズ, 7. 2, B.ラウ, パイレーツ, 7. 4, E.デラクルス, レッズ, 6."
+        },
+        {
+          "label": "今期出場試合数",
+          "value": "日本プロ野球(NPB)の詳細データを提供しています。2012年度分からの全試合結果、個人別成績、コース別成績、条件別状況別成績、観客動員、セイバーメトリクス、選球眼 ..."
+        },
+        {
+          "label": "今期平均評価点",
+          "value": "順位, 選手名, チーム名, 防御率. 1, J.ソリアーノ, エンゼルス, 0.28. 2, M.ワカ, ロイヤルズ, 1.00. 3, P.メシック, ガーディアンズ, 1.05. 4, T.ブラッドリー ..."
+        },
+        {
+          "label": "市場価値",
+          "value": "Transfermarktデータベースの最近更新された市場価値です。 Key: = 市場価値 - キャリアハイ. ポジション: 全て, GK, DF, MF, FW. 主要ポジション:."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 997183,
+        "name": "Xavi Simons",
+        "position": "M",
+        "team": "Tottenham Hotspur",
+        "nationality": "Netherlands",
+        "dateOfBirth": "2003-04-21T00:00:00+00:00",
+        "height": 179,
+        "preferredFoot": "Right",
+        "marketValue": "€54M",
+        "contractUntil": "2030-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 27,
+          "goals": 2,
+          "assists": 5,
+          "rating": 6.9,
+          "minutesPlayed": 1706,
+          "yellowCards": 5,
+          "redCards": 1,
+          "expectedGoals": 2.96,
+          "keyPasses": 33
+        },
+        "positionStats": {
+          "keyPasses": 33,
+          "successfulDribbles": 28,
+          "bigChancesCreated": 7,
+          "tackles": 33,
+          "interceptions": 15,
+          "accuratePassesPct": 82.29
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 10,
+          "goals": 3,
+          "assists": 1,
+          "rating": 7.27
+        }
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "club_current_season",
+      "label": "今シーズンの戦績",
+      "icon": "📈",
+      "narration": "シモンズが所属するトッテナムの今シーズンは、苦難の連続です。この試合時点で、チームは降格圏に沈む苦しい戦いを強いられています。シモンズと共に攻撃の核を担うモハメド・クドゥスのデータも見てみましょう。クドゥスは今季プレミアリーグで19試合出場2ゴール5アシスト、評価点6.86。ドリブル成功52回は脅威ですが、チームとしての結果には結びついていません。このように個人の能力がある程度発揮されているにも関わらず、チームとして勝ちきれない試合が続く。シャビ・シモンズの試合後の表情は、単なる個人の悔しさではなく、『チーム全体が機能していない』という現実に対する、無力感と焦りの表れだったと言えるでしょう。",
+      "keyPoints": [
+        "モハメド・クドゥス今季PL成績: 出場19試合 2ゴール 5アシスト 評価点6.86",
+        "クドゥス ドリブル成功: 52回",
+        "トッテナムは降格圏での苦戦を継続"
+      ],
+      "imageQuery": "Tottenham Hotspur 2025 2026 league table position",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Mohammed Kudus",
+          "url": "https://www.sofascore.com/player/905163",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "リーグ順位",
+          "value": "※勝率の高いチームを上位として表示します。 ※同率チームが発生した場合、セ・リーグについては勝利数の多いチームを上位、パ・リーグについては同順位で表示します。"
+        },
+        {
+          "label": "ポイント",
+          "value": "プロ野球の順位表をお届けします。"
+        },
+        {
+          "label": "成績（勝分負）",
+          "value": "試合. 勝利. 敗戦. 引分. 勝率. 勝差. 残試合. 得点. 失点. 本塁打. 盗塁. 打率. 防御率. 失策. 18, 13, 5, 0 .722, -, 125, 67, 55, 10, 14 .259, 2.64, 9."
+        },
+        {
+          "label": "直近5試合",
+          "value": "絶好調 : アーセナルFCは直近5試合で1試合あたり勝ち点2.4を得ました。 • 好調 : ブライトン・アンド・ホーヴ・アルビオンFCはアーセナルFCと同じようにで、直近の5 ..."
+        },
+        {
+          "label": "トップスコアラー",
+          "value": "... top players providing goal assists in each of the top leagues (Bundesliga, La Liga, Premier League, Serie A, Ligue 1"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 905163,
+        "name": "Mohammed Kudus",
+        "position": "M",
+        "team": "Tottenham Hotspur",
+        "nationality": "Ghana",
+        "dateOfBirth": "2000-08-02T00:00:00+00:00",
+        "height": 176,
+        "preferredFoot": "Left",
+        "marketValue": "€60M",
+        "contractUntil": "2031-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 19,
+          "goals": 2,
+          "assists": 5,
+          "rating": 6.86,
+          "minutesPlayed": 1545,
+          "yellowCards": 3,
+          "redCards": 0,
+          "expectedGoals": 1.93,
+          "keyPasses": 25
+        },
+        "positionStats": {
+          "keyPasses": 25,
+          "successfulDribbles": 52,
+          "bigChancesCreated": 3,
+          "tackles": 29,
+          "interceptions": 3,
+          "accuratePassesPct": 85.59
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 5,
+          "goals": 1,
+          "assists": 0,
+          "rating": 6.96
+        }
+      },
+      "presetValues": {
+        "season": "25/26"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のサッカーファン、特にRedditでは、シモンズの表情に対して様々な反応が寄せられています。多くのユーザーは『少なくとも彼はチームのことを気にかけている（At least it shows he cares）』と、チームへの思いを評価する意見で一致しています。一方で、『Dutch Jaden Smith』や『普段から泣き顔なのに、今回は別次元（resting crying face normally, but this is another level）』といった、彼の特徴的な表情をユーモア交じりに指摘する声も。また、『あと15分以上あるのにユニフォームを脱いで祝うのは狂った行為（celebrating by taking off your shirt when there's still at least 15 minutes to go, insane move）』と、早すぎる祝福が結果的に仇となったことを指摘する厳しい見方も見受けられました。",
+      "keyPoints": [
+        {
+          "text": "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Tbf if I scored a great goal then when we've nearly got a massive 3 points, Danso didn't just cunt the ball out of play and instead lost it and gave up a goal, my reaction would be a bit worse than this",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] man already has resting crying face normally, but this is another level lmao",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] At least it shows he cares and a lot of other Spurs players had the same reactions, the issue is it might be too little too late",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] I am sad for him, really put the effort ",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Dutch Jaden Smith",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Imagine celebrating by taking off your shirt when there's still at least 15 minutes to go, insane move",
+          "source": "reddit"
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍1] Cheers guys xavis crying ",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] I mean, it's good that he seems to be one of the few who cares, but this is really worrying from a mental strength pov as well. It just seems some players don't care, and others are cracking under the strain. Understandably by the way, for those players who care, this must actually be traumati",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] In a way this’d probably be what you want to see as a Spurs fan. Then again you’d have wanted to see it about 20 odd games ago. He put the effort in today, but can that be said all season?",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Saw a few months ago someone saying \"Xavi Simons is the first player I've ever seen peak at 12 years old\" and I think about it every time I hear about him",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] At least his shirt is on",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] If West Ham and Nottingham F. win their games (big if), they'll be more than 1 game away from salvation. Understandable frustration ",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Can't imagine how he feels if they are relegated. Moving to spurs thinking he will be playing in the champions league only to end up in the championship",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] The celebrations were embarrassing for the situation spurs find themselves in. Seal the result first, celebrate at FT",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Beautiful",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] he needs some milk",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] He was also in tears when he got sent off vs Liverpool earlier. Atleast he gives a shit about the team",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Straight into my veins. ",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍1] Nah after he got in the stands with his top off this was hilarious 😂",
+          "source": "reddit"
+        }
+      ],
+      "imageQuery": "Xavi Simons reaction meme reddit",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Tbf if I scored a great goal then when we've nearly got a massive 3 points, Danso didn't just cunt the ball out of play and instead lost it and gave up a goal, my reaction would be a bit worse than this",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] man already has resting crying face normally, but this is another level lmao",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] At least it shows he cares and a lot of other Spurs players had the same reactions, the issue is it might be too little too late",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] I am sad for him, really put the effort ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Dutch Jaden Smith",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Imagine celebrating by taking off your shirt when there's still at least 15 minutes to go, insane move",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Cheers guys xavis crying ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] I mean, it's good that he seems to be one of the few who cares, but this is really worrying from a mental strength pov as well. It just seems some players don't care, and others are cracking under the strain. Understandably by the way, for those players who care, this must actually be traumati",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] In a way this’d probably be what you want to see as a Spurs fan. Then again you’d have wanted to see it about 20 odd games ago. He put the effort in today, but can that be said all season?",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Saw a few months ago someone saying \"Xavi Simons is the first player I've ever seen peak at 12 years old\" and I think about it every time I hear about him",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] At least his shirt is on",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] If West Ham and Nottingham F. win their games (big if), they'll be more than 1 game away from salvation. Understandable frustration ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Can't imagine how he feels if they are relegated. Moving to spurs thinking he will be playing in the champions league only to end up in the championship",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] The celebrations were embarrassing for the situation spurs find themselves in. Seal the result first, celebrate at FT",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Beautiful",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] he needs some milk",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] He was also in tears when he got sent off vs Liverpool earlier. Atleast he gives a shit about the team",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Straight into my veins. ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍1] Nah after he got in the stands with his top off this was hilarious 😂",
+            "source": "reddit"
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "player_career",
+      "label": "選手の来歴",
+      "icon": "📋",
+      "narration": "シャビ・シモンズは、オランダ代表でもある攻撃的ミッドフィールダーまたはウインガーです。そのキャリアは輝かしいものばかりでした。FCバルセロナの名門ラ・マシアで育ち、パリ・サンジェルマンへ移籍。その後RBライプツィヒでは、先ほどご紹介した通りCLで10試合3ゴール1アシストという数字を残すなど、欧州最高峰の舞台で確実に成長を遂げてきた逸材です。そんな彼が、将来を嘱望されて移籍した先がトッテナム・ホットスパー。CL常連を目指すも、現実は降格圏との戦い。かつての華やかなキャリアと、現在のチームの状況との間に生じた大きな落差。『このままの環境で、彼の才能が埋もれていっていいのか』という疑問が、この一件で改めてファンや関係者の間で強まっているのは間違いありません。",
+      "keyPoints": [
+        "来歴: バルセロナ（ラ・マシア）→ PSG → RBライプツィヒ → トッテナム",
+        "オランダ代表の攻撃的MF／ウインガー",
+        "ライプツィヒ時代にCLで活躍（10試合3G1A）"
+      ],
+      "imageQuery": "Xavi Simons career timeline Barcelona PSG Leipzig",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Xavi_Simons%2C_Nick_Verhagen_in_duel_met_Xavi_Simons.jpg/330px-Xavi_Simons%2C_Nick_Verhagen_in_duel_met_Xavi_Simons.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Xavi Simons",
+          "url": "https://en.wikipedia.org/wiki/Xavi_Simons",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Xavi Simons",
+        "description": "Dutch footballer (born 2003)",
+        "extract": "Xavi Quentin Shay Simons is a Dutch professional footballer who plays as an attacking midfielder or winger for Premier League club Tottenham Hotspur and the Netherlands national team.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Xavi_Simons%2C_Nick_Verhagen_in_duel_met_Xavi_Simons.jpg/330px-Xavi_Simons%2C_Nick_Verhagen_in_duel_met_Xavi_Simons.jpg",
+        "url": "https://en.wikipedia.org/wiki/Xavi_Simons",
+        "type": "standard"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "シャビ・シモンズの表情が物語るのは、個人の悔しさだけではなく、チームとしての課題が山積みであるという重い現実でした。データが示す個人の能力と、チームとしての結果のギャップ。プレミアリーグの行方はまだまだ目が離せません。このチャンネルでは、今後も最新のサッカーニュースを数字とデータで深堀りして解説していきます。次回の解説もお楽しみに！高評価とチャンネル登録、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Tottenham Hotspur next match preview",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！\n#速報サッカーニュース",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "11",
+    "originalTitle": "Xavi Simons at full time after the Brighton late equalizer",
+    "generatedAt": "2026-04-19T06:19:57.222Z",
+    "mainImagePath": null
+  }
+}

@@ -1,8 +1,8 @@
 # GEMINI.md - プロジェクト指示書 (2026-04-01)
 
 ## 0. 進捗管理と連携
-- **共通進捗ファイル**: `handoverC&G.md` を必ず最初に読み込み、最新の進捗とToDoを把握すること。
-- **連携**: Gemini CLI と Claude Code を併用しているため、変更内容や進捗は `handoverC&G.md` に適宜追記・修正すること。
+- **共通進捗ファイル**: `session_handover.md` を必ず最初に読み込み、最新の進捗とToDoを把握すること。
+- **連携**: Gemini CLI と Claude Code を併用しているため、変更内容や進捗は `session_handover.md` に適宜追記・修正すること。
 
 このプロジェクト「side-biz」における Gemini CLI の絶対的な振る舞いを定義する。
 

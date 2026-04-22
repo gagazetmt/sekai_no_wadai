@@ -1,0 +1,428 @@
+{
+  "youtubeTitle": "バルサ、ラッシュフォード買取オプション放棄へ！€35Mの決断を数字で徹底検証【速報】",
+  "hashtagsText": "#サッカー #バルセロナ #ラッシュフォード #移籍市場 #マンチェスターU",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "衝撃の速報です。バルセロナが、マンチェスター・ユナイテッドからレンタル中のマーカス・ラッシュフォードの買取オプション行使に、一気にブレーキをかけました。€35Mという金額を前に、バルサが見た『数字』と『不安』とは？",
+      "keyPoints": [],
+      "imageQuery": "Marcus Rashford Barcelona 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "バルサ、ラッシュフォード買取を断念か！？€35Mの決断の裏側",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "ジャーナリストのマッテオ・モレット氏による速報です。バルセロナは、マーカス・ラッシュフォードの€35Mの買取オプションを行使する熱意を急速に冷まし、他の選択肢を探り始めたと報じています。昨夏のレンタル移籍時には期待された『レンタルから完全移籍へ』のシナリオが、突然、暗転の危機に瀕しています。背景には、バルサの厳しい財政状況と、€35Mという投資に見合うだけの『期待値』への疑問があると見られています。",
+      "keyPoints": [
+        "€35Mの買取オプション行使にブレーキ",
+        "バルサが他の選択肢を模索開始",
+        "財政状況と選手への期待値が判断材料"
+      ],
+      "imageQuery": "Matteo Moretto Barcelona transfer news",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "バルセロナの夏の補強計画に、思わぬ方向転換の兆しです。マッテオ・モレット氏によれば、マンチェスター・ユナイテッドからレンタル中のマーカス・ラッシュフォードの買取オプション行使への熱意が急速に冷めているとのこと。その背景には、一体何があるのでしょうか。",
+        "source": "existing"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "では、ラッシュフォードの今シーズンの数字はどうだったのでしょうか？データを見ると、リーガでは出場26試合で6ゴール6アシスト、評価点は6.85。チャンピオンズリーグではさらに輝き、出場11試合で5ゴール3アシスト、評価点7.22を記録しています。『これだけの数字があるのに買わないの？』という疑問が湧くかもしれません。確かに、リーガでのxG（期待ゴール）は6.49と、実際のゴール数6に近く、決定力の面で大きな問題はない数字です。しかし、その陰には『ビッグチャンスを9回も逃している』という事実があります。この『決めきれなかった大きな機会』の多さが、バルサの不安材料の一つとなっている可能性があります。",
+      "keyPoints": [
+        "LaLiga: 26試合6G6A 評価6.85",
+        "CL: 11試合5G3A 評価7.22",
+        "xG 6.49に対し実際のゴールは6",
+        "ビッグチャンスを9回ミス"
+      ],
+      "imageQuery": "Marcus Rashford stats 2025 2026 Barcelona",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Marcus Rashford",
+          "url": "https://www.sofascore.com/player/814590",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "",
+          "value": "セ・リーグ投手成績 · 防御率 · 勝利 · セーブ."
+        },
+        {
+          "label": "",
+          "value": "セ・リーグ投手成績 · 防御率 · 勝利 · セーブ."
+        },
+        {
+          "label": "",
+          "value": "セ・リーグ投手成績 · 防御率 · 勝利 · セーブ."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 814590,
+        "name": "Marcus Rashford",
+        "position": "F",
+        "team": "FC Barcelona",
+        "nationality": "England",
+        "dateOfBirth": "1997-10-31T00:00:00+00:00",
+        "height": 185,
+        "preferredFoot": "Right",
+        "marketValue": "€38M",
+        "contractUntil": "2026-06",
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 26,
+          "goals": 6,
+          "assists": 6,
+          "rating": 6.85,
+          "minutesPlayed": 1442,
+          "yellowCards": 2,
+          "redCards": 0,
+          "expectedGoals": 6.49,
+          "keyPasses": 39
+        },
+        "positionStats": {
+          "shotsOnTarget": 26,
+          "bigChancesMissed": 9,
+          "bigChancesCreated": 6,
+          "successfulDribbles": 24,
+          "expectedGoals": 6.49
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 11,
+          "goals": 5,
+          "assists": 3,
+          "rating": 7.22
+        }
+      }
+    },
+    {
+      "id": "stats_comparison",
+      "label": "スタッツ比較",
+      "icon": "📊",
+      "narration": "残念ながら、ラッシュフォードと他の具体的な代替候補との詳細なスタッツ比較データは、現在取得中です。しかし、バルサが€35Mという資金を投じるにあたり、比較対象となるのは、同額帯で獲得可能な若手のウインガーや、システムにフィットする別のプロファイルの選手でしょう。ラッシュフォードの『出場26試合6ゴール6アシスト』という生産性を、年俸や年齢、守備への貢献度といった要素と天秤にかけた時、バルサのフロントが『合理的な判断』を下した可能性は十分にあります。",
+      "keyPoints": [
+        "€35Mは若手有望株や別プロファイルの選手と比較対象",
+        "生産性だけでなく年俸・年齢・守備貢献も総合判断"
+      ],
+      "imageQuery": "Barcelona winger transfer targets 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "",
+          "value": "How Marcus Rashford's future will impact Barcelona's transfer plans as La Liga giants line up alternative targets to Man"
+        },
+        {
+          "label": "",
+          "value": "How Marcus Rashford's future will impact Barcelona's transfer plans as La Liga giants line up alternative targets to Man"
+        },
+        {
+          "label": "",
+          "value": "How Marcus Rashford's future will impact Barcelona's transfer plans as La Liga giants line up alternative targets to Man"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "stats_comparison: homeTeam/awayTeam または playerNameEn/subject2En が必要です"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "このニュースに対する海外サッカーファンの反応は、驚くほど冷静、あるいは厳しいものです。『彼の年俸は巨大だし、偉大な選手だとも思わない。フィニッシュは悪く、年も取ってきている。スピードが衰えたらひどい選手になる』というコメントが287いいねを集め、『シーズン後半はフェラン・トーレスよりも悪かった。その価格と年俸に見合わない』という指摘も143いいねです。最も核心をついたのは、『出てきたばかりなのに全くプレスしないのが腹立たしい。ラミン・ヤマルは命がけで走っていたのに』という380いいねのコメント。数字以上に、『ボールを持たない時の姿勢と努力』が、バルサファンの心を離れさせたようです。",
+      "keyPoints": [
+        "「年俸が高すぎる」「スピード衰えたら終わり」と指摘多数",
+        "「シーズン後半はフェランより悪い」との辛口評価",
+        "「出たばかりでもプレスしない」姿勢が批判の的",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "imageQuery": "Barcelona fans reaction Rashford Reddit",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-18"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍611] is for villa? 👉👈",
+          "[👍491] He looked promising in the fall, good numbers even if eye test was kinda wonky. But in 2026 he hasn't been improving or showing attitude to extend the deal. ",
+          "[👍380] the thing that annoyed me about him is that he wasn't pressing even just after coming on. meanwhile lamine was running like his life depended on it - as was most of the rest of the team. rashford just seemed like he couldn't be bothered. i can understand if you're tired after playing for 70+ minutes, but he had just come on!",
+          "[👍287] I wouldn't buy Rashford personally. \n\nHis wages are huge and I don't think he's a great player either. His finishing is poor and he is also getting older. When his pace goes, he is going to be a very bad footballer. ",
+          "[👍143] Yeah, he had an even worse 2nd half of the season than Ferran. Not worth the price/salary",
+          "[👍67] April was the time he could've proved his doubters wrong. Started off well against Atleti in the first game and then just failed to impress. He was supposed to be Raphinha's alternative but doesn't have even 50% of his contributions. Better to look at young promising talents available on a cheap fee",
+          "[👍57] Rashford is good player but he is really stupid without the ball. Doesnt really defend or can position himself properly.\n\nReally doesnt fit our style.",
+          "[👍53] betrayal!",
+          "[👍50] Look at these stat watchers in these comments. That’s why eye test is literally the only thing that matters. He’s been shit.\n\nHow many games last year did lewa completely fuck up multiple clear goal scoring chances but still end up with a tap in or 2 and therefore looked great on paper? ",
+          "[👍48] just cooled? they better place that interest in antarctica",
+          "[👍34] For €35m, it’s a decent price and he still gets goals and assists. Not too sure you can find better output for that kind of money right now.",
+          "[👍31] I don’t think he’s the right move tbh; Flick’s system demands the forwards to track back and press and he rarely ever does that. Moreover, and this was apparent within his first three matches, he purely relies on his strength and pace. His ability to dribble is mediocre and he seeks to shoot instead of pass near the goal.\n\nI have a slight inkling he could do well in Atleti or a team that plays more directly.",
+          "[👍16] Could Rashford just go back to Man U now that the coach is different? Or is that bridge completely burnt at this point",
+          "[👍9] That was fast.",
+          "[👍9] Sometimes maybe good, sometimes maybe shit.",
+          "[👍8] His pressing and attitude against Atletico is all Barca needed to see. He had a golden opportunity to shine and showed he isn't reliable ",
+          "[👍6] They need to invest elsewhere so it makes sense.",
+          "[👍6] The only reason to buy sorloth is to stop him from fucking us over lol. Or yo bench him for the entirety of his contract as revenge",
+          "[👍5] Has Gala/Fener written all over it.",
+          "[👍1] \nTo reduce the spam of reports regarding the same move during transfer windows we try to allow **only one submission about each transfer saga per day**. The submission in question also needs to contain relevant new information regarding the potential move, and not just being a \"no/minor developments\" report.   \n\nIf there are important/official developments or new valuable information about a saga, we will allow extra threads in the same day, but for the rest of minor news please just comment the",
+          "彼の数字は良かったが、目で見たプレーは不安定だった。",
+          "出てきたばかりなのに全くプレスしないのが腹立たしい。\nラミン・ヤマルは命がけで走っていたのに、彼はやる気がないように見えた。",
+          "ラフィーニャの代役として、貢献度は50％にも満たない。",
+          "ボールを持たない時の動きが本当に愚かだ。\n守備もポジショニングも、我々のスタイルに合わない。",
+          "時には良く、時には酷い。",
+          "彼は良い選手だが、ボールを持たない時の判断が悪い。\n守備もポジショニングも、我々のスタイルに合わない。",
+          "冷却？南極に置いてくるべきだ。",
+          "年俸が高すぎる。彼は偉大な選手ではない。",
+          "フェランよりも悪いシーズン後半を過ごした。\nその価格と年俸に見合うとは思えない。",
+          "スピードが衰えたら、非常に悪い選手になるだろう。",
+          "3500万ユーロなら妥当な価格だ。\n今の市場で同額以上の成果を出せる選手を見つけるのは難しい。",
+          "フリックのシステムはフォワードの守備的貢献を求める。",
+          "アトレティコのような直接的なチームなら成功するかもしれない。\nしかし、バルサのスタイルには合わない気がする。",
+          "裏切りだ！"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "transfer_rumor",
+      "label": "移籍の噂",
+      "icon": "🔄",
+      "narration": "では、バルサが探す『他の選択肢』とは誰なのでしょうか？現時点で明確な名前は上がっていませんが、バルサは常に市場を睨んでいます。例えば、コール・パーマーのような若くてクリエイティブな選手への関心は以前から噂されていますが、本人がチェルシー残留を明言しているため現実的ではありません。€35Mという予算を考えると、バルサはより若く、年俸も低く、ハンス・フリック監督が求める『全員で守り、全員で攻める』システムに適合するウインガーを、南米や他のヨーロッパリーグから発掘する方向に舵を切る可能性が高いでしょう。ラッシュフォードの『即戦力』としての数字と、『将来性とシステム適性』を天秤にかけた結果と言えます。",
+      "keyPoints": [
+        "「他の選択肢」は具体的に名前が上がっていない",
+        "€35Mで若手・システム適合型の選手を模索か",
+        "コール・パーマーは本人が残留意思を表明"
+      ],
+      "imageQuery": "Barcelona alternative winger targets summer 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Update Transfer Rumours Reports against Coming Summer.",
+          "url": "https://www.facebook.com/100079922794746/posts/update-transfer-rumours-reports-against-coming-summer/932734966067255/",
+          "date": "2 days ago"
+        },
+        {
+          "label": "Cole Palmer reveals his transfer plans from Chelsea to Manchester ...",
+          "url": "https://sportstar.thehindu.com/football/cole-palmer-transfer-news-chelsea-to-manchester-united-premier-league-latest-updates/article70876575.ece",
+          "date": "8 hours ago"
+        },
+        {
+          "label": "Texas A&M is trending towards landing Tennessee transfer forward",
+          "url": "https://aggieswire.usatoday.com/story/sports/college/aggies/mens-basketball/2026/04/16/cade-phillips-texas-aggies-basketball-transfer-portal/89633934007/",
+          "date": "2 days ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "transfer_rumor",
+        "query": "undefined transfer rumor latest 2025 2026",
+        "organic": [
+          {
+            "title": "Update Transfer Rumours Reports against Coming Summer.",
+            "snippet": "(Mail) Barcelona want to re-sign Lionel Messi to coincide with their planned return to Camp Nou in summer 2026. (TNT Sports) Real Madrid defender Raul Asencio ...",
+            "link": "https://www.facebook.com/100079922794746/posts/update-transfer-rumours-reports-against-coming-summer/932734966067255/",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Cole Palmer reveals his transfer plans from Chelsea to Manchester ...",
+            "snippet": "England and Chelsea midfielder Cole Palmer revealed that he has no plans to move away from Chelsea despite rumours of his transfer to Manchester United.",
+            "link": "https://sportstar.thehindu.com/football/cole-palmer-transfer-news-chelsea-to-manchester-united-premier-league-latest-updates/article70876575.ece",
+            "date": "8 hours ago"
+          },
+          {
+            "title": "Texas A&M is trending towards landing Tennessee transfer forward",
+            "snippet": "According to On3, Texas A&M is now trending to land Tennessee transfer forward Cade Phillips, who recently visited the Aggies.",
+            "link": "https://aggieswire.usatoday.com/story/sports/college/aggies/mens-basketball/2026/04/16/cade-phillips-texas-aggies-basketball-transfer-portal/89633934007/",
+            "date": "2 days ago"
+          },
+          {
+            "title": "Celta de Vigo Transfers - All Rumours and Latest News - TransferFeed",
+            "snippet": "A report from TEAMtalk states that Arsenal are interested in signing Oscar Mingueza. The club believes Mingueza would be a high-ca... MORE.",
+            "link": "https://www.transferfeed.com/clubs/celta-de-vigo/35",
+            "date": "4 days ago"
+          },
+          {
+            "title": "Undefined Long Island Football Transfer Portal - On3",
+            "snippet": "The latest undefined college football players that have entered the transfer portal.",
+            "link": "https://www.on3.com/college/long-island-sharks/transfer-portal/wire/football/undefined/?position=s&status=withdrawn",
+            "date": "6 days ago"
+          },
+          {
+            "title": "Noah Gregor linked to N/A - Elite Prospects",
+            "snippet": "Reports connect Noah Gregor with N/A from Florida Panthers as of 2026-04-16. Follow updates and career info on Elite Prospects.",
+            "link": "https://www.eliteprospects.com/transfer/2026/04/16/noah-gregor-in-a-rumours-leaving-florida-panthers/626616",
+            "date": "2 days ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://sportstar.thehindu.com/football/cole-palmer-transfer-news-chelsea-to-manchester-united-premier-league-latest-updates/article70876575.ece]\nCole Palmer reveals his transfer plans from Chelsea to Manchester United - Sportstar Cole Palmer reveals his transfer plans from Chelsea to Manchester United Cole Palmer, born and brought up in Manchester, came through the Manchester City academy before making his first-team debut in 2020 under Pep Guardiola. Updated : Apr 18, 2026 11:02 IST , Chennai - 2 MINS READ Team Sportstar Comments Follow Us SHARE Copy link Email Facebook Twitter Telegram LinkedIn WhatsApp Reddit READ LATER SEE ALL Remove Cole Palmer has prospered at Chelsea since his move from Manchester City in 2023, scoring 53 goals and assisting 32 more for the Blues. | Photo Credit: AP Cole Palmer has prospered at Chelsea since his move from Manchester City in 2023, scoring 53 goals and assisting 32 more for the Blues. | Photo Credit: AP England and Chelsea midfielder Cole Palmer revealed that he has no plans to move away from Chelsea despite rumours of his transfer to Manchester United. “Everyone just talks,” he told The Guardian in an interview, talking about his transfer rumours. “When I see it, I just laugh. Obviously, Manchester is my home. All my family are there, but I don’t miss it. Maybe I’ll miss it if I don’t go for three months or something. But then, when I get home, I think there’s nothing there for me anyway. Palmer, born and brought up in Manchester, came through the Manchester City academy before making his first-team debut in 2020 under Pep Guardiola in a League Cup match against Burnley. However"
+      }
+    },
+    {
+      "id": "player_episode",
+      "label": "選手エピソード",
+      "icon": "✨",
+      "narration": "ラッシュフォードのバルサでの軌跡を振り返ると、忘れられない瞬間があります。今シーズン、カンプ・ノウで初ゴールを決めたエスパニョール戦での鮮やかなボレーシュート。あの瞬間、多くのバルサファンは、レンタルから完全移籍への流れは確実だと思ったことでしょう。マンチェスターのストリートから這い上がり、ユナイテッドとイングランド代表で数々のドラマを生んできたラッシュフォード。そのキャリアの新たな1章として期待されたバルセロナでの完全移籍が、今、大きく揺らいでいます。",
+      "keyPoints": [
+        "カンプ・ノウ初ゴールはエスパニョール戦のボレー",
+        "あの瞬間は完全移籍が確実視された",
+        "マンチェスターから這い上がったストーリーを持つ選手"
+      ],
+      "imageQuery": "Rashford first goal Barcelona Camp Nou",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Marcus Rashford's grassroots story - England Football",
+          "url": "https://www.englandfootball.com/england/mens-senior-team/stories/Marcus-Rashford-grassroots-story",
+          "date": "2026-04-18"
+        },
+        {
+          "label": "Marcus Rashford - The Story - YouTube",
+          "url": "https://www.youtube.com/watch?v=M3Rircb5AH8",
+          "date": "Jun 16, 2020"
+        },
+        {
+          "label": "The Boy Who Carried Too Much: The Marcus Rashford Story - Medium",
+          "url": "https://medium.com/@M1902p/the-boy-who-carried-too-much-the-marcus-rashford-story-82282c73a13f",
+          "date": "Jun 1, 2025"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "player_episode",
+        "query": "Marcus Rashford famous moment story",
+        "organic": [
+          {
+            "title": "Marcus Rashford's grassroots story - England Football",
+            "snippet": "Marcus Rashford's grassroots story ... The England striker takes us through his rise to the top, after starting out with a local club before going on to represent ...",
+            "link": "https://www.englandfootball.com/england/mens-senior-team/stories/Marcus-Rashford-grassroots-story",
+            "date": null
+          },
+          {
+            "title": "Marcus Rashford - The Story - YouTube",
+            "snippet": "Marcus Rashford - The Story #JTGProductions #MarcusRashford #Rashford ... 10 years of capturing Manchester United's BEST moments. JTG ...",
+            "link": "https://www.youtube.com/watch?v=M3Rircb5AH8",
+            "date": "Jun 16, 2020"
+          },
+          {
+            "title": "The Boy Who Carried Too Much: The Marcus Rashford Story - Medium",
+            "snippet": "Football ceased to be joy, becoming survival. The trauma after the Euro final penalties haunted him — racist abuse, vandalism, and unbearable ...",
+            "link": "https://medium.com/@M1902p/the-boy-who-carried-too-much-the-marcus-rashford-story-82282c73a13f",
+            "date": "Jun 1, 2025"
+          },
+          {
+            "title": "Six memorable Marcus Rashford moments - BBC Sport",
+            "snippet": "Six memorable Marcus moments · Marcus Rashford scores on his European debut against Midtjylland in the UEFA Europa League in February · Marcus ...",
+            "link": "https://www.bbc.com/sport/articles/cg3znjnr52ro",
+            "date": "Jul 18, 2023"
+          },
+          {
+            "title": "Marcus Rashford's Story Is More Complicated Than We Know",
+            "snippet": "Marcus Rashford's journey at Manchester United is one of the most compelling stories in modern football. From his meteoric rise as a teenage ...",
+            "link": "https://www.youtube.com/watch?v=mr6Ck0nKVMs",
+            "date": "Feb 12, 2025"
+          },
+          {
+            "title": "10 times Marcus Rashford proved he's England's true hero - Indy100",
+            "snippet": "1. Child poverty letter to MPs · 2. Rashford's response to his campaign's success · 3. His BBC Sports Personality of the Year speech · 4. Getting a ...",
+            "link": "https://www.indy100.com/news/marcus-rashford-facts-mbe-b1954384",
+            "date": "Nov 9, 2021"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=M3Rircb5AH8]\nMarcus Rashford - The Story - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？数字は悪くないのに、なぜ買わないのか。その背景には、現代サッカーにおける『データでは測れない価値』への厳しい眼差しがありました。チャンネル登録と高評価、そしてコメントでのご意見をお待ちしています。次回の『速報！サッカーニュース』もお楽しみに！",
+      "keyPoints": [],
+      "imageQuery": "Soccer news data analysis YouTube",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-18",
+    "postId": "2",
+    "originalTitle": "[Moretto] Barcelona have cooled their interest in activating Marcus Rashford’s €35M buy option. The Spanish club will look at other alternatives.",
+    "generatedAt": "2026-04-18T14:01:14.541Z",
+    "mainImagePath": null
+  }
+}

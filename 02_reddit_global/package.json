@@ -15,12 +15,13 @@
     "axios": "^1.13.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "googleapis": "^144.0.0",
     "iconv-lite": "^0.7.2",
     "msedge-tts": "^2.0.4",
     "openai": "^6.33.0",
     "puppeteer": "^24.38.0",
     "sharp": "^0.34.5",
     "twitter-api-v2": "^1.29.0",
-    "googleapis": "^144.0.0"
+    "ws": "^8.20.0"
   }
 }

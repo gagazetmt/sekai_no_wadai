@@ -12,9 +12,39 @@ const path    = require('path');
 
 const app  = express();
 const PORT = 3005;
+const server = http.createServer(app);
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ noServer: true });
+
 app.use(express.json());
 
-const V2_BASE   = 'http://localhost:3004';
+// ── ターミナル用プロキシ設定 ──────────────────────────────────────────────
+server.on('upgrade', (request, socket, head) => {
+  if (request.url.startsWith('/ttyd')) {
+    const targetWs = new WebSocket('ws://localhost:7681' + request.url.replace('/ttyd', ''));
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      // スマホ <-> ランチャー(3005) <-> WSL(7681) を繋ぐ
+      ws.on('message', (m) => targetWs.readyState === WebSocket.OPEN && targetWs.send(m));
+      targetWs.on('message', (m) => ws.readyState === WebSocket.OPEN && ws.send(m));
+      ws.on('close', () => targetWs.close());
+      targetWs.on('close', () => ws.close());
+    });
+  }
+});
+
+// ターミナルのHTMLを表示するエンドポイント
+app.get('/terminal', (req, res) => {
+  res.send(`<!DOCTYPE html><html><head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mia Terminal Remote</title>
+    <style>body,iframe{margin:0;padding:0;width:100%;height:100vh;border:none;overflow:hidden;background:#000}</style>
+  </head><body>
+    <!-- 3005番の中で 7681番の機能を動かす魔法の仕掛け -->
+    <iframe src="http://100.115.192.114:7681" style="width:100%;height:100%"></iframe>
+  </body></html>`);
+});
+
+const V2_BASE   = 'http://localhost:3006';
 const DATA_DIR  = path.join(__dirname, 'data');
 const LOG_FILE  = path.join(__dirname, 'logs', 'daily_fetch.log');
 const HIST_FILE = path.join(__dirname, 'data', 'mia_chat_history.json');
@@ -26,6 +56,24 @@ function loadHistory() {
 function saveHistory(hist) {
   fs.writeFileSync(HIST_FILE, JSON.stringify(hist.slice(-200), null, 2));
 }
+
+// ── API: ターミナル起動（キック） ──────────────────────────────────────────
+app.post('/api/mia/launch-terminal', (req, res) => {
+  const { spawn } = require('child_process');
+  const batPath = path.join(__dirname, '..', 'start_mia_terminal.bat');
+  
+  console.log(`[mia-launcher] ターミナル起動指示を受信: ${batPath}`);
+  
+  // 背景で実行（detached: true で親が死んでも生き残るようにする）
+  const child = spawn('cmd.exe', ['/c', batPath], {
+    detached: true,
+    stdio: 'ignore',
+    cwd: path.join(__dirname, '..')
+  });
+  child.unref();
+
+  res.json({ ok: true, message: 'ターミナルを起動しました。ポート7681にアクセスしてください。' });
+});
 
 // ── API: CLIへメッセージ送信（proxy） ────────────────────────────────────────
 app.post('/api/mia/send', async (req, res) => {
@@ -190,6 +238,7 @@ body{font-family:'Segoe UI',sans-serif;background:#0b0f1e;color:#e0e8ff;height:1
   <span class="status-dot" id="statusDot"></span>
   <span id="statusLabel">確認中...</span>
   <a class="header-link" href="http://100.116.25.91:3004" target="_blank">🎬 V2ランチャー</a>
+  <button class="header-link" style="background:#1a6ef5;color:#fff;border:none;margin-left:8px;cursor:pointer" onclick="launchTerminal()">📟 ターミナル起動</button>
 </div>
 
 <div class="main">
@@ -239,6 +288,22 @@ async function loadHistory() {
       else                   appendBubble('mia',  h.text, h.ts);
     });
   } catch(_) {}
+}
+
+// ── ターミナル起動 ───────────────────────────────────────────────────────────
+async function launchTerminal() {
+  if(!confirm('PC側のミア・ターミナル(7681)を起動しますか？')) return;
+  try {
+    const r = await fetch('/api/mia/launch-terminal', { method: 'POST' });
+    const d = await r.json();
+    alert(d.message);
+    // 起動後に自動で別タブで開く
+    setTimeout(() => {
+      window.open('http://100.115.192.114:3005/terminal', '_blank');
+    }, 2000);
+  } catch(e) {
+    alert('起動失敗: ' + e.message);
+  }
 }
 
 // ── バブル追加 ────────────────────────────────────────────────────────────────
@@ -378,6 +443,6 @@ function esc(s) {
 
 app.get('/', (req, res) => res.send(HTML));
 
-app.listen(PORT, () => {
-  console.log(`[mia-launcher] Mia Chat V2 起動: http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`[mia-launcher] Mia Chat V2 起動: http://0.0.0.0:${PORT}`);
 });

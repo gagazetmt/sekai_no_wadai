@@ -632,6 +632,57 @@ function sanitizeForVoiceVox(text) {
     .trim();
 }
 
+// ─── TTS: MiniMax (New!) ────────────────────────────────────────────────────────
+async function narrationMiniMax(text, outputPath, speakerId = VV_SPEAKER) {
+  const axios = require('axios');
+  const safe = sanitizeForVoiceVox(text); // VoiceVoxの読み補正を流用！
+  const MINIMAX_API_KEY = process.env.MINIMAX_API_KEY;
+  const MINIMAX_GROUP_ID = process.env.MINIMAX_GROUP_ID;
+
+  // VoiceVox ID -> MiniMax Voice ID マッピング
+  const VOICE_MAP = {
+    13: "English_ManWithDeepVoice", // 青山龍星風
+    3:  "Japanese_InnocentBoy",     // ずんだもん風
+    11: "Japanese_CalmLady",        // 小夜風
+    0:  "Japanese_GracefulMaiden"   // めたん風
+  };
+  const voiceId = VOICE_MAP[speakerId] || "Japanese_CalmLady";
+
+  const res = await axios.post(
+    `https://api-uw.minimax.io/v1/t2a_v2?GroupId=${MINIMAX_GROUP_ID}`,
+    {
+      model: "speech-2.8-hd",
+      text: safe,
+      voice_setting: {
+        voice_id: voiceId,
+        speed: 1.0,
+        vol: 1.0,
+        pitch: 0
+      },
+      audio_setting: {
+        sample_rate: 32000,
+        bitrate: 128000,
+        format: "mp3",
+        channel: 1
+      },
+      output_format: "hex"
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${MINIMAX_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+
+  if (res.data.data && res.data.data.audio) {
+    fs.writeFileSync(outputPath, Buffer.from(res.data.data.audio, 'hex'));
+    return outputPath;
+  } else {
+    throw new Error(`MiniMax API error: ${JSON.stringify(res.data.base_resp)}`);
+  }
+}
+
 // ─── TTS: VoiceVox ────────────────────────────────────────────────────────────
 async function narrationVoiceVox(text, outputPath, speaker = VV_SPEAKER) {
   const safe = sanitizeForVoiceVox(text);
@@ -654,14 +705,22 @@ async function narrationVoiceVox(text, outputPath, speaker = VV_SPEAKER) {
   return outputPath;
 }
 
-async function generateNarration(text, outputPath) {
-  // 相棒の要望により VoiceVox を最優先（OpenAI APIキーがあっても無視）
+async function generateNarration(text, outputPath, speaker = VV_SPEAKER) {
+  const provider = process.env.TTS_PROVIDER || "voicevox";
+
   try {
-    return await narrationVoiceVox(text, outputPath);
+    if (provider === "minimax") {
+      return await narrationMiniMax(text, outputPath, speaker);
+    } else {
+      return await narrationVoiceVox(text, outputPath, speaker);
+    }
   } catch (err) {
-    console.warn(`  ⚠️ VoiceVox生成エラー: ${err.message}`);
-    // もしどうしても OpenAI を使いたい場合はここにフォールバックを書けるけど、
-    // 今は VoiceVox が基本だから、そのままエラーを投げるね！
+    console.warn(`  ⚠️ ${provider}生成エラー: ${err.message}`);
+    // VoiceVoxにフォールバック（MiniMaxでエラーが出た場合の保険！）
+    if (provider === "minimax") {
+      console.log("  🔄 VoiceVoxにフォールバックして再試行するよ...");
+      return await narrationVoiceVox(text, outputPath, speaker);
+    }
     throw err;
   }
 }
@@ -854,8 +913,9 @@ async function main() {
   console.log(`🎙️  TTS    : ${ttsMode}`);
   console.log(`📐 Canvas : ${W}×${H}px  FPS:${FPS}\n`);
 
-  // VoiceVox 起動確認（OpenAI Key がない場合のみ）
-  if (!process.env.OPENAI_API_KEY) {
+  // TTS 起動確認
+  const provider = process.env.TTS_PROVIDER || "voicevox";
+  if (provider === "voicevox" && !process.env.OPENAI_API_KEY) {
     try {
       const r = await fetch(`${VOICEVOX_URL}/version`);
       if (!r.ok) throw new Error();
@@ -864,6 +924,8 @@ async function main() {
       console.error(`❌ VoiceVox 未起動 / OPENAI_API_KEY も未設定`);
       process.exit(1);
     }
+  } else if (provider === "minimax") {
+    console.log(`✅ MiniMax TTS モード (VoiceVoxはフォールバック用)\n`);
   }
 
   ensureBeep();

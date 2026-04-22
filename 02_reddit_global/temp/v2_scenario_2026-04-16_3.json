@@ -1,0 +1,367 @@
+{
+  "youtubeTitle": "カマヴィンガ退場で試合が激変！レアル対バイエルンCL決定的瞬間と海外の反応を徹底解説",
+  "hashtagsText": "#サッカー #レアルマドリード #バイエルンミュンヘン #カマヴィンガ #チャンピオンズリーグ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "チャンネル登録と高評価、よろしくお願いします！今回は、チャンピオンズリーグ準決勝、レアル・マドリード対バイエルン・ミュンヘンの第2戦で起きた、試合の流れを一変させたあの退場劇について、詳しく解説していきます！",
+      "keyPoints": [],
+      "imageQuery": "Real Madrid vs Bayern Munich 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "カマヴィンガ退場の真相",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "まずは試合結果からお伝えします。2025-26シーズンUEFAチャンピオンズリーグ準決勝第2戦、レアル・マドリード対バイエルン・ミュンヘン。この試合で、レアル・マドリードの若きMF、エドゥアルド・カマヴィンガが86分に2枚目のイエローカードを受けて一発退場。バイエルンはこの退場を契機に連続ゴールを決め、第2戦を勝利で飾りました。",
+      "keyPoints": [
+        "レアル・マドリード vs バイエルン・ミュンヘン",
+        "カマヴィンガが86分に退場",
+        "バイエルンが退場後に連続ゴール"
+      ],
+      "imageQuery": "Camavinga red card 86 minute",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "story",
+      "statsRows": null,
+      "scriptNote": "マドリーVSバイエルンの試合結果。得点者と得点時間、退場者と退場時間を書くこと",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 973887,
+        "name": "Eduardo Camavinga",
+        "position": "M",
+        "team": "Real Madrid",
+        "nationality": "France",
+        "dateOfBirth": "2002-11-10T00:00:00+00:00",
+        "height": 182,
+        "preferredFoot": "Left",
+        "leagueName": "UEFA Champions League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 11,
+          "goals": 1,
+          "assists": 1,
+          "rating": 7.04,
+          "minutesPlayed": 478,
+          "yellowCards": 2,
+          "redCards": 1,
+          "expectedGoals": 0.46,
+          "keyPasses": 4
+        }
+      }
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "試合の決定的瞬間は、86分に起きました。カマヴィンガはバイエルンのハリー・ケインに対して戦術的なファウルを犯します。問題はその後の行動で、ファウル後、審判の笛を待たずにボールを拾い、その場から離れてプレーを遅延させたのです。この行為が審判の目に余り、2枚目のイエローカード、つまりレッドカードが提示されました。ファウル自体はイエロー級とも言えますが、既に1枚警告を受けていたことを考えると、非常にリスクの高い、そして不必要な行動だったと言えるでしょう。",
+      "keyPoints": [
+        "86分、ケインへの戦術的ファウル",
+        "ファウル後、ボールを持ち去りプレー遅延",
+        "2枚目のイエローで一発退場"
+      ],
+      "imageQuery": "Camavinga foul Kane 86",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "[Sakatsuku Breaking News] That policy is getting even ... - YouTube",
+          "url": "https://www.youtube.com/watch?v=8Ybx0YHAbWE",
+          "date": "23 hours ago"
+        },
+        {
+          "label": "ヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出 ...",
+          "url": "https://www.soccer-king.jp/news/japan/national/20260415/2149020.html/2",
+          "date": "16 hours ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": "退場シーンでのカマヴィンガの行動。イエローカードの妥当性。",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "match_key_moment",
+        "query": "カマヴィンガ",
+        "organic": [
+          {
+            "title": "[Sakatsuku Breaking News] That policy is getting even ... - YouTube",
+            "snippet": "Comments. 8. レアル好きだからモドリッチ、バルベルデ、カマヴィンガ共存させたいのに全員DMなの辛いっす . 15:55 · Go to channel サイモンのイキれる英語教室 ...",
+            "link": "https://www.youtube.com/watch?v=8Ybx0YHAbWE",
+            "date": "23 hours ago"
+          },
+          {
+            "title": "ヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出 ...",
+            "snippet": "話題の記事. バイエルンがレアルとの撃ち合い制しCL準決勝へ！…カマヴィンガ退場後の連続ゴールで2ndレグも勝利.",
+            "link": "https://www.soccer-king.jp/news/japan/national/20260415/2149020.html/2",
+            "date": "16 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=8Ybx0YHAbWE]\n【サカつく速報】あのポリシーが更に強化⁉︎\"新MF確定\"の最新ガチャ情報を解説‼︎【サカつく2026】 - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC\n\n---\n\n[出典: https://www.soccer-king.jp/news/japan/national/20260415/2149020.html/2]\nヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出！…板村真央＆福島望愛がともに連発 | ページ 2 | サッカーキング 2026.04.15 SEARCH --> ヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出！…板村真央＆福島望愛がともに連発 15時間前 【ゴール動画】板村＆福島がともに連続ゴール！ 才能×才能のホットライン 🇯🇵福島望愛のラストパスを 板村真央が完璧なタッチから突き刺した！ 決勝進出へ向けて前半5分で先制🙌 🏆AFC U20女子アジアカップ 準決勝 🆚日本×中国 📺DAZN ライブ配信中 #U20女子アジアカップ #だったらDAZN pic.twitter.com/7YkgNPXGYL &mdash; DAZN Japan (@DAZN_JPN) April 15, 2026 ワンダーガールのFK弾💥 🇯🇵福島望愛が直接FKを沈めた✨ 大ブレイク中の福島が今大会5ゴール目！ 🏆AFC U20女子アジアカップ 準決勝 🆚日本×中国 📺DAZN ライブ配信中 #U20女子アジアカップ #だったらDAZN pic.twitter.com/uzT95Cyz29 &mdash; DAZN Japan (@DAZN_JPN) April 15, 2026 話題の記事 「atmos」と「Jリーグ」による初のコラボレーションアパレルが実現 FIFAワールドカップ2026｜日本代表 日程・結果・放送・配信・メンバー なでしこジャパン、DF高橋はなの離脱を発表…追加の選手招集はなし 1 2 なでしこ に関する記事をもっと見る By サッカーキング編集部 サッカー総合情報サイト 世界のサッカー情報を配信する国内最高峰のサッカー総合メディア。日本代表をはじめ、Jリーグ、プレミアリーグ、海外日本人選手、高校サッカーなどの国内外の最新ニュース、コラム、選手インタビュー、試合結果速報、ゲーム、ショッピングといったサッカーにまつわるあらゆる情報を提供しています。「X」「Instagram」「YouTube」「TikTok」など、各種SNSサービスも充実したコンテンツを発信中。 #アジア #日本 #AFC U20女子アジアカップタイ2026 #U－20女子日本代表 SHARE RECOMMENDED おすすめの記事 サッカーキング×FIFAワールドカップ2026 特設ページ 「南野拓実選手DNS応援ダブルキャンペーン」開催中！ CL 2026.04.16 2025-26 UEFAチャンピオンズリーグ　結果・トーナメント・テレビ放送・ネット配信情報｜試合日程一覧・順位表【随時更新】 By サッカーキング編集部 8時間前 2025-26シーズン日本人選手・海外移籍情報まとめ 独自AIで「試合結果」を予想／「WINNER」にチャレンジ SOCCERKING VIDEO 【ラ・リーガ深掘り】 CL4強入りを果たすのは？ 【プレミア深掘り】 最終節までノンストップ！ 【セリエA深掘り】 イタリア出張を振り返ろう！〜パルマ編〜 VIEW MORE"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "この退場劇に対する海外、特にサッカー専門掲示板Redditでの反応は非常に厳しいものでした。多くのユーザーがカマヴィンガの判断を強く批判しています。『史上最も愚かな2枚目のイエローだ』『文字通り脳が死んでいる』『戦術的ファウル後、ボールを遠ざけるとは何を考えているんだ』といったコメントが多数。また、『審判が既にイエローを出していたことを忘れていたのが唯一の理由だ』『もし審判がカマのイエローを忘れていなければ、おそらく退場にはならなかった』という、審判の判断に疑問を呈する声も上がっていました。",
+      "keyPoints": [
+        "「史上最も愚かな2枚目のイエロー」との批判多数",
+        "「審判が警告を忘れていたから」との指摘も",
+        "「試合を台無しにした」との厳しい意見"
+      ],
+      "imageQuery": "reddit soccer reaction Camavinga",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍4483] Might be the dumbest second yellow I've ever seen, and immediately cost them",
+          "[👍1992] Idiot, that's all that's needed to say",
+          "[👍1939] Actually brain dead ",
+          "[👍1091] What's he doing lmao surely he forgot he was on a yellow what an idiot ",
+          "[👍726] Probably never a red if he didn’t forget cama already got a yellow ",
+          "[👍627] Tactical foul then taking the ball away, what the fuck was he doing?",
+          "[👍513] What a dumbass lol",
+          "[👍456] LMAO you can clearly see the ref only gave that cause he forgot he already got a yellow 😭😭😭",
+          "[👍426] Ref forgot he had a yellow already only reason he got one",
+          "[👍354] Might be the most stupid player ever",
+          "[👍260] Threw the entire game ggs",
+          "[👍141] [removed]",
+          "[👍137] Unbelievably stupid from him. He has probably cost them the match. \n\n",
+          "[👍128] Ref only booked him because he forgot he already had a yellow ",
+          "[👍76] braindead",
+          "[👍68] The dude has the brain of a wooden broom",
+          "[👍49] Daft by Camavinga but the ref's never giving him a second yellow for that if he remembered he was already on a booking.",
+          "[👍47] Thought it was a bit soft at first but this angle does it for me. He clearly fouls Kane and then runs away with the ball, delaying the play. ",
+          "[👍41] So dumb. Unreal ",
+          "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "史上最も愚かな2枚目のイエローだ",
+          "審判がイエローを出したのは\n彼が既に警告を受けていたことを忘れていたからだと明らかにわかる",
+          "あのバカは一体何をやってるんだ？",
+          "もし審判がカマのイエローを\n忘れていなければ、おそらく退場にはならなかった",
+          "戦術的ファウル後、ボールを遠ざけるとは",
+          "審判が既にイエローを\n出していたことを忘れていたのが唯一の理由だ",
+          "試合を台無しにしたな",
+          "文字通り脳が死んでいる",
+          "彼は確かにイエローを\n持っていたことを忘れていたに違いない、何というバカだ",
+          "史上最も愚かな選手かもしれない",
+          "信じられないほど愚かなプレーだ",
+          "彼はおそらく試合を\n台無しにした。本当に愚かだ。",
+          "イエローを忘れた審判が\n原因で退場とは",
+          "バカ、それだけが言える"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "player_profile",
+      "label": "選手プロフィール",
+      "icon": "👤",
+      "narration": "では、このプレーで注目を浴びたエドゥアルド・カマヴィンガとはどのような選手なのでしょうか。カマヴィンガはアンゴラ生まれのフランス代表MFで、レアル・マドリードでは主に中央ミッドフィルダーとして、時には左サイドバックとしてもプレーするユーティリティ性の高い選手です。今シーズンもチームに欠かせない存在として活躍してきましたが、今回のような一瞬の判断ミスが大きな代償を生むこともあるのがトップレベルの舞台。今回の退場は彼のキャリアの中でも痛い経験となったはずです。",
+      "keyPoints": [
+        "アンゴラ生まれのフランス代表MF",
+        "レアルでCB、SBもこなすユーティリティプレイヤー",
+        "今季はチームの主力として活躍"
+      ],
+      "imageQuery": "Eduardo Camavinga Real Madrid",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg/330px-Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Eduardo Camavinga",
+          "url": "https://en.wikipedia.org/wiki/Eduardo_Camavinga",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "年齢と国籍",
+          "value": "エドゥアルド・カマヴィンガ（Eduardo Camavinga, 2002年11月10日 - ）は、アンゴラ・カビンダ州ミコンジェ（英語版）出身のサッカー選手。レアル・マドリード所属。"
+        },
+        {
+          "label": "ポジション（可能なポジションすべて）",
+          "value": "#6 Eduardo Camavinga · 身長: 1,82 m · ポジション: セントラルミッドフィールダー · 代理人: CAA Stellar 認証済み."
+        },
+        {
+          "label": "今期の成績",
+          "value": "パフォーマンスデータ. このページは選手の詳細なスタッツ情報を表示します。ドロップダウンメニューからシーズンや大会ごとにフィルターすることが可能です。"
+        },
+        {
+          "label": "退場経験",
+          "value": "Eduardo Celmi Camavinga (born 10 November 2002) is a professional footballer who plays as a central midfielder. He occas"
+        }
+      ],
+      "scriptNote": "カマヴィンガのプロフィールと今期の成績、レーティングと退場経験を書く",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Eduardo Camavinga",
+        "description": "Footballer (born 2002)",
+        "extract": "Eduardo Celmi Camavinga is a professional footballer who plays as a central midfielder. He occasionally plays as left back for La Liga club Real Madrid. Born in Angola, he plays for the France national team.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg/330px-Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg",
+        "url": "https://en.wikipedia.org/wiki/Eduardo_Camavinga",
+        "type": "standard"
+      }
+    },
+    {
+      "id": "player_episode",
+      "label": "選手エピソード",
+      "icon": "✨",
+      "narration": "残念ながら、今回提供されたデータからはカマヴィンガ選手に関する具体的なエピソードや、彼の詳細な個人成績、ケガからの復帰戦績などを確認することはできませんでした。しかし、彼が若くしてレアル・マドリードの重要な戦力となっていることからも、類稀なる才能の持ち主であることは間違いありません。今回の過ちを糧に、さらに成長した姿を見せてくれることを期待したいですね。",
+      "keyPoints": [
+        "データ不足のため詳細なエピソードは割愛",
+        "レアルの重要な若手戦力であることに変わりはない"
+      ],
+      "imageQuery": "Camavinga skills highlights",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "ヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出 ...",
+          "url": "https://www.soccer-king.jp/news/japan/national/20260415/2149020.html/2",
+          "date": "16 hours ago"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "今期の成績",
+          "value": "Eduardo Camavinga. Eduardo Celmi Camavinga. Position: DF-MF (CM) ▫ Footed: Left. 182cm, 68kg (5-11½, 150lb). Born: Novem"
+        },
+        {
+          "label": "チャンピオンズリーグでの得点数",
+          "value": "This is the goal statistic of Real Madrid player Eduardo Camavinga, which gives a detailed view on the goals the player "
+        },
+        {
+          "label": "ケガからの復帰後のチームの戦績",
+          "value": "In the 2020-21 season, Camavinga made 39 appearances for Rennes in all competitions, scoring once and providing two assi"
+        }
+      ],
+      "scriptNote": "エンバペの個人成績、CLでの成績、ケガによる離脱からの復帰後の戦績",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "player_episode",
+        "query": "エンバペ",
+        "organic": [
+          {
+            "title": "ヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出 ...",
+            "snippet": "キリアン・エンバペ · 伊藤洋輝 · ジョゼップ・グアルディオラ · 佐野海舟 · アルネ・スロット · 鈴木彩艶 · ヴィニシウス ... 東軍のヴィニシウスとエンバペ. 技ありチップ ...",
+            "link": "https://www.soccer-king.jp/news/japan/national/20260415/2149020.html/2",
+            "date": "16 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.soccer-king.jp/news/japan/national/20260415/2149020.html/2]\nヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出！…板村真央＆福島望愛がともに連発 | ページ 2 | サッカーキング 2026.04.15 SEARCH --> ヤングなでしこ、中国撃破で北朝鮮待つU20女子アジア杯決勝進出！…板村真央＆福島望愛がともに連発 15時間前 【ゴール動画】板村＆福島がともに連続ゴール！ 才能×才能のホットライン 🇯🇵福島望愛のラストパスを 板村真央が完璧なタッチから突き刺した！ 決勝進出へ向けて前半5分で先制🙌 🏆AFC U20女子アジアカップ 準決勝 🆚日本×中国 📺DAZN ライブ配信中 #U20女子アジアカップ #だったらDAZN pic.twitter.com/7YkgNPXGYL &mdash; DAZN Japan (@DAZN_JPN) April 15, 2026 ワンダーガールのFK弾💥 🇯🇵福島望愛が直接FKを沈めた✨ 大ブレイク中の福島が今大会5ゴール目！ 🏆AFC U20女子アジアカップ 準決勝 🆚日本×中国 📺DAZN ライブ配信中 #U20女子アジアカップ #だったらDAZN pic.twitter.com/uzT95Cyz29 &mdash; DAZN Japan (@DAZN_JPN) April 15, 2026 話題の記事 「atmos」と「Jリーグ」による初のコラボレーションアパレルが実現 FIFAワールドカップ2026｜日本代表 日程・結果・放送・配信・メンバー なでしこジャパン、DF高橋はなの離脱を発表…追加の選手招集はなし 1 2 なでしこ に関する記事をもっと見る By サッカーキング編集部 サッカー総合情報サイト 世界のサッカー情報を配信する国内最高峰のサッカー総合メディア。日本代表をはじめ、Jリーグ、プレミアリーグ、海外日本人選手、高校サッカーなどの国内外の最新ニュース、コラム、選手インタビュー、試合結果速報、ゲーム、ショッピングといったサッカーにまつわるあらゆる情報を提供しています。「X」「Instagram」「YouTube」「TikTok」など、各種SNSサービスも充実したコンテンツを発信中。 #アジア #日本 #AFC U20女子アジアカップタイ2026 #U－20女子日本代表 SHARE RECOMMENDED おすすめの記事 サッカーキング×FIFAワールドカップ2026 特設ページ 「南野拓実選手DNS応援ダブルキャンペーン」開催中！ CL 2026.04.16 2025-26 UEFAチャンピオンズリーグ　結果・トーナメント・テレビ放送・ネット配信情報｜試合日程一覧・順位表【随時更新】 By サッカーキング編集部 8時間前 2025-26シーズン日本人選手・海外移籍情報まとめ 独自AIで「試合結果」を予想／「WINNER」にチャレンジ SOCCERKING VIDEO 【ラ・リーガ深掘り】 CL4強入りを果たすのは？ 【プレミア深掘り】 最終節までノンストップ！ 【セリエA深掘り】 イタリア出張を振り返ろう！〜パルマ編〜 VIEW MORE"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "マドリーの戦略",
+      "icon": "🔍",
+      "narration": "詳しいデータは取得できませんでしたが、第1戦でビハインドを負ったレアル・マドリードは、このセカンドレグで逆転を狙う必要がありました。ホームでの猛攻が予想される中、カマヴィンガの退場は戦術的にも人的にも大きな痛手となったはずです。",
+      "keyPoints": [
+        "第1戦ビハインドからの逆転が目標",
+        "ホームでの攻撃的サッカーが予想された"
+      ],
+      "imageQuery": "Real Madrid tactics 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "story",
+      "statsRows": null,
+      "scriptNote": "ファーストレグでビハインドを負ったマドリーのセカンドレグでの戦略",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "ニュース検索: 参考ワードを入力してください"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "バイエルンの戦略",
+      "icon": "🔍",
+      "narration": "同様に、バイエルン・ミュンヘンの詳細な戦略データも取得できませんでした。しかし、アウェーで第1戦のアドバンテージを守り切る、あるいは追加点を奪いにいくという選択肢があった中で、相手の退場というチャンスを確実にモノにしたバイエルンの対応は、勝負所の強さを見せつけたと言えるでしょう。",
+      "keyPoints": [
+        "第1戦のアドバンテージを活かす戦い",
+        "相手の退場を確実に勝利に結びつけた"
+      ],
+      "imageQuery": "Bayern Munich tactics 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "story",
+      "statsRows": null,
+      "scriptNote": "迎え撃つバイエルンの戦略",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "ニュース検索: 参考ワードを入力してください"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？一瞬の判断が試合の行方を大きく左右する、それがチャンピオンズリーグの厳しさです。カマヴィンガにはこの経験を次へのバネにしてもらいたいですね。最新のサッカーニュースをわかりやすくお届けする「速報！サッカーニュース」のチャンネル登録と、高評価ボタンのクリックをぜひよろしくお願いします！それでは、また次の動画でお会いしましょう！",
+      "keyPoints": [],
+      "imageQuery": "Champions League highlights",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "一瞬の判断が勝敗を分ける",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-16",
+    "postId": "3",
+    "originalTitle": "Eduardo Camavinga second yellow card vs Bayern Munich 86'",
+    "generatedAt": "2026-04-16T06:41:59.292Z",
+    "mainImagePath": null
+  }
+}

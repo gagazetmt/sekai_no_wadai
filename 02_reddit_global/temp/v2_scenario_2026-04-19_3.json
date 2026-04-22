@@ -1,0 +1,488 @@
+{
+  "youtubeTitle": "【衝撃ゴール】佐野海舟がECL準々決勝で超ミドル弾！日本人コンビが欧州の舞台で決勝点を生み出す",
+  "hashtagsText": "#サッカー #佐野海舟 #川崎颯太 #マインツ #ECL",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "ヨーロッパカンファレンスリーグ、準々決勝の大舞台で、日本人コンビが歴史的な連係を見せました。マインツの佐野海舟選手が、川崎颯太選手のアシストから見事なミドルシュートを決め、チームを勝利へと導いたのです。その全真相を、詳細なデータと共に徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Kaishu Sano ECL goal celebration",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "日本人コンビが欧州の舞台で決勝点を生み出す！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "ヨーロッパカンファレンスリーグ、準々決勝の舞台で、日本人選手が鮮烈な一撃を放ちました。マインツの佐野海舟選手が、川崎颯太選手との連係から左サイドを爆走、中央へ切り込んで放った一撃は、ゴールの右隅に吸い込まれる圧巻のミドルシュート。このゴールがチームを勝利へと導きます。ECL準々決勝という欧州の大舞台で、日本人2人が連係し決勝点を生んだという事実は、日本のサッカーファンにとって大きな衝撃と喜びをもたらしました。まさに「川崎颯太→佐野海舟」という日本人コンビの完結は、言葉を超えた美しいサッカーそのものです。",
+      "keyPoints": [
+        "ECL準々決勝で日本人コンビが決勝点",
+        "川崎颯太→佐野海舟の完璧な連係",
+        "左サイドからの爆走&中央切り込みからのミドル"
+      ],
+      "imageQuery": "Sano Kawasaki ECL assist goal",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "ヨーロッパカンファレンスリーグ、準々決勝の舞台で、日本人選手が鮮烈な一撃を放ちました。マインツの佐野海舟選手が、川崎颯太選手との連係から左サイドを爆走、中央へ切り込んで放った一撃は、ゴールの右隅に吸い込まれる圧巻のミドルシュート。このゴールがチームを勝利へと導きます。",
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "stats_comparison",
+      "label": "試合スタッツ",
+      "icon": "📊",
+      "narration": "それでは、マインツ対ストラスブールのファーストレグの試合をスタッツで振り返りましょう。試合結果は1-0でマインツの勝利。決勝点は佐野海舟選手のミドルシュートでした。相手チームのストラスブールには、アルゼンチンの期待の星、バレンティン・バルコ選手がいます。今シーズンのリーグ1でのスタッツは、出場25試合でゴール1、アシスト4、評価点7.15。市場価値は2700万ユーロと高く評価されています。キーパス38回、ビッグチャンス創出13回と攻撃的な能力が光る選手です。しかし、この日は日本人コンビの前にその牙が十分に剥けませんでした。",
+      "keyPoints": [
+        "試合結果: マインツ 1-0 ストラスブール",
+        "決勝点: 佐野海舟 (アシスト: 川崎颯太)",
+        "バルコ (相手): 25試合1G4A 評価7.15"
+      ],
+      "imageQuery": "Mainz vs Strasbourg match stats",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Valentín Barco",
+          "url": "https://www.sofascore.com/player/1127057",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "stats",
+      "statsRows": [],
+      "scriptNote": "マインツとストラスブールのファーストレグの試合結果をスタッツ情報から振り返る。",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1127057,
+        "name": "Valentín Barco",
+        "position": "M",
+        "team": "RC Strasbourg",
+        "nationality": "Argentina",
+        "dateOfBirth": "2004-07-23T00:00:00+00:00",
+        "height": 172,
+        "preferredFoot": "Left",
+        "marketValue": "€27M",
+        "contractUntil": null,
+        "leagueName": "Ligue 1",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 25,
+          "goals": 1,
+          "assists": 4,
+          "rating": 7.15,
+          "minutesPlayed": 2022,
+          "yellowCards": 5,
+          "redCards": 1,
+          "expectedGoals": 2.15,
+          "keyPasses": 38
+        },
+        "positionStats": {
+          "keyPasses": 38,
+          "successfulDribbles": 22,
+          "bigChancesCreated": 13,
+          "tackles": 52,
+          "interceptions": 13,
+          "accuratePassesPct": 86.51
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "player_profile",
+      "label": "選手プロフィール",
+      "icon": "👤",
+      "narration": "ヒーロー、佐野海舟選手のプロフィールを見ていきましょう。国籍は日本、身長176cm。今シーズンのブンデスリーガでは、出場29試合、ゴール1、アシスト1、評価点7.03を記録しています。プレー時間は2609分とほぼフル出場に近い信頼を得ており、市場価値は2600万ユーロに達しています。海外の反応でも「佐野は日本語しか話せないのに余裕でやれてるな」というコメントがありましたが、まさにその通りで、言語の壁をプレー力で完全に超越しています。サッカーは世界共通語。ボールと走り、戦術理解で意思疎通が可能な、普遍的なスポーツであることを佐野選手は体現しています。",
+      "keyPoints": [
+        "国籍: 日本, 身長: 176cm",
+        "今季ブンデス: 29試合1G1A 評価7.03",
+        "市場価値: €26M",
+        "プレー時間: 2609分 (ほぼフル出場)"
+      ],
+      "imageQuery": "Kaishu Sano Mainz 05 profile",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Kaishu Sano",
+          "url": "https://www.sofascore.com/player/1028307",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "年齢",
+          "value": "順位, 選手名, チーム, 年齢, 生年月日, 年数, 守備, 身長, 体重, 血液型, 投打, 出身地, 年俸(推定). 1, 石川 雅規, ヤクルト, 46歳, 1980/01/22, 25年, 投手, 167cm ..."
+        },
+        {
+          "label": "ポジション",
+          "value": "DFであれば、中央でプレーする選手を「センターバック」（③④）、サイドでプレーする選手は「サイドバック」（②⑤）と言います。 MFは中央でプレーする選手を「センターハーフ」（ ..."
+        },
+        {
+          "label": "身長",
+          "value": "野手（179.4cm）より投手（182.3cm）のほうが身長が高い · 左投手（180.6㎝）より右投手（183.0㎝）のほうが身長が高い · 12球団別の身長ランキングでは北海道日本ハム ..."
+        },
+        {
+          "label": "市場価値",
+          "value": "Die wertvollsten Spieler der Welt ; 1. Lamine Yamal. 右ウィンガー. 18 ; 2. Erling Haaland. センターフォワード. 25 ; 3. Kylian Mbappé. セ"
+        },
+        {
+          "label": "プロデビュー年",
+          "value": "順位, 選手名, チーム, 年数, 年齢, 生年月日, 守備, 身長, 体重, 血液型, 投打, 出身地, 年俸(推定). 1, 石川 雅規, ヤクルト, 25年, 46歳, 1980/01/22, 投手, 167cm ..."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1028307,
+        "name": "Kaishu Sano",
+        "position": "M",
+        "team": "1. FSV Mainz 05",
+        "nationality": "Japan",
+        "dateOfBirth": "2000-12-30T00:00:00+00:00",
+        "height": 176,
+        "preferredFoot": "Right",
+        "marketValue": "€26M",
+        "contractUntil": null,
+        "leagueName": "Bundesliga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 29,
+          "goals": 1,
+          "assists": 1,
+          "rating": 7.03,
+          "minutesPlayed": 2609,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 1,
+          "keyPasses": 19
+        },
+        "positionStats": {
+          "keyPasses": 19,
+          "successfulDribbles": 24,
+          "bigChancesCreated": 5,
+          "tackles": 46,
+          "interceptions": 63,
+          "accuratePassesPct": 78.47
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season_summary": "29試合 1G 1A",
+        "goals": "1点",
+        "assists": "1本",
+        "goal_assist_total": "2",
+        "appearances": "29試合",
+        "minutes_played": "2609分",
+        "goals_per90": "0.03点",
+        "ga_per90": "0.07",
+        "expected_goals": "1",
+        "key_passes": "19本",
+        "dribbles": "24回",
+        "tackles": "46回",
+        "rating": "7.03",
+        "market_value": "€26M",
+        "nationality": "Japan",
+        "height": "176cm",
+        "position": "M",
+        "team": "1. FSV Mainz 05",
+        "league": "Bundesliga 25/26"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "佐野選手の今シーズンの詳細なスタッツを深掘りします。守備的MFとしての数字が非常に印象的です。タックル成功は46回、インターセプトに至っては63回。これは高い守備位置取りと読む力の証です。パス成功率は78.47%と、攻守の切り替えの基点としても機能しています。キーパス19回、ビッグチャンス創出5回と、攻撃への関与も見逃せません。そして、そんな守備職人が、このECLの大舞台で見事なミドルシュートを決めたのです。守備的MFの得点は非常にレア。その貴重な一撃が、最も重要な場面で炸裂しました。数字が物語るのは、守備の堅実さと、ここ一番で爆発する得点力、その両方を兼ね備えた万能型MFの姿です。",
+      "keyPoints": [
+        "守備職人: タックル46回, インターセプト63回",
+        "パス成功率: 78.47%",
+        "攻撃関与: キーパス19回, ビッグチャンス創出5回",
+        "得点: レアな守備的MFのゴールを決勝点で決断"
+      ],
+      "imageQuery": "Kaishu Sano defensive stats tackles",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Kaishu Sano",
+          "url": "https://www.sofascore.com/player/1028307",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "今期成績（G+A）",
+          "value": "防御率成績一覧. 勝利. 2026/4/19 13:51. 順位, 選手名, チーム名, 勝利. 1, J.ソリアーノ, エンゼルス, 5. 2, D.マーティン, Wソックス, 3. 2, G.ウィリアムズ ..."
+        },
+        {
+          "label": "今期出場試合数",
+          "value": "セントラル・リーグ. チーム, 試合, 勝利, 敗北, 引分, 勝率, 差. ヤクルト, 143, 80, 59, 4 .576, --. DeNA, 143, 73, 68, 2 .518, 8.0. 阪 神, 143, 68, 71, "
+        },
+        {
+          "label": "今期平均評価点",
+          "value": "順位, 選手名, チーム名, QS率. 1, 山本, ドジャース, 100.0. 2, C.セール, ブレーブス, 80.0. 3, T.グラスノー, ドジャース, 75.0. 3, M.ケラー, パイレーツ, 75.0."
+        },
+        {
+          "label": "直近平均評価点",
+          "value": "順位, 選手名, チーム名, 防御率. 1, J.ソリアーノ, エンゼルス, 0.28. 2, M.ワカ, ロイヤルズ, 1.00. 3, P.メシック, ガーディアンズ, 1.05. 防御率成績一覧. 勝利."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1028307,
+        "name": "Kaishu Sano",
+        "position": "M",
+        "team": "1. FSV Mainz 05",
+        "nationality": "Japan",
+        "dateOfBirth": "2000-12-30T00:00:00+00:00",
+        "height": 176,
+        "preferredFoot": "Right",
+        "marketValue": "€26M",
+        "contractUntil": null,
+        "leagueName": "Bundesliga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 29,
+          "goals": 1,
+          "assists": 1,
+          "rating": 7.03,
+          "minutesPlayed": 2609,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 1,
+          "keyPasses": 19
+        },
+        "positionStats": {
+          "keyPasses": 19,
+          "successfulDribbles": 24,
+          "bigChancesCreated": 5,
+          "tackles": 46,
+          "interceptions": 63,
+          "accuratePassesPct": 78.47
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のサッカーファン、特にRedditではこのゴールと佐野選手のプレーに大きな興奮が巻き起こっています。多くのユーザーが「ワオ！」の連打でその驚きを表現する一方、「マジで日本人最高選手になる予感」と将来を嘱目する声も。また、「日本語しか話せないのに余裕でやれてる」というコメントは、言語の壁を軽々と超える佐野選手のサッカーセンスと適応力の高さを称えると共に、サッカーというスポーツの本質を突いています。ボールとフィールド上での意思疎通があれば、言葉は必ずしも必須ではない。佐野海舟のプレーは、まさにそのことを世界に示した一撃でした。",
+      "keyPoints": [
+        {
+          "text": "[👍12] 佐野は日本語しか話せないのに余裕でやれてるな   サッカーに言葉が必須ってなんだったの",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍11] こいつボール奪ってから自分で突破できるのがマジで凄い   来季どこ行くんだろう",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍10] わおおおおおおおおおおおおおおおおおおおおおおおおおおん                           &#128054;爺警報発令",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍9] マジで日本人最高選手になる予感",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍8] もしかして田中碧より上なんじゃないのか",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍7] ワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオ   ワオワオワアオオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍6] 市場から注目が一気に集まった中でのスーパーゴール   こいつスターになりますやん",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍5] こりゃ遠藤キャプテン怪我治ってもレギュラー取られるんじゃないか？",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍4] ひょっとしたらイジェソンより上かも   ただイガンインと比べるとまだまだ下",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍3] ゴール前のボール奪取もすげぇわ   ボランチに必要な能力が高すぎる",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍2] &gt;&gt;14   遠藤もう控えだぞ   佐野鎌田がファーストチョイス   遠藤田中がセカンドチョイス   守田か藤田が5番手争い",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] &gt;&gt;2   佐野の相手、雑魚カンファレンスリーグかよ弱",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "imageQuery": "Reddit soccer reaction Japanese player",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍12] 佐野は日本語しか話せないのに余裕でやれてるな   サッカーに言葉が必須ってなんだったの",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍11] こいつボール奪ってから自分で突破できるのがマジで凄い   来季どこ行くんだろう",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍10] わおおおおおおおおおおおおおおおおおおおおおおおおおおん                           &#128054;爺警報発令",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍9] マジで日本人最高選手になる予感",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍8] もしかして田中碧より上なんじゃないのか",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍7] ワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオ   ワオワオワアオオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオワオ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍6] 市場から注目が一気に集まった中でのスーパーゴール   こいつスターになりますやん",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍5] こりゃ遠藤キャプテン怪我治ってもレギュラー取られるんじゃないか？",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍4] ひょっとしたらイジェソンより上かも   ただイガンインと比べるとまだまだ下",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍3] ゴール前のボール奪取もすげぇわ   ボランチに必要な能力が高すぎる",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍2] &gt;&gt;14   遠藤もう控えだぞ   佐野鎌田がファーストチョイス   遠藤田中がセカンドチョイス   守田か藤田が5番手争い",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] &gt;&gt;2   佐野の相手、雑魚カンファレンスリーグかよ弱",
+            "source": "reddit",
+            "score": null
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？データが物語る佐野海舟選手の成長と、欧州の大舞台で花開いた日本人コンビの連係。今後のECL準々決勝第2戦、そして彼らの活躍から目が離せません。このチャンネルでは、今後も詳細なデータに基づいたサッカー情報をお届けします。チャンネル登録と高評価、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Subscribe like notification soccer",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "3",
+    "originalTitle": "【サッカー】ECL準々決勝第1戦　佐野海舟が川崎颯太アシストから超スーパーゴール！圧巻ミドルでマインツをECL先勝導く  [久太郎★]",
+    "generatedAt": "2026-04-19T11:11:48.116Z",
+    "mainImagePath": null
+  }
+}

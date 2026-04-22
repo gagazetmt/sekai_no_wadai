@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>型３ — データカード型プレビュー</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+.preview-wrap {
+  width: 960px;
+  height: 540px;
+  transform-origin: top left;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* ======================================================
+   スライド本体 1920×1080
+   ====================================================== */
+.slide {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  transform: scale(0.5);
+  transform-origin: top left;
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  background: #060e1c;
+}
+
+/* ── 左パネル：画像 40% ── */
+.panel-img {
+  width: 40%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.panel-img .img-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center top;
+  transition: background-image 0.3s;
+}
+/* 右端を右パネルへ自然につなぐ */
+.panel-img .img-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    transparent 55%,
+    rgba(6,14,28,0.70) 80%,
+    rgba(6,14,28,1.00) 100%
+  );
+}
+/* 上下マスク（バナー・字幕バー分） */
+.panel-img .img-vfade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(6,14,28,0.85) 0%,
+    transparent 10%,
+    transparent 75%,
+    rgba(6,14,28,0.95) 100%
+  );
+}
+
+/* 名前タグ（画像の下部に重ねる） */
+.img-name {
+  position: absolute;
+  bottom: 130px;
+  left: 0; right: 0;
+  padding: 0 40px;
+}
+.img-name .player-name {
+  font-size: 50px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 14px rgba(0,0,0,0.9);
+  line-height: 1.2;
+}
+.img-name .player-sub {
+  font-size: 26px;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-top: 6px;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.8);
+}
+
+/* ── 右パネル：データカード 60% ── */
+.panel-data {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 108px 64px 124px 40px;
+  gap: 0;
+  position: relative;
+}
+
+/* カードグリッド（2列） */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  flex: 1;
+}
+
+/* データカード */
+.data-card {
+  background: linear-gradient(135deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.2s;
+}
+/* 左上のアクセントライン */
+.data-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--accent, #f59e0b);
+  border-radius: 4px 0 0 4px;
+}
+
+/* カード内：ラベル */
+.card-label {
+  font-size: 22px;
+  font-weight: 700;
+  color: #6080b0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+/* カード内：メイン数値 */
+.card-value {
+  font-size: 72px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+/* カード内：補足テキスト */
+.card-sub {
+  font-size: 20px;
+  font-weight: 600;
+  color: #60a0d0;
+  margin-top: 2px;
+}
+
+/* ヒーローカード（1枚だけ大きく） */
+.data-card.hero {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 32px;
+  padding: 32px 40px;
+  background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04));
+  border-color: rgba(245,158,11,0.30);
+}
+.data-card.hero::before { background: #f59e0b; }
+.data-card.hero .card-value { font-size: 100px; color: #f59e0b; }
+.data-card.hero .card-label { font-size: 28px; }
+
+/* ── 上部バナー ── */
+.top-banner {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 90px;
+  background: rgba(0,0,0,0.80);
+  border-bottom: 4px solid #f59e0b;
+  display: flex;
+  align-items: center;
+  padding: 0 60px;
+  gap: 20px;
+  z-index: 20;
+}
+.banner-icon { font-size: 34px; }
+.banner-title {
+  color: #fff;
+  font-size: 34px;
+  font-weight: 900;
+}
+.banner-sub {
+  color: #f59e0b;
+  font-size: 22px;
+  font-weight: 700;
+  margin-left: auto;
+  letter-spacing: 1px;
+}
+
+/* ── 字幕バー ── */
+.sub-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 110px;
+  background: rgba(0,0,0,0.90);
+  border-top: 3px solid rgba(245,158,11,0.50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.sub-bar .sub-text {
+  color: #fff;
+  font-size: 46px;
+  font-weight: 800;
+  text-align: center;
+  padding: 0 80px;
+  line-height: 1.4;
+}
+
+/* ── 編集UI ── */
+.editor {
+  width: 960px;
+  margin-top: 24px;
+  background: #1a1f35;
+  border-radius: 12px;
+  padding: 20px;
+  color: #c0d0f0;
+  font-size: 13px;
+}
+.editor h3 { color: #f59e0b; margin-bottom: 12px; font-size: 14px; }
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.editor-section { background: #0d1220; border-radius: 8px; padding: 12px; }
+.editor-section h4 { color: #60a0d0; margin-bottom: 8px; font-size: 12px; }
+.row-editor { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; }
+.row-editor label { width: 72px; color: #6070a0; flex-shrink: 0; font-size: 12px; }
+.row-editor input, .row-editor select {
+  flex: 1;
+  background: #1a2040; border: 1px solid #2a3560;
+  color: #e0e8ff; padding: 4px 8px;
+  border-radius: 4px; font-size: 12px;
+}
+.btn-update {
+  margin-top: 12px; padding: 8px 20px;
+  background: #f59e0b; color: #000;
+  border: none; border-radius: 6px;
+  font-weight: 700; cursor: pointer; font-size: 13px;
+}
+.accent-dot {
+  display: inline-block;
+  width: 14px; height: 14px; border-radius: 50%;
+  vertical-align: middle; margin-right: 4px;
+}
+</style>
+</head>
+<body>
+
+<!-- ── プレビュー ── -->
+<div class="preview-wrap">
+  <div class="slide" id="slide">
+
+    <!-- 上部バナー -->
+    <div class="top-banner">
+      <div class="banner-icon" id="bannerIcon">🏃</div>
+      <div class="banner-title" id="bannerTitle">選手プロフィール</div>
+      <div class="banner-sub" id="bannerSub">2025-26シーズン</div>
+    </div>
+
+    <!-- 左：画像パネル -->
+    <div class="panel-img">
+      <div class="img-bg" id="imgBg" style="background-image:url('stock/3-1.jpg')"></div>
+      <div class="img-fade"></div>
+      <div class="img-vfade"></div>
+      <div class="img-name">
+        <div class="player-name" id="playerName">Arda Güler</div>
+        <div class="player-sub"  id="playerSub">Real Madrid | トルコ代表</div>
+      </div>
+    </div>
+
+    <!-- 右：データカードパネル -->
+    <div class="panel-data">
+      <div class="card-grid" id="cardGrid">
+        <!-- JS が生成 -->
+      </div>
+    </div>
+
+    <!-- 字幕バー -->
+    <div class="sub-bar">
+      <div class="sub-text" id="subText">
+        22歳の天才が刻んだ数字—欧州最高峰での輝きをデータで証明する
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ── 編集UI ── -->
+<div class="editor">
+  <h3>📝 スライドデータ編集</h3>
+  <div class="editor-grid">
+
+    <!-- バナー・基本情報 -->
+    <div class="editor-section">
+      <h4>🏷 バナー</h4>
+      <div class="row-editor"><label>アイコン</label><input id="eBannerIcon" value="🏃"></div>
+      <div class="row-editor"><label>タイトル</label><input id="eBannerTitle" value="選手プロフィール"></div>
+      <div class="row-editor"><label>サブ</label><input id="eBannerSub" value="2025-26シーズン"></div>
+    </div>
+
+    <!-- 選手情報 -->
+    <div class="editor-section">
+      <h4>👤 人物情報</h4>
+      <div class="row-editor"><label>名前</label><input id="ePlayerName" value="Arda Güler"></div>
+      <div class="row-editor"><label>サブ</label><input id="ePlayerSub" value="Real Madrid | トルコ代表"></div>
+      <div class="row-editor"><label>画像URL</label><input id="eImgUrl" value="stock/3-1.jpg"></div>
+    </div>
+
+    <!-- カードデータ -->
+    <div class="editor-section" style="grid-column:1/-1">
+      <h4>📊 データカード（ラベル / 値 / 補足 / アクセント色 / ヒーローカード？）</h4>
+      <div id="cardEditors"></div>
+      <button onclick="addCard()" style="margin-top:8px;padding:4px 12px;background:#2a3560;color:#9bb5e0;border:none;border-radius:4px;cursor:pointer;font-size:12px">＋ カード追加</button>
+    </div>
+
+    <!-- 字幕 -->
+    <div class="editor-section" style="grid-column:1/-1">
+      <h4>💬 字幕テキスト</h4>
+      <div class="row-editor"><label>字幕</label><input id="eSubText" value="22歳の天才が刻んだ数字—欧州最高峰での輝きをデータで証明する"></div>
+    </div>
+
+  </div>
+  <button class="btn-update" onclick="applyEdit()">▶ プレビューに反映</button>
+</div>
+
+
+<script>
+// ── デフォルトカードデータ ────────────────────────────────────
+let cards = [
+  { label: '評価点',      value: '8.70', sub: '今試合 最高評価',    accent: '#f59e0b', hero: true  },
+  { label: 'ゴール',      value: '2',    sub: '開始1分 & 29分',    accent: '#3b82f6', hero: false },
+  { label: 'アシスト',    value: '0',    sub: 'チャンス創出 3回',   accent: '#8b5cf6', hero: false },
+  { label: '今季CL',      value: '4G',   sub: '出場7試合',          accent: '#10b981', hero: false },
+  { label: 'プレー時間',  value: '62\'', sub: '62分でベンチへ',     accent: '#ef4444', hero: false },
+];
+
+const ACCENT_OPTIONS = [
+  { label: '橙', value: '#f59e0b' },
+  { label: '青', value: '#3b82f6' },
+  { label: '紫', value: '#8b5cf6' },
+  { label: '緑', value: '#10b981' },
+  { label: '赤', value: '#ef4444' },
+  { label: '水', value: '#06b6d4' },
+];
+
+// ── カードHTML生成 ────────────────────────────────────────────
+function buildCards(cards) {
+  return cards.map(c => `
+    <div class="data-card ${c.hero ? 'hero' : ''}" style="--accent:${c.accent}">
+      <div class="card-label">${c.label}</div>
+      <div class="card-value">${c.value}</div>
+      ${c.sub ? `<div class="card-sub">${c.sub}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ── 行エディタ生成 ─────────────────────────────────────────────
+function buildCardEditors(cards) {
+  const accentOpts = ACCENT_OPTIONS.map(o =>
+    `<option value="${o.value}">${o.label}</option>`
+  ).join('');
+
+  return cards.map((c, i) => `
+    <div class="row-editor" id="ce_${i}">
+      <label style="color:#60a0d0;width:20px;flex-shrink:0">${i+1}</label>
+      <input style="flex:1.5" placeholder="ラベル"  value="${c.label}" oninput="cards[${i}].label=this.value">
+      <input style="flex:1"   placeholder="値"      value="${c.value}" oninput="cards[${i}].value=this.value">
+      <input style="flex:1.5" placeholder="補足"    value="${c.sub}"   oninput="cards[${i}].sub=this.value">
+      <select style="flex:0.7" onchange="cards[${i}].accent=this.value">
+        ${ACCENT_OPTIONS.map(o =>
+          `<option value="${o.value}" ${o.value===c.accent?'selected':''}>${o.label}</option>`
+        ).join('')}
+      </select>
+      <label style="width:auto;color:#9bb5e0;gap:4px;flex-shrink:0">
+        <input type="checkbox" ${c.hero?'checked':''} onchange="cards[${i}].hero=this.checked"> Hero
+      </label>
+      <button onclick="removeCard(${i})" style="background:#3a1010;color:#e07070;border:none;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px">✕</button>
+    </div>`).join('');
+}
+
+function addCard() {
+  cards.push({ label: '項目', value: '—', sub: '', accent: '#3b82f6', hero: false });
+  refresh();
+}
+function removeCard(i) {
+  cards.splice(i, 1);
+  refresh();
+}
+
+// ── プレビュー更新 ─────────────────────────────────────────────
+function refresh() {
+  document.getElementById('cardGrid').innerHTML    = buildCards(cards);
+  document.getElementById('cardEditors').innerHTML = buildCardEditors(cards);
+}
+
+// ── 編集反映 ──────────────────────────────────────────────────
+function applyEdit() {
+  document.getElementById('bannerIcon').textContent  = document.getElementById('eBannerIcon').value;
+  document.getElementById('bannerTitle').textContent = document.getElementById('eBannerTitle').value;
+  document.getElementById('bannerSub').textContent   = document.getElementById('eBannerSub').value;
+  document.getElementById('playerName').textContent  = document.getElementById('ePlayerName').value;
+  document.getElementById('playerSub').textContent   = document.getElementById('ePlayerSub').value;
+  document.getElementById('imgBg').style.backgroundImage = `url('${document.getElementById('eImgUrl').value}')`;
+  document.getElementById('subText').textContent     = document.getElementById('eSubText').value;
+  document.getElementById('cardGrid').innerHTML      = buildCards(cards);
+}
+
+window.onload = () => refresh();
+</script>
+</body>
+</html>

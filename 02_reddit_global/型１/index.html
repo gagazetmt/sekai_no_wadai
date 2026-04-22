@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>型１ — データカード型プレビュー</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  font-family: sans-serif;
+}
+
+.preview-wrap {
+  width: 960px;
+  height: 540px;
+  transform-origin: top left;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* ======================================================
+   スライド本体 1920×1080
+   ====================================================== */
+.slide {
+  width: 1920px;
+  height: 1080px;
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  transform: scale(0.5);
+  transform-origin: top left;
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  background: #060e1c;
+  color: #fff;
+}
+
+/* --- レイアウト：左 (42%) / 右 (58%) --- */
+.panel-left {
+  width: 42%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 60px;
+  gap: 40px;
+  position: relative;
+}
+.panel-right {
+  width: 58%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 60px 60px 60px 20px;
+  gap: 30px;
+  position: relative;
+}
+
+/* --- 左側：タイトルと大画像 --- */
+.main-title {
+  height: 180px;
+  font-size: 72px;
+  font-weight: 900;
+  border-left: 12px solid #f59e0b;
+  padding-left: 40px;
+  display: flex;
+  align-items: center;
+  background: linear-gradient(to right, rgba(245,158,11,0.15), transparent);
+}
+.main-img-frame {
+  flex: 1;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 30px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.3);
+}
+.main-img-frame img { width: 100%; height: 100%; object-fit: cover; }
+
+/* --- 右側上部：ミニ画像2枚 --- */
+.mini-grid {
+  height: 35%;
+  display: flex;
+  gap: 30px;
+}
+.mini-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.mini-label {
+  height: 54px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  font-weight: 800;
+  color: #6080b0;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.mini-img-frame {
+  flex: 1;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.3);
+}
+.mini-img-frame img { width: 100%; height: 100%; object-fit: cover; }
+
+/* --- 右側下部：データ行 --- */
+.data-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.data-row {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+}
+.row-label {
+  width: 35%;
+  background: rgba(0,0,0,0.4);
+  border-left: 6px solid #f59e0b;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  padding-left: 28px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #6080b0;
+}
+.row-value {
+  flex: 1;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  padding-left: 35px;
+  font-size: 46px;
+  font-weight: 900;
+  color: #fff;
+}
+
+/* ======================================================
+   編集UI (Matching Type 3)
+   ====================================================== */
+.editor {
+  width: 960px;
+  margin-top: 24px;
+  background: #1a1f35;
+  border-radius: 12px;
+  padding: 20px;
+  color: #c0d0f0;
+  font-size: 13px;
+}
+.editor h3 { color: #f59e0b; margin-bottom: 12px; font-size: 14px; }
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.editor-section { background: #0d1220; border-radius: 8px; padding: 12px; }
+.editor-section h4 { color: #60a0d0; margin-bottom: 8px; font-size: 12px; }
+.row-editor { display: flex; gap: 8px; margin-bottom: 6px; align-items: center; }
+.row-editor label { width: 80px; color: #6070a0; flex-shrink: 0; font-size: 12px; }
+.row-editor input {
+  flex: 1;
+  background: #1a2040; border: 1px solid #2a3560;
+  color: #e0e8ff; padding: 4px 8px;
+  border-radius: 4px; font-size: 12px;
+}
+.btn-update {
+  margin-top: 12px; padding: 8px 20px;
+  background: #f59e0b; color: #000;
+  border: none; border-radius: 6px;
+  font-weight: 700; cursor: pointer; font-size: 13px;
+}
+</style>
+</head>
+<body>
+
+<!-- ── プレビュー ── -->
+<div class="preview-wrap">
+  <div class="slide" id="slide">
+    
+    <!-- 左パネル -->
+    <div class="panel-left">
+      <div class="main-title" id="mainTitle">MATCH PREVIEW</div>
+      <div class="main-img-frame">
+        <img id="mainImg" src="stock/3-1.jpg">
+      </div>
+    </div>
+
+    <!-- 右パネル -->
+    <div class="panel-right">
+      <!-- ミニ画像 -->
+      <div class="mini-grid">
+        <div class="mini-card">
+          <div class="mini-label" id="label1">HOME</div>
+          <div class="mini-img-frame"><img id="img1" src="stock/3-1.jpg"></div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-label" id="label2">AWAY</div>
+          <div class="mini-img-frame"><img id="img2" src="stock/3-2.jpg"></div>
+        </div>
+      </div>
+
+      <!-- データ行 -->
+      <div class="data-list" id="dataList">
+        <!-- JS generates rows -->
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 編集UI ── -->
+<div class="editor">
+  <h3>📝 スライドデータ編集</h3>
+  <div class="editor-grid">
+    <div class="editor-section">
+      <h4>👤 基本情報</h4>
+      <div class="row-editor"><label>タイトル</label><input id="eMainTitle" value="MATCH PREVIEW"></div>
+      <div class="row-editor"><label>メイン画像</label><input id="eMainImg" value="stock/3-1.jpg"></div>
+    </div>
+    <div class="editor-section">
+      <h4>🖼 ミニ画像</h4>
+      <div class="row-editor"><label>ラベル1</label><input id="eLabel1" value="HOME"></div>
+      <div class="row-editor"><label>画像1</label><input id="eImg1" value="stock/3-1.jpg"></div>
+      <div class="row-editor"><label>ラベル2</label><input id="eLabel2" value="AWAY"></div>
+      <div class="row-editor"><label>画像2</label><input id="eImg2" value="stock/3-2.jpg"></div>
+    </div>
+    <div class="editor-section" style="grid-column: 1 / -1">
+      <h4>📊 データ項目 (ラベル / 値)</h4>
+      <div id="dataEditors"></div>
+    </div>
+  </div>
+  <button class="btn-update" onclick="applyEdit()">▶ プレビューに反映</button>
+</div>
+
+<script>
+let dataItems = [
+  { label: 'ATTACK', value: '88' },
+  { label: 'DEFENSE', value: '76' },
+  { label: 'MIDFIELD', value: '82' },
+  { label: 'SPEED', value: '91' }
+];
+
+function refresh() {
+  const container = document.getElementById('dataList');
+  container.innerHTML = dataItems.map(item => `
+    <div class="data-row">
+      <div class="row-label">${item.label}</div>
+      <div class="row-value">${item.value}</div>
+    </div>
+  `).join('');
+
+  const editorContainer = document.getElementById('dataEditors');
+  editorContainer.innerHTML = dataItems.map((item, i) => `
+    <div class="row-editor">
+      <label>項目 ${i+1}</label>
+      <input value="${item.label}" oninput="dataItems[${i}].label=this.value">
+      <input value="${item.value}" oninput="dataItems[${i}].value=this.value">
+    </div>
+  `).join('');
+}
+
+function applyEdit() {
+  document.getElementById('mainTitle').textContent = document.getElementById('eMainTitle').value;
+  document.getElementById('mainImg').src = document.getElementById('eMainImg').value;
+  document.getElementById('label1').textContent = document.getElementById('eLabel1').value;
+  document.getElementById('img1').src = document.getElementById('eImg1').value;
+  document.getElementById('label2').textContent = document.getElementById('eLabel2').value;
+  document.getElementById('img2').src = document.getElementById('eImg2').value;
+  refresh();
+}
+
+window.onload = refresh;
+</script>
+</body>
+</html>

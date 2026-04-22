@@ -1,0 +1,467 @@
+{
+  "youtubeTitle": "バイエルンvsレアル大乱戦！エムバペ弾も物議…勝敗を分けたカマヴィンガの一瞬【速報!サッカーニュース】",
+  "hashtagsText": "#サッカー #バイエルンミュンヘン #レアルマドリード #エムバペ #カマヴィンガ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "速報！サッカーニュースへようこそ。今夜はチャンピオンズリーグ準々決勝、バイエルン・ミュンヘン対レアル・マドリードの大激戦を徹底解説！エムバペのゴールだけでは語り尽くせない、物議と興奮に満ちた一戦の舞台裏に迫ります。",
+      "keyPoints": [],
+      "imageQuery": "Bayern Munich Real Madrid Champions League",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "バイエルンvsレアル大乱戦",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "チャンネル登録と高評価、よろしくお願いします。さあ、今夜も熱い試合の舞台裏を覗いていきましょう。バイエルン・ミュンヘン対レアル・マドリード。この一戦は、エンバペのゴールだけでは語り尽くせない、物議と興奮に満ちた大乱戦でした。早速、海外サッカー掲示板の反応を深掘りします。",
+      "keyPoints": [
+        "バイエルン・ミュンヘン vs レアル・マドリードのチャンピオンズリーグ準々決勝",
+        "エムバペのゴールを含む大乱戦",
+        "物議と興奮に満ちた試合内容"
+      ],
+      "imageQuery": "Bayern Munich Real Madrid quarter final",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "story",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "チャンネル登録と高評価、よろしくお願いします。さあ、今夜も熱い試合の舞台裏を覗いていきましょう。バイエルン・ミュンヘン対レアル・マドリード。この一戦は、エンバペのゴールだけでは語り尽くせない、物議と興奮に満ちた大乱戦でした。早速、海外サッカー掲示板の反応を深掘りします。",
+        "source": "existing"
+      }
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "試合はまさに目が離せない展開に。レアルは前半だけで3ゴールを奪い、そのうちの1つがキリアン・エムバペによる42分のゴールでした。このゴールでスコアはバイエルン2、レアル3。レアルが逆転に成功した瞬間です。しかし、このゴールの直前に大きな物議を醸すプレーがあったと言われています。",
+      "keyPoints": [
+        "前半だけで合計5ゴールの大乱戦",
+        "エムバペが42分にゴールを決めレアルが3-2で逆転",
+        "ゴール直前に物議を醸すプレーがあったとされる"
+      ],
+      "imageQuery": "Kylian Mbappe goal 42 minute",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "GOAL! Mbappe gets Madrid back in it - The Athletic",
+          "url": "https://www.nytimes.com/athletic/live-blogs/bayern-munich-vs-real-madrid-live-updates-champions-league-score-result/0a9rKBvUokd8/jfm9nPdVP3Uv/",
+          "date": "7 hours ago"
+        },
+        {
+          "label": "Kylian Mbappe made a goal within 42' minutes. Assisted by Vini Jr ...",
+          "url": "https://www.facebook.com/fbm3030/posts/kylian-mbappe-made-a-goal-within-42-minutes-assisted-by-vini-jrfootballmemer-rea/826967680454095/",
+          "date": "9 hours ago"
+        },
+        {
+          "label": "Real madrid vs Bayern Munich 3-2 & All goal highlight - YouTube",
+          "url": "https://www.youtube.com/watch?v=JPajFphsBcA",
+          "date": "10 hours ago"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "バイエルンの得点者と得点時間",
+          "value": "Kylian Mbappe goal today | Real madrid vs Bayern Munich 3-2 & All goal highlight | Champions League."
+        },
+        {
+          "label": "マドリーの得点者と得点時間",
+          "value": "Kylian Mbappe goal today | Real madrid vs Bayern Munich 3-2 & All goal highlight | Champions League."
+        },
+        {
+          "label": "退場者と退場時間",
+          "value": "Kylian Mbappe made a goal within 42' minutes. Assisted by Vini Jr. #FootballMemer #realmadrid 3-2 #BayernMunich #champio"
+        }
+      ],
+      "scriptNote": "得点者と得点時間について記載",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "match_key_moment",
+        "query": "Kylian Mbappe goal 42 minute Real Madrid Bayern Munich",
+        "organic": [
+          {
+            "title": "GOAL! Mbappe gets Madrid back in it - The Athletic",
+            "snippet": "42' Bayern Munich 2-2 Real Madrid (4-3 agg.) It is a brilliant run across by Luis Diaz that makes that goal possible. It caused the second of ...",
+            "link": "https://www.nytimes.com/athletic/live-blogs/bayern-munich-vs-real-madrid-live-updates-champions-league-score-result/0a9rKBvUokd8/jfm9nPdVP3Uv/",
+            "date": "7 hours ago"
+          },
+          {
+            "title": "Kylian Mbappe made a goal within 42' minutes. Assisted by Vini Jr ...",
+            "snippet": "Kylian Mbappe made a goal within 42' minutes. Assisted by Vini Jr. #FootballMemer #realmadrid 3-2 #BayernMunich #championsleague.",
+            "link": "https://www.facebook.com/fbm3030/posts/kylian-mbappe-made-a-goal-within-42-minutes-assisted-by-vini-jrfootballmemer-rea/826967680454095/",
+            "date": "9 hours ago"
+          },
+          {
+            "title": "Real madrid vs Bayern Munich 3-2 & All goal highlight - YouTube",
+            "snippet": "Kylian Mbappe goal today | Real madrid vs Bayern Munich 3-2 & All goal highlight | Champions League. 53 views · 18 minutes ago ...more. SR ...",
+            "link": "https://www.youtube.com/watch?v=JPajFphsBcA",
+            "date": "10 hours ago"
+          },
+          {
+            "title": "REAL MADRID AND BAYERN MUNICH JUST WENT BAND FOR ...",
+            "snippet": "Antonio Rudiger, Real Madrid vs Bayern Munich, Kylian Mbappe goal, UCL highlights, football banter, Madrid post-match. ​Hashtags ...",
+            "link": "https://www.instagram.com/reel/DXKux3NkUL_/",
+            "date": "5 hours ago"
+          },
+          {
+            "title": "Kylian Mbappe finishes off CRAZY first half in Bayern Munich vs ...",
+            "snippet": "The French forward made no mistake in finishing off from close range, giving Real Madrid a 3-2 lead and tying the quarterfinal 4-4 on aggregate!",
+            "link": "https://tribuna.com/en/blogs/kylian-mbappe-finishes-of-crazy-first-half-in-bayern-munich/",
+            "date": "10 hours ago"
+          },
+          {
+            "title": "REAL MADRID'S SEASON IS OVER AFTER BAYERN MUNICH ...",
+            "snippet": "1015 likes, 55 comments - guap.motion on April 15, 2026: \"REAL MADRID'S SEASON IS OVER AFTER BAYERN MUNICH mbappe goal today Olise goal ...",
+            "link": "https://www.instagram.com/reel/DXK-r9UDDMT/",
+            "date": "6 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [
+          {
+            "title": "Luis Diaz and Michael Olise lead Bayern Munich victory over Real Madrid in the 2025-26 Champions League Qua...",
+            "link": "https://worldsoccertalk.com/news/bayern-vs-real-madrid-live-updates-minute-by-minute-coverage-of-the-2025-26-champions-league-quarterfinals-second-leg/",
+            "source": "World Soccer Talk",
+            "date": "8 hours ago",
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ83UL0YwGgU-eZASgw0TiB3FVWEBcUfrRjB8kCvLr5YWLSt1ylaZE_GPNSvQ&s"
+          },
+          {
+            "title": "Historic start to the game",
+            "link": "https://www.nytimes.com/athletic/live-blogs/bayern-munich-vs-real-madrid-live-updates-champions-league-score-result/0a9rKBvUokd8/MXilyrX4ODLW/",
+            "source": "The New York Times",
+            "date": "10 hours ago",
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS72Nhx-z3wuU0VVB_2jSdHZWmnaBOumbr6_59bDL3bDlUpHhVv0ZJDPZkaOg&s"
+          },
+          {
+            "title": "GOAL! Mbappe gets Madrid back in it",
+            "link": "https://www.nytimes.com/athletic/live-blogs/bayern-munich-vs-real-madrid-live-updates-champions-league-score-result/0a9rKBvUokd8/jfm9nPdVP3Uv/",
+            "source": "The New York Times",
+            "date": "7 hours ago",
+            "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDCrH6BLRSzC0Zwf0WZ1zYzbkbmWzzXZjtdgDtOR47Nw0vjOdnDC-Hl0GgHA&s"
+          }
+        ],
+        "articleContent": "[出典: https://www.nytimes.com/athletic/live-blogs/bayern-munich-vs-real-madrid-live-updates-champions-league-score-result/0a9rKBvUokd8/jfm9nPdVP3Uv/]\nGOAL! Mbappe gets Madrid back in it - The Athletic UCL Quarter-Finals Changes at Real? Bayern Win Thriller Arsenal Squeak Through Kane Hits 50 SKIP ADVERTISEMENT Advertisement UEFA Champions League, Quarter-final - Leg 2 Bayern Munich 4 Wed Apr 15 Full Time 3 FCB wins 6 - 4 on aggregate Real Madrid A. Pavlović 6&#x27; H. Kane 38&#x27; L. Díaz 89&#x27; M. Olise 90&#x27;+4&#x27; 2.14 xG 2.25 A. Güler 1&#x27; A. Güler 29&#x27; K. Mbappé 42&#x27; E. Camavinga 86&#x27; A. Güler 90&#x27;+5&#x27; Match Live Blog Discuss Timeline Bayern Munich beat Real Madrid to book Champions League semi-final place: Live updates and reaction The two European giants traded seven goals and a red card as Vincent Kompany’s men won 6-4 on aggregate The Athletic Live Team April 15, 2026 at 6:45 PM EDT Bayern Munich will face Paris-Saint Germain the semi-final. Getty Images 69 New Updates Ed Mackey · Senior Editor, Live Bayern Munich 4-3 Real Madrid (6-4 agg.) — result Bayern Munich are heading for the Champions League semi-finals after beating Real Madrid 6-4 on aggregate. An 86th-minute red card for substitute Eduardo Camavinga preceded two late Bayern goals to eliminate the record winners. Luis Diaz and Michael Olise got the goals in the closing stages to set up a semi-final between Vincent Kompany’s men and Paris Saint-Germain. Until the red card, it had been a much-improved Madrid performance as they scored three times in the first half, twice through Arda Guler and once through Kylian Mbappe. But t"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のファンたちもこの試合に大興奮、そして大きな疑問を抱いていました。『これは史上に残る名勝負だ』『一体何が起きてるんだ？』といった興奮の声がある一方で、多くのコメントが集中したのは、エムバペのゴール前のプレー。『リュディガーがボールから遠く離れたスタニシッチをファウル』『ゴールの前にファウルがあるの？？』と、審判の判定を疑問視する声が相次ぎました。『バイエルン選手はぶっ叩けるが、マドリードのユニフォームに息を吹きかけるだけでもファウルかよ』という皮肉も飛び出すほど。",
+      "keyPoints": [
+        "「史上に残る名勝負」と興奮の声",
+        "エムバペのゴール前のリュディガーのプレーに疑問の声集中",
+        "審判の判定を巡り物議醸成"
+      ],
+      "imageQuery": "Rudiger foul Stanisic reaction",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍1748] This is an all-time classic ",
+          "[👍1350] Wtf is happening 😭",
+          "[👍909] What a game fuck me",
+          "[👍682] Moment of silence for anyone watching Sporting arsenal ",
+          "[👍638] You can clatter Bayern players but breathe on a Madrid shirt and it’s a foul lol",
+          "[👍562] This is an all timer already ",
+          "[👍392] What a fucking game",
+          "[👍392] So Rudiger is just allowed to do whatever? Clear kick in the shin well after the ball is gone right before this. ",
+          "[👍361] Rudiger just booted Stanisic off the ball before this lmao\n\nMadrid hall pass",
+          "[👍334] There’s a foul before the goal????",
+          "[👍329] Yo Rudiger fouled Stanisic without the ball being even near. Wtf?",
+          "[👍290] wow this game…..",
+          "[👍281] Foul on stanisic?",
+          "[👍253] That foul by Rudiger in the build up is insane ",
+          "[👍235] I'm exhausted what the hell is this game",
+          "[👍228] Rudiger just getting away with that?",
+          "[👍207] Referee gotta be smoking something ",
+          "[👍154] so what about of the foul on Stanisic???",
+          "[👍137] 5 goals in the 1st half. Who's choosing to watch Arsenal Sporting?",
+          "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "これは史上に残る名勝負だ",
+          "一体何が起きてるんだ？\n笑っちゃうよ、本当に",
+          "なんて試合だ、ちくしょう",
+          "スポルティング対アーセナルを\n見てる人たちに黙祷を捧げよう",
+          "もう時代に残る試合だよ",
+          "なんてちくしょうな試合だ\n本当に",
+          "疲れたよ、この試合は一体何だ？",
+          "バイエルン選手はぶっ叩けるが",
+          "マドリードのユニフォームに\n息を吹きかけるだけでもファウルかよ笑",
+          "リュディガーは何をしても許されるの？",
+          "ボールが消えた後に明らかに\nスネを蹴ってるだろ、この直前に",
+          "ゴールの前にファウルがあるの？？",
+          "リュディガーがボールから\n遠く離れたスタニシッチをファウル",
+          "ビルドアップでのリュディガーの\nファウルは狂ってる"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "勝敗を分けたカマヴィンガについて",
+      "icon": "📈",
+      "narration": "では、この試合の本当の勝敗を分けた瞬間はどこだったのでしょうか？データを深掘りすると、一人の選手の名前が浮かび上がります。エドゥアルド・カマヴィンガです。試合終盤、86分にカマヴィンガは一瞬の判断ミスからレッドカードを受けて退場。この退場が試合の流れを一変させました。ゴールドットコムの試合後評価でも、『カマヴィンガ、いったい何をしているんだ？』と厳しく指摘。この退場をきっかけに、バイエルンが終盤に2ゴールを奪い、試合をひっくり返したのです。スペイン紙『AS』によれば、この試合前からカマヴィンガのプレーにはチーム内で疑念が持たれていたとも報じられています。",
+      "keyPoints": [
+        "86分、カマヴィンガがレッドカードで退場",
+        "この退場が試合の流れを決定づける",
+        "退場後、バイエルンが2ゴールを奪い逆転勝利"
+      ],
+      "imageQuery": "Eduardo Camavinga red card",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "「彼なら、それを認めるだけの度量があるかもしれない ... - Goal.com",
+          "url": "https://www.goal.com/jp/%E3%83%AA%E3%82%B9%E3%83%88/%E5%BD%BC%E3%81%AA%E3%82%89-%E3%81%9D%E3%82%8C%E3%82%92%E8%AA%8D%E3%82%81%E3%82%8B%E3%81%9F%E3%82%99%E3%81%91%E3%81%AE%E5%BA%A6%E9%87%8F%E3%81%8B%E3%82%99%E3%81%82%E3%82%8B%E3%81%8B%E3%82%82%E3%81%97%E3%82%8C%E3%81%AA%E3%81%84-%E3%83%8F%E3%82%99%E3%82%A4%E3%82%A8%E3%83%AB%E3%83%B3%E3%81%AE%E3%82%B9%E3%82%BF%E3%83%BC%E9%81%B8%E6%89%8B%E3%83%A8%E3%82%B7%E3%83%83%E3%83%95%E3%82%9A-%E3%82%B9%E3%82%BF%E3%83%8B%E3%82%B7%E3%83%83%E3%83%81%E3%81%8B%E3%82%99-%E3%83%AC%E3%82%A2%E3%83%AB-%E3%83%9E%E3%83%88%E3%82%99%E3%83%AA%E3%83%BC%E3%83%88%E3%82%99%E3%81%AE%E3%82%A2%E3%83%B3%E3%83%88%E3%83%8B%E3%82%AA-%E3%83%AA%E3%83%A5%E3%83%86%E3%82%99%E3%82%A3%E3%82%AB%E3%82%99%E3%83%BC%E3%82%92%E5%8E%B3%E3%81%97%E3%81%8F%E6%89%B9%E5%88%A4%E3%81%97%E3%81%9F/blt11724d8caf0f0942",
+          "date": "2026-04-16",
+          "query": "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果"
+        },
+        {
+          "label": "2024-25レアル・マドリー選手評論-中間報告-｜or - note",
+          "url": "https://note.com/kitto_my_turn/n/nba6dd06977fa",
+          "date": "2026-04-16",
+          "query": "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果"
+        },
+        {
+          "label": "キリアン・ムバッペのレアル・マドリード：スタッツのためだけの ...",
+          "url": "https://www.reddit.com/r/realmadrid/comments/1q6234x/kylian_mbapp%C3%A9_at_real_madrid_stat_padder_or/?tl=ja",
+          "date": "2026-04-16",
+          "query": "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果"
+        },
+        {
+          "label": "Real Madrid player ratings vs. Bayern Munich: Eduardo Camavinga ...",
+          "url": "https://www.goal.com/en-ca/lists/real-madrid-player-ratings-vs-bayern-munich-eduardo-camavinga/blt66dc1f16168aa97a",
+          "date": "2026-04-16",
+          "query": "Kamavinga decisive goal 2023-2024 Champions League match analysis"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "選手の今期の成績",
+          "value": "正直に言うと、シャビ監督の下での私たちの勝ち点は、皆さんが思っているほど悪くはありません。昨年とほぼ同じくらいです。そして、現在もCLグループ ..."
+        },
+        {
+          "label": "今期の平均レーディング",
+          "value": "（データ取得失敗）"
+        },
+        {
+          "label": "退場回数",
+          "value": "そのまま合計スコア4-6で敗退が決まっている。 バイエルンのFKを遅延させて2枚目のカードを受けたカマヴィンガについてアントニオ・リュディガーは「話さないほうがいいだ ..."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "userQuery": "勝敗を分けたカマヴィンガについて",
+        "queries": [
+          "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果",
+          "Kamavinga decisive goal 2023-2024 Champions League match analysis",
+          "Camavinga game-winning performance Real Madrid 2024 La Liga highlights"
+        ],
+        "results": [
+          {
+            "query": "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果",
+            "title": "「彼なら、それを認めるだけの度量があるかもしれない ... - Goal.com",
+            "snippet": "レアルの選手たちは試合後も怒りをおさえきれず、その判定が勝敗を分けたと主張した。 「審判は前にイエローカードを出したことを忘れていたのではないか ...",
+            "link": "https://www.goal.com/jp/%E3%83%AA%E3%82%B9%E3%83%88/%E5%BD%BC%E3%81%AA%E3%82%89-%E3%81%9D%E3%82%8C%E3%82%92%E8%AA%8D%E3%82%81%E3%82%8B%E3%81%9F%E3%82%99%E3%81%91%E3%81%AE%E5%BA%A6%E9%87%8F%E3%81%8B%E3%82%99%E3%81%82%E3%82%8B%E3%81%8B%E3%82%82%E3%81%97%E3%82%8C%E3%81%AA%E3%81%84-%E3%83%8F%E3%82%99%E3%82%A4%E3%82%A8%E3%83%AB%E3%83%B3%E3%81%AE%E3%82%B9%E3%82%BF%E3%83%BC%E9%81%B8%E6%89%8B%E3%83%A8%E3%82%B7%E3%83%83%E3%83%95%E3%82%9A-%E3%82%B9%E3%82%BF%E3%83%8B%E3%82%B7%E3%83%83%E3%83%81%E3%81%8B%E3%82%99-%E3%83%AC%E3%82%A2%E3%83%AB-%E3%83%9E%E3%83%88%E3%82%99%E3%83%AA%E3%83%BC%E3%83%88%E3%82%99%E3%81%AE%E3%82%A2%E3%83%B3%E3%83%88%E3%83%8B%E3%82%AA-%E3%83%AA%E3%83%A5%E3%83%86%E3%82%99%E3%82%A3%E3%82%AB%E3%82%99%E3%83%BC%E3%82%92%E5%8E%B3%E3%81%97%E3%81%8F%E6%89%B9%E5%88%A4%E3%81%97%E3%81%9F/blt11724d8caf0f0942"
+          },
+          {
+            "query": "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果",
+            "title": "2024-25レアル・マドリー選手評論-中間報告-｜or - note",
+            "snippet": "12月のヘタフェ戦ではCK時に相手のニョムにちょっかいをかけていた結果、まんまとPKを誘う、してやったりなプレーも。 ミドルシュートはこのまま決め ...",
+            "link": "https://note.com/kitto_my_turn/n/nba6dd06977fa"
+          },
+          {
+            "query": "2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果",
+            "title": "キリアン・ムバッペのレアル・マドリード：スタッツのためだけの ...",
+            "snippet": "ムバッペが出場した83試合の中で、彼が真にスタッツを稼いだ試合は、昨シーズンのラ・リーガでエスパニョールに対して行われたホームゲームだけでした。",
+            "link": "https://www.reddit.com/r/realmadrid/comments/1q6234x/kylian_mbapp%C3%A9_at_real_madrid_stat_padder_or/?tl=ja"
+          },
+          {
+            "query": "Kamavinga decisive goal 2023-2024 Champions League match analysis",
+            "title": "Real Madrid player ratings vs. Bayern Munich: Eduardo Camavinga ...",
+            "snippet": "The Frenchman picked up a late red card to blow a tight game wide open. Bayern capitalised with a pair of late goals to win 4-3 on the night and ...",
+            "link": "https://www.goal.com/en-ca/lists/real-madrid-player-ratings-vs-bayern-munich-eduardo-camavinga/blt66dc1f16168aa97a"
+          },
+          {
+            "query": "Kamavinga decisive goal 2023-2024 Champions League match analysis",
+            "title": "Camavinga Raises Doubts Within Real Madrid Before Bayern ...",
+            "snippet": "The Spanish newspaper 'AS' revealed that the Frenchman Eduardo Camavinga has stirred more doubts within Real Madrid after his performance in ...",
+            "link": "https://www.ysscores.com/en/news/13944266/Camavinga-Raises-Doubts-Within-Real-Madrid-Before-Bayern-Munich-Clash"
+          },
+          {
+            "query": "Kamavinga decisive goal 2023-2024 Champions League match analysis",
+            "title": "Bayern Munich knocks out Real Madrid from Champions League",
+            "snippet": "Bayern Munich secure their place in the semi-finals with decisive late goals from Michael Olise and Luis Diaz, following Eduardo Camavinga's ...",
+            "link": "https://www.facebook.com/groups/1365031450768344/posts/2017280875543395/"
+          },
+          {
+            "query": "Camavinga game-winning performance Real Madrid 2024 La Liga highlights",
+            "title": "HIGHLIGHTS | Alavés 0-1 Real Madrid | LaLiga 2024/25 - YouTube",
+            "snippet": "A first-half Camavinga goal secured victory for the Whites. Ancelotti's men gave a very solid performance, in which they played more than",
+            "link": "https://www.youtube.com/watch?v=SLeZHR6CBtQ&vl=en"
+          },
+          {
+            "query": "Camavinga game-winning performance Real Madrid 2024 La Liga highlights",
+            "title": "Real Madrid vs Alaves: Camavinga and Mbappe Highlights | TikTok",
+            "snippet": "... game they will drop master class performances. 2025-4-13Reply. 31 ... If it's a 3 he's also missing the final because yall got 2 laliga games ...",
+            "link": "https://www.tiktok.com/@croumo/video/7492838915829812486"
+          },
+          {
+            "query": "Camavinga game-winning performance Real Madrid 2024 La Liga highlights",
+            "title": "Eduardo Camavinga's brilliant strike puts Real Madrid ahead - ESPN",
+            "snippet": "LALIGA. Eduardo Camavinga's brilliant strike puts Real Madrid ahead. 1Y. You may also like. You may also like. Lionel Messi scores goal ...",
+            "link": "https://www.espn.com/video/clip/_/id/44656317"
+          }
+        ],
+        "summary": "[2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果]\n  「彼なら、それを認めるだけの度量があるかもしれない ... - Goal.com: レアルの選手たちは試合後も怒りをおさえきれず、その判定が勝敗を分けたと主張した。 「審判は前にイエローカードを出したことを忘れていたのではないか ...\n[2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果]\n  2024-25レアル・マドリー選手評論-中間報告-｜or - note: 12月のヘタフェ戦ではCK時に相手のニョムにちょっかいをかけていた結果、まんまとPKを誘う、してやったりなプレーも。 ミドルシュートはこのまま決め ...\n[2024年 カマヴィンガ 決勝ゴール 勝敗を分けたプレー 試合結果]\n  キリアン・ムバッペのレアル・マドリード：スタッツのためだけの ...: ムバッペが出場した83試合の中で、彼が真にスタッツを稼いだ試合は、昨シーズンのラ・リーガでエスパニョールに対して行われたホームゲームだけでした。\n[Kamavinga decisive goal 2023-2024 Champions League match analysis]\n  Real Madrid player ratings vs. Bayern Munich: Eduardo Camavinga ...: The Frenchman picked up a late red card to blow a tight game wide open. Bayern capitalised with a pair of late goals to win 4-3 on the night and ...\n[Kamavinga decisive goal 2023-2024 Champions League match analysis]\n  Camavinga Raises Doubts Within Real Madrid Before Bayern ...: The Spanish newspaper 'AS' revealed that the Frenchman Eduardo Camavinga has stirred more doubts within Real Madrid after his performance in ...\n[Kamavinga decisive goal 2023-2024 Champions League match analysis]\n  Bayern Munich knocks out Real Madrid from Champions League: Bayern Munich secure their place in the semi-finals with decisive late goals from Michael Olise and Luis Diaz, following Eduardo Camavinga's ...\n[Camavinga game-winning performance Real Madrid 2024 La Liga highlights]\n  HIGHLIGHTS | Alavés 0-1 Real Madrid | LaLiga 2024/25 - YouTube: A first-half Camavinga goal secured victory for the Whites. Ancelotti's men gave a very solid performance, in which they played more than\n[Camavinga game-winning performance Real Madrid 2024 La Liga highlights]\n  Real Madrid vs Alaves: Camavinga and Mbappe Highlights | TikTok: ... game they will drop master class performances. 2025-4-13Reply. 31 ... If it's a 3 he's also missing the final because yall got 2 laliga games ...\n[Camavinga game-winning performance Real Madrid 2024 La Liga highlights]\n  Eduardo Camavinga's brilliant strike puts Real Madrid ahead - ESPN: LALIGA. Eduardo Camavinga's brilliant strike puts Real Madrid ahead. 1Y. You may also like. You may also like. Lionel Messi scores goal ...",
+        "articleContent": "[出典: https://www.goal.com/jp/%E3%83%AA%E3%82%B9%E3%83%88/%E5%BD%BC%E3%81%AA%E3%82%89-%E3%81%9D%E3%82%8C%E3%82%92%E8%AA%8D%E3%82%81%E3%82%8B%E3%81%9F%E3%82%99%E3%81%91%E3%81%AE%E5%BA%A6%E9%87%8F%E3%81%8B%E3%82%99%E3%81%82%E3%82%8B%E3%81%8B%E3%82%82%E3%81%97%E3%82%8C%E3%81%AA%E3%81%84-%E3%83%8F%E3%82%99%E3%82%A4%E3%82%A8%E3%83%AB%E3%83%B3%E3%81%AE%E3%82%B9%E3%82%BF%E3%83%BC%E9%81%B8%E6%89%8B%E3%83%A8%E3%82%B7%E3%83%83%E3%83%95%E3%82%9A-%E3%82%B9%E3%82%BF%E3%83%8B%E3%82%B7%E3%83%83%E3%83%81%E3%81%8B%E3%82%99-%E3%83%AC%E3%82%A2%E3%83%AB-%E3%83%9E%E3%83%88%E3%82%99%E3%83%AA%E3%83%BC%E3%83%88%E3%82%99%E3%81%AE%E3%82%A2%E3%83%B3%E3%83%88%E3%83%8B%E3%82%AA-%E3%83%AA%E3%83%A5%E3%83%86%E3%82%99%E3%82%A3%E3%82%AB%E3%82%99%E3%83%BC%E3%82%92%E5%8E%B3%E3%81%97%E3%81%8F%E6%89%B9%E5%88%A4%E3%81%97%E3%81%9F/blt11724d8caf0f0942]\n「彼なら、それを認めるだけの度量があるかもしれない！」バイエルンのスター選手ヨシップ・スタニシッチが、レアル・マドリードのアントニオ・リュディガーを厳しく批判した。 | Goal.com 日本 IMAGO / Sven Simon Jonas Rütten 2026年4月16日 07:40 翻訳者： チャンピオンズ リーグ バイエルン 対 レアル・マドリー バイエルン レアル・マドリー ヨシプ・スタニシッチ アントニオ・リュディガー ヴァンサン・コンパニ ハーフタイム直前、ヨシップ・スタニシッチはアントニオ・リュディガーに激しいタックルを受けたが、笛は鳴らず、その直後にレアル・マドリードが3－2と逆転した。試合後、スタニシッチはドイツ人選手を強く非難した。 アントニオ・リュディガーにとって、この試合はまさにうってつけだった。レアル・マドリードの守備の要である彼は、FCバイエルン対レアルの感情が激しく渦巻く準々決勝第2戦で、居心地の良さを感じていたに違いない。激しいボディコンタクトとたっぷりの挑発的な言葉――まさにドイツ人選手が好む展開だ。しかし、ミュンヘンのディフェンダー、ヨシップ・スタニシッチに対しては、リュディガーがまたしても明らかにやり過ぎてしまったようだ。 前半終了間際、スタニシッチへの危険なチェックでファウルの判定を免れた場面では、試合後にバイエルン選手を怒らせる出来事も。 ノイアーの好守と、課題を残しつつも光ったウパメカノ。レアル戦のバイエルン選手評価。 スタニシッチはドリブルでリュディガーをかわし、中央のニャブリへパス。直後、リュディガーはパスしたばかりのスタニシッチの脇腹に肘を打ち込み、痛みに苦しむ彼に暴言を吐いた。そのカウンターでエムバペが3-2の勝ち越し弾を決めた。 「俺が向かってくるのを見て、ただ突っ込んできた。昔ならプレーを続け、ボールを失ったらフリーキックを吹くのが普通だ。審判はそのルールを忘れていたのかもしれない」と試合後も怒りを抑えないスタニシッチは語り、タックル後のリュディガーの行動も批判した。 「倒れている間に何があったかは、ここで言う必要はない。トニに聞けばいい。だが、あのような行為は絶対に許されない」と怒りを露わにした。「たった一言――それも二度――だったが、内容は彼に直接確認してほしい。彼なら認める度量があるだろう」 試合後、リュディガーはコメントを控えていると伝えられると、スタニシッチは「代表活動で話す機会があるだろう」と推測。さらに「私は憎しみも個人的にも受け止めない。起きたことはもう終わった。だが、あのような行為は許されない」と結んだ。 対戦相手が顔見知りでもそうでなくても、関係のない話だ」と語った。 広告 AFP アントニオ・リュディガーは、度重なる感情爆発の後、最近は改心した様子を見せている。 バルセロナとのカップ決勝での騒動で長期出場停止となったリュディガーは、代表戦を通じて改心を示した。 3月末、ガーナとスイスとの親善試合を前に FAZ 紙に語った。「度を越えた行動をしたと自覚しているので、真面目で客観的な批判は真剣に受け止めている。チームに混乱をもたらすのではなく、安定と安心感を与えたい」 議論を通じて、責任を果たせなかった瞬間があったと再認識したという。 しかし直後、スタニシッチはリュディガーと接触し前半で交代。コンパニー監督はハーフタイムにデイヴィスを投入した。試合後、スタニシッチはこの保護措置を結果的には良かったと語った。 Getty Images スタニシッチはコンパニーの処分にほぼ\n\n---\n\n[出典: https://note.com/kitto_my_turn/n/nba6dd06977fa]\n2024-25レアル・マドリー選手評論-中間報告-｜or 2024-25レアル・マドリー選手評論-中間報告- 30 or 2025年3月1日 22:28 ・はじめに 春を迎える前のこのよく分からないタイミングで、世界で1番サッカーが上手い集団を偉そうに評して論じるというあまりにも烏滸がましく野暮なお遊びをやる。 はじめに予防線を張っておくと、本稿はあくまでもこの約半年間に筆者が抱いてきた感情の近似値を羅列するだけの駄文であり、貴方に全てを伝えられているなんて自惚れた思考は持ち合わせていない。 たかだか数十㎠の液晶から放たれるブルーライトで光合成をする悲しき化け物のお前らはその前提が悉く抜け落ちる。 的なんか得る気もない言葉の刃で背中から刺そうとするその気持ちをなんとか堪えて粗があっても一意見として飲み込んでみてほしい。 建設的な議論なら大歓迎、インターネット上で高尚なレスバをしよう。 例によって取り留めもなく書き連ねているため、非常に読みにくいはず。 目次から好きな選手のところだけ読むとかでもいいよ。 なんなら別にここで閉じてもらってもいいよ。 ・各選手評 プレータイムやスタッツは2025年3月1日（土）時点のレアル・マドリー公式サイトを参照。（カンテラ組はTransfermarktを参照。） ⭐︎GK #1 ティボ・ クルトワ 34試合出場（3,060分）35失点86セーブ “試合開始”。この言葉を聞いた時、貴方はサッカーにおけるどの瞬間を思い浮かべるだろうか。 選手の入場に心を昂らせる時、それとも眠い目を擦らせながら聴くキックオフの笛が鳴る音。 否、マドリーにおけるそれは開始1〜2分で毎度発生する “COURTOIS WHAT A SAVE!” である。 大怪我で昨季を殆ど棒に振ったが、無事今季は開幕からゴールマウスを守る。 そんな我らが守護神が誇る当代随一のセービング性能は今季も言わずもがな。 圧倒的なセービングエラーの少なさ（エスパニョール戦の失点は除きましょう）、前述の開始早々のピンチやここ一番の被決定機もきっちり抑える抜け目の無さ等、 試合の流れを壊さない ところも彼がNo.1GKである所以。 パンチングも含めてボールを弾く先といった細かいプレーも妥協無し。 彼の異常性は細部に宿るのである。 彼の利き足である左足を切るようにプレスに出る守備も相手チーム視点では既に常套手段となっており、その効力も日に日に増してくるのを感じる今日この頃、右脚で仕方なく蹴らされるボールもラインを割らないぐらいには上達しているが、届ける先が今季は高さが無いロドリゴになっている（か、そもそも人がいない）のは無情。 ビルドアップでしゃしゃり出てくるGKはもはや現代では珍しくないが、 GKの根源的な存在価値を唯只管にシュートを止め続けることで証明する 選手はやはり圧倒的に魅力的。華。 クルトワが全部止めればチームは負けない、まだまだ縋らせてください。 #13アンドリー・ルニン 9試合出場（840分）12失点24セーブ クルトワが離脱している間、緊急補強したケパとの争いに勝って飛躍の年にした昨季とは打って変わり、今季はコパ・デル・レイが主戦場に。 クルトワ負傷時のエマージェンシー起用と合わせて少ない出場機会に留まっている。 出場した試合では無難にやれることをこなせてはいるが、守備に課題のあるチームの煽りを受けて8試合で12失点を喫している事実が重くのしかかる。 特に0-4クラシコや、CLの1-3ミラン戦、コパではセルタ戦・レガネス戦両方で2失点等、 重要なゲームも含\n\n===\n\n[出典: https://www.goal.com/en-ca/lists/real-madrid-player-ratings-vs-bayern-munich-eduardo-camavinga/blt66dc1f16168aa97a]\nReal Madrid player ratings vs. Bayern Munich: Eduardo Camavinga, what are you doing? Silly red card sees Blancos&#x27; Champions League hopes dashed in chaotic second-leg loss | Goal.com Canada GOAL Tom Hindle Apr 16, 2026 06:06+09:00 Player ratings Real Madrid FEATURES Bayern Munich vs Real Madrid Bayern Munich Champions League E. Camavinga A. Guler K. Mbappe A moment of madness from Eduardo Camavinga saw Real Madrid&#x27;s remontada hopes dashed in a 6-4 aggregate loss to Bayern Munich in the quarter-finals of the Champions League. The Frenchman picked up a late red card to blow a tight game wide open. Bayern capitalised with a pair of late goals to win 4-3 on the night and Los Blancos were sent home with a whole host of regrets after a chaotic encounter. But it might have been different. Madrid enjoyed a dream start - even if it was rather gifted to them. With less than 60 seconds gone, Manuel Neuer passed inexplicably to the feet of Arda Guler, who whipped into an empty net from 30 yards. But Bayern responded. Their goal was a simple one. Joshua Kimmich whipped a cross in under the bar. Alex Pavlovic nudged Andriy Lunin out of the way and nodded home. But Los Blancos showed their Champions League quality. Guler was at it again after 30 minutes, whipping a free-kick into the top corner via Neuer&#x27;s outstretched hand. And then it was pretty much madness. Bayern had a couple of good penalty shouts turned down. Harry Kane made up for any complaints by scoring from just in\n\n---\n\n[出典: https://www.ysscores.com/en/news/13944266/Camavinga-Raises-Doubts-Within-Real-Madrid-Before-Bayern-Munich-Clash]\nCamavinga Raises Doubts Within Real Madrid Before Bayern Munich Clash Camavinga Raises Doubts Within Real Madrid Before Bayern Munich Clash Monday 13-04-2026 0 0 Share The Spanish newspaper 'AS' revealed that the Frenchman Eduardo Camavinga has stirred more doubts within Real Madrid after his performance in the Girona match, at a time when the club is considering placing him on the list of players available for sale. The newspaper explained that Camavinga played in Tchouaméni's position during the Girona match, but he did not deliver the expected performance, as the team relied on him to compensate for the absence of his suspended teammate before facing Bayern Munich in the return leg of the UEFA Champions League quarter-finals. Real Madrid is preparing for a decisive match on Wednesday in Munich, after losing the first leg 2-1 at the Santiago Bernabéu Stadium, where the team needs to turn the result around to qualify for the semi-finals. According to 'AS', Camavinga was one of the main options to occupy the defensive midfield position in the absence of Tchouaméni, but his level against Girona increased the controversy over his role at this stage. The newspaper pointed out that the player, who joined Real Madrid from Rennes in 2021 for more than 30 million euros, was seen as a young talent capable of developing, and coach Carlo Ancelotti gradually relied on him until he delivered good performances, most notably in the 2023/2024 UEFA Champions League final against Borussia Dor\n\n===\n\n[出典: https://www.youtube.com/watch?v=SLeZHR6CBtQ&vl=en]\nHIGHLIGHTS | Alavés 0-1 Real Madrid | LaLiga 2024/25 - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      }
+    },
+    {
+      "id": "tactical_analysis",
+      "label": "戦術分析",
+      "icon": "🔬",
+      "narration": "戦術面では、アンチェロッティ率いるレアルが好調な前半を過ごしたものの、カマヴィンガの退場というアクシデントが全てを狂わせました。アンチェロッティは中盤のバランスを重視する4-3-3を好みますが、1人少なくなった状況でその戦術を維持するのは極めて困難。バイエルンはこの数的優位を最大限に活かし、終盤に猛攻を仕掛けて勝利を掴み取りました。",
+      "keyPoints": [
+        "レアルはアンチェロッティお得意の4-3-3で好調な前半",
+        "カマヴィンガ退場で数的劣勢に陥り戦術維持が困難に",
+        "バイエルンが数的優位を活かし終盤猛攻で逆転"
+      ],
+      "imageQuery": "Carlo Ancelotti tactics 4-3-3",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "What This Team Talk Teaches us About Ancelotti - YouTube",
+          "url": "https://www.youtube.com/watch?v=vBjdzxjAfYM",
+          "date": "Mar 30, 2026"
+        },
+        {
+          "label": "Carlo Ancelotti: “We have to do everything possible in the second ...",
+          "url": "https://www.reddit.com/r/realmadrid/comments/1jupbyo/carlo_ancelotti_we_have_to_do_everything_possible/",
+          "date": "Apr 8, 2025"
+        },
+        {
+          "label": "Carlo Ancelotti – Real Madrid – Tactical Analysis - TheMastermindSite",
+          "url": "https://themastermindsite.com/2022/06/12/carlo-ancelotti-real-madrid-tactical-analysis/",
+          "date": "Jun 12, 2022"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "tactical_analysis",
+        "query": "Real Madrid tactical change second half Ancelotti",
+        "organic": [
+          {
+            "title": "What This Team Talk Teaches us About Ancelotti - YouTube",
+            "snippet": "✌ Real Madrid were struggling at half time against Borussia Dortmund in 2024. With just a brief meeting with the players, we see how ...",
+            "link": "https://www.youtube.com/watch?v=vBjdzxjAfYM",
+            "date": "Mar 30, 2026"
+          },
+          {
+            "title": "Carlo Ancelotti: “We have to do everything possible in the second ...",
+            "snippet": "Here are the tactics for 2nd leg, Press high first 15 minutes (Even though the pressing doesn't do shit) then if we get lucky and score we park the bus.",
+            "link": "https://www.reddit.com/r/realmadrid/comments/1jupbyo/carlo_ancelotti_we_have_to_do_everything_possible/",
+            "date": "Apr 8, 2025"
+          },
+          {
+            "title": "Carlo Ancelotti – Real Madrid – Tactical Analysis - TheMastermindSite",
+            "snippet": "Real Madrid have continued in their favoured 4-3-3 (although Ancelotti's tactics at times become more lopsided), and they've continued to deploy ...",
+            "link": "https://themastermindsite.com/2022/06/12/carlo-ancelotti-real-madrid-tactical-analysis/",
+            "date": "Jun 12, 2022"
+          },
+          {
+            "title": "Video: A Tactical Guide to Carlo Ancelotti's Real Madrid",
+            "snippet": "Having won La Liga and the Champions League last season, the addition of Kylian Mbappé seemed to be adding the finishing touches to a team ...",
+            "link": "https://www.holdingmidfield.com/video-a-tactical-guide-to-carlo-ancelotti-real-madrid-tactics-tactical-analysis/",
+            "date": "Apr 10, 2025"
+          },
+          {
+            "title": "Real Madrid manager Ancelotti explains tactical shift that undid Man ...",
+            "snippet": "The major tactical shift that Ancelotti put into place was using Vinicius Junior more centrally, and putting Rodrygo Goes on the left, thus ...",
+            "link": "https://m.allfootballapp.com/news/All/Real-Madrid-manager-Ancelotti-explains-tactical-shift-that-undid-Man-City/3347036",
+            "date": "Apr 10, 2025"
+          },
+          {
+            "title": "Real Madrid's Dominant Second Half: Tactical Breakdown & Key ...",
+            "snippet": "Dive into our in-depth analysis of Real Madrid's latest match, a tale of two halves! The first half was a tightly contested battle with both ...",
+            "link": "https://www.youtube.com/watch?v=Hg9rbi0l7FY",
+            "date": "Jul 2, 2025"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=vBjdzxjAfYM]\nWhat This Team Talk Teaches us About Ancelotti - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？一つのレッドカードが試合の命運を分けた、劇的な一戦でした。チャンネル登録と高評価が、私たちの最大の励みになります。次回の速報！サッカーニュースもお楽しみに！",
+      "keyPoints": [],
+      "imageQuery": "Champions League highlights",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "また次回をお楽しみに！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-16",
+    "postId": "2",
+    "originalTitle": "Bayern Munich 2 - [3] Real Madrid - K. Mbappé 42'",
+    "generatedAt": "2026-04-16T05:59:08.500Z",
+    "mainImagePath": null
+  }
+}

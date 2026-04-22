@@ -1,0 +1,1628 @@
+{
+  "youtubeTitle": "【衝撃の100分劇弾】エヴァートン新本拠地初ダービーでVVDが決めた！11分追加時間の末にキャプテンが歴史を刻む",
+  "hashtagsText": "#サッカー #リヴァプール #エヴァートン #プレミアリーグ #ファンダイク",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "新スタジアム、初ダービー、11分の追加時間。そして、100分目の劇的決着。2026年4月19日、マージーサイドダービーは、キャプテンがすべてを決めるという、最もドラマチックな形で幕を閉じました。その瞬間の全真相を、データと共に徹底解説します。",
+      "keyPoints": [],
+      "imageQuery": "Virgil van Dijk 100th minute goal celebration",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "新天地でも変わらない、エヴァートンへの“遅すぎる”一撃。",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "プレミアリーグ第33節、エヴァートンの新本拠地『ヒル・ディッキンソン・スタジアム』で初めて開催されたマージーサイドダービー。試合は29分にモハメド・サラーが先制、54分にベトが同点と、均衡が続きます。そして、驚異的な11分間の追加時間が告げられ、試合は100分目へ。そのタイムアップ寸前、セットプレーからリヴァプールのキャプテン、ファン・ダイクが頭で決勝弾を叩き込み、試合を決めました。歴史的な舞台で、まさに歴史を作った男の劇的ゴールです。",
+      "keyPoints": [
+        "エヴァートン新スタジアム初ダービー",
+        "11分間の追加時間",
+        "100分目でのファン・ダイク決勝弾",
+        "試合結果: Everton 1 - 2 Liverpool"
+      ],
+      "imageQuery": "Everton new stadium Hill Dickinson first derby",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "グディソン・パークで行われたマージーサイド・ダービーは、文字通り最後の最後で決着がつきました。エヴァートンの新たな本拠地で行われた初のダービー。試合は均衡を保ったまま、驚異的な11分間の追加時間へ。そして、そのタイムアップ寸前、キャプテンが物語を書き換えます。",
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "match_key_moment",
+      "label": "試合の決定的瞬間",
+      "icon": "🎯",
+      "narration": "試合の決定的瞬間は、間違いなく90分+10分、つまり試合開始から100分目に訪れました。リヴァプールに与えられたセットプレーのチャンス。ボールが蹴り込まれると、エヴァートンのペナルティエリアでは激しい押し合いが発生。しかし、身長195cmの巨人、ファン・ダイクは誰よりも高く跳び、ボールを冷静にネットに流し込みました。ゴール後、彼は仲間たちに駆け寄り、歓喜を分かち合います。先制点を決めたサラーがゴール前で確信のガッツポーズを見せたのは29分。そして、キャプテンが締める。文字通り、チームを勝利に導く完璧な演出でした。",
+      "keyPoints": [
+        "決勝弾時刻: 90分+10分 (100分目)",
+        "得点者: Virgil van Dijk",
+        "得点方法: セットプレーからのヘディング",
+        "先制点: 29分 Mohamed Salah"
+      ],
+      "imageQuery": "Van Dijk 90+10 header goal vs Everton 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "matchId": 14025035,
+        "homeTeam": "Everton",
+        "awayTeam": "Liverpool",
+        "homeScore": 1,
+        "awayScore": 2,
+        "matchDate": "2026-04-19",
+        "tournament": "Premier League",
+        "venue": "Hill Dickinson Stadium",
+        "attendance": null,
+        "goals": [
+          {
+            "time": 29,
+            "timeStr": "29'",
+            "player": "Mohamed Salah",
+            "isHome": false,
+            "team": "Liverpool",
+            "type": "通常"
+          },
+          {
+            "time": 54,
+            "timeStr": "54'",
+            "player": "Beto",
+            "isHome": true,
+            "team": "Everton",
+            "type": "通常"
+          },
+          {
+            "time": 90,
+            "timeStr": "90+10'",
+            "player": "Virgil van Dijk",
+            "isHome": false,
+            "team": "Liverpool",
+            "type": "通常"
+          }
+        ],
+        "cards": [
+          {
+            "time": 22,
+            "timeStr": "22'",
+            "player": "Jordan Pickford",
+            "isHome": true,
+            "team": "Everton",
+            "color": "イエロー"
+          },
+          {
+            "time": 90,
+            "timeStr": "90+12'",
+            "player": "James Garner",
+            "isHome": true,
+            "team": "Everton",
+            "color": "イエロー"
+          }
+        ],
+        "stats": {
+          "Ball possession": {
+            "home": "44%",
+            "away": "56%"
+          },
+          "Expected goals": {
+            "home": "0.79",
+            "away": "1.45"
+          },
+          "Big chances": {
+            "home": "2",
+            "away": "2"
+          },
+          "Total shots": {
+            "home": "10",
+            "away": "14"
+          },
+          "Goalkeeper saves": {
+            "home": "3",
+            "away": "3"
+          },
+          "Corner kicks": {
+            "home": "1",
+            "away": "6"
+          },
+          "Fouls": {
+            "home": "8",
+            "away": "12"
+          },
+          "Passes": {
+            "home": "377",
+            "away": "498"
+          },
+          "Tackles": {
+            "home": "29",
+            "away": "12"
+          },
+          "Free kicks": {
+            "home": "12",
+            "away": "8"
+          },
+          "Yellow cards": {
+            "home": "2",
+            "away": "0"
+          },
+          "Shots on target": {
+            "home": "4",
+            "away": "6"
+          },
+          "Hit woodwork": {
+            "home": "0",
+            "away": "0"
+          },
+          "Shots off target": {
+            "home": "5",
+            "away": "4"
+          },
+          "Blocked shots": {
+            "home": "1",
+            "away": "4"
+          },
+          "Shots inside box": {
+            "home": "7",
+            "away": "7"
+          },
+          "Shots outside box": {
+            "home": "3",
+            "away": "7"
+          },
+          "Big chances scored": {
+            "home": "1",
+            "away": "2"
+          },
+          "Big chances missed": {
+            "home": "1",
+            "away": "0"
+          },
+          "Through balls": {
+            "home": "0",
+            "away": "3"
+          },
+          "Touches in penalty area": {
+            "home": "20",
+            "away": "18"
+          },
+          "Fouled in final third": {
+            "home": "1",
+            "away": "0"
+          },
+          "Offsides": {
+            "home": "4",
+            "away": "0"
+          },
+          "Accurate passes": {
+            "home": "288",
+            "away": "413"
+          },
+          "Throw-ins": {
+            "home": "18",
+            "away": "21"
+          },
+          "Final third entries": {
+            "home": "64",
+            "away": "61"
+          },
+          "Final third phase": {
+            "home": "65/113 (58%)",
+            "away": "89/128 (70%)"
+          },
+          "Long balls": {
+            "home": "25/65 (38%)",
+            "away": "15/55 (27%)"
+          },
+          "Crosses": {
+            "home": "4/16 (25%)",
+            "away": "2/10 (20%)"
+          },
+          "Duels": {
+            "home": "63%",
+            "away": "37%"
+          },
+          "Dispossessed": {
+            "home": "6",
+            "away": "20"
+          },
+          "Ground duels": {
+            "home": "44/67 (66%)",
+            "away": "23/67 (34%)"
+          },
+          "Aerial duels": {
+            "home": "19/33 (58%)",
+            "away": "14/33 (42%)"
+          },
+          "Dribbles": {
+            "home": "4/10 (40%)",
+            "away": "5/14 (36%)"
+          },
+          "Tackles won": {
+            "home": "62%",
+            "away": "67%"
+          },
+          "Total tackles": {
+            "home": "29",
+            "away": "12"
+          },
+          "Interceptions": {
+            "home": "10",
+            "away": "10"
+          },
+          "Recoveries": {
+            "home": "54",
+            "away": "50"
+          },
+          "Clearances": {
+            "home": "28",
+            "away": "25"
+          },
+          "Errors lead to a shot": {
+            "home": "1",
+            "away": "0"
+          },
+          "Errors lead to a goal": {
+            "home": "1",
+            "away": "0"
+          },
+          "Total saves": {
+            "home": "3",
+            "away": "3"
+          },
+          "Goals prevented": {
+            "home": "-0.54",
+            "away": "0.56"
+          },
+          "Big saves": {
+            "home": "0",
+            "away": "1"
+          },
+          "High claims": {
+            "home": "0",
+            "away": "1"
+          },
+          "Goal kicks": {
+            "home": "5",
+            "away": "7"
+          }
+        },
+        "topPlayers": [
+          {
+            "name": "Kiernan Dewsbury-Hall",
+            "rating": 7.7
+          },
+          {
+            "name": "Curtis Jones",
+            "rating": 7.5
+          },
+          {
+            "name": "Mohamed Salah",
+            "rating": 7.5
+          },
+          {
+            "name": "James Garner",
+            "rating": 7.4
+          },
+          {
+            "name": "Beto",
+            "rating": 7.3
+          }
+        ],
+        "playerStats": {
+          "Jordan Pickford": {
+            "rating": 6.6,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 44,
+            "passAccuracy": 57,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 54,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Jake O'Brien": {
+            "rating": 6.8,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 29,
+            "passAccuracy": 62,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 53,
+            "fouls": null,
+            "wasFouled": 3,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "James Tarkowski": {
+            "rating": 6.7,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 39,
+            "passAccuracy": 82,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 49,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.13,
+            "bigChanceCreated": null
+          },
+          "Jarrad Branthwaite": {
+            "rating": 7,
+            "minutesPlayed": 87,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 36,
+            "passAccuracy": 89,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 49,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": 1
+          },
+          "Vitaliy Mykolenko": {
+            "rating": 6.9,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 41,
+            "passAccuracy": 73,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 67,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Idrissa Gana Gueye": {
+            "rating": 6.8,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 33,
+            "passAccuracy": 94,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 41,
+            "fouls": 1,
+            "wasFouled": 4,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "James Garner": {
+            "rating": 7.4,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 39,
+            "passAccuracy": 77,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 55,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": 0.02,
+            "bigChanceCreated": null
+          },
+          "Dwight McNeil": {
+            "rating": 6.4,
+            "minutesPlayed": 80,
+            "goals": null,
+            "assists": 0,
+            "shots": 3,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 18,
+            "passAccuracy": 83,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 36,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.1,
+            "bigChanceCreated": null
+          },
+          "Kiernan Dewsbury-Hall": {
+            "rating": 7.7,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 1,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 2,
+            "passes": 43,
+            "passAccuracy": 74,
+            "dribbles": 2,
+            "dribblesWon": 1,
+            "touches": 60,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": 1
+          },
+          "Iliman Ndiaye": {
+            "rating": 6.8,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": 1,
+            "passes": 32,
+            "passAccuracy": 88,
+            "dribbles": 6,
+            "dribblesWon": 3,
+            "touches": 55,
+            "fouls": 1,
+            "wasFouled": 2,
+            "expectedGoals": 0.07,
+            "bigChanceCreated": null
+          },
+          "Beto": {
+            "rating": 7.3,
+            "minutesPlayed": 73,
+            "goals": 1,
+            "assists": 0,
+            "shots": 4,
+            "shotsOnTarget": 2,
+            "keyPasses": 1,
+            "passes": 11,
+            "passAccuracy": 64,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 27,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.47,
+            "bigChanceCreated": null
+          },
+          "Thierno Barry": {
+            "rating": 6.5,
+            "minutesPlayed": 17,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 6,
+            "passAccuracy": 50,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 9,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Tyrique George": {
+            "rating": 6.6,
+            "minutesPlayed": 10,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 2,
+            "passAccuracy": 100,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 9,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Michael Keane": {
+            "rating": 6.2,
+            "minutesPlayed": 16,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 4,
+            "passAccuracy": 75,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 6,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Mark Travers": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Nathan Patterson": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Tyler Dibling": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Carlos Alcaraz": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Merlin Röhl": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Tim Iroegbunam": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Giorgi Mamardashvili": {
+            "rating": 6.9,
+            "minutesPlayed": 58,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 14,
+            "passAccuracy": 43,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 19,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Curtis Jones": {
+            "rating": 7.5,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 84,
+            "passAccuracy": 94,
+            "dribbles": 3,
+            "dribblesWon": 1,
+            "touches": 118,
+            "fouls": 1,
+            "wasFouled": 3,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Ibrahima Konaté": {
+            "rating": 7.1,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 60,
+            "passAccuracy": 85,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 80,
+            "fouls": null,
+            "wasFouled": 2,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Virgil van Dijk": {
+            "rating": 7.2,
+            "minutesPlayed": 90,
+            "goals": 1,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 45,
+            "passAccuracy": 82,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 54,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": 0.23,
+            "bigChanceCreated": null
+          },
+          "Andy Robertson": {
+            "rating": 6.6,
+            "minutesPlayed": 86,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 38,
+            "passAccuracy": 71,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 52,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": 0.02,
+            "bigChanceCreated": null
+          },
+          "Dominik Szoboszlai": {
+            "rating": 6.8,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 1,
+            "shots": 2,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 58,
+            "passAccuracy": 93,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 76,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": 0.07,
+            "bigChanceCreated": 1
+          },
+          "Ryan Gravenberch": {
+            "rating": 6.4,
+            "minutesPlayed": 90,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 55,
+            "passAccuracy": 84,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 63,
+            "fouls": 3,
+            "wasFouled": 1,
+            "expectedGoals": 0.03,
+            "bigChanceCreated": null
+          },
+          "Mohamed Salah": {
+            "rating": 7.5,
+            "minutesPlayed": 90,
+            "goals": 1,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": 1,
+            "passes": 38,
+            "passAccuracy": 89,
+            "dribbles": 5,
+            "dribblesWon": 2,
+            "touches": 64,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.52,
+            "bigChanceCreated": null
+          },
+          "Florian Wirtz": {
+            "rating": 6.5,
+            "minutesPlayed": 84,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 4,
+            "passes": 48,
+            "passAccuracy": 88,
+            "dribbles": 2,
+            "dribblesWon": 1,
+            "touches": 63,
+            "fouls": null,
+            "wasFouled": 1,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Cody Gakpo": {
+            "rating": 6.2,
+            "minutesPlayed": 84,
+            "goals": null,
+            "assists": 1,
+            "shots": 5,
+            "shotsOnTarget": 3,
+            "keyPasses": 4,
+            "passes": 19,
+            "passAccuracy": 79,
+            "dribbles": 1,
+            "dribblesWon": 1,
+            "touches": 35,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": 0.36,
+            "bigChanceCreated": 1
+          },
+          "Alexander Isak": {
+            "rating": 6.4,
+            "minutesPlayed": 72,
+            "goals": null,
+            "assists": 0,
+            "shots": 1,
+            "shotsOnTarget": 1,
+            "keyPasses": null,
+            "passes": 5,
+            "passAccuracy": 60,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 9,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.12,
+            "bigChanceCreated": null
+          },
+          "Freddie Woodman": {
+            "rating": 6.7,
+            "minutesPlayed": 32,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 16,
+            "passAccuracy": 31,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 21,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Rio Ngumoha": {
+            "rating": 6.3,
+            "minutesPlayed": 18,
+            "goals": null,
+            "assists": 0,
+            "shots": 2,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 5,
+            "passAccuracy": 80,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 9,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": 0.1,
+            "bigChanceCreated": null
+          },
+          "Jeremie Frimpong": {
+            "rating": 6.5,
+            "minutesPlayed": 19,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 3,
+            "passAccuracy": 33,
+            "dribbles": 1,
+            "dribblesWon": null,
+            "touches": 6,
+            "fouls": 1,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Alexis Mac Allister": {
+            "rating": 6.4,
+            "minutesPlayed": 19,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": 1,
+            "passes": 8,
+            "passAccuracy": 88,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 8,
+            "fouls": 2,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Miloš Kerkez": {
+            "rating": 6.7,
+            "minutesPlayed": 17,
+            "goals": null,
+            "assists": 0,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": 2,
+            "passAccuracy": 100,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": 4,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Ármin Pécsi": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Trey Nyoni": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          },
+          "Federico Chiesa": {
+            "rating": null,
+            "minutesPlayed": null,
+            "goals": null,
+            "assists": null,
+            "shots": 0,
+            "shotsOnTarget": null,
+            "keyPasses": null,
+            "passes": null,
+            "passAccuracy": null,
+            "dribbles": null,
+            "dribblesWon": null,
+            "touches": null,
+            "fouls": null,
+            "wasFouled": null,
+            "expectedGoals": null,
+            "bigChanceCreated": null
+          }
+        },
+        "scoreline": "Everton 1 - 2 Liverpool",
+        "summary": "【試合結果】Everton 1 - 2 Liverpool（2026-04-19 / Premier League）\n【得点】29' Mohamed Salah（Liverpool）, 54' Beto（Everton）, 90+10' Virgil van Dijk（Liverpool）\n【カード】22' Jordan Pickford（Everton）イエロー, 90+12' James Garner（Everton）イエロー"
+      },
+      "presetValues": {
+        "scoreline": "Everton 1 - 2 Liverpool",
+        "top_player": "Kiernan Dewsbury-Hall（7.7）",
+        "possession": "44% vs 56%",
+        "total_shots": "10 vs 14",
+        "shots_on_target": "4 vs 6",
+        "xg": "0.79 vs 1.45",
+        "passes": "377 vs 498",
+        "pass_accuracy": "288 vs 413",
+        "fouls": "8 vs 12",
+        "corners": "1 vs 6",
+        "yellow_cards": "2 vs 0",
+        "match_date": "2026-04-19",
+        "tournament": "Premier League",
+        "venue": "Hill Dickinson Stadium"
+      }
+    },
+    {
+      "id": "player_episode",
+      "label": "選手エピソード",
+      "icon": "✨",
+      "narration": "このゴールは、ファン・ダイクにとって、エヴァートン戦における「遅すぎる一撃」の伝説に新たな1ページを加えるものでした。海外のサッカーファンからは『This man lives only for scoring late winners against Everton（この男はエヴァートンに対して遅い時間帯に決勝点を決めるためだけに生きている）』というコメントが寄せられるほど。彼は過去にも、重要な局面でエヴァートンの心臓を掴み潰すようなゴールを決めてきました。新スタジアムであろうと、その因縁は色あせません。まさに、エヴァートン戦で“覚醒”する男なのです。",
+      "keyPoints": [
+        "エヴァートン戦での遅い時間帯の決勝点に定評",
+        "海外ファンからの伝説的評価",
+        "新スタジアムでも続く因縁"
+      ],
+      "imageQuery": "Virgil van Dijk late winner history Everton",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Liverpool's Virgil van Dijk breaks Everton hearts in 100th minute",
+          "url": "https://www.youtube.com/watch?v=rAIAb0Y99LE",
+          "date": "22 hours ago"
+        },
+        {
+          "label": "Virgil van Dijk scores in the 100th minute! | Sky Sports Football",
+          "url": "https://www.facebook.com/SkySportsFootball/videos/virgil-van-dijk-scores-in-the-100th-minute-to-send-the-away-end-wild/963209899428807/",
+          "date": "23 hours ago"
+        },
+        {
+          "label": "Virgil van Dijk & Mo Salah REACT to Liverpool last-gasp ... - YouTube",
+          "url": "https://www.youtube.com/watch?v=TmyDcAORN8U",
+          "date": "23 hours ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [
+        {
+          "key": "rating",
+          "label": "今期平均評価点",
+          "value": "7.2",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "goals",
+          "label": "今期ゴール",
+          "value": "1G",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "assists",
+          "label": "今期アシスト",
+          "value": "0A",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "shots",
+          "label": "shots",
+          "value": "1本",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "pass_accuracy",
+          "label": "パス成功率",
+          "value": "82%",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "expected_goals",
+          "label": "今期xG",
+          "value": "0.23",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "minutes_played",
+          "label": "プレー時間",
+          "value": "90分",
+          "entitySource": "Virgil van Dijk"
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "player_episode",
+        "query": "Virgil van Dijk",
+        "organic": [
+          {
+            "title": "Liverpool's Virgil van Dijk breaks Everton hearts in 100th minute",
+            "snippet": "Hill Dickinson Stadium is in shock after Liverpool captain Virgil van Dijk rises highest to deliver the dagger for the Reds against Everton in the 100th ...",
+            "link": "https://www.youtube.com/watch?v=rAIAb0Y99LE",
+            "date": "22 hours ago"
+          },
+          {
+            "title": "Virgil van Dijk scores in the 100th minute! | Sky Sports Football",
+            "snippet": "Virgil van Dijk scores in the 100th minute to send the away end wild! Virgil van Dijk scores in the 100th minute!. Sabit Ahimed and 95K others.",
+            "link": "https://www.facebook.com/SkySportsFootball/videos/virgil-van-dijk-scores-in-the-100th-minute-to-send-the-away-end-wild/963209899428807/",
+            "date": "23 hours ago"
+          },
+          {
+            "title": "Virgil van Dijk & Mo Salah REACT to Liverpool last-gasp ... - YouTube",
+            "snippet": "Virgil van Dijk & Mo Salah REACT to Liverpool last-gasp Merseyside derby win! 124K views · 12 hours ago. #premierleague #liverpool #liverpoolfc ...more ...",
+            "link": "https://www.youtube.com/watch?v=TmyDcAORN8U",
+            "date": "23 hours ago"
+          },
+          {
+            "title": "CAPTAIN OH CAPTAIN!! VIRGIL MIGHT HAVE WON THE DERBY ...",
+            "snippet": "Virgil van Dijk is just one game away from another incredible milestone. In mid-March, Virgil will mark two-and-a-half years without an injury, ban or ...",
+            "link": "https://www.reddit.com/r/LiverpoolFC/comments/1spvd8h/captain_oh_captain_virgil_might_have_won_the/",
+            "date": "23 hours ago"
+          },
+          {
+            "title": "Virgil van Dijk is @Liverpool FC's hero in the derby ... - TikTok",
+            "snippet": "37.3K Likes, 216 Comments. TikTok video from Premier League (@premierleague): “Virgil van Dijk is @Liverpool FC's hero in the derby! ❤️ #PremierLeague”.",
+            "link": "https://www.tiktok.com/@premierleague/video/7630578409143274774",
+            "date": "17 hours ago"
+          },
+          {
+            "title": "Virgil van Dijk celebrates Mohamed Salah's opener before ball hits ...",
+            "snippet": "Virgil van Dijk was very confident that Mohamed Salahs strike would find the back of the net at the Hill Dickinson Stadium!",
+            "link": "https://www.skysports.com/football/video/30998/13534016/virgil-van-dijk-celebrates-mohamed-salahs-opener-before-ball-hits-net",
+            "date": "7 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=rAIAb0Y99LE]\nLiverpool's Virgil van Dijk breaks Everton hearts in 100th minute | Premier League | NBC Sports - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "では、今シーズンのファン・ダイクはどのような活躍を見せているのでしょうか？ SofaScoreのデータによると、プレミアリーグでは33試合に出場し、4ゴールを記録。ディフェンダーながら、攻撃面でも確実に結果を残しています。注目すべきは、期待ゴール値xGが3.02であるのに対し、実際のゴール数が4を超えている点。まさに『期待値を超える男』です。守備面では、空中戦での勝利が153回、評価点は7.28と、リーグを代表するCBとしての地位を盤石なものにしています。CLでも12試合2ゴール3アシスト、評価点7.43と、二刀流DFとしてチームを支え続けています。",
+      "keyPoints": [
+        "今季PL: 33試合4ゴール",
+        "評価点: 7.28",
+        "空中戦勝利: 153回",
+        "xG 3.02 に対し実績4ゴール超え"
+      ],
+      "imageQuery": "Virgil van Dijk 2025 26 season stats SofaScore",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Virgil van Dijk",
+          "url": "https://www.sofascore.com/player/151545",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "key": "rating",
+          "label": "今期平均評価点",
+          "value": "7.2",
+          "entitySource": "Virgil van Dijk"
+        },
+        {
+          "key": "nationality",
+          "label": "国籍",
+          "format": "ブラジル",
+          "research": false,
+          "value": ""
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 151545,
+        "name": "Virgil van Dijk",
+        "position": "D",
+        "team": "Liverpool",
+        "nationality": "Netherlands",
+        "dateOfBirth": "1991-07-08T00:00:00+00:00",
+        "age": 34,
+        "height": 195,
+        "preferredFoot": "Right",
+        "marketValue": "€19M",
+        "contractUntil": "2027-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 120,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 33,
+          "goals": 4,
+          "assists": 0,
+          "rating": 7.28,
+          "minutesPlayed": 2970,
+          "yellowCards": 4,
+          "redCards": 0,
+          "expectedGoals": 3.02,
+          "keyPasses": 11
+        },
+        "positionStats": {
+          "tackles": 22,
+          "interceptions": 21,
+          "clearances": null,
+          "duelsWon": null,
+          "aerialDuelsWon": 153,
+          "blockedShots": 21
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 12,
+          "goals": 2,
+          "assists": 3,
+          "rating": 7.43
+        }
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-20"
+      }
+    },
+    {
+      "id": "club_rival_history",
+      "label": "ライバルとの因縁",
+      "icon": "⚔️",
+      "narration": "この勝利は、エヴァートンにとって新スタジアムでの初ダービーという記念すべき舞台で、まさに心臓を撃ち抜かれるような敗戦でした。マージーサイドダービー100年超の歴史の中で、エヴァートンは古巣グディソン・パークの最後の記憶も、2018年12月のディヴォック・オリジによる96分目の劇的決勝弾という苦いものでした。『You can move stadiums, but the ghost of Origi will follow you.（スタジアムは移せるが、オリジの亡霊はお前たちを追いかける）』という海外コメントが示す通り、新天地に移った今も、リヴァプールとのダービーで最後に笑うのはいつも相手方。その因縁は、スタジアムの名前が変わっても、消えることはないようです。",
+      "keyPoints": [
+        "新スタジアム初ダービーで敗戦",
+        "グディソン最終戦もリヴァプールに劇的敗戦(2018年)",
+        "ダービーでの「遅すぎる敗北」の繰り返し"
+      ],
+      "imageQuery": "Everton Liverpool last minute derby history",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Mohamed Salah",
+          "url": "https://www.sofascore.com/player/159665",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "key": "custom1",
+          "label": "カスタム1",
+          "value": ""
+        },
+        {
+          "key": "custom2",
+          "label": "カスタム2",
+          "value": ""
+        },
+        {
+          "key": "custom3",
+          "label": "カスタム3",
+          "value": ""
+        },
+        {
+          "key": "custom4",
+          "label": "カスタム4",
+          "value": ""
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 159665,
+        "name": "Mohamed Salah",
+        "position": "M",
+        "team": "Liverpool",
+        "nationality": "Egypt",
+        "dateOfBirth": "1992-06-15T00:00:00+00:00",
+        "age": 33,
+        "height": 175,
+        "preferredFoot": "Left",
+        "marketValue": "€29M",
+        "contractUntil": "2027-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 120,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 24,
+          "goals": 7,
+          "assists": 6,
+          "rating": 6.89,
+          "minutesPlayed": 1999,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 7.82,
+          "keyPasses": 47
+        },
+        "positionStats": {
+          "keyPasses": 47,
+          "successfulDribbles": 14,
+          "bigChancesCreated": 10,
+          "tackles": 16,
+          "interceptions": 4,
+          "accuratePassesPct": 76.45
+        },
+        "uclStats": {
+          "leagueName": "UEFA Champions League",
+          "appearances": 10,
+          "goals": 3,
+          "assists": 2,
+          "rating": 7.37
+        }
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-20"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のサッカーファンが集う掲示板では、この劇的な結末に大きな反響が寄せられています。多くのユーザーが、エヴァートンがリヴァプール戦の最後の最後で自滅するという因縁パターンを指摘し、『Everton that.（まさにエヴァートンらしい）』や『They always bottle it（彼らはいつもしくじる）』といった嘆きと皮肉のコメントが多数を占めました。また、11分間の追加時間については、試合の流れからすれば妥当だったという見方が主流です。さらに、セットプレーからの決勝点に『SET PIECE FC』、ゴール前の混乱ぶりに『Woodman’s impact（ウッドマンの影響？）』と、ユーモアを交えたツッコミも見られ、世界中のファンが同じ「またか」という感情を共有していることがうかがえます。",
+      "keyPoints": [
+        {
+          "text": "[👍1684] Everton that.",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1179] Damn, Villa &amp; Liverpool with the last minute goals to gain 3pts",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍579] This man lives only for scoring late winners against Everton",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍565] Woodman’s impact",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍509] SET PIECE FC",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍237] Everton and fucking up at last minute vs Liverpool",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍198] Origi somewhere out there smiling big",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍188] Was very funny in the wrestling match that was going on to see that the Everton defender was actually pulling Pickford’s shirt. ",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍176] CAPTAIN",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍152] Doesn't matter how shit we are, they'll always bottle it lmao",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍143] Apparently Pickford and co were more interested in shoving people, than really, i don't know, get to the fucking ball",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍139] O'Brien holding his own keeper is my favorite part of it",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍89] Proper Ev, that",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍87] They did it lmaooo",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍85] Anyone cribbing about the 11 minutes ~~ET~~ stoppage time didn’t watch the match at all. Entire stadium erupted when 11 minutes was shown lol. \n\nEverton literally had the upper hand going into stoppage time .",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍77] January 2018 anyone?",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍69] Just clicked on this match in the 99th minute. You can thank me Liverpool.",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍67] You can move stadiums, but the ghost of Origi will follow you.",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍53] My goat",
+          "source": "reddit",
+          "score": null
+        },
+        {
+          "text": "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "source": "reddit",
+          "score": null
+        }
+      ],
+      "imageQuery": "Reddit reaction Everton Liverpool van Dijk goal",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-20"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍1684] Everton that.",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1179] Damn, Villa &amp; Liverpool with the last minute goals to gain 3pts",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍579] This man lives only for scoring late winners against Everton",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍565] Woodman’s impact",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍509] SET PIECE FC",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍237] Everton and fucking up at last minute vs Liverpool",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍198] Origi somewhere out there smiling big",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍188] Was very funny in the wrestling match that was going on to see that the Everton defender was actually pulling Pickford’s shirt. ",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍176] CAPTAIN",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍152] Doesn't matter how shit we are, they'll always bottle it lmao",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍143] Apparently Pickford and co were more interested in shoving people, than really, i don't know, get to the fucking ball",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍139] O'Brien holding his own keeper is my favorite part of it",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍89] Proper Ev, that",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍87] They did it lmaooo",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍85] Anyone cribbing about the 11 minutes ~~ET~~ stoppage time didn’t watch the match at all. Entire stadium erupted when 11 minutes was shown lol. \n\nEverton literally had the upper hand going into stoppage time .",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍77] January 2018 anyone?",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍69] Just clicked on this match in the 99th minute. You can thank me Liverpool.",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍67] You can move stadiums, but the ghost of Origi will follow you.",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍53] My goat",
+            "source": "reddit",
+            "score": null
+          },
+          {
+            "text": "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+            "source": "reddit",
+            "score": null
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "新たな舞台で、古くからの因縁が最新の形で更新されたマージーサイドダービー。数字が物語るキャプテンの存在感と、変わらぬライバル関係の熱さ。データで納得するサッカー分析を今後もお届けします。チャンネル登録と高評価、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Liverpool players celebrating derby win 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！\n#速報サッカーニュース\n次回もお楽しみに！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-20",
+    "postId": "2",
+    "originalTitle": "Everton 1 - [2] Liverpool - Virgil van Dijk 90+10'",
+    "generatedAt": "2026-04-20T14:32:29.532Z",
+    "mainImagePath": null
+  }
+}

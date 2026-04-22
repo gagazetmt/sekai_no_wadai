@@ -1,0 +1,359 @@
+{
+  "youtubeTitle": "三笘薫が左足ダイレクトで炸裂！トッテナム戦のワンダーゴールを全角度検証【データで解説】",
+  "hashtagsText": "#サッカー #三笘薫 #ブライトン #プレミアリーグ #トッテナム",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "トッテナムを沈黙させた、あの一撃。三笘薫が放った、まさに芸術と呼ぶべきボレーシュート。今日は、そのゴールを様々な角度から捉えた映像と、海外ファンの熱い反応、そして彼の今季の数字を徹底的に検証します。",
+      "keyPoints": [],
+      "imageQuery": "Kaoru Mitoma goal Tottenham",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "ウェンブリーで炸裂！三笘薫の左足ダイレクトボレーを全角度で徹底解剖！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "前半をリードして折り返そうとしていたトッテナム。しかし、その直前にブライトンの三笘薫が放った一撃は、まさに芸術と呼ぶにふさわしいボレーシュートでした。このゴールは、バレバからのロングフィードを、三笘がダイレクトで左足のインサイドに当て、ゴールの隅に流し込んだもの。まさに電光石火のプレーで、試合の空気を一変させました。ファンバステンを彷彿とさせるような、完璧なボディシェイプとタッチ。多くの選手がここでインステップを強打してボールを高く飛ばしてしまうところを、冷静にインサイドで正確にコントロールした、クラスの高いフィニッシュでした。",
+      "keyPoints": [
+        "ダイレクトボレー",
+        "左足インサイドフィニッシュ",
+        "ファンバステン級のボディシェイプ"
+      ],
+      "imageQuery": "Mitoma volley goal alternate angle",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": "前半AT、スパーズ優勢の空気を一変させた三笘の電光石火ボレー。「ダイレクト」「逆足」という高等テクニックが重なった一撃の全貌を、興奮冷めやらぬ映像とともに解説する。また、ファンバステンを想起させるようなボレーについても解説",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "text": "前半をリードして折り返そうとしていたトッテナム。しかし、その直前にブライトンの三笘薫が放った一撃は、まさに芸術と呼ぶにふさわしいボレーシュートでした。今日は、このゴールを様々な角度から捉えた映像と、海外ファンの熱い反応をお届けします。",
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外の掲示板では、このゴールに世界中のファンが沸き立ちました。『これはもう、ただの爆弾だ』という最高評価のコメントを筆頭に、『左足でこれかよ』と逆足での鮮やかさに驚く声、『信じられないほどのタッチの魔術師だ』とその技術を絶賛する声が多数。また、『ダブステップがシュートになったらこんな感じだろうな』というユニークな比喩や、『見飽きない。夢中になる』というリピートしたくなる魅力を語るコメントも。『ついに誰かが別アングルを上げた！』と、この映像を待ち望んでいたファンの熱意もうかがえます。",
+      "keyPoints": [
+        "海外ファン絶賛",
+        "「爆弾」との表現多数",
+        "「タッチの魔術師」と称賛",
+        "",
+        "",
+        "",
+        ""
+      ],
+      "imageQuery": "soccer reddit reaction Mitoma",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍57] That’s just a banger",
+          "[👍24] Left footed too",
+          "[👍16] Filthy ",
+          "[👍10] The dude is a first touch savant ",
+          "[👍10] I won't get tired of watching this one. It's mesmerizing.",
+          "[👍2] If dub step was a shot ",
+          "[👍1] **Mirrors / Alternative Angles**\n  \n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "[👍1] Class finish to just place it with the inside of the foot rather than trying to blast it through the laces. ",
+          "[👍1] Finally someone posted the AA.",
+          "[👍1] michael keane-esque",
+          "[👍1] So many players try to put their laces through that and slice the ball way high and wide. No need on a ball from that far away, just need to redirect its momentum back whence it came. what a beauty of an instep thumper. ",
+          "これはもう、ただの爆弾だ。",
+          "左足でこれかよ。\n信じられないほどのタッチの魔術師だ。",
+          "見飽きない。夢中になる。",
+          "ダブステップがシュートになったら\nこんな感じだろうな。",
+          "ついに誰かが別アングルを上げた！",
+          "多くの選手はここでインステップを\n強打してボールを高く飛ばしてしまう。",
+          "マイケル・キーンみたいだ。",
+          "不潔なほど上手い。",
+          "クラスの高いフィニッシュだ。\n強打せず、インサイドで正確に置いた。",
+          "美しいインステップの一撃だ。",
+          "しかもウェンブリーで、しかも\nアジア人である三笘選手に決められた。",
+          "前半に必要なリードを\n持って折り返せるはずだったのに…",
+          "試合の最初のシュートが\n45+3分のワンダーゴールだなんて。",
+          "トッテナムは何も悪くない…"
+        ],
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "player_season_stats",
+      "label": "今シーズンの成績",
+      "icon": "📊",
+      "narration": "では、このゴールを決めた三笘薫の今シーズンの数字を見てみましょう。プレミアリーグ25/26シーズン、出場22試合でゴール3、アシスト1、評価点は6.81。注目すべきは、期待ゴール値xGが3.38に対して、実ゴールが3という数字。これは、彼が得たチャンスをほぼ確率通りに決めていることを示しています。しかし、この数字以上に、このトッテナム戦でのゴールのように、統計を超えた「決定力」を見せつけたことが大きい。まさに、『シュートの質は世界水準なのに数字が伴っていなかった男が、よりによって左足ノータッチで世界を唸らせた』という逆説的な瞬間でした。また、キーパス27回、成功ドリブル23回と、チャンスメイク能力も健在です。",
+      "keyPoints": [],
+      "imageQuery": "Kaoru Mitoma stats 2025 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Kaoru Mitoma",
+          "url": "https://www.sofascore.com/player/936849",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "今期成績（G+A）",
+          "value": "順位, 選手名, チーム名, 防御率. 1, J.ソリアーノ, エンゼルス, 0.28. 2, M.ワカ, ロイヤルズ, 1.00. 3, P.メシック, ガーディアンズ, 1.05. 4, T.ブラッドリー ..."
+        },
+        {
+          "label": "今期出場試合数",
+          "value": "セントラル・リーグ. チーム, 試合, 勝利, 敗北, 引分, 勝率, 差. ヤクルト, 143, 80, 59, 4 .576, --. DeNA, 143, 73, 68, 2 .518, 8.0. 阪 神, 143, 68, 71, "
+        },
+        {
+          "label": "今期平均評価点",
+          "value": "順位, 選手名, チーム名, 防御率. 1, J.ソリアーノ, エンゼルス, 0.28. 2, M.ワカ, ロイヤルズ, 1.00. 3, P.メシック, ガーディアンズ, 1.05. 4, T.ブラッドリー ..."
+        },
+        {
+          "label": "市場価値",
+          "value": "Transfermarktデータベースの最近更新された市場価値です。 Key: = 市場価値 - キャリアハイ. ポジション: 全て, GK, DF, MF, FW. 主要ポジション:."
+        },
+        {
+          "label": "キーパス",
+          "value": "巨人, 12. 打点成績一覧. パ・リーグ打者成績. 打率. 2026/4/18 21:38. 順位, 選手名, チーム名, 打率. 1, 辰己, 楽天 .355. 2, 近藤, ソフトバンク .328. 3, 中川 ..."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 936849,
+        "name": "Kaoru Mitoma",
+        "position": "M",
+        "team": "Brighton & Hove Albion",
+        "nationality": "Japan",
+        "dateOfBirth": "1997-05-20T00:00:00+00:00",
+        "height": 178,
+        "preferredFoot": "Right",
+        "marketValue": "€23M",
+        "contractUntil": "2027-06",
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 22,
+          "goals": 3,
+          "assists": 1,
+          "rating": 6.81,
+          "minutesPlayed": 1491,
+          "yellowCards": 3,
+          "redCards": 0,
+          "expectedGoals": 3.38,
+          "keyPasses": 27
+        },
+        "positionStats": {
+          "keyPasses": 27,
+          "successfulDribbles": 23,
+          "bigChancesCreated": 3,
+          "tackles": 16,
+          "interceptions": 9,
+          "accuratePassesPct": 81.31
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "player_episode",
+      "label": "選手エピソード",
+      "icon": "✨",
+      "narration": "三笘薫といえば、あの『1mmの奇跡』に代表される、ドリブルで相手を翻弄するイメージが強い選手です。しかし、なぜあのような豪快なダイレクトボレーを決められるのか。そのヒントは、彼のサッカー哲学にあります。川崎フロンターレ時代から、三笘は『止めずに蹴る』、つまりトラップしてからシュートするのではなく、流れの中で直接シュートに持ち込むプレーを研究し、磨いてきました。それは、相手ディフェンダーの準備が整う前に、素早く決断し実行するため。今回のゴールは、まさにその哲学の結晶。バレバのロングボールを、一切止めることなく、流れるような動きの中で左足に収め、ゴールへと導いたのです。ドリブル職人という一面だけでなく、『蹴る技術』の高さも兼ね備えた、完成度の高いアタッカーであることを証明する一撃でした。",
+      "keyPoints": [
+        "「1mmの奇跡」のドリブラー",
+        "「止めずに蹴る」哲学",
+        "川崎F時代から磨いた技術"
+      ],
+      "imageQuery": "Mitoma Kawasaki Frontale training",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Kaoru_Mitoma_%282022%29.jpg/330px-Kaoru_Mitoma_%282022%29.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Kaoru Mitoma",
+          "url": "https://en.wikipedia.org/wiki/Kaoru_Mitoma",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Kaoru Mitoma",
+        "description": "Japanese footballer (born 1997)",
+        "extract": "Kaoru Mitoma  is a Japanese professional footballer who plays as a left winger for Premier League club Brighton & Hove Albion and the Japan national team. He is best known for his dribbling ability.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Kaoru_Mitoma_%282022%29.jpg/330px-Kaoru_Mitoma_%282022%29.jpg",
+        "url": "https://en.wikipedia.org/wiki/Kaoru_Mitoma",
+        "type": "standard"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "ブライトンの順位",
+      "icon": "🔍",
+      "narration": "この勝利を挙げたブライトンの現在の順位と展望について、データで見てみましょう。チームの状況を象徴する選手の一人が、このゴールの起点となったカルロス・バレバです。今シーズン26試合に出場し、評価点6.55。ゴールやアシストの数字は目立ちませんが、タックル28回、インターセプト25回と守備の貢献度は高く、正確なパス成功率85.74%でビルドアップを支えています。市場価値は5300万ユーロと高く評価されており、チームの重要なピースです。ブライトンは、こうした若く有望な選手を軸に、欧州カップ戦出場権、具体的には UEFAヨーロッパリーグ(EL)や UEFAヨーロッパカンファレンスリーグ(ECL)の獲得を目指して戦っています。マンチェスター・ユナイテッドやチェルシー、ニューカッスルといったライバルと熾烈な争いを演じる中で、三笘のような決定力がより一層重要になってくるでしょう。",
+      "keyPoints": [
+        "バレバ：26試合 評価6.55",
+        "タックル28回、インターセプト25回",
+        "市場価値5300万ユーロ"
+      ],
+      "imageQuery": "Brighton Premier League table 2026",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Carlos Baleba",
+          "url": "https://www.sofascore.com/player/1199043",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "リーグ順位",
+          "value": "Kaoru Mitoma has scored the most career goals by a Japanese player in the Premier League, with 22 goals. ; 1. Kaoru Mito"
+        },
+        {
+          "label": "成績（勝分負）",
+          "value": "Kaoru Mitoma has scored the most career goals by a Japanese player in the Premier League, with 22 goals. ; 1. Kaoru Mito"
+        },
+        {
+          "label": "直近5試合",
+          "value": "Maya Yoshida has made the most career appearances by a Japanese player in the Premier League, with 154 appearances. ; 1."
+        },
+        {
+          "label": "ポイント",
+          "value": "Kaoru Mitoma has scored the most career goals by a Japanese player in the Premier League, with 22 goals. ; 1. Kaoru Mito"
+        }
+      ],
+      "scriptNote": "ブライトンの現在の順位について、CL権、EL権、ECL権　獲得に向けた今後の展望、ライバルとなるチームを解説",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 1199043,
+        "name": "Carlos Baleba",
+        "position": "M",
+        "team": "Brighton & Hove Albion",
+        "nationality": "Cameroon",
+        "dateOfBirth": "2004-01-03T00:00:00+00:00",
+        "height": 179,
+        "preferredFoot": "Left",
+        "marketValue": "€53M",
+        "contractUntil": null,
+        "leagueName": "Premier League",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 26,
+          "goals": 0,
+          "assists": 0,
+          "rating": 6.55,
+          "minutesPlayed": 1318,
+          "yellowCards": 5,
+          "redCards": 0,
+          "expectedGoals": 0.53,
+          "keyPasses": 4
+        },
+        "positionStats": {
+          "keyPasses": 4,
+          "successfulDribbles": 9,
+          "bigChancesCreated": 0,
+          "tackles": 28,
+          "interceptions": 25,
+          "accuratePassesPct": 85.74
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？数字と映像で振り返る三笘薫のワンダーゴール。このチャンネルでは、サッカーの速報ニュースを、具体的なデータと共にお届けしています。次回の解説もお楽しみに！チャンネル登録と高評価、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Subscribe YouTube football news",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "ご視聴ありがとうございました！",
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "8",
+    "originalTitle": "Alternate angles of Mitoma's goal against Spurs",
+    "generatedAt": "2026-04-19T02:53:21.054Z",
+    "mainImagePath": null
+  }
+}

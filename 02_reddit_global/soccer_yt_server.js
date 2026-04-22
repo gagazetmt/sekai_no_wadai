@@ -478,64 +478,184 @@ function buildS5(post) {
 }
 
 // ─── サムネイル カラーパレット ────────────────────────────────────────────────
+// P1用: upperBg / upperTx / lowerBg / lowerTx / subBg / subTx
+// P2-P4用: p1bg / p1tx / p2bg / p2tx / p3bg / p3tx
 const TN_COLORS = {
-  A1:{ boxBg:"linear-gradient(135deg,#D4A800,#C08800)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(200,0,0,0.95)"   },  // 金
-  A2:{ boxBg:"linear-gradient(135deg,#cc0000,#960000)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(20,20,20,0.92)"  },  // 赤
-  A3:{ boxBg:"linear-gradient(135deg,#1c1c1c,#2e2e2e)", boxTx:"#fff", strokeClr:"#b88000", lbl:"rgba(180,140,0,0.95)" },  // 黒
-  A4:{ boxBg:"linear-gradient(135deg,#f0f0f0,#dcdcdc)", boxTx:"#111", strokeClr:"#666",    lbl:"rgba(200,0,0,0.95)"   },  // 白
-  A5:{ boxBg:"linear-gradient(135deg,#0044cc,#002d99)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(200,0,0,0.95)"   },  // 紺
-  A6:{ boxBg:"linear-gradient(135deg,#cc5500,#993e00)", boxTx:"#fff", strokeClr:"#1a1a1a", lbl:"rgba(200,0,0,0.95)"   },  // 橙
+  A1:{
+    upperBg:"#fff001", upperTx:"#2104fc", lowerBg:"#fff001", lowerTx:"#fb0002", subBg:"#fdfcff", subTx:"#c7342d", lbl:"#cc0000", stroke:"#cc0000",
+    p1bg:"#fff001", p1tx:"#2104fc", p2bg:"#fff001", p2tx:"#fb0002", p3bg:"#fdfcff", p3tx:"#c7342d"
+  }, // プレミア金黄
+  A2:{
+    upperBg:"#0088AA", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#0088AA", stroke:"#0088AA",
+    p1bg:"#0088AA", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 青緑×金
+  A3:{
+    upperBg:"#AA0000", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#1a1a1a", subBg:"#ffffff", subTx:"#DD0000", lbl:"#AA0000", stroke:"#AA0000",
+    p1bg:"#AA0000", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#1a1a1a", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 赤×金
+  A4:{
+    upperBg:"#1a1a1a", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#1a1a1a", stroke:"#1a1a1a",
+    p1bg:"#1a1a1a", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 黒×金
+  A5:{
+    upperBg:"#005522", upperTx:"#ffffff", lowerBg:"#ffffff", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#005522", stroke:"#005522",
+    p1bg:"#005522", p1tx:"#ffffff", p2bg:"#ffffff", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 緑×白
+  A6:{
+    upperBg:"#001a88", upperTx:"#ffffff", lowerBg:"#FFD700", lowerTx:"#DD0000", subBg:"#ffffff", subTx:"#DD0000", lbl:"#001a88", stroke:"#001a88",
+    p1bg:"#001a88", p1tx:"#ffffff", p2bg:"#FFD700", p2tx:"#DD0000", p3bg:"#ffffff", p3tx:"#DD0000"
+  }, // 紺×金
 };
 
 // ─── サムネイル HTML (1280×720) ───────────────────────────────────────────────
+// 2段テキストボックス型: 上段(upperBg地/白文字) + 下段(lowerBg地/lowerTx文字)
+// サブボックス(白地・赤文字)が上段上端に少し重なる
 function buildThumbnailHtml(post) {
-  const TW = 1280, TH = 720, SAFE = 40, MARGIN = 32;
   const { b64, mime } = imgBase64(post.mainImagePath);
   const iz = getImgZoom(post, 'tn');
-  const bgStyle = b64
+  const bgCss = b64
     ? `background-image:url('data:${mime};base64,${b64}');background-size:cover;background-position:${iz.x}% ${iz.y}%;background-repeat:no-repeat;background-color:#111;`
     : `background:linear-gradient(135deg,#1a1a3e,#2d2d60);`;
-  const zoomStyle = `transform:scale(${iz.zoom});transform-origin:${iz.x}% ${iz.y}%;`;
-  const label = getLabel(post);
-  const badge = post.badge || "";
-  const vc = TN_COLORS[post.colorVariant] || TN_COLORS.A1;
-  const fs = 66;
-  const badgeFs = Math.round(fs * 0.848);
-  const boxPadV = Math.round(fs * 0.18);
-  const boxPadH = 14;
-  const strokeW = Math.max(2, Math.round(fs * 0.045));
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{width:${TW}px;height:${TH}px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
-  .bg{width:${TW}px;height:${TH}px;position:relative;overflow:hidden;}
-  .bg-img{position:absolute;inset:0;${bgStyle}${zoomStyle}}
-  .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.12);}
-  .title-area{position:absolute;bottom:${SAFE}px;left:0;right:0;display:flex;flex-direction:column;align-items:flex-start;gap:12px;}
-  .badges{display:flex;flex-direction:row;gap:40px;align-items:center;padding-left:${SAFE}px;}
-  .badge-item{display:inline-block;font-size:${badgeFs}px;font-weight:900;padding:4px 30px;border-radius:8px;letter-spacing:2px;color:#fff;width:fit-content;
-    text-shadow:1px 2px 6px rgba(0,0,0,0.7);box-shadow:0 4px 14px rgba(0,0,0,0.55);}
-  .badge-primary{background:${vc.lbl};}
-  .badge-secondary{background:rgba(180,100,0,0.95);}
-  .title-main{
-    color:${vc.boxTx};
-    -webkit-text-stroke:${strokeW}px ${vc.strokeClr};
-    paint-order:stroke fill;
-    text-shadow:3px 4px 10px rgba(0,0,0,0.9),0 0 2px rgba(0,0,0,1);
-    font-size:${fs}px;font-weight:900;line-height:1.3;
-    background:${vc.boxBg};
-    box-shadow:0 6px 20px rgba(0,0,0,0.65),inset 0 1px 0 rgba(255,255,255,0.15);
-    padding:${boxPadV}px ${boxPadH}px;margin-left:${MARGIN}px;margin-right:${MARGIN}px;
-    width:calc(100% - ${MARGIN*2}px);overflow-wrap:break-word;word-break:break-all;}
-  </style></head><body><div class="bg">
-    <div class="bg-img"></div><div class="overlay"></div>
-    <div class="title-area">
-      <div class="badges">
-        <div class="badge-item badge-primary">${esc(label)}</div>
-        ${badge ? `<div class="badge-item badge-secondary">${esc(badge)}</div>` : ""}
-      </div>
-      <div class="title-main">${escLine(post.catchLine1 || "")}</div>
+  const zoomCss = `transform:scale(${iz.zoom});transform-origin:${iz.x}% ${iz.y}%;`;
+  const v = TN_COLORS[post.colorVariant] || TN_COLORS.A1;
+  const PAT = parseInt(post.pattern || 1);
+  const phrases = (post.catchLine1 || "").split(/[\\n、！\s]+/).map(s => s.trim()).filter(Boolean);
+  const lbl = post.label || "【速報】";
+  const fs = 95; // 標準スケール
+
+  if (PAT === 1) {
+    const BOX_H = 324, UPPER_H = 143, LOWER_H = 181, SUB_OVL = 28, PAD = 14, AVAIL_W = 1252, MIN_SX = 0.65;
+    const upperText = phrases[0] || "上段テキスト", lowerText = phrases.slice(1).join("　") || "下段テキスト";
+    const subFsVal = 40;
+    function charW(s){ return [...s].reduce((n,c)=>n+(c.charCodeAt(0)>127?1.0:0.55),0); }
+    function calcStyle(text, rowH){
+      const cw = charW(text), fsByH = Math.floor((rowH - 8) / 1.05), natW = cw * fsByH * 0.91;
+      if(natW <= AVAIL_W) return {fs:fsByH, sx:1.0};
+      const sx = AVAIL_W / natW;
+      if(sx >= MIN_SX) return {fs:fsByH, sx:parseFloat(sx.toFixed(3))};
+      return {fs: Math.floor(AVAIL_W / (cw * 0.91 * MIN_SX)), sx: MIN_SX};
+    }
+    const uCalc = calcStyle(upperText, UPPER_H), lCalc = calcStyle(lowerText, UPPER_H);
+    const uFs = Math.round(uCalc.fs), lFs = Math.round(lCalc.fs);
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+    .wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+    .bg-img{position:absolute;inset:0;${bgCss}${zoomCss}}
+    .overlay{position:absolute;inset:0;background:rgba(0,0,0,0.08);}
+    .main-box{position:absolute;bottom:0;left:0;right:0;height:${BOX_H}px;display:flex;flex-direction:column;}
+    .upper-row,.lower-row{flex-shrink:0;padding:0 ${PAD}px;display:flex;align-items:center;overflow:hidden;}
+    .upper-row{height:${UPPER_H}px;background:${v.upperBg};color:${v.upperTx};font-size:${uFs}px;font-weight:900;}
+    .lower-row{height:${LOWER_H}px;background:${v.lowerBg};color:${v.lowerTx};font-size:${lFs}px;font-weight:900;}
+    .tx{display:inline-block;white-space:nowrap;line-height:1.0;}
+    .sub-box{position:absolute;bottom:${BOX_H - SUB_OVL}px;left:16px;background:${v.subBg};color:${v.subTx};font-size:${subFsVal}px;font-weight:900;padding:4px 20px 5px 14px;border:3px solid ${v.subTx};white-space:nowrap;letter-spacing:1px;box-shadow:2px 3px 12px rgba(0,0,0,0.5);}
+    </style></head><body><div class="wrap"><div class="bg-img"></div><div class="overlay"></div>
+    <div class="main-box">
+      <div class="upper-row"><span class="tx" style="transform:scaleX(${uCalc.sx});transform-origin:left center;">${esc(upperText)}</span></div>
+      <div class="lower-row"><span class="tx" style="transform:scaleX(${lCalc.sx});transform-origin:left center;">${esc(lowerText)}</span></div>
     </div>
-  </div></body></html>`;
+    <div class="sub-box">${esc(getLabel(post))}</div>
+    </div></body></html>`;
+  }
+
+  if (PAT === 2) {
+    const colors=[{bg:v.p1bg,tx:v.p1tx},{bg:v.p2bg,tx:v.p2tx},{bg:v.p3bg,tx:v.p3tx}];
+    const panelFs = Math.round(fs*0.82);
+    const boxes = phrases.map((t,i)=>{
+      const c=colors[i%colors.length];
+      return `<div style="background:${c.bg};color:${c.tx};font-size:${panelFs}px;font-weight:900;padding:10px 20px;line-height:1.22;width:100%;">${esc(t)}</div>`;
+    }).join("\n");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+    .wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+    .img{position:absolute;inset:0;${bgCss}${zoomCss}}
+    .panel{position:absolute;top:0;left:0;width:480px;height:100%;background:rgba(8,8,8,.82);display:flex;flex-direction:column;justify-content:center;padding:36px 0;}
+    .edge{position:absolute;top:0;left:480px;width:4px;height:100%;background:${v.p1bg};}
+    .lbl-tag{background:${v.lbl};color:#fff;font-size:28px;font-weight:900;padding:7px 20px;letter-spacing:1px;margin-bottom:14px;margin-left:28px;}
+    .boxes{display:flex;flex-direction:column;gap:6px;padding:0 28px;}
+    </style></head><body><div class="wrap"><div class="img"></div>
+    <div class="panel"><div class="lbl-tag">${esc(lbl)}</div><div class="boxes">${boxes}</div></div>
+    <div class="edge"></div></div></body></html>`;
+  }
+
+  if (PAT === 3) {
+    const colors=[{bg:v.p1bg,tx:v.p1tx},{bg:v.p2bg,tx:v.p2tx},{bg:v.p3bg,tx:v.p3tx}];
+    const centerFs = Math.round(fs*0.95);
+    const boxes = phrases.map((t,i)=>{
+      const c=colors[i%colors.length];
+      return `<div style="display:inline-block;background:${c.bg};color:${c.tx};font-size:${centerFs}px;font-weight:900;padding:11px 28px;line-height:1.2;">${esc(t)}</div>`;
+    }).join("\n");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+    .wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+    .img{position:absolute;inset:0;${bgCss}${zoomCss}}
+    .vig{position:absolute;inset:0;background:radial-gradient(ellipse 90% 85% at 50% 50%,transparent 15%,rgba(0,0,0,.5) 60%,rgba(0,0,0,.88) 100%);}
+    .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px;}
+    .lbl-tag{background:${v.lbl};color:#fff;font-size:30px;font-weight:900;padding:5px 22px;border-radius:4px;letter-spacing:1px;margin-bottom:8px;}
+    </style></head><body><div class="wrap"><div class="img"></div><div class="vig"></div>
+    <div class="center"><div class="lbl-tag">${esc(lbl)}</div>${boxes}</div></div></body></html>`;
+  }
+
+  if (PAT === 4) {
+    const mainPh = phrases[0]||"タイトル", subPhs = phrases.slice(1);
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+    .wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+    .img{position:absolute;inset:0;${bgCss}${zoomCss}}
+    .bands{position:absolute;bottom:0;left:0;right:0;display:flex;flex-direction:column;}
+    .lbl-band{background:${v.lbl};color:#fff;font-size:28px;font-weight:900;padding:6px 40px;letter-spacing:2px;display:flex;align-items:center;gap:30px;}
+    .main-band{background:${v.p1bg};color:${v.p1tx};font-size:${fs}px;font-weight:900;padding:18px 40px;line-height:1.2;letter-spacing:1px;}
+    </style></head><body><div class="wrap"><div class="img"></div>
+    <div class="bands">
+      <div class="lbl-band">${esc(lbl)}${subPhs.length?`<span style="font-size:18px;opacity:.85">${esc(subPhs.join(' / '))}</span>`:""}</div>
+      <div class="main-band">${esc(mainPh)}</div>
+    </div></div></body></html>`;
+  }
+
+  if (PAT === 5) {
+    const strokeW=Math.round(fs*0.08);
+    const lineHtml=phrases.map(t=>`<div class="line">${esc(t)}</div>`).join("\n");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+    .wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+    .img{position:absolute;inset:0;${bgCss}${zoomCss}}
+    .grad{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 20%,rgba(0,0,0,.52) 100%);}
+    .bottom{position:absolute;bottom:36px;left:36px;right:36px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+    .lbl-tag{background:${v.lbl};color:#fff;font-size:28px;font-weight:900;padding:5px 18px;border-radius:4px;letter-spacing:1px;margin-bottom:6px;}
+    .line{font-size:${fs}px;font-weight:900;line-height:1.18;color:#fff;-webkit-text-stroke:${strokeW}px ${v.stroke};paint-order:stroke fill;filter:drop-shadow(2px 4px 8px rgba(0,0,0,.9));}
+    </style></head><body><div class="wrap"><div class="img"></div><div class="grad"></div>
+    <div class="bottom"><div class="lbl-tag">${esc(lbl)}</div><div>${lineHtml}</div></div></div></body></html>`;
+  }
+
+  if (PAT === 6) {
+    const strokeW=Math.max(3,Math.round(fs*0.055)), subFs=Math.round(fs*0.62);
+    const titleLines=phrases.map(t=>`<div class="fl">${esc(t)}</div>`).join("\n");
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{width:1280px;height:720px;overflow:hidden;font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;}
+    .wrap{width:1280px;height:720px;position:relative;overflow:hidden;}
+    .img{position:absolute;inset:0;${bgCss}${zoomCss}}
+    .right-dark{position:absolute;inset:0;background:linear-gradient(to right,transparent 0%,transparent 25%,rgba(0,0,0,.18) 50%,rgba(0,0,0,.40) 75%,rgba(0,0,0,.55) 100%);}
+    .vig{position:absolute;inset:0;background:radial-gradient(ellipse 110% 100% at 55% 50%,transparent 40%,rgba(0,0,0,.30) 80%,rgba(0,0,0,.60) 100%);}
+    .title-area{position:absolute;top:50%;right:0;width:70%;transform:translateY(-58%);padding:0 50px 0 30px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;}
+    .fl{font-size:${fs}px;font-weight:900;color:#ffffff;-webkit-text-stroke:${strokeW}px #b8760a;paint-order:stroke fill;text-shadow:0 0 8px rgba(230,175,0,1),0 0 18px rgba(220,160,0,.95),0 0 36px rgba(200,140,0,.80),0 0 70px rgba(180,120,0,.50),4px 6px 22px rgba(0,0,0,1);line-height:1.15;letter-spacing:1px;}
+    .sub-wrap{position:absolute;bottom:34px;right:40px;display:flex;align-items:stretch;box-shadow:3px 4px 16px rgba(0,0,0,.7);}
+    .sub-slash{width:${Math.round(subFs*0.7)}px;background:#cc0000;clip-path:polygon(30% 0%,100% 0%,70% 100%,0% 100%);flex-shrink:0;}
+    .sub-bar{background:rgba(240,240,240,.96);padding:10px 28px 10px 16px;display:flex;align-items:center;}
+    .sub-txt{font-size:${subFs}px;font-weight:900;color:#111;letter-spacing:2px;}
+    </style></head><body><div class="wrap">
+    <div class="img"></div><div class="right-dark"></div><div class="vig"></div>
+    <div class="title-area">${titleLines}</div>
+    <div class="sub-wrap"><div class="sub-slash"></div><div class="sub-bar"><div class="sub-txt">${esc(getLabel(post))}</div></div></div>
+    </div></body></html>`;
+  }
+
+  // Fallback to P1
+  return buildThumbnailHtml(Object.assign({}, post, { pattern: 1 }));
 }
 
 // ─── プレビュー尺計算ヘルパー ────────────────────────────────────────────────
@@ -3428,11 +3548,20 @@ function renderPosts() {
       </div>
     </div>
     <div style='margin:4px 0 8px;'>
+      <div style='font-size:10px;color:#888;margin-bottom:4px;'>レイアウト</div>
+      <input type='hidden' id='pattern-\${i}' value='\${p.pattern || 1}'>
+      <div style='display:flex;gap:4px;'>
+        \${[1,2,3,4,5,6].map(pn =>
+          "<button id='patbtn-\${i}-"+pn+"' onclick=\\"selectPattern(\${i},"+pn+")\\" style=\\"flex:1;background:"+( (p.pattern||1)===pn?"#1a1a00":"#111" )+";border:"+( (p.pattern||1)===pn?"2px solid #e5a000":"1px solid #333" )+";border-radius:4px;padding:3px 0;cursor:pointer;color:"+( (p.pattern||1)===pn?"#e5a000":"#666" )+";font-size:10px;font-weight:900;\\">P"+pn+"</button>"
+        ).join("")}
+      </div>
+    </div>
+    <div style='margin:4px 0 8px;'>
       <div style='font-size:10px;color:#888;margin-bottom:4px;'>ボックスカラー</div>
-      <input type='hidden' id='color-\${i}' value='A1'>
+      <input type='hidden' id='color-\${i}' value='\${p.colorVariant || "A1"}'>
       <div style='display:flex;gap:5px;'>
         \${[["A1","#D4A800","金"],["A2","#cc0000","赤"],["A3","#1c1c1c","黒"],["A4","#f0f0f0","白"],["A5","#0044cc","紺"],["A6","#cc5500","橙"]].map(([key,color,name],ci)=>
-          "<button id='colorbtn-\${i}-"+key+"' onclick=\\"selectColor(\${i},'"+key+"')\\" style=\\"display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;background:"+(key==="A1"?"#1a1a00":"#111")+";border:"+(key==="A1"?"2px solid #e5a000":"1px solid #333")+";border-radius:5px;padding:4px 2px;cursor:pointer;\\"><div style=\\"width:100%;height:6px;border-radius:2px;background:"+color+";border:"+(color==="#f0f0f0"?"1px solid #555":"none")+"\\"></div><span style=\\"font-size:9px;color:#999;\\">"+name+"</span></button>"
+          "<button id='colorbtn-\${i}-"+key+"' onclick=\\"selectColor(\${i},'"+key+"')\\" style=\\"display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;background:"+( (p.colorVariant||"A1")===key?"#1a1a00":"#111" )+";border:"+( (p.colorVariant||"A1")===key?"2px solid #e5a000":"1px solid #333" )+";border-radius:5px;padding:4px 2px;cursor:pointer;\\"><div style=\\"width:100%;height:6px;border-radius:2px;background:"+color+";border:"+(color==="#f0f0f0"?"1px solid #555":"none")+"\\"></div><span style=\\"font-size:9px;color:"+( (p.colorVariant||"A1")===key?"#e5a000":"#999" )+";\\">"+name+"</span></button>"
         ).join("")}
       </div>
     </div>
@@ -3540,6 +3669,7 @@ function buildPreviewSrc(i) {
   const labelText = document.getElementById("label-" + i)?.value ?? "";
   const badgeText = document.getElementById("badge-" + i)?.value ?? "";
   const colorVal  = document.getElementById("color-" + i)?.value || "A1";
+  const patVal    = document.getElementById("pattern-" + i)?.value || 1;
   const selectedImg = selectedThumbs[i];
   let src = "/api/thumbnail/preview/" + DATE + "/" + post.idx +
     "?zoom=" + z + "&px=" + x + "&py=" + y +
@@ -3547,9 +3677,22 @@ function buildPreviewSrc(i) {
     "&label=" + encodeURIComponent(labelText) +
     "&badge=" + encodeURIComponent(badgeText) +
     "&color=" + encodeURIComponent(colorVal) +
+    "&pat=" + patVal +
     "&t=" + Date.now();
   if (selectedImg) src += "&img=" + encodeURIComponent(selectedImg);
   return src;
+}
+
+function selectPattern(i, pat) {
+  document.getElementById("pattern-" + i).value = pat;
+  [1,2,3,4,5,6].forEach(pn => {
+    const btn = document.getElementById("patbtn-" + i + "-" + pn);
+    if (!btn) return;
+    btn.style.border     = pn === pat ? "2px solid #e5a000" : "1px solid #333";
+    btn.style.background = pn === pat ? "#1a1a00" : "#111";
+    btn.style.color      = pn === pat ? "#e5a000" : "#666";
+  });
+  updateTnPreview(i);
 }
 
 function selectColor(i, key) {
@@ -3597,6 +3740,7 @@ async function exportThumb(i) {
   const labelVal      = document.getElementById("label-" + i)?.value ?? post.thumbExportPost.label;
   const badgeVal      = document.getElementById("badge-" + i)?.value ?? post.thumbExportPost.badge;
   const colorVariant  = document.getElementById("color-" + i)?.value || "A1";
+  const pattern       = parseInt(document.getElementById("pattern-" + i)?.value || 1);
   const zoom = parseFloat(document.getElementById("zoom-z-" + i)?.value || 1.0);
   const px   = parseFloat(document.getElementById("zoom-x-" + i)?.value || 50);
   const py   = parseFloat(document.getElementById("zoom-y-" + i)?.value || 50);
@@ -3609,6 +3753,7 @@ async function exportThumb(i) {
       label: labelVal,
       badge: badgeVal,
       colorVariant,
+      pattern,
       imgZoom: { tn: { zoom, x: px, y: py } }
     });
     const r = await fetch("/api/thumbnail/export", {

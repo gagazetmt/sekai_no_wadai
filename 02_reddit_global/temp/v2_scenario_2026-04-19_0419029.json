@@ -1,0 +1,574 @@
+{
+  "youtubeTitle": "38年ぶりコパ制覇！レアル・ソシエダがアトレティコをPK戦で下す！米国人監督が欧州5大リーグ史上初の快挙",
+  "hashtagsText": "#レアルソシエダ #コパデルレイ #久保建英 #マタラッツォ #サッカー",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "衝撃の決着です！2026年コパ・デル・レイ決勝、レアル・ソシエダがアトレティコ・マドリードをPK戦の末、下しました。これは単なる優勝ではありません。アメリカ人監督による、欧州サッカー史上初の金字塔が打ち立てられた瞬間です。その全真相を、数字とデータで徹底解説します！",
+      "keyPoints": [],
+      "imageQuery": "Real Sociedad Copa del Rey 2026 final celebration",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": "38年ぶりの歓喜！その裏に隠された歴史的記録とは？",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "2026年4月、セビージャのエスタディオ・ラ・カルトゥハで行われたコパ・デル・レイ決勝。レアル・ソシエダ対アトレティコ・マドリードは、2-2という激しいスコアで120分を終え、その行方はPK戦へ。ソシエダがPK4-3で劇的な勝利を収め、1987年以来、実に38年ぶりとなる王座に輝きました。しかし、この優勝の真の歴史的価値は、指揮を執ったペレグリーノ・マタラッツォ監督にあります。彼の経歴が、この瞬間を単なる優勝から、欧州サッカー史に刻まれる快挙へと変えたのです。",
+      "keyPoints": [
+        "決勝スコア: 120分 2-2",
+        "PK戦: 4-3",
+        "ソシエダ38年ぶり優勝"
+      ],
+      "imageQuery": "Copa del Rey final 2026 penalty shootout",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "news_overview",
+        "query": "copa del rey",
+        "organic": [
+          {
+            "title": "Copa del Rey Final: Atletico Madrid vs. Real Sociedad | ESPN FC",
+            "snippet": "Watch the highlights as Real Sociedad defeat Atletico Madrid, 2-2 (4-3 on penalties), to win the Copa del Rey Final. ✔️ Subscribe to ESPN Unlimited: ...",
+            "link": "https://www.youtube.com/watch?v=pqOI52zaMN4",
+            "date": "8 hours ago"
+          },
+          {
+            "title": "Real Sociedad takes down Atletico Madrid in penalties - YouTube",
+            "snippet": "Following a back and forth 2-2 draw, Real Sociedad defeated Atletico Madrid in penalties to be crowned Copa Del Rey champions. Phil Kitromilides joins Alex ...",
+            "link": "https://www.youtube.com/watch?v=QhXeKS6eZTI",
+            "date": "7 hours ago"
+          },
+          {
+            "title": "Real Sociedad's thrilling Copa del Rey win over Atletico Madrid + ...",
+            "snippet": "Today on ESPN FC, the panel react to the Copa del Rey final, results around the Premier League and more. 0:00 Atletico Madrid vs. Real Sociedad reaction9:56 ...",
+            "link": "https://www.youtube.com/watch?v=PnPwZn9G3jE",
+            "date": "6 hours ago"
+          },
+          {
+            "title": "Atletico de Madrid 3-4 Real Sociedad on penalties | Final - FanCode",
+            "snippet": "14 Feb - 17 May, 2026 · Copa del rey, 2025-26 football vertical banner. Copa ... Copa del Rey, 2025-26. Show more videos. Experience. Premium Live Streaming.",
+            "link": "https://www.fancode.com/football/tour/copa-del-rey-202526-19253270/video-highlights/atletico-de-madrid-34-real-sociedad-on-penalties-final-217267",
+            "date": "7 hours ago"
+          },
+          {
+            "title": "JULIAN ALVAREZ WITH AN ABSOLUTELY INSANE GOAL TO ...",
+            "snippet": "86K likes, 281 comments - espnfc on April 18, 2026: \"JULIAN ALVAREZ WITH AN ABSOLUTELY INSANE GOAL TO EQUALIZE LATE IN THE COPA DEL REY FINAL \".",
+            "link": "https://www.instagram.com/reel/DXSYR3NglXB/",
+            "date": "6 hours ago"
+          },
+          {
+            "title": "Diego Simeone dry interview response to a journalist asking what ...",
+            "snippet": "Diego Simeone dry interview response to a journalist asking what he said to players after Copa Del Rey loss against Real Sociedad: \"Nothing\". Media. This ...",
+            "link": "https://www.reddit.com/r/soccer/comments/1spbvzx/diego_simeone_dry_interview_response_to_a/",
+            "date": "8 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=pqOI52zaMN4]\nCopa del Rey Final: Atletico Madrid vs. Real Sociedad | Copa del Rey Highlights | ESPN FC - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC\n\n---\n\n[出典: https://www.youtube.com/watch?v=QhXeKS6eZTI]\nCopa Del Rey CHAMPIONS | Real Sociedad takes down Atletico Madrid in penalties - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "historical_record",
+      "label": "歴史的記録・節目",
+      "icon": "📜",
+      "narration": "この勝利により、ペレグリーノ・マタラッツォ監督は、欧州の「ビッグ5」リーグ（イングランド、スペイン、イタリア、ドイツ、フランス）において、主要なトロフィーを獲得した初のアメリカ生まれの監督という歴史を作りました。アメリカは「サッカー後進国」という固定観念を、彼は数字と実績で静かに粉砕したのです。コロンビア大学で応用数学の学位を取得した彼は、22歳でドイツに渡り、選手として、そして指導者として欧州の夢を追い続けました。その努力が、この歴史的一冠という形で結実した瞬間でした。",
+      "keyPoints": [
+        "マタラッツォ監督: 欧州5大リーグ初の米国人タイトル獲得監督",
+        "米国出身監督の快挙",
+        ""
+      ],
+      "imageQuery": "Pellegrino Matarazzo first American coach trophy",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Real Sociedad's Copa win gives Matarazzo U.S. coaching history",
+          "url": "https://www.espn.com/soccer/story/_/id/48526120/real-sociedad-copa-del-rey-final-pellegrino-matarazzo-atletico-madrid",
+          "date": "7 hours ago"
+        },
+        {
+          "label": "Pellegrino Matarazzo is the first U.S.-born manager to win a trophy ...",
+          "url": "https://www.facebook.com/BleacherReportFootball/posts/pellegrino-matarazzo-is-the-first-us-born-manager-to-win-a-trophy-with-a-club-in/1574785857337647/",
+          "date": "9 hours ago"
+        },
+        {
+          "label": "[B/R Football] Pellegrino Matarazzo is the first U.S.-born manager to ...",
+          "url": "https://www.reddit.com/r/soccer/comments/1spbes7/br_football_pellegrino_matarazzo_is_the_first/",
+          "date": "8 hours ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "historical_record",
+        "query": "Pellegrino Matarazzo first US born coach trophy big five Europe history",
+        "organic": [
+          {
+            "title": "Real Sociedad's Copa win gives Matarazzo U.S. coaching history",
+            "snippet": "Real Sociedad's Copa del Rey win made Pellegrino Matarazzo the first U.S.-born coach to win a trophy in Europe's \"big five\" leagues.",
+            "link": "https://www.espn.com/soccer/story/_/id/48526120/real-sociedad-copa-del-rey-final-pellegrino-matarazzo-atletico-madrid",
+            "date": "7 hours ago"
+          },
+          {
+            "title": "Pellegrino Matarazzo is the first U.S.-born manager to win a trophy ...",
+            "snippet": "After earning a degree in applied mathematics from Columbia University, he moved to Germany when he was 22 to pursue a European dream as a professional player.",
+            "link": "https://www.facebook.com/BleacherReportFootball/posts/pellegrino-matarazzo-is-the-first-us-born-manager-to-win-a-trophy-with-a-club-in/1574785857337647/",
+            "date": "9 hours ago"
+          },
+          {
+            "title": "[B/R Football] Pellegrino Matarazzo is the first U.S.-born manager to ...",
+            "snippet": "[B/R Football] Pellegrino Matarazzo is the first U.S.-born manager to win a trophy with a club in Europe's top five leagues. Media.",
+            "link": "https://www.reddit.com/r/soccer/comments/1spbes7/br_football_pellegrino_matarazzo_is_the_first/",
+            "date": "8 hours ago"
+          },
+          {
+            "title": "PELLEGRINO MATARAZZO BECOMES THE FIRST AMERICAN ...",
+            "snippet": "Congratulations to Don Carlo who becomes the first and only coach in football history to win all top five European league titles... Serie A - AC Milan ...",
+            "link": "https://www.facebook.com/ESPNFC/posts/pellegrino-matarazzo-becomes-the-first-american-manager-to-win-a-major-cup-final/1922891255868308/",
+            "date": "5 hours ago"
+          },
+          {
+            "title": "Matarazzo's Copa win makes US coaching history",
+            "snippet": "Real Sociedad's Copa del Rey win made Pellegrino Matarazzo the first U.S.-born coach to win a trophy in Europe's \"big five\" leagues. ... Matarazzo's Copa win ...",
+            "link": "https://x.com/ESPNsoccer/status/2045655184844464619",
+            "date": "6 hours ago"
+          },
+          {
+            "title": "Pellegrino Matarazzo interview: The American coach on brink of ...",
+            "snippet": "No American coach (spoiler: not even Ted Lasso) has ever led a team to a major trophy in one of Europe's top five football countries. Below that level ...",
+            "link": "https://www.nytimes.com/athletic/7204565/2026/04/18/copa-del-rey-matarazzo-real-sociedad-atletico/",
+            "date": "1 day ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.espn.com/soccer/story/_/id/48526120/real-sociedad-copa-del-rey-final-pellegrino-matarazzo-atletico-madrid]\nReal Sociedad's Copa win gives Matarazzo U.S. coaching history - ESPN Matarazzo's Copa win makes U.S. coaching history --> Skip to main content Skip to navigation < > Matarazzo's Copa win makes U.S. coaching history 7h Alex Kirkland Messi stunner gives Miami's new coach debut win 5h ESPN News Services Gnabry injury deals Bayern blow; WCup in doubt 6h Associated Press Parkinson: Wrexham to take promotion 'to the wire' 13h PA De Zerbi vows Spurs can win last 5 to survive 10h James Olley Napoli booed as loss puts Inter on verge of title 12h Associated Press Union Berlin's Eta beaten in historic first match 14h Associated Press Ranked: Who are the top 50 players in the Premier League right now? 2d Ryan O'Hanlon Man City vs. Arsenal: What to watch for in Premier League title showdown 2d Rob Dawson, James Olley Transfer rumors, news: Liverpool eye Wharton amid Man United, Real Madrid interest 15h ESPN What did the USWNT learn ahead of World Cup after Japan series? 21h Jeff Kassouf Life after Pochettino: USMNT needs ambitious post-World Cup succession plan 2d Jeff Carlisle play What went wrong for Atlético Madrid vs. Real Sociedad? (3:04) The 'FC TV' crew react to Real Sociedad beating Atlético Madrid on penalties in the Copa del Rey final. (3:04) Alex Kirkland Apr 18, 2026, 07:56 PM ET Multiple Authors Email Print Open Extended Reactions Pellegrino Matarazzo hailed Real Sociedad 's \"unbelievable journey\" since taking charge earlier this season after his team beat Atlético Madrid on"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "custom_research",
+      "label": "久保建英の活躍",
+      "icon": "🔍",
+      "narration": "優勝に貢献した日本人MF、久保建英の今シーズンの活躍をデータで見てみましょう。2025/26シーズンのラ・リーガでは、出場19試合で2ゴール、4アシストを記録。平均評価点は7.13と高い水準を維持しています。プレー時間は1219分。さらに細かく見ると、キーパスは29本、ビッグチャンス創出は6回、成功ドリブルは28回と、攻撃の起点としての役割を果たしました。守備面でもタックル25回、インターセプト7回と貢献。市場価値3100万ユーロ、契約は2029年6月までと、ソシエダの将来を担う重要な選手としての地位を確立しています。",
+      "keyPoints": [
+        "久保建英 25/26シーズン: 出場19試合 2ゴール 4アシスト",
+        "平均評価点: 7.13",
+        "市場価値: €31M"
+      ],
+      "imageQuery": "Takefusa Kubo Real Sociedad 2026 stats",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "SofaScore: Takefusa Kubo",
+          "url": "https://www.sofascore.com/player/880218",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": [],
+      "scriptNote": "この試合の久保建英の活躍を、個人スタッツで紹介",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "playerId": 880218,
+        "name": "Takefusa Kubo",
+        "position": "M",
+        "team": "Real Sociedad",
+        "nationality": "Japan",
+        "dateOfBirth": "2001-06-04T00:00:00+00:00",
+        "height": 174,
+        "preferredFoot": "Left",
+        "marketValue": "€31M",
+        "contractUntil": "2029-06",
+        "leagueName": "LaLiga",
+        "seasonYear": "25/26",
+        "recentMatchCount": 10,
+        "recentAvgRating": null,
+        "seasonStats": {
+          "appearances": 19,
+          "goals": 2,
+          "assists": 4,
+          "rating": 7.13,
+          "minutesPlayed": 1219,
+          "yellowCards": 1,
+          "redCards": 0,
+          "expectedGoals": 2.28,
+          "keyPasses": 29
+        },
+        "positionStats": {
+          "keyPasses": 29,
+          "successfulDribbles": 28,
+          "bigChancesCreated": 6,
+          "tackles": 25,
+          "interceptions": 7,
+          "accuratePassesPct": 79.43
+        },
+        "uclStats": null
+      },
+      "presetValues": {
+        "season": "2024/25",
+        "date": "2026-04-19"
+      }
+    },
+    {
+      "id": "player_career",
+      "label": "監督の来歴",
+      "icon": "📋",
+      "narration": "歴史を作ったマタラッツォ監督の半生を振り返ります。ニューヨーク生まれのアメリカ人。コロンビア大学で数学を学んだ後、22歳でドイツに渡り、選手としてキャリアをスタートさせました。引退後は指導者の道へ。ホッフェンハイムでユリアン・ナーゲルスマン監督の下でアシスタントコーチを務め、その手腕を認められ、2020年にドイツ・ブンデスリーガのVfBシュトゥットガルトの監督に就任。就任初年度での昇格を果たすなど実績を残し、2026年1月、レアル・ソシエダの指揮官に招かれました。アメリカ人がなぜスペインの名門クラブの監督に？ その疑問は、彼の欧州での確固たるキャリアと、数学的アプローチを戦術に活かすユニークな指導力が答えです。",
+      "keyPoints": [
+        "ニューヨーク生まれ",
+        "元選手、数学専攻",
+        "シュトゥットガルトで監督デビュー"
+      ],
+      "imageQuery": "Pellegrino Matarazzo career timeline",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Pellegrino_Matarazzo.jpg/330px-Pellegrino_Matarazzo.jpg",
+      "sources": [
+        {
+          "label": "Wikipedia: Pellegrino Matarazzo",
+          "url": "https://en.wikipedia.org/wiki/Pellegrino_Matarazzo",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Pellegrino Matarazzo",
+        "description": "American soccer coach",
+        "extract": "Pellegrino Matarazzo is an American professional soccer coach and retired player who is the head coach of La Liga club Real Sociedad.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Pellegrino_Matarazzo.jpg/330px-Pellegrino_Matarazzo.jpg",
+        "url": "https://en.wikipedia.org/wiki/Pellegrino_Matarazzo",
+        "type": "standard"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "match_key_moment",
+      "label": "監督の成績",
+      "icon": "🎯",
+      "narration": "マタラッツォ監督が2026年1月にレアル・ソシエダの監督に就任して以降の詳細な成績データは、現在取得中です。しかし、シーズン途中での就任という困難な状況下で、チームを立て直し、コパ・デル・レイというタイトルに導いたことは、彼の指導力の確かさを何よりも物語っています。就任前のチーム状況と、優勝をもたらしたその采配の詳細については、改めて詳細なデータと共にお伝えしたいと思います。",
+      "keyPoints": [],
+      "imageQuery": "Matarazzo Real Sociedad manager stats 2026",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "type1",
+      "statsRows": [
+        {
+          "label": "今季成績（勝分負）",
+          "value": "私の父がダイエー時代の王監督とたまたま飲み屋で隣り合わせたときに、「監督の采配で年間何勝ぐらい変わるものなのですか？」と大変失礼な質問をした ..."
+        },
+        {
+          "label": "就任日",
+          "value": "日本プロ野球（NPB）の現在の監督 ; 北海道日本ハムファイターズ · 新庄剛志, (1972-01-28) 1972年1月28日（54歳）, 2022年（5年目）, 1 ; 千葉ロッテマリーンズ · サブロー, (1976 ..."
+        },
+        {
+          "label": "主フォーメーション",
+          "value": "監督レベルは、サカつくモードでのミッションクリアやドリームチームモードでの活動を通じて得られる監督経験値を一定量貯めることで上昇します。 レベル ..."
+        },
+        {
+          "label": "今季勝率",
+          "value": "勝率. 編集. 2025年シーズン終了時。上位5名。 500試合・500勝以上の監督が対象. 順位, 名前, 勝率, 試合, 勝利, 敗戦. 1, 鶴岡一人 dagger .609, 2994, 1773, 1140. 2 ..."
+        },
+        {
+          "label": "監督通算タイトル",
+          "value": "【NPB】監督通算成績 ; 江藤 慎一, 1, 130 ; 王 貞治, 19, 2507 ; 大石 大二郎, 2, 239 ; 仰木 彬, 14, 1856 ..."
+        }
+      ],
+      "scriptNote": "マタラッツォ監督のソシエダ就任後の成績、",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "SofaScore: 選手名またはチーム名が必要です（参考ワードに入力してください）"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "club_history",
+      "label": "クラブの来歴",
+      "icon": "🏛️",
+      "narration": "優勝を勝ち取ったレアル・ソシエダは、1909年創設のバスク地方を代表するクラブです。本拠地はサン・セバスティアンのアノエタ・スタジアム。前回のコパ・デル・レイ制覇は、遥か1987年。あのメキシコW杯の前年です。つまり、今回の優勝は実に38年ぶりの悲願達成となります。レアル・マドリードやバルセロナといった「銀河系軍団」が支配するスペインサッカーにおいて、バスクのクラブが再び頂点に立ったこの瞬間は、クラブの長い歴史に新たな輝かしい1ページを加えました。",
+      "keyPoints": [
+        "クラブ創設: 1909年",
+        "前回コパ優勝: 1987年 (38年ぶり)"
+      ],
+      "imageQuery": "Real Sociedad 1987 Copa del Rey champions",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/en/thumb/f/f1/Real_Sociedad_logo.svg/330px-Real_Sociedad_logo.svg.png",
+      "sources": [
+        {
+          "label": "Wikipedia: Real Sociedad",
+          "url": "https://en.wikipedia.org/wiki/Real_Sociedad",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "Real Sociedad",
+        "description": "Spanish football club",
+        "extract": "Real Sociedad de Fútbol, S.A.D., more commonly referred to as Real Sociedad in English, and Erreala or Reala in Basque, is a Spanish professional sports club in the city of Donostia / San Sebastián, Basque Country, founded on 7 September 1909. They play their home matches at the Anoeta Stadium.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/en/thumb/f/f1/Real_Sociedad_logo.svg/330px-Real_Sociedad_logo.svg.png",
+        "url": "https://en.wikipedia.org/wiki/Real_Sociedad",
+        "type": "standard"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外のサッカーファン、特にRedditでは、アトレティコ・マドリードに対する皮肉や、ソシエダ優勝を喜ぶ声が多く見られました。最多いいねを集めたのは、「アトレティコはUEFAチャンピオンズリーグ準々決勝のアーセナル戦までに、3週間PKを練習しろ」という、アトレティコのPK戦敗退を揶揄するコメントでした。また、「レアル・マドリードとバルセロナのファン全員がアトレティコを嫌っている。彼らのエネルギーがソシエダに乗り移った『元気玉』のような勝利だ」という、スペイン国内の複雑なライバル関係を笑い交じりに表現した意見も大きな共感を集めていました。その他、アトレティコの高給取り監督への批判や、ソシエダの優勝を純粋に祝福する声も多く上がっています。",
+      "keyPoints": [
+        {
+          "text": "[👍915] Atleti has 3 weeks to practice penalties for Arsenal.",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍432] Real Sociedad winning was powered by the collective energy of every Real Madrid and Barça fan who can’t stand Atlético, basically a football version of a Genki Dama 😂",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍200] Today, I feel Real Socidadian.",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍194] Just sell the team...",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍182] Atleti still trophyless for almost five years despite spending several hundreds of millions over this time period lmao. But watch their fans pretend how their team is so poor despite having the highest paid manager",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍162] The cups have had some varied winners these last couple years ",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍82] I celebrated this way too much. Congratulations La Real and what a fantastic job done by Matarazzo after a disastrous start to the season. ",
+          "source": "reddit"
+        }
+      ],
+      "subComments": [
+        {
+          "text": "[👍52] GOD BLESS LA REAL",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍48] Spanish Dortmund lmao",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍43] I apologise Marrero, I wasn't familiar with your game",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍43] Fucking delighted. Gora Euskadi!",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍40] The culers send their regards.",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍39] Fantastic hatewatch vamos Sociedad!!",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍33] look at la real's ball mascot",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍32] Lets gooo!!!",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍29] Beautiful scenes, heh.",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍28] Simeone best paid manager itw btw",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍22] What does Simeone even do 😭😭😭",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍21] Lads, it's Atleti",
+          "source": "reddit"
+        },
+        {
+          "text": "[👍20] As a Barcelona fan, i approve this",
+          "source": "reddit"
+        }
+      ],
+      "imageQuery": "Reddit reaction Real Sociedad Copa del Rey win",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-19"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          {
+            "text": "[👍915] Atleti has 3 weeks to practice penalties for Arsenal.",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍432] Real Sociedad winning was powered by the collective energy of every Real Madrid and Barça fan who can’t stand Atlético, basically a football version of a Genki Dama 😂",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍200] Today, I feel Real Socidadian.",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍194] Just sell the team...",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍182] Atleti still trophyless for almost five years despite spending several hundreds of millions over this time period lmao. But watch their fans pretend how their team is so poor despite having the highest paid manager",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍162] The cups have had some varied winners these last couple years ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍82] I celebrated this way too much. \n\nCongratulations La Real and what a fantastic job done by Matarazzo after a disastrous start to the season. ",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍52] GOD BLESS LA REAL",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍48] Spanish Dortmund lmao",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍43] I apologise Marrero, I wasn't familiar with your game",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍43] Fucking delighted. Gora Euskadi!",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍40] The culers send their regards.",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍39] Fantastic hatewatch vamos Sociedad!!",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍33] look at la real's ball mascot",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍32] Lets gooo!!!",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍29] Beautiful scenes, heh.",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍28] Simeone best paid manager itw btw",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍22] What does Simeone even do 😭😭😭",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍21] Lads, it's Atleti",
+            "source": "reddit"
+          },
+          {
+            "text": "[👍20] As a Barcelona fan, i approve this",
+            "source": "reddit"
+          }
+        ],
+        "source": "existing"
+      },
+      "presetValues": {}
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "いかがでしたか？ 38年ぶりの優喜、そしてアメリカ人監督による歴史的快挙。レアル・ソシエダのコパ・デル・レイ制覇は、数字とデータが物語る感動的な物語でした。チャンネル登録と高評価ボタン、そしてコメントでのご意見をお待ちしています。それでは、また次の速報でお会いしましょう！",
+      "keyPoints": [],
+      "imageQuery": "Subscribe football news YouTube channel",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": [],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価よろしくお願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      },
+      "presetValues": {}
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-19",
+    "postId": "5",
+    "originalTitle": "Real Sociedad are the Copa del Rey Champions",
+    "generatedAt": "2026-04-19T06:31:50.866Z",
+    "mainImagePath": null
+  }
+}

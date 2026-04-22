@@ -1,0 +1,402 @@
+{
+  "youtubeTitle": "衝撃！ペレス会長がロッカールームで選手を叱責「無冠2年目は許されない」その全真相とデータで見るマドリーの敗因",
+  "hashtagsText": "#サッカー #レアルマドリー #ペレス #バイエルン #チャンピオンズリーグ",
+  "modules": [
+    {
+      "id": "opening",
+      "label": "オープニング",
+      "icon": "🎬",
+      "narration": "衝撃の事実が明らかになりました。レアル・マドリードのフロレンティーノ・ペレス会長が、バイエルン戦敗戦後、ロッカールームに乗り込み、選手たちを激しく叱責したのです。その発言内容と、無冠に終わる可能性が高まったクラブの現状を、データを交えて徹底解説します。",
+      "keyPoints": [],
+      "imageQuery": "Florentino Perez angry locker room",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "opening",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": "ペレス会長、ロッカールームで怒涛の叱責！",
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    },
+    {
+      "id": "news_overview",
+      "label": "ニュース概要",
+      "icon": "📰",
+      "narration": "UEFAチャンピオンズリーグ準決勝第2戦、バイエルン・ミュンヘン対レアル・マドリード。アウェイで迎えたこの試合で、レアル・マドリードは4-3で敗戦し、2シーズン連続で主要タイトル獲得の可能性がほぼ消滅しました。試合後、会長のフロレンティーノ・ペレス氏がロッカールームを訪れ、選手たちに対して厳しい言葉を浴びせたことが複数のメディアによって報じられています。その核心的な発言は、「レアル・マドリードで1シーズン無冠は失敗。2シーズンは耐えられない」そして、「このユニフォームを着ることは特権だが、それには責任が伴う。君たちはその責任を果たしていない」というものでした。",
+      "keyPoints": [
+        "UCL準決勝第2戦: バイエルン 4-3 レアル・マドリード",
+        "ペレス会長発言: 「無冠2年目は耐えられない」",
+        "選手への叱責: 「責任を果たしていない」"
+      ],
+      "imageQuery": "Bayern Munich 4-3 Real Madrid 2025",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "simple",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "news_overview",
+        "query": "Florentino Perez Real Madrid dressing room speech Champions League exit 2025",
+        "organic": [
+          {
+            "title": "According to media reports, Florentino Pérez entered the Real ...",
+            "snippet": "According to media reports, Florentino Pérez entered the Real Madrid dressing room to reprimand the team for their Champions League exit, but told Arda Güler ...",
+            "link": "https://www.facebook.com/BallControl/posts/-according-to-media-reports-florentino-p%C3%A9rez-entered-the-real-madrid-dressing-ro/1500468962125258/",
+            "date": "3 hours ago"
+          },
+          {
+            "title": "Florentino Perez went to the locker rooms of Madrid after the final ...",
+            "snippet": "202 likes, 7 comments - prince_alii5 on April 15, 2026: \"Florentino Perez went to the locker rooms of Madrid after the final whistle vs Bayern Munich ...",
+            "link": "https://www.instagram.com/reel/DXLJCiqjIIA/",
+            "date": "14 hours ago"
+          },
+          {
+            "title": "REAL MADRID LOCKER ROOM DRAMA JUST WENT ... - Instagram",
+            "snippet": "dudeoffside on April 16, 2026: \" REAL MADRID LOCKER ROOM DRAMA JUST WENT VIRAL Florentino Pérez didn't just walk into the dressing room… he commanded it.",
+            "link": "https://www.instagram.com/reel/DXL71inkT1S/",
+            "date": "6 hours ago"
+          },
+          {
+            "title": "'Godfather' Perez goes to the dressing room after Real Madrid's ...",
+            "snippet": "President Florentino Perez personally went into the dressing room to encourage Real Madrid after the team's heartbreaking elimination from the Champions League.",
+            "link": "https://www.vietnam.vn/en/bo-gia-perez-xuong-phong-thay-do-sau-cu-soc-cua-real-madrid",
+            "date": "10 hours ago"
+          },
+          {
+            "title": "Real Madrid president expresses anger after defeat - Facebook",
+            "snippet": "Real Madrid president Florentino Perez storms the dressing room after the match, and pours his anger on Ancelotti, holding him fully responsible for the loss!",
+            "link": "https://www.facebook.com/groups/183101581534290/posts/809016202276155/",
+            "date": "8 hours ago"
+          },
+          {
+            "title": "Florentino Pérez greeted the Real Madrid players one ... - Facebook",
+            "snippet": "EXCLUSIVE: ​Florentino Pérez greeted the Real Madrid players one by one, shaking hands, hugging, and offering individual support and encouragement....",
+            "link": "https://www.facebook.com/groups/458978894153456/posts/26956681287289856/",
+            "date": "3 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": null
+      }
+    },
+    {
+      "id": "club_current_season",
+      "label": "今シーズンの戦績",
+      "icon": "📈",
+      "narration": "レアル・マドリードの今シーズンの詳細な戦績データは、現在取得中です。しかし、チャンピオンズリーグ準決勝敗退が確定したことにより、今シーズン獲得可能な主要タイトルはリーガ・エスパニョーラのみとなりました。現時点で首位を争っているかどうかは別のデータに依存しますが、少なくとも2シーズン連続でチャンピオンズリーグのタイトルを逃すことが確実となり、ペレス会長の「無冠2年目」発言の重みが増す状況です。",
+      "keyPoints": [
+        "UCL準決勝敗退確定",
+        "今季獲得可能タイトル: リーガ・エスパニョーラのみ"
+      ],
+      "imageQuery": "Real Madrid 2025 season trophyless",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "今シーズン チャンピオンズリーグ 成績",
+          "value": "Agg: 1-5. Arsenal win. Real Madrid ; Agg: 4-3. Inter win. Inter ; Agg: 4-5. Paris win. Aston Villa ; Agg: 3-5. Barcelona"
+        },
+        {
+          "label": "今シーズン ラ・リーガ 順位",
+          "value": "順位, チーム, 勝点, 試合, 勝, 分, 負, 得点, 失点, 差. 1, FCバルセロナ, 88, 38, 28, 4, 6, 102, 39, 63. 2, レアル・マドリード, 84, 38, 26, 6, 6, 78, 38, "
+        },
+        {
+          "label": "昨シーズンの成績",
+          "value": "As the reigning European champions, Real Madrid contested the UEFA Super Cup against Atalanta, winning 2–0 and claiming "
+        },
+        {
+          "label": "最後のチャンピオンズリーグ獲得年",
+          "value": "As the reigning European champions, Real Madrid contested the UEFA Super Cup against Atalanta, winning 2–0 and claiming "
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "SofaScore に \"レアルマドリー\" が見つかりません"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "ぺレス会長",
+      "icon": "📈",
+      "narration": "今回のペレス会長のロッカールーム訪問は、極めて異例かつ強烈なメッセージでした。取得データにあるGWIという企業情報は本件とは直接関連しませんが、会長の発言内容そのものがクラブの最高責任者としての焦りと危機感を如実に物語っています。「特権と責任」という言葉は、高額な年俸と世界的名声を得ている選手たちへの、一種の「覚悟」を求める叱責です。また、一部報道では、会長が若手選手のアルダ・ギュラーに「部屋を出て行け。君はこれを見る必要はない」と声をかけたとも伝えられており、ベテラン選手たちへの批判が主眼であった可能性が窺えます。",
+      "keyPoints": [
+        "異例のロッカールーム直接介入",
+        "発言の核心: 「特権には責任が伴う」",
+        "若手アルダへの別対応の報道も"
+      ],
+      "imageQuery": "Florentino Perez speech responsibility",
+      "imagePath": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/GWI_Logo.webp/330px-GWI_Logo.webp.png",
+      "sources": [
+        {
+          "label": "Wikipedia: GWI (company)",
+          "url": "https://en.wikipedia.org/wiki/GWI_(company)",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "type2",
+      "statsRows": [
+        {
+          "label": "マドリー会長就任期間",
+          "value": "20年に渡って会長を務めた期間で我らのクラブはシウダー・レアル・マドリードの建設と、最大限の快適性と安全性、最新鋭のテクノロジーを備える前衛的な象徴、サンティアゴ・ベルナベウ・スタジアムの改修でモデルチェンジのプロセスを過ごして来ている。"
+        },
+        {
+          "label": "マドリーで果たした功績",
+          "value": "フロレンティーノ・ペレス会長は、レアル・マドリードの50年および60年にわたる継続的な忠誠を果たした会員に記章を授与する式典を主宰しました。"
+        },
+        {
+          "label": "獲得したタイトル",
+          "value": "フロレンティーノ・ペレス会長はレアル・マドリードを世界的な名声を取り戻した。 会長としての2期で、サッカーのチャンピオンズリーグ優勝7回、バスケットボールの欧州制覇3回を含む、2つのセクションで計66タイトルを獲得。"
+        },
+        {
+          "label": "その他エピソード",
+          "value": "今回はフロレンティーノ・ペレス特集です。 【PR】プレミアリーグ・ラリーガを見るならU-NEXT https://bit.ly/46JMHeg □【爆笑】EURO2024の面白 ..."
+        }
+      ],
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "title": "GWI (company)",
+        "description": "Market research company",
+        "extract": "GWI is an audience research company founded by Tom Smith in 2009. The company provides audience insight to publishers, media agencies and marketers around the world. GWI profiles consumers across 48+ countries with a panel representing over 2.7 billion digital consumers, making insights available through a subscription-based platform.",
+        "thumbnail": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7c/GWI_Logo.webp/330px-GWI_Logo.webp.png",
+        "url": "https://en.wikipedia.org/wiki/GWI_(company)",
+        "type": "standard"
+      }
+    },
+    {
+      "id": "reddit_reaction",
+      "label": "海外の反応",
+      "icon": "🌍",
+      "narration": "海外サッカーファン、特にレアル・マドリードサポーターの間では、このニュースに対する反応は複雑です。多くのコメントが、会長自身のチーム構築への責任にも言及しています。例えば、「彼が原因でこうなったガラクティコスどもをまるで他人事のように言うな」や「勝率77%の監督を解任したのは君だ」といった声が上がっています。また、会長の姿勢を皮肉る「ガラクティコスのFWをもう2人連れてくれば解決すると思うよ、フロ」や、選手批判よりも自己反省を求める「選手を批判するのは結構だが、少し自己反省も必要じゃないか、会長？」といったコメントも目立ち、単純な選手批判には懐疑的な見方が広がっているようです。",
+      "keyPoints": [
+        "「監督解任の責任は会長」の指摘多数",
+        "ガラクティコス政策への皮肉",
+        "自己反省を求める声"
+      ],
+      "imageQuery": "Real Madrid fan reaction reddit",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "自動収集データ（Reddit/RSS/X）",
+          "date": "2026-04-16"
+        }
+      ],
+      "slideType": "reaction",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "comments": [
+          "[👍213] I think a couple more galactico forwards will solve the problem, Flo",
+          "[👍169] He is part of the problem. His signings have been horrendous. He is looking for galacticos instead of players. His obsession with galacticos has not gone away. He has done nothing to sign defenders, which has been in crisis mode since Ancelotti. He gave up Kane to get Mbappe and denied Modric another year. And now reports suggest he is a fan of Pochettino. Seriously? He will be sacked by the first El Clásico.",
+          "[👍164] \"So to change things up, the first thing we're going to do is extend vini jr, my favorite player\"",
+          "[👍82] Florentino \"Uncle Ben\" Perez",
+          "[👍79] Nah m8, you had a manager with a 77% winrate that had us alive in all competitions, and was trying to put a system in place, something that we desperately need, and you sacked him and replaced him with a traffic cone.\n\nAnd also have failed to reinforce the squad in key areas.\n\nCriticizing the players is fine, some like Camavinga and Vinicius showed they are beyond saving, but a little self reflection is also needed, eh presi?",
+          "[👍72] I've read a version of this where he told Arda to leave the dressing room beforehand.",
+          "[👍62] My favourite post match perez quote has been him saying to arda : \" leave the room you don't have to see this \" \n\n\nNow the source was a Turkish media outlet which is not credible but it still sounds funny ",
+          "[👍47] We’re all looking for the man responsible sounding ass quote, as if all these prima donna whinny babies aren’t his fault.",
+          "[👍29] &gt;Florentino Pérez didn't mince words when assessing the squad's performance in this second trophyless season. “You know that being a Real Madrid player is a privilege for a footballer, and everyone wants to wear our club's shirt. Besides being a privilege, it also carries a responsibility, and many of you haven't lived up to that responsibility. You haven't lived up to the club's expectations.”",
+          "[👍12]  2 previous Galacticos failed and my man thought, 3rd times the charm 🤓☝🏽",
+          "[👍12] Should have appointed a more experienced manager. Like Xabi Alonso for example",
+          "[👍11] He was just pissed that the ref forgot Cama was already booked. I mean he payed enough so that they wont get a red..",
+          "[👍11] Then plan our squad in a better way Mr. Perez. All of this has happened because of the instability of the squad and players getting away from their responsibilities.",
+          "[👍9] Arbeloa in between perez speaking: \"Its my fault!\"",
+          "[👍7] Big boss man, laying down the law!",
+          "[👍7] Arbeloa is gone innit?\n\n\nWho's next on the chopping block?",
+          "[👍7] “So I’m going to change none of you players and again change the manager” ",
+          "[👍7] 2002-2007 era didn't teach this mf anything, and he still thinks it's the right thing to empower entitled superstars over the managers. Insufferable piece of shit.",
+          "[👍4] He couldn't do this when Xabi was in charge?",
+          "[👍1] **This is a quotes thread. Remember that there's only one quotes post allowed per interview/press conference, so new quotes with the same origin will be removed. Feel free to comment other quotes/the whole interview as a reply to this comment so users can see them too!**\n\n\n*I am a bot, and this action was performed automatically. Please [contact the moderators of this subreddit](/message/compose/?to=/r/soccer) if you have any questions or concerns.*",
+          "問題の一部は彼自身だ。補強がひどい。",
+          "「状況を変えるために、まず最初にやることは\n私のお気に入り選手、ヴィニシウス・ジュニオールとの契約延長だ」",
+          "フロレンティーノ・ペレス“アンクル・ベン”",
+          "選手を批判するのは結構だが、\n少し自己反省も必要じゃないか、会長？",
+          "アルダに「部屋を出て行け」と言った版も読んだ。",
+          "ガラクティコス政策が2度失敗して、\nこの人は3度目がチャンスだと思ったんだね。",
+          "もっと経験豊富な監督を任命すべきだった。",
+          "勝率77%の監督を解任したのは君だ。",
+          "彼が原因でこうなったガラクティコスどもを\nまるで他人事のように言うな。",
+          "アルベロアが「私のせいだ！」と叫んでそう。",
+          "それなら我々のチームを\nもっと良く計画しろよ、ペレス氏。",
+          "カマヴィンガが警告済みなのを\n審判が忘れてただけだろ。",
+          "ガラクティコスのFWをもう2人\n連れてくれば解決すると思うよ、フロ。",
+          "大ボスが法を敷いている！"
+        ],
+        "source": "existing"
+      }
+    },
+    {
+      "id": "tactical_analysis",
+      "label": "マドリーの戦術分析",
+      "icon": "🔬",
+      "narration": "第2戦の詳細な戦術分析データは現在取得中ですが、ファーストレグでの1点差を逆転するため、アルベロア監督は積極的な布陣を敷いたと見られます。しかし、アウェイで4失点を喫した結果からは、攻撃に重点を置くあまり守備陣が崩壊した可能性が高いでしょう。取得データにある「ヨーロッパはアトレティコ・マドリード問題を抱えている」というYouTube動画のタイトルは、マドリーの敗因分析とは直接関係が薄いため、ここでは活用しません。むしろ、4-3というスコアが示す通り、互いに得点を重ねる展開の中で、最終的に守備の脆さが敗因となったと推測されます。",
+      "keyPoints": [
+        "第2戦スコア: バイエルン 4-3 レアル",
+        "逆転を狙った積極策と推測",
+        "4失点が敗戦の直接的要因"
+      ],
+      "imageQuery": "Real Madrid defense problems 2025",
+      "imagePath": null,
+      "sources": [
+        {
+          "label": "Europe Has An Atlético Madrid Problem - YouTube",
+          "url": "https://www.youtube.com/watch?v=etGVIYopegs",
+          "date": "1 day ago"
+        },
+        {
+          "label": "Bayern Munich beat Real Madrid 4-3 in the second leg of the UEFA ...",
+          "url": "https://www.tiktok.com/@aaroncikaya/video/7629132167913753878",
+          "date": "16 hours ago"
+        },
+        {
+          "label": "FC Barcelona face a do-or-die situation tonight against Atlético ...",
+          "url": "https://www.instagram.com/reel/DXIOiXujANI/",
+          "date": "2 days ago"
+        }
+      ],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": "ファーストレグでの1点差を追いつくために、アルベロア監督がぶつけてきた作戦。",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": true,
+        "moduleId": "tactical_analysis",
+        "query": "Real Madrid tactical problems Champions League 2025 analysis",
+        "organic": [
+          {
+            "title": "Europe Has An Atlético Madrid Problem - YouTube",
+            "snippet": "In this video: Atlético Madrid's 2025/26 Champions League run explained ... Bayern vs. Real Madrid: Extended Highlights | UCL Quarterfinals - Leg 2 | CBS Sports ...",
+            "link": "https://www.youtube.com/watch?v=etGVIYopegs",
+            "date": "1 day ago"
+          },
+          {
+            "title": "Bayern Munich beat Real Madrid 4-3 in the second leg of the UEFA ...",
+            "snippet": "Arne Slot used very strange tactics in Liverpool's 2-0 defeat against PSG in the first leg of the quarterfinals in the UEFA Champions League.",
+            "link": "https://www.tiktok.com/@aaroncikaya/video/7629132167913753878",
+            "date": "16 hours ago"
+          },
+          {
+            "title": "FC Barcelona face a do-or-die situation tonight against Atlético ...",
+            "snippet": "FC Barcelona face a do-or-die situation tonight against Atlético Madrid as they try to overturn a 2–0 first-leg deficit in the Champions League.",
+            "link": "https://www.instagram.com/reel/DXIOiXujANI/",
+            "date": "2 days ago"
+          },
+          {
+            "title": "That foul really didn't deserve a yellow card. But the red card was en...",
+            "snippet": "2025 Africa Cup of Nations prize ... Every time Atlético Madrid knock FC Barcelona out of the Champions League, Real Madrid end up lifting the trophy.",
+            "link": "https://www.tiktok.com/@sportflow00/video/7629117187222981919",
+            "date": "17 hours ago"
+          },
+          {
+            "title": "ATLETICO MADRID vs BARCELONA 2ND LEG LIVE ... - YouTube",
+            "snippet": "... analysis, and fan takes! WHAT TO EXPECT ON THE STREAM: ✔️ ... Atletico Madrid vs Barcelona highlight match 1-2 goal EUFA Champions league 2025-2026.",
+            "link": "https://www.youtube.com/watch?v=ro_9JowCIGU",
+            "date": "2 days ago"
+          },
+          {
+            "title": "The Best Game Of The Season... - #bayernmunich - TikTok",
+            "snippet": "Bayern Munich Real Madrid, Champions League, Harry Kane goal, Vincent Kompany tactics ... Champions League moments analysis, Trubin Benfica highlights, Real ...",
+            "link": "https://www.tiktok.com/@nialltalkssports/video/7629200369825942806",
+            "date": "11 hours ago"
+          }
+        ],
+        "answerBox": null,
+        "knowledgeGraph": null,
+        "topStories": [],
+        "articleContent": "[出典: https://www.youtube.com/watch?v=etGVIYopegs]\nEurope Has An Atlético Madrid Problem - YouTube About Press Copyright Contact us Creators Advertise Developers Terms Privacy Policy & Safety How YouTube works Test new features &copy; 2026 Google LLC"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "バイエルンの戦略",
+      "icon": "🔍",
+      "narration": "ホームで迎え撃ったバイエルン・ミュンヘンの詳細な戦略データは、現在取得中です。しかし、4得点を奪ったことから、レアルの攻撃的な布陣に対し、カウンターアタックやセットプレーなどで効果的に突破口を見いだした戦い方が成功したと考えられます。レアルが逆転を狙って前線に人数をかけた隙を、バイエルンが確実に突いたのでしょう。4-3というスコアは、バイエルンも3失点していることから、決して完璧な守備ではなかったものの、より多くの得点を奪うことで勝利を掴み取ったことを示しています。",
+      "keyPoints": [
+        "ホームでの4得点が勝利の鍵",
+        "レアルの攻撃的布陣への対応成功と推測"
+      ],
+      "imageQuery": "Bayern Munich tactics UCL 2025",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "insight",
+      "statsRows": null,
+      "scriptNote": "迎え撃つバイエルンの戦略",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "ニュース検索: 参考ワードを入力してください"
+      }
+    },
+    {
+      "id": "custom_research",
+      "label": "キープレイヤー",
+      "icon": "📊",
+      "narration": "この試合の結果を決めたキープレイヤーに関する詳細な個人成績データ（今季成績、本日のスタッツ、UCLでの活躍）は、現在取得中です。しかし、4-3という高得点試合であったことから、両チームの得点者、特にバイエルン側で複数ゴールを挙げた選手や、決定的なアシストを供給した選手が勝敗を分けたキーマンであったと推測されます。レアル・マドリードにおいては、攻撃陣が3得点を奪いながらも、守備の要である選手がチームの失点を防ぎ切れなかったことが、会長の叱責の対象となった可能性があります。",
+      "keyPoints": [
+        "高得点試合(4-3)のため得点者が鍵",
+        "バイエルンの得点源が勝敗を分けたと推測"
+      ],
+      "imageQuery": "Bayern Munich key player UCL semifinal",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "type1",
+      "statsRows": null,
+      "scriptNote": "試合の結果を決めたキープレイヤーについて、今季成績、今日のスタッツ、チャンピオンズリーグでの活躍、次戦へのきたいなどを書く",
+      "catchLine": null,
+      "telop": null,
+      "fetchedData": {
+        "ok": false,
+        "error": "ニュース検索: 参考ワードを入力してください"
+      }
+    },
+    {
+      "id": "ending",
+      "label": "エンディング",
+      "icon": "🏁",
+      "narration": "レアル・マドリードに突きつけられた「無冠2年目」の現実。ペレス会長の激しい叱責は、夏の移籍市場と来季へ向けた大きな変化の序章となるのでしょうか。データを基にしたサッカー分析を続けていきますので、チャンネル登録と高評価のほど、よろしくお願いします！",
+      "keyPoints": [],
+      "imageQuery": "Real Madrid summer transfer 2025",
+      "imagePath": null,
+      "sources": [],
+      "slideType": "ending",
+      "statsRows": null,
+      "scriptNote": null,
+      "catchLine": null,
+      "telop": "チャンネル登録＆高評価お願いします！",
+      "fetchedData": {
+        "ok": true,
+        "source": "existing"
+      }
+    }
+  ],
+  "_meta": {
+    "date": "2026-04-16",
+    "postId": "5",
+    "originalTitle": "Florentino Pérez went down to the dressing room in Munich: \"One season without a trophy is a failure at Real Madrid. Two is intolerable.\" He was very critical of the players: \"Wearing the Real Madrid shirt is a privilege, but it also carries a responsibility, and you have not live up to it.\"",
+    "generatedAt": "2026-04-16T15:06:39.244Z",
+    "mainImagePath": null
+  }
+}
