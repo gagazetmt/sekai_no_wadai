@@ -1,10 +1,5 @@
 // soccer_yt_server_v2.js
 // v2 サッカー YouTube ランチャー Pro統合版（port 3004）
-//
-// 指示書 #1 に基づく大規模改修：
-//   - 左側サイドバー（保存済み案件）の実装
-//   - 時間別アコーディオンUIの導入
-//   - 案件保存・マージ機能の追加
 
 require('dotenv').config();
 const express   = require('express');
@@ -23,7 +18,6 @@ const { computePresetValues, autoStatsRows, getPresetsForClient, getTopicPresets
 const app  = express();
 const PORT = 3004;
 
-// ─── パス定義 ─────────────────────────────────────────────────────────────────
 const TEMP_DIR    = path.join(__dirname, 'temp');
 const DATA_DIR    = path.join(__dirname, 'data');
 const IMG_DIR     = path.join(__dirname, 'images');
@@ -41,35 +35,28 @@ app.use('/images',  express.static(IMG_DIR));
 app.use('/narrations', express.static(SLIDES_DIR));
 app.use('/video-files', express.static(VIDEO_DIR));
 
-// ─── ログ ─────────────────────────────────────────────────────────────────────
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}`;
   console.log(line);
   try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch (_) {}
 }
 
-// ─── v2シナリオJSON パス ─────────────────────────────────────────────────────
 function scenarioPath(date, postId) {
   return path.join(TEMP_DIR, `v2_scenario_${date}_${postId}.json`);
 }
 
-// ── コンテンツ一覧取得 (指示書 #1-2 対応) ──────────────────────────────────────
 app.get('/api/v2/content', (req, res) => {
   const dateStr = req.query.date;
   if (!dateStr) return res.status(400).json({ error: '?date=YYYY-MM-DD が必要です' });
-
   const formattedDate = dateStr.replace(/-/g, "_");
   const storyFile = path.join(DATA_DIR, `stories_${formattedDate}.json`);
   const autoFile  = path.join(DATA_DIR, `auto_generated_${dateStr}.json`);
   const candFile  = path.join(TEMP_DIR, `candidates_${dateStr}.json`);
-  
   let targetFile = null;
   if (fs.existsSync(storyFile)) targetFile = storyFile;
   else if (fs.existsSync(autoFile)) targetFile = autoFile;
   else if (fs.existsSync(candFile)) targetFile = candFile;
-
   if (!targetFile) return res.json({ date: dateStr, posts: [] });
-
   const data  = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
   const posts = (data.posts || []).map((p, i) => {
     const id = p.id || String(i);
@@ -83,11 +70,9 @@ app.get('/api/v2/content', (req, res) => {
       raw:     p
     };
   });
-
   res.json({ date: dateStr, posts });
 });
 
-// ─── 補完情報取得 (指示書 #2) ───
 app.post('/api/v2/fetch-si', async (req, res) => {
   const { date, postId, keywords } = req.body;
   log(`SI取得開始: ${date} ${postId}`);
@@ -99,7 +84,6 @@ app.post('/api/v2/fetch-si', async (req, res) => {
   }
 });
 
-// ─── メイン UI (SPA) ───
 app.get('/', (_, res) => res.send(`<!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="UTF-8">
@@ -199,16 +183,16 @@ body{font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;backgroun
 
       <div id="step2" style="display:none">
         <div class="panel"><div class="panel-title">🎯 選択中の案件</div><div id="selectedPostInfo"></div></div>
-        <div class="panel"><div class="panel-title">🔍 SIスライド情報</div><div style="color:#5a7abf;font-size:12px;">（SI情報のUIがここに入ります）</div></div>
+        <div class="panel"><div class="panel-title">🔍 SIスライド情報</div><div style="color:#5a7abf;font-size:12px;">（ここにSI情報のUIが入ります）</div></div>
       </div>
       <div id="step3" style="display:none">
-        <div class="panel"><div class="panel-title">🧩 モジュール構成</div><div style="color:#5a7abf;font-size:12px;">（モジュール提案と並び替えUIがここに入ります）</div></div>
+        <div class="panel"><div class="panel-title">🧩 モジュール構成</div><div style="color:#5a7abf;font-size:12px;">（モジュール提案のUIが入ります）</div></div>
       </div>
       <div id="step4" style="display:none">
-        <div class="panel"><div class="panel-title">📝 脚本・編集</div><div style="color:#5a7abf;font-size:12px;">（各モジュールのテキスト編集UIがここに入ります）</div></div>
+        <div class="panel"><div class="panel-title">✍️ 脚本・編集</div><div style="color:#5a7abf;font-size:12px;">（各モジュールのテキスト編集UIが入ります）</div></div>
       </div>
       <div id="step5" style="display:none">
-        <div class="panel"><div class="panel-title">🎬 出力設定</div><div style="color:#5a7abf;font-size:12px;">（サムネイルや動画生成のUIがここに入ります）</div></div>
+        <div class="panel"><div class="panel-title">🎬 出力設定</div><div style="color:#5a7abf;font-size:12px;">（動画生成・アップロードUIが入ります）</div></div>
       </div>
     </div>
   </div>
@@ -230,11 +214,10 @@ async function loadContent() {
   if (!date) return alert('日付を選択してください');
   state.date = date;
 
-  const res  = await fetch(\`/api/v2/content?date=\${date}\`);
+  const res  = await fetch('/api/v2/content?date=' + date);
   const data = await res.json();
   state.posts = data.posts;
 
-  // 取得時間ごとにグループ化 (指示書 #1-7)
   const groups = {};
   data.posts.forEach(p => {
     const time = p.addedAt ? p.addedAt.slice(11, 16) : '不明';
@@ -245,19 +228,19 @@ async function loadContent() {
   const list = document.getElementById('postList');
   const sortedTimes = Object.keys(groups).sort((a,b) => b.localeCompare(a));
 
-  list.innerHTML = sortedTimes.map(time => \`
-    <details open class="time-group">
-      <summary class="time-summary">🕒 \${time} 取得分 (\${groups[time].length}件)</summary>
-      <div>
-        \${groups[time].map(p => \`
-          <div class="post-item">
-            <input type="checkbox" class="lead-check" value="\${p.id}" style="width:18px;height:18px">
-            <span class="post-title" onclick="selectLeadFromList('\${p.id}')">\${esc(p.title)}</span>
-          </div>
-        \`).join('')}
-      </div>
-    </details>
-  \`).join('');
+  list.innerHTML = sortedTimes.map(time => {
+    return '<details open class="time-group">' +
+      '<summary class="time-summary">🕒 ' + time + ' 取得分 (' + groups[time].length + '件)</summary>' +
+      '<div>' +
+        groups[time].map(p => {
+          return '<div class="post-item">' +
+            '<input type="checkbox" class="lead-check" value="' + p.id + '" style="width:18px;height:18px">' +
+            '<span class="post-title" onclick="selectLeadFromList(\\'' + p.id + '\\')">' + esc(p.title) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+    '</details>';
+  }).join('');
   
   document.getElementById('postListPanel').style.display = 'block';
   renderSavedLeads();
@@ -271,21 +254,13 @@ function selectLeadFromList(id) {
 function saveSelectedLeads() {
   const checked = Array.from(document.querySelectorAll('.lead-check:checked')).map(el => el.value);
   const selectedPosts = state.posts.filter(p => checked.includes(p.id));
-  
   if (selectedPosts.length === 0) return alert('保存する案件を選択してください');
 
   selectedPosts.forEach(p => {
     if (!state.savedLeads.find(l => l.id === p.id)) {
-      state.savedLeads.unshift({
-        id: p.id,
-        title: p.title,
-        source: p.source,
-        addedAt: p.addedAt,
-        raw: p.raw
-      });
+      state.savedLeads.unshift({ id: p.id, title: p.title, source: p.source, addedAt: p.addedAt, raw: p.raw });
     }
   });
-  
   localStorage.setItem('savedLeads', JSON.stringify(state.savedLeads));
   renderSavedLeads();
   document.querySelectorAll('.lead-check:checked').forEach(el => el.checked = false);
@@ -294,15 +269,15 @@ function saveSelectedLeads() {
 function renderSavedLeads() {
   const list = document.getElementById('savedLeadsList');
   if (state.savedLeads.length === 0) {
-    list.innerHTML = '<div style="color:#3a4a6a;padding:20px;font-size:12px;text-align:center">保存済みなし</div>';
+    list.innerHTML = '<div style=\"color:#3a4a6a;padding:20px;font-size:12px;text-align:center\">保存済みなし</div>';
     return;
   }
   list.innerHTML = state.savedLeads.map(l => {
     const isActive = state.selectedLeadId === l.id ? 'active' : '';
     const time = l.addedAt ? l.addedAt.slice(11, 16) : '--:--';
-    return '<div class="lead-item ' + isActive + '" onclick="clickLead(\\'' + l.id + '\\')">' +
-             '<div class="lead-title">' + esc(l.title) + '</div>' +
-             '<div class="lead-meta"><span>' + l.source + '</span><span>' + time + '</span></div>' +
+    return '<div class=\"lead-item ' + isActive + '\" onclick=\"clickLead(\\'' + l.id + '\\')\">' +
+             '<div class=\"lead-title\">' + esc(l.title) + '</div>' +
+             '<div class=\"lead-meta\"><span>' + l.source + '</span><span>' + time + '</span></div>' +
            '</div>';
   }).join('');
 }
@@ -313,11 +288,9 @@ function clickLead(id) {
   if (!lead) return;
   renderSavedLeads();
   state.selectedPost = lead.raw || lead;
-  
-  const time = lead.addedAt || 'Unknown';
   document.getElementById('selectedPostInfo').innerHTML = 
-    '<div style="font-size:16px; font-weight:bold; color:#7dc8ff; margin-bottom:8px">' + esc(lead.title) + '</div>' +
-    '<div style="font-size:11px; color:#5a7abf">Source: ' + lead.source + ' | Time: ' + time + '</div>';
+    '<div style=\"font-size:16px; font-weight:bold; color:#7dc8ff; margin-bottom:8px\">' + esc(lead.title) + '</div>' +
+    '<div style=\"font-size:11px; color:#5a7abf\">Source: ' + lead.source + ' | Time: ' + (lead.addedAt || 'Unknown') + '</div>';
   goStep(2);
 }
 
@@ -334,9 +307,10 @@ function goStep(n) {
 }
 
 window.onload = () => {
-  const today = new Date().toISOString().slice(0,10);
-  document.getElementById('dateInput').value = today;
+  document.getElementById('dateInput').value = new Date().toISOString().slice(0,10);
   renderSavedLeads();
 };
 </script>
 </body></html>`));
+
+app.listen(PORT, () => console.log('v2 Server running at http://localhost:' + PORT));
