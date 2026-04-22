@@ -507,9 +507,9 @@ function selectModule(index) {
   
   let html = '<div style="display:flex; flex-direction:column; gap:12px;">' +
                '<div><label style="font-size:10px; color:#5a7abf;">モジュール題名</label>' +
-               '<input type="text" value="' + esc(m.title) + '" onchange="updateModule(' + index + ', \'title\', this.value)" style="width:100%; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;"></div>' +
+               '<input type="text" value="' + esc(m.title) + '" onchange="updateModule(' + index + ', &quot;title&quot;, this.value)" style="width:100%; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;"></div>' +
                '<div><label style="font-size:10px; color:#5a7abf;">型・構成案</label>' +
-               '<textarea style="width:100%; height:80px; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;" onchange="updateModule(' + index + ', \'instruction\', this.value)">' + esc(m.instruction || '') + '</textarea></div>' +
+               '<textarea style="width:100%; height:80px; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;" onchange="updateModule(' + index + ', &quot;instruction&quot;, this.value)">' + esc(m.instruction || '') + '</textarea></div>' +
              '</div>';
   document.getElementById('moduleContent').innerHTML = html;
 }
