@@ -183,13 +183,85 @@ body{font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;backgroun
 
       <div id="step2" style="display:none">
         <div class="panel"><div class="panel-title">🎯 選択中の案件</div><div id="selectedPostInfo"></div></div>
-        <div class="panel"><div class="panel-title">🔍 SIスライド情報</div><div style="color:#5a7abf;font-size:12px;">（ここにSI情報のUIが入ります）</div></div>
+        
+        <div style="display:flex; gap:20px;">
+          <!-- 左カラム: キーワード入力とラベル -->
+          <div style="flex:1; display:flex; flex-direction:column; gap:16px;">
+            <div class="panel" style="flex:1;">
+              <div class="panel-title">🔍 SIスライド情報 (検索キーワード)</div>
+              
+              <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <select id="siSourceType" style="padding:6px; background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px;">
+                  <option value="news">News</option>
+                  <option value="wikipedia">Wikipedia</option>
+                  <option value="sofascore_pmt">SofaScore (Player/Manager/Team)</option>
+                  <option value="sofascore_event">SofaScore (Event)</option>
+                  <option value="other">Other URL</option>
+                </select>
+                <input type="text" id="siKeywordInput" placeholder="検索キーワードまたはURL" style="flex:1; padding:6px; background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px;">
+                <button class="btn btn-primary" onclick="addSiKeyword()">＋ 追加</button>
+              </div>
+              
+              <div id="siKeywordsContainer" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; min-height:50px; padding:10px; background:#0d1220; border-radius:8px;"></div>
+              
+              <button class="btn btn-success" style="width:100%; justify-content:center;" onclick="fetchSiData()">⬇️ SI取得実行</button>
+            </div>
+            
+            <button class="btn btn-primary" style="width:100%; justify-content:center; font-size:16px; padding:12px;" onclick="goToModuleProposal()">➡️ モジュール提案へ進む</button>
+          </div>
+          
+          <!-- 右カラム: プレビューと取得済み一覧 -->
+          <div style="flex:1; display:flex; flex-direction:column; gap:16px;">
+            <div class="panel" style="flex:1; display:flex; flex-direction:column;">
+              <div class="panel-title">📺 プレビュー窓</div>
+              <div id="siPreviewWindow" style="flex:1; background:#0d1220; border-radius:8px; padding:12px; overflow-y:auto; font-size:12px; color:#c0d0e0; min-height:200px;">
+                (取得した情報がここに表示されます)
+              </div>
+            </div>
+            <div class="panel" style="flex:1; display:flex; flex-direction:column;">
+              <div class="panel-title">📋 取得済情報一覧</div>
+              <div id="siFetchedList" style="flex:1; background:#0d1220; border-radius:8px; padding:12px; overflow-y:auto; font-size:12px;"></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="step3" style="display:none">
-        <div class="panel"><div class="panel-title">🧩 モジュール構成</div><div style="color:#5a7abf;font-size:12px;">（モジュール提案のUIが入ります）</div></div>
+        <div class="panel">
+          <div class="panel-title">🧩 モジュール提案 (Claude)</div>
+          <button class="btn btn-primary" style="margin-bottom:16px;" onclick="proposeModules()">✨ モジュール構成を提案させる</button>
+          
+          <div id="moduleTabs" style="display:flex; overflow-x:auto; gap:8px; border-bottom:1px solid #2a3050; padding-bottom:8px; margin-bottom:16px;">
+            <!-- タブがここに並ぶ -->
+          </div>
+          
+          <div id="moduleContent" style="background:#0d1220; padding:16px; border-radius:8px; min-height:200px;">
+            （提案されたモジュールの詳細がここに表示されます）
+          </div>
+          
+          <div style="margin-top:20px; display:flex; gap:10px;">
+            <button class="btn btn-ghost" onclick="reproposeModules()">🔄 脚本指示再提案</button>
+            <button class="btn btn-success" style="flex:1; justify-content:center; font-size:16px;" onclick="generateScenarioAndImages()">🎬 シナリオ生成・画像取得へ進む</button>
+          </div>
+        </div>
       </div>
+      
       <div id="step4" style="display:none">
-        <div class="panel"><div class="panel-title">✍️ 脚本・編集</div><div style="color:#5a7abf;font-size:12px;">（各モジュールのテキスト編集UIが入ります）</div></div>
+        <div class="panel">
+          <div class="panel-title">✍️ 脚本・編集 (DeepSeek)</div>
+          
+          <div id="scenarioTabs" style="display:flex; overflow-x:auto; gap:8px; border-bottom:1px solid #2a3050; padding-bottom:8px; margin-bottom:16px;">
+            <!-- シナリオタブがここに並ぶ -->
+          </div>
+          
+          <div id="scenarioContent" style="background:#0d1220; padding:16px; border-radius:8px; min-height:300px;">
+            （生成されたシナリオ本文がここに表示されます）
+          </div>
+          
+          <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn btn-ghost" onclick="generateLocalAudio()">🔊 このモジュールのみ音声生成</button>
+            <button class="btn btn-success" style="font-size:16px; padding:12px 24px;" onclick="startVideoGeneration()">🎞️ 動画生成を開始</button>
+          </div>
+        </div>
       </div>
       <div id="step5" style="display:none">
         <div class="panel"><div class="panel-title">🎬 出力設定</div><div style="color:#5a7abf;font-size:12px;">（動画生成・アップロードUIが入ります）</div></div>
@@ -304,6 +376,190 @@ function goStep(n) {
     const nav = document.getElementById('sNav'+i);
     if (nav) nav.className = 'hstep' + (i===n-1 ? ' active' : '');
   }
+}
+
+// ─── SI スライドロジック (指示書 #2) ───
+let siKeywords = [];
+
+function addSiKeyword() {
+  const type = document.getElementById('siSourceType').value;
+  const input = document.getElementById('siKeywordInput');
+  const word = input.value.trim();
+  if (!word) return;
+
+  // 指示書 #2-7: wikipedia, sofascore は重複追加禁止
+  if (type.includes('wikipedia') || type.includes('sofascore')) {
+    if (siKeywords.some(k => k.type === type)) {
+      alert(type + ' はすでにラベルが追加されています。ダブリを防ぐため1つのみにしてください。');
+      return;
+    }
+  }
+
+  siKeywords.push({ type, word });
+  input.value = '';
+  renderSiKeywords();
+}
+
+function renderSiKeywords() {
+  const container = document.getElementById('siKeywordsContainer');
+  container.innerHTML = siKeywords.map((k, i) => {
+    return '<span style="background:#1a6ef5; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px; display:inline-flex; align-items:center; gap:6px;">' +
+             '[' + k.type + '] ' + esc(k.word) +
+             '<button onclick="removeSiKeyword(' + i + ')" style="background:transparent; border:none; color:#fff; cursor:pointer; font-weight:bold;">×</button>' +
+           '</span>';
+  }).join('');
+}
+
+function removeSiKeyword(index) {
+  siKeywords.splice(index, 1);
+  renderSiKeywords();
+}
+
+async function fetchSiData() {
+  if (siKeywords.length === 0) return alert('検索キーワードを追加してください');
+  if (!state.selectedPost) return alert('案件が選択されていません');
+
+  document.getElementById('siPreviewWindow').innerHTML = '<div style="color:#f59e0b">データ取得中...（約10〜30秒かかります）</div>';
+  
+  try {
+    const res = await fetch('/api/v2/fetch-si', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: state.date,
+        postId: state.selectedPost.id || state.selectedLeadId,
+        keywords: siKeywords
+      })
+    });
+    
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    state.siData = data.data; // 取得したJSONデータを保存
+
+    // プレビューと一覧を描画 (#2-5)
+    document.getElementById('siPreviewWindow').innerHTML = '<pre style="white-space:pre-wrap; word-wrap:break-word;">' + esc(JSON.stringify(data.data, null, 2)) + '</pre>';
+    
+    const listHtml = Object.keys(data.data).map(key => {
+      return '<div style="padding:6px; border-bottom:1px solid #2a3050; display:flex; align-items:center; gap:8px;">' +
+               '<span>⬇️</span> <span>' + esc(key) + ' (データ取得完了)</span>' +
+             '</div>';
+    }).join('');
+    document.getElementById('siFetchedList').innerHTML = listHtml || '取得データなし';
+
+  } catch (err) {
+    document.getElementById('siPreviewWindow').innerHTML = '<div style="color:#ff4b4b">取得エラー: ' + esc(err.message) + '</div>';
+  }
+}
+
+function goToModuleProposal() {
+  if (!state.siData) {
+    if (!confirm('SIデータが取得されていません。このままモジュール提案に進みますカ？')) return;
+  }
+  goStep(3);
+}
+
+// ─── モジュール提案ロジック (指示書 #3) ───
+let modules = [];
+let activeModuleIndex = 0;
+
+async function proposeModules() {
+  if (!state.selectedPost) return alert('案件を選択してください');
+  
+  document.getElementById('moduleContent').innerHTML = '<div style="color:#f59e0b">Claudeが構成を考案中...</div>';
+  
+  try {
+    const res = await fetch('/api/v2/propose-modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postId: state.selectedPost.id,
+        postTitle: state.selectedPost.title,
+        comments: state.selectedPost.comments || [],
+        siData: state.siData
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    modules = data.proposal.modules; // 提案されたモジュール配列
+    renderModuleTabs();
+    selectModule(0);
+  } catch (err) {
+    document.getElementById('moduleContent').innerHTML = '<div style="color:#ff4b4b">提案エラー: ' + esc(err.message) + '</div>';
+  }
+}
+
+function renderModuleTabs() {
+  const container = document.getElementById('moduleTabs');
+  container.innerHTML = modules.map((m, i) => {
+    const activeClass = i === activeModuleIndex ? 'background:#1a6ef5; color:#fff;' : 'background:#1e2540; color:#9bb5e0;';
+    return '<div onclick="selectModule(' + i + ')" style="padding:6px 12px; border-radius:4px; cursor:pointer; font-size:11px; white-space:nowrap; ' + activeClass + '">' +
+             (i+1) + '. ' + esc(m.title) +
+           '</div>';
+  }).join('');
+}
+
+function selectModule(index) {
+  activeModuleIndex = index;
+  renderModuleTabs();
+  const m = modules[index];
+  
+  let html = '<div style="display:flex; flex-direction:column; gap:12px;">' +
+               '<div><label style="font-size:10px; color:#5a7abf;">モジュール題名</label>' +
+               '<input type="text" value="' + esc(m.title) + '" onchange="updateModule(' + index + ', \'title\', this.value)" style="width:100%; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;"></div>' +
+               '<div><label style="font-size:10px; color:#5a7abf;">型・構成案</label>' +
+               '<textarea style="width:100%; height:80px; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;" onchange="updateModule(' + index + ', \'instruction\', this.value)">' + esc(m.instruction || '') + '</textarea></div>' +
+             '</div>';
+  document.getElementById('moduleContent').innerHTML = html;
+}
+
+function updateModule(index, field, value) {
+  modules[index][field] = value;
+}
+
+async function generateScenarioAndImages() {
+  if (modules.length === 0) return alert('モジュールを提案させてください');
+  goStep(4);
+  document.getElementById('scenarioContent').innerHTML = '<div style="color:#f59e0b">DeepSeekが脚本を執筆中...</div>';
+  
+  try {
+    const res = await fetch('/api/v2/generate-scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        postId: state.selectedPost.id,
+        modules: modules
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+
+    state.scenario = data.scenario;
+    renderScenarioTabs();
+    selectScenarioModule(0);
+  } catch (err) {
+    document.getElementById('scenarioContent').innerHTML = '<div style="color:#ff4b4b">脚本生成エラー: ' + esc(err.message) + '</div>';
+  }
+}
+
+// ─── 脚本編集ロジック (指示書 #4) ───
+function renderScenarioTabs() {
+  const container = document.getElementById('scenarioTabs');
+  container.innerHTML = state.scenario.modules.map((m, i) => {
+    return '<div onclick="selectScenarioModule(' + i + ')" style="padding:6px 12px; background:#1e2540; border-radius:4px; cursor:pointer; font-size:11px;">' + (i+1) + '</div>';
+  }).join('');
+}
+
+function selectScenarioModule(index) {
+  const m = state.scenario.modules[index];
+  document.getElementById('scenarioContent').innerHTML = 
+    '<textarea style="width:100%; height:200px; background:#0d1220; color:#fff; border:none; padding:10px;" onchange="state.scenario.modules[' + index + '].script = this.value">' + esc(m.script) + '</textarea>';
+}
+
+function startVideoGeneration() {
+  alert('動画生成を開始しました。バックグラウンドで処理されます。');
+  // 実際にはAPIを叩く
 }
 
 window.onload = () => {
