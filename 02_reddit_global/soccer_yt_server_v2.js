@@ -73,9 +73,31 @@ app.get('/api/v2/content', (req, res) => {
   res.json({ date: dateStr, posts });
 });
 
+const axios = require('axios');
+
+const LOCAL_AGENT_IP = process.env.LOCAL_AGENT_IP || null;
+const LOCAL_AGENT_URL = LOCAL_AGENT_IP ? `http://${LOCAL_AGENT_IP}:3004` : null;
+
+async function delegateToLocal(endpoint, data) {
+  if (!LOCAL_AGENT_URL) return null;
+  log(`[Gateway] Local Agent (${LOCAL_AGENT_IP}) へ委託開始: ${endpoint}`);
+  try {
+    const res = await axios.post(`${LOCAL_AGENT_URL}${endpoint}`, data, { timeout: 90000 });
+    return res.data;
+  } catch (err) {
+    log(`[Gateway] Local Agent 連携エラー: ${err.message}`);
+    return null; 
+  }
+}
+
 app.post('/api/v2/fetch-si', async (req, res) => {
   const { date, postId, keywords } = req.body;
   log(`SI取得開始: ${date} ${postId}`);
+  
+  // ハイブリッド・ゲートウェイ発動
+  const remoteResult = await delegateToLocal('/api/v2/fetch-si', req.body);
+  if (remoteResult && (remoteResult.success || remoteResult.data)) return res.json(remoteResult);
+
   try {
     const results = await fetchAllModuleData(keywords);
     res.json({ success: true, data: results });
@@ -88,7 +110,7 @@ app.get('/', (_, res) => res.send(`<!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>⚽ サッカーYT v2 Pro統合版</title>
+<title>⚽ サッカーYT v2 Gateway Mode (Blue)</title>
 <style>
 /* ─── 基本スタイル ─── */
 *{box-sizing:border-box;margin:0;padding:0}
@@ -98,19 +120,19 @@ body{font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;backgroun
 
 /* ─── 左サイドバー (指示書 #1-9) ─── */
 .sidebar-left { width: 320px; background: #0d1220; border-right: 1px solid #1e2540; display: flex; flex-direction: column; flex-shrink: 0; }
-.sidebar-header { padding: 18px; background: #1a2540; border-bottom: 1px solid #2a3560; color: #7dc8ff; font-weight: 900; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+.sidebar-header { padding: 18px; background: #1a2540; border-bottom: 1px solid #2a3560; color: #1a6ef5; font-weight: 900; font-size: 14px; display: flex; align-items: center; gap: 10px; }
 .saved-leads-list { flex: 1; overflow-y: auto; padding: 12px; }
 .lead-item { background: #161b2e; border: 1px solid #2a3050; border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; border-left: 4px solid transparent; }
 .lead-item:hover { border-color: #1a6ef5; transform: translateX(4px); background: #1e2540; }
-.lead-item.active { border-color: #f59e0b; background: #262c40; border-left-color: #f59e0b; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+.lead-item.active { border-color: #1a6ef5; background: #262c40; border-left-color: #1a6ef5; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
 .lead-title { font-size: 12px; font-weight: bold; color: #e0e8ff; margin-bottom: 6px; line-height: 1.4; }
 .lead-meta { font-size: 10px; color: #5a7abf; display: flex; justify-content: space-between; }
 
 /* ─── メインエリア ─── */
 .content-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; background: #0f1117; }
-.header{background:linear-gradient(135deg,#1a2040,#0d1220);padding:0 12px;border-bottom:1px solid #2a3050;display:flex;align-items:stretch;min-height:56px;flex-shrink:0}
+.header{background:linear-gradient(135deg,#1a2040,#0d1220);padding:0 12px;border-bottom:2px solid #1a6ef5;display:flex;align-items:stretch;min-height:56px;flex-shrink:0}
 .header-brand{display:flex;align-items:center;gap:10px;padding-right:16px;border-right:1px solid #2a3050}
-.header h1{font-size:16px;font-weight:900;color:#ff4b4b}
+.header h1{font-size:16px;font-weight:900;color:#1a6ef5}
 .badge{background:#1a4a8a;color:#7dc8ff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
 .header-steps{display:flex;align-items:stretch;flex:1;overflow-x:auto}
 .hstep{display:flex;align-items:center;gap:6px;padding:0 12px;color:#3a4a6a;font-size:11px;font-weight:600;white-space:nowrap;border-right:1px solid #1a2540;cursor:pointer}
