@@ -78,6 +78,8 @@ const { fetchSerper } = require('./scripts/modules/fetchers/serper_module');
 
 app.post('/api/v2/fetch-si', async (req, res) => {
   log(`SI取得リクエスト受付: ${req.body.keywords?.length}件`);
+  
+  // VPSの場合はまずローカルプロキシへ委託
   const remoteResult = await delegateToLocal('/api/v2/fetch-si', req.body);
   if (remoteResult && (remoteResult.success || remoteResult.data)) return res.json(remoteResult);
 
@@ -85,15 +87,21 @@ app.post('/api/v2/fetch-si', async (req, res) => {
   try {
     const results = {};
     for (const k of keywords) {
-      log(`[Logic Norm] Processing ${k.type}: ${k.word}`);
+      log(`[Logic] Processing ${k.type}: ${k.word}`);
       let data = { ok: false, error: '取得失敗' };
       
+      if (k.type === 'otherURL') {
+        data = { ok: true, url: k.word, note: '外部URL参照' };
+        results[k.word] = data;
+        continue;
+      }
+
       // キーワードが日本語ならAIで英語に変換 (正規化)
       let wordEn = k.word;
       if (/[\u3000-\u9fff\uff00-\uffef]/.test(k.word)) {
         const trans = await callAI(`Soccer search keyword: "${k.word}". Return only official English name. No explanation.`);
         wordEn = trans.trim().replace(/^["']|["']$/g, '');
-        log(`[Logic Norm] 翻訳: ${k.word} -> ${wordEn}`);
+        log(`[Logic] 翻訳: ${k.word} -> ${wordEn}`);
       }
 
       if (k.type === 'wikipedia') {
@@ -103,7 +111,6 @@ app.post('/api/v2/fetch-si', async (req, res) => {
         if (!data.ok) data = await fetchSofaScoreTeam(wordEn);
         if (!data.ok) data = await fetchSofaScoreManager(wordEn);
       } else if (k.type === 'sofascore_event') {
-        // AIで高精度パース
         try {
           const parsed = await callAI(`Extract "home" and "away" team names in English from "${k.word}". Return JSON: { "home": "...", "away": "..." }`, { json: true });
           const { home, away } = JSON.parse(parsed);
@@ -153,7 +160,7 @@ app.get('/', (_, res) => res.send(`<!DOCTYPE html>
 body{font-family:sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overflow:hidden}
 .layout { display: flex; height: 100vh; width: 100vw; }
 
-/* サイドバー (#1-9) */
+/* サイドバー */
 .sidebar { width: 320px; background: #0d1220; border-right: 1px solid #1e2540; display: flex; flex-direction: column; flex-shrink: 0; }
 .sidebar-header { padding: 18px; background: #1a2540; border-bottom: 1px solid #2a3560; color: #1a6ef5; font-weight: 900; font-size: 14px; }
 .saved-list { flex: 1; overflow-y: auto; padding: 12px; }
@@ -176,7 +183,7 @@ h1{ font-size: 18px; color: #1a6ef5; font-weight: 900; }
 .btn-success{background:#10b981; color:#fff;}
 .btn-ghost{background:#1e2540; color:#9bb5e0; border:1px solid #2a3050;}
 
-/* 案件リスト (#1-7) */
+/* 案件リスト */
 .time-group { margin-bottom: 10px; border: 1px solid #2a3050; border-radius: 8px; overflow: hidden; }
 .time-summary { background: #1a2840; padding: 10px; cursor: pointer; color: #7dc8ff; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
 .time-summary:after { content: '▼'; font-size: 10px; transition: 0.3s; }
@@ -187,8 +194,11 @@ h1{ font-size: 18px; color: #1a6ef5; font-weight: 900; }
 .post-row { padding: 10px; border-bottom: 1px solid #1a2540; display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
 .post-row:hover { background: #141a30; }
 
-.label-box { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; padding: 10px; background: #0d1220; border-radius: 8px; }
-.label-item { background: #1a6ef5; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+/* ラベルバッジ */
+.label-box { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; padding: 10px; background: #0d1220; border-radius: 8px; min-height: 50px; }
+.label-item { background: #1a6ef5; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.1); }
+.label-badge { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #7dc8ff; text-transform: uppercase; }
+
 pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflow-x:auto; color:#9bb5e0; white-space:pre-wrap;}
 </style>
 </head>
@@ -223,7 +233,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
             <div>
               <div style="display:flex; gap:5px; margin-bottom:10px;">
                 <select id="siType" style="background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px; padding:5px;">
-                  <option value="news">News</option><option value="wikipedia">Wikipedia</option><option value="sofascore_pmt">SofaScore (P/M/T)</option><option value="sofascore_event">SofaScore (Match)</option>
+                  <option value="news">News</option><option value="wikipedia">Wikipedia</option><option value="sofascore_pmt">SofaScore (P/M/T)</option><option value="sofascore_event">SofaScore (Match)</option><option value="otherURL">Other URL</option>
                 </select>
                 <input type="text" id="siInput" style="flex:1; background:#1e2540; color:#fff; border:1px solid #2a3050; padding:5px;" placeholder="キーワード...">
                 <button class="btn btn-primary" onclick="addLabel()">＋</button>
@@ -231,7 +241,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
               <div id="labels" class="label-box"></div>
               <button class="btn btn-success" style="width:100%;" onclick="fetchSi()">⬇️ SI情報取得実行</button>
             </div>
-            <div><pre id="preview" style="height:300px;">データを取得してね</pre></div>
+            <div><pre id="preview" style="height:350px;">キーワードを追加してね</pre></div>
           </div>
           <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="goStep(3)">➡️ 次へ進む</button>
         </div>
@@ -241,6 +251,8 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
 </div>
 <script>
 let state = { date:'', posts:[], saved:[], selected:null, keywords:[], selectedIds: new Set() };
+const TYPE_NAME = { news: 'NEWS', wikipedia: 'WIKI', sofascore_pmt: 'SOFA(P)', sofascore_event: 'SOFA(M)', otherURL: 'URL' };
+
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function loadContent() {
@@ -299,8 +311,8 @@ function saveSelectedPosts() {
   });
   renderSidebar();
   state.selectedIds.clear();
-  loadContent(); // UIリセット
-  alert('案件を保存しました（左側のスライドに格納されました）');
+  loadContent(); 
+  alert('案件を保存しました');
 }
 
 async function fetchNow() { alert('抽出開始...'); const res = await fetch('/api/v2/fetch-now', {method:'POST'}); if((await res.json()).success) loadContent(); }
@@ -318,6 +330,12 @@ function selectLead(id) {
   state.selected = state.saved.find(x => x.id === id);
   if (!state.selected) return;
   document.getElementById('currentTitle').innerText = state.selected.title;
+  
+  // 案件切り替え時にキーワードとプレビューをリセット
+  state.keywords = [];
+  renderLabels();
+  document.getElementById('preview').innerText = "キーワードを追加してね";
+
   renderSidebar();
   goStep(2);
 }
@@ -333,6 +351,14 @@ function addLabel() {
   const type = document.getElementById('siType').value;
   const word = document.getElementById('siInput').value.trim();
   if(!word) return;
+
+  // 重複チェック (#2-7)
+  if(['wikipedia','sofascore_pmt','sofascore_event'].includes(type)) {
+    if(state.keywords.find(k => k.type === type && k.word === word)) {
+      return alert('このワードは既に追加されています');
+    }
+  }
+
   state.keywords.push({type, word});
   document.getElementById('siInput').value = '';
   renderLabels();
@@ -340,18 +366,27 @@ function addLabel() {
 
 function renderLabels() {
   document.getElementById('labels').innerHTML = state.keywords.map((k, i) => \`
-    <div class="label-item">\${k.word} <span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer">×</span></div>
+    <div class="label-item">
+      <span class="label-badge">\${TYPE_NAME[k.type]}</span>
+      <span>\${esc(k.word)}</span>
+      <span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer; margin-left:5px; opacity:0.6;">×</span>
+    </div>
   \`).join('');
 }
 
 async function fetchSi() {
-  const pre = document.getElementById('preview'); pre.innerHTML = "⏳ 取得中...";
-  const res = await fetch('/api/v2/fetch-si', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ keywords: state.keywords })
-  });
-  const data = await res.json();
-  pre.innerHTML = JSON.stringify(data.data, null, 2);
+  if (state.keywords.length === 0) return alert('キーワードを追加してください');
+  const pre = document.getElementById('preview'); pre.innerHTML = "⏳ Local Agent経由で取得中...";
+  try {
+    const res = await fetch('/api/v2/fetch-si', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ keywords: state.keywords })
+    });
+    const data = await res.json();
+    pre.innerHTML = JSON.stringify(data.data, null, 2);
+  } catch(e) {
+    pre.innerHTML = "❌ 取得エラー: " + e.message;
+  }
 }
 
 window.onload = () => { document.getElementById('dateInput').value = new Date().toISOString().slice(0,10); };
