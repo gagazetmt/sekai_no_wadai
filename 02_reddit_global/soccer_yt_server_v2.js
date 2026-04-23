@@ -77,7 +77,7 @@ const { fetchSofaScoreMatch } = require('./scripts/modules/fetchers/sofascore_ma
 const { fetchSerper } = require('./scripts/modules/fetchers/serper_module');
 
 app.post('/api/v2/fetch-si', async (req, res) => {
-  log(`SI取得リクエスト受付`);
+  log(`SI取得リクエスト受付: ${req.body.keywords?.length}件`);
   const remoteResult = await delegateToLocal('/api/v2/fetch-si', req.body);
   if (remoteResult && (remoteResult.success || remoteResult.data)) return res.json(remoteResult);
 
@@ -85,18 +85,36 @@ app.post('/api/v2/fetch-si', async (req, res) => {
   try {
     const results = {};
     for (const k of keywords) {
-      let data = { ok: false };
-      if (k.type === 'wikipedia') data = await fetchWikipediaSafe([k.word]);
-      else if (k.type === 'sofascore_pmt') {
-        data = await fetchSofaScorePlayer(k.word);
-        if (!data.ok) data = await fetchSofaScoreTeam(k.word);
-        if (!data.ok) data = await fetchSofaScoreManager(k.word);
+      log(`[Logic Norm] Processing ${k.type}: ${k.word}`);
+      let data = { ok: false, error: '取得失敗' };
+      
+      // キーワードが日本語ならAIで英語に変換 (正規化)
+      let wordEn = k.word;
+      if (/[\u3000-\u9fff\uff00-\uffef]/.test(k.word)) {
+        const trans = await callAI(`Soccer search keyword: "${k.word}". Return only official English name. No explanation.`);
+        wordEn = trans.trim().replace(/^["']|["']$/g, '');
+        log(`[Logic Norm] 翻訳: ${k.word} -> ${wordEn}`);
+      }
+
+      if (k.type === 'wikipedia') {
+        data = await fetchWikipediaSafe([wordEn, k.word]);
+      } else if (k.type === 'sofascore_pmt') {
+        data = await fetchSofaScorePlayer(wordEn);
+        if (!data.ok) data = await fetchSofaScoreTeam(wordEn);
+        if (!data.ok) data = await fetchSofaScoreManager(wordEn);
       } else if (k.type === 'sofascore_event') {
-        const teams = k.word.split(/vs|VS|-|－/);
-        if (teams.length >= 2) data = await fetchSofaScoreMatch(teams[0].trim(), teams[1].trim());
+        // AIで高精度パース
+        try {
+          const parsed = await callAI(`Extract "home" and "away" team names in English from "${k.word}". Return JSON: { "home": "...", "away": "..." }`, { json: true });
+          const { home, away } = JSON.parse(parsed);
+          data = await fetchSofaScoreMatch(home, away);
+        } catch (e) {
+          const teams = k.word.split(/vs|VS|-|－/);
+          if (teams.length >= 2) data = await fetchSofaScoreMatch(teams[0].trim(), teams[1].trim());
+        }
       } else if (k.type === 'news') {
-        const news = await fetchSerper(k.word, 'news', 'en');
-        data = { ok: !!news, items: news };
+        const news = await fetchSerper(wordEn, 'news', 'en');
+        data = { ok: !!news.organic?.length, items: news.organic || [], summary: news.answerBox?.snippet || null };
       }
       results[k.word] = sanitizeData(data);
     }
