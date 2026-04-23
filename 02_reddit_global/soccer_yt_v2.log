@@ -2500,3 +2500,18 @@ Official NBA Stats | Stats | NBA.com Schedule Playoffs BAL 2026 League Pass Game
 [2026-04-23T04:20:05.983Z] 自身でSI取得を試行します...
 [2026-04-23T04:20:11.139Z] SI取得リクエスト受付
 [2026-04-23T04:20:11.140Z] 自身でSI取得を試行します...
+[2026-04-23T11:55:40.547Z] [SI] リクエスト受信: 1件 (委託フラグ: true)
+[2026-04-23T11:55:40.554Z] [SI] 取得実行: news - messi
+[2026-04-23T11:55:42.074Z] [SI] 完了: messi - Result: true
+[2026-04-23T11:56:18.149Z] [SI] リクエスト受信: 2件 (委託フラグ: true)
+[2026-04-23T11:56:18.150Z] [SI] 取得実行: news - messi
+[2026-04-23T11:56:19.752Z] [SI] 完了: messi - Result: true
+[2026-04-23T11:56:19.753Z] [SI] 取得実行: wikipedia - chelsea
+[2026-04-23T11:56:21.444Z] [SI] 完了: chelsea - Result: true
+[2026-04-23T11:56:53.562Z] [SI] リクエスト受信: 3件 (委託フラグ: true)
+[2026-04-23T11:56:53.563Z] [SI] 取得実行: news - messi
+[2026-04-23T11:56:54.957Z] [SI] 完了: messi - Result: true
+[2026-04-23T11:56:54.958Z] [SI] 取得実行: wikipedia - chelsea
+[2026-04-23T11:56:56.059Z] [SI] 完了: chelsea - Result: true
+[2026-04-23T11:56:56.060Z] [SI] 取得実行: sofascore_pmt - haaland
+[2026-04-23T11:56:57.252Z] [SI] 完了: haaland - Result: true
