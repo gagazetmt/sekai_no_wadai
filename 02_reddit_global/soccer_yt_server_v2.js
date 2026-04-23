@@ -1,6 +1,6 @@
 // soccer_yt_server_v2.js
 // v2 サッカー YouTube ランチャー Pro統合版 (port 3004)
-// 【改修内容】SofaScore Match候補検索 ＋ 取得後クリア ＋ 青色モード ＋ 永続保存
+// 【改修内容】Match候補検索 ＋ 時間表示修正(added_at) ＋ 鉄壁青モード ＋ 永続保存
 
 require('dotenv').config();
 const express   = require('express');
@@ -51,9 +51,8 @@ async function delegateToLocal(endpoint, data) {
 
 // ─── API ───
 
-// SofaScore 試合候補検索 (#NEW)
 app.post('/api/v2/search-match', async (req, res) => {
-  log(`[SI] Match検索リクエスト: ${req.body.query}`);
+  log(`[SI] Match検索: ${req.body.query}`);
   const remoteResult = await delegateToLocal('/api/v2/search-match', req.body);
   if (remoteResult) return res.json(remoteResult);
 
@@ -61,18 +60,14 @@ app.post('/api/v2/search-match', async (req, res) => {
   try {
     const parsed = await callAI(`Extract home and away teams in English from "${query}". Return JSON: {"home":"...", "away":"..."}`, { json: true });
     const { home, away } = JSON.parse(parsed);
-    // 候補検索ロジック (簡易的に現状のMatch取得を流用し、ヒットしたものを返す)
     const data = await fetchSofaScoreMatch(home, away);
-    if (data.ok) {
-      res.json({ success: true, candidates: [{ id: data.id, title: `${data.homeTeam} vs ${data.awayTeam} (${data.date})`, raw: data }] });
-    } else {
-      res.json({ success: true, candidates: [] });
-    }
+    if (data.ok) res.json({ success: true, candidates: [{ id: data.id, title: `${data.homeTeam} vs ${data.awayTeam} (${data.date})`, raw: data }] });
+    else res.json({ success: true, candidates: [] });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
 app.post('/api/v2/fetch-si', async (req, res) => {
-  log(`[SI] リクエスト受信: ${req.body.keywords?.length}件`);
+  log(`[SI] Req: ${req.body.keywords?.length} keys`);
   const { keywords, postId, _delegated } = req.body;
 
   if (!_delegated && LOCAL_AGENT_URL) {
@@ -84,9 +79,7 @@ app.post('/api/v2/fetch-si', async (req, res) => {
         fs.writeFileSync(filePath, JSON.stringify({ ...existing, ...remoteResult.data }, null, 2));
       }
       return res.json(remoteResult);
-    } else if (remoteResult?.isGatewayError) {
-      return res.status(502).json(remoteResult);
-    }
+    } else if (remoteResult?.isGatewayError) return res.status(502).json(remoteResult);
   }
 
   try {
@@ -95,43 +88,36 @@ app.post('/api/v2/fetch-si', async (req, res) => {
       log(`[SI] Exec: ${k.type} - ${k.word}`);
       let data = { ok: false };
       if (k.type === 'otherURL') { results[k.word] = { ok: true, url: k.word }; continue; }
-      
       let wordEn = k.word;
       if (/[\u3000-\u9fff\uff00-\uffef]/.test(k.word)) {
         const trans = await callAI(`Official English for "${k.word}". Reply only name.`);
         wordEn = trans.trim().replace(/^["']|["']$/g, '');
       }
-
       if (k.type === 'wikipedia') data = await fetchWikipediaSafe([wordEn, k.word]);
       else if (k.type === 'sofascore_pmt') {
         data = await fetchSofaScorePlayer(wordEn);
         if (!data.ok) data = await fetchSofaScoreTeam(wordEn);
         if (!data.ok) data = await fetchSofaScoreManager(wordEn);
       } else if (k.type === 'sofascore_event') {
-        // ID指定がある場合はそれを使用、なければ検索
-        if (k.matchId) data = await fetchSofaScoreMatch(null, null, k.matchId);
-        else {
-          const teams = k.word.split(/vs|VS|-|－/);
-          if (teams.length >= 2) data = await fetchSofaScoreMatch(teams[0].trim(), teams[1].trim());
-        }
+        data = await fetchSofaScoreMatch(null, null, k.matchId || k.word);
       } else if (k.type === 'news') {
         const news = await fetchSerper(wordEn, 'news', 'en');
         data = news.organic?.length ? { ok: true, items: news.organic } : { ok: false };
       }
       results[k.word] = data;
     }
-
     if (postId) {
       const filePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
       let existing = fs.existsSync(filePath) ? JSON.parse(fs.readFileSync(filePath, 'utf8')) : {};
       fs.writeFileSync(filePath, JSON.stringify({ ...existing, ...results }, null, 2));
     }
     res.json({ success: true, data: results });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { log(`[SI] Fatal: ${err.message}`); res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/v2/si-history', (req, res) => {
-  const filePath = path.join(SI_DATA_DIR, `${req.query.postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
+  const postId = req.query.postId || "";
+  const filePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
   if (!fs.existsSync(filePath)) return res.json({ items: [] });
   const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   res.json({ items: Object.keys(data).map(k => ({ title: k, data: data[k] })) });
@@ -144,56 +130,57 @@ app.get('/api/v2/content', (req, res) => {
   const file = path.join(DATA_DIR, `stories_${d.replace(/-/g, "_")}.json`);
   if (!fs.existsSync(file)) return res.json({ posts: [] });
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  res.json({ posts: (data.posts || []).map((p, i) => ({ id: p.id || String(i), title: p.titleJa || p.title, addedAt: p.addedAt, source: p.source, raw: p })) });
+  res.json({ posts: (data.posts || []).map((p, i) => ({ id: p.id || String(i), title: p.titleJa || p.title, addedAt: p.added_at || p.addedAt || (p.created_utc ? new Date(p.created_utc*1000).toISOString() : null), source: p.source, raw: p })) });
 });
 
-// ─── UI (HTML) ───
+// ─── UI ───
 app.get('/', (_, res) => res.send(`<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8"><title>⚽ サッカーYT v2 Pro Full Blue</title>
 <style>
+:root { --blue: #1a6ef5; --bg: #0f1117; --panel: #161b2e; --border: #2a3050; }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overflow:hidden;display:flex;}
-.sidebar{width:300px;background:#0d1220;border-right:1px solid #1e2540;display:flex;flex-direction:column;flex-shrink:0;}
-.sidebar-header{padding:15px;background:#1a2540;color:#1a6ef5;font-weight:900;font-size:13px;border-bottom:1px solid #2a3560;}
-.saved-list{flex:1;overflow-y:auto;padding:10px;}
-.lead-item{background:#161b2e;border:1px solid #2a3050;border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;font-size:12px;}
-.lead-item.active{border-color:#1a6ef5;background:#262c40;border-left:4px solid #1a6ef5;}
+body{font-family:sans-serif;background:var(--bg);color:#e0e0e0;height:100vh;overflow:hidden;display:flex;}
+.sidebar{width:320px;background:#0d1220;border-right:1px solid #1e2540;display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-header{padding:18px;background:#1a2540;color:var(--blue);font-weight:900;font-size:14px;border-bottom:1px solid #2a3560;}
+.saved-list{flex:1;overflow-y:auto;padding:12px;}
+.lead-item{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer;font-size:13px;transition:0.2s;}
+.lead-item.active{border-color:var(--blue);background:#262c40;border-left:4px solid var(--blue);}
 .main{flex:1;display:flex;flex-direction:column;}
-.header{background:#1a2040;padding:10px 20px;border-bottom:2px solid #1a6ef5;display:flex;justify-content:space-between;align-items:center;}
-h1{font-size:16px;color:#1a6ef5;font-weight:900;}
+.header{background:#1a2040;padding:12px 20px;border-bottom:2px solid var(--blue);display:flex;justify-content:space-between;align-items:center;}
+h1{font-size:18px;color:var(--blue) !important;font-weight:900;}
 .steps{display:flex;background:#0d1220;border-bottom:1px solid #1e2540;}
-.step{padding:10px 15px;font-size:11px;font-weight:bold;color:#3a4a6a;}
-.step.active{color:#1a6ef5;background:#161b2e;}
+.step{padding:12px 20px;font-size:11px;font-weight:bold;color:#3a4a6a;}
+.step.active{color:var(--blue);background:var(--panel);}
 .content{flex:1;overflow-y:auto;padding:20px;}
-.panel{background:#161b2e;border-radius:10px;padding:15px;margin-bottom:15px;border:1px solid #2a3050;}
-.btn{padding:6px 12px;border-radius:6px;cursor:pointer;border:none;font-weight:bold;font-size:11px;}
-.btn-primary{background:#1a6ef5;color:#fff;}
+.panel{background:var(--panel);border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid var(--border);}
+.btn{padding:8px 16px;border-radius:8px;cursor:pointer;border:none;font-weight:bold;font-size:12px;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:var(--blue);color:#fff;}
 .btn-success{background:#10b981;color:#fff;}
-.time-group{margin-bottom:10px;border:1px solid #2a3050;border-radius:6px;overflow:hidden;}
-.time-summary{background:#1a2840;padding:8px;cursor:pointer;color:#7dc8ff;font-size:11px;font-weight:bold;}
-.post-row{padding:8px;border-bottom:1px solid #1a2540;display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;}
-.label-box{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;padding:10px;background:#0d1220;border-radius:6px;min-height:40px;}
-.label-item{background:#1a6ef5;color:#fff;padding:3px 8px;border-radius:15px;font-size:10px;display:flex;align-items:center;gap:5px;}
-.label-badge{background:rgba(0,0,0,0.3);padding:1px 4px;border-radius:3px;font-size:8px;}
-.si-list{background:#0d1220;border-radius:6px;margin-top:10px;border:1px solid #1e2540;}
-.si-item{padding:6px 10px;border-bottom:1px solid #1e2540;font-size:11px;cursor:pointer;display:flex;align-items:center;gap:8px;}
-.cand-list{background:#1a2540;border-radius:6px;padding:5px;margin-top:5px;max-height:100px;overflow-y:auto;display:none;}
-.cand-item{padding:5px;font-size:10px;cursor:pointer;border-bottom:1px solid #2a3560;}
-.cand-item:hover{background:#2a3560;}
-pre{background:#0d1220;padding:10px;border-radius:6px;font-size:10px;overflow-x:auto;color:#9bb5e0;white-space:pre-wrap;}
+.time-group{margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.time-summary{background:#1a2840;padding:10px;cursor:pointer;color:#7dc8ff;font-size:12px;font-weight:bold;}
+.post-row{padding:10px;border-bottom:1px solid #1a2540;display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;}
+.label-box{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:10px;background:#0d1220;border-radius:8px;min-height:50px;}
+.label-item{background:var(--blue);color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;display:flex;align-items:center;gap:6px;}
+.label-badge{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;font-size:9px;color:#7dc8ff;}
+.si-list{margin-top:10px;background:#0d1220;border-radius:8px;border:1px solid #1e2540;}
+.si-item{padding:8px 12px;border-bottom:1px solid #1e2540;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;}
+.cand-list{background:#1a2540;border-radius:8px;padding:8px;margin-top:8px;max-height:150px;overflow-y:auto;display:none;border:1px solid var(--blue);}
+.cand-item{padding:8px;font-size:12px;cursor:pointer;border-bottom:1px solid #2a3560;}
+.cand-item:hover{background:var(--blue);color:#fff;}
+pre{background:#0d1220;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;color:#9bb5e0;white-space:pre-wrap;}
 </style></head>
 <body>
-<div class="sidebar"><div class="sidebar-header">📦 保存済み案件</div><div id="savedList" class="saved-list"></div></div>
+<div class="sidebar"><div class="sidebar-header">📦 保存済み案件 (Pro Blue)</div><div id="savedList" class="saved-list"></div></div>
 <div class="main">
-  <div class="header"><h1>⚽ サッカーYT v2 Pro Full Blue</h1><div style="font-size:10px; color:#1a6ef5;">📡 連携: ${LOCAL_AGENT_IP || 'DIRECT'}</div></div>
+  <div class="header"><h1>⚽ サッカーYT v2 Pro Full Blue</h1><div style="font-size:12px; color:var(--blue);">📡 連携: \${LOCAL_AGENT_IP || 'DIRECT'}</div></div>
   <div class="steps"><div class="step active" id="st1">1.案件選択</div><div class="step" id="st2">2.SIスライド</div><div class="step" id="st3">3.構成</div></div>
   <div class="content">
-    <div id="step1"><div class="panel"><input type="date" id="dateInput" style="background:#1e2540;color:#fff;border:1px solid #2a3050;padding:5px;border-radius:4px;"><button class="btn btn-primary" onclick="loadContent()">案件読込</button> <button class="btn btn-success" onclick="saveSelected()">💾 案件を保存</button></div><div id="postList"></div></div>
-    <div id="step2" style="display:none;"><div class="panel"><div id="curTitle" style="font-size:15px;font-weight:900;color:#1a6ef5;margin-bottom:10px;"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
-      <div><div style="display:flex;gap:5px;"><select id="siType" style="background:#1e2540;color:#fff;border:1px solid #2a3050;border-radius:4px;padding:3px;"><option value="news">News</option><option value="wikipedia">Wiki</option><option value="sofascore_pmt">Sofa(P/M/T)</option><option value="sofascore_event">Sofa(Match)</option></select><input type="text" id="siInput" style="flex:1;background:#1e2540;color:#fff;border:1px solid #2a3050;padding:3px;" placeholder="ワード..."><button class="btn btn-primary" id="addBtn" onclick="handleAdd()">＋</button></div>
-      <div id="candList" class="cand-list"></div><div id="labels" class="label-box"></div><button class="btn btn-success" style="width:100%" onclick="fetchSi()">⬇️ 情報取得実行</button></div>
-      <div style="display:flex;flex-direction:column;"><div style="font-size:10px;color:#1a6ef5;font-weight:bold;margin-bottom:5px;">🔍 プレビュー</div><pre id="preview" style="height:150px;">データを取得してね</pre><div style="font-size:10px;color:#1a6ef5;font-weight:bold;margin-top:10px;margin-bottom:5px;">📂 取得済み</div><div id="siHistory" class="si-list" style="height:100px;overflow-y:auto;"></div></div>
-    </div><button class="btn btn-primary" style="width:100%;margin-top:15px;" onclick="goStep(3)">➡️ 次へ進む</button></div></div>
+    <div id="step1"><div class="panel"><input type="date" id="dateInput" style="background:#1e2540;color:#fff;border:1px solid #2a3050;padding:6px;border-radius:4px;"><button class="btn btn-primary" onclick="loadContent()">案件読込</button> <button class="btn btn-success" onclick="saveSelected()">💾 案件を保存</button></div><div id="postList"></div></div>
+    <div id="step2" style="display:none;"><div class="panel"><div id="curTitle" style="font-size:18px;font-weight:900;color:var(--blue);margin-bottom:15px;"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div><div style="display:flex;gap:5px;"><select id="siType" style="background:#1e2540;color:#fff;border:1px solid #2a3050;border-radius:4px;padding:5px;"><option value="news">News</option><option value="wikipedia">Wiki</option><option value="sofascore_pmt">Sofa(P/M/T)</option><option value="sofascore_event">Sofa(Match)</option></select><input type="text" id="siInput" style="flex:1;background:#1e2540;color:#fff;border:1px solid #2a3050;padding:5px;" placeholder="ワード..."><button class="btn btn-primary" id="addBtn" onclick="handleAdd()">＋</button></div>
+      <div id="candList" class="cand-list"></div><div id="labels" class="label-box"></div><button class="btn btn-success" style="width:100%" onclick="fetchSi()">⬇️ SI情報取得実行</button></div>
+      <div style="display:flex;flex-direction:column;"><div style="font-size:11px;color:var(--blue);font-weight:bold;margin-bottom:8px;">🔍 データプレビュー</div><pre id="preview" style="height:200px;">データを取得してね</pre><div style="font-size:11px;color:var(--blue);font-weight:bold;margin-top:10px;margin-bottom:5px;">📂 取得済み履歴</div><div id="siHistory" class="si-list" style="height:150px;overflow-y:auto;"></div></div>
+    </div><button class="btn btn-primary" style="width:100%;margin-top:20px;" onclick="goStep(3)">➡️ 次へ進む</button></div></div>
   </div>
 </div>
 <script>
@@ -204,9 +191,9 @@ async function loadContent() {
   const d = document.getElementById('dateInput').value; if(!d)return;
   const res = await fetch('/api/v2/content?date='+d); const data = await res.json(); state.posts = data.posts;
   const groups = {}; data.posts.forEach(p => { const t = p.addedAt ? p.addedAt.slice(11,16) : '不明'; if(!groups[t]) groups[t]=[]; groups[t].push(p); });
-  document.getElementById('postList').innerHTML = Object.keys(groups).sort().reverse().map(t => \`<div class="time-group"><div class="time-summary" onclick="this.parentElement.querySelector('.time-content').style.display=this.parentElement.querySelector('.time-content').style.display==='none'?'block':'none'">🕒 \${t} 取得分 (\${groups[t].length})</div><div class="time-content" style="display:none;">\${groups[t].map(p => \`<div class="post-row" onclick="toggleSel('\${p.id}', this)"><input type="checkbox" id="chk_\${p.id}" \${state.selectedIds.has(p.id)?'checked':''}> \${esc(p.title)}</div>\`).join('')}</div></div>\`).join('');
+  document.getElementById('postList').innerHTML = Object.keys(groups).sort().reverse().map(t => \`<div class="time-group"><div class="time-summary" onclick="const c=this.parentElement.querySelector('.time-content');c.style.display=c.style.display==='none'?'block':'none'">🕒 \${t} 取得分 (\${groups[t].length})</div><div class="time-content" style="display:none;">\${groups[t].map(p => \`<div class="post-row" onclick="toggleSel('\${p.id}', this)"><input type="checkbox" id="chk_\${p.id}" \${state.selectedIds.has(p.id)?'checked':''}> \${esc(p.title)}</div>\`).join('')}</div></div>\`).join('');
 }
-function toggleSel(id, el){ const chk = document.getElementById('chk_'+id); state.selectedIds.has(id)?(state.selectedIds.delete(id),chk.checked=false,el.style.background=''):(state.selectedIds.add(id),chk.checked=true,el.style.background='#1a2440'); }
+function toggleSel(id, el){ const chk = document.getElementById('chk_'+id); if(state.selectedIds.has(id)){state.selectedIds.delete(id);chk.checked=false;el.style.background='';}else{state.selectedIds.add(id);chk.checked=true;el.style.background='#1a2440';} }
 async function saveSelected(){
   state.selectedIds.forEach(id => { const p=state.posts.find(x=>x.id===id); if(p && !state.saved.find(x=>x.id===id)) state.saved.push(p); });
   await fetch('/api/v2/saved-projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state.saved)});
@@ -222,42 +209,35 @@ async function selectLead(id){
 }
 function renderHistory(items){ state.curHist = items; document.getElementById('siHistory').innerHTML = items.length ? items.map((item, i) => \`<div class="si-item" onclick="document.getElementById('preview').innerText=JSON.stringify(state.curHist[\${i}].data,null,2)">📥 \${esc(item.title)}</div>\`).join('') : '<div style="padding:10px;font-size:10px;color:#5a6a8a;">なし</div>'; }
 function goStep(n){ [1,2,3].forEach(i=>{ if(document.getElementById('step'+i)){document.getElementById('step'+i).style.display=(i===n?'block':'none'); document.getElementById('st'+i).className='step'+(i===n?' active':'');} }); }
-
 async function handleAdd(){
-  const type = document.getElementById('siType').value;
-  const word = document.getElementById('siInput').value.trim();
+  const type = document.getElementById('siType').value, word = document.getElementById('siInput').value.trim();
   if(!word) return;
   if(type === 'sofascore_event'){
     document.getElementById('addBtn').innerText = '検索中...';
     const res = await fetch('/api/v2/search-match', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({query:word})});
-    const data = await res.json();
-    document.getElementById('addBtn').innerText = '＋';
+    const data = await res.json(); document.getElementById('addBtn').innerText = '＋';
     if(data.candidates?.length){
       const list = document.getElementById('candList'); list.style.display = 'block';
-      list.innerHTML = data.candidates.map(c => \`<div class="cand-item" onclick="addLabel('${type}', '${word}', '\${c.id}')">\${esc(c.title)}</div>\`).join('');
-    } else { alert('試合が見つかりませんでした'); }
-  } else { addLabel(type, word); }
+      list.innerHTML = data.candidates.map(c => \`<div class="cand-item" onclick="addLabel('${type}', '\${c.title}', '\${c.id}')">\${esc(c.title)}</div>\`).join('');
+    } else alert('試合が見つかりませんでした');
+  } else addLabel(type, word);
 }
 function addLabel(type, word, matchId=null){
-  state.keywords.push({type, word, matchId});
-  document.getElementById('siInput').value = '';
-  document.getElementById('candList').style.display = 'none';
-  renderLabels();
+  state.keywords.push({type, word, matchId}); document.getElementById('siInput').value = '';
+  document.getElementById('candList').style.display = 'none'; renderLabels();
 }
 function renderLabels(){ document.getElementById('labels').innerHTML = state.keywords.map((k,i)=>\`<div class="label-item"><span class="label-badge">\${TYPE_NAME[k.type]}</span>\${esc(k.word)}<span onclick="state.keywords.splice(\${i},1);renderLabels()" style="cursor:pointer">×</span></div>\`).join(''); }
-
 async function fetchSi(){
   if(!state.keywords.length) return alert('キーワードを追加してください');
   const pre = document.getElementById('preview'); pre.innerText = "取得中...";
   try {
     const res = await fetch('/api/v2/fetch-si',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:state.keywords,postId:state.selected.id})});
     const data = await res.json();
-    if (data.isGatewayError) pre.innerHTML = "❌ 403回避のため直接取得を中止しました。Local Agentを確認してください: " + data.error;
+    if (data.isGatewayError) pre.innerHTML = "❌ 403回避のため直接取得を中止しました。Local Agentを確認してください";
     else { 
       pre.innerText = JSON.stringify(data.data,null,2); 
-      state.keywords = []; renderLabels(); // 成功時にクリア！
-      const h = await fetch(\`/api/v2/si-history?postId=\${encodeURIComponent(state.selected.id)}\`);
-      renderHistory((await h.json()).items);
+      state.keywords = []; renderLabels(); 
+      const h = await fetch(\`/api/v2/si-history?postId=\${encodeURIComponent(state.selected.id)}\`); renderHistory((await h.json()).items);
     }
   } catch(e) { pre.innerHTML = "❌ エラー: " + e.message; }
 }
