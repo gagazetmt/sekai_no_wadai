@@ -180,8 +180,8 @@ body{font-family:sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overfl
 
 /* メイン */
 .content-main { flex: 1; display: flex; flex-direction: column; background: #0f1117; }
-.header{ background: #1a2040; padding: 12px 20px; border-bottom: 2px solid #1a6ef5; display: flex; justify-content: space-between; align-items: center; }
-h1{ font-size: 18px; color: #1a6ef5; font-weight: 900; }
+.header{ background: #1a2040; padding: 12px 20px; border-bottom: 2px solid red; display: flex; justify-content: space-between; align-items: center; }
+h1{ font-size: 18px; color: red; font-weight: 900; }
 .steps { display: flex; background: #0d1220; border-bottom: 1px solid #1e2540; }
 .step { padding: 12px 20px; font-size: 11px; font-weight: bold; color: #3a4a6a; }
 .step.active { color: #1a6ef5; background: #161b2e; }
