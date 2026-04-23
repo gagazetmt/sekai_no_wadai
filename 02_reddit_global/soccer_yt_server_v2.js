@@ -176,9 +176,14 @@ h1{ font-size: 18px; color: #1a6ef5; font-weight: 900; }
 .btn-success{background:#10b981; color:#fff;}
 .btn-ghost{background:#1e2540; color:#9bb5e0; border:1px solid #2a3050;}
 
-/* 案件リスト */
+/* 案件リスト (#1-7) */
 .time-group { margin-bottom: 10px; border: 1px solid #2a3050; border-radius: 8px; overflow: hidden; }
-.time-summary { background: #1a2840; padding: 10px; cursor: pointer; color: #7dc8ff; font-size: 12px; font-weight: bold; }
+.time-summary { background: #1a2840; padding: 10px; cursor: pointer; color: #7dc8ff; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+.time-summary:after { content: '▼'; font-size: 10px; transition: 0.3s; }
+.time-group.open .time-summary:after { transform: rotate(180deg); }
+.time-content { display: none; background: #161b2e; }
+.time-group.open .time-content { display: block; }
+
 .post-row { padding: 10px; border-bottom: 1px solid #1a2540; display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
 .post-row:hover { background: #141a30; }
 
@@ -196,7 +201,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
   <div class="content-main">
     <div class="header">
       <h1>⚽ サッカーYT v2 Pro Full Blue</h1>
-      <div style="font-size:12px; color:#1a6ef5;">📡 連携: ${LOCAL_AGENT_IP ? \`Local Agent (\${LOCAL_AGENT_IP})\` : 'DIRECT'}</div>
+      <div style="font-size:12px; color:#1a6ef5;">📡 連携: ${LOCAL_AGENT_IP ? `Local Agent (${LOCAL_AGENT_IP})` : 'DIRECT'}</div>
     </div>
     <div class="steps">
       <div class="step active" id="st1">1.案件選択</div><div class="step" id="st2">2.SIスライド</div><div class="step" id="st3">3.モジュール</div><div class="step" id="st4">4.脚本</div><div class="step" id="st5">5.出力</div>
@@ -207,6 +212,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
           <input type="date" id="dateInput" style="background:#1e2540; color:#fff; border:1px solid #2a3050; padding:6px; border-radius:4px;">
           <button class="btn btn-primary" onclick="loadContent()">案件読込</button>
           <button class="btn btn-ghost" onclick="fetchNow()">⚡ 今すぐ抽出</button>
+          <button class="btn btn-success" onclick="saveSelectedPosts()" style="margin-left:10px;">💾 案件を保存</button>
         </div>
         <div id="postList"></div>
       </div>
@@ -234,7 +240,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
   </div>
 </div>
 <script>
-let state = { date:'', posts:[], saved:[], selected:null, keywords:[] };
+let state = { date:'', posts:[], saved:[], selected:null, keywords:[], selectedIds: new Set() };
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function loadContent() {
@@ -243,31 +249,74 @@ async function loadContent() {
   const res = await fetch('/api/v2/content?date='+d);
   const data = await res.json();
   state.posts = data.posts;
+  state.selectedIds.clear();
+
   const groups = {};
-  data.posts.forEach(p => { const t = p.addedAt ? p.addedAt.slice(11,16) : '不明'; if(!groups[t]) groups[t]=[]; groups[t].push(p); });
-  document.getElementById('postList').innerHTML = Object.keys(groups).sort().reverse().map(t => \`
-    <div class="time-group">
-      <div class="time-summary">🕒 \${t} 取得分</div>
-      <div>\${groups[t].map(p => \`<div class="post-row" onclick="clickPost('\${p.id}')">\${esc(p.title)}</div>\`).join('')}</div>
-    </div>\`).join('');
+  data.posts.forEach(p => { 
+    const t = p.addedAt ? p.addedAt.slice(11,16) : '不明'; 
+    if(!groups[t]) groups[t]=[]; 
+    groups[t].push(p); 
+  });
+
+  const sortedTimes = Object.keys(groups).sort().reverse();
+  document.getElementById('postList').innerHTML = sortedTimes.map(t => {
+    const postsHtml = groups[t].map(p => \`
+      <div class="post-row" onclick="toggleSelect('\${p.id}', this)">
+        <input type="checkbox" id="chk_\${p.id}" \${state.selectedIds.has(p.id)?'checked':''} onclick="event.stopPropagation()">
+        <div style="flex:1;">
+          <div style="font-weight:bold;">\${esc(p.title)}</div>
+          <div style="font-size:10px; color:#5a6a8a;">Source: \${p.source} | Score: \${p.score}</div>
+        </div>
+      </div>\`).join('');
+    return \`
+      <div class="time-group open">
+        <div class="time-summary" onclick="this.parentElement.classList.toggle('open')">🕒 \${t} 取得分 (\${groups[t].length}件)</div>
+        <div class="time-content">\${postsHtml}</div>
+      </div>\`;
+  }).join('');
+}
+
+function toggleSelect(id, el) {
+  const chk = document.getElementById('chk_'+id);
+  if (state.selectedIds.has(id)) {
+    state.selectedIds.delete(id);
+    if(chk) chk.checked = false;
+    el.style.background = '';
+  } else {
+    state.selectedIds.add(id);
+    if(chk) chk.checked = true;
+    el.style.background = '#1a2540';
+  }
+}
+
+function saveSelectedPosts() {
+  if (state.selectedIds.size === 0) return alert('案件を選択してください');
+  state.selectedIds.forEach(id => {
+    const p = state.posts.find(x => x.id === id);
+    if (p && !state.saved.find(x => x.id === id)) {
+      state.saved.push(p);
+    }
+  });
+  renderSidebar();
+  state.selectedIds.clear();
+  loadContent(); // UIリセット
+  alert('案件を保存しました（左側のスライドに格納されました）');
 }
 
 async function fetchNow() { alert('抽出開始...'); const res = await fetch('/api/v2/fetch-now', {method:'POST'}); if((await res.json()).success) loadContent(); }
 
-function clickPost(id) {
-  const p = state.posts.find(x => x.id === id);
-  if(!state.saved.find(x => x.id === id)) { state.saved.unshift(p); renderSidebar(); }
-  selectLead(id);
-}
-
 function renderSidebar() {
   document.getElementById('savedList').innerHTML = state.saved.map(l => \`
-    <div class="lead-item \${state.selected?.id === l.id ? 'active' : ''}" onclick="selectLead('\${l.id}')">\${esc(l.title)}</div>
+    <div class="lead-item \${state.selected?.id === l.id ? 'active' : ''}" onclick="selectLead('\${l.id}')">
+      <div style="font-size:12px; font-weight:bold;">\${esc(l.title)}</div>
+      <div style="font-size:9px; color:#5a6a8a; margin-top:4px;">\${l.source}</div>
+    </div>
   \`).join('');
 }
 
 function selectLead(id) {
   state.selected = state.saved.find(x => x.id === id);
+  if (!state.selected) return;
   document.getElementById('currentTitle').innerText = state.selected.title;
   renderSidebar();
   goStep(2);
