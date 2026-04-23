@@ -6720,3 +6720,22 @@ Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, li
 ❌ candidates_2026-04-23.json が見つかりません。先に fetch_daily_candidates.js を実行してください。
 [2026/04/23 20:01:39.40] STEP2: generate_text_content END (exit:1) 
 [2026/04/23 20:01:39.40] ===== COMPLETED ===== 
+[2026/04/23 22:30:02.09] ===== START DAILY FETCH ===== 
+[2026/04/23 22:30:02.09] STEP1: fetch_daily_candidates START 
+
+🚀 案件収集開始: 2026-04-23T22:30:02.755+09:00
+📡 Redditから案件を探索中...
+📡 5chから案件を取得中...
+📡 5ch スクレイピング開始...
+  板: 海外サッカー板
+  板: 日本代表板
+  板: スポーツニュース板
+✅ 5ch: 12件取得
+🤖 AI翻訳開始... (10件)
+❌ 翻訳エラー: Expected ',' or '}' after property value in JSON at position 5736 (line 129 column 6)
+✅ 完了! 新規:2件 / 合計:38件 -> stories_2026_04_23.json
+[2026/04/23 22:31:42.34] STEP1: fetch_daily_candidates END (exit:0) 
+[2026/04/23 22:31:42.34] STEP2: generate_text_content START 
+❌ candidates_2026-04-23.json が見つかりません。先に fetch_daily_candidates.js を実行してください。
+[2026/04/23 22:31:42.41] STEP2: generate_text_content END (exit:1) 
+[2026/04/23 22:31:42.41] ===== COMPLETED ===== 

@@ -1,6 +1,6 @@
 // soccer_yt_server_v2.js
 // v2 サッカー YouTube ランチャー Pro統合版 (port 3004)
-// 【改修内容】鉄の掟・絶対遵守 ＋ Match候補エスケープ修正 ＋ 属性別表示 ＋ 鉄壁青モード
+// 【改修内容】鉄の掟・絶対遵守 ＋ ReferenceError修正 ＋ Match候補表示修正 ＋ 鉄壁青モード
 
 require('dotenv').config();
 const express   = require('express');
@@ -259,12 +259,13 @@ async function handleAdd(){
       const data = await res.json();
       if(data.candidates?.length){
         const list = document.getElementById('candList'); list.style.display = 'block';
-        list.innerHTML = data.candidates.map((c, i) => \`<div class="cand-item" onclick="addLabel('${type}', '\${esc(c.title)}', '\${c.id}')">\${esc(c.title)}</div>\`).join('');
+        list.innerHTML = data.candidates.map((c, i) => \`<div class="cand-item" data-id="\${c.id}" data-title="\${esc(c.title)}" onclick='addCand(this)'>\${esc(c.title)}</div>\`).join('');
       } else alert('試合が見つかりませんでした');
     } catch(e){ alert('検索エラー'); }
     document.getElementById('addBtn').innerText = '＋';
-  } else addLabel(type, word);
+  } else { addLabel(type, word); }
 }
+function addCand(el){ addLabel('sofascore_event', el.getAttribute('data-title'), el.getAttribute('data-id')); }
 function addLabel(type, word, matchId=null){
   state.keywords.push({type, word, matchId}); document.getElementById('siInput').value = '';
   document.getElementById('candList').style.display = 'none'; renderLabels();
