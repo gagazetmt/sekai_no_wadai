@@ -201,7 +201,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
   <div class="content-main">
     <div class="header">
       <h1>⚽ サッカーYT v2 Pro Full Blue</h1>
-      <div style="font-size:12px; color:#1a6ef5;">📡 連携: ${LOCAL_AGENT_IP ? `Local Agent (${LOCAL_AGENT_IP})` : 'DIRECT'}</div>
+      <div style="font-size:12px; color:#1a6ef5;">📡 連携: ${LOCAL_AGENT_IP ? 'Local Agent (' + LOCAL_AGENT_IP + ')' : 'DIRECT'}</div>
     </div>
     <div class="steps">
       <div class="step active" id="st1">1.案件選択</div><div class="step" id="st2">2.SIスライド</div><div class="step" id="st3">3.モジュール</div><div class="step" id="st4">4.脚本</div><div class="step" id="st5">5.出力</div>
