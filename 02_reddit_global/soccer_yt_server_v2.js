@@ -1,6 +1,6 @@
 // soccer_yt_server_v2.js
 // v2 サッカー YouTube ランチャー Pro統合版 (port 3004)
-// 【改修内容】鉄の掟・完遂版 ＋ Match候補検索(安全なエスケープ) ＋ 時間表示修正 ＋ 鉄壁青モード
+// 【改修内容】鉄の掟・赤 ＋ P/M/T自動判別表示 ＋ Match検索強化 ＋ 取得後クリア
 
 require('dotenv').config();
 const express   = require('express');
@@ -58,11 +58,19 @@ app.post('/api/v2/search-match', async (req, res) => {
 
   const { query } = req.body;
   try {
-    const parsed = await callAI(`Extract home and away teams in English from "${query}". Return JSON: {"home":"...", "away":"..."}`, { json: true });
-    const { home, away } = JSON.parse(parsed);
-    const data = await fetchSofaScoreMatch(home, away);
-    if (data.ok) res.json({ success: true, candidates: [{ id: data.id, title: `${data.homeTeam} vs ${data.awayTeam} (${data.date})`, raw: data }] });
-    else res.json({ success: true, candidates: [] });
+    const parsed = await callAI(`Identify team name(s) in English from "${query}". JSON: {"teams": ["Team1", "Team2"]}`, { json: true });
+    const { teams } = JSON.parse(parsed);
+    let candidates = [];
+    if (teams.length >= 2) {
+      const d = await fetchSofaScoreMatch(teams[0], teams[1]);
+      if (d.ok) candidates.push({ id: d.id, title: `${d.homeTeam} vs ${d.awayTeam} (${d.date})` });
+    } else if (teams.length === 1) {
+      const d = await fetchSofaScoreMatch(teams[0], ""); 
+      if (d.ok) candidates.push({ id: d.id, title: `${d.homeTeam} vs ${d.awayTeam} (${d.date})` });
+      const t = await fetchSofaScoreTeam(teams[0]);
+      if (t.ok && t.nextEvent) candidates.push({ id: t.nextEvent.id, title: `NEXT: ${t.nextEvent.homeTeam} vs ${t.nextEvent.awayTeam}` });
+    }
+    res.json({ success: true, candidates });
   } catch (e) { res.json({ success: false, error: e.message }); }
 });
 
@@ -87,22 +95,33 @@ app.post('/api/v2/fetch-si', async (req, res) => {
     for (const k of keywords) {
       log(`[SI] Exec: ${k.type} - ${k.word}`);
       let data = { ok: false };
-      if (k.type === 'otherURL') { results[k.word] = { ok: true, url: k.word }; continue; }
+      if (k.type === 'otherURL') { results[k.word] = { ok: true, url: k.word, siType: 'url' }; continue; }
       let wordEn = k.word;
       if (/[\u3000-\u9fff\uff00-\uffef]/.test(k.word)) {
         const trans = await callAI(`Official English for "${k.word}". Reply only name.`);
         wordEn = trans.trim().replace(/^["']|["']$/g, '');
       }
-      if (k.type === 'wikipedia') data = await fetchWikipediaSafe([wordEn, k.word]);
-      else if (k.type === 'sofascore_pmt') {
-        data = await fetchSofaScorePlayer(wordEn);
-        if (!data.ok) data = await fetchSofaScoreTeam(wordEn);
-        if (!data.ok) data = await fetchSofaScoreManager(wordEn);
+
+      if (k.type === 'wikipedia') {
+        data = await fetchWikipediaSafe([wordEn, k.word]);
+        data.siType = 'wiki';
+      } else if (k.type === 'sofascore_pmt') {
+        let p = await fetchSofaScorePlayer(wordEn);
+        if (p.ok) { data = { ...p, siType: 'player' }; }
+        else {
+          let t = await fetchSofaScoreTeam(wordEn);
+          if (t.ok) { data = { ...t, siType: 'team' }; }
+          else {
+            let m = await fetchSofaScoreManager(wordEn);
+            if (m.ok) { data = { ...m, siType: 'manager' }; }
+          }
+        }
       } else if (k.type === 'sofascore_event') {
         data = await fetchSofaScoreMatch(null, null, k.matchId || k.word);
+        data.siType = 'match';
       } else if (k.type === 'news') {
         const news = await fetchSerper(wordEn, 'news', 'en');
-        data = news.organic?.length ? { ok: true, items: news.organic } : { ok: false };
+        data = news.organic?.length ? { ok: true, items: news.organic, siType: 'news' } : { ok: false };
       }
       results[k.word] = data;
     }
@@ -141,51 +160,50 @@ app.get('/api/v2/content', (req, res) => {
 
 // ─── UI ───
 app.get('/', (_, res) => res.send(`<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8"><title>⚽ サッカーYT v2 Pro Full Blue</title>
+<html lang="ja"><head><meta charset="UTF-8"><title>⚽ サッカーYT v2 Pro Full Red</title>
 <style>
-:root { --main-blue: #1a6ef5; --dark-bg: #0f1117; --panel-bg: #161b2e; --border-clr: #2a3050; }
+:root { --main-red: #ff3b3b; --dark-bg: #0f0f12; --panel-bg: #1e1e26; --border-line: #3d3d4d; }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:sans-serif;background:var(--dark-bg);color:#e0e0e0;height:100vh;overflow:hidden;display:flex;}
-.sidebar{width:320px;background:#0d1220;border-right:1px solid #1e2540;display:flex;flex-direction:column;flex-shrink:0;}
-.sidebar-header{padding:18px;background:#1a2540;color:var(--main-blue);font-weight:900;font-size:14px;border-bottom:1px solid #2a3560;}
+.sidebar{width:320px;background:#0d0d12;border-right:1px solid var(--border-line);display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-header-red{padding:18px;background:#2a1010;color:var(--main-red);font-weight:900;font-size:14px;border-bottom:1px solid #4a1a1a;}
 .saved-list{flex:1;overflow-y:auto;padding:12px;}
-.lead-item{background:var(--panel-bg);border:1px solid var(--border-clr);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer;font-size:13px;transition:0.2s;}
-.lead-item.active{border-color:var(--main-blue);background:#262c40;border-left:4px solid var(--main-blue);}
+.lead-item{background:var(--panel-bg);border:1px solid var(--border-line);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer;font-size:13px;transition:0.2s;}
+.lead-item.active{border-color:var(--main-red);background:#331a1a;border-left:4px solid var(--main-red);}
 .main-area{flex:1;display:flex;flex-direction:column;}
-.header-blue{background:#1a2040;padding:12px 20px;border-bottom:3px solid var(--main-blue) !important;display:flex;justify-content:space-between;align-items:center;}
-.header-blue h1{font-size:20px;color:var(--main-blue) !important;font-weight:900;margin:0;text-shadow:0 0 10px rgba(26,110,245,0.3);}
-.steps{display:flex;background:#0d1220;border-bottom:1px solid #1e2540;}
-.step{padding:12px 20px;font-size:11px;font-weight:bold;color:#3a4a6a;}
-.step.active{color:var(--main-blue);background:var(--panel-bg);}
+.header-red-force{background:#2a1010;padding:15px 25px;border-bottom:3px solid var(--main-red) !important;display:flex;justify-content:space-between;align-items:center;}
+.header-red-force h1{font-size:22px;color:var(--main-red) !important;font-weight:900;margin:0;text-shadow:0 0 12px rgba(255,59,59,0.5);}
+.steps{display:flex;background:#0d0d12;border-bottom:1px solid var(--border-line);}
+.step{padding:12px 20px;font-size:11px;font-weight:bold;color:#5a5a6a;}
+.step.active{color:var(--main-red);background:var(--panel-bg);}
 .content-scroll{flex:1;overflow-y:auto;padding:20px;}
-.panel{background:var(--panel-bg);border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid var(--border-clr);}
+.panel{background:var(--panel-bg);border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid var(--border-line);}
 .btn{padding:8px 16px;border-radius:8px;cursor:pointer;border:none;font-weight:bold;font-size:12px;display:inline-flex;align-items:center;gap:6px;}
-.btn-primary{background:var(--main-blue);color:#fff;}
+.btn-primary{background:var(--main-red);color:#fff;}
 .btn-success{background:#10b981;color:#fff;}
-.time-group{margin-bottom:10px;border:1px solid var(--border-clr);border-radius:8px;overflow:hidden;}
-.time-summary{background:#1a2840;padding:10px;cursor:pointer;color:#7dc8ff;font-size:12px;font-weight:bold;}
-.post-row{padding:10px;border-bottom:1px solid #1a2540;display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;}
-.label-box{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:10px;background:#0d1220;border-radius:8px;min-height:50px;}
-.label-item{background:var(--main-blue);color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;display:flex;align-items:center;gap:6px;}
-.label-badge{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;font-size:9px;color:#7dc8ff;}
-.si-list{margin-top:10px;background:#0d1220;border-radius:8px;border:1px solid #1e2540;}
-.si-item{padding:8px 12px;border-bottom:1px solid #1e2540;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;}
-.cand-list{background:#1a2540;border-radius:8px;padding:8px;margin-top:8px;max-height:150px;overflow-y:auto;display:none;border:1px solid var(--main-blue);}
-.cand-item{padding:8px;font-size:12px;cursor:pointer;border-bottom:1px solid #2a3560;transition:0.2s;}
-.cand-item:hover{background:var(--main-blue);color:#fff;}
-pre{background:#0d1220;padding:12px;border-radius:8px;font-size:11px;overflow-x:auto;color:#9bb5e0;white-space:pre-wrap;}
+.time-group{margin-bottom:10px;border:1px solid var(--border-line);border-radius:8px;overflow:hidden;}
+.time-summary{background:#2a1a1a;padding:10px;cursor:pointer;color:#ff9b9b;font-size:12px;font-weight:bold;}
+.post-row{padding:10px;border-bottom:1px solid #2a2020;display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;}
+.label-box{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;padding:10px;background:#0d0d12;border-radius:8px;min-height:50px;}
+.label-item{background:var(--main-red);color:#fff;padding:4px 10px;border-radius:20px;font-size:11px;display:flex;align-items:center;gap:6px;}
+.label-badge{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;font-size:9px;color:#ff9b9b;}
+.si-list{margin-top:10px;background:#0d0d12;border-radius:8px;border:1px solid var(--border-line);}
+.si-item{padding:10px 15px;border-bottom:1px solid #1e1e26;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;}
+.cand-list{background:#331a1a;border-radius:8px;padding:8px;margin-top:8px;max-height:150px;overflow-y:auto;display:none;border:1px solid var(--main-red);}
+.cand-item{padding:8px;font-size:12px;cursor:pointer;border-bottom:1px solid #4a2a2a;transition:0.2s;}
+pre{background:#0d0d12;padding:15px;border-radius:8px;font-size:12px;overflow-x:auto;color:#ff9b9b;white-space:pre-wrap;border:1px solid #2a1010;}
 </style></head>
 <body>
-<div class="sidebar"><div class="sidebar-header">📦 保存済み案件 (Pro Blue)</div><div id="savedList" class="saved-list"></div></div>
+<div class="sidebar"><div class="sidebar-header-red">📦 保存済み案件 (Pro Red)</div><div id="savedList" class="saved-list"></div></div>
 <div class="main-area">
-  <div class="header-blue"><h1>⚽ サッカーYT v2 Pro Full Blue</h1><div style="font-size:12px; color:var(--main-blue);">📡 連携: \${LOCAL_AGENT_IP || 'DIRECT'}</div></div>
+  <div class="header-red-force"><h1>⚽ サッカーYT v2 Pro Full Red</h1><div style="font-size:12px; color:var(--main-red);">📡 連携: \${LOCAL_AGENT_IP || 'DIRECT'}</div></div>
   <div class="steps"><div class="step active" id="st1">1.案件選択</div><div class="step" id="st2">2.SIスライド</div><div class="step" id="st3">3.構成</div></div>
   <div class="content-scroll">
-    <div id="step1"><div class="panel"><input type="date" id="dateInput" style="background:#1e2540;color:#fff;border:1px solid #2a3050;padding:6px;border-radius:4px;"><button class="btn btn-primary" onclick="loadContent()">案件読込</button> <button class="btn btn-success" onclick="saveSelected()">💾 案件を保存</button></div><div id="postList"></div></div>
-    <div id="step2" style="display:none;"><div class="panel"><div id="curTitle" style="font-size:18px;font-weight:900;color:var(--main-blue);margin-bottom:15px;"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-      <div><div style="display:flex;gap:5px;"><select id="siType" style="background:#1e2540;color:#fff;border:1px solid #2a3050;border-radius:4px;padding:5px;"><option value="news">News</option><option value="wikipedia">Wiki</option><option value="sofascore_pmt">Sofa(P/M/T)</option><option value="sofascore_event">Sofa(Match)</option></select><input type="text" id="siInput" style="flex:1;background:#1e2540;color:#fff;border:1px solid #2a3050;padding:5px;" placeholder="ワード..."><button class="btn btn-primary" id="addBtn" onclick="handleAdd()">＋</button></div>
+    <div id="step1"><div class="panel"><input type="date" id="dateInput" style="background:#0d0d12;color:#fff;border:1px solid var(--border-line);padding:6px;border-radius:4px;"><button class="btn btn-primary" onclick="loadContent()">案件読込</button> <button class="btn btn-success" onclick="saveSelected()">💾 案件を保存</button></div><div id="postList"></div></div>
+    <div id="step2" style="display:none;"><div class="panel"><div id="curTitle" style="font-size:18px;font-weight:900;color:var(--main-red);margin-bottom:15px;"></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div><div style="display:flex;gap:5px;"><select id="siType" style="background:#0d0d12;color:#fff;border:1px solid var(--border-line);border-radius:4px;padding:5px;"><option value="news">News</option><option value="wikipedia">Wiki</option><option value="sofascore_pmt">Sofa(P/M/T)</option><option value="sofascore_event">Sofa(Match)</option></select><input type="text" id="siInput" style="flex:1;background:#0d0d12;color:#fff;border:1px solid var(--border-line);padding:5px;" placeholder="ワード..."><button class="btn btn-primary" id="addBtn" onclick="handleAdd()">＋</button></div>
       <div id="candList" class="cand-list"></div><div id="labels" class="label-box"></div><button class="btn btn-success" style="width:100%" onclick="fetchSi()">⬇️ SI情報取得実行</button></div>
-      <div style="display:flex;flex-direction:column;"><div style="font-size:11px;color:var(--main-blue);font-weight:bold;margin-bottom:8px;">🔍 データプレビュー</div><pre id="preview" style="height:200px;">データを取得してね</pre><div style="font-size:11px;color:var(--main-blue);font-weight:bold;margin-top:10px;margin-bottom:5px;">📂 取得済み履歴</div><div id="siHistory" class="si-list" style="height:150px;overflow-y:auto;"></div></div>
+      <div style="display:flex;flex-direction:column;"><div style="font-size:11px;color:var(--main-red);font-weight:bold;margin-bottom:8px;">🔍 データプレビュー</div><pre id="preview" style="height:250px;">データを取得してね</pre><div style="font-size:11px;color:var(--main-red);font-weight:bold;margin-top:10px;margin-bottom:5px;">📂 取得済み履歴</div><div id="siHistory" class="si-list" style="height:150px;overflow-y:auto;"></div></div>
     </div><button class="btn btn-primary" style="width:100%;margin-top:20px;" onclick="goStep(3)">➡️ 次へ進む</button></div></div>
   </div>
 </div>
@@ -197,15 +215,14 @@ async function loadContent() {
   const d = document.getElementById('dateInput').value; if(!d)return;
   const res = await fetch('/api/v2/content?date='+d); const data = await res.json(); state.posts = data.posts;
   const groups = {}; data.posts.forEach(p => { 
-    const timeFull = p.addedAt || '不明';
-    let t = '不明';
+    const timeFull = p.addedAt || '不明'; let t = '不明';
     if(timeFull.includes('T')) t = timeFull.split('T')[1].slice(0,5);
     else if(timeFull.includes(':')) t = timeFull.slice(0,5);
     if(!groups[t]) groups[t]=[]; groups[t].push(p); 
   });
   document.getElementById('postList').innerHTML = Object.keys(groups).sort().reverse().map(t => \`<div class="time-group"><div class="time-summary" onclick="const c=this.parentElement.querySelector('.time-content');c.style.display=c.style.display==='none'?'block':'none'">🕒 \${t} 取得分 (\${groups[t].length})</div><div class="time-content" style="display:none;">\${groups[t].map(p => \`<div class="post-row" onclick="toggleSel('\${p.id}', this)"><input type="checkbox" id="chk_\${p.id}" \${state.selectedIds.has(p.id)?'checked':''}> \${esc(p.title)}</div>\`).join('')}</div></div>\`).join('');
 }
-function toggleSel(id, el){ const chk = document.getElementById('chk_'+id); if(state.selectedIds.has(id)){state.selectedIds.delete(id);chk.checked=false;el.style.background='';}else{state.selectedIds.add(id);chk.checked=true;el.style.background='#1a2440';} }
+function toggleSel(id, el){ const chk = document.getElementById('chk_'+id); if(state.selectedIds.has(id)){state.selectedIds.delete(id);chk.checked=false;el.style.background='';}else{state.selectedIds.add(id);chk.checked=true;el.style.background='#2a1a1a';} }
 async function saveSelected(){
   state.selectedIds.forEach(id => { const p=state.posts.find(x=>x.id===id); if(p && !state.saved.find(x=>x.id===id)) state.saved.push(p); });
   await fetch('/api/v2/saved-projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state.saved)});
@@ -219,9 +236,16 @@ async function selectLead(id){
   renderSidebar(); const res = await fetch(\`/api/v2/si-history?postId=\${encodeURIComponent(state.selected.id)}\`);
   const data = await res.json(); renderHistory(data.items); goStep(2);
 }
-function renderHistory(items){ state.curHist = items; document.getElementById('siHistory').innerHTML = items.length ? items.map((item, i) => \`<div class="si-item" onclick="document.getElementById('preview').innerText=JSON.stringify(state.curHist[\${i}].data,null,2)">📥 \${esc(item.title)}</div>\`).join('') : '<div style="padding:10px;font-size:10px;color:#5a6a8a;">なし</div>'; }
+function renderHistory(items){ state.curHist = items; document.getElementById('siHistory').innerHTML = items.length ? items.map((item, i) => \`<div class="si-item" onclick="previewSi(\${i})">📥 \${esc(item.title)}</div>\`).join('') : '<div style="padding:10px;font-size:10px;color:#5a5a6a;">なし</div>'; }
+function previewSi(i){
+  const d = state.curHist[i].data; let txt = "";
+  if(d.siType==='player') txt = \`【選手】\${d.name}\\n年齢: \${d.age} / 身長: \${d.height} / 体重: \${d.weight}\\n所属: \${d.teamName} / ポジション: \${d.position}\`;
+  else if(d.siType==='team') txt = \`【チーム】\${d.name}\\n本拠地: \${d.venueName} / 設立: \${d.foundedYear}\\nリーグ: \${d.leagueName}\`;
+  else if(d.siType==='manager') txt = \`【監督】\${d.name}\\n国籍: \${d.nationality} / 年齢: \${d.age}\\nフォーメーション: \${d.preferredFormation}\`;
+  else txt = JSON.stringify(d, null, 2);
+  document.getElementById('preview').innerText = txt;
+}
 function goStep(n){ [1,2,3].forEach(i=>{ const el=document.getElementById('step'+i); if(el){el.style.display=(i===n?'block':'none'); document.getElementById('st'+i).className='step'+(i===n?' active':'');} }); }
-
 async function handleAdd(){
   const type = document.getElementById('siType').value, word = document.getElementById('siInput').value.trim();
   if(!word) return;
@@ -232,32 +256,26 @@ async function handleAdd(){
       const data = await res.json();
       if(data.candidates?.length){
         const list = document.getElementById('candList'); list.style.display = 'block';
-        list.innerHTML = data.candidates.map((c, i) => {
-          const btnData = JSON.stringify({type, title:c.title, id:c.id});
-          return \`<div class="cand-item" onclick='addCand(\${btnData})'>\${esc(c.title)}</div>\`;
-        }).join('');
+        list.innerHTML = data.candidates.map((c, i) => \`<div class="cand-item" onclick='addLabel("${type}", "\${esc(c.title)}", "\${c.id}")'>\${esc(c.title)}</div>\`).join('');
       } else alert('試合が見つかりませんでした');
     } catch(e){ alert('検索エラー'); }
     document.getElementById('addBtn').innerText = '＋';
-  } else { addLabel(type, word); }
+  } else addLabel(type, word);
 }
-function addCand(data){ addLabel(data.type, data.title, data.id); }
 function addLabel(type, word, matchId=null){
   state.keywords.push({type, word, matchId}); document.getElementById('siInput').value = '';
   document.getElementById('candList').style.display = 'none'; renderLabels();
 }
 function renderLabels(){ document.getElementById('labels').innerHTML = state.keywords.map((k,i)=>\`<div class="label-item"><span class="label-badge">\${TYPE_NAME[k.type]}</span>\${esc(k.word)}<span onclick="state.keywords.splice(\${i},1);renderLabels()" style="cursor:pointer">×</span></div>\`).join(''); }
-
 async function fetchSi(){
   if(!state.keywords.length) return alert('キーワードを追加してください');
   const pre = document.getElementById('preview'); pre.innerText = "取得中...";
   try {
-    const res = await fetch('/api/v2/fetch-si',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:state.keywords,postId:state.selected.id})});
+    const res = await fetch('/api/v2/fetch-si', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keywords:state.keywords,postId:state.selected.id})});
     const data = await res.json();
     if (data.isGatewayError) pre.innerHTML = "❌ Local Agentエラー: " + data.error;
     else { 
-      pre.innerText = JSON.stringify(data.data,null,2); 
-      state.keywords = []; renderLabels(); // 成功時にクリア！
+      pre.innerText = "取得完了！履歴から確認してね"; state.keywords = []; renderLabels(); 
       const h = await fetch(\`/api/v2/si-history?postId=\${encodeURIComponent(state.selected.id)}\`); renderHistory((await h.json()).items);
     }
   } catch(e) { pre.innerHTML = "❌ エラー: " + e.message; }
@@ -265,4 +283,4 @@ async function fetchSi(){
 window.onload = async () => { document.getElementById('dateInput').value=new Date().toISOString().slice(0,10); try{const r=await fetch('/api/v2/saved-projects'); state.saved=await r.json()||[]; renderSidebar();}catch(e){} };
 </script></body></html>`));
 
-app.listen(PORT, () => console.log('v2 Full Pro Blue Gateway Server running at http://localhost:' + PORT));
+app.listen(PORT, () => console.log('v2 Full Pro Red Server running at http://localhost:' + PORT));

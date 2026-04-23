@@ -1,52 +1,26 @@
 {
-  "palmer": {
+  "haaland": {
+    "ok": false,
+    "error": "Request failed with status code 403"
+  },
+  "chelsea": {
     "ok": true,
     "playerId": 982780,
     "name": "Cole Palmer",
     "position": "M",
     "team": "Chelsea",
     "nationality": "England",
-    "dateOfBirth": "2002-05-06T00:00:00+00:00",
-    "age": 23,
-    "height": 185,
+    "age": null,
     "weight": null,
-    "shirtNumber": "10",
-    "preferredFoot": "Left",
-    "marketValue": "€101M",
-    "contractUntil": "2033-06",
-    "leagueName": "Premier League",
-    "seasonYear": "25/26",
-    "recentMatchCount": 120,
+    "shirtNumber": null,
+    "marketValue": null,
+    "contractUntil": null,
+    "leagueName": null,
+    "seasonYear": null,
+    "recentMatchCount": 0,
     "recentAvgRating": null,
-    "seasonStats": {
-      "appearances": 22,
-      "goals": 9,
-      "assists": 1,
-      "rating": 7.07,
-      "minutesPlayed": 1606,
-      "yellowCards": 4,
-      "redCards": 0,
-      "expectedGoals": 9.21,
-      "keyPasses": 23
-    },
-    "positionStats": {
-      "keyPasses": 23,
-      "successfulDribbles": 21,
-      "bigChancesCreated": 3,
-      "tackles": 21,
-      "interceptions": 13,
-      "accuratePassesPct": 84.89
-    },
-    "uclStats": {
-      "leagueName": "UEFA Champions League",
-      "appearances": 4,
-      "goals": 1,
-      "assists": 2,
-      "rating": 6.95
-    }
-  },
-  "chelsea": {
-    "ok": false,
-    "error": "取得失敗"
+    "seasonStats": null,
+    "positionStats": null,
+    "uclStats": null
   }
 }
