@@ -1,97 +1,52 @@
 {
-  "messi": {
+  "palmer": {
     "ok": true,
-    "items": [
-      {
-        "title": "Lionel Messi - Wikipedia",
-        "snippet": "An Argentine international, Messi is the national team's all-time leading goalscorer and most-capped player. Several years after his senior debut in 2005, he ...",
-        "link": "https://en.wikipedia.org/wiki/Lionel_Messi",
-        "date": null
-      },
-      {
-        "title": "Lionel Messi - Inter Miami CF Forward - ESPN",
-        "snippet": "LionelMessi · HT/WT. 5' 7\", 148 lbs · Birthdate. 6/24/1987 (38) · Birthplace. Rosario, Argentina. Follow. 2026 MLS Stats. START ...",
-        "link": "https://www.espn.com/soccer/player/_/id/45843/lionel-messi",
-        "date": null
-      },
-      {
-        "title": "Lionel Messi | Inter Miami CF",
-        "snippet": "Lionel Messi · Profile · Career Stats · Match Log · News · Video. Player Details. Name. Lionel Messi. Height. 5' 7\". Weight. 148 lbs. Date of Birth. 6.24.1987 ( ...",
-        "link": "https://www.intermiamicf.com/players/lionel-messi/",
-        "date": null
-      },
-      {
-        "title": "Biografía Leo Messi | messi.com",
-        "snippet": "Aquí tienes la biografía de Leo Messi, jugador del Futbol Club Barcelona y uno de los mejores jugadores del mundo.",
-        "link": "https://messi.com/en/biography/",
-        "date": null
-      },
-      {
-        "title": "Messi vs Real Salt Lake | Amazing Performance & Big Win! - YouTube",
-        "snippet": "messi #intermiami Lionel Messi delivered an amazing performance as Inter Miami secured a solid 2–0 victory against Real Salt Lake.",
-        "link": "https://www.youtube.com/watch?v=g7ARSAzXeX4",
-        "date": "6 hours ago"
-      },
-      {
-        "title": "Lionel Messi Stats, Goals, Records, Assists, Cups and more",
-        "snippet": "Lionel Messi. Lionel Andrés Messi Cuccittini. Position: FW-MF (AM-WM) ▫ Footed: Left. 170cm, 72kg (5-7, 159lb). Born: June 24, 1987 in Rosario, Argentina ar.",
-        "link": "https://fbref.com/en/players/d70ce98e/Lionel-Messi",
-        "date": null
-      }
-    ]
-  },
-  "chelsea": {
-    "ok": true,
-    "title": "Chelsea F.C.",
-    "description": "Association football club in England",
-    "extract": "Chelsea Football Club is an English professional football club based in Fulham, West London, England. They compete in the Premier League, the top tier of English football, and are one of the most successful clubs in English football history. In domestic football, Chelsea have won six top-flight league titles, eight FA Cups, five League Cups, four FA Community Shields and two Full Members' Cups. In international football, they have won two UEFA Champions Leagues, two UEFA Europa Leagues, two UEFA Cup Winners' Cups, two UEFA Super Cups, two FIFA Club World Cups and one UEFA Conference League.",
-    "thumbnail": "https://upload.wikimedia.org/wikipedia/en/thumb/c/cc/Chelsea_FC.svg/330px-Chelsea_FC.svg.png",
-    "url": "https://en.wikipedia.org/wiki/Chelsea_F.C.",
-    "type": "standard"
-  },
-  "haaland": {
-    "ok": true,
-    "playerId": 839956,
-    "name": "Erling Haaland",
-    "position": "F",
-    "team": "Manchester City",
-    "nationality": "Norway",
-    "dateOfBirth": "2000-07-21T00:00:00+00:00",
-    "age": 25,
-    "height": 194,
+    "playerId": 982780,
+    "name": "Cole Palmer",
+    "position": "M",
+    "team": "Chelsea",
+    "nationality": "England",
+    "dateOfBirth": "2002-05-06T00:00:00+00:00",
+    "age": 23,
+    "height": 185,
     "weight": null,
-    "shirtNumber": "9",
+    "shirtNumber": "10",
     "preferredFoot": "Left",
-    "marketValue": "€218M",
-    "contractUntil": null,
+    "marketValue": "€101M",
+    "contractUntil": "2033-06",
     "leagueName": "Premier League",
     "seasonYear": "25/26",
     "recentMatchCount": 120,
     "recentAvgRating": null,
     "seasonStats": {
-      "appearances": 32,
-      "goals": 24,
-      "assists": 7,
-      "rating": 7.33,
-      "minutesPlayed": 2688,
-      "yellowCards": 2,
+      "appearances": 22,
+      "goals": 9,
+      "assists": 1,
+      "rating": 7.07,
+      "minutesPlayed": 1606,
+      "yellowCards": 4,
       "redCards": 0,
-      "expectedGoals": 23.45,
-      "keyPasses": 22
+      "expectedGoals": 9.21,
+      "keyPasses": 23
     },
     "positionStats": {
-      "shotsOnTarget": 53,
-      "bigChancesMissed": 27,
-      "bigChancesCreated": 8,
-      "successfulDribbles": 15,
-      "expectedGoals": 23.45
+      "keyPasses": 23,
+      "successfulDribbles": 21,
+      "bigChancesCreated": 3,
+      "tackles": 21,
+      "interceptions": 13,
+      "accuratePassesPct": 84.89
     },
     "uclStats": {
       "leagueName": "UEFA Champions League",
-      "appearances": 10,
-      "goals": 8,
-      "assists": 0,
-      "rating": 7.26
+      "appearances": 4,
+      "goals": 1,
+      "assists": 2,
+      "rating": 6.95
     }
+  },
+  "chelsea": {
+    "ok": false,
+    "error": "取得失敗"
   }
 }

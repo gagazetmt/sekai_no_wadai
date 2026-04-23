@@ -2515,3 +2515,12 @@ Official NBA Stats | Stats | NBA.com Schedule Playoffs BAL 2026 League Pass Game
 [2026-04-23T11:56:56.059Z] [SI] 完了: chelsea - Result: true
 [2026-04-23T11:56:56.060Z] [SI] 取得実行: sofascore_pmt - haaland
 [2026-04-23T11:56:57.252Z] [SI] 完了: haaland - Result: true
+[2026-04-23T12:02:23.548Z] [SI] リクエスト受信: 1件 (委託フラグ: true)
+[2026-04-23T12:02:23.549Z] [SI] 取得実行: sofascore_pmt - palmer
+[2026-04-23T12:02:25.467Z] [SI] 完了: palmer - Result: true
+[2026-04-23T12:02:56.057Z] [SI] リクエスト受信: 2件 (委託フラグ: true)
+[2026-04-23T12:02:56.058Z] [SI] 取得実行: sofascore_pmt - palmer
+[2026-04-23T12:02:56.528Z] [SI] 完了: palmer - Result: true
+[2026-04-23T12:02:56.529Z] [SI] 取得実行: sofascore_event - chelsea
+[2026-04-23T12:02:57.034Z] [SI] SofaScore Match Parse Error
+[2026-04-23T12:02:57.035Z] [SI] 完了: chelsea - Result: false
