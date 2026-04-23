@@ -18,12 +18,13 @@ const PORT = 3004;
 
 const TEMP_DIR    = path.join(__dirname, 'temp');
 const DATA_DIR    = path.join(__dirname, 'data');
+const SI_DATA_DIR = path.join(DATA_DIR, 'si_data');
 const IMG_DIR     = path.join(__dirname, 'images');
 const SLIDES_DIR  = path.join(__dirname, 'soccer_yt_slides');
 const VIDEO_DIR   = path.join(__dirname, 'soccer_yt_videos_v2');
 const LOG_FILE    = path.join(__dirname, 'soccer_yt_v2.log');
 
-[TEMP_DIR, DATA_DIR, IMG_DIR, SLIDES_DIR, VIDEO_DIR].forEach(d => {
+[TEMP_DIR, DATA_DIR, SI_DATA_DIR, IMG_DIR, SLIDES_DIR, VIDEO_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
 
@@ -55,7 +56,6 @@ async function delegateToLocal(endpoint, data) {
 
 // ─── データ整形プログラム (#2-4) 改良版 ───
 function sanitizeData(data, depth = 0) {
-  // 巨大すぎるオブジェクトの再帰を防ぐ (SofaScore対策)
   if (depth > 3) return data; 
   if (typeof data === 'string') {
     return data.replace(/"/g, '”').replace(/'/g, '’').replace(/,/g, '，').replace(/\n/g, ' ');
@@ -63,8 +63,7 @@ function sanitizeData(data, depth = 0) {
   if (Array.isArray(data)) return data.slice(0, 100).map(item => sanitizeData(item, depth + 1));
   if (typeof data === 'object' && data !== null) {
     const res = {};
-    const keys = Object.keys(data);
-    for (const key of keys) {
+    for (const key in data) {
       res[key] = sanitizeData(data[key], depth + 1);
     }
     return res;
@@ -83,32 +82,34 @@ const { fetchSerper } = require('./scripts/modules/fetchers/serper_module');
 
 app.post('/api/v2/fetch-si', async (req, res) => {
   log(`SI取得リクエスト受付: ${req.body.keywords?.length}件`);
-  
+  const { keywords, postId } = req.body;
+
   // VPSの場合はまずローカルプロキシへ委託
   const remoteResult = await delegateToLocal('/api/v2/fetch-si', req.body);
-  if (remoteResult && (remoteResult.success || remoteResult.data)) return res.json(remoteResult);
+  if (remoteResult && (remoteResult.success || remoteResult.data)) {
+    // 委託先から返ってきたデータも保存 (#2-3)
+    if (postId) {
+      const savePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
+      fs.writeFileSync(savePath, JSON.stringify(remoteResult.data, null, 2));
+    }
+    return res.json(remoteResult);
+  }
 
-  const { keywords } = req.body;
   try {
     const results = {};
     for (const k of keywords) {
       log(`[Logic] Processing ${k.type}: ${k.word}`);
       let data = { ok: false, error: '取得失敗' };
-      
       if (k.type === 'otherURL') {
         data = { ok: true, url: k.word, note: '外部URL参照' };
         results[k.word] = data;
         continue;
       }
-
-      // キーワードが日本語ならAIで英語に変換 (正規化)
       let wordEn = k.word;
       if (/[\u3000-\u9fff\uff00-\uffef]/.test(k.word)) {
         const trans = await callAI(`Soccer search keyword: "${k.word}". Return only official English name. No explanation.`);
         wordEn = trans.trim().replace(/^["']|["']$/g, '');
-        log(`[Logic] 翻訳: ${k.word} -> ${wordEn}`);
       }
-
       if (k.type === 'wikipedia') {
         data = await fetchWikipediaSafe([wordEn, k.word]);
       } else if (k.type === 'sofascore_pmt') {
@@ -128,15 +129,27 @@ app.post('/api/v2/fetch-si', async (req, res) => {
         const news = await fetchSerper(wordEn, 'news', 'en');
         data = { ok: !!news.organic?.length, items: news.organic || [], summary: news.answerBox?.snippet || null };
       }
-      
-      // SofaScoreデータは巨大なので、sanitizeDataの深さを制限
       results[k.word] = (k.type.includes('sofascore')) ? data : sanitizeData(data);
     }
+
+    // 保存 (#2-3)
+    if (postId) {
+      const savePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
+      fs.writeFileSync(savePath, JSON.stringify(results, null, 2));
+    }
     res.json({ success: true, data: results });
-  } catch (err) { 
-    log(`[Logic] エラー発生: ${err.message}`);
-    res.status(500).json({ error: err.message }); 
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 保存済みSI取得API
+app.get('/api/v2/si-history', (req, res) => {
+  const { postId } = req.query;
+  if (!postId) return res.json({ success: false, items: [] });
+  const fileName = `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`;
+  const filePath = path.join(SI_DATA_DIR, fileName);
+  if (!fs.existsSync(filePath)) return res.json({ success: true, items: [] });
+  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  res.json({ success: true, items: Object.keys(data).map(key => ({ title: key, data: data[key] })) });
 });
 
 app.get('/api/v2/content', (req, res) => {
@@ -170,7 +183,6 @@ app.get('/', (_, res) => res.send(`<!DOCTYPE html>
 body{font-family:sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overflow:hidden}
 .layout { display: flex; height: 100vh; width: 100vw; }
 
-/* サイドバー */
 .sidebar { width: 320px; background: #0d1220; border-right: 1px solid #1e2540; display: flex; flex-direction: column; flex-shrink: 0; }
 .sidebar-header { padding: 18px; background: #1a2540; border-bottom: 1px solid #2a3560; color: #1a6ef5; font-weight: 900; font-size: 14px; }
 .saved-list { flex: 1; overflow-y: auto; padding: 12px; }
@@ -178,10 +190,9 @@ body{font-family:sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overfl
 .lead-item:hover { border-color: #1a6ef5; transform: translateX(4px); }
 .lead-item.active { border-color: #1a6ef5; background: #262c40; border-left-color: #1a6ef5; }
 
-/* メイン */
 .content-main { flex: 1; display: flex; flex-direction: column; background: #0f1117; }
-.header{ background: #1a2040; padding: 12px 20px; border-bottom: 2px solid red; display: flex; justify-content: space-between; align-items: center; }
-h1{ font-size: 18px; color: red; font-weight: 900; }
+.header{ background: #1a2040; padding: 12px 20px; border-bottom: 2px solid #1a6ef5; display: flex; justify-content: space-between; align-items: center; }
+h1{ font-size: 18px; color: #1a6ef5; font-weight: 900; }
 .steps { display: flex; background: #0d1220; border-bottom: 1px solid #1e2540; }
 .step { padding: 12px 20px; font-size: 11px; font-weight: bold; color: #3a4a6a; }
 .step.active { color: #1a6ef5; background: #161b2e; }
@@ -193,7 +204,6 @@ h1{ font-size: 18px; color: red; font-weight: 900; }
 .btn-success{background:#10b981; color:#fff;}
 .btn-ghost{background:#1e2540; color:#9bb5e0; border:1px solid #2a3050;}
 
-/* 案件リスト */
 .time-group { margin-bottom: 10px; border: 1px solid #2a3050; border-radius: 8px; overflow: hidden; }
 .time-summary { background: #1a2840; padding: 10px; cursor: pointer; color: #7dc8ff; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
 .time-summary:after { content: '▼'; font-size: 10px; transition: 0.3s; }
@@ -204,10 +214,15 @@ h1{ font-size: 18px; color: red; font-weight: 900; }
 .post-row { padding: 10px; border-bottom: 1px solid #1a2540; display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
 .post-row:hover { background: #141a30; }
 
-/* ラベルバッジ */
 .label-box { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; padding: 10px; background: #0d1220; border-radius: 8px; min-height: 50px; }
-.label-item { background: #1a6ef5; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,0.1); }
+.label-item { background: #1a6ef5; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
 .label-badge { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #7dc8ff; text-transform: uppercase; }
+
+/* 取得済一覧 (#2-5) */
+.si-list { margin-top: 5px; background: #0d1220; border-radius: 8px; overflow: hidden; border: 1px solid #1e2540; }
+.si-item { padding: 8px 12px; border-bottom: 1px solid #1e2540; font-size: 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; }
+.si-item:hover { background: #1a2540; }
+.dl-icon { color: #10b981; font-size: 16px; }
 
 pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflow-x:auto; color:#9bb5e0; white-space:pre-wrap;}
 </style>
@@ -251,7 +266,12 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
               <div id="labels" class="label-box"></div>
               <button class="btn btn-success" style="width:100%;" onclick="fetchSi()">⬇️ SI情報取得実行</button>
             </div>
-            <div><pre id="preview" style="height:350px;">キーワードを追加してね</pre></div>
+            <div style="display:flex; flex-direction:column; gap:10px; max-height:500px;">
+              <div style="font-size:11px; color:#1a6ef5; font-weight:bold;">🔍 取得データプレビュー</div>
+              <pre id="preview" style="flex:1; min-height:200px; max-height:250px;">キーワードを追加してね</pre>
+              <div style="font-size:11px; color:#1a6ef5; font-weight:bold; margin-top:5px;">📂 取得済み情報一覧 (ダウンロード済)</div>
+              <div id="siHistory" class="si-list" style="height:150px; overflow-y:auto;"></div>
+            </div>
           </div>
           <button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="goStep(3)">➡️ 次へ進む</button>
         </div>
@@ -260,7 +280,7 @@ pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflo
   </div>
 </div>
 <script>
-let state = { date:'', posts:[], saved:[], selected:null, keywords:[], selectedIds: new Set() };
+let state = { date:'', posts:[], saved:[], selected:null, keywords:[], selectedIds: new Set(), siItems: [] };
 const TYPE_NAME = { news: 'NEWS', wikipedia: 'WIKI', sofascore_pmt: 'SOFA(P)', sofascore_event: 'SOFA(M)', otherURL: 'URL' };
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -272,14 +292,8 @@ async function loadContent() {
   const data = await res.json();
   state.posts = data.posts;
   state.selectedIds.clear();
-
   const groups = {};
-  data.posts.forEach(p => { 
-    const t = p.addedAt ? p.addedAt.slice(11,16) : '不明'; 
-    if(!groups[t]) groups[t]=[]; 
-    groups[t].push(p); 
-  });
-
+  data.posts.forEach(p => { const t = p.addedAt ? p.addedAt.slice(11,16) : '不明'; if(!groups[t]) groups[t]=[]; groups[t].push(p); });
   const sortedTimes = Object.keys(groups).sort().reverse();
   document.getElementById('postList').innerHTML = sortedTimes.map(t => {
     const postsHtml = groups[t].map(p => \`
@@ -290,39 +304,23 @@ async function loadContent() {
           <div style="font-size:10px; color:#5a6a8a;">Source: \${p.source} | Score: \${p.score}</div>
         </div>
       </div>\`).join('');
-    return \`
-      <div class="time-group open">
-        <div class="time-summary" onclick="this.parentElement.classList.toggle('open')">🕒 \${t} 取得分 (\${groups[t].length}件)</div>
-        <div class="time-content">\${postsHtml}</div>
-      </div>\`;
+    return \`<div class="time-group open"><div class="time-summary" onclick="this.parentElement.classList.toggle('open')">🕒 \${t} 取得分 (\${groups[t].length}件)</div><div class="time-content">\${postsHtml}</div></div>\`;
   }).join('');
 }
 
 function toggleSelect(id, el) {
   const chk = document.getElementById('chk_'+id);
-  if (state.selectedIds.has(id)) {
-    state.selectedIds.delete(id);
-    if(chk) chk.checked = false;
-    el.style.background = '';
-  } else {
-    state.selectedIds.add(id);
-    if(chk) chk.checked = true;
-    el.style.background = '#1a2540';
-  }
+  if (state.selectedIds.has(id)) { state.selectedIds.delete(id); if(chk) chk.checked = false; el.style.background = ''; }
+  else { state.selectedIds.add(id); if(chk) chk.checked = true; el.style.background = '#1a2540'; }
 }
 
 function saveSelectedPosts() {
   if (state.selectedIds.size === 0) return alert('案件を選択してください');
   state.selectedIds.forEach(id => {
     const p = state.posts.find(x => x.id === id);
-    if (p && !state.saved.find(x => x.id === id)) {
-      state.saved.push(p);
-    }
+    if (p && !state.saved.find(x => x.id === id)) state.saved.push(p);
   });
-  renderSidebar();
-  state.selectedIds.clear();
-  loadContent(); 
-  alert('案件を保存しました');
+  renderSidebar(); state.selectedIds.clear(); loadContent(); alert('案件を保存しました');
 }
 
 async function fetchNow() { alert('抽出開始...'); const res = await fetch('/api/v2/fetch-now', {method:'POST'}); if((await res.json()).success) loadContent(); }
@@ -332,22 +330,42 @@ function renderSidebar() {
     <div class="lead-item \${state.selected?.id === l.id ? 'active' : ''}" onclick="selectLead('\${l.id}')">
       <div style="font-size:12px; font-weight:bold;">\${esc(l.title)}</div>
       <div style="font-size:9px; color:#5a6a8a; margin-top:4px;">\${l.source}</div>
-    </div>
-  \`).join('');
+    </div>\`).join('');
 }
 
-function selectLead(id) {
+async function selectLead(id) {
   state.selected = state.saved.find(x => x.id === id);
   if (!state.selected) return;
   document.getElementById('currentTitle').innerText = state.selected.title;
-  
-  // 案件切り替え時にキーワードとプレビューをリセット
-  state.keywords = [];
-  renderLabels();
+  state.keywords = []; renderLabels();
   document.getElementById('preview').innerText = "キーワードを追加してね";
+  renderSidebar(); await loadSiHistory(); goStep(2);
+}
 
-  renderSidebar();
-  goStep(2);
+async function loadSiHistory() {
+  if (!state.selected) return;
+  const res = await fetch(\`/api/v2/si-history?postId=\${encodeURIComponent(state.selected.id)}\`);
+  const data = await res.json();
+  state.siItems = data.items || [];
+  renderSiHistory();
+}
+
+function renderSiHistory() {
+  const container = document.getElementById('siHistory');
+  if (state.siItems.length === 0) {
+    container.innerHTML = '<div style="padding:20px; font-size:11px; color:#5a6a8a; text-align:center;">取得済みデータはありません</div>';
+    return;
+  }
+  container.innerHTML = state.siItems.map((item, i) => \`
+    <div class="si-item" onclick="previewSi(\${i})">
+      <span class="dl-icon">📥</span>
+      <span>\${esc(item.title)}</span>
+    </div>\`).join('');
+}
+
+function previewSi(idx) {
+  const item = state.siItems[idx];
+  document.getElementById('preview').innerText = JSON.stringify(item.data, null, 2);
 }
 
 function goStep(n) {
@@ -361,27 +379,15 @@ function addLabel() {
   const type = document.getElementById('siType').value;
   const word = document.getElementById('siInput').value.trim();
   if(!word) return;
-
-  // 重複チェック (#2-7)
   if(['wikipedia','sofascore_pmt','sofascore_event'].includes(type)) {
-    if(state.keywords.find(k => k.type === type && k.word === word)) {
-      return alert('このワードは既に追加されています');
-    }
+    if(state.keywords.find(k => k.type === type && k.word === word)) return alert('既に追加済みです');
   }
-
-  state.keywords.push({type, word});
-  document.getElementById('siInput').value = '';
-  renderLabels();
+  state.keywords.push({type, word}); document.getElementById('siInput').value = ''; renderLabels();
 }
 
 function renderLabels() {
   document.getElementById('labels').innerHTML = state.keywords.map((k, i) => \`
-    <div class="label-item">
-      <span class="label-badge">\${TYPE_NAME[k.type]}</span>
-      <span>\${esc(k.word)}</span>
-      <span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer; margin-left:5px; opacity:0.6;">×</span>
-    </div>
-  \`).join('');
+    <div class="label-item"><span class="label-badge">\${TYPE_NAME[k.type]}</span><span>\${esc(k.word)}</span><span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer; margin-left:5px; opacity:0.6;">×</span></div>\`).join('');
 }
 
 async function fetchSi() {
@@ -390,13 +396,12 @@ async function fetchSi() {
   try {
     const res = await fetch('/api/v2/fetch-si', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ keywords: state.keywords })
+      body: JSON.stringify({ keywords: state.keywords, postId: state.selected.id })
     });
     const data = await res.json();
     pre.innerHTML = JSON.stringify(data.data, null, 2);
-  } catch(e) {
-    pre.innerHTML = "❌ 取得エラー: " + e.message;
-  }
+    await loadSiHistory();
+  } catch(e) { pre.innerHTML = "❌ 取得エラー: " + e.message; }
 }
 
 window.onload = () => { document.getElementById('dateInput').value = new Date().toISOString().slice(0,10); };
