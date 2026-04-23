@@ -4,12 +4,19 @@
     "error": "Request failed with status code 403"
   },
   "chelsea": {
+    "ok": false
+  },
+  "iraora": {
+    "ok": false,
+    "error": "Request failed with status code 403"
+  },
+  "marezca": {
     "ok": true,
-    "playerId": 982780,
-    "name": "Cole Palmer",
+    "playerId": 2026,
+    "name": "Enzo Maresca",
     "position": "M",
-    "team": "Chelsea",
-    "nationality": "England",
+    "team": "No team",
+    "nationality": "Italy",
     "age": null,
     "weight": null,
     "shirtNumber": null,
@@ -21,6 +28,10 @@
     "recentAvgRating": null,
     "seasonStats": null,
     "positionStats": null,
-    "uclStats": null
+    "uclStats": null,
+    "siType": "player"
+  },
+  "messi": {
+    "ok": false
   }
 }

@@ -2533,3 +2533,13 @@ Official NBA Stats | Stats | NBA.com Schedule Playoffs BAL 2026 League Pass Game
 [2026-04-23T12:39:32.198Z] [SI] Req: 1 keys
 [2026-04-23T12:39:32.204Z] [SI] Exec: sofascore_pmt - chelsea
 [2026-04-23T12:40:05.035Z] [SI] Match検索: chelsea
+[2026-04-23T13:59:28.561Z] [SI] Match検索: chelsea
+[2026-04-23T13:59:45.581Z] [SI] Match検索: liverpool
+[2026-04-23T14:00:07.410Z] [SI] Req: 1 keys
+[2026-04-23T14:00:07.410Z] [SI] Exec: sofascore_pmt - iraora
+[2026-04-23T14:00:35.328Z] [SI] Req: 1 keys
+[2026-04-23T14:00:35.334Z] [SI] Exec: sofascore_pmt - marezca
+[2026-04-23T14:01:17.552Z] [SI] Req: 1 keys
+[2026-04-23T14:01:17.553Z] [SI] Exec: sofascore_pmt - chelsea
+[2026-04-23T14:07:41.235Z] [SI] Req: 1 keys
+[2026-04-23T14:07:41.236Z] [SI] Exec: sofascore_pmt - messi
