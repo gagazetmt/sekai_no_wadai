@@ -1,19 +1,17 @@
 // soccer_yt_server_v2.js
 // v2 サッカー YouTube ランチャー Pro統合版（port 3004）
+// 【改修内容】全SIソースの本気実装 ＋ ゲートウェイ維持 ＋ 赤色モード
 
 require('dotenv').config();
 const express   = require('express');
 const fs        = require('fs');
 const path      = require('path');
 const { spawn, execSync } = require('child_process');
-const { google } = require('googleapis');
+const axios     = require('axios');
 
-const { proposeModules }    = require('./scripts/modules/proposer');
-const { proposeWithData, proposeWithClaude } = require('./scripts/modules/propose_with_data');
+const { proposeWithData }    = require('./scripts/modules/propose_with_data');
 const { fetchAllModuleData } = require('./scripts/modules/fetcher');
 const { callAI }             = require('./scripts/ai_client');
-const { buildSlide }         = require('./scripts/slide_builder');
-const { computePresetValues, autoStatsRows, getPresetsForClient, getTopicPresetsForClient } = require('./scripts/stat_presets');
 
 const app  = express();
 const PORT = 3004;
@@ -21,19 +19,12 @@ const PORT = 3004;
 const TEMP_DIR    = path.join(__dirname, 'temp');
 const DATA_DIR    = path.join(__dirname, 'data');
 const IMG_DIR     = path.join(__dirname, 'images');
-const SLIDES_DIR  = path.join(__dirname, 'soccer_yt_slides');
-const VIDEO_DIR   = path.join(__dirname, 'soccer_yt_videos_v2');
-const THUMB_DIR   = path.join(__dirname, 'soccer_yt_thumbnails_v2');
 const LOG_FILE    = path.join(__dirname, 'soccer_yt_v2.log');
 
-[TEMP_DIR, VIDEO_DIR, THUMB_DIR, SLIDES_DIR].forEach(d => {
-  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
-});
+[TEMP_DIR, DATA_DIR, IMG_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 app.use(express.json({ limit: '10mb' }));
-app.use('/images',  express.static(IMG_DIR));
-app.use('/narrations', express.static(SLIDES_DIR));
-app.use('/video-files', express.static(VIDEO_DIR));
+app.use('/images', express.static(IMG_DIR));
 
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}`;
@@ -41,48 +32,15 @@ function log(msg) {
   try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch (_) {}
 }
 
-function scenarioPath(date, postId) {
-  return path.join(TEMP_DIR, `v2_scenario_${date}_${postId}.json`);
-}
-
-app.get('/api/v2/content', (req, res) => {
-  const dateStr = req.query.date;
-  if (!dateStr) return res.status(400).json({ error: '?date=YYYY-MM-DD が必要です' });
-  const formattedDate = dateStr.replace(/-/g, "_");
-  const storyFile = path.join(DATA_DIR, `stories_${formattedDate}.json`);
-  const autoFile  = path.join(DATA_DIR, `auto_generated_${dateStr}.json`);
-  const candFile  = path.join(TEMP_DIR, `candidates_${dateStr}.json`);
-  let targetFile = null;
-  if (fs.existsSync(storyFile)) targetFile = storyFile;
-  else if (fs.existsSync(autoFile)) targetFile = autoFile;
-  else if (fs.existsSync(candFile)) targetFile = candFile;
-  if (!targetFile) return res.json({ date: dateStr, posts: [] });
-  const data  = JSON.parse(fs.readFileSync(targetFile, 'utf8'));
-  const posts = (data.posts || []).map((p, i) => {
-    const id = p.id || String(i);
-    return {
-      id,
-      title:   p.titleJa || p.title || '（タイトルなし）',
-      addedAt: p.addedAt || p.added_at || null,
-      source:  p.source || 'unknown',
-      score:   p.score || 0,
-      hasScenario: fs.existsSync(scenarioPath(dateStr, id)),
-      raw:     p
-    };
-  });
-  res.json({ date: dateStr, posts });
-});
-
-const axios = require('axios');
-
+// ─── ゲートウェイ設定 ───
 const LOCAL_AGENT_IP = process.env.LOCAL_AGENT_IP || null;
 const LOCAL_AGENT_URL = LOCAL_AGENT_IP ? `http://${LOCAL_AGENT_IP}:3004` : null;
 
 async function delegateToLocal(endpoint, data) {
   if (!LOCAL_AGENT_URL) return null;
-  log(`[Gateway] Local Agent (${LOCAL_AGENT_IP}) へ委託開始: ${endpoint}`);
+  log(`[Gateway] Local Agent へ委託: ${endpoint}`);
   try {
-    const res = await axios.post(`${LOCAL_AGENT_URL}${endpoint}`, data, { timeout: 90000 });
+    const res = await axios.post(`${LOCAL_AGENT_URL}${endpoint}`, data, { timeout: 120000 });
     return res.data;
   } catch (err) {
     log(`[Gateway] Local Agent 連携エラー: ${err.message}`);
@@ -90,505 +48,186 @@ async function delegateToLocal(endpoint, data) {
   }
 }
 
+// ─── データ整形プログラム (指示書 #2-4) ───
+function sanitizeData(data) {
+  if (typeof data === 'string') {
+    return data.replace(/"/g, '”').replace(/'/g, '’').replace(/,/g, '，').replace(/\n/g, ' ');
+  }
+  if (Array.isArray(data)) return data.map(sanitizeData);
+  if (typeof data === 'object' && data !== null) {
+    const res = {};
+    for (const key in data) res[key] = sanitizeData(data[key]);
+    return res;
+  }
+  return data;
+}
+
+// ─── API エンドポイント ───
+
+const { fetchWikipediaSafe } = require('./scripts/modules/fetchers/wikipedia');
+const { fetchSofaScorePlayer } = require('./scripts/modules/fetchers/sofascore_player');
+const { fetchSofaScoreTeam } = require('./scripts/modules/fetchers/sofascore_team');
+const { fetchSofaScoreManager } = require('./scripts/modules/fetchers/sofascore_manager');
+const { fetchSofaScoreMatch } = require('./scripts/modules/fetchers/sofascore_match');
+const { fetchSerper } = require('./scripts/modules/fetchers/serper_module');
+
 app.post('/api/v2/fetch-si', async (req, res) => {
-  const { date, postId, keywords } = req.body;
-  log(`SI取得開始: ${date} ${postId}`);
+  log(`SI取得リクエスト受付: ${JSON.stringify(req.body.keywords)}`);
   
-  // ハイブリッド・ゲートウェイ発動
+  // 1. ローカルプロキシへ委託
   const remoteResult = await delegateToLocal('/api/v2/fetch-si', req.body);
   if (remoteResult && (remoteResult.success || remoteResult.data)) return res.json(remoteResult);
 
+  // 2. 自身で取得 (VPS)
+  const { keywords } = req.body;
   try {
-    const results = await fetchAllModuleData(keywords);
+    const results = {};
+    for (const k of keywords) {
+      log(`[Direct] Fetching ${k.type}: ${k.word}`);
+      let data = { ok: false, error: '取得失敗' };
+      
+      if (k.type === 'wikipedia') {
+        data = await fetchWikipediaSafe([k.word]);
+      } else if (k.type === 'sofascore_pmt') {
+        data = await fetchSofaScorePlayer(k.word);
+        if (!data.ok) data = await fetchSofaScoreTeam(k.word);
+        if (!data.ok) data = await fetchSofaScoreManager(k.word);
+      } else if (k.type === 'sofascore_event') {
+        const teams = k.word.split(/vs|VS|-|－/);
+        if (teams.length >= 2) data = await fetchSofaScoreMatch(teams[0].trim(), teams[1].trim());
+        else data = { ok: false, error: '対戦形式で入力してください' };
+      } else if (k.type === 'news') {
+        data = await fetchSerper(k.word, 'news', 'en');
+        data = { ok: !!data, items: data };
+      }
+      
+      results[k.word] = sanitizeData(data);
+    }
     res.json({ success: true, data: results });
   } catch (err) {
+    log(`[Direct] SI取得エラー: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
 
+app.get('/api/v2/content', (req, res) => {
+  const dateStr = req.query.date;
+  if (!dateStr) return res.status(400).json({ error: '?date=YYYY-MM-DD が必要です' });
+  const formattedDate = dateStr.replace(/-/g, "_");
+  const storyFile = path.join(DATA_DIR, `stories_${formattedDate}.json`);
+  if (!fs.existsSync(storyFile)) return res.json({ date: dateStr, posts: [] });
+  const data = JSON.parse(fs.readFileSync(storyFile, 'utf8'));
+  res.json({ date: dateStr, posts: (data.posts || []).map((p, i) => ({ id: p.id || String(i), title: p.titleJa || p.title, addedAt: p.addedAt, source: p.source, score: p.score, raw: p })) });
+});
+
+// ─── UI (HTML) ───
 app.get('/', (_, res) => res.send(`<!DOCTYPE html>
-<html lang="ja"><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>⚽ サッカーYT v2 Gateway Mode (Blue)</title>
+<html lang="ja"><head><meta charset="UTF-8"><title>⚽ サッカーYT v2 SI Professional (Red)</title>
 <style>
-/* ─── 基本スタイル ─── */
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overflow:hidden}
-
-.layout { display: flex; height: 100vh; width: 100vw; }
-
-/* ─── 左サイドバー (指示書 #1-9) ─── */
-.sidebar-left { width: 320px; background: #0d1220; border-right: 1px solid #1e2540; display: flex; flex-direction: column; flex-shrink: 0; }
-.sidebar-header { padding: 18px; background: #1a2540; border-bottom: 1px solid #2a3560; color: #1a6ef5; font-weight: 900; font-size: 14px; display: flex; align-items: center; gap: 10px; }
-.saved-leads-list { flex: 1; overflow-y: auto; padding: 12px; }
-.lead-item { background: #161b2e; border: 1px solid #2a3050; border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; border-left: 4px solid transparent; }
-.lead-item:hover { border-color: #1a6ef5; transform: translateX(4px); background: #1e2540; }
-.lead-item.active { border-color: #1a6ef5; background: #262c40; border-left-color: #1a6ef5; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-.lead-title { font-size: 12px; font-weight: bold; color: #e0e8ff; margin-bottom: 6px; line-height: 1.4; }
-.lead-meta { font-size: 10px; color: #5a7abf; display: flex; justify-content: space-between; }
-
-/* ─── メインエリア ─── */
-.content-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; background: #0f1117; }
-.header{background:linear-gradient(135deg,#1a2040,#0d1220);padding:0 12px;border-bottom:2px solid #1a6ef5;display:flex;align-items:stretch;min-height:56px;flex-shrink:0}
-.header-brand{display:flex;align-items:center;gap:10px;padding-right:16px;border-right:1px solid #2a3050}
-.header h1{font-size:16px;font-weight:900;color:#1a6ef5}
-.badge{background:#1a4a8a;color:#7dc8ff;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700}
-.header-steps{display:flex;align-items:stretch;flex:1;overflow-x:auto}
-.hstep{display:flex;align-items:center;gap:6px;padding:0 12px;color:#3a4a6a;font-size:11px;font-weight:600;white-space:nowrap;border-right:1px solid #1a2540;cursor:pointer}
-.hstep.active{color:#7dc8ff}
-.hstep-num{width:18px;height:18px;border-radius:50%;background:#1a2340;color:#3a4a6a;font-size:9px;display:flex;align-items:center;justify-content:center}
-.hstep.active .hstep-num{background:#1a6ef5;color:#fff}
-
-.main-scroll { flex: 1; overflow-y: auto; padding: 20px; }
-.panel{background:#161b2e;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3050}
-.panel-title{font-size:14px;font-weight:700;color:#9bb5e0;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-
-/* ─── 案件リスト (アコーディオン) ─── */
-.time-group { margin-bottom: 12px; border: 1px solid #2a3050; border-radius: 10px; overflow: hidden; }
-.time-summary { background: #1a2840; padding: 12px 16px; cursor: pointer; color: #f0e080; font-weight: bold; font-size: 13px; display: flex; justify-content: space-between; align-items: center; user-select: none; }
-.time-summary:hover { background: #1e2d50; }
-.post-item { background: #0d1220; border-bottom: 1px solid #1a2040; padding: 10px 16px; display: flex; align-items: center; gap: 12px; transition: 0.1s; }
-.post-item:last-child { border-bottom: none; }
-.post-item:hover { background: #141a30; }
-.post-title { font-size: 13px; color: #c0d0e0; flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
-
-/* ─── 汎用ボタン ─── */
-.btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; border: none; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
-.btn-primary { background: #1a6ef5; color: #fff; }
-.btn-primary:hover { background: #2a7ef5; }
-.btn-success { background: #1a8a4a; color: #fff; }
-.btn-success:hover { background: #2a9a5a; }
-.btn-ghost { background: #1e2540; color: #9bb5e0; border: 1px solid #2a3050; }
-.btn-ghost:hover { background: #2a3560; }
+  body{font-family:sans-serif; background:#0f1117; color:#e0e0e0; margin:0; padding:20px;}
+  .header{ border-bottom: 2px solid #ff4b4b; padding-bottom:15px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+  h1{ color: #ff4b4b; margin:0; font-size:20px; }
+  .panel{background:#161b2e; border-radius:12px; padding:20px; margin-bottom:20px; border:1px solid #2a3050;}
+  .btn{padding:8px 16px; border-radius:8px; cursor:pointer; border:none; font-weight:bold; transition:0.2s;}
+  .btn-primary{background:#ff4b4b; color:#fff;}
+  .btn-success{background:#10b981; color:#fff;}
+  .btn-ghost{background:#1e2540; color:#9bb5e0; border:1px solid #2a3050;}
+  .label-box{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px; padding:10px; background:#0d1220; border-radius:8px;}
+  .label-item{background:#ff4b4b; color:#fff; padding:4px 10px; border-radius:20px; font-size:11px; display:flex; align-items:center; gap:6px;}
+  pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflow-x:auto; color:#9bb5e0; white-space:pre-wrap;}
 </style>
 </head>
 <body>
-<div class="layout">
-  <!-- 左サイドバー: 保存済み案件 (指示書 #1-9) -->
-  <div class="sidebar-left">
-    <div class="sidebar-header">📦 保存済み案件 (SIスライド候補)</div>
-    <div class="saved-leads-list" id="savedLeadsList"></div>
+  <div class="header">
+    <h1>⚽ サッカーYT v2 SI Professional (Red)</h1>
+    <div style="font-size:12px; color:#ff4b4b;">📡 連携: ${LOCAL_AGENT_IP ? `Local Agent (\${LOCAL_AGENT_IP})` : 'VPS直接'}</div>
   </div>
 
-  <div class="content-main">
-    <div class="header">
-      <div class="header-brand"><h1>⚽ サッカーYT</h1><span class="badge">v2 Pro</span></div>
-      <div class="header-steps" id="stepNav">
-        <div class="hstep active" id="sNav0"><div class="hstep-num">1</div>案件選択</div>
-        <div class="hstep" id="sNav1"><div class="hstep-num">2</div>SIスライド</div>
-        <div class="hstep" id="sNav2"><div class="hstep-num">3</div>モジュール</div>
-        <div class="hstep" id="sNav3"><div class="hstep-num">4</div>脚本・編集</div>
-        <div class="hstep" id="sNav4"><div class="hstep-num">5</div>出力</div>
+  <div class="panel">
+    <input type="date" id="dateInput">
+    <button class="btn btn-primary" onclick="loadContent()">案件読込</button>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+    <div>
+      <div class="panel">
+        <div style="margin-bottom:10px; display:flex; gap:5px;">
+          <select id="siType" style="background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px; padding:5px;">
+            <option value="news">News</option>
+            <option value="wikipedia">Wikipedia</option>
+            <option value="sofascore_pmt">SofaScore (P/M/T)</option>
+            <option value="sofascore_event">SofaScore (Match)</option>
+          </select>
+          <input type="text" id="siInput" style="flex:1; background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px; padding:5px;" placeholder="キーワード...">
+          <button class="btn btn-primary" onclick="addLabel()">＋</button>
+        </div>
+        <div id="labels" class="label-box"></div>
+        <button class="btn btn-success" style="width:100%;" onclick="fetchSi()">⬇️ SI情報取得実行</button>
+      </div>
+      <div id="postList"></div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>📺 取得データプレビュー</h3>
+        <div id="preview" style="min-height:300px; max-height:600px; overflow-y:auto;">案件とキーワードを選んでね</div>
       </div>
     </div>
+  </div>
 
-    <div class="main-scroll">
-      <!-- STEP 1: 案件選択 -->
-      <div id="step1">
-        <div class="panel">
-          <div class="panel-title">🕒 案件収集スケジュール (Stories Fetch)</div>
-          <div style="display:flex; gap:10px">
-            <input type="date" id="dateInput">
-            <button class="btn btn-primary" onclick="loadContent()">案件を読み込む</button>
-          </div>
-        </div>
+  <script>
+    let state = { posts: [], selectedPost: null, keywords: [] };
 
-        <div id="postListPanel" style="display:none">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
-            <h3 style="font-size:14px; color:#9bb5e0">📋 取得済み案件一覧</h3>
-            <button class="btn btn-success" onclick="saveSelectedLeads()">✔️ 選択した案件を保存</button>
-          </div>
-          <div id="postList"></div>
-        </div>
-      </div>
+    async function loadContent() {
+      const d = document.getElementById('dateInput').value;
+      if(!d) return;
+      const res = await fetch('/api/v2/content?date='+d);
+      const data = await res.json();
+      state.posts = data.posts;
+      document.getElementById('postList').innerHTML = data.posts.map(p => 
+        \`<div class="panel" onclick="selectPost('\${p.id}')" style="cursor:pointer; padding:10px; font-size:13px;">\${p.title}</div>\`
+      ).join('');
+    }
 
-      <div id="step2" style="display:none">
-        <div class="panel"><div class="panel-title">🎯 選択中の案件</div><div id="selectedPostInfo"></div></div>
-        
-        <div style="display:flex; gap:20px;">
-          <!-- 左カラム: キーワード入力とラベル -->
-          <div style="flex:1; display:flex; flex-direction:column; gap:16px;">
-            <div class="panel" style="flex:1;">
-              <div class="panel-title">🔍 SIスライド情報 (検索キーワード)</div>
-              
-              <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <select id="siSourceType" style="padding:6px; background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px;">
-                  <option value="news">News</option>
-                  <option value="wikipedia">Wikipedia</option>
-                  <option value="sofascore_pmt">SofaScore (Player/Manager/Team)</option>
-                  <option value="sofascore_event">SofaScore (Event)</option>
-                  <option value="other">Other URL</option>
-                </select>
-                <input type="text" id="siKeywordInput" placeholder="検索キーワードまたはURL" style="flex:1; padding:6px; background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px;">
-                <button class="btn btn-primary" onclick="addSiKeyword()">＋ 追加</button>
-              </div>
-              
-              <div id="siKeywordsContainer" style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; min-height:50px; padding:10px; background:#0d1220; border-radius:8px;"></div>
-              
-              <button class="btn btn-success" style="width:100%; justify-content:center;" onclick="fetchSiData()">⬇️ SI取得実行</button>
-            </div>
-            
-            <button class="btn btn-primary" style="width:100%; justify-content:center; font-size:16px; padding:12px;" onclick="goToModuleProposal()">➡️ モジュール提案へ進む</button>
-          </div>
-          
-          <!-- 右カラム: プレビューと取得済み一覧 -->
-          <div style="flex:1; display:flex; flex-direction:column; gap:16px;">
-            <div class="panel" style="flex:1; display:flex; flex-direction:column;">
-              <div class="panel-title">📺 プレビュー窓</div>
-              <div id="siPreviewWindow" style="flex:1; background:#0d1220; border-radius:8px; padding:12px; overflow-y:auto; font-size:12px; color:#c0d0e0; min-height:200px;">
-                (取得した情報がここに表示されます)
-              </div>
-            </div>
-            <div class="panel" style="flex:1; display:flex; flex-direction:column;">
-              <div class="panel-title">📋 取得済情報一覧</div>
-              <div id="siFetchedList" style="flex:1; background:#0d1220; border-radius:8px; padding:12px; overflow-y:auto; font-size:12px;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div id="step3" style="display:none">
-        <div class="panel">
-          <div class="panel-title">🧩 モジュール提案 (Claude)</div>
-          <button class="btn btn-primary" style="margin-bottom:16px;" onclick="proposeModules()">✨ モジュール構成を提案させる</button>
-          
-          <div id="moduleTabs" style="display:flex; overflow-x:auto; gap:8px; border-bottom:1px solid #2a3050; padding-bottom:8px; margin-bottom:16px;">
-            <!-- タブがここに並ぶ -->
-          </div>
-          
-          <div id="moduleContent" style="background:#0d1220; padding:16px; border-radius:8px; min-height:200px;">
-            （提案されたモジュールの詳細がここに表示されます）
-          </div>
-          
-          <div style="margin-top:20px; display:flex; gap:10px;">
-            <button class="btn btn-ghost" onclick="reproposeModules()">🔄 脚本指示再提案</button>
-            <button class="btn btn-success" style="flex:1; justify-content:center; font-size:16px;" onclick="generateScenarioAndImages()">🎬 シナリオ生成・画像取得へ進む</button>
-          </div>
-        </div>
-      </div>
+    function addLabel() {
+      const type = document.getElementById('siType').value;
+      const word = document.getElementById('siInput').value.trim();
+      if(!word) return;
+      if((type==='wikipedia' || type==='sofascore_pmt') && state.keywords.find(k => k.word === word)) return alert('重複しています');
+      state.keywords.push({type, word});
+      document.getElementById('siInput').value = '';
+      renderLabels();
+    }
+
+    function renderLabels() {
+      document.getElementById('labels').innerHTML = state.keywords.map((k, i) => 
+        \`<div class="label-item">\${k.word} (\${k.type}) <span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer">×</span></div>\`
+      ).join('');
+    }
+
+    async function selectPost(id) {
+      state.selectedPost = state.posts.find(p => p.id === id);
+      document.querySelectorAll('.panel').forEach(p => p.style.borderColor = '#2a3050');
+      event.currentTarget.style.borderColor = '#ff4b4b';
+    }
+
+    async function fetchSi() {
+      if(!state.selectedPost) return alert('案件を選んでね');
+      if(state.keywords.length === 0) return alert('キーワードを追加してね');
       
-      <div id="step4" style="display:none">
-        <div class="panel">
-          <div class="panel-title">✍️ 脚本・編集 (DeepSeek)</div>
-          
-          <div id="scenarioTabs" style="display:flex; overflow-x:auto; gap:8px; border-bottom:1px solid #2a3050; padding-bottom:8px; margin-bottom:16px;">
-            <!-- シナリオタブがここに並ぶ -->
-          </div>
-          
-          <div id="scenarioContent" style="background:#0d1220; padding:16px; border-radius:8px; min-height:300px;">
-            （生成されたシナリオ本文がここに表示されます）
-          </div>
-          
-          <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center;">
-            <button class="btn btn-ghost" onclick="generateLocalAudio()">🔊 このモジュールのみ音声生成</button>
-            <button class="btn btn-success" style="font-size:16px; padding:12px 24px;" onclick="startVideoGeneration()">🎞️ 動画生成を開始</button>
-          </div>
-        </div>
-      </div>
-      <div id="step5" style="display:none">
-        <div class="panel"><div class="panel-title">🎬 出力設定</div><div style="color:#5a7abf;font-size:12px;">（動画生成・アップロードUIが入ります）</div></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-let state = {
-  date: '',
-  posts: [],
-  savedLeads: JSON.parse(localStorage.getItem('savedLeads') || '[]'),
-  selectedLeadId: null,
-  currentStep: 1
-};
-
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-async function loadContent() {
-  const date = document.getElementById('dateInput').value;
-  if (!date) return alert('日付を選択してください');
-  state.date = date;
-
-  const res  = await fetch('/api/v2/content?date=' + date);
-  const data = await res.json();
-  state.posts = data.posts;
-
-  const groups = {};
-  data.posts.forEach(p => {
-    const time = p.addedAt ? p.addedAt.slice(11, 16) : '不明';
-    if (!groups[time]) groups[time] = [];
-    groups[time].push(p);
-  });
-
-  const list = document.getElementById('postList');
-  const sortedTimes = Object.keys(groups).sort((a,b) => b.localeCompare(a));
-
-  list.innerHTML = sortedTimes.map(time => {
-    return '<details open class="time-group">' +
-      '<summary class="time-summary">🕒 ' + time + ' 取得分 (' + groups[time].length + '件)</summary>' +
-      '<div>' +
-        groups[time].map(p => {
-          return '<div class="post-item">' +
-            '<input type="checkbox" class="lead-check" value="' + p.id + '" style="width:18px;height:18px">' +
-            '<span class="post-title" onclick="selectLeadFromList(\\'' + p.id + '\\')">' + esc(p.title) + '</span>' +
-          '</div>';
-        }).join('') +
-      '</div>' +
-    '</details>';
-  }).join('');
-  
-  document.getElementById('postListPanel').style.display = 'block';
-  renderSavedLeads();
-}
-
-function selectLeadFromList(id) {
-  const checkbox = document.querySelector('.lead-check[value="' + id + '"]');
-  if (checkbox) checkbox.checked = !checkbox.checked;
-}
-
-function saveSelectedLeads() {
-  const checked = Array.from(document.querySelectorAll('.lead-check:checked')).map(el => el.value);
-  const selectedPosts = state.posts.filter(p => checked.includes(p.id));
-  if (selectedPosts.length === 0) return alert('保存する案件を選択してください');
-
-  selectedPosts.forEach(p => {
-    if (!state.savedLeads.find(l => l.id === p.id)) {
-      state.savedLeads.unshift({ id: p.id, title: p.title, source: p.source, addedAt: p.addedAt, raw: p.raw });
+      const preview = document.getElementById('preview');
+      preview.innerHTML = "⏳ 取得中... (ローカル連携)";
+      
+      const res = await fetch('/api/v2/fetch-si', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ keywords: state.keywords })
+      });
+      const data = await res.json();
+      preview.innerHTML = \`<pre>\${JSON.stringify(data.data, null, 2)}</pre>\`;
     }
-  });
-  localStorage.setItem('savedLeads', JSON.stringify(state.savedLeads));
-  renderSavedLeads();
-  document.querySelectorAll('.lead-check:checked').forEach(el => el.checked = false);
-}
 
-function renderSavedLeads() {
-  const list = document.getElementById('savedLeadsList');
-  if (state.savedLeads.length === 0) {
-    list.innerHTML = '<div style=\"color:#3a4a6a;padding:20px;font-size:12px;text-align:center\">保存済みなし</div>';
-    return;
-  }
-  list.innerHTML = state.savedLeads.map(l => {
-    const isActive = state.selectedLeadId === l.id ? 'active' : '';
-    const time = l.addedAt ? l.addedAt.slice(11, 16) : '--:--';
-    return '<div class=\"lead-item ' + isActive + '\" onclick=\"clickLead(\\'' + l.id + '\\')\">' +
-             '<div class=\"lead-title\">' + esc(l.title) + '</div>' +
-             '<div class=\"lead-meta\"><span>' + l.source + '</span><span>' + time + '</span></div>' +
-           '</div>';
-  }).join('');
-}
-
-function clickLead(id) {
-  state.selectedLeadId = id;
-  const lead = state.savedLeads.find(l => l.id === id);
-  if (!lead) return;
-  renderSavedLeads();
-  state.selectedPost = lead.raw || lead;
-  document.getElementById('selectedPostInfo').innerHTML = 
-    '<div style=\"font-size:16px; font-weight:bold; color:#7dc8ff; margin-bottom:8px\">' + esc(lead.title) + '</div>' +
-    '<div style=\"font-size:11px; color:#5a7abf\">Source: ' + lead.source + ' | Time: ' + (lead.addedAt || 'Unknown') + '</div>';
-  goStep(2);
-}
-
-function goStep(n) {
-  state.currentStep = n;
-  for(let i=1; i<=5; i++) {
-    const el = document.getElementById('step'+i);
-    if (el) el.style.display = (i===n ? 'block' : 'none');
-  }
-  for(let i=0; i<5; i++) {
-    const nav = document.getElementById('sNav'+i);
-    if (nav) nav.className = 'hstep' + (i===n-1 ? ' active' : '');
-  }
-}
-
-// ─── SI スライドロジック (指示書 #2) ───
-let siKeywords = [];
-
-function addSiKeyword() {
-  const type = document.getElementById('siSourceType').value;
-  const input = document.getElementById('siKeywordInput');
-  const word = input.value.trim();
-  if (!word) return;
-
-  // 指示書 #2-7: wikipedia, sofascore は重複追加禁止
-  if (type.includes('wikipedia') || type.includes('sofascore')) {
-    if (siKeywords.some(k => k.type === type)) {
-      alert(type + ' はすでにラベルが追加されています。ダブリを防ぐため1つのみにしてください。');
-      return;
-    }
-  }
-
-  siKeywords.push({ type, word });
-  input.value = '';
-  renderSiKeywords();
-}
-
-function renderSiKeywords() {
-  const container = document.getElementById('siKeywordsContainer');
-  container.innerHTML = siKeywords.map((k, i) => {
-    return '<span style="background:#1a6ef5; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px; display:inline-flex; align-items:center; gap:6px;">' +
-             '[' + k.type + '] ' + esc(k.word) +
-             '<button onclick="removeSiKeyword(' + i + ')" style="background:transparent; border:none; color:#fff; cursor:pointer; font-weight:bold;">×</button>' +
-           '</span>';
-  }).join('');
-}
-
-function removeSiKeyword(index) {
-  siKeywords.splice(index, 1);
-  renderSiKeywords();
-}
-
-async function fetchSiData() {
-  if (siKeywords.length === 0) return alert('検索キーワードを追加してください');
-  if (!state.selectedPost) return alert('案件が選択されていません');
-
-  document.getElementById('siPreviewWindow').innerHTML = '<div style="color:#f59e0b">データ取得中...（約10〜30秒かかります）</div>';
-  
-  try {
-    const res = await fetch('/api/v2/fetch-si', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date: state.date,
-        postId: state.selectedPost.id || state.selectedLeadId,
-        keywords: siKeywords
-      })
-    });
-    
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    state.siData = data.data; // 取得したJSONデータを保存
-
-    // プレビューと一覧を描画 (#2-5)
-    document.getElementById('siPreviewWindow').innerHTML = '<pre style="white-space:pre-wrap; word-wrap:break-word;">' + esc(JSON.stringify(data.data, null, 2)) + '</pre>';
-    
-    const listHtml = Object.keys(data.data).map(key => {
-      return '<div style="padding:6px; border-bottom:1px solid #2a3050; display:flex; align-items:center; gap:8px;">' +
-               '<span>⬇️</span> <span>' + esc(key) + ' (データ取得完了)</span>' +
-             '</div>';
-    }).join('');
-    document.getElementById('siFetchedList').innerHTML = listHtml || '取得データなし';
-
-  } catch (err) {
-    document.getElementById('siPreviewWindow').innerHTML = '<div style="color:#ff4b4b">取得エラー: ' + esc(err.message) + '</div>';
-  }
-}
-
-function goToModuleProposal() {
-  if (!state.siData) {
-    if (!confirm('SIデータが取得されていません。このままモジュール提案に進みますカ？')) return;
-  }
-  goStep(3);
-}
-
-// ─── モジュール提案ロジック (指示書 #3) ───
-let modules = [];
-let activeModuleIndex = 0;
-
-async function proposeModules() {
-  if (!state.selectedPost) return alert('案件を選択してください');
-  
-  document.getElementById('moduleContent').innerHTML = '<div style="color:#f59e0b">Claudeが構成を考案中...</div>';
-  
-  try {
-    const res = await fetch('/api/v2/propose-modules', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        postId: state.selectedPost.id,
-        postTitle: state.selectedPost.title,
-        comments: state.selectedPost.comments || [],
-        siData: state.siData
-      })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    modules = data.proposal.modules; // 提案されたモジュール配列
-    renderModuleTabs();
-    selectModule(0);
-  } catch (err) {
-    document.getElementById('moduleContent').innerHTML = '<div style="color:#ff4b4b">提案エラー: ' + esc(err.message) + '</div>';
-  }
-}
-
-function renderModuleTabs() {
-  const container = document.getElementById('moduleTabs');
-  container.innerHTML = modules.map((m, i) => {
-    const activeClass = i === activeModuleIndex ? 'background:#1a6ef5; color:#fff;' : 'background:#1e2540; color:#9bb5e0;';
-    return '<div onclick="selectModule(' + i + ')" style="padding:6px 12px; border-radius:4px; cursor:pointer; font-size:11px; white-space:nowrap; ' + activeClass + '">' +
-             (i+1) + '. ' + esc(m.title) +
-           '</div>';
-  }).join('');
-}
-
-function selectModule(index) {
-  activeModuleIndex = index;
-  renderModuleTabs();
-  const m = modules[index];
-  
-  let html = '<div style="display:flex; flex-direction:column; gap:12px;">' +
-               '<div><label style="font-size:10px; color:#5a7abf;">モジュール題名</label>' +
-               '<input type="text" value="' + esc(m.title) + '" onchange="updateModule(' + index + ', &quot;title&quot;, this.value)" style="width:100%; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;"></div>' +
-               '<div><label style="font-size:10px; color:#5a7abf;">型・構成案</label>' +
-               '<textarea style="width:100%; height:80px; padding:8px; background:#161b2e; color:#fff; border:1px solid #2a3050; border-radius:4px;" onchange="updateModule(' + index + ', &quot;instruction&quot;, this.value)">' + esc(m.instruction || '') + '</textarea></div>' +
-             '</div>';
-  document.getElementById('moduleContent').innerHTML = html;
-}
-
-function updateModule(index, field, value) {
-  modules[index][field] = value;
-}
-
-async function generateScenarioAndImages() {
-  if (modules.length === 0) return alert('モジュールを提案させてください');
-  goStep(4);
-  document.getElementById('scenarioContent').innerHTML = '<div style="color:#f59e0b">DeepSeekが脚本を執筆中...</div>';
-  
-  try {
-    const res = await fetch('/api/v2/generate-scenario', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        postId: state.selectedPost.id,
-        modules: modules
-      })
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    state.scenario = data.scenario;
-    renderScenarioTabs();
-    selectScenarioModule(0);
-  } catch (err) {
-    document.getElementById('scenarioContent').innerHTML = '<div style="color:#ff4b4b">脚本生成エラー: ' + esc(err.message) + '</div>';
-  }
-}
-
-// ─── 脚本編集ロジック (指示書 #4) ───
-function renderScenarioTabs() {
-  const container = document.getElementById('scenarioTabs');
-  container.innerHTML = state.scenario.modules.map((m, i) => {
-    return '<div onclick="selectScenarioModule(' + i + ')" style="padding:6px 12px; background:#1e2540; border-radius:4px; cursor:pointer; font-size:11px;">' + (i+1) + '</div>';
-  }).join('');
-}
-
-function selectScenarioModule(index) {
-  const m = state.scenario.modules[index];
-  document.getElementById('scenarioContent').innerHTML = 
-    '<textarea style="width:100%; height:200px; background:#0d1220; color:#fff; border:none; padding:10px;" onchange="state.scenario.modules[' + index + '].script = this.value">' + esc(m.script) + '</textarea>';
-}
-
-function startVideoGeneration() {
-  alert('動画生成を開始しました。バックグラウンドで処理されます。');
-  // 実際にはAPIを叩く
-}
-
-window.onload = () => {
-  document.getElementById('dateInput').value = new Date().toISOString().slice(0,10);
-  renderSavedLeads();
-};
-</script>
+    window.onload = () => { document.getElementById('dateInput').value = new Date().toISOString().slice(0,10); };
+  </script>
 </body></html>`));
 
-app.listen(PORT, () => console.log('v2 Server running at http://localhost:' + PORT));
+app.listen(PORT, () => console.log('v2 SI Professional Server running at http://localhost:' + PORT));
