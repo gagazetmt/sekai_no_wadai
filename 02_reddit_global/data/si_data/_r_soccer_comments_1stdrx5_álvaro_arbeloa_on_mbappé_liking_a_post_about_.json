@@ -1,0 +1,7 @@
+{
+  "Mexico Olympic Team": {
+    "ok": false,
+    "error": "チーム名が必要です",
+    "siType": "team"
+  }
+}
