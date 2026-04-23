@@ -53,15 +53,20 @@ async function delegateToLocal(endpoint, data) {
   }
 }
 
-// ─── データ整形プログラム (#2-4) ───
-function sanitizeData(data) {
+// ─── データ整形プログラム (#2-4) 改良版 ───
+function sanitizeData(data, depth = 0) {
+  // 巨大すぎるオブジェクトの再帰を防ぐ (SofaScore対策)
+  if (depth > 3) return data; 
   if (typeof data === 'string') {
     return data.replace(/"/g, '”').replace(/'/g, '’').replace(/,/g, '，').replace(/\n/g, ' ');
   }
-  if (Array.isArray(data)) return data.map(sanitizeData);
+  if (Array.isArray(data)) return data.slice(0, 100).map(item => sanitizeData(item, depth + 1));
   if (typeof data === 'object' && data !== null) {
     const res = {};
-    for (const key in data) res[key] = sanitizeData(data[key]);
+    const keys = Object.keys(data);
+    for (const key of keys) {
+      res[key] = sanitizeData(data[key], depth + 1);
+    }
     return res;
   }
   return data;
@@ -123,10 +128,15 @@ app.post('/api/v2/fetch-si', async (req, res) => {
         const news = await fetchSerper(wordEn, 'news', 'en');
         data = { ok: !!news.organic?.length, items: news.organic || [], summary: news.answerBox?.snippet || null };
       }
-      results[k.word] = sanitizeData(data);
+      
+      // SofaScoreデータは巨大なので、sanitizeDataの深さを制限
+      results[k.word] = (k.type.includes('sofascore')) ? data : sanitizeData(data);
     }
     res.json({ success: true, data: results });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { 
+    log(`[Logic] エラー発生: ${err.message}`);
+    res.status(500).json({ error: err.message }); 
+  }
 });
 
 app.get('/api/v2/content', (req, res) => {
@@ -376,7 +386,7 @@ function renderLabels() {
 
 async function fetchSi() {
   if (state.keywords.length === 0) return alert('キーワードを追加してください');
-  const pre = document.getElementById('preview'); pre.innerHTML = "⏳ Local Agent経由で取得中...";
+  const pre = document.getElementById('preview'); pre.innerHTML = "⏳ 取得中...";
   try {
     const res = await fetch('/api/v2/fetch-si', {
       method:'POST', headers:{'Content-Type':'application/json'},
