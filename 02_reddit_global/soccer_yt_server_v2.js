@@ -1,6 +1,6 @@
 // soccer_yt_server_v2.js
 // v2 サッカー YouTube ランチャー Pro統合版（port 3004）
-// 【改修内容】指示書100%準拠 UI ＋ プロフェッショナルSI取得 ＋ ゲートウェイ統合 ＋ 赤色モード
+// 【改修内容】指示書100%準拠 UI ＋ プロフェッショナルSI取得 ＋ ゲートウェイ統合 ＋ 青色モード
 
 require('dotenv').config();
 const express   = require('express');
@@ -37,7 +37,6 @@ const LOCAL_AGENT_URL = LOCAL_AGENT_IP ? `http://${LOCAL_AGENT_IP}:3004` : null;
 
 async function delegateToLocal(endpoint, data) {
   if (!LOCAL_AGENT_URL) return null;
-  // 無限ループ防止: 既にローカルエージェントからのリクエストなら委託しない
   if (data._delegated) return null; 
   
   log(`[Gateway] Local Agent (${LOCAL_AGENT_IP}) へ委託開始: ${endpoint}`);
@@ -46,7 +45,7 @@ async function delegateToLocal(endpoint, data) {
     return res.data;
   } catch (err) {
     log(`[Gateway] Local Agent 連携エラー: ${err.message}`);
-    return null; 
+    return { success: false, error: `Local Agent連携失敗: ${err.message}`, isGatewayError: true }; 
   }
 }
 
@@ -75,16 +74,26 @@ app.post('/api/v2/fetch-si', async (req, res) => {
   log(`[SI] リクエスト受信: ${req.body.keywords?.length}件`);
   const { keywords, postId } = req.body;
 
+  // VPS環境かどうかを判定（簡易的にIPの有無やホスト名で判断可能だが、ここでは委託設定があれば必ず委託する）
   const remoteResult = await delegateToLocal('/api/v2/fetch-si', req.body);
-  if (remoteResult && (remoteResult.success || remoteResult.data)) {
-    log(`[SI] ローカルエージェントからデータ取得成功`);
-    if (postId) {
-      const savePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
-      fs.writeFileSync(savePath, JSON.stringify(remoteResult.data, null, 2));
+  
+  // 委託結果が「成功」または「接続エラー（Gatewayエラー）」なら、VPS側で直接取得は絶対にしない
+  if (remoteResult) {
+    if (remoteResult.success || remoteResult.data) {
+      log(`[SI] ローカルエージェントからデータ取得成功`);
+      if (postId) {
+        const savePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
+        fs.writeFileSync(savePath, JSON.stringify(remoteResult.data, null, 2));
+      }
+      return res.json(remoteResult);
+    } else if (remoteResult.isGatewayError) {
+      log(`[SI] ローカルエージェント連携に失敗したため、403回避のため直接取得を中止します`);
+      return res.status(502).json(remoteResult);
     }
-    return res.json(remoteResult);
   }
 
+  // ここからは、自分がLocal Agent（または委託設定なし）の場合のみ実行される
+  log(`[SI] 本機で直接取得を実行します（403リスクを承知の上）`);
   try {
     const results = {};
     for (const k of keywords) {
@@ -95,21 +104,15 @@ app.post('/api/v2/fetch-si', async (req, res) => {
       }
       let wordEn = k.word;
       if (/[\u3000-\u9fff\uff00-\uffef]/.test(k.word)) {
-        log(`[SI] AI翻訳中: ${k.word}`);
-        const trans = await callAI(`Soccer search keyword: "${k.word}". Return only official English name. No explanation.`);
+        const trans = await callAI(`Official English name for: "${k.word}". Return ONLY the name.`);
         wordEn = trans.trim().replace(/^["']|["']$/g, '');
-        log(`[SI] 翻訳結果: ${wordEn}`);
       }
-      if (k.type === 'wikipedia') {
-        log(`[SI] Wiki取得中: ${wordEn}`);
-        data = await fetchWikipediaSafe([wordEn, k.word]);
-      } else if (k.type === 'sofascore_pmt') {
-        log(`[SI] SofaScore(P/M/T)取得中: ${wordEn}`);
+      if (k.type === 'wikipedia') data = await fetchWikipediaSafe([wordEn, k.word]);
+      else if (k.type === 'sofascore_pmt') {
         data = await fetchSofaScorePlayer(wordEn);
         if (!data.ok) data = await fetchSofaScoreTeam(wordEn);
         if (!data.ok) data = await fetchSofaScoreManager(wordEn);
       } else if (k.type === 'sofascore_event') {
-        log(`[SI] SofaScore(Match)取得中: ${k.word}`);
         try {
           const parsed = await callAI(`Extract home/away teams from "${k.word}". JSON: { "home": "...", "away": "..." }`, { json: true });
           const { home, away } = JSON.parse(parsed);
@@ -119,12 +122,10 @@ app.post('/api/v2/fetch-si', async (req, res) => {
           if (teams.length >= 2) data = await fetchSofaScoreMatch(teams[0].trim(), teams[1].trim());
         }
       } else if (k.type === 'news') {
-        log(`[SI] News取得中: ${wordEn}`);
         const news = await fetchSerper(wordEn, 'news', 'en');
         data = { ok: !!news.organic?.length, items: news.organic || [], summary: news.answerBox?.snippet || null };
       }
       results[k.word] = (k.type.includes('sofascore')) ? data : sanitizeData(data);
-      log(`[SI] 処理完了 (${k.type}): ${k.word} - Success: ${!!data.ok}`);
     }
     if (postId) {
       const savePath = path.join(SI_DATA_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
@@ -164,31 +165,31 @@ app.get('/api/v2/content', (req, res) => {
 app.get('/', (_, res) => res.send(`<!DOCTYPE html>
 <html lang="ja"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>⚽ サッカーYT v2 Pro Full Red</title>
+<title>⚽ サッカーYT v2 Pro Full Blue</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:sans-serif;background:#0f1117;color:#e0e0e0;height:100vh;overflow:hidden}
 .layout { display: flex; height: 100vh; width: 100vw; }
 .sidebar { width: 320px; background: #0d1220; border-right: 1px solid #1e2540; display: flex; flex-direction: column; flex-shrink: 0; }
-.sidebar-header { padding: 18px; background: #2a1010; border-bottom: 1px solid #4a1a1a; color: red; font-weight: 900; font-size: 14px; }
+.sidebar-header { padding: 18px; background: #1a2540; border-bottom: 1px solid #2a3560; color: #1a6ef5; font-weight: 900; font-size: 14px; }
 .saved-list { flex: 1; overflow-y: auto; padding: 12px; }
 .lead-item { background: #161b2e; border: 1px solid #2a3050; border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; border-left: 4px solid transparent; }
-.lead-item:hover { border-color: red; transform: translateX(4px); }
-.lead-item.active { border-color: red; background: #261616; border-left-color: red; }
+.lead-item:hover { border-color: #1a6ef5; transform: translateX(4px); }
+.lead-item.active { border-color: #1a6ef5; background: #262c40; border-left-color: #1a6ef5; }
 .content-main { flex: 1; display: flex; flex-direction: column; background: #0f1117; }
-.header{ background: #1a1010; padding: 12px 20px; border-bottom: 2px solid red; display: flex; justify-content: space-between; align-items: center; }
-h1{ font-size: 18px; color: red; font-weight: 900; }
+.header{ background: #1a2040; padding: 12px 20px; border-bottom: 2px solid #1a6ef5; display: flex; justify-content: space-between; align-items: center; }
+h1{ font-size: 18px; color: #1a6ef5; font-weight: 900; }
 .steps { display: flex; background: #0d1220; border-bottom: 1px solid #1e2540; }
 .step { padding: 12px 20px; font-size: 11px; font-weight: bold; color: #3a4a6a; }
-.step.active { color: red; background: #161b2e; }
+.step.active { color: #1a6ef5; background: #161b2e; }
 .main-scroll { flex: 1; overflow-y: auto; padding: 20px; }
 .panel{background:#161b2e; border-radius:12px; padding:20px; margin-bottom:20px; border:1px solid #2a3050;}
 .btn{padding:8px 16px; border-radius:8px; cursor:pointer; border:none; font-weight:bold; transition:0.2s; display:inline-flex; align-items:center; gap:6px;}
-.btn-primary{background:red; color:#fff;}
+.btn-primary{background:#1a6ef5; color:#fff;}
 .btn-success{background:#10b981; color:#fff;}
 .btn-ghost{background:#1e2540; color:#9bb5e0; border:1px solid #2a3050;}
 .time-group { margin-bottom: 10px; border: 1px solid #2a3050; border-radius: 8px; overflow: hidden; }
-.time-summary { background: #1a1010; padding: 10px; cursor: pointer; color: #ff7d7d; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+.time-summary { background: #1a2840; padding: 10px; cursor: pointer; color: #7dc8ff; font-size: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
 .time-summary:after { content: '▼'; font-size: 10px; transition: 0.3s; }
 .time-group.open .time-summary:after { transform: rotate(180deg); }
 .time-content { display: none; background: #161b2e; }
@@ -196,22 +197,22 @@ h1{ font-size: 18px; color: red; font-weight: 900; }
 .post-row { padding: 10px; border-bottom: 1px solid #1a2540; display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; }
 .post-row:hover { background: #141a30; }
 .label-box { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; padding: 10px; background: #0d1220; border-radius: 8px; min-height: 50px; }
-.label-item { background: red; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
-.label-badge { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #ff7d7d; text-transform: uppercase; }
+.label-item { background: #1a6ef5; color: #fff; padding: 4px 10px; border-radius: 20px; font-size: 11px; display: flex; align-items: center; gap: 6px; }
+.label-badge { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; font-size: 9px; font-weight: bold; color: #7dc8ff; text-transform: uppercase; }
 .si-list { margin-top: 5px; background: #0d1220; border-radius: 8px; overflow: hidden; border: 1px solid #1e2540; }
 .si-item { padding: 8px 12px; border-bottom: 1px solid #1e2540; font-size: 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; }
-.si-item:hover { background: #1a2540; }
+.si-item:hover { background: #1a2440; }
 .dl-icon { color: #10b981; font-size: 16px; }
 pre{background:#0d1220; padding:10px; border-radius:8px; font-size:11px; overflow-x:auto; color:#9bb5e0; white-space:pre-wrap;}
 </style>
 </head>
 <body>
-<div class="layout"><div class="sidebar"><div class="sidebar-header">📦 保存済み案件 (Pro Red)</div><div id="savedList" class="saved-list"></div></div>
-<div class="content-main"><div class="header"><h1>⚽ サッカーYT v2 Pro Full Red</h1><div style="font-size:12px; color:red;">📡 連携: ${LOCAL_AGENT_IP ? 'Local Agent (' + LOCAL_AGENT_IP + ')' : 'DIRECT'}</div></div>
+<div class="layout"><div class="sidebar"><div class="sidebar-header">📦 保存済み案件 (Pro Blue)</div><div id="savedList" class="saved-list"></div></div>
+<div class="content-main"><div class="header"><h1>⚽ サッカーYT v2 Pro Full Blue</h1><div style="font-size:12px; color:#1a6ef5;">📡 連携: ${LOCAL_AGENT_IP ? 'Local Agent (' + LOCAL_AGENT_IP + ')' : 'DIRECT'}</div></div>
 <div class="steps"><div class="step active" id="st1">1.案件選択</div><div class="step" id="st2">2.SIスライド</div><div class="step" id="st3">3.モジュール</div><div class="step" id="st4">4.脚本</div><div class="step" id="st5">5.出力</div></div>
 <div class="main-scroll">
 <div id="step1"><div class="panel"><input type="date" id="dateInput" style="background:#1e2540; color:#fff; border:1px solid #2a3050; padding:6px; border-radius:4px;"><button class="btn btn-primary" onclick="loadContent()">案件読込</button><button class="btn btn-ghost" onclick="fetchNow()">⚡ 今すぐ抽出</button><button class="btn btn-success" onclick="saveSelectedPosts()" style="margin-left:10px;">💾 案件を保存</button></div><div id="postList"></div></div>
-<div id="step2" style="display:none;"><div class="panel"><div id="currentTitle" style="font-size:18px; font-weight:900; color:red; margin-bottom:15px;"></div><div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;"><div><div style="display:flex; gap:5px; margin-bottom:10px;"><select id="siType" style="background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px; padding:5px;"><option value="news">News</option><option value="wikipedia">Wikipedia</option><option value="sofascore_pmt">SofaScore (P/M/T)</option><option value="sofascore_event">SofaScore (Match)</option><option value="otherURL">Other URL</option></select><input type="text" id="siInput" style="flex:1; background:#1e2540; color:#fff; border:1px solid #2a3050; padding:5px;" placeholder="キーワード..."><button class="btn btn-primary" onclick="addLabel()">＋</button></div><div id="labels" class="label-box"></div><button class="btn btn-success" style="width:100%;" onclick="fetchSi()">⬇️ SI情報取得実行</button></div><div style="display:flex; flex-direction:column; gap:10px;"><div style="font-size:11px; color:red; font-weight:bold;">🔍 取得データプレビュー</div><pre id="preview" style="height:200px;">キーワードを追加してね</pre><div style="font-size:11px; color:red; font-weight:bold; margin-top:5px;">📂 取得済み情報一覧</div><div id="siHistory" class="si-list" style="height:150px; overflow-y:auto;"></div></div></div><button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="goStep(3)">➡️ 次へ進む</button></div></div>
+<div id="step2" style="display:none;"><div class="panel"><div id="currentTitle" style="font-size:18px; font-weight:900; color:#1a6ef5; margin-bottom:15px;"></div><div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;"><div><div style="display:flex; gap:5px; margin-bottom:10px;"><select id="siType" style="background:#1e2540; color:#fff; border:1px solid #2a3050; border-radius:4px; padding:5px;"><option value="news">News</option><option value="wikipedia">Wikipedia</option><option value="sofascore_pmt">SofaScore (P/M/T)</option><option value="sofascore_event">SofaScore (Match)</option><option value="otherURL">Other URL</option></select><input type="text" id="siInput" style="flex:1; background:#1e2540; color:#fff; border:1px solid #2a3050; padding:5px;" placeholder="キーワード..."><button class="btn btn-primary" onclick="addLabel()">＋</button></div><div id="labels" class="label-box"></div><button class="btn btn-success" style="width:100%;" onclick="fetchSi()">⬇️ SI情報取得実行</button></div><div style="display:flex; flex-direction:column; gap:10px;"><div style="font-size:11px; color:#1a6ef5; font-weight:bold;">🔍 取得データプレビュー</div><pre id="preview" style="height:200px;">キーワードを追加してね</pre><div style="font-size:11px; color:#1a6ef5; font-weight:bold; margin-top:5px;">📂 取得済み情報一覧</div><div id="siHistory" class="si-list" style="height:150px; overflow-y:auto;"></div></div></div><button class="btn btn-primary" style="width:100%; margin-top:20px;" onclick="goStep(3)">➡️ 次へ進む</button></div></div>
 </div></div></div>
 <script>
 let state = { date:'', posts:[], saved:[], selected:null, keywords:[], selectedIds: new Set(), siItems: [] };
@@ -229,7 +230,7 @@ async function loadContent() {
 }
 function toggleSelect(id, el) {
   if (state.selectedIds.has(id)) { state.selectedIds.delete(id); document.getElementById('chk_'+id).checked=false; el.style.background=''; }
-  else { state.selectedIds.add(id); document.getElementById('chk_'+id).checked=true; el.style.background='#261616'; }
+  else { state.selectedIds.add(id); document.getElementById('chk_'+id).checked=true; el.style.background='#1a2440'; }
 }
 async function saveSelectedPosts() {
   state.selectedIds.forEach(id => { const p = state.posts.find(x => x.id === id); if(p && !state.saved.find(x => x.id === id)) state.saved.push(p); });
@@ -237,7 +238,8 @@ async function saveSelectedPosts() {
   renderSidebar(); state.selectedIds.clear(); loadContent(); alert('案件を保存しました');
 }
 function renderSidebar() {
-  document.getElementById('savedList').innerHTML = state.saved.map(l => \`<div class="lead-item \${state.selected?.id === l.id ? 'active' : ''}" onclick="selectLead('\${l.id}')"><div style="font-size:12px; font-weight:bold;">\${esc(l.title)}</div></div>\`).join('');
+  document.getElementById('savedList').innerHTML = state.saved.map(l => \`
+    <div class="lead-item \${state.selected?.id === l.id ? 'active' : ''}" onclick="selectLead('\${l.id}')"><div style="font-size:12px; font-weight:bold;">\${esc(l.title)}</div></div>\`).join('');
 }
 async function selectLead(id) {
   state.selected = state.saved.find(x => x.id === id); if(!state.selected) return;
@@ -260,20 +262,23 @@ function addLabel() {
   state.keywords.push({type, word}); document.getElementById('siInput').value=''; renderLabels();
 }
 function renderLabels() {
-  document.getElementById('labels').innerHTML = state.keywords.map((k,i) => \`<div class="label-item"><span class="label-badge">\${TYPE_NAME[k.type]}</span><span>\${esc(k.word)}</span><span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer; margin-left:5px;">×</span></div>\`).join('');
+  document.getElementById('labels').innerHTML = state.keywords.map((k,i) => \`
+    <div class="label-item"><span class="label-badge">\${TYPE_NAME[k.type]}</span><span>\${esc(k.word)}</span><span onclick="state.keywords.splice(\${i},1);renderLabels();" style="cursor:pointer; margin-left:5px;">×</span></div>\`).join('');
 }
 async function fetchSi() {
   if(!state.keywords.length) return alert('キーワードを追加してください');
   const pre = document.getElementById('preview'); pre.innerHTML = "⏳ 取得中...";
   try {
     const res = await fetch('/api/v2/fetch-si', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ keywords: state.keywords, postId: state.selected.id }) });
-    const data = await res.json(); pre.innerHTML = JSON.stringify(data.data, null, 2); await loadSiHistory();
+    const data = await res.json(); 
+    if (data.isGatewayError) { pre.innerHTML = "❌ 403回避のため直接取得を中止しました。Local Agentを確認してください: " + data.error; }
+    else { pre.innerHTML = JSON.stringify(data.data, null, 2); await loadSiHistory(); }
   } catch(e) { pre.innerHTML = "❌ エラー: " + e.message; }
 }
 window.onload = async () => {
   document.getElementById('dateInput').value = new Date().toISOString().slice(0,10);
-  const res = await fetch('/api/v2/saved-projects'); state.saved = await res.json() || []; renderSidebar();
+  try { const res = await fetch('/api/v2/saved-projects'); state.saved = await res.json() || []; renderSidebar(); } catch(e) {}
 };
 </script></body></html>`));
 
-app.listen(PORT, () => console.log('v2 Full Pro Red Server running at http://localhost:' + PORT));
+app.listen(PORT, () => console.log('v2 Full Pro Blue Server running at http://localhost:' + PORT));
