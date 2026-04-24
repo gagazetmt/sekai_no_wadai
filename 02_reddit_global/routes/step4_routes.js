@@ -761,6 +761,120 @@ function getUI() {
     return html;
   }
 
+  /* タイプ別データ編集UI（dataSlots / catchphrases / comments）*/
+  function _buildDataEditUi(m) {
+    const t = m.type;
+    let html = '';
+
+    // dataSlots 系（stats/profile/matchcard）
+    if (['stats','profile','matchcard'].includes(t)) {
+      const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
+      if (!slots.length) m.dataSlots = slots;
+      html += '<div style="margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; データスロット（編集可）</span>'
+        + '<button class="btn btn-sm" id="s4BtnAddSlot" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>';
+      slots.forEach(function(s, idx) {
+        const merged = (s.label && s.value) ? (s.label + '：' + s.value) : (s.merged || '');
+        html += '<div style="display:grid;grid-template-columns:24px 1fr 28px;gap:6px;margin-bottom:5px;align-items:center">'
+          + '<span style="font-size:10px;color:#8a9aba;text-align:center">#' + (idx+1) + '</span>'
+          + '<input class="inp s4-slot" data-idx="' + idx + '" placeholder="例: 今季ゴール：24"'
+          + ' style="font-size:12px;padding:5px 8px" value="' + _e(merged) + '">'
+          + '<button class="btn btn-sm s4-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    // comparison: 3カラム（label/left/right）
+    else if (t === 'comparison') {
+      const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
+      m.dataSlots = slots;
+      html += '<div style="margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; 対比データ（label / 左 / 右）</span>'
+        + '<button class="btn btn-sm" id="s4BtnAddCmpSlot" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>';
+      // siBindingLeft/Right 表示（読込専用、Step3 で設定済み想定）
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;font-size:11px;color:#94a3b8">'
+        + '<div>左: <span style="color:#93c5fd">' + _e(m.siBindingLeft || '(未設定)') + '</span></div>'
+        + '<div>右: <span style="color:#fca5a5">' + _e(m.siBindingRight || '(未設定)') + '</span></div>'
+        + '</div>';
+      slots.forEach(function(s, idx) {
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:5px;margin-bottom:5px">'
+          + '<input class="inp s4-cmp-label" data-idx="' + idx + '" placeholder="LABEL" style="font-size:11px;padding:4px 6px" value="' + _e(s.label || '') + '">'
+          + '<input class="inp s4-cmp-left"  data-idx="' + idx + '" placeholder="左"    style="font-size:11px;padding:4px 6px;color:#93c5fd" value="' + _e(s.leftValue || '') + '">'
+          + '<input class="inp s4-cmp-right" data-idx="' + idx + '" placeholder="右"    style="font-size:11px;padding:4px 6px;color:#fca5a5" value="' + _e(s.rightValue || '') + '">'
+          + '<button class="btn btn-sm s4-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    // insight: catchphrases 編集（既存の chunk UI と重複するため、catchphrases を編集可能にする）
+    else if (t === 'insight') {
+      const phrases = Array.isArray(m.catchphrases) ? m.catchphrases : [];
+      m.catchphrases = phrases;
+      html += '<div style="margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; キャッチコピー見出し（編集可）</span>'
+        + '<button class="btn btn-sm" id="s4BtnAddPhrase" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>';
+      phrases.forEach(function(p, idx) {
+        html += '<div style="display:grid;grid-template-columns:24px 1fr 28px;gap:6px;margin-bottom:5px;align-items:center">'
+          + '<span style="font-size:10px;color:#8a9aba;text-align:center">' + (idx+1) + '.</span>'
+          + '<input class="inp s4-phrase" data-idx="' + idx + '" placeholder="見出し' + (idx+1) + '"'
+          + ' style="font-size:12px;padding:5px 8px" value="' + _e(p) + '">'
+          + '<button class="btn btn-sm s4-phrase-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    // reaction: comments 編集
+    else if (t === 'reaction') {
+      const coms = Array.isArray(m.comments) ? m.comments : [];
+      m.comments = coms;
+      html += '<div style="margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; コメント（編集可）</span>'
+        + '<button class="btn btn-sm" id="s4BtnAddComment" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>';
+      coms.forEach(function(c, idx) {
+        html += '<div style="display:grid;grid-template-columns:24px 1fr 60px 28px;gap:5px;margin-bottom:5px;align-items:center">'
+          + '<span style="font-size:10px;color:#8a9aba;text-align:center">' + (idx+1) + '.</span>'
+          + '<input class="inp s4-cmt-text"  data-idx="' + idx + '" placeholder="コメント" style="font-size:11px;padding:4px 6px" value="' + _e(c.text || '') + '">'
+          + '<input type="number" class="inp s4-cmt-score" data-idx="' + idx + '" placeholder="score" style="font-size:11px;padding:4px 6px" value="' + (c.score || 0) + '">'
+          + '<button class="btn btn-sm s4-cmt-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    // history: dataSlots（label=日付/value=タイトル）+ chunks（既存）
+    else if (t === 'history') {
+      const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
+      m.dataSlots = slots;
+      html += '<div style="margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; タイムラインイベント（日付 / タイトル）</span>'
+        + '<button class="btn btn-sm" id="s4BtnAddHistEvt" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>';
+      slots.forEach(function(s, idx) {
+        html += '<div style="display:grid;grid-template-columns:24px 100px 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
+          + '<span style="font-size:10px;color:#8a9aba;text-align:center">' + (idx+1) + '.</span>'
+          + '<input class="inp s4-hist-date"  data-idx="' + idx + '" placeholder="2024" style="font-size:11px;padding:4px 6px;color:#fbbf24" value="' + _e(s.label || '') + '">'
+          + '<input class="inp s4-hist-title" data-idx="' + idx + '" placeholder="出来事"  style="font-size:11px;padding:4px 6px" value="' + _e(s.value || '') + '">'
+          + '<button class="btn btn-sm s4-hist-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+
+    return html;
+  }
+
   function _s4RenderEditor() {
     const editor = document.getElementById('s4Editor');
     const mods = window.APP.modules || [];
@@ -773,48 +887,48 @@ function getUI() {
     if (!m) return;
     const col = TYPE_COLORS[m.type] || '#555';
 
+    // 型プルダウン候補
+    const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','history','matchcard','matchcenter','ending'];
+    const typeOpts = ALL_TYPES.map(function(t) {
+      return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + ' — ' + (TYPE_LABELS[t] || '') + '</option>';
+    }).join('');
+
     editor.innerHTML =
-      // タイトル + タイプバッジ
-      '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;align-items:center">'
+      // ★ タイトル（編集可）+ タイプセレクト（編集可、変更で再描画）
+      '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px;align-items:end">'
       + '<div>'
-      + '<div style="font-size:10px;color:#8a9aba;margin-bottom:3px">&#x1F4DD; スライドタイトル</div>'
-      + '<div style="font-size:15px;font-weight:bold;color:#fff">' + _e(m.title || '') + '</div>'
+      + '<div style="font-size:10px;color:#8a9aba;margin-bottom:3px">&#x1F4DD; タイトル</div>'
+      + '<input id="s4TitleInp" class="inp" style="width:100%;font-size:14px;font-weight:bold" value="' + _e(m.title || '') + '">'
       + '</div>'
-      + '<div style="background:' + col + ';color:#fff;padding:6px 14px;border-radius:6px;font-size:11px;font-weight:bold">'
-      + (m.type || '?').toUpperCase() + ' &middot; ' + _e(TYPE_LABELS[m.type] || '')
+      + '<div>'
+      + '<div style="font-size:10px;color:#8a9aba;margin-bottom:3px">&#x1F39E; タイプ</div>'
+      + '<select id="s4TypeSel" class="inp" style="font-size:12px;padding:5px 8px;background:' + col + '33;border-color:' + col + '">'
+      + typeOpts
+      + '</select>'
       + '</div>'
       + '</div>'
 
-      // SIバインド
+      // SI バインド
       + (m.siBinding
-          ? '<div style="margin-bottom:10px;font-size:11px;color:#94a3b8">'
+          ? '<div style="margin-bottom:8px;font-size:11px;color:#94a3b8">'
             + '&#x1F517; SIバインド: <span style="color:#fff;font-weight:bold">' + _e(m.siBinding) + '</span>'
             + '</div>'
           : '')
 
-      // 脚本指示
-      + (m.scriptDir
-          ? '<div style="background:#0d1220;border-radius:8px;padding:10px;margin-bottom:14px">'
-            + '<div style="font-size:10px;color:#f59e0b;margin-bottom:4px">&#x1F3AD; 脚本指示（Step3）</div>'
-            + '<div style="font-size:12px;color:#c0cce0;line-height:1.5">' + _e(m.scriptDir) + '</div>'
-            + '</div>'
-          : '')
+      // 脚本指示（編集可）
+      + '<div style="margin-bottom:10px">'
+      + '<div style="font-size:10px;color:#f59e0b;margin-bottom:3px">&#x1F3AD; 脚本指示</div>'
+      + '<textarea id="s4ScriptDirInp" class="inp" rows="2" style="width:100%;font-size:11px;line-height:1.5">' + _e(m.scriptDir || '') + '</textarea>'
+      + '</div>'
 
-      // ナレーション編集欄（タイプ別 chunk対応）
+      // タイプ別データ編集（dataSlots/catchphrases/comments）
+      + _buildDataEditUi(m)
+
+      // ナレーション編集欄（既存）
       + _buildNarrationUi(m)
 
-      // プレースホルダー: 背景画像（Phase 4後）+ 音声テスト（Phase 5後）
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-      + '<div style="background:#0d1220;border-radius:8px;padding:12px;text-align:center;color:#5a6a8a;font-size:11px">'
-      + '&#x1F5BC; 背景画像選択<br><span style="font-size:10px">Step4完了後にまとめて実装</span>'
-      + '</div>'
-      + '<div style="background:#0d1220;border-radius:8px;padding:12px;text-align:center;color:#5a6a8a;font-size:11px">'
-      + '&#x1F50A; 音声テスト<br><span style="font-size:10px">MiniMax 連携で実装予定</span>'
-      + '</div>'
-      + '</div>'
-
       // 位置表示
-      + '<div style="margin-top:10px;font-size:10px;color:#5a6a8a">モジュール ' + (i + 1) + ' / ' + mods.length + '</div>';
+      + '<div style="margin-top:8px;font-size:10px;color:#5a6a8a">モジュール ' + (i + 1) + ' / ' + mods.length + '</div>';
   }
 
   /* ── タブ切替 ── */
@@ -828,13 +942,73 @@ function getUI() {
     const i = window.APP.s4.activeTab;
     const m = window.APP.modules?.[i];
     if (!m) return;
+
+    // タイトル / タイプ / 脚本指示
+    const t = document.getElementById('s4TitleInp');
+    const tp = document.getElementById('s4TypeSel');
+    const sd = document.getElementById('s4ScriptDirInp');
+    if (t)  m.title     = t.value;
+    if (tp) m.type      = tp.value;
+    if (sd) m.scriptDir = sd.value;
+
+    // ナレーション
     const n = document.getElementById('s4Narration');
     if (n) m.narration = n.value;
-    // chunks も DOM から拾う
+
+    // chunks
     const chunkEls = document.querySelectorAll('.s4-chunk');
-    if (chunkEls.length) {
-      const chunks = Array.from(chunkEls).map(el => el.value);
-      m.narrationChunks = chunks;
+    if (chunkEls.length) m.narrationChunks = Array.from(chunkEls).map(el => el.value);
+
+    // タイプ別データ収集
+    const t2 = m.type;
+    if (['stats','profile','matchcard'].includes(t2)) {
+      const merged = document.querySelectorAll('.s4-slot');
+      const slots = Array.from(merged).map(el => {
+        const raw = el.value || '';
+        const parts = raw.split(/[:：]/);
+        const lbl = (parts[0] || '').trim();
+        const val = parts.slice(1).join(':').trim();
+        return { label: lbl, value: val, merged: raw };
+      });
+      m.dataSlots = slots;
+    } else if (t2 === 'comparison') {
+      const labels = document.querySelectorAll('.s4-cmp-label');
+      const lefts  = document.querySelectorAll('.s4-cmp-left');
+      const rights = document.querySelectorAll('.s4-cmp-right');
+      const slots = [];
+      for (let j = 0; j < labels.length; j++) {
+        slots.push({
+          label:      labels[j]?.value || '',
+          leftValue:  lefts[j]?.value  || '',
+          rightValue: rights[j]?.value || '',
+        });
+      }
+      m.dataSlots = slots;
+    } else if (t2 === 'insight') {
+      const inputs = document.querySelectorAll('.s4-phrase');
+      m.catchphrases = Array.from(inputs).map(el => el.value);
+    } else if (t2 === 'reaction') {
+      const texts  = document.querySelectorAll('.s4-cmt-text');
+      const scores = document.querySelectorAll('.s4-cmt-score');
+      const coms = [];
+      for (let j = 0; j < texts.length; j++) {
+        coms.push({
+          text:  texts[j]?.value || '',
+          score: Number(scores[j]?.value) || 0,
+        });
+      }
+      m.comments = coms;
+    } else if (t2 === 'history') {
+      const dates  = document.querySelectorAll('.s4-hist-date');
+      const titles = document.querySelectorAll('.s4-hist-title');
+      const slots = [];
+      for (let j = 0; j < dates.length; j++) {
+        slots.push({
+          label: dates[j]?.value  || '',
+          value: titles[j]?.value || '',
+        });
+      }
+      m.dataSlots = slots;
     }
   }
 
@@ -997,17 +1171,66 @@ function getUI() {
     setTimeout(window._s4LoadVideos, 300);
   };
 
+  /* ── 追加/削除ヘルパー ── */
+  function _s4AddArrayItem(field, defaultVal) {
+    _s4SaveCurrent();
+    const m = window.APP.modules?.[window.APP.s4.activeTab];
+    if (!m) return;
+    if (!Array.isArray(m[field])) m[field] = [];
+    m[field].push(defaultVal);
+    _s4Render();
+  }
+  function _s4RemoveArrayItem(field, idx) {
+    _s4SaveCurrent();
+    const m = window.APP.modules?.[window.APP.s4.activeTab];
+    if (!m || !Array.isArray(m[field])) return;
+    if (m[field].length > 0) m[field].splice(idx, 1);
+    _s4Render();
+  }
+
   /* ── イベント委任 ── */
   document.addEventListener('click', function(e) {
-    if (e.target.id === 's4BtnGenAll') {
-      window.s4GenerateAll();
-    } else if (e.target.id === 's4BtnRegen') {
-      window.s4RegenNarration();
-    } else if (e.target.id === 's4BtnNext') {
-      window.s4GenerateVideo();
-    } else if (e.target.id === 's4BtnRefreshVideos') {
-      window._s4LoadVideos();
+    const id = e.target.id;
+    const cls = e.target.classList;
+    const idx = cls && cls.length ? parseInt(e.target.dataset.idx, 10) : null;
+
+    if (id === 's4BtnGenAll')         return window.s4GenerateAll();
+    if (id === 's4BtnRegen')          return window.s4RegenNarration();
+    if (id === 's4BtnNext')           return window.s4GenerateVideo();
+    if (id === 's4BtnRefreshVideos')  return window._s4LoadVideos();
+
+    // 追加ボタン
+    if (id === 's4BtnAddSlot')      return _s4AddArrayItem('dataSlots', { label: '', value: '', merged: '' });
+    if (id === 's4BtnAddCmpSlot')   return _s4AddArrayItem('dataSlots', { label: '', leftValue: '', rightValue: '' });
+    if (id === 's4BtnAddPhrase')    return _s4AddArrayItem('catchphrases', '');
+    if (id === 's4BtnAddComment')   return _s4AddArrayItem('comments', { text: '', score: 0 });
+    if (id === 's4BtnAddHistEvt')   return _s4AddArrayItem('dataSlots', { label: '', value: '' });
+
+    // 削除ボタン（class名で判別）
+    if (cls.contains('s4-slot-remove'))    return _s4RemoveArrayItem('dataSlots', idx);
+    if (cls.contains('s4-cmp-remove'))     return _s4RemoveArrayItem('dataSlots', idx);
+    if (cls.contains('s4-phrase-remove'))  return _s4RemoveArrayItem('catchphrases', idx);
+    if (cls.contains('s4-cmt-remove'))     return _s4RemoveArrayItem('comments', idx);
+    if (cls.contains('s4-hist-remove'))    return _s4RemoveArrayItem('dataSlots', idx);
+  });
+
+  /* ── 型変更時の再描画 + プレビュー更新 ── */
+  document.addEventListener('change', function(e) {
+    if (e.target.id === 's4TypeSel') {
+      _s4SaveCurrent();
+      _s4Render();
+      setTimeout(window._s4ReloadPreview, 100);
     }
+  });
+
+  /* ── 編集内容を即時プレビューに反映（debounce 1000ms）── */
+  let _s4PreviewTimer = null;
+  document.addEventListener('input', function(e) {
+    if (!document.getElementById('s4Editor')?.contains(e.target)) return;
+    clearTimeout(_s4PreviewTimer);
+    _s4PreviewTimer = setTimeout(function() {
+      window._s4ReloadPreview();
+    }, 1000);
   });
 
   /* ヘルパー */
@@ -1028,26 +1251,25 @@ function getUI() {
   }
   function _e(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-  /* ── プレビュー iframe 更新 ── */
-  window._s4ReloadPreview = function() {
+  /* ── プレビュー iframe 更新（modules を server に save→ iframe 再読込）── */
+  window._s4ReloadPreview = async function() {
     const post = window.APP.selected;
     if (!post) return;
     const i = window.APP.s4.activeTab;
     const frame = document.getElementById('s4PreviewFrame');
     if (!frame) return;
-    // modules を先に保存してからプレビュー更新
+
     _s4SaveCurrent();
-    // modules を POST でサーバーに保存してから再読込
-    fetchJson('/api/v2/generate-video', null); // no-op: generate-videoは別のPOST
-    // bgImage 保存（即時）
-    const currentMod = window.APP.modules?.[i];
-    if (currentMod) {
-      fetchJson('/api/v2/set-bg-image', {
+
+    // modules をサーバーに保存（preview-slide が読むファイル）
+    try {
+      await fetchJson('/api/save-modules', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, idx: i, bgImage: currentMod.bgImage || null }),
-      }).catch(() => {});
-    }
-    // 簡易に cache bust で強制リロード
+        body: JSON.stringify({ postId: post.id, modules: window.APP.modules || [] }),
+      });
+    } catch (_) {}
+
+    // cache bust で強制リロード
     const ts = Date.now();
     frame.src = '/api/v2/preview-slide?postId=' + encodeURIComponent(post.id) + '&idx=' + i + '&_ts=' + ts;
   };
