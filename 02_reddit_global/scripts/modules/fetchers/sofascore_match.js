@@ -9,16 +9,93 @@
 
 const { apiGet } = require('./_sofa_common');
 
+// チーム名 → teamId を1件取得
+async function _findTeamId(teamName) {
+  try {
+    const data = await apiGet(`/search/all/?q=${encodeURIComponent(teamName)}`);
+    const team = (data.results || []).find(r =>
+      r.type === 'team' && (r.entity?.sport?.id === 1 || !r.entity?.sport)
+    );
+    return team?.entity || null;
+  } catch (_) { return null; }
+}
+
+/**
+ * 「Home vs Away」から直近の試合イベントを特定する。
+ *  戦略1（速い）: /search/all/?q=A B → recent events（ただし古い試合が先頭に来がち）
+ *  戦略2（正確）: 両チームの team ID を取得 → /team/{home}/events/last/0 で絞り込み
+ *                 → 両チーム ID が一致する試合だけ残して時系列ソート → 最新を返す
+ */
 async function searchMatch(homeTeam, awayTeam) {
+  // 戦略2：team events から直接 H2H を引く（正確・最新優先）
+  const [homeEnt, awayEnt] = await Promise.all([
+    _findTeamId(homeTeam),
+    _findTeamId(awayTeam),
+  ]);
+
+  if (homeEnt && awayEnt) {
+    try {
+      // home の直近イベント → awayId と対戦したものだけ抽出 → 新しい順
+      const evRes = await apiGet(`/team/${homeEnt.id}/events/last/0`);
+      const h2hEvents = (evRes.events || [])
+        .filter(e =>
+          (e.homeTeam?.id === homeEnt.id && e.awayTeam?.id === awayEnt.id) ||
+          (e.homeTeam?.id === awayEnt.id && e.awayTeam?.id === homeEnt.id)
+        )
+        .sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0));
+
+      if (h2hEvents.length) {
+        console.log(`[SofaScore Match] H2H戦略2で発見: ${homeTeam} vs ${awayTeam} → ${new Date(h2hEvents[0].startTimestamp*1000).toISOString().slice(0,10)}`);
+        return h2hEvents[0];
+      }
+    } catch (_) {}
+  }
+
+  // 戦略1：fallback の汎用検索（チーム ID が取れない時のため）
   const q = `${homeTeam} ${awayTeam}`;
   const data = await apiGet(`/search/all/?q=${encodeURIComponent(q)}`);
   const events = (data.results || []).filter(r => r.type === 'event');
   if (!events.length) return null;
+
   const sorted = events
     .map(r => r.entity)
     .filter(e => e.startTimestamp)
     .sort((a, b) => b.startTimestamp - a.startTimestamp);
-  return sorted[0] || null;
+
+  // finished を優先（upcoming だとまだスコア無いため）
+  const finished = sorted.filter(e => e.status?.type === 'finished');
+  console.log(`[SofaScore Match] 戦略1 fallback: ${sorted.length}件中 finished ${finished.length}件`);
+  return finished[0] || sorted[0] || null;
+}
+
+// H2H 履歴を取得（直近 N 件）
+async function fetchRecentH2H(homeTeam, awayTeam, limit = 3) {
+  const [homeEnt, awayEnt] = await Promise.all([
+    _findTeamId(homeTeam),
+    _findTeamId(awayTeam),
+  ]);
+  if (!homeEnt || !awayEnt) return [];
+
+  try {
+    const evRes = await apiGet(`/team/${homeEnt.id}/events/last/0`);
+    return (evRes.events || [])
+      .filter(e =>
+        (e.homeTeam?.id === homeEnt.id && e.awayTeam?.id === awayEnt.id) ||
+        (e.homeTeam?.id === awayEnt.id && e.awayTeam?.id === homeEnt.id)
+      )
+      .sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0))
+      .slice(0, limit)
+      .map(e => ({
+        id:         e.id,
+        date:       e.startTimestamp ? new Date(e.startTimestamp * 1000).toISOString().slice(0, 10) : null,
+        homeTeam:   e.homeTeam?.name,
+        awayTeam:   e.awayTeam?.name,
+        homeScore:  e.homeScore?.display ?? e.homeScore?.normaltime ?? null,
+        awayScore:  e.awayScore?.display ?? e.awayScore?.normaltime ?? null,
+        tournament: e.tournament?.name,
+        status:     e.status?.type,
+      }));
+  } catch (_) { return []; }
 }
 
 async function fetchSofaScoreMatch(homeTeam, awayTeam) {
@@ -239,4 +316,4 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
   }
 }
 
-module.exports = { fetchSofaScoreMatch, searchMatch };
+module.exports = { fetchSofaScoreMatch, searchMatch, fetchRecentH2H };
