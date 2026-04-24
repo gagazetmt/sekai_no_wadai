@@ -2,7 +2,7 @@
 // Matchcenter スライド：試合詳細（スコア + 得点 + スタッツ）
 // テンプレート元: /matchcenter/index.html の compact 版
 
-const { PALETTE, esc, imgDataUri, wrapHTML } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
 
 function buildMatchcenterHTML(mod) {
   // siBinding の sofascore_match データから組み立てるのが理想
@@ -220,7 +220,7 @@ function buildMatchcenterHTML(mod) {
     </div>
   </div>
 </div>
-${subText ? `<div class="sub-bar"><div class="sub-text">${esc(subText)}</div></div>` : ''}`;
+${buildSubtitleBar(subText, { height: 90, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

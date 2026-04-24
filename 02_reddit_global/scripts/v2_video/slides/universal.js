@@ -2,7 +2,7 @@
 // 汎用フォールバック：背景 + タイトル + ナレーションテキスト
 // stats / profile / comparison / reaction など、個別テンプレを書いてない型の fallback
 
-const { PALETTE, esc, imgDataUri, wrapHTML } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
 
 function buildUniversalHTML(mod) {
   const bg    = imgDataUri(mod.bgImage);
@@ -102,7 +102,7 @@ function buildUniversalHTML(mod) {
     ${extras.slice(0, 5).map(x => `<div class="u-extra">${x}</div>`).join('')}
   </div>
 </div>
-${narr ? `<div class="u-narr-bar">${esc(narr)}</div>` : ''}`;
+${buildSubtitleBar(narr, { height: 110, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

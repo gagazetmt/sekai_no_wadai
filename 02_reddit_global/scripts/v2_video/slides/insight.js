@@ -2,7 +2,7 @@
 // Insight スライド：キャッチコピーが上から順にフェードイン（V1 再現）
 // テンプレート元: /insight/index.html（プレビュー版から editor を除外して1920x1080 に最適化）
 
-const { PALETTE, esc, imgDataUri, wrapHTML } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar } = require('./_common');
 
 function buildInsightHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
@@ -81,25 +81,6 @@ function buildInsightHTML(mod) {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.sub-bar {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 110px;
-  background: rgba(0, 0, 0, 0.90);
-  border-top: 3px solid rgba(245, 158, 11, 0.5);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 20;
-}
-.sub-bar .sub-text {
-  color: ${PALETTE.text};
-  font-size: 42px;
-  font-weight: 800;
-  text-align: center;
-  padding: 0 80px;
-  line-height: 1.4;
-  max-height: 88px;
-  overflow: hidden;
-}
 `;
 
   const slideBody = `
@@ -109,7 +90,7 @@ function buildInsightHTML(mod) {
 <div class="catchphrases">
   ${phrases.map(p => `<div class="phrase">${esc(p)}</div>`).join('')}
 </div>
-${subText ? `<div class="sub-bar"><div class="sub-text">${esc(subText)}</div></div>` : ''}`;
+${buildSubtitleBar(subText, { height: 110, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

@@ -2,7 +2,7 @@
 // Matchcard スライド：試合プレビュー（左=メイン画像+タイトル / 右=HOME/AWAYミニ+データ行4件）
 // テンプレート元: /matchcard/index.html（= 型1）
 
-const { PALETTE, esc, imgDataUri, wrapHTML } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
 
 function buildMatchcardHTML(mod) {
   // dataSlots 4件を data-row で使う
@@ -172,7 +172,7 @@ function buildMatchcardHTML(mod) {
   </div>
   <div class="data-list">${dataRows}</div>
 </div>
-${subText ? `<div class="sub-bar"><div class="sub-text">${esc(subText)}</div></div>` : ''}`;
+${buildSubtitleBar(subText, { height: 90, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

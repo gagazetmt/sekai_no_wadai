@@ -2,7 +2,7 @@
 // History スライド：左ヒーロー画像 + 右タイムライン（ドット+カード）
 // テンプレート元: /history/index.html
 
-const { PALETTE, esc, imgDataUri, wrapHTML } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
 
 function buildHistoryHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
@@ -201,7 +201,7 @@ function buildHistoryHTML(mod) {
   <div class="tl-header">KEY MILESTONES</div>
   <div class="tl-body">${eventsHtml}</div>
 </div>
-${subText ? `<div class="sub-bar"><div class="sub-text">${esc(subText)}</div></div>` : ''}`;
+${buildSubtitleBar(subText, { height: 90, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

@@ -419,15 +419,22 @@ router.get('/v2/preview-slide', (req, res) => {
     const { buildHistoryHTML }    = require('../scripts/v2_video/slides/history');
     const { buildMatchcardHTML }  = require('../scripts/v2_video/slides/matchcard');
     const { buildMatchcenterHTML }= require('../scripts/v2_video/slides/matchcenter');
+    const { buildStatsHTML, buildProfileHTML } = require('../scripts/v2_video/slides/stats');
+    const { buildComparisonHTML } = require('../scripts/v2_video/slides/comparison');
+    const { buildReactionHTML }   = require('../scripts/v2_video/slides/reaction');
 
     let html;
     switch (mod.type) {
-      case 'opening':     html = buildOpeningHTML(mod);   break;
-      case 'ending':      html = buildEndingHTML(mod);    break;
-      case 'insight':     html = buildInsightHTML(mod);   break;
-      case 'history':     html = buildHistoryHTML(mod);   break;
-      case 'matchcard':   html = buildMatchcardHTML(mod); break;
+      case 'opening':     html = buildOpeningHTML(mod);     break;
+      case 'ending':      html = buildEndingHTML(mod);      break;
+      case 'insight':     html = buildInsightHTML(mod);     break;
+      case 'history':     html = buildHistoryHTML(mod);     break;
+      case 'matchcard':   html = buildMatchcardHTML(mod);   break;
       case 'matchcenter': html = buildMatchcenterHTML(mod); break;
+      case 'stats':       html = buildStatsHTML(mod);       break;
+      case 'profile':     html = buildProfileHTML(mod);     break;
+      case 'comparison':  html = buildComparisonHTML(mod);  break;
+      case 'reaction':    html = buildReactionHTML(mod);    break;
       default:            html = buildUniversalHTML(mod);
     }
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);

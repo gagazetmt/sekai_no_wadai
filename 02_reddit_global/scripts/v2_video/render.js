@@ -25,6 +25,9 @@ const { buildInsightHTML }    = require('./slides/insight');
 const { buildHistoryHTML }    = require('./slides/history');
 const { buildMatchcardHTML }  = require('./slides/matchcard');
 const { buildMatchcenterHTML }= require('./slides/matchcenter');
+const { buildStatsHTML, buildProfileHTML } = require('./slides/stats');
+const { buildComparisonHTML } = require('./slides/comparison');
+const { buildReactionHTML }   = require('./slides/reaction');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const W = 1920, H = 1080, FPS = 30;
@@ -64,11 +67,10 @@ function buildSlideHTML(mod) {
     case 'history':     return buildHistoryHTML(mod);
     case 'matchcard':   return buildMatchcardHTML(mod);
     case 'matchcenter': return buildMatchcenterHTML(mod);
-    // 残りは汎用 fallback（Phase 4b で個別実装予定）
-    case 'stats':
-    case 'profile':
-    case 'comparison':
-    case 'reaction':
+    case 'stats':       return buildStatsHTML(mod);
+    case 'profile':     return buildProfileHTML(mod);
+    case 'comparison':  return buildComparisonHTML(mod);
+    case 'reaction':    return buildReactionHTML(mod);
     default:            return buildUniversalHTML(mod);
   }
 }
