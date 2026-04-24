@@ -33,13 +33,41 @@ function jstNow() {
   return { date, hour, iso };
 }
 
+// Reddit 取得（住宅プロキシ対応）
+//  WEBSHARE_PROXY_URL が設定されていれば Webshare rotating residential 経由、
+//  そうでなければ直叩き（ローカル住宅IP想定）
+const axios = require('axios');
+let _HttpsProxyAgent = null;
+try { _HttpsProxyAgent = require('https-proxy-agent').HttpsProxyAgent; } catch (_) {}
+
+const PROXY_TPL_REDDIT = process.env.WEBSHARE_PROXY_URL || null;
+function _pickRedditProxyAgent() {
+  if (!PROXY_TPL_REDDIT || !_HttpsProxyAgent) return null;
+  const n = Math.floor(Math.random() * 4000) + 1;
+  const url = PROXY_TPL_REDDIT.includes('{N}')
+    ? PROXY_TPL_REDDIT.replace('{N}', n)
+    : PROXY_TPL_REDDIT;
+  return new _HttpsProxyAgent(url);
+}
+
 async function redditGet(url) {
-  const headers = { "User-Agent": "soccer-news-bot/1.0" };
+  const headers = {
+    'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36',
+    'Accept':          'application/json, text/plain, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+  const agent = _pickRedditProxyAgent();
   try {
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
-    if (res.ok) return res.json();
-  } catch {}
-  return null;
+    const res = await axios.get(url, {
+      headers,
+      timeout:    12000,
+      httpsAgent: agent || undefined,
+    });
+    return res.data;
+  } catch (e) {
+    console.warn(`[Reddit] ${url.slice(0, 80)} → ${e.response?.status || e.code || e.message}`);
+    return null;
+  }
 }
 
 // ─── 翻訳・意訳エンジン (#1-6 強化版：サニタイズ＋小バッチ＋個別フォールバック) ──
