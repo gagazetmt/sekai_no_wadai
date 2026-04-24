@@ -1,10 +1,8 @@
 // scripts/modules/fetchers/sofascore_player.js
 // SofaScore 非公式API で選手スタッツを取得
-// VPS IPブロック時はSerperにフォールバック
 
 const axios = require('axios');
-const { fetchSerper } = require('./serper_module');
-const { callAI }      = require('../../ai_client');
+const { callAI } = require('../../ai_client');
 
 const BASE_URL = 'https://api.sofascore.com/api/v1';
 const HEADERS  = {
@@ -29,7 +27,7 @@ function hasJapanese(str) {
 async function translateToEnglish(jaName) {
   try {
     const raw = await callAI({
-      model:      'claude-haiku',
+      model:      'claude-haiku-4-5-20251001',
       max_tokens: 50,
       messages:   [{ role: 'user', content: `Soccer player name in Japanese: "${jaName}". Return only the official English name (e.g. "Kaoru Mitoma"). No explanation.` }],
     });
@@ -250,41 +248,11 @@ async function fetchSofaScorePlayer(playerNameEn) {
       uclStats,       // UCL成績（国内リーグと別に保持）
     };
   } catch (e) {
-    // 403 = VPS IPブロック → Serperにフォールバック
-    if (e.response?.status === 403 || e.message?.includes('403')) {
-      return await fetchPlayerStatsViaSerper(playerNameEn);
+    if (e.response?.status === 403) {
+      return { ok: false, error: 'SofaScore: IPブロック(403)。プロキシ設定が必要です' };
     }
     return { ok: false, error: e.message };
   }
 }
 
-// SofaScore 403時のSerperフォールバック
-async function fetchPlayerStatsViaSerper(playerNameEn) {
-  try {
-    const [statsRes, profileRes] = await Promise.all([
-      fetchSerper(`${playerNameEn} 2025-26 season stats goals assists appearances`, 'sofascore_fallback'),
-      fetchSerper(`${playerNameEn} footballer profile age nationality position club`, 'sofascore_fallback'),
-    ]);
-
-    const snippets = [
-      ...(statsRes.organic   || []).slice(0, 3).map(r => `[Stats] ${r.title}: ${r.snippet}`),
-      ...(profileRes.organic || []).slice(0, 2).map(r => `[Profile] ${r.title}: ${r.snippet}`),
-      statsRes.answerBox?.snippet   ? `[Answer] ${statsRes.answerBox.snippet}`   : null,
-      profileRes.answerBox?.snippet ? `[Answer] ${profileRes.answerBox.snippet}` : null,
-    ].filter(Boolean);
-
-    return {
-      ok:           snippets.length > 0,
-      source:       'serper_fallback',
-      playerNameEn,
-      summary:      snippets.join('\n'),
-      // SofaScore形式のフィールドは null（シナリオ生成側でsummaryを使う）
-      seasonStats:  null,
-      recentAvgRating: null,
-    };
-  } catch (e) {
-    return { ok: false, error: `SofaScore 403 + Serper fallback失敗: ${e.message}` };
-  }
-}
-
-module.exports = { fetchSofaScorePlayer, searchPlayer, fetchPlayerStatsViaSerper };
+module.exports = { fetchSofaScorePlayer, searchPlayer };
