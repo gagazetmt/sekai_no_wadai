@@ -555,6 +555,107 @@ function getUI() {
     s3RenderEditor();
   };
 
+  /* ── SIバインド対象から引けるフィールド定義 ──
+     各 box type でプルダウンに並ぶ { path, label } のリスト
+     path は siData のネスト参照キー（ドット区切り、配列は数値インデックスもOK） */
+  const FIELD_MAP = {
+    sofascore_player: [
+      { path: 'seasonStats.goals',         label: '今季ゴール' },
+      { path: 'seasonStats.assists',       label: '今季アシスト' },
+      { path: 'seasonStats.appearances',   label: '出場試合' },
+      { path: 'seasonStats.rating',        label: 'レーティング' },
+      { path: 'seasonStats.minutesPlayed', label: '出場分' },
+      { path: 'seasonStats.expectedGoals', label: 'xG' },
+      { path: 'seasonStats.keyPasses',     label: 'キーパス' },
+      { path: 'seasonStats.yellowCards',   label: 'イエロー' },
+      { path: 'seasonStats.redCards',      label: 'レッド' },
+      { path: 'recentAvgRating',           label: '直近平均レート' },
+      { path: 'lastMatchStats.rating',     label: '直近試合rating' },
+      { path: 'lastMatchStats.score',      label: '直近試合スコア' },
+      { path: 'lastMatchStats.opponent',   label: '直近対戦相手' },
+      { path: 'marketValue',               label: '市場価値' },
+      { path: 'position',                  label: 'ポジション' },
+      { path: 'team',                      label: '所属チーム' },
+      { path: 'nationality',               label: '国籍' },
+      { path: 'age',                       label: '年齢' },
+      { path: 'height',                    label: '身長' },
+      { path: 'weight',                    label: '体重' },
+      { path: 'shirtNumber',               label: '背番号' },
+      { path: 'preferredFoot',             label: '利き足' },
+      { path: 'contractUntil',             label: '契約期限' },
+      { path: 'leagueName',                label: 'リーグ' },
+    ],
+    sofascore_team: [
+      { path: 'standing.position',      label: '順位' },
+      { path: 'standing.played',        label: '試合数' },
+      { path: 'standing.wins',          label: '勝利' },
+      { path: 'standing.draws',         label: '引分' },
+      { path: 'standing.losses',        label: '敗戦' },
+      { path: 'standing.goalsFor',      label: '得点' },
+      { path: 'standing.goalsAgainst',  label: '失点' },
+      { path: 'standing.points',        label: '勝ち点' },
+      { path: 'managerName',            label: '監督' },
+      { path: 'leagueName',             label: 'リーグ' },
+      { path: 'seasonYear',             label: 'シーズン' },
+      { path: 'country',                label: '国' },
+      { path: 'venue',                  label: '本拠地' },
+      { path: 'founded',                label: '創設年' },
+      { path: 'marketValue',            label: 'クラブ総市場価値' },
+    ],
+    sofascore_manager: [
+      { path: 'currentTeam',                     label: '現チーム' },
+      { path: 'currentTeamSince',                label: '現チーム就任' },
+      { path: 'nationality',                     label: '国籍' },
+      { path: 'age',                             label: '年齢' },
+      { path: 'preferredFormation',              label: 'フォーメーション' },
+      { path: 'overallPerformance.total',        label: '通算試合数' },
+      { path: 'overallPerformance.wins',         label: '通算勝利' },
+      { path: 'overallPerformance.draws',        label: '通算引分' },
+      { path: 'overallPerformance.losses',       label: '通算敗戦' },
+      { path: 'overallPerformance.winRate',      label: '通算勝率(%)' },
+      { path: 'overallPerformance.goalsScored',  label: '通算得点' },
+      { path: 'overallPerformance.goalsConceded',label: '通算失点' },
+      { path: 'currentTeamStats.wins',           label: '現チーム勝利' },
+      { path: 'currentTeamStats.draws',          label: '現チーム引分' },
+      { path: 'currentTeamStats.losses',         label: '現チーム敗戦' },
+      { path: 'currentTeamStats.winRate',        label: '現チーム勝率(%)' },
+    ],
+    sofascore_match: [
+      { path: 'scoreline',  label: 'スコア' },
+      { path: 'matchDate',  label: '試合日' },
+      { path: 'tournament', label: '大会' },
+      { path: 'venue',      label: '会場' },
+      { path: 'attendance', label: '観客数' },
+      { path: 'h2hSummary', label: 'H2H通算' },
+    ],
+    wikipedia: [
+      { path: 'title',   label: '記事タイトル' },
+      { path: 'extract', label: '要約' },
+    ],
+  };
+
+  /* siData から box+label 指定で生データを取り出す */
+  function _s3GetSiItem(siLabel) {
+    var s3si = window.APP.s3SiData || {};
+    if (!s3si.boxes) return null;
+    for (var boxType in s3si.boxes) {
+      var box = s3si.boxes[boxType];
+      var found = (box.fetched || []).find(function(f) { return f.label === siLabel; });
+      if (found) return { boxType: boxType, data: found.data };
+    }
+    return null;
+  }
+
+  /* ネストパス文字列 (e.g. 'seasonStats.goals') で値を取り出す */
+  function _s3GetByPath(obj, path) {
+    if (!obj || !path) return null;
+    return path.split('.').reduce(function(o, k) {
+      if (o == null) return null;
+      if (Array.isArray(o) && /^\d+$/.test(k)) return o[parseInt(k, 10)];
+      return o[k];
+    }, obj);
+  }
+
   /* ── エディタ描画 (3-4/3-5/3-6) ── */
   function s3RenderEditor() {
     const mods = window.APP.modules || [];
@@ -667,12 +768,30 @@ function getUI() {
     }
 
     if (type === 'stats' || type === 'profile' || type === 'matchcard') {
-      // 既存の { label, value } を「ラベル：値」の1カラムに統合表示
       const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
       if (!slots.length) {
         for (let k = 0; k < 4; k++) slots.push({ label: '', value: '' });
       }
       m.dataSlots = slots;
+
+      // siBinding の box type に応じたデータ型プルダウン候補
+      let fieldDefs = [];
+      const bindItem = m.siBinding ? _s3GetSiItem(m.siBinding) : null;
+      if (bindItem && FIELD_MAP[bindItem.boxType]) {
+        fieldDefs = FIELD_MAP[bindItem.boxType];
+      }
+
+      // データ型プルダウン（共通）+ セットボタン
+      const fieldDropdown = bindItem
+        ? '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px;">'
+          + '<select class="inp" id="s3FieldSel" style="font-size:12px;padding:5px;">'
+          + '<option value="">データ型を選択...</option>'
+          + fieldDefs.map(f => '<option value="' + _e(f.path) + '">' + _e(f.label) + '</option>').join('')
+          + '</select>'
+          + '<button class="btn btn-sm" onclick="s3SetFieldRow()" style="background:#10b981;color:#fff;">&#x1F3AF; データセット</button>'
+          + '</div>'
+        : '<div style="font-size:11px;color:#5a6a8a;margin-bottom:10px;">上の「SIデータバインド」を選択するとデータ型プルダウンが使えます。空行の手動入力も可能。</div>';
+
       const rows = m.dataSlots.map((s, idx) => {
         const merged = (s.label && s.value) ? (s.label + '：' + s.value) : (s.merged || '');
         return '<div style="display:grid;grid-template-columns:30px 1fr 30px;gap:6px;margin-bottom:6px;align-items:center;">'
@@ -681,8 +800,8 @@ function getUI() {
           + '<button class="btn btn-sm s3-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
           + '</div>';
       }).join('');
-      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddSlot()">+ スロット追加</button>';
-      return wrap(rows + addBtn);
+      const addBtn = '<button class="btn btn-sm" style="background:#64748b;color:#fff;margin-top:4px;" onclick="s3AddSlot()">+ 空行追加（手動入力用）</button>';
+      return wrap(fieldDropdown + rows + addBtn);
     }
 
     if (type === 'comparison') {
@@ -701,10 +820,30 @@ function getUI() {
           '<option value="' + _e(it.key) + '"' + (m.siBindingRight===it.key?' selected':'') + '>' + _e(it.label) + '</option>'
         )).join('');
 
+      // データ型プルダウン候補（左バインドの box type から引く）
+      let fieldOpts = '<option value="">(先に左SIを選択)</option>';
+      if (m.siBindingLeft) {
+        const leftItem = _s3GetSiItem(m.siBindingLeft);
+        if (leftItem && FIELD_MAP[leftItem.boxType]) {
+          fieldOpts = '<option value="">データ型を選択...</option>'
+            + FIELD_MAP[leftItem.boxType].map(f =>
+                '<option value="' + _e(f.path) + '">' + _e(f.label) + '</option>'
+              ).join('');
+        }
+      }
+
       const topRow =
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">'
-        + '<select class="inp" id="s3BindLeft" style="font-size:11px;padding:5px;">' + siOptsL + '</select>'
-        + '<select class="inp" id="s3BindRight" style="font-size:11px;padding:5px;">' + siOptsR + '</select>'
+        '<div style="margin-bottom:10px;">'
+        // 対比対象 左/右
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">'
+        + '<select class="inp" id="s3BindLeft"  style="font-size:11px;padding:5px;color:#93c5fd;">' + siOptsL + '</select>'
+        + '<select class="inp" id="s3BindRight" style="font-size:11px;padding:5px;color:#fca5a5;">' + siOptsR + '</select>'
+        + '</div>'
+        // データ型プルダウン + セットボタン
+        + '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;">'
+        + '<select class="inp" id="s3CmpFieldSel" style="font-size:12px;padding:5px;">' + fieldOpts + '</select>'
+        + '<button class="btn btn-sm" onclick="s3SetCmpRow()" style="background:#10b981;color:#fff;">&#x1F3AF; データセット</button>'
+        + '</div>'
         + '</div>';
 
       const rows = m.dataSlots.map((s, idx) =>
@@ -715,7 +854,7 @@ function getUI() {
         + '<button class="btn btn-sm s3-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
         + '</div>'
       ).join('');
-      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddCmpSlot()">+ 行追加</button>';
+      const addBtn = '<button class="btn btn-sm" style="background:#64748b;color:#fff;margin-top:4px;" onclick="s3AddCmpSlot()">+ 空行追加（手動入力用）</button>';
       return wrap(topRow + rows + addBtn);
     }
 
@@ -825,6 +964,49 @@ function getUI() {
     m.dataSlots.push({ label: '', value: '', merged: '' });
     s3RenderEditor();
   };
+
+  /* stats/profile/matchcard: データセットボタン（データ型選択 → 値自動取得）*/
+  window.s3SetFieldRow = function() {
+    _s3SaveCurrent();
+    const m = window.APP.modules?.[window.APP.activeTab];
+    if (!m) return;
+    const fieldSel = document.getElementById('s3FieldSel');
+    const fieldPath = fieldSel?.value;
+    if (!fieldPath) { _s3Msg('データ型を選んでください'); return; }
+
+    const bindItem = m.siBinding ? _s3GetSiItem(m.siBinding) : null;
+    if (!bindItem) { _s3Msg('先にSIバインドを選んでください'); return; }
+
+    const fmap = FIELD_MAP[bindItem.boxType] || [];
+    const fieldDef = fmap.find(f => f.path === fieldPath);
+    const label = fieldDef ? fieldDef.label : fieldPath;
+
+    const val = _s3GetByPath(bindItem.data, fieldPath);
+    const valStr = (val == null ? '-' : String(val));
+
+    const newSlot = {
+      label: label,
+      value: valStr,
+      merged: label + '：' + valStr,
+    };
+
+    if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
+    // 空スロットがあればそこに挿入、なければ末尾追加
+    const emptyIdx = m.dataSlots.findIndex(s => !s.label && !s.value && !s.merged);
+    if (emptyIdx >= 0) m.dataSlots[emptyIdx] = newSlot;
+    else m.dataSlots.push(newSlot);
+
+    s3RenderEditor();
+    _s3Msg('&#x2705; ' + label + '：' + valStr + ' をセットしました');
+  };
+
+  /* SIバインド変更時にデータ型プルダウン更新 */
+  document.addEventListener('change', function(e) {
+    if (e.target.id === 's3SiBind') {
+      _s3SaveCurrent();
+      s3RenderEditor();
+    }
+  });
   /* comparison: 行追加/削除 */
   window.s3AddCmpSlot = function() {
     _s3SaveCurrent();
@@ -834,6 +1016,55 @@ function getUI() {
     m.dataSlots.push({ label: '', leftValue: '', rightValue: '' });
     s3RenderEditor();
   };
+
+  /* comparison: データセットボタン（データ型選択 → 両側の値自動取得）*/
+  window.s3SetCmpRow = function() {
+    _s3SaveCurrent();
+    const m = window.APP.modules?.[window.APP.activeTab];
+    if (!m) return;
+    const fieldSel = document.getElementById('s3CmpFieldSel');
+    const fieldPath = fieldSel?.value;
+    if (!fieldPath) { _s3Msg('データ型を選んでください'); return; }
+
+    const leftKey = m.siBindingLeft;
+    const rightKey = m.siBindingRight;
+    if (!leftKey || !rightKey) { _s3Msg('左右のSIバインドを両方選んでください'); return; }
+
+    const leftItem  = _s3GetSiItem(leftKey);
+    const rightItem = _s3GetSiItem(rightKey);
+    if (!leftItem || !rightItem) { _s3Msg('SIデータが見つかりません'); return; }
+
+    // ラベル名（日本語）を FIELD_MAP から取得
+    const fmap = FIELD_MAP[leftItem.boxType] || [];
+    const fieldDef = fmap.find(f => f.path === fieldPath);
+    const label = fieldDef ? fieldDef.label : fieldPath;
+
+    const lv = _s3GetByPath(leftItem.data,  fieldPath);
+    const rv = _s3GetByPath(rightItem.data, fieldPath);
+
+    const newRow = {
+      label: label,
+      leftValue:  (lv == null ? '-' : String(lv)),
+      rightValue: (rv == null ? '-' : String(rv)),
+    };
+
+    if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
+    // 空行があればそこに挿入、なければ末尾追加
+    const emptyIdx = m.dataSlots.findIndex(s => !s.label && !s.leftValue && !s.rightValue);
+    if (emptyIdx >= 0) m.dataSlots[emptyIdx] = newRow;
+    else m.dataSlots.push(newRow);
+
+    s3RenderEditor();
+    _s3Msg('&#x2705; ' + label + ' をセットしました');
+  };
+
+  /* comparison: 左右SIバインド変更時にフィールドプルダウンを更新 */
+  document.addEventListener('change', function(e) {
+    if (e.target.id === 's3BindLeft' || e.target.id === 's3BindRight') {
+      _s3SaveCurrent();
+      s3RenderEditor();
+    }
+  });
   /* reaction: コメント追加 */
   window.s3AddComment = function() {
     _s3SaveCurrent();
