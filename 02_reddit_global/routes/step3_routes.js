@@ -75,10 +75,19 @@ router.post('/propose-modules', async (req, res) => {
 - エンディング: 余韻・チャンネル登録を促す
 
 【使用可能なスライドタイプ】
-opening / insight / stats / reaction / profile / comparison / timeline / ending
+- opening     : 冒頭10秒で視聴者を掴むインパクトタイトル（常に1枚目）
+- insight     : 3〜5個のキャッチコピーが上から積み上がる（例: "18歳でCL8得点" "ドルトムントで80ゴール" 等）
+- stats       : 選手/チームのスタッツをデータカード2x2グリッドで表示
+- reaction    : 海外ファンのコメント吹き出し（Reddit/5chコメント紹介）
+- profile     : 選手/監督の詳細プロフィール（画像＋データカード）
+- comparison  : 2者を左右で対比（VS形式。選手vs選手、チームvsチーム）
+- history     : 時系列のタイムライン（キャリア年表・出来事の流れ）
+- matchcard   : 試合プレビューカード（両チーム情報の並列表示・試合前の紹介）
+- matchcenter : 試合詳細（スコア・ピッチ図・スタッツ一覧）
+- ending      : チャンネル登録を促す締め（常に最後）
 
 JSONのみ返すこと（説明・マークダウン不要）:
-{"modules": [{"title": "スライドタイトル", "type": "opening", "reason": "採用理由（1行）", "scriptDir": "このスライドのナレーション方向性・演出ポイント（2〜3文）", "siBinding": null}, {"title": "...", "type": "insight|stats|reaction|profile|comparison|timeline", "reason": "...", "scriptDir": "...", "siBinding": "SI取得済みキーワード名またはnull"}, {"title": "エンディングタイトル", "type": "ending", "reason": "...", "scriptDir": "...", "siBinding": null}]}`;
+{"modules": [{"title": "スライドタイトル", "type": "opening", "reason": "採用理由（1行）", "scriptDir": "このスライドのナレーション方向性・演出ポイント（2〜3文）", "siBinding": null}, {"title": "...", "type": "insight|stats|reaction|profile|comparison|history|matchcard|matchcenter", "reason": "...", "scriptDir": "...", "siBinding": "SI取得済みキーワード名またはnull"}, {"title": "エンディングタイトル", "type": "ending", "reason": "...", "scriptDir": "...", "siBinding": null}]}`;
 
   try {
     const raw    = await callAI({ model: 'claude-sonnet-4-6', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
@@ -89,14 +98,16 @@ JSONのみ返すこと（説明・マークダウン不要）:
 
     // scriptDir が欠けている場合のデフォルト補完
     const defaultScriptDir = {
-      opening:    '衝撃的な問いかけや事実で始め、視聴者を最初の3秒で引き込む。',
-      insight:    '背景・経緯を分かりやすく解説し、視聴者の理解を深める。',
-      stats:      '具体的な数字・データを見せ、情報の信頼性と説得力を高める。',
-      reaction:   '海外ファンのリアルなコメントを紹介し、視聴者の共感を生む。',
-      profile:    '選手・監督のプロフィールや実績を深掘りし、視聴者の興味を引く。',
-      comparison: '2者を比較することで違いを際立たせ、視聴者に気づきを与える。',
-      timeline:   '時系列でストーリーを展開し、出来事の流れを分かりやすく伝える。',
-      ending:     '全体のまとめと感想を述べ、コメントへの参加とチャンネル登録を促す。',
+      opening:     '衝撃的な問いかけや事実で始め、視聴者を最初の3秒で引き込む。',
+      insight:     'キャッチコピーを3〜5個ナレーションに合わせて積み上げ、視聴者の記憶に残す。',
+      stats:       '具体的な数字・データを見せ、情報の信頼性と説得力を高める。',
+      reaction:    '海外ファンのリアルなコメントを紹介し、視聴者の共感を生む。',
+      profile:     '選手・監督のプロフィールや実績を深掘りし、視聴者の興味を引く。',
+      comparison:  '2者を比較することで違いを際立たせ、視聴者に気づきを与える。',
+      history:     '時系列でストーリーを展開し、出来事の流れを分かりやすく伝える。',
+      matchcard:   '両チームの情報を並列で紹介し、試合への期待感を高める。',
+      matchcenter: 'スコア・ピッチ・スタッツを順に見せ、試合の全貌を伝える。',
+      ending:      '全体のまとめと感想を述べ、コメントへの参加とチャンネル登録を促す。',
     };
     mods.forEach(mod => {
       if (!mod.scriptDir || !mod.scriptDir.trim()) {
@@ -255,14 +266,16 @@ function getUI() {
 
   const TYPE_COLORS = {
     opening:'#ff4d4d', insight:'#1a6ef5', stats:'#10b981', reaction:'#f59e0b',
-    profile:'#8b5cf6', comparison:'#ef4444', timeline:'#6b7280', ending:'#64748b',
+    profile:'#8b5cf6', comparison:'#ef4444', history:'#6366f1',
+    matchcard:'#14b8a6', matchcenter:'#06b6d4', ending:'#64748b',
   };
   const TYPE_LABELS = {
-    opening:'オープニング', insight:'概要・解説', stats:'スタッツ・数値',
-    reaction:'コメント反応', profile:'プロフィール', comparison:'比較',
-    timeline:'時系列', ending:'エンディング',
+    opening:'オープニング', insight:'キャッチコピー', stats:'スタッツ・数値',
+    reaction:'コメント反応', profile:'プロフィール', comparison:'対比',
+    history:'時系列ヒストリー', matchcard:'試合プレビュー',
+    matchcenter:'試合詳細', ending:'エンディング',
   };
-  const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','timeline','ending'];
+  const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','history','matchcard','matchcenter','ending'];
 
   /* SIデータ（サーバーから取得）*/
   window.APP = window.APP || {};

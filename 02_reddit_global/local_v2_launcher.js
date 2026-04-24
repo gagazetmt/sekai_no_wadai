@@ -28,6 +28,11 @@ app.use('/api', s3Router);
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
 
+// テンプレートプレビュー（各モジュール型のHTMLを直接確認する用）
+['insight', 'history', 'matchcard', 'matchcenter'].forEach(name => {
+  app.use('/template/' + name, require('express').static(path.join(__dirname, name)));
+});
+
 // ─── メインページ（シェルのみ）────────────────────────────
 app.get('/', (_, res) => res.send(buildPage()));
 
