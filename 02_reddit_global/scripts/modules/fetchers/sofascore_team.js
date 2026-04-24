@@ -1,20 +1,12 @@
 // scripts/modules/fetchers/sofascore_team.js
-// SofaScore からチーム情報・順位・直近試合・監督を取得
+// SofaScore からチーム情報を取得（最適化版: 5 API call）
+//  ① /search/all/                → teamId
+//  ② /team/{id}                  → 基本情報・監督・市場価値
+//  ③ /team/{id}/events/last/0    → 直近5試合
+//  ④ /team/{id}/events/next/0    → リーグ情報（tournament+season ID取得のため）
+//  ⑤ /unique-tournament/{t}/season/{s}/standings/total → 順位・今期スタッツ
 
-const axios = require('axios');
-
-const BASE_URL = 'https://api.sofascore.com/api/v1';
-const HEADERS  = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  'Accept':     'application/json',
-  'Referer':    'https://www.sofascore.com/',
-  'Origin':     'https://www.sofascore.com',
-};
-
-async function apiGet(endpoint) {
-  const res = await axios.get(`${BASE_URL}${endpoint}`, { headers: HEADERS, timeout: 12000 });
-  return res.data;
-}
+const { apiGet } = require('./_sofa_common');
 
 async function searchTeam(teamName) {
   try {
@@ -28,101 +20,122 @@ async function searchTeam(teamName) {
   }
 }
 
+function formatTeamMatch(e, teamId) {
+  const isHome   = e.homeTeam?.id === teamId;
+  const homeScore = e.homeScore?.display ?? e.homeScore?.normaltime ?? null;
+  const awayScore = e.awayScore?.display ?? e.awayScore?.normaltime ?? null;
+  const myScore   = isHome ? homeScore : awayScore;
+  const oppScore  = isHome ? awayScore : homeScore;
+  const oppName   = isHome ? e.awayTeam?.name : e.homeTeam?.name;
+  const winner    = e.winnerCode;
+  const result    = winner === 3 ? 'D' : ((isHome && winner === 1) || (!isHome && winner === 2)) ? 'W' : 'L';
+  return {
+    result,
+    opponent:   oppName,
+    isHome,
+    score:      `${myScore ?? '?'}-${oppScore ?? '?'}`,
+    date:       e.startTimestamp ? new Date(e.startTimestamp * 1000).toISOString().slice(0, 10) : null,
+    tournament: e.tournament?.name,
+  };
+}
+
 async function fetchSofaScoreTeam(teamName) {
   if (!teamName) return { ok: false, error: 'チーム名が必要です' };
 
   try {
     // ① チーム検索
-    const searchData = await apiGet(`/search/all/?q=${encodeURIComponent(teamName)}`);
-    // sport.id=1 がサッカー。野球・バスケ等を除外
-    const teams = (searchData.results || []).filter(r =>
-      r.type === 'team' && (r.entity?.sport?.id === 1 || !r.entity?.sport)
-    );
-    if (!teams.length) return { ok: false, error: `SofaScore に "${teamName}" が見つかりません` };
-    const team   = teams[0].entity;
+    const team = await searchTeam(teamName);
+    if (!team) return { ok: false, error: `SofaScore に "${teamName}" が見つかりません` };
     const teamId = team.id;
 
-    // ② チーム詳細・監督・フォーメーション（並列取得）
-    const [detailData, lastPages, nextEventsData] = await Promise.all([
-      apiGet(`/team/${teamId}`).catch(() => ({})),
-      Promise.all([0,1,2,3].map(p => apiGet(`/team/${teamId}/events/last/${p}`).catch(() => ({ events: [] })))),
-      apiGet(`/team/${teamId}/events/next/0`).catch(() => ({ events: [] })),
-    ]);
+    // ② チーム詳細
+    let teamDetail = {};
+    try {
+      const td   = await apiGet(`/team/${teamId}`);
+      teamDetail = td.team || {};
+    } catch (_) {}
 
-    const teamDetail   = detailData.team || {};
-    const managerName  = teamDetail.manager?.name  || null;
-    const managerId    = teamDetail.manager?.id    || null;
-
-    // ③ 直近5試合（結果）
-    const allLastEvents = lastPages.flatMap(p => p.events || []);
-    const last5 = allLastEvents.slice(0, 5).map(e => {
-      const isHome   = e.homeTeam?.id === teamId;
-      const myScore  = isHome ? (e.homeScore?.display ?? e.homeScore?.normaltime) : (e.awayScore?.display ?? e.awayScore?.normaltime);
-      const oppScore = isHome ? (e.awayScore?.display ?? e.awayScore?.normaltime) : (e.homeScore?.display ?? e.homeScore?.normaltime);
-      const oppName  = isHome ? e.awayTeam?.name : e.homeTeam?.name;
-      const winner   = e.winnerCode;
-      const result   = winner === 3 ? 'D' : (isHome ? winner === 1 : winner === 2) ? 'W' : 'L';
-      const date     = e.startTimestamp ? new Date(e.startTimestamp * 1000).toISOString().slice(0, 10) : null;
-      return { result, opponent: oppName, score: `${myScore}-${oppScore}`, date, tournament: e.tournament?.name };
-    });
-
-    // ④ リーグ順位（次の試合のtournament/seasonから取得）
-    let standing    = null;
-    let leagueName  = null;
-    let seasonYear  = null;
-
-    const nextEvent = (nextEventsData.events || []).find(e => e.tournament?.uniqueTournament);
-    if (nextEvent) {
-      const tid = nextEvent.tournament?.uniqueTournament?.id;
-      const sid = nextEvent.season?.id;
-      leagueName = nextEvent.tournament?.uniqueTournament?.name || nextEvent.tournament?.name;
-      seasonYear = nextEvent.season?.year;
-
-      if (tid && sid) {
-        const standData = await apiGet(`/unique-tournament/${tid}/season/${sid}/standings/total`).catch(() => null);
-        if (standData) {
-          const rows = standData.standings?.[0]?.rows || [];
-          const row  = rows.find(r => r.team?.id === teamId);
-          if (row) {
-            standing = {
-              position:     row.position,
-              played:       row.matches,
-              wins:         row.wins,
-              draws:        row.draws,
-              losses:       row.losses,
-              goalsFor:     row.scoresFor,
-              goalsAgainst: row.scoresAgainst,
-              points:       row.points,
-            };
-          }
-        }
-      }
-    }
-
-    // ⑤ サマリー生成
-    const last5str = last5.map(m => `${m.result} vs ${m.opponent} ${m.score}`).join(', ');
-    const standStr = standing
-      ? `${standing.position}位 ${standing.wins}勝${standing.draws}分${standing.losses}敗 ${standing.points}pts ` +
-        `(GF:${standing.goalsFor} GA:${standing.goalsAgainst})`
+    const managerName = teamDetail.manager?.name || null;
+    const managerId   = teamDetail.manager?.id   || null;
+    const venue       = teamDetail.venue?.stadium?.name || null;
+    const country     = teamDetail.country?.name || team.country?.name || null;
+    const founded     = teamDetail.foundationDateTimestamp
+      ? new Date(teamDetail.foundationDateTimestamp * 1000).getFullYear()
+      : null;
+    // クラブ総市場価値（取れたら）
+    const marketValue    = teamDetail.value?.value || teamDetail.proposedMarketValue || null;
+    const marketValueStr = marketValue
+      ? (marketValue >= 1_000_000
+          ? `€${(marketValue / 1_000_000).toFixed(0)}M`
+          : `€${(marketValue / 1_000).toFixed(0)}K`)
       : null;
 
+    // ③ 直近5試合（ページ0のみ。通常10-12件取れる）
+    let last5 = [];
+    try {
+      const ev = await apiGet(`/team/${teamId}/events/last/0`);
+      const finished = (ev.events || []).filter(e => e.status?.type === 'finished').reverse();
+      // reverseで古い順→新しい順にし直してslice(0,5)で最新5試合
+      last5 = finished.slice(-5).reverse().map(e => formatTeamMatch(e, teamId));
+    } catch (_) {}
+
+    // ④ 次試合（リーグ情報取得のため）
+    let leagueName = null;
+    let seasonYear = null;
+    let tournamentId = null;
+    let seasonId     = null;
+    try {
+      const nx = await apiGet(`/team/${teamId}/events/next/0`);
+      const nextEvent = (nx.events || []).find(e => e.tournament?.uniqueTournament);
+      if (nextEvent) {
+        tournamentId = nextEvent.tournament?.uniqueTournament?.id;
+        seasonId     = nextEvent.season?.id;
+        leagueName   = nextEvent.tournament?.uniqueTournament?.name || nextEvent.tournament?.name;
+        seasonYear   = nextEvent.season?.year;
+      }
+    } catch (_) {}
+
+    // ⑤ 順位（今期スタッツ）
+    let standing = null;
+    if (tournamentId && seasonId) {
+      try {
+        const st = await apiGet(`/unique-tournament/${tournamentId}/season/${seasonId}/standings/total`);
+        const rows = st.standings?.[0]?.rows || [];
+        const row  = rows.find(r => r.team?.id === teamId);
+        if (row) {
+          standing = {
+            position:     row.position,
+            played:       row.matches,
+            wins:         row.wins,
+            draws:        row.draws,
+            losses:       row.losses,
+            goalsFor:     row.scoresFor,
+            goalsAgainst: row.scoresAgainst,
+            points:       row.points,
+          };
+        }
+      } catch (_) {}
+    }
+
     return {
-      ok: true,
+      ok:          true,
       teamId,
-      teamName:   teamDetail.name || team.name,
-      leagueName,
-      seasonYear,
+      teamName:    teamDetail.name || team.name,
+      country,
+      venue,
+      founded,
+      marketValue: marketValueStr,
       managerName,
       managerId,
+      leagueName,
+      seasonYear,
       standing,
       last5,
-      summary:
-        `【チーム情報】${teamDetail.name || team.name}（${leagueName || '不明'} ${seasonYear || ''}）\n` +
-        (managerName ? `監督: ${managerName}\n` : '') +
-        (standStr    ? `順位: ${standStr}\n` : '') +
-        `直近5試合: ${last5str || '（取得失敗）'}`,
     };
   } catch (e) {
+    if (e.response?.status === 403) {
+      return { ok: false, error: 'SofaScore: IPブロック(403)。プロキシ設定が必要です' };
+    }
     return { ok: false, error: e.message };
   }
 }

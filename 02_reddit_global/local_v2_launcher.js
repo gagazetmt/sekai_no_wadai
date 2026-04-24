@@ -173,17 +173,20 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
    各 Step はこのオブジェクトで状態を共有する。
    Step をまたぐ遷移もここで管理。
    ==================================================== */
-window.APP = {
+/* step2/step3 の IIFE が先に window.APP.s2 等をセットしているので、
+   ここでは上書きせず「未定義のキーのみデフォルト値を追加」する形にする。 */
+window.APP = window.APP || {};
+Object.assign(window.APP, Object.assign({
   posts:       [],           // Step1: 案件一覧
   postMap:     {},           // Step1: id → post の逆引き
   selectedIds: new Set(),    // Step1: チェック中のID
   saved:       [],           // 保存済み案件リスト（サイドバー）
   selected:    null,         // 現在編集中の案件（Step2〜3で使用）
-  keywords:    [],           // Step2: SIキーワード
-  siData:      {},           // Step2: 取得済みSIデータ
+  keywords:    [],           // Step2: SIキーワード（レガシー互換用）
+  siData:      {},           // Step2: 取得済みSIデータ（レガシー互換用）
   modules:     [],           // Step3: モジュール一覧
   activeTab:   0,            // Step3: 現在のタブ
-};
+}, window.APP));
 
 /* ── fetchJson ヘルパー（全 Step で使用）── */
 window.fetchJson = async function(url, opts) {

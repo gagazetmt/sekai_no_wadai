@@ -265,6 +265,7 @@ function getUI() {
   const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','timeline','ending'];
 
   /* SIデータ（サーバーから取得）*/
+  window.APP = window.APP || {};
   window.APP.s3SiData = {};
 
   window.step3Init = function() {

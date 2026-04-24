@@ -9,12 +9,14 @@ const fs      = require('fs');
 const path    = require('path');
 
 const { callAI }               = require('../scripts/ai_client');
-const { fetchWikipediaSafe }   = require('../scripts/modules/fetchers/wikipedia');
+const { fetchWikipediaSafe,
+        searchWikipediaTitles }= require('../scripts/modules/fetchers/wikipedia');
 const { fetchSofaScorePlayer } = require('../scripts/modules/fetchers/sofascore_player');
 const { fetchSofaScoreTeam }   = require('../scripts/modules/fetchers/sofascore_team');
 const { fetchSofaScoreManager }= require('../scripts/modules/fetchers/sofascore_manager');
 const { fetchSofaScoreMatch }  = require('../scripts/modules/fetchers/sofascore_match');
 const { fetchSerper }          = require('../scripts/modules/fetchers/serper_module');
+const { apiGetLight: sofaApiGetLight } = require('../scripts/modules/fetchers/_sofa_common');
 
 const router = express.Router();
 const SI_DIR = path.join(__dirname, '..', 'data', 'si_data');
@@ -53,6 +55,74 @@ function emptySiData(postId) {
   };
 }
 
+// ─── ラベル検証ヘルパー（Phase 3: Plan C 軽量検証）───────────
+//   各関数: string を受けて { valid: boolean, canonical?: string } を返す
+
+// Wikipedia: タイトル検索だけで存在確認（本文fetchしない）
+async function validateWikipediaLabel(label) {
+  try {
+    const titles = await searchWikipediaTitles(label);
+    return titles && titles.length
+      ? { valid: true, canonical: titles[0] }
+      : { valid: false };
+  } catch (_) { return { valid: false }; }
+}
+
+// SofaScore: 汎用ヘルパー。type で絞る
+async function _validateSofaByType(label, typeFilter) {
+  try {
+    const data = await sofaApiGetLight(`/search/all/?q=${encodeURIComponent(label)}`);
+    const hit = (data.results || []).find(r =>
+      r.type === typeFilter && (r.entity?.sport?.id === 1 || !r.entity?.sport)
+    );
+    return hit ? { valid: true, canonical: hit.entity?.name || label } : { valid: false };
+  } catch (_) { return { valid: false }; }
+}
+const validateSofaPlayer  = l => _validateSofaByType(l, 'player');
+const validateSofaTeam    = l => _validateSofaByType(l, 'team');
+const validateSofaManager = async l => {
+  // manager 型は稀。team 経由でもOKとする
+  const r = await _validateSofaByType(l, 'manager');
+  if (r.valid) return r;
+  // フォールバック: 監督名 → team 検索で誰かのチームなら valid 扱い
+  return { valid: false };
+};
+const validateSofaMatch = async (label) => {
+  const parts = label.split(' vs ').map(s => s.trim());
+  if (parts.length < 2 || !parts[1]) return { valid: false };
+  // 両チームが SofaScore にヒットすれば valid（実試合検索は取得時に行う）
+  const [h, a] = await Promise.all([
+    _validateSofaByType(parts[0], 'team'),
+    _validateSofaByType(parts[1], 'team'),
+  ]);
+  if (h.valid && a.valid) return { valid: true, canonical: `${h.canonical} vs ${a.canonical}` };
+  return { valid: false };
+};
+
+// AI ラベル補正（Plan B フォールバック）
+async function aiCorrectLabel(boxType, originalLabel, errorMsg) {
+  try {
+    const hint = {
+      wikipedia:         'Wikipedia article title',
+      sofascore_player:  'soccer player full name (e.g. "Lionel Messi")',
+      sofascore_manager: 'soccer manager full name (e.g. "Pep Guardiola")',
+      sofascore_team:    'soccer club official name (e.g. "Manchester City")',
+      sofascore_match:   'match in "HomeTeam vs AwayTeam" format',
+    }[boxType] || 'canonical name';
+
+    const raw = await callAI({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages:   [{ role: 'user', content:
+        `The label "${originalLabel}" failed (${errorMsg || 'not found'}) when searched on ${boxType}.
+Suggest the most likely ${hint}. Common abbreviations to expand:
+UCL→UEFA Champions League, EPL→Premier League, Man Utd→Manchester United, Real→Real Madrid
+Return ONLY the corrected name, no quotes or explanation.` }]
+    });
+    return raw.trim().replace(/^["'「」]|["'「」]$/g, '').slice(0, 120);
+  } catch (_) { return null; }
+}
+
 // ─── API ─────────────────────────────────────────────────
 
 // AIラベル提案（DeepSeek / Claude Haiku）
@@ -87,15 +157,80 @@ Comments: ${comments}` }],
     });
 
     const m = response.match(/\{[\s\S]*\}/);
-    if (!m) return res.json({ boxes: {} });
-    res.json({ boxes: JSON.parse(m[0]) });
+    if (!m) return res.json({ boxes: {}, unvalidated: {} });
+    const boxes = JSON.parse(m[0]);
+
+    // ── ラベル検証（Plan C: 軽量検証のみ。ハズレは除外せずマークだけ付ける）──
+    const unvalidated = {
+      wikipedia:         [],
+      sofascore_player:  [],
+      sofascore_manager: [],
+      sofascore_team:    [],
+      sofascore_match:   [],
+    };
+    const validators = {
+      wikipedia:         validateWikipediaLabel,
+      sofascore_player:  validateSofaPlayer,
+      sofascore_manager: validateSofaManager,
+      sofascore_team:    validateSofaTeam,
+      sofascore_match:   validateSofaMatch,
+    };
+
+    console.log('[Step2] ラベル検証開始...');
+    for (const [boxType, validator] of Object.entries(validators)) {
+      const labels = boxes[boxType] || [];
+      const newLabels = [];
+      for (const lbl of labels) {
+        if (!lbl) continue;
+        const r = await validator(lbl);
+        if (r.valid) {
+          // 公式名で正規化
+          newLabels.push(r.canonical || lbl);
+        } else {
+          // ハズレは残すがマーク
+          newLabels.push(lbl);
+          unvalidated[boxType].push(lbl);
+        }
+      }
+      boxes[boxType] = newLabels;
+    }
+    console.log('[Step2] 検証完了。未検証ラベル:',
+      Object.entries(unvalidated).filter(([_,v]) => v.length).map(([k,v]) => `${k}:${v.length}`).join(', ') || 'なし');
+
+    res.json({ boxes, unvalidated });
   } catch (e) {
     console.error('[Step2] AI提案エラー:', e.message);
-    res.json({ boxes: {} });
+    res.json({ boxes: {}, unvalidated: {} });
   }
 });
 
-// SI一件取得（type + label → データ保存）
+// type + label で1件フェッチする内部関数
+async function _fetchByType(type, label) {
+  switch (type) {
+    case 'news':              return await fetchSerper(label);
+    case 'wikipedia':         return await fetchWikipediaSafe(label);
+    case 'sofascore_player':  return await fetchSofaScorePlayer(label);
+    case 'sofascore_manager': return await fetchSofaScoreManager(label);
+    case 'sofascore_team':    return await fetchSofaScoreTeam(label);
+    case 'sofascore_match': {
+      const parts = label.split(' vs ').map(s => s.trim());
+      if (parts.length < 2 || !parts[1])
+        throw new Error('"HomeTeam vs AwayTeam" 形式で入力してください');
+      return await fetchSofaScoreMatch(parts[0], parts[1]);
+    }
+    case 'otherURL':          return { url: label, type: 'manual', ok: true };
+    default: throw new Error('不明なタイプ: ' + type);
+  }
+}
+
+// 結果が成功かどうか判定（null / ok:false / ハズレ状態 をハズレとして判定）
+function _isFetchFailed(data) {
+  if (!data) return true;
+  if (data.ok === false) return true;
+  return false;
+}
+
+// SI一件取得（type + label → データ保存。ハズレ時は AI 補正で再試行）
 router.post('/fetch-si-item', async (req, res) => {
   const { postId, type, label } = req.body;
   if (!postId || !type || !label) return res.status(400).json({ error: 'params required' });
@@ -113,49 +248,59 @@ router.post('/fetch-si-item', async (req, res) => {
 
   let data = null;
   let error = null;
+  let corrected = null; // AI補正で使った代替ラベル
 
+  // ── ① 1回目: 素のラベルでフェッチ ──
   try {
-    switch (type) {
-      case 'news':
-        data = await fetchSerper(label);
-        break;
-      case 'wikipedia':
-        data = await fetchWikipediaSafe(label);
-        break;
-      case 'sofascore_player':
-        data = await fetchSofaScorePlayer(label);
-        break;
-      case 'sofascore_manager':
-        data = await fetchSofaScoreManager(label);
-        break;
-      case 'sofascore_team':
-        data = await fetchSofaScoreTeam(label);
-        break;
-      case 'sofascore_match': {
-        const parts = label.split(' vs ').map(s => s.trim());
-        if (parts.length < 2 || !parts[1])
-          throw new Error('"HomeTeam vs AwayTeam" 形式で入力してください');
-        data = await fetchSofaScoreMatch(parts[0], parts[1]);
-        break;
-      }
-      case 'otherURL':
-        data = { url: label, type: 'manual', ok: true };
-        break;
-      default:
-        throw new Error('不明なタイプ: ' + type);
-    }
+    data = await _fetchByType(type, label);
   } catch (e) {
     error = e.message;
-    console.error('[Step2] SI取得エラー:', type, label, e.message);
+    console.error('[Step2] SI取得1回目失敗:', type, label, e.message);
   }
 
-  if (data) {
-    box.fetched.push({ label, data, fetchedAt: new Date().toISOString() });
+  // ── ② ハズレたら AI 補正で1回だけリトライ（news/otherURL は補正対象外）──
+  const AI_CORRECTIBLE = ['wikipedia','sofascore_player','sofascore_manager','sofascore_team','sofascore_match'];
+  if (_isFetchFailed(data) && AI_CORRECTIBLE.includes(type)) {
+    const errMsg = error || (data?.error) || 'not found';
+    console.log('[Step2] AI補正リトライ試行:', type, label);
+    const fixed = await aiCorrectLabel(type, label, errMsg);
+    if (fixed && fixed !== label) {
+      console.log('[Step2] AI補正結果:', label, '→', fixed);
+      corrected = fixed;
+      try {
+        const retryData = await _fetchByType(type, fixed);
+        if (!_isFetchFailed(retryData)) {
+          data = retryData;
+          error = null;
+        } else {
+          // リトライも失敗なら最初のdataを残す
+          if (!data) data = retryData;
+        }
+      } catch (e2) {
+        console.error('[Step2] AI補正リトライも失敗:', e2.message);
+      }
+    }
+  }
+
+  // 保存（成功時のみ）
+  const success = !_isFetchFailed(data);
+  if (success) {
+    box.fetched.push({
+      label,
+      correctedLabel: corrected || null,
+      data,
+      fetchedAt: new Date().toISOString(),
+    });
     if (!box.labels.includes(label)) box.labels.push(label);
     try { fs.writeFileSync(filePath, JSON.stringify(siData, null, 2)); } catch (_) {}
   }
 
-  res.json({ ok: !!data, error: error || null, data: data || null });
+  res.json({
+    ok: success,
+    error: success ? null : (error || data?.error || '取得失敗'),
+    data: data || null,
+    corrected,
+  });
 });
 
 // SIデータ取得
@@ -256,32 +401,38 @@ var BOX_TYPES = {
   otherURL:          { ja: 'URL',     label: 'その他URL',   color: '#64748b', hint: 'URLを入力' },
 };
 
-/* ─ 初期化 ─ */
+/* ─ 初期化（window.APPが未定義ならこのスコープで作る）─ */
+window.APP = window.APP || {};
 window.APP.s2 = {
   boxes:   {},
   history: [],
 };
 Object.keys(BOX_TYPES).forEach(function(k) {
-  window.APP.s2.boxes[k] = { labels: [], fetched: [] };
+  /* unvalidatedLabels: 検証でハズレたラベルのリスト（⚠️表示用）*/
+  window.APP.s2.boxes[k] = { labels: [], fetched: [], unvalidatedLabels: [] };
 });
 
 /* ─ step2Init（goStepから呼ばれる）─ */
 window.step2Init = function() {
   var post = window.APP.selected;
-  if (!post) return;
 
   /* 状態リセット */
   Object.keys(BOX_TYPES).forEach(function(k) {
-    window.APP.s2.boxes[k] = { labels: [], fetched: [] };
+    window.APP.s2.boxes[k] = { labels: [], fetched: [], unvalidatedLabels: [] };
   });
   window.APP.s2.history = [];
   window._s2HistData    = [];
 
-  document.getElementById('s2Title').textContent = (post.title || '(タイトル不明)').slice(0, 80);
+  /* 案件が未選択でも7ボックスは常に描画 */
+  document.getElementById('s2Title').textContent = post
+    ? (post.title || '(タイトル不明)').slice(0, 80)
+    : '← 左サイドバーの保存済み案件をクリックしてください';
   _s2Msg('');
   _s2RenderBoxes();
   _s2RenderHistory();
   _s2RenderFetchedChips();
+
+  if (!post) return;
 
   /* サーバーから既存SIデータを読み込む */
   fetchJson('/api/si-data?postId=' + encodeURIComponent(post.id))
@@ -290,8 +441,9 @@ window.step2Init = function() {
       Object.keys(BOX_TYPES).forEach(function(k) {
         if (d.boxes[k]) {
           window.APP.s2.boxes[k] = {
-            labels:  d.boxes[k].labels  || [],
-            fetched: d.boxes[k].fetched || [],
+            labels:            d.boxes[k].labels            || [],
+            fetched:           d.boxes[k].fetched           || [],
+            unvalidatedLabels: d.boxes[k].unvalidatedLabels  || [],
           };
         }
       });
@@ -317,7 +469,7 @@ window.step2Init = function() {
 function s2SuggestLabels() {
   var post = window.APP.selected;
   if (!post) { alert('案件が選択されていません'); return; }
-  _s2Msg('AI提案中...');
+  _s2Msg('AI提案中... (ラベル検証に数秒かかります)');
   fetchJson('/api/suggest-si-labels', {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -325,6 +477,7 @@ function s2SuggestLabels() {
   })
   .then(function(d) {
     if (!d.boxes) { _s2Msg('提案なし'); return; }
+    var warnCount = 0;
     Object.keys(BOX_TYPES).forEach(function(k) {
       var labels = d.boxes[k];
       if (!Array.isArray(labels)) return;
@@ -333,9 +486,15 @@ function s2SuggestLabels() {
           window.APP.s2.boxes[k].labels.push(lbl);
         }
       });
+      /* 未検証ラベルリストを更新 */
+      var unval = (d.unvalidated && d.unvalidated[k]) || [];
+      window.APP.s2.boxes[k].unvalidatedLabels = unval;
+      warnCount += unval.length;
     });
     _s2RenderBoxes();
-    _s2Msg('AIラベルを追加しました');
+    _s2Msg(warnCount
+      ? 'AIラベルを追加しました（⚠️ 未検証: ' + warnCount + '件、取得時にAI補正します）'
+      : 'AIラベルを追加しました（全て検証済み）');
   })
   .catch(function(e) { _s2Msg('AIエラー: ' + e.message); });
 }
@@ -374,18 +533,31 @@ function s2FetchItem(type, label) {
   })
   .then(function(d) {
     if (d.ok) {
-      var entry = { label: label, data: d.data, fetchedAt: new Date().toISOString() };
+      var entry = {
+        label: label,
+        correctedLabel: d.corrected || null,
+        data: d.data,
+        fetchedAt: new Date().toISOString(),
+      };
       /* fetchedに追加（重複回避）*/
       var box = window.APP.s2.boxes[type];
       if (!box.fetched.find(function(f) { return f.label === label; })) {
         box.fetched.push(entry);
       }
+      /* 取得成功したら未検証リストからも除去 */
+      var uidx = (box.unvalidatedLabels || []).indexOf(label);
+      if (uidx >= 0) box.unvalidatedLabels.splice(uidx, 1);
       /* history に追加 */
-      window.APP.s2.history.unshift({ type: type, label: label, data: d.data, fetchedAt: entry.fetchedAt });
+      window.APP.s2.history.unshift({
+        type: type, label: label, correctedLabel: d.corrected || null,
+        data: d.data, fetchedAt: entry.fetchedAt,
+      });
       _s2RenderBoxes();
       _s2RenderHistory();
       _s2RenderFetchedChips();
-      _s2Msg(label + ' 取得完了');
+      _s2Msg(d.corrected
+        ? label + ' → AI補正「' + d.corrected + '」で取得成功'
+        : label + ' 取得完了');
       return true;
     } else {
       _s2Msg(label + ' 失敗: ' + (d.error || '不明'));
@@ -426,8 +598,10 @@ function s2FetchAll() {
     }
     var t = tasks[i++];
     if (prog) prog.textContent = i + '/' + tasks.length + ' ' + t.type + ': ' + t.label;
+    /* SofaScore系はレート制限が厳しいので長めに待つ */
+    var delay = t.type.indexOf('sofascore') === 0 ? 1500 : 400;
     s2FetchItem(t.type, t.label).then(function() {
-      setTimeout(next, 400);
+      setTimeout(next, delay);
     });
   }
   next();
@@ -477,19 +651,27 @@ window.s2Download = function(type, label) {
 function _s2RenderBoxes() {
   var el = document.getElementById('s2Boxes');
   if (!el) return;
-  var post = window.APP.selected;
-  if (!post) return;
 
   var html = '';
   Object.entries(BOX_TYPES).forEach(function(entry) {
     var type = entry[0], cfg = entry[1];
     var box  = window.APP.s2.boxes[type] || { labels: [], fetched: [] };
 
+    var unvalidated = box.unvalidatedLabels || [];
     var chips = box.labels.map(function(lbl, idx) {
-      var isFetched = !!box.fetched.find(function(f) { return f.label === lbl; });
-      return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;'
-        + 'font-size:11px;background:' + cfg.color + '33;border:1px solid ' + cfg.color + ';color:#fff;margin:2px">'
+      var isFetched     = !!box.fetched.find(function(f) { return f.label === lbl; });
+      var isUnvalidated = unvalidated.indexOf(lbl) >= 0 && !isFetched;
+      var borderStyle   = isUnvalidated
+        ? '1px dashed #f59e0b'
+        : '1px solid ' + cfg.color;
+      var bgColor       = isUnvalidated ? '#f59e0b22' : cfg.color + '33';
+      var titleAttr     = isUnvalidated
+        ? ' title="未検証ラベル: SofaScore/Wikipediaでヒットしませんでした。取得時にAI補正が走ります"'
+        : '';
+      return '<span' + titleAttr + ' style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;'
+        + 'font-size:11px;background:' + bgColor + ';border:' + borderStyle + ';color:#fff;margin:2px">'
         + (isFetched ? '<span style="color:#10b981">&#x2705;</span>' : '')
+        + (isUnvalidated ? '<span style="color:#fbbf24">&#x26A0;</span>' : '')
         + _esc(lbl)
         + (isFetched ? '' : '<span class="s2-chip-remove" data-type="' + type + '" data-idx="' + idx + '" '
           + 'style="cursor:pointer;margin-left:5px;color:#aaa;font-size:13px">&#xD7;</span>')
