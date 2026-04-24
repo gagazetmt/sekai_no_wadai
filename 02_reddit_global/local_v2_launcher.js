@@ -30,6 +30,9 @@ app.use('/api', s4Router);
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
 
+// 生成済み動画を静的配信（Step4 でブラウザ再生・ダウンロード）
+app.use('/v2_videos', require('express').static(path.join(__dirname, 'data', 'v2_videos')));
+
 // テンプレートプレビュー（各モジュール型のHTMLを直接確認する用）
 ['insight', 'history', 'matchcard', 'matchcenter'].forEach(name => {
   app.use('/template/' + name, require('express').static(path.join(__dirname, name)));

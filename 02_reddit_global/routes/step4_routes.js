@@ -7,12 +7,17 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
+const { spawn } = require('child_process');
 
 const { callAI } = require('../scripts/ai_client');
 
-const router   = express.Router();
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const SI_DIR   = path.join(DATA_DIR, 'si_data');
+const router    = express.Router();
+const DATA_DIR  = path.join(__dirname, '..', 'data');
+const SI_DIR    = path.join(DATA_DIR, 'si_data');
+const VIDEO_DIR = path.join(DATA_DIR, 'v2_videos');
+const JOB_DIR   = path.join(DATA_DIR, 'v2_jobs');
+
+[VIDEO_DIR, JOB_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 function safeJson(file, fallback) {
   try {
@@ -323,14 +328,80 @@ router.post('/v2/regen-narration', async (req, res) => {
   });
 });
 
-// Phase 4 で実装: 背景画像候補取得
-router.get('/v2/images', (req, res) => {
-  res.json({ images: [], note: 'Phase 4 未実装' });
+// Phase 4a: 動画生成ジョブ起動（非同期、バックグラウンド実行）
+router.post('/v2/generate-video', (req, res) => {
+  const { postId, modules } = req.body;
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+
+  // モジュールが渡された場合は先に保存（Step4 編集状態を反映）
+  if (Array.isArray(modules) && modules.length) {
+    try {
+      const mp = path.join(DATA_DIR, (postId || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_') + '_modules.json');
+      fs.writeFileSync(mp, JSON.stringify({ postId, modules, savedAt: new Date().toISOString() }, null, 2));
+    } catch (e) { console.warn('[Step4] modules保存失敗:', e.message); }
+  }
+
+  const jobId = 'job_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const jp    = path.join(JOB_DIR, jobId + '.json');
+  fs.writeFileSync(jp, JSON.stringify({
+    jobId, postId, status: 'queued', createdAt: new Date().toISOString(),
+  }, null, 2));
+
+  // 非同期で render.js を spawn
+  const renderScript = path.join(__dirname, '..', 'scripts', 'v2_video', 'render.js');
+  const proc = spawn('node', [renderScript, postId, jobId], {
+    detached: true,
+    stdio:    'ignore',
+    cwd:      path.join(__dirname, '..'),
+  });
+  proc.unref();
+
+  console.log(`[Step4] 動画生成 job 起動: ${jobId} (postId: ${postId})`);
+  res.json({ ok: true, jobId });
+});
+
+// ジョブ進捗
+router.get('/v2/video-status', (req, res) => {
+  const jobId = req.query.jobId;
+  if (!jobId) return res.status(400).json({ error: 'jobId required' });
+  const jp = path.join(JOB_DIR, jobId + '.json');
+  if (!fs.existsSync(jp)) return res.status(404).json({ error: 'job not found' });
+  try {
+    res.json(JSON.parse(fs.readFileSync(jp, 'utf8')));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// postId に紐づく生成済み動画一覧
+router.get('/v2/videos', (req, res) => {
+  const postId = req.query.postId;
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+  const prefix = (postId || '').replace(/[\/\?%*:|"<>\.]/g, '_').slice(-20);
+  try {
+    const all = fs.readdirSync(VIDEO_DIR).filter(f => f.startsWith(prefix) && f.endsWith('.mp4'));
+    const videos = all.map(f => {
+      const full = path.join(VIDEO_DIR, f);
+      const st   = fs.statSync(full);
+      return {
+        file:      f,
+        sizeBytes: st.size,
+        createdAt: st.birthtime || st.ctime,
+        url:       '/v2_videos/' + f,
+      };
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    res.json({ videos });
+  } catch (e) {
+    res.json({ videos: [], error: e.message });
+  }
 });
 
 // Phase 5 で実装: 1モジュールの音声テスト（MiniMax）
 router.post('/v2/tts-single', (req, res) => {
   res.status(501).json({ error: 'Phase 5 未実装' });
+});
+
+// 背景画像候補取得（Step4後の「裏」フェーズで実装予定）
+router.get('/v2/images', (req, res) => {
+  res.json({ images: [], note: 'Step4完了後に画像取得機能を実装予定' });
 });
 
 // ─── UI ─────────────────────────────────────────────────
@@ -363,10 +434,32 @@ function getUI() {
     </div>
   </div>
 
-  <!-- ボトム：次のステップへ -->
+  <!-- 動画生成進捗 -->
+  <div id="s4GenProgress" class="panel" style="display:none;margin-bottom:12px">
+    <div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:6px">
+      &#x1F3A5; 動画生成ジョブ <span id="s4JobId" style="font-size:10px;color:#8a9aba"></span>
+    </div>
+    <div id="s4JobStatus" style="font-size:13px;color:#c0cce0;margin-bottom:4px">準備中...</div>
+    <div style="background:#0d1220;height:8px;border-radius:4px;overflow:hidden">
+      <div id="s4JobBar" style="background:var(--c);height:100%;width:0%;transition:width .3s"></div>
+    </div>
+  </div>
+
+  <!-- 生成済み動画一覧 -->
+  <div class="panel" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F4FD; 生成済み動画</span>
+      <button class="btn btn-sm" id="s4BtnRefreshVideos">&#x21BB; 一覧更新</button>
+    </div>
+    <div id="s4VideoList" style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:11px;color:#5a6a8a">まだ生成した動画はありません</div>
+    </div>
+  </div>
+
+  <!-- ボトム：動画生成ボタン -->
   <div style="display:flex;gap:8px">
     <button class="btn btn-success" id="s4BtnNext" style="flex:1;padding:13px;font-size:14px;font-weight:bold">
-      &#x1F3AC; 動画生成・書き出し &#x2192;
+      &#x1F3AC; 動画生成・書き出し
     </button>
   </div>
 
@@ -651,6 +744,104 @@ function getUI() {
     }
   };
 
+  /* ── 動画生成（Phase 4a） ── */
+  window.s4GenerateVideo = async function() {
+    _s4SaveCurrent();
+    const mods = window.APP.modules || [];
+    if (!mods.length) return alert('モジュールがありません');
+    const postId = window.APP.selected?.id;
+    if (!postId) return alert('案件が選択されていません');
+
+    // 1. ジョブ起動
+    _s4Msg('&#x1F3AC; 動画生成ジョブ起動中...');
+    let jobId;
+    try {
+      const d = await fetchJson('/api/v2/generate-video', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, modules: mods }),
+      });
+      if (!d.ok) { _s4Msg('&#x274C; ' + (d.error || '起動失敗')); return; }
+      jobId = d.jobId;
+    } catch (e) {
+      _s4Msg('&#x274C; 起動エラー: ' + e.message);
+      return;
+    }
+
+    // 2. 進捗パネル表示
+    const panel = document.getElementById('s4GenProgress');
+    const jobIdEl = document.getElementById('s4JobId');
+    const statusEl = document.getElementById('s4JobStatus');
+    const bar = document.getElementById('s4JobBar');
+    panel.style.display = 'block';
+    jobIdEl.textContent = jobId;
+    statusEl.textContent = 'キュー登録完了、レンダリング開始待ち...';
+    bar.style.width = '0%';
+    _s4Msg('&#x2705; ジョブID ' + jobId);
+
+    // 3. ポーリング（2秒間隔）
+    const timer = setInterval(async function() {
+      try {
+        const s = await fetchJson('/api/v2/video-status?jobId=' + encodeURIComponent(jobId));
+        const st = s.status || '?';
+        const total = s.totalSlides || 0;
+        const done  = s.doneSlides || 0;
+        const pct = total ? Math.round(done / total * 85) : 10; // 最後のconcat/audioで+15%
+
+        if (st === 'done') {
+          bar.style.width = '100%';
+          statusEl.textContent = '&#x2705; 完成！';
+          statusEl.innerHTML = '&#x2705; 完成しました！';
+          clearInterval(timer);
+          setTimeout(function() { panel.style.display = 'none'; }, 3000);
+          _s4LoadVideos(); // 一覧リロード
+        } else if (st === 'error') {
+          statusEl.innerHTML = '&#x274C; 失敗: ' + _e(s.error || '不明なエラー');
+          bar.style.background = '#ef4444';
+          clearInterval(timer);
+        } else {
+          statusEl.textContent = st + (total ? ' (' + done + '/' + total + ')' : '');
+          bar.style.width = pct + '%';
+        }
+      } catch (e) {
+        // ポーリングで404等は無視（まだ書き出し直後の可能性）
+      }
+    }, 2000);
+  };
+
+  /* ── 生成済み動画一覧ロード ── */
+  window._s4LoadVideos = async function() {
+    const postId = window.APP.selected?.id;
+    if (!postId) return;
+    const listEl = document.getElementById('s4VideoList');
+    try {
+      const d = await fetchJson('/api/v2/videos?postId=' + encodeURIComponent(postId));
+      const vids = d.videos || [];
+      if (!vids.length) {
+        listEl.innerHTML = '<div style="font-size:11px;color:#5a6a8a">まだ生成した動画はありません</div>';
+        return;
+      }
+      listEl.innerHTML = vids.map(v => {
+        const sizeMB = (v.sizeBytes / 1024 / 1024).toFixed(1);
+        const dt = new Date(v.createdAt).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' });
+        return '<div style="background:#0d1220;border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px">'
+          + '<span style="flex:1;font-size:12px;color:#c0cce0">&#x1F39E; ' + _e(v.file) + '</span>'
+          + '<span style="font-size:10px;color:#8a9aba">' + dt + ' / ' + sizeMB + 'MB</span>'
+          + '<a href="' + v.url + '" target="_blank" class="btn btn-sm" style="background:var(--c);color:#fff;text-decoration:none">&#x25B6; 再生</a>'
+          + '<a href="' + v.url + '" download class="btn btn-sm" style="background:#10b981;color:#fff;text-decoration:none">&#x2B07; DL</a>'
+          + '</div>';
+      }).join('');
+    } catch (e) {
+      listEl.innerHTML = '<div style="font-size:11px;color:#ef4444">一覧取得エラー: ' + e.message + '</div>';
+    }
+  };
+
+  /* step4Init の後に動画一覧もロード */
+  const _origInit = window.step4Init;
+  window.step4Init = function() {
+    _origInit();
+    setTimeout(window._s4LoadVideos, 300);
+  };
+
   /* ── イベント委任 ── */
   document.addEventListener('click', function(e) {
     if (e.target.id === 's4BtnGenAll') {
@@ -658,8 +849,9 @@ function getUI() {
     } else if (e.target.id === 's4BtnRegen') {
       window.s4RegenNarration();
     } else if (e.target.id === 's4BtnNext') {
-      _s4SaveCurrent();
-      _s4Msg('&#x23F3; Phase 6（動画生成 or Step5遷移）で実装予定');
+      window.s4GenerateVideo();
+    } else if (e.target.id === 's4BtnRefreshVideos') {
+      window._s4LoadVideos();
     }
   });
 
