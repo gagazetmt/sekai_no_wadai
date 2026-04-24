@@ -77,12 +77,15 @@ function _isProxyError(msg) {
   return /CONNECT|tunnel|proxy/i.test(String(msg || ''));
 }
 
-// 通常版：プロキシ失敗 / 403 / 429 時にセッション変えて最大3回まで試行
+// 通常版：プロキシ失敗 / 403 / 429 時にセッション変えて最大5回まで試行
+// バックオフ: 0.8s, 1.5s, 2.5s, 4s
 async function apiGet(endpoint) {
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 5;
+  const PROXY_BACKOFFS = [0, 800, 1500, 2500, 4000]; // 試行前の追加待機
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     await _waitRateLimit();
+    if (attempt > 1) await _sleep(PROXY_BACKOFFS[attempt - 1] || 0);
 
     let res;
     try {
@@ -92,7 +95,6 @@ async function apiGet(endpoint) {
       _lastCallTs = Date.now();
       if (attempt < MAX_ATTEMPTS) {
         console.log(`[SofaScore] spawn fail (${attempt}/${MAX_ATTEMPTS}): ${e.message.slice(0, 80)}`);
-        await _sleep(1000);
         continue;
       }
       throw e;
@@ -102,8 +104,7 @@ async function apiGet(endpoint) {
     // Python 側で例外（CONNECT失敗など）→ プロキシ系エラーなら別セッションで即再試行
     if (!res.ok) {
       if (_isProxyError(res.error) && attempt < MAX_ATTEMPTS) {
-        console.log(`[SofaScore] proxy error (${attempt}/${MAX_ATTEMPTS}): ${(res.error||'').slice(0, 80)}`);
-        await _sleep(1000);
+        console.log(`[SofaScore] proxy error (${attempt}/${MAX_ATTEMPTS}): ${(res.error||'').slice(0, 60)}`);
         continue;
       }
       throw new Error(res.error || 'python call failed');
@@ -115,9 +116,9 @@ async function apiGet(endpoint) {
       catch (e) { throw new Error(`body parse: ${res.body.slice(0, 120)}`); }
     }
 
-    // 403/429 → 5秒待って再試行（セッション変わる）
+    // 403/429 → 再試行（セッション変わる）
     if ((res.status === 403 || res.status === 429) && attempt < MAX_ATTEMPTS) {
-      console.log(`[SofaScore] ${res.status} on ${endpoint} (${attempt}/${MAX_ATTEMPTS}) → ${RETRY_WAIT_MS}ms 後リトライ`);
+      console.log(`[SofaScore] ${res.status} on ${endpoint} (${attempt}/${MAX_ATTEMPTS})`);
       await _sleep(RETRY_WAIT_MS);
       continue;
     }
