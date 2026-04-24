@@ -20,7 +20,7 @@ const COMMENT_LIMIT     = 15;   // 1案件あたりのコメント取得数
 const REDDIT_SOURCES    = ['hot', 'rising', 'new']; // 複数ソートから混ぜて取得
 
 const VPS_HOST = "root@37.60.224.54";
-const VPS_DEST = "/root/sekai_no_wadai/02_reddit_global/temp/";
+const VPS_DEST = "/root/sekai_no_wadai/02_reddit_global/data/"; // V2ランチャーが読む場所に直接送る
 const SSH_KEY  = path.join(process.env.USERPROFILE || "C:\\Users\\USER", ".ssh", "id_ed25519");
 
 // ─── ユーティリティ ───────────────────────────────────────────────────────────
