@@ -466,7 +466,7 @@ function getUI() {
   <div style="display:flex;gap:8px;">
     <button class="btn btn-sm" style="flex:1;" onclick="s3Repropose()">🔄 タイトル編集後に再提案</button>
     <button class="btn btn-success" id="s3GenBtn" style="flex:2;font-size:14px;padding:12px;" onclick="s3Generate()">
-      🎬 シナリオ生成・画像取得開始
+      🎬 モジュール確定 &#x2192; Step4 へ
     </button>
   </div>
 
@@ -1223,7 +1223,7 @@ function getUI() {
 
     const btn = document.getElementById('s3GenBtn');
     btn.disabled = true;
-    btn.textContent = '⏳ 生成中...';
+    btn.textContent = '⏳ 保存中...';
     _s3Msg('モジュールを保存中...');
 
     try {
@@ -1233,38 +1233,16 @@ function getUI() {
         body: JSON.stringify({ postId, modules: window.APP.modules }),
       });
 
-      /* 画像取得キーワードを収集（SIバインドがある場合は優先） */
-      const kwSet = new Set();
-      window.APP.modules.forEach(m => {
-        if (m.siBinding) kwSet.add(m.siBinding);
-      });
-      /* SI取得済みのplayer/teamラベルを追加（上限6件）*/
-      const s3si = window.APP.s3SiData || {};
-      if (s3si.boxes) {
-        ['sofascore_player','sofascore_team'].forEach(function(boxType) {
-          const box = s3si.boxes[boxType];
-          if (box) (box.fetched || []).forEach(function(f) { kwSet.add(f.label); });
-        });
-      }
-      const keywords = [...kwSet].slice(0, 6);
+      /* 画像取得は Step4 完了後に「裏」として別途実装するため、ここでは行わない */
+      _s3Msg('✅ モジュール確定！ Step4 へ遷移します...');
 
-      if (keywords.length) {
-        _s3Msg('⏳ 画像取得中 (0/' + keywords.length + ')…');
-        const imgRes = await fetchJson('/api/fetch-images', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ postId, keywords }),
-        });
-        window.APP.images = imgRes.images || [];
-        s3RenderImages(window.APP.images);
-        _s3Msg('✅ 完了！モジュール ' + window.APP.modules.length + '枚 / 画像 ' + imgRes.count + '枚');
-      } else {
-        _s3Msg('✅ モジュール保存完了（画像キーワードなし）');
-      }
+      /* Step4 に遷移（window.APP.modules は既に保持済み → step4Init が引き継ぐ）*/
+      setTimeout(function() { window.goStep(4); }, 300);
     } catch(e) {
       _s3Msg('❌ 失敗: ' + e.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = '🎬 シナリオ生成・画像取得開始';
+      btn.textContent = '🎬 モジュール確定 → Step4 へ';
     }
   };
 
