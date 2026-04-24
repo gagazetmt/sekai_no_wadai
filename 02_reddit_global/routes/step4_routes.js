@@ -399,68 +399,216 @@ router.post('/v2/tts-single', (req, res) => {
   res.status(501).json({ error: 'Phase 5 未実装' });
 });
 
+// Step4 プレビュー用：1モジュールの スライドHTMLを返す
+router.get('/v2/preview-slide', (req, res) => {
+  const { postId, idx } = req.query;
+  if (!postId) return res.status(400).send('<!doctype html><title>err</title><body>postId required</body>');
+  try {
+    const mp = modulesPath(postId);
+    if (!fs.existsSync(mp)) return res.status(404).send('<!doctype html><title>err</title><body>modules not found</body>');
+    const { modules = [] } = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const i = Math.max(0, Math.min(modules.length - 1, parseInt(idx || '0', 10)));
+    const mod = modules[i];
+    if (!mod) return res.status(404).send('<!doctype html><title>err</title><body>module out of range</body>');
+
+    // 動画生成と同じスライド HTML ジェネレータを使う
+    const { buildOpeningHTML }    = require('../scripts/v2_video/slides/opening');
+    const { buildEndingHTML }     = require('../scripts/v2_video/slides/ending');
+    const { buildUniversalHTML }  = require('../scripts/v2_video/slides/universal');
+    const { buildInsightHTML }    = require('../scripts/v2_video/slides/insight');
+    const { buildHistoryHTML }    = require('../scripts/v2_video/slides/history');
+    const { buildMatchcardHTML }  = require('../scripts/v2_video/slides/matchcard');
+    const { buildMatchcenterHTML }= require('../scripts/v2_video/slides/matchcenter');
+
+    let html;
+    switch (mod.type) {
+      case 'opening':     html = buildOpeningHTML(mod);   break;
+      case 'ending':      html = buildEndingHTML(mod);    break;
+      case 'insight':     html = buildInsightHTML(mod);   break;
+      case 'history':     html = buildHistoryHTML(mod);   break;
+      case 'matchcard':   html = buildMatchcardHTML(mod); break;
+      case 'matchcenter': html = buildMatchcenterHTML(mod); break;
+      default:            html = buildUniversalHTML(mod);
+    }
+    res.set('Content-Type', 'text/html; charset=utf-8').send(html);
+  } catch (e) {
+    res.status(500).send('<!doctype html><title>err</title><body>' + String(e.message).replace(/</g, '&lt;') + '</body>');
+  }
+});
+
+// Step4 画像ギャラリー：サンプル画像の一覧
+router.get('/v2/gallery', (req, res) => {
+  const galleryDirs = [
+    path.join(__dirname, '..', 'images'),
+    path.join(__dirname, '..', '型１', 'stock'),
+    path.join(__dirname, '..', '型３', 'stock'),
+  ];
+  const images = [];
+  galleryDirs.forEach(d => {
+    if (!fs.existsSync(d)) return;
+    try {
+      // 直下の画像ファイル
+      fs.readdirSync(d).forEach(f => {
+        if (!/\.(jpg|jpeg|png|webp)$/i.test(f)) return;
+        const rel = path.relative(path.join(__dirname, '..'), path.join(d, f)).replace(/\\/g, '/');
+        images.push({ path: rel, name: f, url: '/' + rel });
+      });
+      // 日付フォルダ配下も 1 階層掘る
+      fs.readdirSync(d).forEach(sub => {
+        const subPath = path.join(d, sub);
+        if (!fs.statSync(subPath).isDirectory()) return;
+        try {
+          fs.readdirSync(subPath).forEach(f => {
+            if (!/\.(jpg|jpeg|png|webp)$/i.test(f)) return;
+            const rel = path.relative(path.join(__dirname, '..'), path.join(subPath, f)).replace(/\\/g, '/');
+            images.push({ path: rel, name: sub + '/' + f, url: '/' + rel });
+          });
+        } catch (_) {}
+      });
+    } catch (_) {}
+  });
+  // 最大30件、ユニーク
+  const seen = new Set();
+  const unique = images.filter(im => { if (seen.has(im.path)) return false; seen.add(im.path); return true; }).slice(0, 30);
+  res.json({ images: unique });
+});
+
 // 背景画像候補取得（Step4後の「裏」フェーズで実装予定）
 router.get('/v2/images', (req, res) => {
   res.json({ images: [], note: 'Step4完了後に画像取得機能を実装予定' });
+});
+
+// 現在編集中モジュールの bgImage を保存
+router.post('/v2/set-bg-image', (req, res) => {
+  const { postId, idx, bgImage } = req.body;
+  if (!postId || idx == null) return res.status(400).json({ error: 'postId + idx required' });
+  try {
+    const mp = modulesPath(postId);
+    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+    const j = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const i = parseInt(idx, 10);
+    if (!j.modules[i]) return res.status(404).json({ error: 'idx out of range' });
+    j.modules[i].bgImage = bgImage || null;
+    j.savedAt = new Date().toISOString();
+    fs.writeFileSync(mp, JSON.stringify(j, null, 2));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── UI ─────────────────────────────────────────────────
 
 function getUI() {
   return `
-<div id="step4" class="step-container" style="display:none">
+<div id="step4" class="step-container" style="display:none;padding:12px 16px">
 
-  <!-- トップパネル -->
-  <div class="panel" style="margin-bottom:12px">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <span id="s4Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">
+  <!-- トップ操作バー -->
+  <div class="panel" style="margin-bottom:10px;padding:12px 14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="s4Title" style="font-size:13px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">
         案件を選択してください
       </span>
       <button class="btn btn-primary" id="s4BtnGenAll" title="全モジュールのナレーションを一括生成">
         &#x1F4D6; 全ナレーション一括生成
       </button>
-      <span id="s4Msg" style="font-size:12px;color:#8a9aba"></span>
+      <button class="btn btn-success" id="s4BtnNext" title="動画生成を開始">
+        &#x1F3AC; 動画生成・書き出し
+      </button>
+      <span id="s4Msg" style="font-size:11px;color:#8a9aba"></span>
     </div>
   </div>
 
-  <!-- タブ行（Step3 と同じ並び）-->
-  <div id="s4Tabs" style="display:flex;gap:3px;flex-wrap:wrap;"></div>
+  <!-- タブ行 -->
+  <div id="s4Tabs" style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:6px"></div>
 
-  <!-- モジュールエディタ -->
-  <div id="s4Editor"
-       style="background:var(--panel);border:1px solid var(--c);border-radius:0 12px 12px 12px;padding:20px;min-height:280px;margin-bottom:16px">
-    <div style="color:#5a6a8a;text-align:center;padding:20px">
-      Step3 でモジュールを確定した後、このStepで各モジュールの脚本を生成・編集します
+  <!-- ★★★ 2カラム レイアウト ★★★ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:720px">
+
+    <!-- ═══ 左カラム ═══ -->
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <!-- 左上: エディタ -->
+      <div id="s4Editor"
+           style="background:var(--panel);border:1px solid var(--c);border-radius:0 10px 10px 10px;padding:16px;min-height:480px;overflow-y:auto">
+        <div style="color:#5a6a8a;text-align:center;padding:20px">
+          Step3 でモジュールを確定した後、このStepで各モジュールの脚本を生成・編集します
+        </div>
+      </div>
+
+      <!-- 左下: 画像ギャラリー -->
+      <div class="panel" style="padding:12px;min-height:220px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F5BC; 背景画像ギャラリー（クリックで現モジュールにセット）</span>
+          <button class="btn btn-sm" id="s4BtnRefreshGallery">&#x21BB;</button>
+        </div>
+        <div id="s4Gallery" style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-height:360px;overflow-y:auto">
+          <div style="grid-column:1/-1;color:#5a6a8a;font-size:11px;text-align:center;padding:12px">読込中...</div>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:#8a9aba">
+          現在のスライド背景: <span id="s4CurrentBg" style="color:#fff">(未設定)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ 右カラム ═══ -->
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <!-- 右上: プレビュー -->
+      <div class="panel" style="padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F4FA; スライドプレビュー（動画と同じ見た目）</span>
+          <button class="btn btn-sm" id="s4BtnReloadPreview">&#x21BB; リロード</button>
+        </div>
+        <div id="s4PreviewWrap" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:6px;overflow:hidden">
+          <iframe id="s4PreviewFrame"
+                  style="position:absolute;top:0;left:0;width:1920px;height:1080px;border:0;transform-origin:top left"
+                  sandbox="allow-same-origin allow-scripts">
+          </iframe>
+        </div>
+      </div>
+
+      <!-- 右中: 音声生成 -->
+      <div class="panel" style="padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3A4; 音声生成（現スライド）</span>
+          <button class="btn btn-sm" id="s4BtnGenVoice" style="background:#8b5cf6;color:#fff">&#x2728; 音声生成</button>
+        </div>
+        <div id="s4VoiceList" style="display:flex;flex-direction:column;gap:4px;min-height:40px;font-size:11px;color:#5a6a8a">
+          Phase 5 で MiniMax 連携予定
+        </div>
+      </div>
+
+      <!-- 右下: ログ -->
+      <div class="panel" style="padding:10px 12px;flex:1;min-height:180px;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F4C4; ログ</span>
+          <button class="btn btn-sm" id="s4BtnClearLog">クリア</button>
+        </div>
+        <div id="s4Log"
+             style="flex:1;background:#000;color:#9bb5e0;padding:8px 10px;border-radius:6px;font-family:monospace;font-size:10px;line-height:1.55;overflow-y:auto;max-height:300px">
+          <div style="color:#5a6a8a">[log] 準備完了</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- 動画生成進捗 -->
-  <div id="s4GenProgress" class="panel" style="display:none;margin-bottom:12px">
-    <div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:6px">
+  <!-- 動画生成進捗（下部） -->
+  <div id="s4GenProgress" class="panel" style="display:none;margin-top:10px;padding:10px 14px">
+    <div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:4px">
       &#x1F3A5; 動画生成ジョブ <span id="s4JobId" style="font-size:10px;color:#8a9aba"></span>
     </div>
-    <div id="s4JobStatus" style="font-size:13px;color:#c0cce0;margin-bottom:4px">準備中...</div>
-    <div style="background:#0d1220;height:8px;border-radius:4px;overflow:hidden">
+    <div id="s4JobStatus" style="font-size:12px;color:#c0cce0;margin-bottom:4px">準備中...</div>
+    <div style="background:#0d1220;height:6px;border-radius:3px;overflow:hidden">
       <div id="s4JobBar" style="background:var(--c);height:100%;width:0%;transition:width .3s"></div>
     </div>
   </div>
 
   <!-- 生成済み動画一覧 -->
-  <div class="panel" style="margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+  <div class="panel" style="margin-top:10px;padding:10px 14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F4FD; 生成済み動画</span>
       <button class="btn btn-sm" id="s4BtnRefreshVideos">&#x21BB; 一覧更新</button>
     </div>
-    <div id="s4VideoList" style="display:flex;flex-direction:column;gap:6px">
+    <div id="s4VideoList" style="display:flex;flex-direction:column;gap:4px">
       <div style="font-size:11px;color:#5a6a8a">まだ生成した動画はありません</div>
     </div>
-  </div>
-
-  <!-- ボトム：動画生成ボタン -->
-  <div style="display:flex;gap:8px">
-    <button class="btn btn-success" id="s4BtnNext" style="flex:1;padding:13px;font-size:14px;font-weight:bold">
-      &#x1F3AC; 動画生成・書き出し
-    </button>
   </div>
 
 </div>
@@ -856,8 +1004,136 @@ function getUI() {
   });
 
   /* ヘルパー */
-  function _s4Msg(t) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = t; }
+  function _s4Msg(t) {
+    const el = document.getElementById('s4Msg');
+    if (el) el.innerHTML = t;
+    // ログにも追記
+    _s4Log(t.replace(/&#x[0-9A-F]+;/g, '').trim());
+  }
+  function _s4Log(msg) {
+    const el = document.getElementById('s4Log');
+    if (!el) return;
+    const ts = new Date().toLocaleTimeString('ja-JP', { hour12: false });
+    const line = document.createElement('div');
+    line.innerHTML = '<span style="color:#5a6a8a">[' + ts + ']</span> ' + String(msg || '');
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
   function _e(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* ── プレビュー iframe 更新 ── */
+  window._s4ReloadPreview = function() {
+    const post = window.APP.selected;
+    if (!post) return;
+    const i = window.APP.s4.activeTab;
+    const frame = document.getElementById('s4PreviewFrame');
+    if (!frame) return;
+    // modules を先に保存してからプレビュー更新
+    _s4SaveCurrent();
+    // modules を POST でサーバーに保存してから再読込
+    fetchJson('/api/v2/generate-video', null); // no-op: generate-videoは別のPOST
+    // bgImage 保存（即時）
+    const currentMod = window.APP.modules?.[i];
+    if (currentMod) {
+      fetchJson('/api/v2/set-bg-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, idx: i, bgImage: currentMod.bgImage || null }),
+      }).catch(() => {});
+    }
+    // 簡易に cache bust で強制リロード
+    const ts = Date.now();
+    frame.src = '/api/v2/preview-slide?postId=' + encodeURIComponent(post.id) + '&idx=' + i + '&_ts=' + ts;
+  };
+
+  /* ── プレビュー枠のリサイズ時にスケール計算 ── */
+  window._s4FitPreview = function() {
+    const wrap = document.getElementById('s4PreviewWrap');
+    const frame = document.getElementById('s4PreviewFrame');
+    if (!wrap || !frame) return;
+    const w = wrap.clientWidth;
+    const scale = w / 1920;
+    frame.style.transform = 'scale(' + scale + ')';
+  };
+  window.addEventListener('resize', function() { window._s4FitPreview(); });
+
+  /* ── 画像ギャラリー ── */
+  window._s4LoadGallery = async function() {
+    const el = document.getElementById('s4Gallery');
+    try {
+      const d = await fetchJson('/api/v2/gallery');
+      const imgs = d.images || [];
+      if (!imgs.length) {
+        el.innerHTML = '<div style="grid-column:1/-1;color:#5a6a8a;font-size:11px;text-align:center;padding:12px">画像がありません</div>';
+        return;
+      }
+      el.innerHTML = imgs.map(function(im) {
+        return '<div class="s4-gal-item" data-url="' + _e(im.url) + '" data-path="' + _e(im.path) + '"'
+          + ' style="cursor:pointer;position:relative;aspect-ratio:16/9;background:#000 url(' + im.url + ') center/cover;'
+          + 'border-radius:4px;border:2px solid transparent;transition:border-color .1s" title="' + _e(im.name) + '"></div>';
+      }).join('');
+    } catch (e) {
+      el.innerHTML = '<div style="grid-column:1/-1;color:#ef4444;font-size:11px;text-align:center">ギャラリーロード失敗: ' + e.message + '</div>';
+    }
+  };
+
+  /* ── ギャラリー画像クリック → 現モジュールにセット ── */
+  document.addEventListener('click', function(e) {
+    if (!e.target.classList) return;
+    if (e.target.classList.contains('s4-gal-item')) {
+      const url = e.target.dataset.url;
+      const path = e.target.dataset.path;
+      const i = window.APP.s4.activeTab;
+      const m = window.APP.modules?.[i];
+      if (!m) return;
+      m.bgImage = path;
+      const curBgEl = document.getElementById('s4CurrentBg');
+      if (curBgEl) curBgEl.textContent = path;
+      _s4Log('背景画像セット: ' + path);
+      window._s4ReloadPreview();
+    }
+  });
+
+  /* ログクリアボタン */
+  document.addEventListener('click', function(e) {
+    if (e.target.id === 's4BtnClearLog') {
+      const el = document.getElementById('s4Log');
+      if (el) el.innerHTML = '<div style="color:#5a6a8a">[log] クリア</div>';
+    } else if (e.target.id === 's4BtnReloadPreview') {
+      window._s4ReloadPreview();
+    } else if (e.target.id === 's4BtnRefreshGallery') {
+      window._s4LoadGallery();
+    } else if (e.target.id === 's4BtnGenVoice') {
+      _s4Log('⏳ 音声生成: Phase 5（MiniMax連携）で実装予定');
+    }
+  });
+
+  /* ── モジュールタブ切替時にプレビューも更新 ── */
+  const _s4SwitchOrig = window.s4Switch;
+  window.s4Switch = function(i) {
+    _s4SwitchOrig(i);
+    // 現モジュールの bgImage 表示
+    const m = window.APP.modules?.[i];
+    const curBgEl = document.getElementById('s4CurrentBg');
+    if (curBgEl) curBgEl.textContent = m?.bgImage || '(未設定)';
+    // プレビューロード
+    setTimeout(window._s4ReloadPreview, 100);
+  };
+
+  /* ── step4Init 完了後のフック：プレビュー + ギャラリー ── */
+  const _origStep4Init = window.step4Init;
+  window.step4Init = function() {
+    _origStep4Init();
+    setTimeout(function() {
+      window._s4LoadVideos();
+      window._s4LoadGallery();
+      window._s4FitPreview();
+      setTimeout(window._s4ReloadPreview, 300);
+      // 現モジュールの bgImage 表示
+      const m = window.APP.modules?.[window.APP.s4.activeTab];
+      const curBgEl = document.getElementById('s4CurrentBg');
+      if (curBgEl) curBgEl.textContent = m?.bgImage || '(未設定)';
+    }, 300);
+  };
 
 })();
 </script>`;

@@ -65,17 +65,17 @@ function buildPage() {
 body { font-family: sans-serif; background: var(--bg); color: var(--text);
        display: flex; height: 100vh; overflow: hidden; }
 
-/* ── サイドバー ── */
-.sidebar { width: 300px; background: #0d1220; border-right: 1px solid var(--border);
+/* ── サイドバー（コンパクト化）── */
+.sidebar { width: 220px; background: #0d1220; border-right: 1px solid var(--border);
            display: flex; flex-direction: column; flex-shrink: 0; }
-.sidebar-header { padding: 16px; background: #1a2540; color: var(--c);
-                  font-weight: 900; font-size: 14px; border-bottom: 1px solid #2a3560; }
-.saved-list { flex: 1; overflow-y: auto; padding: 10px; }
-.lead-item { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-             padding: 11px 13px; margin-bottom: 8px; cursor: pointer; font-size: 13px;
-             transition: border-color .15s; line-height: 1.4; }
+.sidebar-header { padding: 12px 14px; background: #1a2540; color: var(--c);
+                  font-weight: 900; font-size: 12px; border-bottom: 1px solid #2a3560; letter-spacing: 1px; }
+.saved-list { flex: 1; overflow-y: auto; padding: 8px; }
+.lead-item { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+             padding: 8px 10px; margin-bottom: 6px; cursor: pointer; font-size: 11px;
+             transition: border-color .15s; line-height: 1.35; word-break: break-all; }
 .lead-item:hover { border-color: var(--muted); }
-.lead-item.active { border-color: var(--c); border-left: 4px solid var(--c); background: #1e2540; }
+.lead-item.active { border-color: var(--c); border-left: 3px solid var(--c); background: #1e2540; }
 
 /* ── メインエリア ── */
 .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }

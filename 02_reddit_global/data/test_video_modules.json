@@ -1,0 +1,9 @@
+{
+  "postId": "test_video",
+  "modules": [
+    {"type":"opening","title":"衝撃！ハーランド新記録","narration":"プレミア史上最速100G"},
+    {"type":"insight","title":"HAALAND","catchphrases":["18歳でCL8得点","ドルトムントで80G","マンCで100G達成"],"narration":"驚異の得点力がすべてを物語る"},
+    {"type":"stats","title":"今季スタッツ","siBinding":"Erling Haaland","dataSlots":[{"label":"GOALS","value":"24","merged":"GOALS：24"},{"label":"ASSISTS","value":"7","merged":"ASSISTS：7"},{"label":"RATING","value":"7.92","merged":"RATING：7.92"},{"label":"MARKET","value":"€218M","merged":"MARKET：€218M"}],"narration":"24得点7アシスト、レーティング7.92。市場価値は驚愕の€218M。"},
+    {"type":"ending","title":"ありがとう！","narration":"また次回も熱い試合を届けるぞ"}
+  ]
+}
