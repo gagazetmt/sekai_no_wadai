@@ -73,44 +73,60 @@ function _httpErr(status, body) {
   return e;
 }
 
-// 通常版：403/429 時に1回リトライ
+function _isProxyError(msg) {
+  return /CONNECT|tunnel|proxy/i.test(String(msg || ''));
+}
+
+// 通常版：プロキシ失敗 / 403 / 429 時にセッション変えて最大3回まで試行
 async function apiGet(endpoint) {
-  await _waitRateLimit();
+  const MAX_ATTEMPTS = 3;
 
-  let res;
-  try {
-    res = await _callPython(endpoint);
-  } catch (e) {
-    _lastCallTs = Date.now();
-    throw e;
-  }
-  _lastCallTs = Date.now();
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    await _waitRateLimit();
 
-  if (!res.ok) throw new Error(res.error || 'python call failed');
-
-  // 200 ならパースして返す
-  if (res.status === 200) {
-    try { return JSON.parse(res.body); }
-    catch (e) { throw new Error(`body parse: ${res.body.slice(0, 120)}`); }
-  }
-
-  // 403/429 → 5秒待って1回リトライ
-  if (res.status === 403 || res.status === 429) {
-    console.log(`[SofaScore] ${res.status} on ${endpoint} → ${RETRY_WAIT_MS}ms 後にリトライ`);
-    await _sleep(RETRY_WAIT_MS);
-    let res2;
-    try { res2 = await _callPython(endpoint); }
-    catch (e) { _lastCallTs = Date.now(); throw e; }
-    _lastCallTs = Date.now();
-    if (!res2.ok) throw new Error(res2.error || 'python call failed');
-    if (res2.status === 200) {
-      try { return JSON.parse(res2.body); }
-      catch (e) { throw new Error(`body parse: ${res2.body.slice(0, 120)}`); }
+    let res;
+    try {
+      // _callPython は呼ぶたびに _pickProxy() で別セッション選ぶ
+      res = await _callPython(endpoint);
+    } catch (e) {
+      _lastCallTs = Date.now();
+      if (attempt < MAX_ATTEMPTS) {
+        console.log(`[SofaScore] spawn fail (${attempt}/${MAX_ATTEMPTS}): ${e.message.slice(0, 80)}`);
+        await _sleep(1000);
+        continue;
+      }
+      throw e;
     }
-    throw _httpErr(res2.status, res2.body);
+    _lastCallTs = Date.now();
+
+    // Python 側で例外（CONNECT失敗など）→ プロキシ系エラーなら別セッションで即再試行
+    if (!res.ok) {
+      if (_isProxyError(res.error) && attempt < MAX_ATTEMPTS) {
+        console.log(`[SofaScore] proxy error (${attempt}/${MAX_ATTEMPTS}): ${(res.error||'').slice(0, 80)}`);
+        await _sleep(1000);
+        continue;
+      }
+      throw new Error(res.error || 'python call failed');
+    }
+
+    // 200 → 成功
+    if (res.status === 200) {
+      try { return JSON.parse(res.body); }
+      catch (e) { throw new Error(`body parse: ${res.body.slice(0, 120)}`); }
+    }
+
+    // 403/429 → 5秒待って再試行（セッション変わる）
+    if ((res.status === 403 || res.status === 429) && attempt < MAX_ATTEMPTS) {
+      console.log(`[SofaScore] ${res.status} on ${endpoint} (${attempt}/${MAX_ATTEMPTS}) → ${RETRY_WAIT_MS}ms 後リトライ`);
+      await _sleep(RETRY_WAIT_MS);
+      continue;
+    }
+
+    // それ以外のエラー
+    throw _httpErr(res.status, res.body);
   }
 
-  throw _httpErr(res.status, res.body);
+  throw new Error('apiGet: max attempts exceeded');
 }
 
 // 軽量版：リトライしない（検証用・ラベル検証でサーバー側が速く応答する必要があるケース）
