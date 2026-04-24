@@ -256,9 +256,11 @@ async function main() {
   const allPosts = [...trulyNew, ...existing.posts].sort((a, b) => new Date(b.added_at) - new Date(a.added_at));
   fs.writeFileSync(fileName, JSON.stringify({ date, posts: allPosts }, null, 2));
 
-  // 5. VPS送信
-  const cmd = `scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no "${fileName}" "${VPS_HOST}:${VPS_DEST}"`;
-  try { execSync(cmd, { stdio: "inherit" }); } catch {}
+  // 5. VPS送信（Windows からのみ。VPS 上では不要）
+  if (process.platform === "win32") {
+    const cmd = `scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no "${fileName}" "${VPS_HOST}:${VPS_DEST}"`;
+    try { execSync(cmd, { stdio: "inherit" }); } catch {}
+  }
 
   console.log(`✅ 完了! 新規:${trulyNew.length}件 / 合計:${allPosts.length}件 -> ${path.basename(fileName)}`);
 }
