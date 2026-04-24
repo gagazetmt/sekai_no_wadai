@@ -15,8 +15,9 @@ const DATA_DIR          = path.join(__dirname, "..", "data");
 const HISTORY_FILE      = path.join(DATA_DIR, "seen_history.json");
 const REDDIT_SELECT_N   = 10;   // Redditから10件
 const FIVECH_SELECT_N   = 10;   // 5chから10件
-const REDDIT_MIN_SCORE  = 20;   // 盛り上がり判定しきい値
+const REDDIT_MIN_SCORE  = 10;   // 盛り上がり判定しきい値（緩和: 20→10）
 const COMMENT_LIMIT     = 15;   // 1案件あたりのコメント取得数
+const REDDIT_SOURCES    = ['hot', 'rising', 'new']; // 複数ソートから混ぜて取得
 
 const VPS_HOST = "root@37.60.224.54";
 const VPS_DEST = "/root/sekai_no_wadai/02_reddit_global/temp/";
@@ -41,55 +42,124 @@ async function redditGet(url) {
   return null;
 }
 
-// ─── 翻訳・意訳エンジン (#1-6 強化) ───────────────────────────────────────────
-async function translateCaptions(items) {
-  const targets = items.filter(it => !it.titleJa);
-  if (!targets.length) return items;
+// ─── 翻訳・意訳エンジン (#1-6 強化版：サニタイズ＋小バッチ＋個別フォールバック) ──
 
-  const prompt = `あなたはサッカーメディアの敏腕編集者です。以下の海外ニュース案件とコメントを、日本の視聴者の心を掴むキャッチーな内容に翻訳してください。
+// JSON サニタイズ＆パース（制御文字除去・最初の[...]または{...}を抽出）
+function tryParseLenient(raw, wantArray = false) {
+  if (!raw) return null;
+  // 制御文字除去（\b \f \v + 00-08, 0B, 0C, 0E-1F）
+  const CTRL_RE = new RegExp('[\u0000-\u0008\u000B\u000C\u000E-\u001F]', 'g');
+  const cleaned = raw
+    .replace(CTRL_RE, ' ')
+    // Claude が時々出す smart quotes を ASCII に
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
 
-【翻訳ルール】
-1. 案件タイトル: 直訳ではなく、思わずクリックしたくなる「煽り」や「期待感」を込めた意訳を優先。
-2. 選手・チーム名: 必ず一般的なカタカナ表記にする。
-3. コメント: ネット掲示板特有の「熱量」や「ユーモア」を再現した面白い日本語にする。
+  const pattern = wantArray ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/;
+  const m = cleaned.match(pattern);
+  if (!m) return null;
 
-【入力データ】
-${targets.map((it, i) => `--- [ITEM ${i}] ---\nTitle: ${it.title}\nComments:\n${it.comments.map(c => `- ${c.body}`).join('\n')}`).join('\n\n')}
+  try { return JSON.parse(m[0]); }
+  catch (_) {
+    // 二次フォールバック: 末尾が途切れている可能性 → 最後の完結要素まで切る
+    try {
+      const arr = m[0];
+      // 最後の `}` までで閉じる試み
+      const lastClose = wantArray ? arr.lastIndexOf(']') : arr.lastIndexOf('}');
+      if (lastClose > 0) return JSON.parse(arr.slice(0, lastClose + 1));
+    } catch (_) {}
+    return null;
+  }
+}
 
-【出力形式】
-JSONの配列形式で、タイトルとコメントのペアだけを返してください。
+// 1件を単独翻訳（バッチが失敗したときのフォールバック）
+async function translateSingle(item) {
+  const commentsText = item.comments.slice(0, 5).map(c => `- ${c.body}`).join('\n');
+  const prompt = `以下のサッカー関連投稿を日本語に意訳してください。視聴者をクリックしたくさせる煽り・熱量を込めた表現で。
+
+Title: ${item.title}
+Comments:
+${commentsText}
+
+【重要】JSONのみ返すこと。文字列内の改行は \\n、引用符は \\" でエスケープ。制御文字・Smart Quotes 禁止。
+
+{"titleJa": "日本語タイトル", "commentsJa": ["訳1", "訳2", "訳3", "訳4", "訳5"]}`;
+
+  try {
+    const raw = await callAI({
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+      messages:   [{ role: 'user', content: prompt }],
+    });
+    return tryParseLenient(raw, false);
+  } catch (_) { return null; }
+}
+
+// バッチ翻訳（3件ずつ）
+async function translateBatch(batch) {
+  const prompt = `以下のサッカー関連投稿を日本語に意訳してください。視聴者をクリックしたくさせる煽り・熱量で。
+
+【入力】
+${batch.map((it, i) => `[${i}] Title: ${it.title}\nComments:\n${it.comments.slice(0, 5).map(c => '- ' + c.body).join('\n')}`).join('\n\n')}
+
+【重要ルール】JSONの配列のみ返す。文字列内の改行は \\n、引用符は \\" でエスケープ。制御文字・Smart Quotes 禁止。出力JSONは1行でも構わない。
+
 [
-  { "titleJa": "タイトル", "commentsJa": ["コメ1", "コメ2"...] },
+  {"titleJa": "タイトル1", "commentsJa": ["コメ1a", "コメ1b", ...]},
+  {"titleJa": "タイトル2", "commentsJa": [...]},
   ...
 ]`;
 
   try {
-    console.log(`🤖 AI翻訳開始... (${targets.length}件)`);
     const raw = await callAI({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 4000,
-      messages: [{ role: 'user', content: prompt }]
+      model:      'claude-haiku-4-5-20251001',
+      max_tokens: 3000,
+      messages:   [{ role: 'user', content: prompt }],
     });
-    const m = raw.match(/\[[\s\S]*\]/);
-    if (!m) return items;
-    const translated = JSON.parse(m[0]);
+    return tryParseLenient(raw, true);
+  } catch (_) { return null; }
+}
 
-    const map = new Map(targets.map((it, i) => [it.id, translated[i]]));
-    return items.map(it => {
-      const res = map.get(it.id);
-      if (res) {
-        return {
-          ...it,
-          titleJa: res.titleJa || it.title,
-          comments: it.comments.map((c, ci) => ({ ...c, bodyJa: res.commentsJa?.[ci] || c.body }))
-        };
+async function translateCaptions(items) {
+  const targets = items.filter(it => !it.titleJa);
+  if (!targets.length) return items;
+
+  console.log(`🤖 AI翻訳開始... (${targets.length}件)`);
+
+  const BATCH = 3;
+  const results = new Map(); // id → { titleJa, commentsJa }
+
+  for (let i = 0; i < targets.length; i += BATCH) {
+    const batch = targets.slice(i, i + BATCH);
+    const parsed = await translateBatch(batch);
+
+    if (Array.isArray(parsed) && parsed.length >= batch.length) {
+      batch.forEach((it, j) => { if (parsed[j]) results.set(it.id, parsed[j]); });
+      console.log(`  ✅ バッチ ${Math.floor(i/BATCH)+1}: ${batch.length}件`);
+    } else {
+      console.log(`  ⚠️ バッチ ${Math.floor(i/BATCH)+1} 失敗 → 個別翻訳へ`);
+      for (const it of batch) {
+        const single = await translateSingle(it);
+        if (single) results.set(it.id, single);
+        else console.log(`    ❌ 個別も失敗: ${it.title.slice(0, 40)}`);
+        await new Promise(r => setTimeout(r, 300));
       }
-      return it;
-    });
-  } catch (e) {
-    console.error("❌ 翻訳エラー:", e.message);
-    return items;
+    }
+    await new Promise(r => setTimeout(r, 400));
   }
+
+  const successCount = results.size;
+  console.log(`🎯 翻訳完了: ${successCount}/${targets.length}件`);
+
+  return items.map(it => {
+    const res = results.get(it.id);
+    if (!res) return it;
+    return {
+      ...it,
+      titleJa: res.titleJa || it.title,
+      comments: it.comments.map((c, ci) => ({ ...c, bodyJa: res.commentsJa?.[ci] || c.body })),
+    };
+  });
 }
 
 // ─── 案件収集メイン ────────────────────────────────────────────────────────────
@@ -97,17 +167,31 @@ async function main() {
   const { date, iso } = jstNow();
   console.log(`\n🚀 案件収集開始: ${iso}`);
 
-  // 1. Redditから取得 (#1-4, #1-5)
-  console.log("📡 Redditから案件を探索中...");
-  const redditJson = await redditGet("https://www.reddit.com/r/soccer/hot.json?limit=100");
-  const redditPosts = (redditJson?.data?.children || [])
-    .map(c => c.data)
-    .filter(p => !p.stickied && p.score >= REDDIT_MIN_SCORE)
-    .slice(0, REDDIT_SELECT_N)
-    .map(p => ({
-      id: p.permalink, source: "reddit", title: p.title, url: "https://www.reddit.com" + p.permalink,
-      score: p.score, numComments: p.num_comments, created_utc: p.created_utc, permalink: p.permalink, comments: []
-    }));
+  // 1. Redditから取得 (#1-4, #1-5) - hot/rising/new から混合取得して鮮度確保
+  console.log("📡 Redditから案件を探索中... (hot+rising+new)");
+  const seen = new Map(); // permalink → post
+  for (const sort of REDDIT_SOURCES) {
+    const json = await redditGet(`https://www.reddit.com/r/soccer/${sort}.json?limit=50`);
+    (json?.data?.children || [])
+      .map(c => c.data)
+      .filter(p => !p.stickied && p.score >= REDDIT_MIN_SCORE)
+      .forEach(p => {
+        if (!seen.has(p.permalink)) {
+          seen.set(p.permalink, {
+            id: p.permalink, source: "reddit", title: p.title,
+            url: "https://www.reddit.com" + p.permalink,
+            score: p.score, numComments: p.num_comments,
+            created_utc: p.created_utc, permalink: p.permalink,
+            sortSource: sort, comments: [],
+          });
+        }
+      });
+  }
+  // スコア降順で上位N件
+  const redditPosts = Array.from(seen.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, REDDIT_SELECT_N);
+  console.log(`  📊 ${seen.size}件から上位${redditPosts.length}件選定`);
 
   // 各Reddit案件のコメントを取得
   for (const p of redditPosts) {

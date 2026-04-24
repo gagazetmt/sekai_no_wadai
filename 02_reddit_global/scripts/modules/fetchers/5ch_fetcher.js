@@ -11,8 +11,8 @@ const HEADERS = {
   'Accept-Language': 'ja-JP,ja;q=0.9',
 };
 
-const MIN_COUNT   = 50;   // 最低レス数
-const MAX_THREADS = 4;    // 板ごとの最大取得スレ数
+const MIN_COUNT   = 30;   // 最低レス数（緩和: 50→30）
+const MAX_THREADS = 6;    // 板ごとの最大取得スレ数（緩和: 4→6）
 const MAX_COMMENTS = 12;  // 取得するコメント数
 
 // 除外タイトルパターン（共通）
