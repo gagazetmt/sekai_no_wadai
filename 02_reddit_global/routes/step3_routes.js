@@ -667,23 +667,30 @@ function getUI() {
     }
 
     if (type === 'stats' || type === 'profile' || type === 'matchcard') {
+      // 既存の { label, value } を「ラベル：値」の1カラムに統合表示
       const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
-      while (slots.length < 4) slots.push({ label: '', value: '' });
-      m.dataSlots = slots.slice(0, 4);
-      const rows = m.dataSlots.map((s, idx) =>
-        '<div style="display:grid;grid-template-columns:40px 1fr 1fr;gap:6px;margin-bottom:6px;align-items:center;">'
-        + '<span style="font-size:10px;color:#8a9aba;text-align:center;">#' + (idx+1) + '</span>'
-        + '<input class="inp s3-slot-label" data-idx="' + idx + '" placeholder="LABEL" style="font-size:12px;padding:4px 8px;" value="' + _e(s.label || '') + '">'
-        + '<input class="inp s3-slot-value" data-idx="' + idx + '" placeholder="VALUE" style="font-size:12px;padding:4px 8px;" value="' + _e(s.value || '') + '">'
-        + '</div>'
-      ).join('');
-      return wrap(rows);
+      if (!slots.length) {
+        for (let k = 0; k < 4; k++) slots.push({ label: '', value: '' });
+      }
+      m.dataSlots = slots;
+      const rows = m.dataSlots.map((s, idx) => {
+        const merged = (s.label && s.value) ? (s.label + '：' + s.value) : (s.merged || '');
+        return '<div style="display:grid;grid-template-columns:30px 1fr 30px;gap:6px;margin-bottom:6px;align-items:center;">'
+          + '<span style="font-size:10px;color:#8a9aba;text-align:center;">#' + (idx+1) + '</span>'
+          + '<input class="inp s3-slot-merged" data-idx="' + idx + '" placeholder="例: 今季ゴール：28" style="font-size:13px;padding:5px 10px;" value="' + _e(merged) + '">'
+          + '<button class="btn btn-sm s3-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
+          + '</div>';
+      }).join('');
+      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddSlot()">+ スロット追加</button>';
+      return wrap(rows + addBtn);
     }
 
     if (type === 'comparison') {
       const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
-      while (slots.length < 4) slots.push({ label: '', leftValue: '', rightValue: '' });
-      m.dataSlots = slots.slice(0, 4);
+      if (!slots.length) {
+        for (let k = 0; k < 4; k++) slots.push({ label: '', leftValue: '', rightValue: '' });
+      }
+      m.dataSlots = slots;
 
       const siOptsL = ['<option value="">(左: 未選択)</option>']
         .concat(siItems.map(it =>
@@ -701,18 +708,20 @@ function getUI() {
         + '</div>';
 
       const rows = m.dataSlots.map((s, idx) =>
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px;">'
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 30px;gap:6px;margin-bottom:6px;align-items:center;">'
         + '<input class="inp s3-cmp-label" data-idx="' + idx + '" placeholder="LABEL" style="font-size:12px;padding:4px 8px;" value="' + _e(s.label || '') + '">'
-        + '<input class="inp s3-cmp-left" data-idx="' + idx + '" placeholder="左" style="font-size:12px;padding:4px 8px;color:#93c5fd;" value="' + _e(s.leftValue || '') + '">'
-        + '<input class="inp s3-cmp-right" data-idx="' + idx + '" placeholder="右" style="font-size:12px;padding:4px 8px;color:#fca5a5;" value="' + _e(s.rightValue || '') + '">'
+        + '<input class="inp s3-cmp-left"  data-idx="' + idx + '" placeholder="左"    style="font-size:12px;padding:4px 8px;color:#93c5fd;" value="' + _e(s.leftValue || '') + '">'
+        + '<input class="inp s3-cmp-right" data-idx="' + idx + '" placeholder="右"    style="font-size:12px;padding:4px 8px;color:#fca5a5;" value="' + _e(s.rightValue || '') + '">'
+        + '<button class="btn btn-sm s3-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
         + '</div>'
       ).join('');
-      return wrap(topRow + rows);
+      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddCmpSlot()">+ 行追加</button>';
+      return wrap(topRow + rows + addBtn);
     }
 
     if (type === 'insight') {
       const phrases = Array.isArray(m.catchphrases) ? m.catchphrases : [];
-      while (phrases.length < 3) phrases.push('');
+      if (!phrases.length) phrases.push('', '', '');
       m.catchphrases = phrases;
       const rows = m.catchphrases.map((p, idx) =>
         '<div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">'
@@ -721,24 +730,24 @@ function getUI() {
         + '<button class="btn btn-sm" style="background:#ef4444;color:#fff;" onclick="s3RemovePhrase(' + idx + ')">&#xD7;</button>'
         + '</div>'
       ).join('');
-      const addBtn = m.catchphrases.length < 5
-        ? '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddPhrase()">+ 行追加</button>'
-        : '';
+      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddPhrase()">+ キャッチコピー追加</button>';
       return wrap(rows + addBtn);
     }
 
     if (type === 'reaction') {
       const coms = Array.isArray(m.comments) ? m.comments : [];
-      while (coms.length < 7) coms.push({ text: '', score: 0 });
-      m.comments = coms.slice(0, 7);
+      if (!coms.length) { for (let k = 0; k < 7; k++) coms.push({ text: '', score: 0 }); }
+      m.comments = coms;
       const rows = m.comments.map((c, idx) =>
-        '<div style="display:grid;grid-template-columns:22px 1fr 70px;gap:6px;margin-bottom:6px;align-items:center;">'
+        '<div style="display:grid;grid-template-columns:22px 1fr 70px 30px;gap:6px;margin-bottom:6px;align-items:center;">'
         + '<span style="font-size:10px;color:#8a9aba;text-align:center;">' + (idx+1) + '.</span>'
-        + '<input class="inp s3-cmt-text" data-idx="' + idx + '" placeholder="コメント" style="font-size:12px;padding:4px 8px;" value="' + _e(c.text || '') + '">'
+        + '<input class="inp s3-cmt-text"  data-idx="' + idx + '" placeholder="コメント" style="font-size:12px;padding:4px 8px;" value="' + _e(c.text || '') + '">'
         + '<input type="number" class="inp s3-cmt-score" data-idx="' + idx + '" placeholder="score" style="font-size:11px;padding:4px 8px;" value="' + (c.score || 0) + '">'
+        + '<button class="btn btn-sm s3-cmt-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
         + '</div>'
       ).join('');
-      return wrap(rows);
+      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddComment()">+ コメント追加</button>';
+      return wrap(rows + addBtn);
     }
 
     return '';
@@ -761,22 +770,24 @@ function getUI() {
     // ── データバインド系の入力を DOM から収集 ──
     const type = m.type;
     if (['stats','profile','matchcard'].includes(type)) {
-      const labels = document.querySelectorAll('.s3-slot-label');
-      const values = document.querySelectorAll('.s3-slot-value');
+      // 「ラベル：値」1カラム形式を保存時に分解
+      const merged = document.querySelectorAll('.s3-slot-merged');
       const slots = [];
-      for (let j = 0; j < 4; j++) {
-        slots.push({
-          label: labels[j]?.value || '',
-          value: values[j]?.value || '',
-        });
-      }
+      merged.forEach(el => {
+        const raw = el.value || '';
+        // 全角：または半角:で label と value を分ける
+        const parts = raw.split(/[:：]/);
+        const label = (parts[0] || '').trim();
+        const value = parts.slice(1).join(':').trim();
+        slots.push({ label, value, merged: raw });
+      });
       m.dataSlots = slots;
     } else if (type === 'comparison') {
       const labels = document.querySelectorAll('.s3-cmp-label');
       const lefts  = document.querySelectorAll('.s3-cmp-left');
       const rights = document.querySelectorAll('.s3-cmp-right');
       const slots = [];
-      for (let j = 0; j < 4; j++) {
+      for (let j = 0; j < labels.length; j++) {
         slots.push({
           label:      labels[j]?.value || '',
           leftValue:  lefts[j]?.value  || '',
@@ -790,7 +801,7 @@ function getUI() {
       if (bR) m.siBindingRight = bR.value || null;
     } else if (type === 'insight') {
       const inputs = document.querySelectorAll('.s3-phrase');
-      m.catchphrases = Array.from(inputs).map(el => el.value).filter(v => v !== undefined);
+      m.catchphrases = Array.from(inputs).map(el => el.value);
     } else if (type === 'reaction') {
       const texts  = document.querySelectorAll('.s3-cmt-text');
       const scores = document.querySelectorAll('.s3-cmt-score');
@@ -805,13 +816,41 @@ function getUI() {
     }
   }
 
+  /* stats/profile/matchcard: スロット追加/削除 */
+  window.s3AddSlot = function() {
+    _s3SaveCurrent();
+    const m = window.APP.modules?.[window.APP.activeTab];
+    if (!m) return;
+    if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
+    m.dataSlots.push({ label: '', value: '', merged: '' });
+    s3RenderEditor();
+  };
+  /* comparison: 行追加/削除 */
+  window.s3AddCmpSlot = function() {
+    _s3SaveCurrent();
+    const m = window.APP.modules?.[window.APP.activeTab];
+    if (!m) return;
+    if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
+    m.dataSlots.push({ label: '', leftValue: '', rightValue: '' });
+    s3RenderEditor();
+  };
+  /* reaction: コメント追加 */
+  window.s3AddComment = function() {
+    _s3SaveCurrent();
+    const m = window.APP.modules?.[window.APP.activeTab];
+    if (!m) return;
+    if (!Array.isArray(m.comments)) m.comments = [];
+    m.comments.push({ text: '', score: 0 });
+    s3RenderEditor();
+  };
+
   /* insight: キャッチコピー行追加/削除 */
   window.s3AddPhrase = function() {
     _s3SaveCurrent();
     const m = window.APP.modules?.[window.APP.activeTab];
     if (!m) return;
     if (!Array.isArray(m.catchphrases)) m.catchphrases = [];
-    if (m.catchphrases.length < 5) m.catchphrases.push('');
+    m.catchphrases.push('');
     s3RenderEditor();
   };
   window.s3RemovePhrase = function(idx) {
@@ -821,6 +860,36 @@ function getUI() {
     if (m.catchphrases.length > 1) m.catchphrases.splice(idx, 1);
     s3RenderEditor();
   };
+
+  /* スロット削除（stats/profile/matchcard/comparison/reaction 共通）*/
+  document.addEventListener('click', function(e) {
+    const t = e.target;
+    if (!t.classList) return;
+    const idx = parseInt(t.dataset.idx, 10);
+    if (isNaN(idx)) return;
+    const m = window.APP.modules?.[window.APP.activeTab];
+    if (!m) return;
+
+    if (t.classList.contains('s3-slot-remove')) {
+      _s3SaveCurrent();
+      if (Array.isArray(m.dataSlots) && m.dataSlots.length > 1) {
+        m.dataSlots.splice(idx, 1);
+        s3RenderEditor();
+      }
+    } else if (t.classList.contains('s3-cmp-remove')) {
+      _s3SaveCurrent();
+      if (Array.isArray(m.dataSlots) && m.dataSlots.length > 1) {
+        m.dataSlots.splice(idx, 1);
+        s3RenderEditor();
+      }
+    } else if (t.classList.contains('s3-cmt-remove')) {
+      _s3SaveCurrent();
+      if (Array.isArray(m.comments) && m.comments.length > 1) {
+        m.comments.splice(idx, 1);
+        s3RenderEditor();
+      }
+    }
+  });
 
   /* データバインドのみ再生成（populate-module 呼び出し） */
   window.s3PopulateModule = async function() {
