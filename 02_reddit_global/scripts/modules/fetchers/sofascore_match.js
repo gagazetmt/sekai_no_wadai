@@ -30,6 +30,14 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
     if (!match) return { ok: false, error: `SofaScore に "${homeTeam} vs ${awayTeam}" の試合が見つかりません` };
     const matchId = match.id;
 
+    // ②③④⑤ 並列取得（detail / incidents / statistics / lineups）────────
+    const [detailRaw, incRaw, statsRaw, lineupRaw] = await Promise.all([
+      apiGet(`/event/${matchId}`).catch(e => ({ __err: e })),
+      apiGet(`/event/${matchId}/incidents`).catch(e => ({ __err: e })),
+      apiGet(`/event/${matchId}/statistics`).catch(e => ({ __err: e })),
+      apiGet(`/event/${matchId}/lineups`).catch(e => ({ __err: e })),
+    ]);
+
     // ② 試合詳細（スコアと基本情報）
     let homeScore = null, awayScore = null, matchDate = null, tournament = null;
     let homeTeamName = match.homeTeam?.name || homeTeam;
@@ -38,9 +46,8 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
     let awayTeamId   = match.awayTeam?.id   || null;
     let venue        = null;
     let attendance   = null;
-    try {
-      const detail = await apiGet(`/event/${matchId}`);
-      const ev     = detail.event || {};
+    if (!detailRaw?.__err && detailRaw.event) {
+      const ev = detailRaw.event;
       homeScore = ev.homeScore?.display ?? ev.homeScore?.normaltime ?? null;
       awayScore = ev.awayScore?.display ?? ev.awayScore?.normaltime ?? null;
       const statusType = ev.status?.type || '';
@@ -56,7 +63,7 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       awayTeamId   = ev.awayTeam?.id   || awayTeamId;
       venue        = ev.venue?.stadium?.name || null;
       attendance   = ev.attendance || null;
-    } catch (_) {
+    } else {
       homeScore = match.homeScore?.display ?? match.homeScore?.normaltime ?? null;
       awayScore = match.awayScore?.display ?? match.awayScore?.normaltime ?? null;
       matchDate = match.startTimestamp ? new Date(match.startTimestamp * 1000).toISOString().slice(0, 10) : null;
@@ -65,9 +72,8 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
 
     // ③ incidents（得点・カード）
     let goals = [], cards = [];
-    try {
-      const incData   = await apiGet(`/event/${matchId}/incidents`);
-      const incidents = incData.incidents || [];
+    if (!incRaw?.__err) {
+      const incidents = incRaw.incidents || [];
       for (const inc of incidents) {
         if (inc.time < 0) continue;
         const timeStr = inc.addedTime && inc.addedTime > 0
@@ -95,12 +101,11 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       }
       goals.sort((a, b) => a.time - b.time);
       cards.sort((a, b) => a.time - b.time);
-    } catch (_) {}
+    }
 
     // ④ 試合スタッツ（ポゼッション・シュート等）
     let stats = {};
-    try {
-      const statsRaw = await apiGet(`/event/${matchId}/statistics`);
+    if (!statsRaw?.__err) {
       for (const group of (statsRaw.statistics?.[0]?.groups || [])) {
         for (const item of (group.statisticsItems || [])) {
           if (!stats[item.name]) {
@@ -108,14 +113,14 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
           }
         }
       }
-    } catch (_) {}
+    }
 
-    // ⑤ ラインアップ + 選手個人スタッツ
+    // ⑤ ラインアップ + 選手個人スタッツ（並列取得済みを処理）
     let topPlayers  = [];
     let playerStats = {};
     let formations  = { home: null, away: null };
-    try {
-      const lineupData = await apiGet(`/event/${matchId}/lineups`);
+    if (!lineupRaw?.__err) {
+      const lineupData = lineupRaw;
       formations.home = lineupData.home?.formation || null;
       formations.away = lineupData.away?.formation || null;
 
@@ -160,7 +165,7 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
           bigChanceCreated: st.bigChanceCreated ?? null,
         };
       }
-    } catch (_) {}
+    }
 
     // ⑥ H2H直近5試合（homeTeamId/awayTeamId両方が取れた場合のみ）
     let h2hMatches = [];

@@ -46,9 +46,12 @@ async function fetchSofaScoreManager(managerName, managerId = null) {
     const id = managerId || await findManagerId(managerName);
     if (!id) return { ok: false, error: `"${managerName}" の監督IDが見つかりません` };
 
-    // ② 基本情報 + 経歴 + performance
-    const data = await apiGet(`/manager/${id}`);
-    const m    = data.manager || {};
+    // ②③ 並列取得（manager info + events last）────────
+    const [data, evRaw] = await Promise.all([
+      apiGet(`/manager/${id}`),
+      apiGet(`/manager/${id}/events/last/0`).catch(e => ({ __err: e })),
+    ]);
+    const m = data.manager || {};
 
     // 経歴整形（新しい順）
     const career = (m.teams || []).map(t => ({
@@ -71,12 +74,11 @@ async function fetchSofaScoreManager(managerName, managerId = null) {
       ? Math.floor((Date.now() - m.dateOfBirthTimestamp * 1000) / (365.25 * 24 * 3600 * 1000))
       : null;
 
-    // ③ 直近試合（ページ0で10-12件取れる → 5件抽出）
+    // ③ 直近試合（並列取得済みを処理）
     let last5Matches = [];
     let currentTeamStats = null;
-    try {
-      const ev = await apiGet(`/manager/${id}/events/last/0`);
-      const events = (ev.events || []).filter(e => e.status?.type === 'finished');
+    if (!evRaw?.__err) {
+      const events = (evRaw.events || []).filter(e => e.status?.type === 'finished');
       last5Matches = events.slice(0, 5).map(formatManagerMatch);
 
       // 現チームの直近成績を集計（最大10件）
@@ -102,7 +104,7 @@ async function fetchSofaScoreManager(managerName, managerId = null) {
           };
         }
       }
-    } catch (_) {}
+    }
 
     return {
       ok:                 true,

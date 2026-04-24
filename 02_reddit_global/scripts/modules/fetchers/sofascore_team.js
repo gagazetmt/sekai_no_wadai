@@ -48,12 +48,15 @@ async function fetchSofaScoreTeam(teamName) {
     if (!team) return { ok: false, error: `SofaScore に "${teamName}" が見つかりません` };
     const teamId = team.id;
 
+    // ②③④ 並列取得（detail / events last / events next）────────
+    const [tdRaw, evRaw, nxRaw] = await Promise.all([
+      apiGet(`/team/${teamId}`).catch(e => ({ __err: e })),
+      apiGet(`/team/${teamId}/events/last/0`).catch(e => ({ __err: e })),
+      apiGet(`/team/${teamId}/events/next/0`).catch(e => ({ __err: e })),
+    ]);
+
     // ② チーム詳細
-    let teamDetail = {};
-    try {
-      const td   = await apiGet(`/team/${teamId}`);
-      teamDetail = td.team || {};
-    } catch (_) {}
+    const teamDetail = tdRaw?.__err ? {} : (tdRaw.team || {});
 
     const managerName = teamDetail.manager?.name || null;
     const managerId   = teamDetail.manager?.id   || null;
@@ -62,7 +65,6 @@ async function fetchSofaScoreTeam(teamName) {
     const founded     = teamDetail.foundationDateTimestamp
       ? new Date(teamDetail.foundationDateTimestamp * 1000).getFullYear()
       : null;
-    // クラブ総市場価値（取れたら）
     const marketValue    = teamDetail.value?.value || teamDetail.proposedMarketValue || null;
     const marketValueStr = marketValue
       ? (marketValue >= 1_000_000
@@ -70,30 +72,27 @@ async function fetchSofaScoreTeam(teamName) {
           : `€${(marketValue / 1_000).toFixed(0)}K`)
       : null;
 
-    // ③ 直近5試合（ページ0のみ。通常10-12件取れる）
+    // ③ 直近5試合
     let last5 = [];
-    try {
-      const ev = await apiGet(`/team/${teamId}/events/last/0`);
-      const finished = (ev.events || []).filter(e => e.status?.type === 'finished').reverse();
-      // reverseで古い順→新しい順にし直してslice(0,5)で最新5試合
+    if (!evRaw?.__err) {
+      const finished = (evRaw.events || []).filter(e => e.status?.type === 'finished').reverse();
       last5 = finished.slice(-5).reverse().map(e => formatTeamMatch(e, teamId));
-    } catch (_) {}
+    }
 
     // ④ 次試合（リーグ情報取得のため）
     let leagueName = null;
     let seasonYear = null;
     let tournamentId = null;
     let seasonId     = null;
-    try {
-      const nx = await apiGet(`/team/${teamId}/events/next/0`);
-      const nextEvent = (nx.events || []).find(e => e.tournament?.uniqueTournament);
+    if (!nxRaw?.__err) {
+      const nextEvent = (nxRaw.events || []).find(e => e.tournament?.uniqueTournament);
       if (nextEvent) {
         tournamentId = nextEvent.tournament?.uniqueTournament?.id;
         seasonId     = nextEvent.season?.id;
         leagueName   = nextEvent.tournament?.uniqueTournament?.name || nextEvent.tournament?.name;
         seasonYear   = nextEvent.season?.year;
       }
-    } catch (_) {}
+    }
 
     // ⑤ 順位（今期スタッツ）
     let standing = null;

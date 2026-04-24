@@ -132,13 +132,15 @@ async function fetchSofaScorePlayer(playerNameEn) {
     if (!player) return { ok: false, error: `SofaScore に "${playerNameEn}" が見つかりません` };
     const playerId = player.id;
 
-    // ② 詳細情報（市場価値・契約）
-    let playerDetail = {};
-    try {
-      const pd = await apiGet(`/player/${playerId}`);
-      playerDetail = pd.player || {};
-    } catch (_) {}
+    // ②③④ 並列取得（detail / events / statistics）────────────
+    const [pdRaw, evRaw, statsRaw] = await Promise.all([
+      apiGet(`/player/${playerId}`).catch(e => ({ __err: e })),
+      apiGet(`/player/${playerId}/events/last/0`).catch(e => ({ __err: e })),
+      apiGet(`/player/${playerId}/statistics`).catch(e => ({ __err: e })),
+    ]);
 
+    // ② 詳細情報（市場価値・契約）
+    const playerDetail = pdRaw?.__err ? {} : (pdRaw.player || {});
     const marketValue = playerDetail.proposedMarketValue || null;
     const contractUntil = playerDetail.contractUntilTimestamp
       ? new Date(playerDetail.contractUntilTimestamp * 1000).toISOString().slice(0, 7)
@@ -149,14 +151,12 @@ async function fetchSofaScorePlayer(playerNameEn) {
           : `€${(marketValue / 1_000).toFixed(0)}K`)
       : null;
 
-    // ③ 直近試合（ページ0のみ。通常10-12件入る）
+    // ③ 直近試合
     let last5Matches = [];
     let lastMatchStats = null;
     let recentAvgRating = null;
-    try {
-      const evRes = await apiGet(`/player/${playerId}/events/last/0`);
-      const events = (evRes.events || []).filter(e => e.playerStatistics != null).reverse();
-      // reverseで新しい順
+    if (!evRaw?.__err) {
+      const events = (evRaw.events || []).filter(e => e.playerStatistics != null).reverse();
       const recent = events.slice(-20).reverse();
       last5Matches = recent.slice(0, 5).map(e => formatMatchStats(e, playerId));
       lastMatchStats = last5Matches[0] || null;
@@ -166,15 +166,15 @@ async function fetchSofaScorePlayer(playerNameEn) {
       recentAvgRating = ratings.length
         ? parseFloat((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2))
         : null;
-    } catch (_) {}
+    }
 
     // ④ シーズン統計（全シーズン → 最新年の国内リーグ優先）
     let seasonStats = null;
     let leagueName  = null;
     let seasonYear  = null;
     let uclStats    = null;
-    try {
-      const statsData   = await apiGet(`/player/${playerId}/statistics`);
+    if (!statsRaw?.__err) {
+      const statsData   = statsRaw;
       const allSeasons  = statsData.seasons || [];
       const latestYear  = allSeasons[0]?.year;
       const currentList = latestYear
@@ -203,7 +203,7 @@ async function fetchSofaScorePlayer(playerNameEn) {
         seasonYear  = preferred.year;
         seasonStats = preferred.statistics || null;
       }
-    } catch (_) {}
+    }
 
     const position      = playerDetail.position || player.position || '';
     const positionStats = buildPositionStats(position, seasonStats);
