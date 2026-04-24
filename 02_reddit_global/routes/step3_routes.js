@@ -44,43 +44,121 @@ router.post('/propose-modules', async (req, res) => {
 
   const comments = (post.raw?.comments || [])
     .map(c => c.bodyJa || c.body || '').filter(Boolean).slice(0, 8).join(' / ');
-  const siSummary = JSON.stringify(siData).slice(0, 2500);
+
+  // SI取得済みキーワード一覧を整形
+  const siItems = [];
+  if (siData.boxes) {
+    Object.entries(siData.boxes).forEach(([boxType, box]) => {
+      (box.fetched || []).forEach(f => siItems.push({ type: boxType, label: f.label }));
+    });
+  }
+  const siSummary = siItems.length
+    ? siItems.map(i => i.label + '(' + i.type + ')').join(', ')
+    : JSON.stringify(siData).slice(0, 1500);
 
   const prompt = `あなたはプロのサッカーYouTubeチャンネルの脚本家です。
-以下の案件・コメント・補足情報をもとに、視聴者を最初の3秒から最後まで釘付けにする最強のスライド構成を5〜10枚で提案してください。
+以下の案件・コメント・補足情報をもとに、視聴者を最初の3秒から最後まで釘付けにするスライド構成を6〜9枚で提案してください。
 
 【案件（日本語）】${post.title || post.titleOrig}
 【案件（原文）】${post.titleOrig || ''}
 【コメント要約】${comments || '(なし)'}
-【補足情報（SI）】${siSummary || '(なし)'}
+【取得済みSI情報】${siSummary || '(なし)'}
 
-【構成の鉄則】
-1. オープニング（0〜10秒）: 視聴者の心を鷲掴みにする衝撃的な問い・事実・煽りから始める
-2. ピーク: 最も盛り上がるポイントを1〜2枚で山場として演出する
-3. データ深掘り: スタッツ・数字・比較で信頼性を高める（2〜3枚）
-4. コメント紹介: 海外ファンのリアルな反応で共感を生む（1〜2枚）
-5. エンディング: 余韻を残し、チャンネル登録を促す
+【絶対ルール】
+- 必ず1枚目のtypeを "opening" にすること
+- 必ず最後の1枚のtypeを "ending" にすること
+- 全モジュールにscriptDirフィールドを必ず記入すること
 
-【スライドタイプ】
-- insight   : 概要・ストーリー解説（テキスト中心）
-- stats     : スタッツ・数値データ（数字・グラフ・比較表）
-- reaction  : コメント・ファン反応紹介
-- profile   : 選手・監督のプロフィール深掘り
-- comparison: 選手/チーム同士の比較
-- timeline  : 時系列ストーリー展開
+【構成指針】
+- オープニング: 視聴者を3秒で掴む衝撃フック・問いかけ
+- 中盤: ピーク演出(1〜2枚) + データ深掘り(2〜3枚) + コメント反応(1〜2枚)
+- エンディング: 余韻・チャンネル登録を促す
 
-JSONのみ返すこと（前後の説明・マークダウン不要）:
-{"modules": [{"title": "スライドタイトル", "type": "insight|stats|reaction|profile|comparison|timeline", "reason": "このスライドを入れる理由（1行）", "siBinding": "SI取得済みキーワード名（なければnull）"}]}`;
+【使用可能なスライドタイプ】
+opening / insight / stats / reaction / profile / comparison / timeline / ending
+
+JSONのみ返すこと（説明・マークダウン不要）:
+{"modules": [{"title": "スライドタイトル", "type": "opening", "reason": "採用理由（1行）", "scriptDir": "このスライドのナレーション方向性・演出ポイント（2〜3文）", "siBinding": null}, {"title": "...", "type": "insight|stats|reaction|profile|comparison|timeline", "reason": "...", "scriptDir": "...", "siBinding": "SI取得済みキーワード名またはnull"}, {"title": "エンディングタイトル", "type": "ending", "reason": "...", "scriptDir": "...", "siBinding": null}]}`;
 
   try {
     const raw    = await callAI({ model: 'claude-sonnet-4-6', max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
     const m      = raw.match(/\{[\s\S]*\}/);
     if (!m) { console.error('[Step3] JSONパース失敗:', raw.slice(0,200)); return res.status(500).json({ error: 'JSONパース失敗' }); }
     const parsed = JSON.parse(m[0]);
-    console.log('[Step3] 提案成功:', parsed.modules?.length, '件');
+    const mods   = parsed.modules || [];
+
+    // scriptDir が欠けている場合のデフォルト補完
+    const defaultScriptDir = {
+      opening:    '衝撃的な問いかけや事実で始め、視聴者を最初の3秒で引き込む。',
+      insight:    '背景・経緯を分かりやすく解説し、視聴者の理解を深める。',
+      stats:      '具体的な数字・データを見せ、情報の信頼性と説得力を高める。',
+      reaction:   '海外ファンのリアルなコメントを紹介し、視聴者の共感を生む。',
+      profile:    '選手・監督のプロフィールや実績を深掘りし、視聴者の興味を引く。',
+      comparison: '2者を比較することで違いを際立たせ、視聴者に気づきを与える。',
+      timeline:   '時系列でストーリーを展開し、出来事の流れを分かりやすく伝える。',
+      ending:     '全体のまとめと感想を述べ、コメントへの参加とチャンネル登録を促す。',
+    };
+    mods.forEach(mod => {
+      if (!mod.scriptDir || !mod.scriptDir.trim()) {
+        mod.scriptDir = defaultScriptDir[mod.type] || '';
+      }
+    });
+
+    // opening が先頭になければ自動挿入
+    if (!mods.length || mods[0].type !== 'opening') {
+      const topTitle = (post.title || post.titleOrig || '').slice(0, 25);
+      mods.unshift({
+        title:     '衝撃！' + topTitle,
+        type:      'opening',
+        reason:    '視聴者を最初の3秒で引き込むオープニング',
+        scriptDir: defaultScriptDir.opening,
+        siBinding: null,
+      });
+    }
+    // ending が末尾になければ自動挿入
+    if (!mods.length || mods[mods.length - 1].type !== 'ending') {
+      mods.push({
+        title:     'まとめ・チャンネル登録を！',
+        type:      'ending',
+        reason:    '余韻を残しチャンネル登録を促す',
+        scriptDir: defaultScriptDir.ending,
+        siBinding: null,
+      });
+    }
+
+    parsed.modules = mods;
+    console.log('[Step3] 提案成功:', mods.length, '件 (opening/ending補完済み)');
     res.json(parsed);
   } catch (e) {
     console.error('[Step3] エラー:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// モジュール1件の脚本指示再提案
+router.post('/regen-module-script', async (req, res) => {
+  const { post, module: mod, allModules } = req.body;
+  if (!post || !mod) return res.status(400).json({ error: 'post + module required' });
+  console.log('[Step3] 脚本指示再提案:', mod.title);
+  const otherTitles = (allModules || []).filter(m => m.title !== mod.title).map(m => m.title).join(', ');
+  try {
+    const raw = await callAI({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 600,
+      messages: [{ role: 'user', content:
+        `あなたはサッカーYouTubeの脚本家です。以下のスライドの脚本指示を再提案してください。
+スライドタイプ: ${mod.type}、タイトル: 「${mod.title}」
+案件: ${post.title || post.titleOrig}
+全体構成（他のスライド）: ${otherTitles || 'なし'}
+SIバインド: ${mod.siBinding || 'なし'}
+
+このスライドの脚本指示（ナレーション方向性・演出ポイント）を2〜3文で提案してください。
+JSONのみ: {"scriptDir": "脚本指示テキスト"}` }]
+    });
+    const m = raw.match(/\{[\s\S]*\}/);
+    res.json(m ? JSON.parse(m[0]) : { scriptDir: '' });
+  } catch (e) {
+    console.error('[Step3] 脚本指示再提案エラー:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -176,19 +254,33 @@ function getUI() {
   /* === Step3 スコープ === */
 
   const TYPE_COLORS = {
-    insight:'#1a6ef5', stats:'#10b981', reaction:'#f59e0b',
-    profile:'#8b5cf6', comparison:'#ef4444', timeline:'#6b7280',
+    opening:'#ff4d4d', insight:'#1a6ef5', stats:'#10b981', reaction:'#f59e0b',
+    profile:'#8b5cf6', comparison:'#ef4444', timeline:'#6b7280', ending:'#64748b',
   };
   const TYPE_LABELS = {
-    insight:'概要・解説', stats:'スタッツ・数値', reaction:'コメント反応',
-    profile:'プロフィール', comparison:'比較', timeline:'時系列',
+    opening:'オープニング', insight:'概要・解説', stats:'スタッツ・数値',
+    reaction:'コメント反応', profile:'プロフィール', comparison:'比較',
+    timeline:'時系列', ending:'エンディング',
   };
-  const ALL_TYPES = ['insight','stats','reaction','profile','comparison','timeline'];
+  const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','timeline','ending'];
+
+  /* SIデータ（サーバーから取得）*/
+  window.APP.s3SiData = {};
 
   window.step3Init = function() {
-    s3RenderTabs();
-    s3RenderEditor();
-    s3LoadImages();
+    var postId = window.APP.selected && window.APP.selected.id;
+    if (!postId) { s3RenderTabs(); s3RenderEditor(); return; }
+    /* サーバーからSIデータを取得してからレンダリング */
+    fetchJson('/api/si-data?postId=' + encodeURIComponent(postId))
+      .then(function(d) {
+        window.APP.s3SiData = d || {};
+      })
+      .catch(function() {})
+      .then(function() {
+        s3RenderTabs();
+        s3RenderEditor();
+        s3LoadImages();
+      });
   };
 
   /* ── モジュール提案 (3-1/3-2/3-3) ── */
@@ -199,7 +291,7 @@ function getUI() {
     try {
       const d = await fetchJson('/api/propose-modules', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ post:window.APP.selected, postId:window.APP.selected?.id, siDataIn:window.APP.siData||{} }),
+        body: JSON.stringify({ post:window.APP.selected, postId:window.APP.selected?.id, siDataIn:window.APP.s3SiData||{} }),
       });
       window.APP.modules   = d.modules || [];
       window.APP.activeTab = 0;
@@ -254,51 +346,68 @@ function getUI() {
       '<option value="' + t + '"' + (m.type===t?' selected':'') + '>' + t + ' — ' + TYPE_LABELS[t] + '</option>'
     ).join('');
 
-    /* 3-6: SIデータバインドドロップダウン */
-    const siKeys = Object.keys(window.APP.siData || {});
-    const siOpts = ['<option value="">(バインドなし)</option>']
-      .concat(siKeys.map(k => {
-        const d = window.APP.siData[k];
-        const label = k + (d?.siType ? ' [' + d.siType + ']' : '') + (d?.ok===false?' ⚠':'');
-        return '<option value="' + _e(k) + '"' + (m.siBinding===k?' selected':'') + '>' + _e(label) + '</option>';
-      })).join('');
+    /* SIデータバインドドロップダウン（新Step2構造対応）*/
+    var siItems = [];
+    var s3si = window.APP.s3SiData || {};
+    if (s3si.boxes) {
+      Object.entries(s3si.boxes).forEach(function(entry) {
+        var boxType = entry[0], box = entry[1];
+        (box.fetched || []).forEach(function(f) {
+          siItems.push({ key: f.label, label: f.label + ' [' + boxType + ']' });
+        });
+      });
+    }
+    var siOpts = '<option value="">(バインドなし)</option>'
+      + siItems.map(function(it) {
+          return '<option value="' + _e(it.key) + '"' + (m.siBinding===it.key?' selected':'') + '>' + _e(it.label) + '</option>';
+        }).join('');
 
     document.getElementById('s3Editor').innerHTML =
       /* タイトル */
       '<div style="margin-bottom:14px;">'
-      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">📝 スライドタイトル</div>'
+      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">&#x1F4DD; スライドタイトル</div>'
       + '<input id="s3TitleInp" type="text" class="inp" style="width:100%;font-size:15px;font-weight:bold;" value="' + _e(m.title) + '">'
       + '</div>'
 
       /* タイプ + バッジ */
       + '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;">'
       + '<div>'
-      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">🎞️ スライドタイプ</div>'
+      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">&#x1F39E; スライドタイプ</div>'
       + '<select id="s3TypeSel" class="inp" style="width:100%;">' + typeOpts + '</select>'
       + '</div>'
       + '<div style="display:flex;flex-direction:column;justify-content:flex-end;gap:6px;">'
       + '<div style="background:'+col+';color:#fff;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:bold;text-align:center;">'
       + (m.type||'?').toUpperCase() + '</div>'
-      + '<button class="btn btn-sm" style="background:#dc2626;color:#fff;" onclick="s3Delete('+i+')">🗑️ 削除</button>'
+      + '<button class="btn btn-sm" style="background:#dc2626;color:#fff;" onclick="s3Delete('+i+')">&#x1F5D1; 削除</button>'
       + '</div>'
       + '</div>'
 
-      /* 3-6: SIバインド */
+      /* SIバインド */
       + '<div style="margin-bottom:14px;">'
-      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">🔗 SIデータバインド (3-6)</div>'
-      + (siKeys.length
+      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">&#x1F517; SIデータバインド</div>'
+      + (siItems.length
           ? '<select id="s3SiBind" class="inp" style="width:100%;">' + siOpts + '</select>'
           : '<div style="font-size:11px;color:#5a6a8a;">Step2でSIデータを取得してください</div>')
       + '</div>'
 
-      /* AI意図 */
-      + '<div style="background:#0d1220;border-radius:8px;padding:12px;">'
-      + '<div style="font-size:10px;color:#8a9aba;margin-bottom:4px;">💡 AI 制作意図</div>'
-      + '<div style="font-size:13px;color:#c0cce0;line-height:1.6;">' + _e(m.reason||'') + '</div>'
+      /* 脚本指示 (#3-2-2) */
+      + '<div style="margin-bottom:14px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">'
+      + '<span style="font-size:11px;color:var(--c);font-weight:bold;">&#x1F3AD; 脚本指示</span>'
+      + '<button class="btn btn-sm" id="s3RegenBtn" onclick="s3RegenScript()">&#x21BB; 再提案</button>'
+      + '</div>'
+      + '<textarea id="s3ScriptDir" class="inp" style="width:100%;height:80px;font-size:12px;resize:vertical;">'
+      + _e(m.scriptDir || '') + '</textarea>'
+      + '</div>'
+
+      /* AI制作意図 */
+      + '<div style="background:#0d1220;border-radius:8px;padding:12px;margin-bottom:10px;">'
+      + '<div style="font-size:10px;color:#8a9aba;margin-bottom:4px;">&#x1F4A1; AI制作意図</div>'
+      + '<div style="font-size:12px;color:#c0cce0;line-height:1.6;">' + _e(m.reason||'') + '</div>'
       + '</div>'
 
       /* 位置表示 */
-      + '<div style="margin-top:10px;font-size:10px;color:#5a6a8a;">スライド ' + (i+1) + ' / ' + mods.length + '</div>';
+      + '<div style="font-size:10px;color:#5a6a8a;">スライド ' + (i+1) + ' / ' + mods.length + '</div>';
   }
 
   /* 現在タブの入力を APP に反映 */
@@ -309,10 +418,36 @@ function getUI() {
     const t = document.getElementById('s3TitleInp');
     const s = document.getElementById('s3TypeSel');
     const b = document.getElementById('s3SiBind');
+    const d = document.getElementById('s3ScriptDir');
     if (t) m.title     = t.value;
     if (s) m.type      = s.value;
     if (b) m.siBinding = b.value || null;
+    if (d) m.scriptDir = d.value;
   }
+
+  /* 脚本指示再提案 (#3-2-2) */
+  window.s3RegenScript = async function() {
+    _s3SaveCurrent();
+    const i = window.APP.activeTab;
+    const m = window.APP.modules?.[i];
+    if (!m) return;
+    const btn = document.getElementById('s3RegenBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '...'; }
+    _s3Msg('脚本指示を再提案中...');
+    try {
+      const d = await fetchJson('/api/regen-module-script', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ post: window.APP.selected, module: m, allModules: window.APP.modules }),
+      });
+      if (d.scriptDir) {
+        m.scriptDir = d.scriptDir;
+        const ta = document.getElementById('s3ScriptDir');
+        if (ta) ta.value = d.scriptDir;
+        _s3Msg('脚本指示を更新しました');
+      }
+    } catch(e) { _s3Msg('再提案失敗: ' + e.message); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '↻ 再提案'; } }
+  };
 
   /* 追加 */
   window.s3AddModule = function() {
@@ -371,15 +506,19 @@ function getUI() {
         body: JSON.stringify({ postId, modules: window.APP.modules }),
       });
 
-      /* 画像取得キーワードを収集（SIバインドがある場合は優先、なければタイトル） */
+      /* 画像取得キーワードを収集（SIバインドがある場合は優先） */
       const kwSet = new Set();
       window.APP.modules.forEach(m => {
         if (m.siBinding) kwSet.add(m.siBinding);
       });
-      /* SI取得済みキーも追加（playerとteamのみ、上限6件） */
-      Object.entries(window.APP.siData || {}).forEach(([k, v]) => {
-        if (['player','team'].includes(v?.siType)) kwSet.add(k);
-      });
+      /* SI取得済みのplayer/teamラベルを追加（上限6件）*/
+      const s3si = window.APP.s3SiData || {};
+      if (s3si.boxes) {
+        ['sofascore_player','sofascore_team'].forEach(function(boxType) {
+          const box = s3si.boxes[boxType];
+          if (box) (box.fetched || []).forEach(function(f) { kwSet.add(f.label); });
+        });
+      }
       const keywords = [...kwSet].slice(0, 6);
 
       if (keywords.length) {
