@@ -151,17 +151,31 @@ async function fetchSofaScorePlayer(playerNameEn) {
           : `€${(marketValue / 1_000).toFixed(0)}K`)
       : null;
 
-    // ③ 直近試合
+    // ③ 直近試合（2026-04 API変更対応）
+    // events/last/0 は playerStatistics を含まなくなったため、
+    // 各試合の per-event statistics エンドポイントを別途叩いて補完する
     let last5Matches = [];
     let lastMatchStats = null;
     let recentAvgRating = null;
     if (!evRaw?.__err) {
-      const events = (evRaw.events || []).filter(e => e.playerStatistics != null).reverse();
-      const recent = events.slice(-20).reverse();
-      last5Matches = recent.slice(0, 5).map(e => formatMatchStats(e, playerId));
+      const events = (evRaw.events || []);
+      // events は chronological（末尾が最新）。直近5件を新→旧で取得
+      const recent5 = events.slice(-5).reverse();
+      const psResults = await Promise.all(
+        recent5.map(e =>
+          apiGet(`/event/${e.id}/player/${playerId}/statistics`).catch(() => null)
+        )
+      );
+      last5Matches = recent5
+        .map((e, i) => {
+          const ps = psResults[i]?.statistics;
+          if (!ps) return null;
+          return formatMatchStats({ ...e, playerStatistics: ps }, playerId);
+        })
+        .filter(Boolean);
       lastMatchStats = last5Matches[0] || null;
-      const ratings = recent.slice(0, 10)
-        .map(e => e.playerStatistics?.rating)
+      const ratings = last5Matches
+        .map(m => m.rating)
         .filter(r => r != null && r > 0);
       recentAvgRating = ratings.length
         ? parseFloat((ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2))
