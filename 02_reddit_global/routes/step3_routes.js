@@ -121,10 +121,15 @@ router.post('/v3/generate-scenario', async (req, res) => {
     const matchBlock  = (si.boxes.match.items  || []).map(_matchBlock).join('\n')  || '(なし)';
     const searchBlock = (si.boxes.search.items || []).map(_searchBlock).join('\n') || '(なし)';
 
+    // ── 各カードの type をサーバー側で先に解決（クライアント送信値は信用しない）──
+    mods.forEach(m => {
+      m.type = resolveType(m.mainKey, m.subSource, m.subValue, si) || m.type || 'insight';
+    });
+
     // ── outline ブロック化 ──
     const outlineLines = mods.map((m, i) => {
       const tags = `main="${m.mainKey}"` + (m.subSource ? ` sub="${m.subSource}:${m.subValue}"` : '');
-      return `${i+1}. type=${m.type || '?'} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
+      return `${i+1}. type=${m.type} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
     }).join('\n');
 
     // ── プロンプト ──
@@ -219,10 +224,13 @@ JSON のみ返す（マークダウン不要）：
     if (!parsed?.modules) return res.status(500).json({ error: '生成失敗（JSON parse fail）' });
 
     // outline と AI返却をマージ（順序保持）
+    // type はクライアント送信値を信用せず、必ずサーバー側で v3_tags.resolveType で決定
     const merged = mods.map((src, i) => {
       const ai = parsed.modules[i] || {};
+      const resolvedType = resolveType(src.mainKey, src.subSource, src.subValue, si);
       return {
         ...src,
+        type:         resolvedType || src.type || 'insight',
         title:        ai.title        || src.title        || `スライド${i+1}`,
         narration:    ai.narration    || '',
         dataSlots:    ai.dataSlots    || [],
