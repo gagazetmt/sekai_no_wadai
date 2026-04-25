@@ -159,8 +159,13 @@ ${outlineLines}
   - opening / ending: 追加なし
   - insight: "catchphrases": [短句×3〜5、各15文字以内、事実+数字を含む]
   - reaction: "comments": [{"text":"...","score":0}×7] — 上記【元コメント抜粋】から面白い7件を選び日本語意訳
-  - stats / matchcard / history: "dataSlots": [{"label":"...","value":"..."}×4〜8]
+  - stats / history: "dataSlots": [{"label":"...","value":"..."}×4〜8]
+  - matchcard: "dataSlots": **必ず4個** [{"label":"...","value":"..."}]
+    例: [{"label":"大会","value":"ラ・リーガ第32節"},{"label":"会場","value":"ベニート・ビジャマリン"},{"label":"日付","value":"2026-04-24"},{"label":"スコア","value":"1-1"}]
+    候補: 大会 / 会場 / 日付 / スコア / 主役選手 / 得点者 / 観客数 / レフェリー / 結果
+    ※ homeTeam / awayTeam は別途自動注入されるので dataSlots に含めない
   - comparison: "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]
+  - matchcenter: 追加フィールド不要（matchData は自動注入）。narration のみ書く
 
 【データ抽出ルール（厳守）】
 - mainKey="entity:<名前>" のカードでは、上記 [entity 一覧] の該当エントリを **データソース** として使う
@@ -224,6 +229,48 @@ JSON のみ返す（マークダウン不要）：
         catchphrases: ai.catchphrases || [],
         comments:     ai.comments     || [],
       };
+    });
+
+    // ── 後処理: matchcard / matchcenter / comparison(対match) は match siData から
+    //          homeTeam / awayTeam / matchData を自動注入 ──
+    merged.forEach(m => {
+      if (!m.mainKey) return;
+      // mainKey="match:<label>" → matchを引く
+      if (m.mainKey.startsWith('match:')) {
+        const matchLabel = m.mainKey.slice(6);
+        const matchItem  = (si.boxes.match?.items || []).find(x => x.label === matchLabel);
+        const data       = matchItem?.data;
+        // 名前の fallback：data 内 → label split
+        const parts = matchLabel.split(/\s+vs\s+/i).map(s => s.trim());
+        m.homeTeam  = data?.homeTeam  || parts[0] || 'HOME';
+        m.awayTeam  = data?.awayTeam  || parts[1] || 'AWAY';
+        m.homeScore = data?.homeScore;
+        m.awayScore = data?.awayScore;
+        m.matchDate = data?.matchDate || '';
+        m.scoreline = data?.scoreline || '';
+        // matchcenter は matchData オブジェクトを期待
+        if (m.type === 'matchcenter' && data?.ok) {
+          // sofa.match の stats は [{name, home, away}] 形式 → flat へ
+          const flatStats = {};
+          if (Array.isArray(data.stats)) {
+            data.stats.forEach(s => {
+              if (s?.name) flatStats[s.name] = `${s.home ?? '-'} / ${s.away ?? '-'}`;
+            });
+          }
+          m.matchData = {
+            homeTeam:   data.homeTeam,
+            awayTeam:   data.awayTeam,
+            homeScore:  data.homeScore,
+            awayScore:  data.awayScore,
+            tournament: data.tournament,
+            matchDate:  data.matchDate,
+            venue:      data.venue,
+            goals:      Array.isArray(data.goals) ? data.goals : [],
+            stats:      flatStats,
+            topPlayers: Array.isArray(data.topPlayers) ? data.topPlayers : [],
+          };
+        }
+      }
     });
 
     // 永続化
