@@ -105,12 +105,33 @@ function buildHistoryHTML(mod) {
   background: linear-gradient(to bottom, rgba(245, 158, 11, 0.8), rgba(245, 158, 11, 0.1));
   border-radius: 2px;
 }
+@keyframes evtFadeIn {
+  from { opacity: 0; transform: translateX(-40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes dotPulse {
+  0%   { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.4); }
+  50%  { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.5), 0 0 24px rgba(16, 185, 129, 0.6); }
+  100% { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.4); }
+}
 .tl-event {
   position: relative;
   display: flex;
   align-items: center;
   gap: 40px;
   padding: 12px 0;
+  /* 初期は非表示。delayで順次フェードイン */
+  opacity: 0;
+  animation: evtFadeIn 0.55s ease-out forwards;
+}
+.tl-event:nth-child(1) { animation-delay: 0.30s; }
+.tl-event:nth-child(2) { animation-delay: 1.50s; }
+.tl-event:nth-child(3) { animation-delay: 2.70s; }
+.tl-event:nth-child(4) { animation-delay: 3.90s; }
+.tl-event:nth-child(5) { animation-delay: 5.10s; }
+/* 最新イベントの dot だけ脈動 */
+.tl-event.current::before {
+  animation: dotPulse 1.6s ease-in-out 5.30s infinite;
 }
 .tl-event::before {
   content: '';
