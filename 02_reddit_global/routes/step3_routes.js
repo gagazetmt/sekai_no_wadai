@@ -12,6 +12,8 @@ const path    = require('path');
 const { callAI }               = require('../scripts/ai_client');
 const { fetchWikimediaImages } = require('../scripts/fetch_wikimedia');
 const { fetchXImages }         = require('../scripts/fetch_x_images');
+const { RECIPES, getRecipe }   = require('../scripts/v2_story/recipes');
+const { buildModuleFromBinding } = require('../scripts/v2_story/builder');
 
 const router    = express.Router();
 const DATA_DIR  = path.join(__dirname, '..', 'data');
@@ -125,6 +127,38 @@ function buildSiSummary(siData) {
   return summary;
 }
 
+// レシピをプロンプト用に短く整形（A判定優先。各セルの利用可能スロットkey一覧）
+function formatRecipesForPrompt() {
+  const lines = [];
+  const groups = { A: [], B: [] };  // C は今回プロンプトに含めない（情報量過多回避）
+  Object.entries(RECIPES).forEach(([key, r]) => {
+    if (groups[r.priority]) groups[r.priority].push([key, r]);
+  });
+  function buildLine(key, r) {
+    let line = `- ${key}（${r.label}）`;
+    if (r.populates === 'dataSlots' && r.availableSlots?.length) {
+      const keys = r.availableSlots.map(s => s.key).join('/');
+      line += ` slots:[${keys}]`;
+      if (r.defaultSelection?.length) {
+        line += ` default:[${r.defaultSelection.join(',')}]`;
+      }
+    }
+    if (r.populates === 'matchData') line += ` ※customSlotKeys不要（自動）`;
+    if (r.historyShape)              line += ` ※customSlotKeys不要（Wikiから自動）`;
+    if (r.populates === 'comments')  line += ` ※commentsをAIが埋める`;
+    if (r.populates === 'catchphrases') line += ` ※catchphrasesをAIが埋める`;
+    if (r.requiresSecondary)         line += ` ※secondary必須`;
+    return line;
+  }
+  ['A', 'B'].forEach(p => {
+    if (groups[p].length) {
+      lines.push(`【優先度${p}】`);
+      groups[p].forEach(([key, r]) => lines.push(buildLine(key, r)));
+    }
+  });
+  return lines.join('\n');
+}
+
 // 投稿コメントから reaction 用候補を抽出（英語→Claude翻訳は重いので素のまま7件）
 function pickRawComments(post, n = 10) {
   const comments = (post.raw?.comments || [])
@@ -162,8 +196,11 @@ router.post('/propose-modules', async (req, res) => {
   // reaction 用の投稿コメント候補（AIに翻訳/選定させる素材）
   const rawComments = pickRawComments(post, 12);
 
+  // 取得済みSIラベルだけを別枠で抜き出して提示（primary/secondary に使えるラベル一覧）
+  const siLabels = Object.keys(siSummary);
+
   const prompt = `あなたはプロのサッカーYouTubeチャンネルの脚本家です。
-以下の案件・コメント・SI情報をもとに、スライド構成を6〜9枚で提案し、各モジュールのデータバインドまで埋めてください。
+以下の案件・コメント・SI情報をもとに、スライド構成を6〜9枚で提案してください。
 
 【案件（日本語）】${post.title || post.titleOrig}
 【案件（原文）】${post.titleOrig || ''}
@@ -172,42 +209,51 @@ router.post('/propose-modules', async (req, res) => {
 【取得済みSIデータ（ラベル→主要フィールド）】
 ${siSummaryText}
 
+【取得済みSIラベル一覧】（primary/secondary に使えるラベル）
+${siLabels.length ? siLabels.join(' / ') : '(なし)'}
+
 【絶対ルール】
-1. 1枚目は type="opening"、最後は type="ending"（固定）
-2. 全モジュールに scriptDir を記入
-3. stats/profile/matchcard には dataSlots（4個）を必ず記入（SIデータから実値を引用）
-4. comparison には dataSlots（4行）と siBindingLeft / siBindingRight を記入
-5. insight には catchphrases（3〜5個）を必ず記入
-6. reaction には comments（7個、日本語訳済み）を必ず記入
-7. matchcenter は siBinding のみ（sofascore_match ラベル必須。dataSlotsは不要）
-8. opening/ending/history は dataSlots 不要
+1. 1枚目は opening、最後は ending（固定）
+2. 全モジュールに scriptDir と binding を必ず記入
+3. binding は { subject, aspect, primary, secondary?, customSlotKeys? } の形式
+   - subject: player / team / manager / match / transfer / tournament / generic
+   - aspect: 下記【主題.観点 一覧】から選ぶ（subject ごとに使える観点が決まる）
+   - primary: 取得済みSIラベルから選ぶ（generic は null 可）
+   - secondary: 対比型（comparison系）でのみ使う2つ目のラベル
+   - customSlotKeys: dataSlots 系で表示したいスロットkey配列（4個推奨）。省略時は default
+4. opening/ending は binding={"subject":"generic","aspect":"free","primary":null}
+5. insight モジュールは binding={"subject":"generic","aspect":"free","primary":null} + catchphrases（3〜5個）必須
+6. reaction モジュールは binding={"subject":"generic","aspect":"free","primary":null} + comments（7個、日本語訳済み）必須
+7. dataSlots / matchData などのデータ値は **コード側で自動充填** されるので、AIは値を埋めなくてよい（binding と customSlotKeys だけ正しく指定）
 
-【データバインド形式】
-- stats/profile/matchcard の dataSlots:
-    [{"label":"GOALS","value":"24"},{"label":"ASSISTS","value":"5"},
-     {"label":"RATING","value":"7.92"},{"label":"MARKET","value":"€180M"}]
-    → value は SIデータ（siBindingラベル）から引用した実値。なければ推定値でも可
-- comparison の dataSlots:
-    [{"label":"GOALS","leftValue":"24","rightValue":"18"},
-     {"label":"ASSISTS","leftValue":"5","rightValue":"3"},...4行]
-    → siBindingLeft="選手A", siBindingRight="選手B" を両方記入
-- insight の catchphrases:
-    ["18歳でCL8得点","ドルトムントで2年で80ゴール","マンCで111試合100ゴール","3年連続得点王"]
-    → 短く・強く・数字や事実をベースに
-- reaction の comments:
-    [{"text":"ハーランドは人外","score":2453},{"text":"...","score":1820},...7件]
-    → 上の【元コメント】から上位7件を選定し日本語に意訳（元が日本語ならそのまま）
+【主題.観点 一覧】
+${formatRecipesForPrompt()}
 
-【使用可能なスライドタイプ】
-opening / insight / stats / reaction / profile / comparison / history / matchcard / matchcenter / ending
+【catchphrases / comments の形式】（insight / reaction のみ手動）
+- catchphrases: ["18歳でCL8得点","ドルトムントで80ゴール","3年連続得点王"]
+- comments: [{"text":"...","score":0},...7件]
+  → 上の【元コメント】から面白い7件を選定し日本語に意訳
 
 JSONのみ返すこと（説明・マークダウン不要）。以下は例：
 {"modules": [
-  {"title":"衝撃！ハーランドの偉業","type":"opening","reason":"視聴者を掴む","scriptDir":"...","siBinding":null},
-  {"title":"HAALANDの偉業","type":"insight","reason":"...","scriptDir":"...","siBinding":"Erling Haaland","catchphrases":["18歳でCL8得点","ドルトムントで80ゴール","3年連続得点王"]},
-  {"title":"今期スタッツ","type":"stats","reason":"...","scriptDir":"...","siBinding":"Erling Haaland","dataSlots":[{"label":"GOALS","value":"24"},{"label":"ASSISTS","value":"5"},{"label":"RATING","value":"7.92"},{"label":"xG","value":"22.3"}]},
-  {"title":"海外の声","type":"reaction","reason":"...","scriptDir":"...","siBinding":null,"comments":[{"text":"...","score":0},{"text":"...","score":0},...7件]},
-  {"title":"まとめ","type":"ending","reason":"...","scriptDir":"...","siBinding":null}
+  {"title":"衝撃！ハーランドの偉業","scriptDir":"...","reason":"視聴者を掴む",
+   "binding":{"subject":"generic","aspect":"free","primary":null}},
+  {"title":"HAALANDの偉業","scriptDir":"...","reason":"...",
+   "binding":{"subject":"generic","aspect":"free","primary":null},
+   "catchphrases":["18歳でCL8得点","ドルトムントで80ゴール","3年連続得点王"]},
+  {"title":"今期スタッツ","scriptDir":"...","reason":"...",
+   "binding":{"subject":"player","aspect":"careerStats","primary":"Erling Haaland",
+              "customSlotKeys":["goals","assists","rating","xG"]}},
+  {"title":"マドリー vs バルサ H2H","scriptDir":"...","reason":"...",
+   "binding":{"subject":"match","aspect":"h2h","primary":"Real Madrid vs Barcelona",
+              "secondary":"-","customSlotKeys":["wins","draws","losses","lastResult"]}},
+  {"title":"試合詳細","scriptDir":"...","reason":"...",
+   "binding":{"subject":"match","aspect":"matchStats","primary":"Real Madrid vs Barcelona"}},
+  {"title":"海外の声","scriptDir":"...","reason":"...",
+   "binding":{"subject":"generic","aspect":"free","primary":null},
+   "comments":[{"text":"...","score":0},...7件]},
+  {"title":"まとめ","scriptDir":"...","reason":"...",
+   "binding":{"subject":"generic","aspect":"free","primary":null}}
 ]}`;
 
   try {
@@ -231,35 +277,108 @@ JSONのみ返すこと（説明・マークダウン不要）。以下は例：
       ending:      '全体のまとめと感想を述べ、コメントへの参加とチャンネル登録を促す。',
     };
 
-    // データバインドの欠落を補完
-    mods.forEach(mod => {
+    // type → デフォルトbinding 推測（後方互換：旧AIが type のみで返してきた場合）
+    function inferBindingFromType(mod) {
+      const t = mod.type;
+      if (['opening','ending','insight','reaction'].includes(t)) {
+        return { subject: 'generic', aspect: 'free', primary: null };
+      }
+      // siBinding ベースの旧形式から推測
+      const single = mod.siBinding;
+      const left   = mod.siBindingLeft;
+      const right  = mod.siBindingRight;
+      const aspectByType = {
+        profile:    'profile',
+        stats:      'careerStats',
+        history:    'history',
+        comparison: 'careerStats',
+        matchcard:  'matchStats',
+        matchcenter:'matchStats',
+      };
+      const subjectGuess = (lbl) => {
+        if (!lbl) return 'generic';
+        for (const subj of ['player', 'team', 'manager', 'match']) {
+          const box = ({ player:'sofascore_player', team:'sofascore_team', manager:'sofascore_manager', match:'sofascore_match' })[subj];
+          if (siData?.boxes?.[box]?.fetched?.some(f => f.label === lbl)) return subj;
+        }
+        return 'player';
+      };
+      return {
+        subject:   subjectGuess(single || left),
+        aspect:    aspectByType[t] || 'free',
+        primary:   single || left || null,
+        secondary: right || null,
+      };
+    }
+
+    // 各モジュールに binding がある場合はビルダーで自動充填
+    // binding 無しはレガシー（AIが直接 dataSlots を記入したケース）として尊重
+    let buildOk = 0, buildSkip = 0, buildFail = 0;
+    for (const mod of mods) {
+      // scriptDir が無ければ補完
       if (!mod.scriptDir || !mod.scriptDir.trim()) {
         mod.scriptDir = defaultScriptDir[mod.type] || '';
       }
-      if (['stats','profile','matchcard'].includes(mod.type)) {
-        if (!Array.isArray(mod.dataSlots) || mod.dataSlots.length < 4) {
-          const existing = Array.isArray(mod.dataSlots) ? mod.dataSlots : [];
-          while (existing.length < 4) existing.push({ label: 'ITEM' + (existing.length + 1), value: '-' });
-          mod.dataSlots = existing.slice(0, 4);
-        }
+
+      // binding 無しなら type から推測（できる範囲で）
+      if (!mod.binding || !mod.binding.subject) {
+        mod.binding = inferBindingFromType(mod);
       }
-      if (mod.type === 'comparison') {
-        if (!Array.isArray(mod.dataSlots) || mod.dataSlots.length < 4) {
-          const existing = Array.isArray(mod.dataSlots) ? mod.dataSlots : [];
-          while (existing.length < 4) existing.push({ label: 'ITEM' + (existing.length + 1), leftValue: '-', rightValue: '-' });
-          mod.dataSlots = existing.slice(0, 4);
-        }
+
+      // generic.free（opening/ending/insight/reaction）はビルダー実行不要
+      if (mod.binding.subject === 'generic' && mod.binding.aspect === 'free') {
+        buildSkip++;
+        continue;
       }
-      if (mod.type === 'insight') {
-        if (!Array.isArray(mod.catchphrases) || !mod.catchphrases.length) {
-          mod.catchphrases = [(mod.title || 'キャッチコピー1'), 'キャッチコピー2', 'キャッチコピー3'];
+
+      // ビルダー実行（dataSlots / matchData 自動充填）
+      try {
+        const r = await buildModuleFromBinding(mod.binding, { siData });
+        if (r.ok) {
+          // 既存フィールドを保持しつつ、ビルダー出力で上書き
+          // type/dataSlots/matchData/siBinding* はビルダー側を優先
+          mod.type      = r.module.type;
+          if (r.module.dataSlots)    mod.dataSlots    = r.module.dataSlots;
+          if (r.module.matchData)    mod.matchData    = r.module.matchData;
+          if (r.module.catchphrases) mod.catchphrases = mod.catchphrases?.length ? mod.catchphrases : r.module.catchphrases;
+          if (r.module.siBinding)      mod.siBinding      = r.module.siBinding;
+          if (r.module.siBindingLeft)  mod.siBindingLeft  = r.module.siBindingLeft;
+          if (r.module.siBindingRight) mod.siBindingRight = r.module.siBindingRight;
+          if (r.module.homeTeam)  mod.homeTeam  = r.module.homeTeam;
+          if (r.module.awayTeam)  mod.awayTeam  = r.module.awayTeam;
+          if (r.module.homeScore !== undefined) mod.homeScore = r.module.homeScore;
+          if (r.module.awayScore !== undefined) mod.awayScore = r.module.awayScore;
+          if (r.module.matchDate) mod.matchDate = r.module.matchDate;
+          buildOk++;
+        } else {
+          console.warn(`[Step3] build失敗 "${mod.title}":`, r.error);
+          buildFail++;
         }
+      } catch (e) {
+        console.warn(`[Step3] build例外 "${mod.title}":`, e.message);
+        buildFail++;
       }
-      if (mod.type === 'reaction') {
-        if (!Array.isArray(mod.comments) || !mod.comments.length) {
-          // AIが出し忘れた場合は生コメントで埋める（未翻訳・上位7件）
-          mod.comments = rawComments.slice(0, 7);
-        }
+    }
+    console.log(`[Step3] ビルダー実行: 成功${buildOk} / スキップ${buildSkip} / 失敗${buildFail}`);
+
+    // 各モジュールの fallback：必須フィールドが空ならミニマム補完
+    mods.forEach(mod => {
+      if (mod.type === 'insight' && !mod.catchphrases?.length) {
+        mod.catchphrases = [(mod.title || 'キャッチコピー1'), 'キャッチコピー2', 'キャッチコピー3'];
+      }
+      if (mod.type === 'reaction' && !mod.comments?.length) {
+        mod.comments = rawComments.slice(0, 7);
+      }
+      // dataSlots がまだ無い stats/profile/matchcard は最小4枠で埋める
+      if (['stats','profile','matchcard'].includes(mod.type) && (!mod.dataSlots || mod.dataSlots.length < 4)) {
+        const existing = Array.isArray(mod.dataSlots) ? mod.dataSlots : [];
+        while (existing.length < 4) existing.push({ label: 'ITEM' + (existing.length + 1), value: '-' });
+        mod.dataSlots = existing.slice(0, 4);
+      }
+      if (mod.type === 'comparison' && (!mod.dataSlots || mod.dataSlots.length < 4)) {
+        const existing = Array.isArray(mod.dataSlots) ? mod.dataSlots : [];
+        while (existing.length < 4) existing.push({ label: 'ITEM' + (existing.length + 1), leftValue: '-', rightValue: '-' });
+        mod.dataSlots = existing.slice(0, 4);
       }
     });
 
@@ -271,6 +390,7 @@ JSONのみ返すこと（説明・マークダウン不要）。以下は例：
         type:      'opening',
         reason:    '視聴者を最初の3秒で引き込むオープニング',
         scriptDir: defaultScriptDir.opening,
+        binding:   { subject: 'generic', aspect: 'free', primary: null },
         siBinding: null,
       });
     }
@@ -281,12 +401,13 @@ JSONのみ返すこと（説明・マークダウン不要）。以下は例：
         type:      'ending',
         reason:    '余韻を残しチャンネル登録を促す',
         scriptDir: defaultScriptDir.ending,
+        binding:   { subject: 'generic', aspect: 'free', primary: null },
         siBinding: null,
       });
     }
 
     parsed.modules = mods;
-    console.log('[Step3] 提案成功:', mods.length, '件 (opening/ending補完済み)');
+    console.log('[Step3] 提案成功:', mods.length, '件');
     res.json(parsed);
   } catch (e) {
     console.error('[Step3] エラー:', e.message);

@@ -485,6 +485,102 @@ router.get('/v2/images', (req, res) => {
   res.json({ images: [], note: 'Step4完了後に画像取得機能を実装予定' });
 });
 
+// レシピメタデータ取得：UIプルダウン用に subject/aspect/availableSlots/SIラベル一覧を返す
+router.get('/v2/recipes', (req, res) => {
+  const { RECIPES, SUBJECTS, SUBJECT_LABELS, SUBJECT_BOX_MAP } = require('../scripts/v2_story/recipes');
+  const postId = req.query.postId;
+
+  // recipes 全件をフロント用に整形
+  const recipeList = Object.entries(RECIPES).map(([key, r]) => {
+    const [subject, aspect] = key.split('.');
+    return {
+      key, subject, aspect,
+      label:        r.label,
+      description:  r.description,
+      template:     r.template,
+      priority:     r.priority,
+      populates:    r.populates,
+      historyShape: !!r.historyShape,
+      requiresSecondary: !!r.requiresSecondary,
+      needsMatchSide:    !!r.needsMatchSide,
+      availableSlots: (r.availableSlots || []).map(s => ({ key: s.key, label: s.label })),
+      defaultSelection: r.defaultSelection || [],
+    };
+  });
+
+  // SI ラベル一覧（postId 指定時）
+  const siLabels = { player: [], team: [], manager: [], match: [] };
+  if (postId) {
+    const siData = safeJson(siPath(postId), {});
+    Object.entries(SUBJECT_BOX_MAP).forEach(([subj, box]) => {
+      (siData?.boxes?.[box]?.fetched || []).forEach(f => {
+        if (f.label && !siLabels[subj].includes(f.label)) siLabels[subj].push(f.label);
+      });
+    });
+  }
+
+  res.json({
+    subjects:      SUBJECTS,
+    subjectLabels: SUBJECT_LABELS,
+    recipes:       recipeList,
+    siLabels,
+  });
+});
+
+// モジュール再構築：binding 変更や customSlotKeys 変更時にビルダー実行 → 1モジュール返す
+router.post('/v2/rebuild-module', async (req, res) => {
+  const { postId, idx, binding, persist } = req.body;
+  if (!postId || idx == null || !binding) {
+    return res.status(400).json({ error: 'postId + idx + binding required' });
+  }
+  try {
+    const { buildModuleFromBinding } = require('../scripts/v2_story/builder');
+    const siData = safeJson(siPath(postId), {});
+
+    const r = await buildModuleFromBinding(binding, { siData });
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
+
+    const result = r.module;
+
+    // persist=true なら現在のモジュールに合成して保存
+    if (persist) {
+      const mp = modulesPath(postId);
+      if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+      const j = JSON.parse(fs.readFileSync(mp, 'utf8'));
+      const i = parseInt(idx, 10);
+      if (!j.modules[i]) return res.status(404).json({ error: 'idx out of range' });
+      const cur = j.modules[i];
+
+      // 既存の編集済みフィールド（title / scriptDir / narration / bgImage 等）を保持しつつ、
+      // type / dataSlots / matchData / siBinding 系をビルダー結果で上書き
+      cur.binding = result.binding;
+      cur.type    = result.type;
+      if (result.dataSlots !== undefined)  cur.dataSlots    = result.dataSlots;
+      if (result.matchData !== undefined)  cur.matchData    = result.matchData;
+      if (result.catchphrases !== undefined && (!cur.catchphrases || !cur.catchphrases.length)) {
+        cur.catchphrases = result.catchphrases;
+      }
+      cur.siBinding      = result.siBinding      ?? null;
+      cur.siBindingLeft  = result.siBindingLeft  ?? null;
+      cur.siBindingRight = result.siBindingRight ?? null;
+      if (result.homeTeam) cur.homeTeam = result.homeTeam;
+      if (result.awayTeam) cur.awayTeam = result.awayTeam;
+      if (result.homeScore !== undefined) cur.homeScore = result.homeScore;
+      if (result.awayScore !== undefined) cur.awayScore = result.awayScore;
+      if (result.matchDate) cur.matchDate = result.matchDate;
+
+      j.savedAt = new Date().toISOString();
+      fs.writeFileSync(mp, JSON.stringify(j, null, 2));
+      return res.json({ ok: true, module: cur, persisted: true });
+    }
+
+    res.json({ ok: true, module: result, persisted: false });
+  } catch (e) {
+    console.error('[Step4] rebuild-module エラー:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 現在編集中モジュールの bgImage を保存
 router.post('/v2/set-bg-image', (req, res) => {
   const { postId, idx, bgImage } = req.body;
@@ -638,8 +734,32 @@ function getUI() {
 
   window.APP = window.APP || {};
   window.APP.s4 = {
-    activeTab: 0, // 現在選択中のモジュール index
+    activeTab: 0,         // 現在選択中のモジュール index
+    recipes: [],          // /api/v2/recipes の結果
+    recipesByKey: {},     // 'subject.aspect' → recipe（キャッシュ）
+    subjects: [],
+    subjectLabels: {},
+    siLabels: { player:[], team:[], manager:[], match:[] },
   };
+
+  /* ── レシピ + SIラベル一覧を取得 ── */
+  async function _s4LoadRecipes() {
+    const post = window.APP.selected;
+    const url = '/api/v2/recipes' + (post?.id ? '?postId=' + encodeURIComponent(post.id) : '');
+    try {
+      const r = await fetch(url);
+      const j = await r.json();
+      window.APP.s4.recipes = j.recipes || [];
+      window.APP.s4.recipesByKey = {};
+      (j.recipes || []).forEach(function(rec) {
+        window.APP.s4.recipesByKey[rec.key] = rec;
+      });
+      window.APP.s4.subjects      = j.subjects      || [];
+      window.APP.s4.subjectLabels = j.subjectLabels || {};
+      window.APP.s4.siLabels      = j.siLabels      || { player:[], team:[], manager:[], match:[] };
+      console.log('[Step4] レシピ読込OK:', (j.recipes || []).length, '件 / SIラベル:', j.siLabels);
+    } catch (e) { console.warn('[Step4] recipes読込失敗', e); }
+  }
 
   /* ── 初期化（goStep(4) で呼ばれる）── */
   window.step4Init = function() {
@@ -648,6 +768,9 @@ function getUI() {
       ? (post.title || '(タイトル不明)').slice(0, 80)
       : '← 左サイドバーの保存済み案件をクリックしてください';
     _s4Msg('');
+
+    // レシピ読込（並行）
+    _s4LoadRecipes().then(_s4Render);
 
     // Step3 から引き継いだモジュールがあれば使う。無ければサーバーから読み込む
     if (!window.APP.modules || !window.APP.modules.length) {
@@ -766,23 +889,58 @@ function getUI() {
     const t = m.type;
     let html = '';
 
+    // 現binding に対応するレシピの availableSlots を取得（プルダウン用）
+    function _getAvailableSlots() {
+      const b = m.binding || {};
+      const r = window.APP.s4?.recipesByKey?.[b.subject + '.' + b.aspect];
+      return r?.availableSlots || [];
+    }
+    function _slotKeyOptions(currentKey) {
+      const slots = _getAvailableSlots();
+      if (!slots.length) return '';
+      let html = '';
+      slots.forEach(function(s) {
+        html += '<option value="' + _e(s.key) + '"' + (s.key === currentKey ? ' selected' : '') + '>'
+          + _e(s.label) + '</option>';
+      });
+      html += '<option value=""' + (!currentKey ? ' selected' : '') + '>(カスタム)</option>';
+      return html;
+    }
+
     // dataSlots 系（stats/profile/matchcard）
     if (['stats','profile','matchcard'].includes(t)) {
       const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
       if (!slots.length) m.dataSlots = slots;
+      const slotOpts = _slotKeyOptions.bind(null);
+      const hasRecipe = _getAvailableSlots().length > 0;
       html += '<div style="margin-bottom:10px">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; データスロット（編集可）</span>'
+        + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; データスロット（編集可）'
+        + (hasRecipe ? '<span style="font-size:9px;color:#5a6a8a;margin-left:6px">※ ラベル変更後は ↻ データ再取得 で値を更新</span>' : '')
+        + '</span>'
         + '<button class="btn btn-sm" id="s4BtnAddSlot" style="background:#10b981;color:#fff">+ 追加</button>'
         + '</div>';
       slots.forEach(function(s, idx) {
-        const merged = (s.label && s.value) ? (s.label + '：' + s.value) : (s.merged || '');
-        html += '<div style="display:grid;grid-template-columns:24px 1fr 28px;gap:6px;margin-bottom:5px;align-items:center">'
-          + '<span style="font-size:10px;color:#8a9aba;text-align:center">#' + (idx+1) + '</span>'
-          + '<input class="inp s4-slot" data-idx="' + idx + '" placeholder="例: 今季ゴール：24"'
-          + ' style="font-size:12px;padding:5px 8px" value="' + _e(merged) + '">'
-          + '<button class="btn btn-sm s4-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
-          + '</div>';
+        const slotKey = s.slotKey || '';
+        if (hasRecipe) {
+          // 3カラム：[ラベルプルダウン] [値（編集可）] [削除]
+          html += '<div style="display:grid;grid-template-columns:24px 140px 1fr 28px;gap:6px;margin-bottom:5px;align-items:center">'
+            + '<span style="font-size:10px;color:#8a9aba;text-align:center">#' + (idx+1) + '</span>'
+            + '<select class="inp s4-slot-key" data-idx="' + idx + '" style="font-size:11px;padding:4px 6px">' + slotOpts(slotKey) + '</select>'
+            + '<input class="inp s4-slot-value" data-idx="' + idx + '" placeholder="値"'
+            + ' style="font-size:12px;padding:5px 8px" value="' + _e(s.value || '') + '">'
+            + '<button class="btn btn-sm s4-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+            + '</div>';
+        } else {
+          // 旧来の merged 入力（ラベル：値）
+          const merged = (s.label && s.value) ? (s.label + '：' + s.value) : (s.merged || '');
+          html += '<div style="display:grid;grid-template-columns:24px 1fr 28px;gap:6px;margin-bottom:5px;align-items:center">'
+            + '<span style="font-size:10px;color:#8a9aba;text-align:center">#' + (idx+1) + '</span>'
+            + '<input class="inp s4-slot" data-idx="' + idx + '" placeholder="例: 今季ゴール：24"'
+            + ' style="font-size:12px;padding:5px 8px" value="' + _e(merged) + '">'
+            + '<button class="btn btn-sm s4-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+            + '</div>';
+        }
       });
       html += '</div>';
     }
@@ -791,6 +949,7 @@ function getUI() {
     else if (t === 'comparison') {
       const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
       m.dataSlots = slots;
+      const hasRecipe = _getAvailableSlots().length > 0;
       html += '<div style="margin-bottom:10px">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
         + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; 対比データ（label / 左 / 右）</span>'
@@ -802,12 +961,24 @@ function getUI() {
         + '<div>右: <span style="color:#fca5a5">' + _e(m.siBindingRight || '(未設定)') + '</span></div>'
         + '</div>';
       slots.forEach(function(s, idx) {
-        html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:5px;margin-bottom:5px">'
-          + '<input class="inp s4-cmp-label" data-idx="' + idx + '" placeholder="LABEL" style="font-size:11px;padding:4px 6px" value="' + _e(s.label || '') + '">'
-          + '<input class="inp s4-cmp-left"  data-idx="' + idx + '" placeholder="左"    style="font-size:11px;padding:4px 6px;color:#93c5fd" value="' + _e(s.leftValue || '') + '">'
-          + '<input class="inp s4-cmp-right" data-idx="' + idx + '" placeholder="右"    style="font-size:11px;padding:4px 6px;color:#fca5a5" value="' + _e(s.rightValue || '') + '">'
-          + '<button class="btn btn-sm s4-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
-          + '</div>';
+        const slotKey = s.slotKey || '';
+        if (hasRecipe) {
+          // ラベル＝プルダウン、左/右値＝編集可
+          html += '<div style="display:grid;grid-template-columns:140px 1fr 1fr 28px;gap:5px;margin-bottom:5px">'
+            + '<select class="inp s4-slot-key s4-cmp-label-sel" data-idx="' + idx + '" style="font-size:11px;padding:4px 6px">' + _slotKeyOptions(slotKey) + '</select>'
+            + '<input class="inp s4-cmp-left"  data-idx="' + idx + '" placeholder="左"    style="font-size:11px;padding:4px 6px;color:#93c5fd" value="' + _e(s.leftValue || '') + '">'
+            + '<input class="inp s4-cmp-right" data-idx="' + idx + '" placeholder="右"    style="font-size:11px;padding:4px 6px;color:#fca5a5" value="' + _e(s.rightValue || '') + '">'
+            + '<button class="btn btn-sm s4-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+            + '</div>';
+        } else {
+          // 旧来の自由入力ラベル
+          html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:5px;margin-bottom:5px">'
+            + '<input class="inp s4-cmp-label" data-idx="' + idx + '" placeholder="LABEL" style="font-size:11px;padding:4px 6px" value="' + _e(s.label || '') + '">'
+            + '<input class="inp s4-cmp-left"  data-idx="' + idx + '" placeholder="左"    style="font-size:11px;padding:4px 6px;color:#93c5fd" value="' + _e(s.leftValue || '') + '">'
+            + '<input class="inp s4-cmp-right" data-idx="' + idx + '" placeholder="右"    style="font-size:11px;padding:4px 6px;color:#fca5a5" value="' + _e(s.rightValue || '') + '">'
+            + '<button class="btn btn-sm s4-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 6px">&#xD7;</button>'
+            + '</div>';
+        }
       });
       html += '</div>';
     }
@@ -875,6 +1046,79 @@ function getUI() {
     return html;
   }
 
+  /* ── binding 編集UI（主題/観点/対象 + customSlotKeys） ── */
+  function _buildBindingUi(m) {
+    const s4 = window.APP.s4 || {};
+    const recipesByKey = s4.recipesByKey || {};
+    const subjects = s4.subjects || [];
+    const subjectLabels = s4.subjectLabels || {};
+    const siLabels = s4.siLabels || {};
+
+    // binding が無ければ最低限のスケルトンを作る（generic.free）
+    if (!m.binding) m.binding = { subject:'generic', aspect:'free', primary:null, secondary:null };
+    const b = m.binding;
+
+    // 主題プルダウン
+    const subjOpts = subjects.map(function(s) {
+      return '<option value="' + s + '"' + (b.subject === s ? ' selected' : '') + '>' + (subjectLabels[s] || s) + '</option>';
+    }).join('');
+
+    // 観点プルダウン（現主題に対応するセルだけ）
+    const aspectsForSubj = (s4.recipes || []).filter(function(r) { return r.subject === b.subject; });
+    const aspectOpts = aspectsForSubj.map(function(r) {
+      return '<option value="' + r.aspect + '"' + (b.aspect === r.aspect ? ' selected' : '') + '>'
+        + r.label + ' [' + r.priority + ']</option>';
+    }).join('') || '<option value="free">(なし)</option>';
+
+    // primary プルダウン（subject に応じた SI ラベル）
+    const labelsForSubj = b.subject === 'generic' ? [] : (siLabels[b.subject] || []);
+    const primaryOpts = '<option value="">(なし)</option>' + labelsForSubj.map(function(lbl) {
+      return '<option value="' + _e(lbl) + '"' + (b.primary === lbl ? ' selected' : '') + '>' + _e(lbl) + '</option>';
+    }).join('');
+
+    // secondary プルダウン（comparison系のみ）
+    const recipe = recipesByKey[b.subject + '.' + b.aspect];
+    const showSecondary = !!(recipe && recipe.requiresSecondary);
+    const secondaryOpts = '<option value="">(なし)</option>' + labelsForSubj.map(function(lbl) {
+      return '<option value="' + _e(lbl) + '"' + (b.secondary === lbl ? ' selected' : '') + '>' + _e(lbl) + '</option>';
+    }).join('');
+
+    // バインドキーの色
+    const isFree = b.subject === 'generic' && b.aspect === 'free';
+    const borderCol = isFree ? '#3a4458' : '#3b82f6';
+
+    let html = '<div style="background:#0d1220;border:1px solid ' + borderCol + ';border-radius:6px;padding:8px 10px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+      + '<span style="font-size:10px;color:#94a3b8;font-weight:bold">&#x1F517; binding（主題と観点）</span>'
+      + (isFree
+          ? '<span style="font-size:10px;color:#5a6a8a">※フリー編集モジュール（自動充填なし）</span>'
+          : '<button class="btn btn-sm" id="s4BtnRebuild" style="background:#3b82f6;color:#fff;font-size:10px;padding:3px 8px">&#x21BB; データ再取得</button>'
+        )
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:5px">'
+      + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">主題 (subject)</div>'
+      + '<select id="s4BindSubj" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindSubjChange()">' + subjOpts + '</select></div>'
+      + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">観点 (aspect)</div>'
+      + '<select id="s4BindAspect" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindAspectChange()">' + aspectOpts + '</select></div>'
+      + '</div>';
+    if (b.subject !== 'generic') {
+      html += '<div style="display:grid;grid-template-columns:' + (showSecondary ? '1fr 1fr' : '1fr') + ';gap:6px">'
+        + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象 (primary)</div>'
+        + '<select id="s4BindPrimary" class="inp" style="font-size:11px;padding:4px 6px;width:100%">' + primaryOpts + '</select></div>';
+      if (showSecondary) {
+        html += '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象2 (secondary) ※必須</div>'
+          + '<select id="s4BindSecondary" class="inp" style="font-size:11px;padding:4px 6px;width:100%">' + secondaryOpts + '</select></div>';
+      }
+      html += '</div>';
+    }
+    if (recipe && recipe.description) {
+      html += '<div style="font-size:10px;color:#6080b0;margin-top:5px">&#x1F4D6; ' + _e(recipe.description) + '</div>';
+    }
+    html += '</div>';
+
+    return html;
+  }
+
   function _s4RenderEditor() {
     const editor = document.getElementById('s4Editor');
     const mods = window.APP.modules || [];
@@ -908,12 +1152,8 @@ function getUI() {
       + '</div>'
       + '</div>'
 
-      // SI バインド
-      + (m.siBinding
-          ? '<div style="margin-bottom:8px;font-size:11px;color:#94a3b8">'
-            + '&#x1F517; SIバインド: <span style="color:#fff;font-weight:bold">' + _e(m.siBinding) + '</span>'
-            + '</div>'
-          : '')
+      // ★ binding（主題/観点/対象）UI
+      + _buildBindingUi(m)
 
       // 脚本指示（編集可）
       + '<div style="margin-bottom:10px">'
@@ -938,6 +1178,89 @@ function getUI() {
     _s4Render();
   };
 
+  /* ── binding: subject 変更時 → aspect プルダウン更新 ── */
+  window.s4OnBindSubjChange = function() {
+    _s4SaveCurrent();
+    const m = window.APP.modules?.[window.APP.s4.activeTab];
+    if (!m) return;
+    const subjEl = document.getElementById('s4BindSubj');
+    if (!subjEl) return;
+    const newSubj = subjEl.value;
+    // 同じsubjectで一番優先度の高いaspectを自動選択
+    const recipes = (window.APP.s4.recipes || []).filter(r => r.subject === newSubj);
+    recipes.sort((a, b) => (a.priority || 'Z').localeCompare(b.priority || 'Z'));
+    m.binding = m.binding || {};
+    m.binding.subject = newSubj;
+    m.binding.aspect  = recipes[0]?.aspect || 'free';
+    m.binding.primary = null;
+    m.binding.secondary = null;
+    m.binding.customSlotKeys = recipes[0]?.defaultSelection || null;
+    _s4Render();
+  };
+
+  /* ── binding: aspect 変更時 → defaultSelection を反映 ── */
+  window.s4OnBindAspectChange = function() {
+    _s4SaveCurrent();
+    const m = window.APP.modules?.[window.APP.s4.activeTab];
+    if (!m) return;
+    const aspEl = document.getElementById('s4BindAspect');
+    if (!aspEl) return;
+    const newAsp = aspEl.value;
+    m.binding = m.binding || {};
+    m.binding.aspect = newAsp;
+    const recipe = window.APP.s4.recipesByKey?.[m.binding.subject + '.' + newAsp];
+    m.binding.customSlotKeys = recipe?.defaultSelection || null;
+    _s4Render();
+  };
+
+  /* ── データ再取得：ビルダーAPIを呼んで現モジュールに反映 ── */
+  window.s4Rebuild = async function() {
+    _s4SaveCurrent();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.modules?.[i];
+    const post = window.APP.selected;
+    if (!m || !post?.id) return;
+    if (!m.binding || m.binding.subject === 'generic') {
+      _s4Msg('&#x26A0; generic.free のため再取得不要');
+      return;
+    }
+    const btn = document.getElementById('s4BtnRebuild');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 再取得中...'; }
+    _s4Msg('&#x1F504; ビルダー実行中...');
+    try {
+      const r = await fetch('/api/v2/rebuild-module', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId:  post.id,
+          idx:     i,
+          binding: m.binding,
+          persist: false,
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        _s4Msg('&#x274C; 再取得失敗: ' + (j.error || ''));
+        if (btn) { btn.disabled = false; btn.textContent = '↻ データ再取得'; }
+        return;
+      }
+      // ビルダー結果を現モジュールにマージ
+      const result = j.module;
+      m.type = result.type;
+      if (result.dataSlots !== undefined) m.dataSlots = result.dataSlots;
+      if (result.matchData !== undefined) m.matchData = result.matchData;
+      if (result.catchphrases !== undefined) m.catchphrases = result.catchphrases;
+      m.siBinding      = result.siBinding      ?? null;
+      m.siBindingLeft  = result.siBindingLeft  ?? null;
+      m.siBindingRight = result.siBindingRight ?? null;
+      _s4Msg('&#x2705; データ再取得完了');
+      _s4Render();
+    } catch (e) {
+      _s4Msg('&#x274C; 再取得エラー: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '↻ データ再取得'; }
+    }
+  };
+
   function _s4SaveCurrent() {
     const i = window.APP.s4.activeTab;
     const m = window.APP.modules?.[i];
@@ -951,6 +1274,25 @@ function getUI() {
     if (tp) m.type      = tp.value;
     if (sd) m.scriptDir = sd.value;
 
+    // binding 編集状態の収集
+    const bsubj   = document.getElementById('s4BindSubj');
+    const baspect = document.getElementById('s4BindAspect');
+    const bprim   = document.getElementById('s4BindPrimary');
+    const bsec    = document.getElementById('s4BindSecondary');
+    if (bsubj || baspect || bprim || bsec) {
+      m.binding = m.binding || {};
+      if (bsubj)   m.binding.subject   = bsubj.value;
+      if (baspect) m.binding.aspect    = baspect.value;
+      if (bprim)   m.binding.primary   = bprim.value || null;
+      if (bsec)    m.binding.secondary = bsec.value  || null;
+    }
+    // customSlotKeys: dataSlots プルダウンから収集
+    const slotKeyEls = document.querySelectorAll('.s4-slot-key');
+    if (slotKeyEls.length && m.binding) {
+      const keys = Array.from(slotKeyEls).map(el => el.value).filter(Boolean);
+      if (keys.length) m.binding.customSlotKeys = keys;
+    }
+
     // ナレーション
     const n = document.getElementById('s4Narration');
     if (n) m.narration = n.value;
@@ -962,28 +1304,68 @@ function getUI() {
     // タイプ別データ収集
     const t2 = m.type;
     if (['stats','profile','matchcard'].includes(t2)) {
-      const merged = document.querySelectorAll('.s4-slot');
-      const slots = Array.from(merged).map(el => {
-        const raw = el.value || '';
-        const parts = raw.split(/[:：]/);
-        const lbl = (parts[0] || '').trim();
-        const val = parts.slice(1).join(':').trim();
-        return { label: lbl, value: val, merged: raw };
-      });
-      m.dataSlots = slots;
+      // 新形式（プルダウン+値）
+      const keyEls = document.querySelectorAll('.s4-slot-key');
+      const valEls = document.querySelectorAll('.s4-slot-value');
+      if (keyEls.length) {
+        const recipe = window.APP.s4?.recipesByKey?.[m.binding?.subject + '.' + m.binding?.aspect];
+        const availSlots = recipe?.availableSlots || [];
+        const slots = [];
+        for (let j = 0; j < keyEls.length; j++) {
+          const key = keyEls[j].value || '';
+          const slotMeta = availSlots.find(s => s.key === key);
+          slots.push({
+            slotKey: key || undefined,
+            label:   slotMeta?.label || (m.dataSlots?.[j]?.label || ''),
+            value:   valEls[j]?.value || '',
+          });
+        }
+        m.dataSlots = slots;
+      } else {
+        // 旧形式（merged入力）
+        const merged = document.querySelectorAll('.s4-slot');
+        const slots = Array.from(merged).map(el => {
+          const raw = el.value || '';
+          const parts = raw.split(/[:：]/);
+          const lbl = (parts[0] || '').trim();
+          const val = parts.slice(1).join(':').trim();
+          return { label: lbl, value: val, merged: raw };
+        });
+        m.dataSlots = slots;
+      }
     } else if (t2 === 'comparison') {
-      const labels = document.querySelectorAll('.s4-cmp-label');
+      // 新形式（プルダウンラベル）
+      const cmpKeyEls = document.querySelectorAll('.s4-cmp-label-sel');
       const lefts  = document.querySelectorAll('.s4-cmp-left');
       const rights = document.querySelectorAll('.s4-cmp-right');
-      const slots = [];
-      for (let j = 0; j < labels.length; j++) {
-        slots.push({
-          label:      labels[j]?.value || '',
-          leftValue:  lefts[j]?.value  || '',
-          rightValue: rights[j]?.value || '',
-        });
+      if (cmpKeyEls.length) {
+        const recipe = window.APP.s4?.recipesByKey?.[m.binding?.subject + '.' + m.binding?.aspect];
+        const availSlots = recipe?.availableSlots || [];
+        const slots = [];
+        for (let j = 0; j < cmpKeyEls.length; j++) {
+          const key = cmpKeyEls[j].value || '';
+          const slotMeta = availSlots.find(s => s.key === key);
+          slots.push({
+            slotKey:    key || undefined,
+            label:      slotMeta?.label || (m.dataSlots?.[j]?.label || ''),
+            leftValue:  lefts[j]?.value  || '',
+            rightValue: rights[j]?.value || '',
+          });
+        }
+        m.dataSlots = slots;
+      } else {
+        // 旧形式
+        const labels = document.querySelectorAll('.s4-cmp-label');
+        const slots = [];
+        for (let j = 0; j < labels.length; j++) {
+          slots.push({
+            label:      labels[j]?.value || '',
+            leftValue:  lefts[j]?.value  || '',
+            rightValue: rights[j]?.value || '',
+          });
+        }
+        m.dataSlots = slots;
       }
-      m.dataSlots = slots;
     } else if (t2 === 'insight') {
       const inputs = document.querySelectorAll('.s4-phrase');
       m.catchphrases = Array.from(inputs).map(el => el.value);
@@ -1198,6 +1580,7 @@ function getUI() {
     if (id === 's4BtnRegen')          return window.s4RegenNarration();
     if (id === 's4BtnNext')           return window.s4GenerateVideo();
     if (id === 's4BtnRefreshVideos')  return window._s4LoadVideos();
+    if (id === 's4BtnRebuild')        return window.s4Rebuild();
 
     // 追加ボタン
     if (id === 's4BtnAddSlot')      return _s4AddArrayItem('dataSlots', { label: '', value: '', merged: '' });
