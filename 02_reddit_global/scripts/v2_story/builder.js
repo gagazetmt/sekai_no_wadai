@@ -78,6 +78,28 @@ function detectMatchSide(matchEntity, teamLabel) {
   return 'home';
 }
 
+// ─── siData の sofa.match 群から、両チームを含む match を探す ─
+function findMatchBetweenTeams(siData, teamA, teamB) {
+  if (!siData?.boxes?.sofascore_match?.fetched || !teamA || !teamB) return null;
+  const a = teamA.toLowerCase();
+  const b = teamB.toLowerCase();
+  for (const f of siData.boxes.sofascore_match.fetched) {
+    const d = f.data;
+    if (!d) continue;
+    const ht = (d.homeTeam || '').toLowerCase();
+    const at = (d.awayTeam || '').toLowerCase();
+    const aMatchH = ht.includes(a) || a.includes(ht);
+    const aMatchA = at.includes(a) || a.includes(at);
+    const bMatchH = ht.includes(b) || b.includes(ht);
+    const bMatchA = at.includes(b) || b.includes(at);
+    if ((aMatchH && bMatchA) || (aMatchA && bMatchH)) return d;
+  }
+  // フォールバック：先頭の match を返す（h2hMatches が両チームを含む可能性）
+  const first = siData.boxes.sofascore_match.fetched[0]?.data;
+  if (first?.h2hMatches?.length) return first;
+  return null;
+}
+
 // ─── メイン：binding から モジュール部分構造を作る ───────────
 async function buildModuleFromBinding(binding, ctx = {}) {
   if (!binding?.subject || !binding?.aspect) {
@@ -163,16 +185,50 @@ async function buildModuleFromBinding(binding, ctx = {}) {
     // customSlotKeys 解決：binding 側 → ctx 側 → recipe.defaultSelection
     const selectedKeys = binding.customSlotKeys || ctx.customSlotKeys || recipe.defaultSelection;
 
-    // team.matchStats のような needsMatchSide ケース
     let ctxForExtract = {};
+
+    // ── needsTeamH2H：team.h2h 用、両チームを含む match を探す ──
+    if (recipe.needsTeamH2H) {
+      if (!binding.secondary) {
+        return { ok: false, error: 'team.h2h は secondary（対戦相手チーム）必須' };
+      }
+      const matchEntity = findMatchBetweenTeams(siData, binding.primary, binding.secondary);
+      if (!matchEntity) {
+        return { ok: false, error: `${binding.primary} vs ${binding.secondary} を含む試合データが siData に無い` };
+      }
+      // 左右で primaryTeam を入れ替えて extract
+      out.dataSlots = selectedKeys.map(k => {
+        const slot = recipe.availableSlots.find(s => s.key === k);
+        if (!slot) return null;
+        return {
+          slotKey:    k,
+          label:      slot.label,
+          leftValue:  String(slot.extract(matchEntity, { primaryTeam: binding.primary })   ?? '-'),
+          rightValue: String(slot.extract(matchEntity, { primaryTeam: binding.secondary }) ?? '-'),
+        };
+      }).filter(Boolean);
+      out.siBindingLeft  = binding.primary;
+      out.siBindingRight = binding.secondary;
+      return { ok: true, module: out };
+    }
+
+    // ── needsMatchPreview：matchcard 型、homeTeam/awayTeam 自動セット ──
+    if (recipe.needsMatchPreview) {
+      // primaryEntity は match データ
+      out.dataSlots = buildDataSlotsFromRecipe(recipe, primaryEntity, null, selectedKeys, {});
+      out.homeTeam  = primaryEntity.homeTeam;
+      out.awayTeam  = primaryEntity.awayTeam;
+      out.matchDate = primaryEntity.matchDate;
+      out.siBinding = binding.primary;
+      return { ok: true, module: out };
+    }
+
+    // ── team.matchStats のような needsMatchSide ケース ───────
     if (recipe.needsMatchSide) {
-      // 試合データを別途参照する想定。primary は team ラベル。
-      // siData.boxes.sofascore_match の最初のエントリを参照
       const matchEntities = siData?.boxes?.sofascore_match?.fetched || [];
       const matchEntity   = matchEntities[0]?.data;
       if (matchEntity) {
         ctxForExtract.side = detectMatchSide(matchEntity, binding.primary);
-        // primaryEntity を matchEntity に切り替え（statsは試合側にある）
         out.dataSlots = buildDataSlotsFromRecipe(
           recipe, matchEntity, null,
           selectedKeys,
@@ -181,14 +237,8 @@ async function buildModuleFromBinding(binding, ctx = {}) {
       } else {
         out.dataSlots = [];
       }
-    } else if (binding.subject === 'match' && binding.aspect === 'h2h') {
-      // h2h は primary エンティティ自体が match データ（home/away 分岐）
-      out.dataSlots = buildDataSlotsFromRecipe(
-        recipe, primaryEntity, primaryEntity,  // 同じmatchを左右ctxで渡す
-        selectedKeys,
-        {}
-      );
     } else {
+      // 通常 dataSlots：レシピの extract で primary/secondary を直接評価
       out.dataSlots = buildDataSlotsFromRecipe(
         recipe, primaryEntity, secondaryEntity,
         selectedKeys,
@@ -229,10 +279,79 @@ async function rebuildLegacyModule(legacyMod, ctx = {}) {
   };
 }
 
+// ─── 評価済みスロット一覧を作る（UI ドロップダウン用） ─────
+// 全 availableSlots を評価して、UI が「ラベル：値」表示できるようにする
+async function buildAllEvaluatedSlots(binding, ctx = {}) {
+  const { getRecipe, findEntity } = require('./recipes');
+  const recipe = getRecipe(binding.subject, binding.aspect);
+  if (!recipe?.availableSlots?.length) return [];
+
+  const siData = ctx.siData || {};
+
+  // 特殊：team.h2h は両side同じ matchEntity を使い、primaryTeam を変えて評価
+  if (recipe.needsTeamH2H) {
+    const matchEntity = findMatchBetweenTeams(siData, binding.primary, binding.secondary);
+    if (!matchEntity) return [];
+    return recipe.availableSlots.map(slot => ({
+      key:        slot.key,
+      label:      slot.label,
+      leftValue:  String(slot.extract(matchEntity, { primaryTeam: binding.primary })   ?? '-'),
+      rightValue: String(slot.extract(matchEntity, { primaryTeam: binding.secondary }) ?? '-'),
+    }));
+  }
+
+  // 特殊：matchPreview は primary が match
+  if (recipe.needsMatchPreview) {
+    const matchEntity = findEntity(siData, binding.subject, binding.primary);
+    if (!matchEntity) return [];
+    return recipe.availableSlots.map(slot => ({
+      key:   slot.key,
+      label: slot.label,
+      value: String(slot.extract(matchEntity, {}) ?? '-'),
+    }));
+  }
+
+  // 特殊：team.matchStats は match から home/away
+  if (recipe.needsMatchSide) {
+    const matchEntities = siData?.boxes?.sofascore_match?.fetched || [];
+    const matchEntity   = matchEntities[0]?.data;
+    if (!matchEntity) return [];
+    const side = detectMatchSide(matchEntity, binding.primary);
+    return recipe.availableSlots.map(slot => ({
+      key:   slot.key,
+      label: slot.label,
+      value: String(slot.extract(matchEntity, { side }) ?? '-'),
+    }));
+  }
+
+  // 通常：primary [+ secondary]
+  const primaryEntity   = findEntity(siData, binding.subject, binding.primary);
+  const secondaryEntity = binding.secondary ? findEntity(siData, binding.subject, binding.secondary) : null;
+  if (!primaryEntity) return [];
+
+  return recipe.availableSlots.map(slot => {
+    if (recipe.requiresSecondary && secondaryEntity) {
+      return {
+        key:        slot.key,
+        label:      slot.label,
+        leftValue:  String(slot.extract(primaryEntity, {})   ?? '-'),
+        rightValue: String(slot.extract(secondaryEntity, {}) ?? '-'),
+      };
+    }
+    return {
+      key:   slot.key,
+      label: slot.label,
+      value: String(slot.extract(primaryEntity, {}) ?? '-'),
+    };
+  });
+}
+
 module.exports = {
   buildModuleFromBinding,
+  buildAllEvaluatedSlots,
   rebuildLegacyModule,
   buildMatchData,
   eventsToHistoryShape,
   detectMatchSide,
+  findMatchBetweenTeams,
 };

@@ -534,13 +534,15 @@ router.post('/v2/rebuild-module', async (req, res) => {
     return res.status(400).json({ error: 'postId + idx + binding required' });
   }
   try {
-    const { buildModuleFromBinding } = require('../scripts/v2_story/builder');
+    const { buildModuleFromBinding, buildAllEvaluatedSlots } = require('../scripts/v2_story/builder');
     const siData = safeJson(siPath(postId), {});
 
     const r = await buildModuleFromBinding(binding, { siData });
     if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
 
     const result = r.module;
+    // 全 availableSlots を評価（UI のプルダウン「label：value」表示用）
+    const evaluatedSlots = await buildAllEvaluatedSlots(binding, { siData });
 
     // persist=true なら現在のモジュールに合成して保存
     if (persist) {
@@ -571,10 +573,10 @@ router.post('/v2/rebuild-module', async (req, res) => {
 
       j.savedAt = new Date().toISOString();
       fs.writeFileSync(mp, JSON.stringify(j, null, 2));
-      return res.json({ ok: true, module: cur, persisted: true });
+      return res.json({ ok: true, module: cur, evaluatedSlots, persisted: true });
     }
 
-    res.json({ ok: true, module: result, persisted: false });
+    res.json({ ok: true, module: result, evaluatedSlots, persisted: false });
   } catch (e) {
     console.error('[Step4] rebuild-module エラー:', e.message);
     res.status(500).json({ error: e.message });
@@ -895,13 +897,23 @@ function getUI() {
       const r = window.APP.s4?.recipesByKey?.[b.subject + '.' + b.aspect];
       return r?.availableSlots || [];
     }
+    // プルダウン選択肢を「label：value」表示で生成（_evalSlots キャッシュ参照）
     function _slotKeyOptions(currentKey) {
       const slots = _getAvailableSlots();
       if (!slots.length) return '';
+      const evalSlots = m._evalSlots || [];
+      const evalByKey = {};
+      evalSlots.forEach(function(es) { evalByKey[es.key] = es; });
       let html = '';
       slots.forEach(function(s) {
+        const ev = evalByKey[s.key];
+        let display = s.label;
+        if (ev) {
+          if (ev.value !== undefined && ev.value !== '-') display = s.label + '：' + ev.value;
+          else if (ev.leftValue !== undefined) display = s.label + '：' + ev.leftValue + ' vs ' + ev.rightValue;
+        }
         html += '<option value="' + _e(s.key) + '"' + (s.key === currentKey ? ' selected' : '') + '>'
-          + _e(s.label) + '</option>';
+          + _e(display) + '</option>';
       });
       html += '<option value=""' + (!currentKey ? ' selected' : '') + '>(カスタム)</option>';
       return html;
@@ -1253,7 +1265,11 @@ function getUI() {
       m.siBinding      = result.siBinding      ?? null;
       m.siBindingLeft  = result.siBindingLeft  ?? null;
       m.siBindingRight = result.siBindingRight ?? null;
-      _s4Msg('&#x2705; データ再取得完了');
+      if (result.homeTeam) m.homeTeam = result.homeTeam;
+      if (result.awayTeam) m.awayTeam = result.awayTeam;
+      // 全評価済みスロットをキャッシュ（プルダウンの「label：value」表示用）
+      m._evalSlots = j.evaluatedSlots || [];
+      _s4Msg('&#x2705; データ再取得完了 (' + (j.evaluatedSlots?.length || 0) + '項目)');
       _s4Render();
     } catch (e) {
       _s4Msg('&#x274C; 再取得エラー: ' + e.message);
@@ -1595,6 +1611,33 @@ function getUI() {
     if (cls.contains('s4-phrase-remove'))  return _s4RemoveArrayItem('catchphrases', idx);
     if (cls.contains('s4-cmt-remove'))     return _s4RemoveArrayItem('comments', idx);
     if (cls.contains('s4-hist-remove'))    return _s4RemoveArrayItem('dataSlots', idx);
+  });
+
+  /* ── プルダウン変更時：選択した slot の評価値を value 入力に自動転記 ── */
+  document.addEventListener('change', function(e) {
+    if (e.target.classList && e.target.classList.contains('s4-slot-key')) {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const newKey = e.target.value;
+      const m = window.APP.modules?.[window.APP.s4.activeTab];
+      if (!m || !newKey) return;
+      const ev = (m._evalSlots || []).find(function(s) { return s.key === newKey; });
+      if (!ev) return;
+      // single-side
+      if (ev.value !== undefined) {
+        const valEl = document.querySelector('.s4-slot-value[data-idx="' + idx + '"]');
+        if (valEl) valEl.value = ev.value;
+      }
+      // compare（左右）
+      if (ev.leftValue !== undefined) {
+        const lEl = document.querySelector('.s4-cmp-left[data-idx="' + idx + '"]');
+        const rEl = document.querySelector('.s4-cmp-right[data-idx="' + idx + '"]');
+        if (lEl) lEl.value = ev.leftValue;
+        if (rEl) rEl.value = ev.rightValue;
+      }
+      // ラベルも recipe のラベルに揃える（dataSlot[i].label）
+      _s4SaveCurrent();
+      return;
+    }
   });
 
   /* ── 型変更時の再描画 + プレビュー更新 ── */

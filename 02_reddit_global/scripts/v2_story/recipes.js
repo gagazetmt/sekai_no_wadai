@@ -298,8 +298,8 @@ const RECIPES = {
     // build時に sofa.match の生データから matchData オブジェクトを構築
   },
 
-  // ── A9. 過去対戦成績（H2H）──────────────────────────────────
-  'match.h2h': {
+  // ── A9. 過去対戦成績（H2H）─── subject=team, 2チーム比較
+  'team.h2h': {
     priority: 'A',
     label: '過去対戦成績(H2H)',
     description: '2チーム間の過去対戦成績（comparison型でレンダリング）',
@@ -307,15 +307,121 @@ const RECIPES = {
     sources: ['sofa.match.h2h'],
     populates: 'dataSlots',
     requiresSecondary: true,
-    // h2h の場合 primary=homeTeam, secondary=awayTeam を想定
-    // SI box は sofascore_match の h2hMatches/h2hSummary から計算
+    needsTeamH2H: true,  // builder が siData.matches から該当試合を探す
     availableSlots: [
-      { key: 'wins',      label: '勝利数',     extract: (d, ctx) => h2hExtract(d, ctx, 'wins') },
-      { key: 'draws',     label: '引分',       extract: (d, ctx) => h2hExtract(d, ctx, 'draws') },
-      { key: 'losses',    label: '敗戦',       extract: (d, ctx) => h2hExtract(d, ctx, 'losses') },
-      { key: 'lastResult', label: '直近結果',  extract: (d, ctx) => h2hExtract(d, ctx, 'lastResult') },
+      // ctx.primaryTeam = primary側のチーム名 / d = 該当matchの sofa.match data
+      { key: 'wins',       label: '勝利数',    extract: (d, ctx) => h2hCountForTeam(d, ctx.primaryTeam, 'wins') },
+      { key: 'draws',      label: '引分',      extract: (d, ctx) => h2hCountForTeam(d, ctx.primaryTeam, 'draws') },
+      { key: 'losses',     label: '敗戦',      extract: (d, ctx) => h2hCountForTeam(d, ctx.primaryTeam, 'losses') },
+      { key: 'lastResult', label: '直近結果',  extract: (d, ctx) => h2hCountForTeam(d, ctx.primaryTeam, 'lastResult') },
+      { key: 'recentScores', label: '直近スコア', extract: (d, ctx) => h2hCountForTeam(d, ctx.primaryTeam, 'recentScores') },
     ],
     defaultSelection: ['wins', 'draws', 'losses', 'lastResult'],
+  },
+
+  // ── A10. 選手 vs 選手 通算スタッツ比較 ────────────────────
+  'player.compareCareerStats': {
+    priority: 'A',
+    label: '選手 vs 選手 通算スタッツ',
+    description: '2選手の今シーズン通算スタッツを comparison 型で並べる',
+    template: 'comparison',
+    sources: ['sofa.player'],
+    populates: 'dataSlots',
+    requiresSecondary: true,
+    availableSlots: [  // player.careerStats と同じ extract を流用
+      { key: 'goals',     label: 'ゴール',   extract: d => fmtNum(d?.seasonStats?.goals) },
+      { key: 'assists',   label: 'アシスト', extract: d => fmtNum(d?.seasonStats?.assists) },
+      { key: 'apps',      label: '出場',     extract: d => fmtNum(d?.seasonStats?.appearances) + '試合' },
+      { key: 'minutes',   label: '出場時間', extract: d => d?.seasonStats?.minutesPlayed ? d.seasonStats.minutesPlayed + '分' : '-' },
+      { key: 'rating',    label: '平均評定', extract: d => fmtFloat(d?.seasonStats?.rating, 2) },
+      { key: 'xG',        label: 'xG',       extract: d => fmtFloat(d?.seasonStats?.expectedGoals, 2) },
+      { key: 'keyPasses', label: 'キーパス', extract: d => fmtNum(d?.seasonStats?.keyPasses) },
+      { key: 'recentAvgRating', label: '直近10戦平均', extract: d => fmtFloat(d?.recentAvgRating, 2) },
+      { key: 'marketValue', label: '市場価値', extract: d => fmtNum(d?.marketValue) },
+    ],
+    defaultSelection: ['goals', 'assists', 'rating', 'apps'],
+  },
+
+  // ── A11. 選手 vs 選手 試合スタッツ比較 ────────────────────
+  'player.compareMatchStats': {
+    priority: 'A',
+    label: '選手 vs 選手 試合スタッツ',
+    description: '2選手の同試合（または直近）パフォーマンス比較',
+    template: 'comparison',
+    sources: ['sofa.player.lastMatch'],
+    populates: 'dataSlots',
+    requiresSecondary: true,
+    availableSlots: [
+      { key: 'rating',       label: '評定',       extract: d => fmtFloat(d?.lastMatchStats?.rating, 2) },
+      { key: 'goals',        label: 'ゴール',     extract: d => fmtNum(d?.lastMatchStats?.goals) },
+      { key: 'assists',      label: 'アシスト',   extract: d => fmtNum(d?.lastMatchStats?.assists) },
+      { key: 'shots',        label: 'シュート',   extract: d => fmtNum(d?.lastMatchStats?.shots) },
+      { key: 'shotsOnTarget',label: '枠内',       extract: d => fmtNum(d?.lastMatchStats?.shotsOnTarget) },
+      { key: 'keyPasses',    label: 'キーパス',   extract: d => fmtNum(d?.lastMatchStats?.keyPasses) },
+      { key: 'passAcc',      label: 'パス成功率', extract: d => fmtPct(d?.lastMatchStats?.accuratePassesPct) },
+      { key: 'dribblesWon',  label: 'ドリブル成功',extract: d => fmtNum(d?.lastMatchStats?.dribblesWon) },
+      { key: 'touches',      label: 'タッチ数',   extract: d => fmtNum(d?.lastMatchStats?.touches) },
+    ],
+    defaultSelection: ['rating', 'goals', 'shots', 'passAcc'],
+  },
+
+  // ── A12. チーム vs チーム 今季成績比較 ─────────────────────
+  'team.compareSeasonStats': {
+    priority: 'A',
+    label: 'チーム vs チーム 今季成績',
+    description: '2クラブの今季リーグ成績を並べて比較',
+    template: 'comparison',
+    sources: ['sofa.team'],
+    populates: 'dataSlots',
+    requiresSecondary: true,
+    availableSlots: [  // team.seasonStats と同じ extract を流用
+      { key: 'position', label: '順位',     extract: d => d?.standing?.position != null ? d.standing.position + '位' : '-' },
+      { key: 'points',   label: '勝点',     extract: d => fmtNum(d?.standing?.points) },
+      { key: 'wins',     label: '勝利',     extract: d => fmtNum(d?.standing?.wins) },
+      { key: 'draws',    label: '引分',     extract: d => fmtNum(d?.standing?.draws) },
+      { key: 'losses',   label: '敗戦',     extract: d => fmtNum(d?.standing?.losses) },
+      { key: 'gf',       label: '得点',     extract: d => fmtNum(d?.standing?.goalsFor) },
+      { key: 'ga',       label: '失点',     extract: d => fmtNum(d?.standing?.goalsAgainst) },
+      { key: 'gd',       label: '得失点差',
+        extract: d => (d?.standing?.goalsFor != null && d?.standing?.goalsAgainst != null)
+          ? String(d.standing.goalsFor - d.standing.goalsAgainst) : '-' },
+      { key: 'wdlStr',   label: 'W-D-L',
+        extract: d => d?.standing ? `${d.standing.wins||0}-${d.standing.draws||0}-${d.standing.losses||0}` : '-' },
+      { key: 'marketValue', label: '総資産', extract: d => fmtNum(d?.marketValue) },
+    ],
+    defaultSelection: ['position', 'points', 'gf', 'gd'],
+  },
+
+  // ── A13. 試合プレビュー ─────────────────────────────────────
+  'match.preview': {
+    priority: 'A',
+    label: '試合プレビュー',
+    description: '試合前情報（H2H・両チームスタッツ・主役選手）。matchcard型で表示',
+    template: 'matchcard',
+    sources: ['sofa.match'],
+    populates: 'dataSlots',
+    needsMatchPreview: true,  // builder が homeTeam/awayTeam を自動セット
+    availableSlots: [
+      // d は sofa.match data（試合エンティティ）
+      { key: 'h2hRecord',  label: 'H2H通算',
+        extract: (d) => d?.h2hSummary || (d?.h2hMatches?.length ? `直近${d.h2hMatches.length}戦` : '-') },
+      { key: 'tournament', label: '大会',
+        extract: (d) => fmtNum(d?.tournament) },
+      { key: 'venue',      label: '会場',
+        extract: (d) => fmtNum(d?.venue) },
+      { key: 'matchDate',  label: '日付',
+        extract: (d) => fmtNum(d?.matchDate) },
+      { key: 'topScorer',  label: 'トップスコアラー',
+        extract: (d) => {
+          const tp = (d?.topPlayers || [])[0];
+          return tp ? `${tp.name}(${tp.rating || '-'})` : '-';
+        } },
+      { key: 'attendance', label: '観客数',
+        extract: (d) => d?.attendance ? d.attendance.toLocaleString() + '人' : '-' },
+      { key: 'lastH2HResult', label: '直近対戦',
+        extract: (d) => d?.h2hMatches?.[0]?.scoreline || '-' },
+    ],
+    defaultSelection: ['h2hRecord', 'tournament', 'venue', 'matchDate'],
   },
 
   // ════════════════════════════════════════════════════════════
@@ -449,30 +555,34 @@ function extractMatchStat(matchData, ctx, statName) {
   return fmtNum(row[side]);
 }
 
-// ─── h2h データの抽出ヘルパー ────────────────────────────────
-function h2hExtract(matchData, ctx, key) {
-  if (!matchData?.h2hMatches || !matchData.h2hMatches.length) return '-';
-  const matches = matchData.h2hMatches;
-  const homeName = matchData.homeTeam;
-  const isHomeSide = ctx?.side !== 'away';  // primary側=home扱いがデフォ
+// ─── 2チーム間のh2h集計（primary視点で W/D/L カウント） ────
+// matchEntity = sofa.match data（h2hMatches を含む）
+// primaryTeam = primary側の team 名
+// scoreline 形式： "Real Madrid 3-1 Real Betis"
+function h2hCountForTeam(matchEntity, primaryTeam, key) {
+  const matches = matchEntity?.h2hMatches || [];
+  if (!matches.length || !primaryTeam) return '-';
+  const primaryName = String(primaryTeam).toLowerCase();
   let w = 0, d = 0, l = 0;
   matches.forEach(m => {
-    // scoreline: "Real Madrid 3-1 Barcelona"
-    const scoreM = (m.scoreline || '').match(/(.+?)\s+(\d+)-(\d+)\s+(.+)/);
-    if (!scoreM) return;
-    const [, hN, hS, aS, aN] = scoreM;
+    const sm = (m.scoreline || '').match(/^(.+?)\s+(\d+)-(\d+)\s+(.+?)$/);
+    if (!sm) return;
+    const [, hN, hS, aS, aN] = sm;
     const hScore = parseInt(hS), aScore = parseInt(aS);
-    const sideHome = isHomeSide ? (hN.includes(homeName) || homeName.includes(hN)) : !(hN.includes(homeName) || homeName.includes(hN));
+    const homeLower = hN.trim().toLowerCase();
+    const awayLower = aN.trim().toLowerCase();
+    const primaryIsHome = homeLower.includes(primaryName) || primaryName.includes(homeLower);
+    const primaryIsAway = awayLower.includes(primaryName) || primaryName.includes(awayLower);
+    if (!primaryIsHome && !primaryIsAway) return;
     if (hScore === aScore) d++;
-    else if (sideHome ? hScore > aScore : aScore > hScore) w++;
+    else if (primaryIsHome ? hScore > aScore : aScore > hScore) w++;
     else l++;
   });
-  if (key === 'wins') return String(w);
-  if (key === 'draws') return String(d);
+  if (key === 'wins')   return String(w);
+  if (key === 'draws')  return String(d);
   if (key === 'losses') return String(l);
-  if (key === 'lastResult') {
-    return matches[0]?.scoreline || '-';
-  }
+  if (key === 'lastResult')   return matches[0]?.scoreline || '-';
+  if (key === 'recentScores') return matches.slice(0, 3).map(m => m.scoreline).filter(Boolean).join(' / ');
   return '-';
 }
 
