@@ -1311,7 +1311,8 @@ function getUI() {
             + '<button class="btn btn-sm s3-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
             + '</div>';
         }).join('');
-        const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddSlot()">+ 行追加</button>';
+        const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddSlot()">+ 行追加</button>'
+          + '<button class="btn btn-sm" style="background:#a855f7;color:#fff;margin-top:4px;margin-left:6px;" onclick="s3FillFromScriptDir()" title="脚本指示の内容に応じてWikipediaからデータ抽出">&#x2728; scriptDirから取得</button>';
         return wrap(hint + rows + addBtn);
       }
 
@@ -1631,6 +1632,40 @@ function getUI() {
   window.s3OnTypeChange = function() {
     _s3SaveCurrent();
     s3RenderEditor();
+  };
+
+  /* scriptDir駆動 dataSlots自動充填（Wikipedia実データから抽出） */
+  window.s3FillFromScriptDir = async function() {
+    _s3SaveCurrent();
+    const i = window.APP.activeTab;
+    const m = window.APP.modules?.[i];
+    const post = window.APP.selected;
+    if (!m || !post?.id) return;
+    if (!m.scriptDir || !m.scriptDir.trim()) {
+      _s3Msg('&#x26A0; 脚本指示が空です');
+      return;
+    }
+    _s3Msg('&#x2728; モジュール保存 → Wikipedia → AI抽出 中...');
+    try {
+      // endpoint がディスク読込なので先に save
+      await fetchJson('/api/save-modules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, modules: window.APP.modules }),
+      });
+      const j = await fetchJson('/api/v2/fill-slots-from-scriptdir', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, idx: i, scriptDir: m.scriptDir }),
+      });
+      if (!j.ok) {
+        _s3Msg('&#x274C; 失敗: ' + (j.error || ''));
+        return;
+      }
+      m.dataSlots = j.dataSlots;
+      _s3Msg('&#x2705; ' + j.dataSlots.length + 'スロット充填 (' + j.source + ' / ' + j.wikiTitle + ')');
+      s3RenderEditor();
+    } catch (e) {
+      _s3Msg('&#x274C; エラー: ' + e.message);
+    }
   };
 
   /* outline 編集の自動保存（debounce 1.5s） */

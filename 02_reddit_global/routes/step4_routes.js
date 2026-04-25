@@ -589,6 +589,116 @@ router.post('/v2/rebuild-module', async (req, res) => {
   }
 });
 
+// scriptDir 駆動 dataSlots 自動充填（Wikipedia実データから抽出）
+// DeepSeek 既定 + Haiku フォールバック / ハルシネーション禁止
+router.post('/v2/fill-slots-from-scriptdir', async (req, res) => {
+  const { postId, idx, scriptDir, wikiTitle: explicitTitle } = req.body;
+  if (!postId || idx == null || !scriptDir) {
+    return res.status(400).json({ error: 'postId + idx + scriptDir required' });
+  }
+  try {
+    // モジュール読込（binding.primary を Wikipedia title として使う）
+    const mp = modulesPath(postId);
+    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+    const j  = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const m  = j.modules?.[parseInt(idx, 10)];
+    if (!m) return res.status(404).json({ error: 'idx out of range' });
+
+    const wikiTitle = explicitTitle || m.binding?.primary || m.siBinding;
+    if (!wikiTitle) return res.status(400).json({ error: 'wikiTitle (or binding.primary) が無いため取得不可' });
+
+    // Wikipedia wikitext 取得
+    const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
+    const wt = await fetchWikipediaWikitext(wikiTitle);
+    if (!wt) return res.status(500).json({ error: `Wikipedia "${wikiTitle}" 取得失敗` });
+
+    // 容量制限：career stats 周辺だけ抜き出すヒューリスティック（無ければ全部）
+    let body = wt;
+    const idxCS = wt.search(/==\s*Career statistics\s*==|==\s*個人成績\s*==|==\s*クラブでの統計\s*==/i);
+    if (idxCS >= 0) {
+      // 該当セクションから次の == まで（最大15000文字）
+      const tail = wt.slice(idxCS);
+      const idxNext = tail.slice(2).search(/\n==\s/);
+      body = idxNext > 0 ? tail.slice(0, idxNext + 2) : tail.slice(0, 15000);
+    }
+    body = body.slice(0, 15000);
+
+    const prompt = `あなたはサッカーデータ抽出の専門家です。
+【脚本指示】 ${scriptDir}
+
+【データソース】 Wikipedia 記事「${wikiTitle}」の Career statistics セクション抜粋:
+"""
+${body}
+"""
+
+【タスク】
+脚本指示で要求されている数値を上記Wikipediaから抽出し、stats スライドの dataSlots（最大8個）として返す。
+
+【ハルシネーション禁止 — 厳守】
+- 値は必ず上記データソースに明記されているもののみ使用
+- データソースに無い値は項目自体を出力しない（推測・記憶からの補完は絶対NG）
+- ラベルは脚本指示の文言に沿って簡潔に（例「ラリーガ通算」「セリエA通算」「プロ初得点」）
+- 値は数字+単位（例「311ゴール」「2002年」）
+
+JSON のみ返す（マークダウン不要）。例：
+{"dataSlots": [
+  {"label":"通算ゴール","value":"924"},
+  {"label":"プレミアリーグ","value":"145"},
+  {"label":"ラリーガ","value":"311"},
+  {"label":"セリエA","value":"81"},
+  {"label":"サウジリーグ","value":"82"},
+  {"label":"プロ初得点","value":"2002年10月"}
+]}`;
+
+    // DeepSeek 既定 → JSON崩れたら Haiku にフォールバック
+    let raw, used = 'deepseek';
+    try {
+      raw = await callAI({
+        forceProvider: 'deepseek',
+        model: 'deepseek-chat', max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+      });
+    } catch (e) {
+      console.warn('[fill-slots] deepseek 例外、Haikuにフォールバック:', e.message);
+      raw = await callAI({
+        forceProvider: 'anthropic',
+        model: 'claude-haiku-4-5-20251001', max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      used = 'haiku';
+    }
+
+    let parsed = null;
+    const m1 = raw && raw.match(/\{[\s\S]*\}/);
+    if (m1) { try { parsed = JSON.parse(m1[0]); } catch (_) {} }
+    if (!parsed?.dataSlots && used === 'deepseek') {
+      // フォールバック：Haikuで再試行
+      console.warn('[fill-slots] deepseek JSON崩れ、Haikuに切替');
+      raw = await callAI({
+        forceProvider: 'anthropic',
+        model: 'claude-haiku-4-5-20251001', max_tokens: 1200,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const m2 = raw.match(/\{[\s\S]*\}/);
+      if (m2) parsed = JSON.parse(m2[0]);
+      used = 'haiku';
+    }
+
+    if (!parsed?.dataSlots?.length) return res.status(500).json({ error: 'dataSlots 抽出失敗' });
+
+    // dataSlots に整形（label / value のみ保持）
+    const slots = parsed.dataSlots.slice(0, 8).map(s => ({
+      label: String(s.label || '').slice(0, 30),
+      value: String(s.value || '').slice(0, 30),
+    }));
+    console.log(`[fill-slots] "${wikiTitle}" / ${used} → ${slots.length}スロット`);
+    res.json({ ok: true, dataSlots: slots, source: used, wikiTitle });
+  } catch (e) {
+    console.error('[fill-slots] エラー:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // 現在編集中モジュールの bgImage を保存
 router.post('/v2/set-bg-image', (req, res) => {
   const { postId, idx, bgImage } = req.body;
@@ -936,11 +1046,14 @@ function getUI() {
       const slotOpts = _slotKeyOptions.bind(null);
       const hasRecipe = _getAvailableSlots().length > 0;
       html += '<div style="margin-bottom:10px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px;flex-wrap:wrap;">'
         + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; データスロット（編集可）'
         + (hasRecipe ? '<span style="font-size:9px;color:#5a6a8a;margin-left:6px">※ ラベル変更後は ↻ データ再取得 で値を更新</span>' : '')
         + '</span>'
+        + '<div style="display:flex;gap:4px;">'
+        + '<button class="btn btn-sm" id="s4BtnFillFromScript" style="background:#a855f7;color:#fff" title="脚本指示の内容に応じてWikipediaからデータ抽出">&#x2728; scriptDirから取得</button>'
         + '<button class="btn btn-sm" id="s4BtnAddSlot" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>'
         + '</div>';
       slots.forEach(function(s, idx) {
         const slotKey = s.slotKey || '';
@@ -1299,6 +1412,45 @@ function getUI() {
       window.s4Rebuild();
     } else {
       _s4Render();
+    }
+  };
+
+  /* ── scriptDir駆動 dataSlots自動充填（Wikipedia実データから抽出） ── */
+  window.s4FillFromScriptDir = async function() {
+    _s4SaveCurrent();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.modules?.[i];
+    const post = window.APP.selected;
+    if (!m || !post?.id) return;
+    if (!m.scriptDir || !m.scriptDir.trim()) {
+      _s4Msg('&#x26A0; 脚本指示が空です');
+      return;
+    }
+    const btn = document.getElementById('s4BtnFillFromScript');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Wikipedia取得中...'; }
+    _s4Msg('&#x2728; scriptDir → Wikipedia → AI抽出 中...');
+    try {
+      const r = await fetch('/api/v2/fill-slots-from-scriptdir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId:    post.id,
+          idx:       i,
+          scriptDir: m.scriptDir,
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        _s4Msg('&#x274C; 失敗: ' + (j.error || ''));
+        if (btn) { btn.disabled = false; btn.textContent = '✨ scriptDirから取得'; }
+        return;
+      }
+      m.dataSlots = j.dataSlots;
+      _s4Msg('&#x2705; ' + j.dataSlots.length + 'スロット充填 (' + j.source + ' / ' + j.wikiTitle + ')');
+      _s4Render();
+    } catch (e) {
+      _s4Msg('&#x274C; エラー: ' + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = '✨ scriptDirから取得'; }
     }
   };
 
@@ -1684,6 +1836,7 @@ function getUI() {
     if (id === 's4BtnNext')           return window.s4GenerateVideo();
     if (id === 's4BtnRefreshVideos')  return window._s4LoadVideos();
     if (id === 's4BtnRebuild')        return window.s4Rebuild();
+    if (id === 's4BtnFillFromScript') return window.s4FillFromScriptDir();
 
     // 追加ボタン
     if (id === 's4BtnAddSlot')      return _s4AddArrayItem('dataSlots', { label: '', value: '', merged: '' });

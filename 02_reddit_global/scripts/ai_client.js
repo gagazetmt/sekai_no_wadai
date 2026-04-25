@@ -13,33 +13,33 @@ require("dotenv").config({ path: require("path").join(__dirname, "..", ".env"), 
 
 const PROVIDER = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
 
-let _client = null;
+const _clients = {};  // provider → client インスタンス
 
-function getClient() {
-  if (_client) return _client;
-  if (PROVIDER === "deepseek") {
+function getClient(provider) {
+  if (_clients[provider]) return _clients[provider];
+  if (provider === "deepseek") {
     const OpenAI = require("openai");
-    _client = new OpenAI({
+    _clients[provider] = new OpenAI({
       apiKey:  process.env.DEEPSEEK_API_KEY,
       baseURL: "https://api.deepseek.com",
     });
   } else {
     const Anthropic = require("@anthropic-ai/sdk");
-    _client = new Anthropic();
+    _clients[provider] = new Anthropic();
   }
-  return _client;
+  return _clients[provider];
 }
 
 /**
  * AIにメッセージを送り、テキスト応答を返す
- * @param {{ model: string, max_tokens: number, messages: Array, system?: string }} opts
- *   system: DeepSeek → role:"system" メッセージとして先頭に追加
- *           Anthropic → system パラメータとして渡す
+ * @param {{ model, max_tokens, messages, system?, forceProvider? }} opts
+ *   forceProvider: "deepseek" | "anthropic" — env無視して特定providerを使う
  * @returns {Promise<string>}
  */
-async function callAI({ model, max_tokens, messages, system }) {
-  const client = getClient();
-  if (PROVIDER === "deepseek") {
+async function callAI({ model, max_tokens, messages, system, forceProvider }) {
+  const provider = (forceProvider || PROVIDER).toLowerCase();
+  const client   = getClient(provider);
+  if (provider === "deepseek") {
     const msgs = system
       ? [{ role: "system", content: system }, ...messages]
       : messages;
