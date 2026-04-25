@@ -32,6 +32,7 @@ function safeJson(file, fallback) {
 function siPath(postId)      { return path.join(SI_DIR,   (postId||'unknown').replace(/[\/\?%*:|"<>\.]/g,'_') + '.json'); }
 function modulesPath(postId) { return path.join(DATA_DIR, (postId||'unknown').replace(/[\/\?%*:|"<>\.]/g,'_') + '_modules.json'); }
 function imagesPath(postId)  { return path.join(DATA_DIR, (postId||'unknown').replace(/[\/\?%*:|"<>\.]/g,'_') + '_images.json'); }
+function outlinePath(postId) { return path.join(DATA_DIR, (postId||'unknown').replace(/[\/\?%*:|"<>\.]/g,'_') + '_outline.json'); }
 
 // ─── SI データサマリー（AI プロンプト用に圧縮）─────────────
 // 取得済みSIデータから、AIが読みやすい形の「ラベル → 主要フィールド」マップを作る
@@ -175,11 +176,100 @@ function pickRawComments(post, n = 10) {
 
 // ─── API ─────────────────────────────────────────────────
 
+// 全体構成（outline）取得 — 既存ファイルがあれば返す
+router.get('/propose-outline', (req, res) => {
+  const postId = req.query.postId;
+  if (!postId) return res.json({ outline: null });
+  const cached = safeJson(outlinePath(postId), null);
+  res.json({ outline: cached?.outline || null });
+});
+
+// 全体構成（outline）保存 — ユーザー編集後の永続化
+router.post('/propose-outline/save', (req, res) => {
+  const { postId, outline } = req.body;
+  if (!postId || !Array.isArray(outline)) {
+    return res.status(400).json({ error: 'postId + outline[] required' });
+  }
+  try {
+    fs.writeFileSync(outlinePath(postId), JSON.stringify({ postId, outline, savedAt: new Date().toISOString() }, null, 2));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 全体構成（outline）AI提案（Claude Haiku 軽量）
+router.post('/propose-outline', async (req, res) => {
+  const { post, postId, siDataIn, force } = req.body;
+  if (!post) return res.status(400).json({ error: 'post required' });
+
+  // forceでなければキャッシュを返す
+  if (!force) {
+    const cached = safeJson(outlinePath(postId), null);
+    if (cached?.outline?.length) {
+      console.log('[Step3] outline キャッシュヒット:', postId);
+      return res.json({ outline: cached.outline, cached: true });
+    }
+  }
+  console.log('[Step3] outline 提案:', post.title || post.titleOrig);
+
+  let siData = siDataIn || {};
+  if (postId && !Object.keys(siData).length) siData = safeJson(siPath(postId), {});
+
+  const commentsRaw = (post.raw?.comments || [])
+    .map(c => c.bodyJa || c.body || '').filter(Boolean).slice(0, 6).join(' / ');
+  const siSummary  = buildSiSummary(siData);
+  const siLabels   = Object.keys(siSummary);
+
+  const prompt = `あなたはサッカーYouTube動画の構成作家です。
+以下の案件と取得済み素材から、動画スライド構成（outline）を**8枚**提案してください。
+**この段階ではスライドの「型」は決めません。話の流れ・各スライドが伝えたい内容だけ。**
+
+【案件】${post.title || post.titleOrig}
+【元コメント抜粋】${commentsRaw || '(なし)'}
+【取得済みSIラベル】${siLabels.length ? siLabels.join(' / ') : '(なし)'}
+
+【ルール】
+1. 1枚目はオープニング（フック）、最後はエンディング（締めくくり）
+2. 各スライドは title（短い見出し）と direction（30〜60文字。「何を伝えるか」を具体的に）の2要素
+3. 流れに緩急をつける（事実紹介→深掘り→対比→反応→まとめ など）
+4. SIラベルから引ける情報（選手のスタッツ・チーム成績・試合詳細など）を活用する案を含める
+
+JSONのみ返す。例：
+{"outline": [
+  {"title":"オープニング","direction":"ベジェリンの劇的ゴールをキャッチーに伝えて視聴者を掴む"},
+  {"title":"概要","direction":"試合のスコア、ベジェリンの活躍を簡潔に説明"},
+  {"title":"基本情報","direction":"ベジェリンの選手プロフィール（ポジション・年齢・所属）"},
+  {"title":"今期成績","direction":"ベジェリンの今シーズンのスタッツを数字で紹介"},
+  {"title":"来歴","direction":"ベジェリンのキャリア年表 - 印象的な移籍やシーズン"},
+  {"title":"対決","direction":"対戦相手の左SBとベジェリンを並べて比較"},
+  {"title":"海外の反応","direction":"Redditでの海外ファンの興奮コメントを紹介"},
+  {"title":"エンディング","direction":"今後の展望と視聴者への問いかけで締める"}
+]}`;
+
+  try {
+    const raw    = await callAI({ model: 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: prompt }] });
+    const m      = raw.match(/\{[\s\S]*\}/);
+    if (!m) { console.error('[Step3] outline JSONパース失敗:', raw.slice(0,200)); return res.status(500).json({ error: 'JSONパース失敗' }); }
+    const parsed = JSON.parse(m[0]);
+    const outline = (parsed.outline || []).filter(x => x?.title || x?.direction);
+    if (!outline.length) return res.status(500).json({ error: 'outline 空' });
+
+    // 永続化
+    try {
+      fs.writeFileSync(outlinePath(postId), JSON.stringify({ postId, outline, savedAt: new Date().toISOString() }, null, 2));
+    } catch (_) {}
+
+    res.json({ outline });
+  } catch (e) {
+    console.error('[Step3] outline エラー:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // モジュール構成提案（Claude Sonnet）
 router.post('/propose-modules', async (req, res) => {
-  const { post, postId, siDataIn } = req.body;
+  const { post, postId, siDataIn, outline } = req.body;
   if (!post) return res.status(400).json({ error: 'post required' });
-  console.log('[Step3] モジュール提案:', post.title || post.titleOrig);
+  console.log('[Step3] モジュール提案:', post.title || post.titleOrig, outline?.length ? `(outline: ${outline.length}枚)` : '');
 
   let siData = siDataIn || {};
   if (postId && !Object.keys(siData).length) siData = safeJson(siPath(postId), {});
@@ -199,13 +289,20 @@ router.post('/propose-modules', async (req, res) => {
   // 取得済みSIラベルだけを別枠で抜き出して提示（primary/secondary に使えるラベル一覧）
   const siLabels = Object.keys(siSummary);
 
+  // outline があれば AI に渡す（指定枚数・各スライドの方向性を強制）
+  const outlineText = (Array.isArray(outline) && outline.length)
+    ? outline.map((o, i) => `${i + 1}. ${o.title || ''} — ${o.direction || ''}`).join('\n')
+    : '';
+
   const prompt = `あなたはプロのサッカーYouTubeチャンネルの脚本家です。
-以下の案件・コメント・SI情報をもとに、スライド構成を6〜9枚で提案してください。
+${outlineText
+  ? `以下の【全体構成（outline）】の各スライドに、type/binding/データ充填を肉付けしてください。スライド枚数・順序・方向性は outline に厳密に従う。`
+  : `以下の案件・コメント・SI情報をもとに、スライド構成を6〜9枚で提案してください。`}
 
 【案件（日本語）】${post.title || post.titleOrig}
 【案件（原文）】${post.titleOrig || ''}
 【元コメント（翻訳前または日本語）】${commentsRaw || '(なし)'}
-
+${outlineText ? `\n【全体構成（outline）】\n${outlineText}\n` : ''}
 【取得済みSIデータ（ラベル→主要フィールド）】
 ${siSummaryText}
 
@@ -588,6 +685,22 @@ function getUI() {
     </div>
   </div>
 
+  <!-- 全体構成（outline）パネル：modules 未生成時のみ表示 -->
+  <div id="s3OutlinePanel" class="panel" style="display:none;margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:13px;color:var(--c);font-weight:bold;">📋 全体構成（outline）— 話の流れだけ決める</span>
+      <span id="s3OutlineMsg" style="font-size:11px;color:#8a9aba;"></span>
+    </div>
+    <div id="s3OutlineList"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn btn-sm" onclick="s3OutlineAddRow()" style="background:#10b981;color:#fff;">＋ スライド追加</button>
+      <button class="btn btn-sm" onclick="s3OutlineRegen()" style="background:#64748b;color:#fff;">🔄 outline再提案</button>
+      <button class="btn btn-primary" onclick="s3ProposeFromOutline()" style="margin-left:auto;font-size:13px;padding:8px 18px;">
+        ✨ この目次でモジュール詳細を提案
+      </button>
+    </div>
+  </div>
+
   <!-- タブ行 -->
   <div id="s3Tabs" style="display:flex;gap:3px;flex-wrap:wrap;"></div>
 
@@ -648,7 +761,7 @@ function getUI() {
 
   window.step3Init = function() {
     var postId = window.APP.selected && window.APP.selected.id;
-    if (!postId) { s3RenderTabs(); s3RenderEditor(); return; }
+    if (!postId) { s3RenderTabs(); s3RenderEditor(); _s3HideOutline(); return; }
     /* サーバーからSIデータ + レシピを取得してからレンダリング */
     Promise.all([
       fetchJson('/api/si-data?postId=' + encodeURIComponent(postId))
@@ -660,7 +773,166 @@ function getUI() {
       s3RenderEditor();
       s3LoadImages();
       _s3FetchEvalSlots(window.APP.activeTab || 0);
+      // modules が空なら outline を取得 or 自動生成
+      if (!(window.APP.modules || []).length) _s3InitOutline();
+      else _s3HideOutline();
     });
+  };
+
+  /* ── outline 取得・表示・編集 ── */
+  function _s3HideOutline() {
+    var el = document.getElementById('s3OutlinePanel');
+    if (el) el.style.display = 'none';
+  }
+  function _s3ShowOutline() {
+    var el = document.getElementById('s3OutlinePanel');
+    if (el) el.style.display = '';
+  }
+
+  async function _s3InitOutline() {
+    var postId = window.APP.selected?.id;
+    if (!postId) return;
+    _s3ShowOutline();
+    _s3SetOutlineMsg('⏳ 既存outline確認中...');
+    try {
+      // 既存があれば読み込み
+      var got = await fetchJson('/api/propose-outline?postId=' + encodeURIComponent(postId));
+      if (Array.isArray(got.outline) && got.outline.length) {
+        window.APP.s3.outline = got.outline;
+        _s3RenderOutline();
+        _s3SetOutlineMsg('💾 既存outline読込（' + got.outline.length + '枚）');
+        return;
+      }
+      // 無ければ自動生成
+      _s3SetOutlineMsg('⏳ Haiku が話の流れを構築中...');
+      var d = await fetchJson('/api/propose-outline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post: window.APP.selected, postId: postId, siDataIn: window.APP.s3SiData || {} }),
+      });
+      window.APP.s3.outline = d.outline || [];
+      _s3RenderOutline();
+      _s3SetOutlineMsg('✅ outline 生成完了（' + window.APP.s3.outline.length + '枚）');
+    } catch (e) {
+      _s3SetOutlineMsg('❌ outline生成失敗: ' + e.message);
+      window.APP.s3.outline = [];
+      _s3RenderOutline();
+    }
+  }
+
+  function _s3SetOutlineMsg(s) {
+    var el = document.getElementById('s3OutlineMsg');
+    if (el) el.innerHTML = s;
+  }
+
+  function _s3RenderOutline() {
+    var el = document.getElementById('s3OutlineList');
+    if (!el) return;
+    var ol = window.APP.s3.outline || [];
+    if (!ol.length) {
+      el.innerHTML = '<div style="padding:14px;color:#8a9aba;font-size:12px;text-align:center;">空。「+ スライド追加」または「🔄 outline再提案」で開始</div>';
+      return;
+    }
+    el.innerHTML = ol.map(function(o, idx) {
+      return '<div style="display:grid;grid-template-columns:24px 200px 1fr 28px 28px 28px;gap:6px;margin-bottom:6px;align-items:center;">'
+        + '<span style="font-size:10px;color:#8a9aba;text-align:center;">#' + (idx+1) + '</span>'
+        + '<input class="inp s3-ol-title" data-idx="' + idx + '" placeholder="タイトル" style="font-size:12px;padding:5px 8px;" value="' + _e(o.title || '') + '">'
+        + '<input class="inp s3-ol-direction" data-idx="' + idx + '" placeholder="方向性（何を伝えるか）" style="font-size:12px;padding:5px 8px;" value="' + _e(o.direction || '') + '">'
+        + '<button class="btn btn-sm" data-idx="' + idx + '" onclick="s3OutlineMove(' + idx + ',-1)" style="background:#475569;color:#fff;padding:4px 6px;">↑</button>'
+        + '<button class="btn btn-sm" data-idx="' + idx + '" onclick="s3OutlineMove(' + idx + ',1)" style="background:#475569;color:#fff;padding:4px 6px;">↓</button>'
+        + '<button class="btn btn-sm" data-idx="' + idx + '" onclick="s3OutlineRemove(' + idx + ')" style="background:#ef4444;color:#fff;padding:4px 6px;">×</button>'
+        + '</div>';
+    }).join('');
+  }
+
+  // outline 入力編集を APP に反映してから永続化
+  function _s3CollectOutline() {
+    var titles = document.querySelectorAll('.s3-ol-title');
+    var dirs   = document.querySelectorAll('.s3-ol-direction');
+    var ol = [];
+    for (var i = 0; i < titles.length; i++) {
+      ol.push({
+        title:     titles[i].value || '',
+        direction: dirs[i] ? (dirs[i].value || '') : '',
+      });
+    }
+    window.APP.s3.outline = ol;
+    return ol;
+  }
+
+  async function _s3SaveOutline() {
+    var ol = _s3CollectOutline();
+    var postId = window.APP.selected?.id;
+    if (!postId) return;
+    try {
+      await fetchJson('/api/propose-outline/save', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: postId, outline: ol }),
+      });
+    } catch (_) {}
+  }
+
+  window.s3OutlineAddRow = function() {
+    _s3CollectOutline();
+    window.APP.s3.outline = window.APP.s3.outline || [];
+    window.APP.s3.outline.push({ title: '', direction: '' });
+    _s3RenderOutline();
+  };
+  window.s3OutlineRemove = function(idx) {
+    _s3CollectOutline();
+    window.APP.s3.outline.splice(idx, 1);
+    _s3RenderOutline();
+  };
+  window.s3OutlineMove = function(idx, delta) {
+    _s3CollectOutline();
+    var ol = window.APP.s3.outline;
+    var ni = idx + delta;
+    if (ni < 0 || ni >= ol.length) return;
+    var tmp = ol[idx]; ol[idx] = ol[ni]; ol[ni] = tmp;
+    _s3RenderOutline();
+  };
+  window.s3OutlineRegen = async function() {
+    var postId = window.APP.selected?.id;
+    if (!postId) return;
+    if (!confirm('現在のoutlineを破棄して再生成しますか？')) return;
+    _s3SetOutlineMsg('⏳ Haiku が再構築中...');
+    try {
+      var d = await fetchJson('/api/propose-outline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post: window.APP.selected, postId: postId, siDataIn: window.APP.s3SiData || {}, force: true }),
+      });
+      window.APP.s3.outline = d.outline || [];
+      _s3RenderOutline();
+      _s3SetOutlineMsg('✅ outline 再生成（' + window.APP.s3.outline.length + '枚）');
+    } catch (e) {
+      _s3SetOutlineMsg('❌ ' + e.message);
+    }
+  };
+
+  window.s3ProposeFromOutline = async function() {
+    var ol = _s3CollectOutline();
+    if (!ol.length) return alert('outline が空です');
+    await _s3SaveOutline();
+    _s3Msg('⏳ Sonnet がoutlineを肉付け中...');
+    document.getElementById('s3Editor').innerHTML = '<div style="color:var(--c);padding:20px;">⏳ 詳細生成中（型・binding・データ充填）...</div>';
+    try {
+      var d = await fetchJson('/api/propose-modules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          post: window.APP.selected,
+          postId: window.APP.selected?.id,
+          siDataIn: window.APP.s3SiData || {},
+          outline: ol,
+        }),
+      });
+      window.APP.modules   = d.modules || [];
+      window.APP.activeTab = 0;
+      _s3HideOutline();
+      s3RenderTabs();
+      s3RenderEditor();
+      _s3Msg('✅ ' + window.APP.modules.length + ' スライド詳細生成完了');
+    } catch (e) {
+      _s3Msg('❌ 詳細生成失敗: ' + e.message);
+    }
   };
 
   /* ── eval slots を背景取得（プルダウン「label：値」表示用）── */
@@ -703,6 +975,7 @@ function getUI() {
       });
       window.APP.modules   = d.modules || [];
       window.APP.activeTab = 0;
+      _s3HideOutline();
       s3RenderTabs();
       s3RenderEditor();
       _s3Msg('✅ ' + window.APP.modules.length + ' スライド提案完了');
@@ -1333,6 +1606,16 @@ function getUI() {
     _s3SaveCurrent();
     s3RenderEditor();
   };
+
+  /* outline 編集の自動保存（debounce 1.5s） */
+  let _s3OutlineSaveTimer = null;
+  document.addEventListener('input', function(e) {
+    if (!e.target.classList) return;
+    if (e.target.classList.contains('s3-ol-title') || e.target.classList.contains('s3-ol-direction')) {
+      clearTimeout(_s3OutlineSaveTimer);
+      _s3OutlineSaveTimer = setTimeout(_s3SaveOutline, 1500);
+    }
+  });
 
   /* slotKey 変更時：選択 slot の評価値を value 入力に自動転記 ── */
   document.addEventListener('change', function(e) {
