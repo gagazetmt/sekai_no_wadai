@@ -1411,7 +1411,8 @@ function getUI() {
         + '<button class="btn btn-sm" style="background:#ef4444;color:#fff;" onclick="s3RemovePhrase(' + idx + ')">&#xD7;</button>'
         + '</div>'
       ).join('');
-      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddPhrase()">+ キャッチコピー追加</button>';
+      const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddPhrase()">+ キャッチコピー追加</button>'
+        + '<button class="btn btn-sm" style="background:#a855f7;color:#fff;margin-top:4px;margin-left:6px;" onclick="s3FillFromScriptDir()" title="脚本指示に応じてSofaScore/Wikipediaから事実ベースで生成">&#x2728; scriptDirから取得</button>';
       return wrap(rows + addBtn);
     }
 
@@ -1661,8 +1662,14 @@ function getUI() {
         _s3Msg('&#x274C; 失敗: ' + (j.error || ''));
         return;
       }
-      m.dataSlots = j.dataSlots;
-      _s3Msg('&#x2705; ' + j.dataSlots.length + 'スロット充填 (' + j.source + ' / ' + j.wikiTitle + ')');
+      // type別反映
+      if (j.catchphrases) {
+        m.catchphrases = j.catchphrases;
+        _s3Msg('&#x2705; ' + j.catchphrases.length + 'キャッチコピー充填 (' + j.source + ')');
+      } else if (j.dataSlots) {
+        m.dataSlots = j.dataSlots;
+        _s3Msg('&#x2705; ' + j.dataSlots.length + 'スロット充填 (' + j.source + ')');
+      }
       s3RenderEditor();
     } catch (e) {
       _s3Msg('&#x274C; エラー: ' + e.message);

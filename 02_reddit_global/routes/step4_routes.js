@@ -608,9 +608,11 @@ router.post('/v2/fill-slots-from-scriptdir', async (req, res) => {
 
     const type     = m.type || 'stats';
     const isCmp    = type === 'comparison';
+    const isHist   = type === 'history';
+    const isIns    = type === 'insight';
     const primary  = m.binding?.primary   || m.siBinding      || m.siBindingLeft  || null;
     const secondary= m.binding?.secondary || m.siBindingRight || null;
-    if (!primary && !isCmp) {
+    if (!primary && !isCmp && !isIns) {
       return res.status(400).json({ error: 'binding.primary または siBinding が必要' });
     }
     if (isCmp && (!primary || !secondary)) {
@@ -654,11 +656,17 @@ router.post('/v2/fill-slots-from-scriptdir', async (req, res) => {
     const wikiP = primary   ? await _getWiki(primary,   wikiBudget) : '';
     const wikiS = secondary ? await _getWiki(secondary, wikiBudget) : '';
 
-    // ── プロンプト生成 ──────────────────────────────────────
+    // ── プロンプト生成（type別）──────────────────────────────────────
     function _siBlock(label, si) {
       if (!si) return `(SIデータなし)`;
       return `[${si.boxType}] ${JSON.stringify(si.data, null, 0).slice(0, 1500)}`;
     }
+
+    // 元コメント（insight 用：reaction 素材としても活用）
+    const rawComments = (j.modules && j.post)
+      ? '' // 後方互換、postなければスキップ
+      : '';
+
     const cmpExample = `{"dataSlots":[
   {"label":"通算ゴール","leftValue":"924","rightValue":"853"},
   {"label":"出場試合","leftValue":"1230","rightValue":"1043"}
@@ -667,12 +675,37 @@ router.post('/v2/fill-slots-from-scriptdir', async (req, res) => {
   {"label":"通算ゴール","value":"924"},
   {"label":"プレミアリーグ","value":"145"}
 ]}`;
+    const histExample = `{"dataSlots":[
+  {"label":"2011","value":"アーセナル下部組織加入"},
+  {"label":"2014","value":"プレミアリーグ初出場"},
+  {"label":"2022","value":"レアル・ベティス移籍"}
+]}`;
+    const insExample = `{"catchphrases":[
+  "18歳でCL出場",
+  "アーセナル時代145試合",
+  "ベティスで覚醒の決勝弾"
+]}`;
+
+    let outputSpec, outputExample;
+    if (isCmp) {
+      outputSpec = '対比型 dataSlots（label / leftValue / rightValue を最大8個）';
+      outputExample = cmpExample;
+    } else if (isHist) {
+      outputSpec = 'タイムライン dataSlots（label=年, value=出来事 を時系列順に最大8個）';
+      outputExample = histExample;
+    } else if (isIns) {
+      outputSpec = 'catchphrases（短く強いキャッチコピーを3〜5個、各15文字以内）';
+      outputExample = insExample;
+    } else {
+      outputSpec = 'dataSlots（label / value を最大8個）';
+      outputExample = stdExample;
+    }
 
     const prompt = `あなたはサッカーデータ抽出の専門家です。
 【脚本指示】${scriptDir}
 
-【スライド型】${type}${isCmp ? '（左右対比）' : ''}
-【対象】${primary || ''}${secondary ? ' vs ' + secondary : ''}
+【スライド型】${type}${isCmp ? '（左右対比）' : isHist ? '（タイムライン年表）' : isIns ? '（キャッチコピー）' : ''}
+【対象】${primary || '(任意)'}${secondary ? ' vs ' + secondary : ''}
 
 ━━━ データソース ━━━
 ${primary ? `[A] SofaScore 実データ（${primary}）:\n${_siBlock(primary, siP)}\n\n[A] Wikipedia 抜粋（${primary}）:\n"""\n${wikiP || '(取得失敗)'}\n"""\n` : ''}
@@ -680,16 +713,19 @@ ${secondary ? `\n[B] SofaScore 実データ（${secondary}）:\n${_siBlock(secon
 ━━━━━━━━━━━━━━━━
 
 【タスク】
-脚本指示で要求されている内容に沿って、${isCmp ? '対比型 dataSlots（左右の値）' : 'dataSlots（単一値）'}を最大8個生成。
+脚本指示に沿って、${outputSpec}を生成。
 **SofaScore は今季データ、Wikipedia は通算/歴史データ。脚本指示の文脈で適切な方を選んで使い分ける。**
 
 【ハルシネーション禁止 — 厳守】
 - 値は必ず上記データソースに明記されているもののみ
 - データに無い項目は **出力しない**（推測・記憶からの補完は絶対NG）
-- ${isCmp ? '比較項目として両者に値が存在するもののみ採用（片側「-」になるなら除外）' : '値は数字+単位（例「311ゴール」「2002年」）'}
+${isCmp ? '- 比較項目として両者に値が存在するもののみ採用（片側「-」になるなら除外）' : ''}
+${isHist ? '- 年は西暦4桁（例「2014」）、出来事は具体的に20文字以内\n- 時系列順（古い→新しい）で並べる' : ''}
+${isIns ? '- キャッチコピーは「事実+数字」を含む短句（例「18歳でCL8得点」）\n- 抽象的・主観的表現は避ける' : ''}
+${(!isCmp && !isHist && !isIns) ? '- 値は数字+単位（例「311ゴール」「2002年」）' : ''}
 
 JSON のみ（マークダウン不要）。例：
-${isCmp ? cmpExample : stdExample}`;
+${outputExample}`;
 
     // ── DeepSeek 既定 → JSON崩れ時 Haiku フォールバック ──
     async function _ask(provider) {
@@ -702,6 +738,12 @@ ${isCmp ? cmpExample : stdExample}`;
       try { return JSON.parse(m1[0]); } catch (_) { return null; }
     }
 
+    function _hasOutput(p) {
+      if (!p) return false;
+      if (isIns) return Array.isArray(p.catchphrases) && p.catchphrases.length;
+      return Array.isArray(p.dataSlots) && p.dataSlots.length;
+    }
+
     let raw, parsed = null, used = 'deepseek';
     try {
       raw    = await _ask('deepseek');
@@ -709,33 +751,43 @@ ${isCmp ? cmpExample : stdExample}`;
     } catch (e) {
       console.warn('[fill-slots] deepseek 例外:', e.message);
     }
-    if (!parsed?.dataSlots) {
+    if (!_hasOutput(parsed)) {
       console.warn('[fill-slots] deepseek 失敗、Haikuにフォールバック');
       raw    = await _ask('anthropic');
       parsed = _parse(raw);
       used   = 'haiku';
     }
-
-    if (!parsed?.dataSlots?.length) return res.status(500).json({ error: 'dataSlots 抽出失敗' });
+    if (!_hasOutput(parsed)) return res.status(500).json({ error: '抽出失敗（出力空）' });
 
     // ── 整形（型に応じた shape）──
-    let slots;
-    if (isCmp) {
-      slots = parsed.dataSlots.slice(0, 8).map(s => ({
+    let result = { ok: true, source: used, type, primary, secondary };
+    if (isIns) {
+      const phrases = parsed.catchphrases.slice(0, 5)
+        .map(s => String(s || '').slice(0, 25))
+        .filter(Boolean);
+      if (!phrases.length) return res.status(500).json({ error: '有効な catchphrase が0件' });
+      result.catchphrases = phrases;
+      console.log(`[fill-slots] type=insight primary="${primary}" / ${used} → ${phrases.length}コピー`);
+    } else if (isCmp) {
+      const slots = parsed.dataSlots.slice(0, 8).map(s => ({
         label:      String(s.label || '').slice(0, 30),
         leftValue:  String(s.leftValue ?? s.left ?? '').slice(0, 30),
         rightValue: String(s.rightValue ?? s.right ?? '').slice(0, 30),
       })).filter(s => s.leftValue && s.rightValue && s.leftValue !== '-' && s.rightValue !== '-');
+      if (!slots.length) return res.status(500).json({ error: '有効な dataSlot が0件' });
+      result.dataSlots = slots;
+      console.log(`[fill-slots] type=comparison primary="${primary}" vs "${secondary}" / ${used} → ${slots.length}スロット`);
     } else {
-      slots = parsed.dataSlots.slice(0, 8).map(s => ({
+      // stats / matchcard / history
+      const slots = parsed.dataSlots.slice(0, 8).map(s => ({
         label: String(s.label || '').slice(0, 30),
         value: String(s.value || '').slice(0, 30),
       })).filter(s => s.value && s.value !== '-');
+      if (!slots.length) return res.status(500).json({ error: '有効な dataSlot が0件' });
+      result.dataSlots = slots;
+      console.log(`[fill-slots] type=${type} primary="${primary}" / ${used} → ${slots.length}スロット`);
     }
-    if (!slots.length) return res.status(500).json({ error: '有効な dataSlot が0件' });
-
-    console.log(`[fill-slots] type=${type} primary="${primary}"${secondary ? ' vs "'+secondary+'"' : ''} / ${used} → ${slots.length}スロット`);
-    res.json({ ok: true, dataSlots: slots, source: used, type, primary, secondary });
+    res.json(result);
   } catch (e) {
     console.error('[fill-slots] エラー:', e.message);
     res.status(500).json({ error: e.message });
@@ -1169,9 +1221,12 @@ function getUI() {
       const phrases = Array.isArray(m.catchphrases) ? m.catchphrases : [];
       m.catchphrases = phrases;
       html += '<div style="margin-bottom:10px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px;flex-wrap:wrap;">'
         + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; キャッチコピー見出し（編集可）</span>'
+        + '<div style="display:flex;gap:4px;">'
+        + '<button class="btn btn-sm" id="s4BtnFillFromScript" style="background:#a855f7;color:#fff" title="脚本指示の内容に応じてSofaScore/Wikipedia/コメントから事実ベースで生成">&#x2728; scriptDirから取得</button>'
         + '<button class="btn btn-sm" id="s4BtnAddPhrase" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>'
         + '</div>';
       phrases.forEach(function(p, idx) {
         html += '<div style="display:grid;grid-template-columns:24px 1fr 28px;gap:6px;margin-bottom:5px;align-items:center">'
@@ -1209,9 +1264,12 @@ function getUI() {
       const slots = Array.isArray(m.dataSlots) ? m.dataSlots : [];
       m.dataSlots = slots;
       html += '<div style="margin-bottom:10px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px;flex-wrap:wrap;">'
         + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; タイムラインイベント（日付 / タイトル）</span>'
+        + '<div style="display:flex;gap:4px;">'
+        + '<button class="btn btn-sm" id="s4BtnFillFromScript" style="background:#a855f7;color:#fff" title="脚本指示の内容に応じてWikipedia infoboxから年表抽出">&#x2728; scriptDirから取得</button>'
         + '<button class="btn btn-sm" id="s4BtnAddHistEvt" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>'
         + '</div>';
       slots.forEach(function(s, idx) {
         html += '<div style="display:grid;grid-template-columns:24px 100px 1fr 28px;gap:5px;margin-bottom:5px;align-items:center">'
@@ -1491,8 +1549,14 @@ function getUI() {
         if (btn) { btn.disabled = false; btn.textContent = '✨ scriptDirから取得'; }
         return;
       }
-      m.dataSlots = j.dataSlots;
-      _s4Msg('&#x2705; ' + j.dataSlots.length + 'スロット充填 (' + j.source + ' / ' + j.wikiTitle + ')');
+      // type別に該当フィールドへ反映
+      if (j.catchphrases) {
+        m.catchphrases = j.catchphrases;
+        _s4Msg('&#x2705; ' + j.catchphrases.length + 'キャッチコピー充填 (' + j.source + ')');
+      } else if (j.dataSlots) {
+        m.dataSlots = j.dataSlots;
+        _s4Msg('&#x2705; ' + j.dataSlots.length + 'スロット充填 (' + j.source + ')');
+      }
       _s4Render();
     } catch (e) {
       _s4Msg('&#x274C; エラー: ' + e.message);
