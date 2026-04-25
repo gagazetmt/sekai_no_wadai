@@ -9,9 +9,10 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 
-const router   = express.Router();
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const router    = express.Router();
+const DATA_DIR  = path.join(__dirname, '..', 'data');
 const SAVED_FILE = path.join(DATA_DIR, 'saved_projects.json');
+const VIDEO_DIR = path.join(DATA_DIR, 'v2_videos');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -24,6 +25,23 @@ function safeJson(file, fallback) {
     console.error('[Step1] JSON読み込みエラー:', file, e.message);
     return fallback;
   }
+}
+
+// JST の今日（YYYY-MM-DD）
+function todayJst() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// 案件IDから動画生成済みかを判定（動画ファイル prefix 一致）
+function _videoFilesCache() {
+  try { return fs.readdirSync(VIDEO_DIR).filter(f => f.endsWith('.mp4')); }
+  catch (_) { return []; }
+}
+function hasGeneratedVideo(postId, files) {
+  if (!postId) return false;
+  const prefix = String(postId).replace(/[\/\?%*:|"<>\.]/g, '_').slice(-20);
+  if (!prefix) return false;
+  return files.some(f => f.startsWith(prefix));
 }
 
 // ─── API ─────────────────────────────────────────────────
@@ -52,8 +70,26 @@ router.get('/content', (req, res) => {
 });
 
 // 保存済み案件取得
+// ※自動クリーンアップ：①addedAtが今日(JST)より前の案件 ②動画生成済みの案件 を除外
 router.get('/saved-projects', (req, res) => {
-  res.json(safeJson(SAVED_FILE, []));
+  const all = safeJson(SAVED_FILE, []);
+  if (!Array.isArray(all) || !all.length) return res.json(all || []);
+
+  const today = todayJst();
+  const videos = _videoFilesCache();
+  const filtered = all.filter(p => {
+    const addedDate = (p.addedAt || '').slice(0, 10);
+    if (addedDate && addedDate < today) return false;       // 古い日付
+    if (hasGeneratedVideo(p.id, videos)) return false;       // 動画生成済み
+    return true;
+  });
+
+  // 件数が変わっていれば永続化
+  if (filtered.length !== all.length) {
+    try { fs.writeFileSync(SAVED_FILE, JSON.stringify(filtered, null, 2)); }
+    catch (e) { console.error('[Step1] saved-projects 自動クリーンアップ書込失敗:', e.message); }
+  }
+  res.json(filtered);
 });
 
 // 保存済み案件更新
