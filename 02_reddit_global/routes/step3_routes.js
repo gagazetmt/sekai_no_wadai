@@ -216,22 +216,38 @@ router.post('/propose-outline', async (req, res) => {
 
   const commentsRaw = (post.raw?.comments || [])
     .map(c => c.bodyJa || c.body || '').filter(Boolean).slice(0, 6).join(' / ');
-  const siSummary  = buildSiSummary(siData);
-  const siLabels   = Object.keys(siSummary);
+  const siSummary     = buildSiSummary(siData);
+  const siLabels      = Object.keys(siSummary);
+  const siSummaryText = siLabels.length
+    ? JSON.stringify(siSummary, null, 0).slice(0, 2500)
+    : '(なし)';
+
+  const todayJst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
   const prompt = `あなたはサッカーYouTube動画の構成作家です。
 以下の案件と取得済み素材から、動画スライド構成（outline）を**8枚**提案してください。
 **この段階ではスライドの「型」は決めません。話の流れ・各スライドが伝えたい内容だけ。**
 
+【今日の日付】${todayJst}（JST）
 【案件】${post.title || post.titleOrig}
 【元コメント抜粋】${commentsRaw || '(なし)'}
-【取得済みSIラベル】${siLabels.length ? siLabels.join(' / ') : '(なし)'}
+
+【取得済みSI実データ（${todayJst}時点の最新値）】
+${siSummaryText}
+
+【取得済みSIラベル一覧】${siLabels.length ? siLabels.join(' / ') : '(なし)'}
+
+【ハルシネーション防止 — 厳守】
+- **あなたの学習データは古い**（2024年〜2025年初頭まで）。サッカー界は監督交代・移籍・成績変動が激しい。
+- **「現在の監督」「現所属」「今季成績」「直近の出来事」などは上記【取得済みSI実データ】からのみ参照**。
+- データに無い人物・チーム・試合・移籍話は **絶対に言及しない**（例: 「アンチェロッティ監督が…」とか勝手に書かない。データに無ければそのトピック自体使わない）。
+- 確証のない過去の出来事を含めるくらいなら、別の角度（コメントの反応・試合の数字・スタッツ）に振る。
 
 【ルール】
 1. 1枚目はオープニング（フック）、最後はエンディング（締めくくり）
 2. 各スライドは title（短い見出し）と direction（30〜60文字。「何を伝えるか」を具体的に）の2要素
 3. 流れに緩急をつける（事実紹介→深掘り→対比→反応→まとめ など）
-4. SIラベルから引ける情報（選手のスタッツ・チーム成績・試合詳細など）を活用する案を含める
+4. SI実データから引ける情報を優先的に活用する案を含める
 
 JSONのみ返す。例：
 {"outline": [
@@ -294,20 +310,29 @@ router.post('/propose-modules', async (req, res) => {
     ? outline.map((o, i) => `${i + 1}. ${o.title || ''} — ${o.direction || ''}`).join('\n')
     : '';
 
+  const todayJst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+
   const prompt = `あなたはプロのサッカーYouTubeチャンネルの脚本家です。
 ${outlineText
   ? `以下の【全体構成（outline）】の各スライドに、type/binding/データ充填を肉付けしてください。スライド枚数・順序・方向性は outline に厳密に従う。`
   : `以下の案件・コメント・SI情報をもとに、スライド構成を6〜9枚で提案してください。`}
 
+【今日の日付】${todayJst}（JST）
 【案件（日本語）】${post.title || post.titleOrig}
 【案件（原文）】${post.titleOrig || ''}
 【元コメント（翻訳前または日本語）】${commentsRaw || '(なし)'}
 ${outlineText ? `\n【全体構成（outline）】\n${outlineText}\n` : ''}
-【取得済みSIデータ（ラベル→主要フィールド）】
+【取得済みSI実データ（${todayJst}時点の最新値）】
 ${siSummaryText}
 
 【取得済みSIラベル一覧】（primary/secondary に使えるラベル）
 ${siLabels.length ? siLabels.join(' / ') : '(なし)'}
+
+【ハルシネーション防止 — 厳守】
+- **あなたの学習データは古い**（2024年〜2025年初頭まで）。現在の監督・所属・成績はあなたの記憶と異なる可能性が高い。
+- **「現在の監督」「現所属クラブ」「今季成績」「直近の試合結果」などは上記【SI実データ】からのみ参照**。
+- データに無い人物・チーム・試合・移籍話は **絶対に言及しない**。catchphrases / scriptDir / title すべてに適用。
+- 例：データに「Real Madrid 監督=Xabi Alonso」とあれば Xabi Alonso と書く。データに無ければ「現監督」等の曖昧表現または別角度に振る。アンチェロッティ等の過去の名前を勝手に書かない。
 
 【絶対ルール】
 1. 1枚目は opening、最後は ending（固定）
