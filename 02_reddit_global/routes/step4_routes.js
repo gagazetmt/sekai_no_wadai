@@ -318,9 +318,20 @@ function getUI() {
           }).join('');
     }
 
+    const ALL_TYPES = ['opening','insight','stats','reaction','comparison','history','matchcard','matchcenter','ending'];
+    const typeOpts = ALL_TYPES.map(function(t) {
+      return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
+    }).join('');
+
     el.innerHTML = ''
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
-      + '<span style="font-size:11px;color:#94a3b8;">type=' + _esc(m.type||'?') + ' | mainKey=' + _esc(m.mainKey||'?') + (m.subSource ? ' | sub=' + _esc(m.subSource+':'+m.subValue) : '') + '</span>'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">'
+      + '<div style="display:flex;align-items:center;gap:6px;">'
+      + '<span style="font-size:11px;color:#94a3b8;">type:</span>'
+      + '<select class="inp" id="s4TypeSel" onchange="s4OnTypeChange()" style="font-size:11px;padding:3px 6px;background:#0d1220;color:var(--c);font-weight:bold;">'
+      + typeOpts
+      + '</select>'
+      + '<span style="font-size:10px;color:#5a6a8a;">main=' + _esc(m.mainKey||'?') + (m.subSource ? ' / sub=' + _esc(m.subSource+':'+m.subValue) : '') + '</span>'
+      + '</div>'
       + '<button class="btn btn-sm" onclick="s4RegenNarr()" style="background:#3b82f6;color:#fff;font-size:10px;padding:4px 10px;">↻ ナレーション再生成</button>'
       + '</div>'
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">タイトル</div>'
@@ -383,6 +394,32 @@ function getUI() {
     _renderTabs();
     _renderEditor();
     _reloadPreview();
+  };
+
+  /* ── type 手動変更（強制上書き）── */
+  window.s4OnTypeChange = function() {
+    _collectInputs();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    const sel = document.getElementById('s4TypeSel');
+    if (!sel) return;
+    const newType = sel.value;
+    m.type = newType;
+    // 型に対応するフィールドが空なら最低限スケルトン投入（編集UI表示用）
+    if (newType === 'insight' && (!m.catchphrases || !m.catchphrases.length)) m.catchphrases = ['', '', ''];
+    if (newType === 'reaction' && (!m.comments || !m.comments.length)) {
+      m.comments = Array.from({length: 7}, () => ({ text: '', score: 0 }));
+    }
+    if (['stats','matchcard','history'].includes(newType) && (!m.dataSlots || !m.dataSlots.length)) {
+      m.dataSlots = [{label:'',value:''},{label:'',value:''},{label:'',value:''},{label:'',value:''}];
+    }
+    if (newType === 'comparison' && (!m.dataSlots || !m.dataSlots.length || m.dataSlots[0]?.value !== undefined)) {
+      m.dataSlots = [{label:'',leftValue:'',rightValue:''},{label:'',leftValue:'',rightValue:''},{label:'',leftValue:'',rightValue:''},{label:'',leftValue:'',rightValue:''}];
+    }
+    _saveModulesQuiet();
+    _renderEditor();
+    setTimeout(_reloadPreview, 200);
   };
 
   /* ── 入力監視 → debounceでプレビュー更新 ── */
