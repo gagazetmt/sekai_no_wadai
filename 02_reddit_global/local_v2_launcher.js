@@ -147,6 +147,67 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
           transition: background .15s; }
 .s3-tab:hover { background: #252f4a; }
 .s3-tab-active { color: #fff; border-color: var(--c); }
+
+/* ════════════════════════════════════════════════
+   📱 モバイル対応 Phase A
+   横スクロール撲滅 / タップ領域確保 / 縦積み化
+   ════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* ── ベース：縦積み、ページスクロール解放 ── */
+  body { flex-direction: column; height: auto; min-height: 100vh; overflow: auto; }
+
+  /* ── サイドバー：上部に圧縮配置（内部スクロール）── */
+  .sidebar { width: 100%; max-height: 25vh; border-right: none;
+             border-bottom: 1px solid var(--border); }
+
+  /* ── メインエリア：オーバーフロー解放 ── */
+  .main-area { width: 100%; overflow: visible; }
+  .content-scroll { overflow-y: visible; }
+
+  /* ── ヘッダ ── */
+  .header { padding: 10px 14px; flex-wrap: wrap; gap: 4px; }
+  .header h1 { font-size: 15px; }
+  .header-sub { font-size: 10px; }
+
+  /* ── ステップナビ：横スクロール ── */
+  .steps { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .step-nav { padding: 12px 14px; font-size: 12px; flex-shrink: 0;
+              min-height: 44px; display: flex; align-items: center; }
+
+  /* ── コンテンツ ── */
+  .step-container { padding: 12px 14px; }
+  .panel { padding: 14px; margin-bottom: 12px; }
+
+  /* ── ボタン：タップ領域 ≥ 40px ── */
+  .btn { padding: 10px 16px; font-size: 13px; min-height: 40px; }
+  .btn-sm { padding: 8px 12px; font-size: 12px; min-height: 36px; }
+
+  /* ── 入力欄：iOS自動ズーム防止のため font-size 16px ── */
+  .inp { padding: 10px 12px; font-size: 16px; min-height: 40px; }
+
+  /* ── リスト系：タップ領域確保 ── */
+  .post-row { padding: 12px 14px; font-size: 13px; }
+  .lead-item { padding: 12px 14px; font-size: 12px; }
+  .cand-row, .si-hist-row { padding: 12px; font-size: 12px; }
+  .time-summary { padding: 12px 14px; font-size: 12px; }
+
+  /* ── pre：横スクロール保険 ── */
+  pre { font-size: 11px; padding: 10px; }
+
+  /* ── Step3/4 のインライン2カラム grid を縦積みに上書き ── */
+  [style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  /* ── 画像ギャラリー 5列 → 2列 ── */
+  [style*="grid-template-columns:repeat(5,1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ── モジュールタブ ── */
+  .s3-tab { padding: 12px 14px; font-size: 12px; min-width: 80px;
+            min-height: 44px; display: inline-flex; align-items: center;
+            justify-content: center; }
+}
 </style>
 </head>
 <body>
