@@ -1395,7 +1395,8 @@ function getUI() {
         + '<button class="btn btn-sm s3-cmp-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
         + '</div>'
       ).join('');
-      const addBtn = '<button class="btn btn-sm" style="background:#64748b;color:#fff;margin-top:4px;" onclick="s3AddCmpSlot()">+ 空行追加（手動入力用）</button>';
+      const addBtn = '<button class="btn btn-sm" style="background:#64748b;color:#fff;margin-top:4px;" onclick="s3AddCmpSlot()">+ 空行追加（手動入力用）</button>'
+        + '<button class="btn btn-sm" style="background:#a855f7;color:#fff;margin-top:4px;margin-left:6px;" onclick="s3FillFromScriptDir()" title="脚本指示の内容に応じてSofaScore/Wikipediaから対比抽出">&#x2728; scriptDirから取得</button>';
       return wrap(topRow + rows + addBtn);
     }
 

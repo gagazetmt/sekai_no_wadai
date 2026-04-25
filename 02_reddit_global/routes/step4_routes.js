@@ -589,110 +589,153 @@ router.post('/v2/rebuild-module', async (req, res) => {
   }
 });
 
-// scriptDir 駆動 dataSlots 自動充填（Wikipedia実データから抽出）
+// scriptDir 駆動 データ自動充填（SofaScore + Wikipedia 両方をAIに参照させる）
+// stats/profile/matchcard → dataSlots [{label,value}]
+// comparison              → dataSlots [{label,leftValue,rightValue}]
 // DeepSeek 既定 + Haiku フォールバック / ハルシネーション禁止
 router.post('/v2/fill-slots-from-scriptdir', async (req, res) => {
-  const { postId, idx, scriptDir, wikiTitle: explicitTitle } = req.body;
+  const { postId, idx, scriptDir } = req.body;
   if (!postId || idx == null || !scriptDir) {
     return res.status(400).json({ error: 'postId + idx + scriptDir required' });
   }
   try {
-    // モジュール読込（binding.primary を Wikipedia title として使う）
+    // モジュール読込
     const mp = modulesPath(postId);
     if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
     const j  = JSON.parse(fs.readFileSync(mp, 'utf8'));
     const m  = j.modules?.[parseInt(idx, 10)];
     if (!m) return res.status(404).json({ error: 'idx out of range' });
 
-    const wikiTitle = explicitTitle || m.binding?.primary || m.siBinding;
-    if (!wikiTitle) return res.status(400).json({ error: 'wikiTitle (or binding.primary) が無いため取得不可' });
-
-    // Wikipedia wikitext 取得
-    const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
-    const wt = await fetchWikipediaWikitext(wikiTitle);
-    if (!wt) return res.status(500).json({ error: `Wikipedia "${wikiTitle}" 取得失敗` });
-
-    // 容量制限：career stats 周辺だけ抜き出すヒューリスティック（無ければ全部）
-    let body = wt;
-    const idxCS = wt.search(/==\s*Career statistics\s*==|==\s*個人成績\s*==|==\s*クラブでの統計\s*==/i);
-    if (idxCS >= 0) {
-      // 該当セクションから次の == まで（最大15000文字）
-      const tail = wt.slice(idxCS);
-      const idxNext = tail.slice(2).search(/\n==\s/);
-      body = idxNext > 0 ? tail.slice(0, idxNext + 2) : tail.slice(0, 15000);
+    const type     = m.type || 'stats';
+    const isCmp    = type === 'comparison';
+    const primary  = m.binding?.primary   || m.siBinding      || m.siBindingLeft  || null;
+    const secondary= m.binding?.secondary || m.siBindingRight || null;
+    if (!primary && !isCmp) {
+      return res.status(400).json({ error: 'binding.primary または siBinding が必要' });
     }
-    body = body.slice(0, 15000);
+    if (isCmp && (!primary || !secondary)) {
+      return res.status(400).json({ error: 'comparison は binding.primary と secondary 両方必要' });
+    }
 
-    const prompt = `あなたはサッカーデータ抽出の専門家です。
-【脚本指示】 ${scriptDir}
+    // ── SofaScore 等の SI実データ要約 ──────────────────────
+    const siData = safeJson(siPath(postId), {});
+    function _siSummaryFor(label) {
+      if (!siData?.boxes) return null;
+      for (const [boxType, box] of Object.entries(siData.boxes)) {
+        const f = (box.fetched || []).find(f => f.label === label);
+        if (f?.data && f.data.ok !== false) {
+          return { boxType, label, data: f.data };
+        }
+      }
+      return null;
+    }
+    const siP = primary   ? _siSummaryFor(primary)   : null;
+    const siS = secondary ? _siSummaryFor(secondary) : null;
 
-【データソース】 Wikipedia 記事「${wikiTitle}」の Career statistics セクション抜粋:
-"""
-${body}
-"""
+    // ── Wikipedia wikitext 取得（Career statistics 中心）──
+    const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
+    async function _getWiki(title, maxBytes) {
+      if (!title) return '';
+      try {
+        const wt = await fetchWikipediaWikitext(title);
+        if (!wt) return '';
+        // career stats セクション優先
+        let body = wt;
+        const idxCS = wt.search(/==\s*Career statistics\s*==|==\s*個人成績\s*==|==\s*クラブでの統計\s*==/i);
+        if (idxCS >= 0) {
+          const tail = wt.slice(idxCS);
+          const idxNext = tail.slice(2).search(/\n==\s/);
+          body = idxNext > 0 ? tail.slice(0, idxNext + 2) : tail.slice(0, maxBytes);
+        }
+        return body.slice(0, maxBytes);
+      } catch (_) { return ''; }
+    }
+    const wikiBudget = isCmp ? 7000 : 12000;
+    const wikiP = primary   ? await _getWiki(primary,   wikiBudget) : '';
+    const wikiS = secondary ? await _getWiki(secondary, wikiBudget) : '';
 
-【タスク】
-脚本指示で要求されている数値を上記Wikipediaから抽出し、stats スライドの dataSlots（最大8個）として返す。
-
-【ハルシネーション禁止 — 厳守】
-- 値は必ず上記データソースに明記されているもののみ使用
-- データソースに無い値は項目自体を出力しない（推測・記憶からの補完は絶対NG）
-- ラベルは脚本指示の文言に沿って簡潔に（例「ラリーガ通算」「セリエA通算」「プロ初得点」）
-- 値は数字+単位（例「311ゴール」「2002年」）
-
-JSON のみ返す（マークダウン不要）。例：
-{"dataSlots": [
+    // ── プロンプト生成 ──────────────────────────────────────
+    function _siBlock(label, si) {
+      if (!si) return `(SIデータなし)`;
+      return `[${si.boxType}] ${JSON.stringify(si.data, null, 0).slice(0, 1500)}`;
+    }
+    const cmpExample = `{"dataSlots":[
+  {"label":"通算ゴール","leftValue":"924","rightValue":"853"},
+  {"label":"出場試合","leftValue":"1230","rightValue":"1043"}
+]}`;
+    const stdExample = `{"dataSlots":[
   {"label":"通算ゴール","value":"924"},
-  {"label":"プレミアリーグ","value":"145"},
-  {"label":"ラリーガ","value":"311"},
-  {"label":"セリエA","value":"81"},
-  {"label":"サウジリーグ","value":"82"},
-  {"label":"プロ初得点","value":"2002年10月"}
+  {"label":"プレミアリーグ","value":"145"}
 ]}`;
 
-    // DeepSeek 既定 → JSON崩れたら Haiku にフォールバック
-    let raw, used = 'deepseek';
-    try {
-      raw = await callAI({
-        forceProvider: 'deepseek',
-        model: 'deepseek-chat', max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }],
-      });
-    } catch (e) {
-      console.warn('[fill-slots] deepseek 例外、Haikuにフォールバック:', e.message);
-      raw = await callAI({
-        forceProvider: 'anthropic',
-        model: 'claude-haiku-4-5-20251001', max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      used = 'haiku';
+    const prompt = `あなたはサッカーデータ抽出の専門家です。
+【脚本指示】${scriptDir}
+
+【スライド型】${type}${isCmp ? '（左右対比）' : ''}
+【対象】${primary || ''}${secondary ? ' vs ' + secondary : ''}
+
+━━━ データソース ━━━
+${primary ? `[A] SofaScore 実データ（${primary}）:\n${_siBlock(primary, siP)}\n\n[A] Wikipedia 抜粋（${primary}）:\n"""\n${wikiP || '(取得失敗)'}\n"""\n` : ''}
+${secondary ? `\n[B] SofaScore 実データ（${secondary}）:\n${_siBlock(secondary, siS)}\n\n[B] Wikipedia 抜粋（${secondary}）:\n"""\n${wikiS || '(取得失敗)'}\n"""\n` : ''}
+━━━━━━━━━━━━━━━━
+
+【タスク】
+脚本指示で要求されている内容に沿って、${isCmp ? '対比型 dataSlots（左右の値）' : 'dataSlots（単一値）'}を最大8個生成。
+**SofaScore は今季データ、Wikipedia は通算/歴史データ。脚本指示の文脈で適切な方を選んで使い分ける。**
+
+【ハルシネーション禁止 — 厳守】
+- 値は必ず上記データソースに明記されているもののみ
+- データに無い項目は **出力しない**（推測・記憶からの補完は絶対NG）
+- ${isCmp ? '比較項目として両者に値が存在するもののみ採用（片側「-」になるなら除外）' : '値は数字+単位（例「311ゴール」「2002年」）'}
+
+JSON のみ（マークダウン不要）。例：
+${isCmp ? cmpExample : stdExample}`;
+
+    // ── DeepSeek 既定 → JSON崩れ時 Haiku フォールバック ──
+    async function _ask(provider) {
+      const model = provider === 'deepseek' ? 'deepseek-chat' : 'claude-haiku-4-5-20251001';
+      return callAI({ forceProvider: provider, model, max_tokens: 1500, messages: [{ role: 'user', content: prompt }] });
+    }
+    function _parse(raw) {
+      const m1 = raw && raw.match(/\{[\s\S]*\}/);
+      if (!m1) return null;
+      try { return JSON.parse(m1[0]); } catch (_) { return null; }
     }
 
-    let parsed = null;
-    const m1 = raw && raw.match(/\{[\s\S]*\}/);
-    if (m1) { try { parsed = JSON.parse(m1[0]); } catch (_) {} }
-    if (!parsed?.dataSlots && used === 'deepseek') {
-      // フォールバック：Haikuで再試行
-      console.warn('[fill-slots] deepseek JSON崩れ、Haikuに切替');
-      raw = await callAI({
-        forceProvider: 'anthropic',
-        model: 'claude-haiku-4-5-20251001', max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }],
-      });
-      const m2 = raw.match(/\{[\s\S]*\}/);
-      if (m2) parsed = JSON.parse(m2[0]);
-      used = 'haiku';
+    let raw, parsed = null, used = 'deepseek';
+    try {
+      raw    = await _ask('deepseek');
+      parsed = _parse(raw);
+    } catch (e) {
+      console.warn('[fill-slots] deepseek 例外:', e.message);
+    }
+    if (!parsed?.dataSlots) {
+      console.warn('[fill-slots] deepseek 失敗、Haikuにフォールバック');
+      raw    = await _ask('anthropic');
+      parsed = _parse(raw);
+      used   = 'haiku';
     }
 
     if (!parsed?.dataSlots?.length) return res.status(500).json({ error: 'dataSlots 抽出失敗' });
 
-    // dataSlots に整形（label / value のみ保持）
-    const slots = parsed.dataSlots.slice(0, 8).map(s => ({
-      label: String(s.label || '').slice(0, 30),
-      value: String(s.value || '').slice(0, 30),
-    }));
-    console.log(`[fill-slots] "${wikiTitle}" / ${used} → ${slots.length}スロット`);
-    res.json({ ok: true, dataSlots: slots, source: used, wikiTitle });
+    // ── 整形（型に応じた shape）──
+    let slots;
+    if (isCmp) {
+      slots = parsed.dataSlots.slice(0, 8).map(s => ({
+        label:      String(s.label || '').slice(0, 30),
+        leftValue:  String(s.leftValue ?? s.left ?? '').slice(0, 30),
+        rightValue: String(s.rightValue ?? s.right ?? '').slice(0, 30),
+      })).filter(s => s.leftValue && s.rightValue && s.leftValue !== '-' && s.rightValue !== '-');
+    } else {
+      slots = parsed.dataSlots.slice(0, 8).map(s => ({
+        label: String(s.label || '').slice(0, 30),
+        value: String(s.value || '').slice(0, 30),
+      })).filter(s => s.value && s.value !== '-');
+    }
+    if (!slots.length) return res.status(500).json({ error: '有効な dataSlot が0件' });
+
+    console.log(`[fill-slots] type=${type} primary="${primary}"${secondary ? ' vs "'+secondary+'"' : ''} / ${used} → ${slots.length}スロット`);
+    res.json({ ok: true, dataSlots: slots, source: used, type, primary, secondary });
   } catch (e) {
     console.error('[fill-slots] エラー:', e.message);
     res.status(500).json({ error: e.message });
@@ -1086,9 +1129,12 @@ function getUI() {
       m.dataSlots = slots;
       const hasRecipe = _getAvailableSlots().length > 0;
       html += '<div style="margin-bottom:10px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px;flex-wrap:wrap;">'
         + '<span style="font-size:11px;color:var(--c);font-weight:bold">&#x1F3AF; 対比データ（label / 左 / 右）</span>'
+        + '<div style="display:flex;gap:4px;">'
+        + '<button class="btn btn-sm" id="s4BtnFillFromScript" style="background:#a855f7;color:#fff" title="脚本指示の内容に応じてSofaScore/Wikipediaから対比抽出">&#x2728; scriptDirから取得</button>'
         + '<button class="btn btn-sm" id="s4BtnAddCmpSlot" style="background:#10b981;color:#fff">+ 追加</button>'
+        + '</div>'
         + '</div>';
       // siBindingLeft/Right 表示（読込専用、Step3 で設定済み想定）
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;font-size:11px;color:#94a3b8">'
