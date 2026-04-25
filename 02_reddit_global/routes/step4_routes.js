@@ -730,12 +730,12 @@ function getUI() {
 
   const TYPE_COLORS = {
     opening:'#ff4d4d', insight:'#1a6ef5', stats:'#10b981', reaction:'#f59e0b',
-    profile:'#8b5cf6', comparison:'#ef4444', history:'#6366f1',
+    comparison:'#ef4444', history:'#6366f1',
     matchcard:'#14b8a6', matchcenter:'#06b6d4', ending:'#64748b',
   };
   const TYPE_LABELS = {
     opening:'オープニング', insight:'キャッチコピー', stats:'スタッツ',
-    reaction:'コメント反応', profile:'プロフィール', comparison:'対比',
+    reaction:'コメント反応', comparison:'対比',
     history:'ヒストリー', matchcard:'試合プレビュー',
     matchcenter:'試合詳細', ending:'エンディング',
   };
@@ -1166,7 +1166,8 @@ function getUI() {
     const col = TYPE_COLORS[m.type] || '#555';
 
     // 型プルダウン候補
-    const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','history','matchcard','matchcenter','ending'];
+    // profile は stats と中身同じのため UI から削除（既存モジュールは render側で stats扱い）
+    const ALL_TYPES = ['opening','insight','stats','reaction','comparison','history','matchcard','matchcenter','ending'];
     const typeOpts = ALL_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + ' — ' + (TYPE_LABELS[t] || '') + '</option>';
     }).join('');

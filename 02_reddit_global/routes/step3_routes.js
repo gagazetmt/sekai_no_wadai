@@ -337,7 +337,7 @@ ${siLabels.length ? siLabels.join(' / ') : '(なし)'}
 【絶対ルール】
 1. 1枚目は opening、最後は ending（固定）
 2. 全モジュールに **type** と **scriptDir** と **binding** を必ず記入
-3. type: opening / insight / stats / reaction / profile / comparison / history / matchcard / matchcenter / ending
+3. type: opening / insight / stats / reaction / comparison / history / matchcard / matchcenter / ending
    - **multi-variety!! 同じ type を連続させない / opening と ending 以外は重複OKだがバリエーション豊富に**
 4. binding は { subject, aspect, primary, secondary?, customSlotKeys? } の形式
    - subject: player / team / manager / match / transfer / tournament / generic
@@ -760,11 +760,12 @@ function getUI() {
   };
   const TYPE_LABELS = {
     opening:'オープニング', insight:'キャッチコピー', stats:'スタッツ・数値',
-    reaction:'コメント反応', profile:'プロフィール', comparison:'対比',
+    reaction:'コメント反応', comparison:'対比',
     history:'時系列ヒストリー', matchcard:'試合プレビュー',
     matchcenter:'試合詳細', ending:'エンディング',
   };
-  const ALL_TYPES = ['opening','insight','stats','reaction','profile','comparison','history','matchcard','matchcenter','ending'];
+  // profile は stats と中身同じのため UI から削除（既存モジュールは render側で stats扱い）
+  const ALL_TYPES = ['opening','insight','stats','reaction','comparison','history','matchcard','matchcenter','ending'];
 
   /* SIデータ（サーバーから取得）*/
   window.APP = window.APP || {};

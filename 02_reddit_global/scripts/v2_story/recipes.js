@@ -116,7 +116,7 @@ const RECIPES = {
     priority: 'A',
     label: '選手の基本情報',
     description: '選手1人のプロフィール（ポジション・年齢・国籍・所属・市場価値）',
-    template: 'profile',
+    template: 'stats',
     sources: ['sofa.player', 'wiki.summary'],
     populates: 'dataSlots',
     availableSlots: [
@@ -219,7 +219,7 @@ const RECIPES = {
     priority: 'A',
     label: 'チームの基本情報',
     description: 'クラブ1つの基本情報（リーグ・監督・スタジアム・市場価値）',
-    template: 'profile',
+    template: 'stats',
     sources: ['sofa.team', 'wiki.summary'],
     populates: 'dataSlots',
     availableSlots: [
@@ -445,7 +445,7 @@ const RECIPES = {
     availableSlots: [], defaultSelection: [],
   },
   'manager.profile': {
-    priority: 'B', label: '監督の基本情報', template: 'profile',
+    priority: 'B', label: '監督の基本情報', template: 'stats',
     description: '監督1人の基本情報（国籍・年齢・現職・フォーメーション）',
     sources: ['sofa.manager', 'wiki.summary'], populates: 'dataSlots',
     availableSlots: [
@@ -494,7 +494,7 @@ const RECIPES = {
     availableSlots: [], defaultSelection: [],
   },
   'transfer.profile': {
-    priority: 'B', label: '移籍の基本情報', template: 'profile',
+    priority: 'B', label: '移籍の基本情報', template: 'stats',
     description: '移籍噂の概要（誰がどこから何処へ・金額・条件）',
     sources: ['news', 'wiki'], populates: 'dataSlots',
     availableSlots: [], defaultSelection: [],
@@ -539,7 +539,7 @@ const RECIPES = {
   'match.postAnalysis':    { priority: 'C', label: '試合後の分析', template: 'reaction', description: '試合後の専門家・ファンの分析', sources: ['news', 'reddit'], populates: 'comments' },
   'transfer.timeline':     { priority: 'C', label: '移籍の噂タイムライン', template: 'history', description: '移籍話の経時的な動き', sources: ['news'], populates: 'dataSlots', historyShape: true },
   'transfer.feeRanking':   { priority: 'C', label: '移籍金ランキング', template: 'stats',   description: '歴代/今夏の移籍金トップリスト', sources: ['news', 'curated'], populates: 'dataSlots', availableSlots: [], defaultSelection: [] },
-  'tournament.profile':    { priority: 'C', label: '大会の基本情報', template: 'profile', description: '大会概要（出場国・歴史・形式）', sources: ['wiki', 'sofa'], populates: 'dataSlots', availableSlots: [], defaultSelection: [] },
+  'tournament.profile':    { priority: 'C', label: '大会の基本情報', template: 'stats', description: '大会概要（出場国・歴史・形式）', sources: ['wiki', 'sofa'], populates: 'dataSlots', availableSlots: [], defaultSelection: [] },
   'tournament.pastResults':{ priority: 'C', label: '大会の過去結果', template: 'history', description: '過去の優勝・準優勝', sources: ['wiki'], populates: 'dataSlots', historyShape: true },
   'tournament.favorites':  { priority: 'C', label: '大会の優勝候補', template: 'reaction', description: '今大会の優勝候補・有力選手', sources: ['news'], populates: 'comments' },
   'generic.topic':         { priority: 'C', label: 'フリートピック', template: 'reaction', description: 'その他のサッカー時事ネタ', sources: ['news', 'reddit'], populates: 'comments' },
