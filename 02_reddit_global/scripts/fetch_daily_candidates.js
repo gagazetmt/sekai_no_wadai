@@ -13,9 +13,9 @@ const { fetch5chCandidates } = require("./modules/fetchers/5ch_fetcher");
 // ─── 定数 (指示書 #1-4, #1-5 に基づき調整) ───────────────────────────────────────────
 const DATA_DIR          = path.join(__dirname, "..", "data");
 const HISTORY_FILE      = path.join(DATA_DIR, "seen_history.json");
-const REDDIT_SELECT_N   = 10;   // Redditから10件
-const FIVECH_SELECT_N   = 10;   // 5chから10件
-const REDDIT_MIN_SCORE  = 10;   // 盛り上がり判定しきい値（緩和: 20→10）
+const REDDIT_SELECT_N   = parseInt(process.env.REDDIT_SELECT_N || '10', 10);   // env で上書き可
+const FIVECH_SELECT_N   = parseInt(process.env.FIVECH_SELECT_N || '10', 10);   // env で上書き可
+const REDDIT_MIN_SCORE  = parseInt(process.env.REDDIT_MIN_SCORE || '10', 10);  // 盛り上がり判定しきい値
 const COMMENT_LIMIT     = 15;   // 1案件あたりのコメント取得数
 const REDDIT_SOURCES    = ['hot', 'rising', 'new']; // 複数ソートから混ぜて取得
 
