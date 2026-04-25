@@ -195,6 +195,17 @@ async function main() {
   const { date, iso } = jstNow();
   console.log(`\n🚀 案件収集開始: ${iso}`);
 
+  // 既存案件のIDセットを先に読込（既出除外用）
+  const formattedDateForDedup = date.replace(/-/g, "_");
+  const fileNameForDedup = path.join(DATA_DIR, `stories_${formattedDateForDedup}.json`);
+  let existingIds = new Set();
+  if (fs.existsSync(fileNameForDedup)) {
+    try {
+      const _ex = JSON.parse(fs.readFileSync(fileNameForDedup, "utf8"));
+      existingIds = new Set((_ex.posts || []).map(p => p.id));
+    } catch (_) {}
+  }
+
   // 1. Redditから取得 (#1-4, #1-5) - hot/rising/new から混合取得して鮮度確保
   console.log("📡 Redditから案件を探索中... (hot+rising+new)");
   const seen = new Map(); // permalink → post
@@ -202,7 +213,7 @@ async function main() {
     const json = await redditGet(`https://www.reddit.com/r/soccer/${sort}.json?limit=50`);
     (json?.data?.children || [])
       .map(c => c.data)
-      .filter(p => !p.stickied && p.score >= REDDIT_MIN_SCORE)
+      .filter(p => !p.stickied && p.score >= REDDIT_MIN_SCORE)  // ← ハードル: score閾値
       .forEach(p => {
         if (!seen.has(p.permalink)) {
           seen.set(p.permalink, {
@@ -215,11 +226,12 @@ async function main() {
         }
       });
   }
-  // スコア降順で上位N件
-  const redditPosts = Array.from(seen.values())
+  // 既出除外 → スコア降順 → 上位N件（ハードル: score>=REDDIT_MIN_SCORE は前段で適用済）
+  const fresh = Array.from(seen.values()).filter(p => !existingIds.has(p.permalink));
+  const redditPosts = fresh
     .sort((a, b) => b.score - a.score)
     .slice(0, REDDIT_SELECT_N);
-  console.log(`  📊 ${seen.size}件から上位${redditPosts.length}件選定`);
+  console.log(`  📊 探索${seen.size}件 / 既出${seen.size - fresh.length}除外 / 残${fresh.length}件 → 上位${redditPosts.length}件選定 (score>=${REDDIT_MIN_SCORE})`);
 
   // 各Reddit案件のコメントを取得
   for (const p of redditPosts) {
@@ -242,15 +254,15 @@ async function main() {
   const finalItems = translated.map(it => ({ ...it, added_at: iso }));
 
   // 4. ファイル保存とマージ (#1-2)
-  const formattedDate = date.replace(/-/g, "_");
-  const fileName = path.join(DATA_DIR, `stories_${formattedDate}.json`);
-  
+  const fileName = fileNameForDedup;  // 冒頭で定義済み
+
   let existing = { posts: [] };
   if (fs.existsSync(fileName)) {
     existing = JSON.parse(fs.readFileSync(fileName, "utf8"));
   }
 
-  const existingIds = new Set(existing.posts.map(p => p.id));
+  // 既出ID再構築（保存直前に最新化、Reddit取得中に他プロセスが書き換えた可能性に保険）
+  existingIds = new Set(existing.posts.map(p => p.id));
   const trulyNew = finalItems.filter(it => !existingIds.has(it.id));
   
   const allPosts = [...trulyNew, ...existing.posts].sort((a, b) => new Date(b.added_at) - new Date(a.added_at));
