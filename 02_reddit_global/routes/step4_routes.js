@@ -1267,13 +1267,17 @@ function getUI() {
     _s4Render();
   };
 
-  /* ── binding: primary/secondary 変更時 → eval キャッシュ無効化 ── */
+  /* ── binding: primary/secondary 変更時 → フルrebuildで dataSlots も更新 ── */
   window.s4OnBindEntityChange = function() {
     _s4SaveCurrent();
     const m = window.APP.modules?.[window.APP.s4.activeTab];
     if (!m) return;
     m._evalSlots = null;
-    _s4Render();
+    if (typeof window.s4Rebuild === 'function') {
+      window.s4Rebuild();
+    } else {
+      _s4Render();
+    }
   };
 
   /* ── データ再取得：ビルダーAPIを呼んで現モジュールに反映 ── */

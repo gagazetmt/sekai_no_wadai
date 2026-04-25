@@ -614,22 +614,65 @@ function getUI() {
   /* SIデータ（サーバーから取得）*/
   window.APP = window.APP || {};
   window.APP.s3SiData = {};
+  window.APP.s3 = window.APP.s3 || { recipesByKey: {} };
+
+  /* ── レシピ読込（Step4と共通）── */
+  function _s3LoadRecipes() {
+    var post = window.APP.selected;
+    var url  = '/api/v2/recipes' + (post && post.id ? '?postId=' + encodeURIComponent(post.id) : '');
+    return fetchJson(url)
+      .then(function(j) {
+        var rbk = {};
+        (j.recipes || []).forEach(function(r) { rbk[r.key] = r; });
+        window.APP.s3.recipesByKey = rbk;
+      })
+      .catch(function(e) { console.warn('[Step3] recipes読込失敗', e); });
+  }
 
   window.step3Init = function() {
     var postId = window.APP.selected && window.APP.selected.id;
     if (!postId) { s3RenderTabs(); s3RenderEditor(); return; }
-    /* サーバーからSIデータを取得してからレンダリング */
-    fetchJson('/api/si-data?postId=' + encodeURIComponent(postId))
-      .then(function(d) {
-        window.APP.s3SiData = d || {};
-      })
-      .catch(function() {})
-      .then(function() {
-        s3RenderTabs();
-        s3RenderEditor();
-        s3LoadImages();
-      });
+    /* サーバーからSIデータ + レシピを取得してからレンダリング */
+    Promise.all([
+      fetchJson('/api/si-data?postId=' + encodeURIComponent(postId))
+        .then(function(d) { window.APP.s3SiData = d || {}; })
+        .catch(function() {}),
+      _s3LoadRecipes(),
+    ]).then(function() {
+      s3RenderTabs();
+      s3RenderEditor();
+      s3LoadImages();
+      _s3FetchEvalSlots(window.APP.activeTab || 0);
+    });
   };
+
+  /* ── eval slots を背景取得（プルダウン「label：値」表示用）── */
+  async function _s3FetchEvalSlots(idx) {
+    var m    = (window.APP.modules || [])[idx];
+    var post = window.APP.selected;
+    if (!m || !post || !post.id) return;
+    if (!m.binding || !m.binding.subject || !m.binding.aspect) return;
+    if (m.binding.subject === 'generic') return;
+    if (Array.isArray(m._evalSlots) && m._evalSlots.length) return;
+    try {
+      var r = await fetch('/api/v2/rebuild-module', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId:   post.id,
+          idx:      idx,
+          binding:  m.binding,
+          persist:  false,
+          evalOnly: true,
+        }),
+      });
+      var j = await r.json();
+      if (!j.ok) return;
+      m._evalSlots = j.evaluatedSlots || [];
+      if (window.APP.activeTab === idx) s3RenderEditor();
+    } catch (_) { /* silent */ }
+  }
+  window._s3FetchEvalSlots = _s3FetchEvalSlots;
 
   /* ── モジュール提案 (3-1/3-2/3-3) ── */
   window.s3Propose = async function() {
@@ -674,7 +717,38 @@ function getUI() {
     window.APP.activeTab = i;
     s3RenderTabs();
     s3RenderEditor();
+    _s3FetchEvalSlots(i);
   };
+
+  /* ── レシピの availableSlots を取得 ── */
+  function _s3GetAvailableSlots(m) {
+    var b = m && m.binding;
+    if (!b || !b.subject || !b.aspect) return [];
+    var r = (window.APP.s3.recipesByKey || {})[b.subject + '.' + b.aspect];
+    return (r && r.availableSlots) || [];
+  }
+
+  /* ── プルダウン選択肢を「label：値」表示で生成 ── */
+  function _s3SlotKeyOptions(m, currentKey) {
+    var slots = _s3GetAvailableSlots(m);
+    if (!slots.length) return '';
+    var evalSlots = m._evalSlots || [];
+    var evalByKey = {};
+    evalSlots.forEach(function(es) { evalByKey[es.key] = es; });
+    var html = '';
+    slots.forEach(function(s) {
+      var ev = evalByKey[s.key];
+      var display = s.label;
+      if (ev) {
+        if (ev.value !== undefined && ev.value !== '-') display = s.label + '：' + ev.value;
+        else if (ev.leftValue !== undefined) display = s.label + '：' + ev.leftValue + ' vs ' + ev.rightValue;
+      }
+      html += '<option value="' + _e(s.key) + '"' + (s.key === currentKey ? ' selected' : '') + '>'
+        + _e(display) + '</option>';
+    });
+    html += '<option value=""' + (!currentKey ? ' selected' : '') + '>(カスタム)</option>';
+    return html;
+  }
 
   /* ── SIバインド対象から引けるフィールド定義 ──
      各 box type でプルダウンに並ぶ { path, label } のリスト
@@ -860,6 +934,9 @@ function getUI() {
 
       /* 位置表示 */
       + '<div style="font-size:10px;color:#5a6a8a;">スライド ' + (i+1) + ' / ' + mods.length + '</div>';
+
+    // 現在表示中タブの eval slots を背景で取得（プルダウン「label：値」用）
+    if (typeof _s3FetchEvalSlots === 'function') _s3FetchEvalSlots(i);
   }
 
   /* ── データバインドUI生成（タイプ別） ── */
@@ -895,14 +972,40 @@ function getUI() {
       }
       m.dataSlots = slots;
 
-      // siBinding の box type に応じたデータ型プルダウン候補
+      // ── 新レシピシステム判定 ──
+      const newAvailable = _s3GetAvailableSlots(m);
+      const useNewSystem = newAvailable.length > 0
+        && m.binding && m.binding.subject && m.binding.subject !== 'generic';
+
+      if (useNewSystem) {
+        // 「label：値」プルダウンUI（Step4と同じ）
+        const hint = '<div style="font-size:11px;color:#10b981;margin-bottom:8px;">'
+          + '&#x1F3AF; binding: <b>' + _e(m.binding.subject) + '.' + _e(m.binding.aspect) + '</b>'
+          + (m.binding.primary ? ' / ' + _e(m.binding.primary) : '')
+          + '</div>';
+        const rows = m.dataSlots.map(function(s, idx) {
+          const slotKey = s.slotKey || '';
+          return '<div style="display:grid;grid-template-columns:30px 160px 1fr 30px;gap:6px;margin-bottom:6px;align-items:center;">'
+            + '<span style="font-size:10px;color:#8a9aba;text-align:center;">#' + (idx+1) + '</span>'
+            + '<select class="inp s3-slot-key" data-idx="' + idx + '" style="font-size:11px;padding:4px 6px;">'
+            + _s3SlotKeyOptions(m, slotKey)
+            + '</select>'
+            + '<input class="inp s3-slot-value" data-idx="' + idx + '" placeholder="値"'
+            + ' style="font-size:12px;padding:5px 8px;" value="' + _e(s.value || '') + '">'
+            + '<button class="btn btn-sm s3-slot-remove" data-idx="' + idx + '" style="background:#ef4444;color:#fff;padding:4px 8px;">&#xD7;</button>'
+            + '</div>';
+        }).join('');
+        const addBtn = '<button class="btn btn-sm" style="background:#10b981;color:#fff;margin-top:4px;" onclick="s3AddSlot()">+ 行追加</button>';
+        return wrap(hint + rows + addBtn);
+      }
+
+      // ── 旧UI（binding 無 or generic.free 等）──
       let fieldDefs = [];
       const bindItem = m.siBinding ? _s3GetSiItem(m.siBinding) : null;
       if (bindItem && FIELD_MAP[bindItem.boxType]) {
         fieldDefs = FIELD_MAP[bindItem.boxType];
       }
 
-      // データ型プルダウン（共通）+ セットボタン
       const fieldDropdown = bindItem
         ? '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px;">'
           + '<select class="inp" id="s3FieldSel" style="font-size:12px;padding:5px;">'
@@ -1030,18 +1133,39 @@ function getUI() {
     // ── データバインド系の入力を DOM から収集 ──
     const type = m.type;
     if (['stats','profile','matchcard'].includes(type)) {
-      // 「ラベル：値」1カラム形式を保存時に分解
-      const merged = document.querySelectorAll('.s3-slot-merged');
-      const slots = [];
-      merged.forEach(el => {
-        const raw = el.value || '';
-        // 全角：または半角:で label と value を分ける
-        const parts = raw.split(/[:：]/);
-        const label = (parts[0] || '').trim();
-        const value = parts.slice(1).join(':').trim();
-        slots.push({ label, value, merged: raw });
-      });
-      m.dataSlots = slots;
+      // 新システム（slotKey + value）が表示中ならそちらを優先
+      const newKeys   = document.querySelectorAll('.s3-slot-key');
+      const newValues = document.querySelectorAll('.s3-slot-value');
+      if (newKeys.length) {
+        const recipeSlots = _s3GetAvailableSlots(m);
+        const labelByKey  = {};
+        recipeSlots.forEach(rs => { labelByKey[rs.key] = rs.label; });
+        const slots = [];
+        for (let j = 0; j < newKeys.length; j++) {
+          const k = newKeys[j].value || '';
+          slots.push({
+            slotKey: k || undefined,
+            label:   labelByKey[k] || '',
+            value:   newValues[j]?.value || '',
+          });
+        }
+        m.dataSlots = slots;
+        // customSlotKeys を binding にも反映（再取得時の整合性）
+        const keys = slots.map(s => s.slotKey).filter(Boolean);
+        if (keys.length && m.binding) m.binding.customSlotKeys = keys;
+      } else {
+        // 旧UI: 「ラベル：値」1カラム形式を保存時に分解
+        const merged = document.querySelectorAll('.s3-slot-merged');
+        const slots = [];
+        merged.forEach(el => {
+          const raw = el.value || '';
+          const parts = raw.split(/[:：]/);
+          const label = (parts[0] || '').trim();
+          const value = parts.slice(1).join(':').trim();
+          slots.push({ label, value, merged: raw });
+        });
+        m.dataSlots = slots;
+      }
     } else if (type === 'comparison') {
       const labels = document.querySelectorAll('.s3-cmp-label');
       const lefts  = document.querySelectorAll('.s3-cmp-left');
@@ -1184,6 +1308,23 @@ function getUI() {
     if (e.target.id === 's3BindLeft' || e.target.id === 's3BindRight') {
       _s3SaveCurrent();
       s3RenderEditor();
+    }
+  });
+
+  /* slotKey 変更時：選択 slot の評価値を value 入力に自動転記 ── */
+  document.addEventListener('change', function(e) {
+    if (e.target.classList && e.target.classList.contains('s3-slot-key')) {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const newKey = e.target.value;
+      const m = window.APP.modules?.[window.APP.activeTab];
+      if (!m || !newKey) return;
+      const ev = (m._evalSlots || []).find(function(s) { return s.key === newKey; });
+      if (!ev) return;
+      if (ev.value !== undefined) {
+        const valEl = document.querySelector('.s3-slot-value[data-idx="' + idx + '"]');
+        if (valEl) valEl.value = ev.value;
+      }
+      _s3SaveCurrent();
     }
   });
   /* reaction: コメント追加 */
