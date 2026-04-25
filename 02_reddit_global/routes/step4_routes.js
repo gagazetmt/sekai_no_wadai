@@ -1068,42 +1068,58 @@ function getUI() {
     return html;
   }
 
-  /* ── binding 編集UI（主題/観点/対象 + customSlotKeys） ── */
+  /* ── binding 編集UI（観点 + 対象（役割サフィックス付き）） ── */
+  // 役割サフィックス（primary/secondary プルダウンの「人名 (監督)」表示用）
+  const ROLE_SUFFIX = { player: '選手', team: 'チーム', manager: '監督', match: '試合' };
+
   function _buildBindingUi(m) {
     const s4 = window.APP.s4 || {};
     const recipesByKey = s4.recipesByKey || {};
-    const subjects = s4.subjects || [];
-    const subjectLabels = s4.subjectLabels || {};
     const siLabels = s4.siLabels || {};
 
     // binding が無ければ最低限のスケルトンを作る（generic.free）
     if (!m.binding) m.binding = { subject:'generic', aspect:'free', primary:null, secondary:null };
     const b = m.binding;
 
-    // 主題プルダウン
-    const subjOpts = subjects.map(function(s) {
-      return '<option value="' + s + '"' + (b.subject === s ? ' selected' : '') + '>' + (subjectLabels[s] || s) + '</option>';
-    }).join('');
+    // ── 役割つき統合ラベル一覧の構築 ──
+    // すべての SI ラベルを {subject, label} の形でフラット化、表示は「label (役割)」
+    const allEntities = [];
+    Object.keys(ROLE_SUFFIX).forEach(function(subj) {
+      (siLabels[subj] || []).forEach(function(lbl) {
+        allEntities.push({ subject: subj, label: lbl, role: ROLE_SUFFIX[subj] });
+      });
+    });
 
-    // 観点プルダウン（現主題に対応するセルだけ）
-    const aspectsForSubj = (s4.recipes || []).filter(function(r) { return r.subject === b.subject; });
-    const aspectOpts = aspectsForSubj.map(function(r) {
-      return '<option value="' + r.aspect + '"' + (b.aspect === r.aspect ? ' selected' : '') + '>'
-        + r.label + ' [' + r.priority + ']</option>';
-    }).join('') || '<option value="free">(なし)</option>';
+    // primary 対象プルダウン（全エンティティ）
+    function buildEntityOpts(currentSubj, currentLabel, filterSubj) {
+      const opts = ['<option value="">(なし)</option>'];
+      allEntities.forEach(function(e) {
+        if (filterSubj && e.subject !== filterSubj) return;
+        const val = e.subject + '||' + e.label;
+        const sel = (currentSubj === e.subject && currentLabel === e.label) ? ' selected' : '';
+        opts.push('<option value="' + _e(val) + '"' + sel + '>'
+          + _e(e.label) + ' (' + e.role + ')</option>');
+      });
+      return opts.join('');
+    }
 
-    // primary プルダウン（subject に応じた SI ラベル）
-    const labelsForSubj = b.subject === 'generic' ? [] : (siLabels[b.subject] || []);
-    const primaryOpts = '<option value="">(なし)</option>' + labelsForSubj.map(function(lbl) {
-      return '<option value="' + _e(lbl) + '"' + (b.primary === lbl ? ' selected' : '') + '>' + _e(lbl) + '</option>';
-    }).join('');
+    // 観点プルダウン（subject 自動推定 → そのsubjectで使えるaspectのみ）
+    // primary が選ばれていない時は b.subject を使う（generic.free 等）
+    const inferredSubj = b.primary
+      ? (allEntities.find(function(e) { return e.label === b.primary; }) || {}).subject || b.subject
+      : b.subject;
+    const aspectsForSubj = (s4.recipes || []).filter(function(r) { return r.subject === inferredSubj; });
+    const aspectOpts = aspectsForSubj.length
+      ? aspectsForSubj.map(function(r) {
+          return '<option value="' + r.aspect + '"' + (b.aspect === r.aspect ? ' selected' : '') + '>'
+            + r.label + ' [' + r.priority + ']</option>';
+        }).join('')
+      : '<option value="free" selected>(汎用フリー)</option>';
 
-    // secondary プルダウン（comparison系のみ）
-    const recipe = recipesByKey[b.subject + '.' + b.aspect];
+    const recipe = recipesByKey[inferredSubj + '.' + b.aspect];
     const showSecondary = !!(recipe && recipe.requiresSecondary);
-    const secondaryOpts = '<option value="">(なし)</option>' + labelsForSubj.map(function(lbl) {
-      return '<option value="' + _e(lbl) + '"' + (b.secondary === lbl ? ' selected' : '') + '>' + _e(lbl) + '</option>';
-    }).join('');
+    const primaryOpts   = buildEntityOpts(b.subject, b.primary, null);
+    const secondaryOpts = buildEntityOpts(b.subject, b.secondary, inferredSubj);
 
     // バインドキーの色
     const isFree = b.subject === 'generic' && b.aspect === 'free';
@@ -1111,28 +1127,24 @@ function getUI() {
 
     let html = '<div style="background:#0d1220;border:1px solid ' + borderCol + ';border-radius:6px;padding:8px 10px;margin-bottom:10px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-      + '<span style="font-size:10px;color:#94a3b8;font-weight:bold">&#x1F517; binding（主題と観点）</span>'
+      + '<span style="font-size:10px;color:#94a3b8;font-weight:bold">&#x1F517; binding（対象 × 観点）</span>'
       + (isFree
           ? '<span style="font-size:10px;color:#5a6a8a">※フリー編集モジュール（自動充填なし）</span>'
           : '<button class="btn btn-sm" id="s4BtnRebuild" style="background:#3b82f6;color:#fff;font-size:10px;padding:3px 8px">&#x21BB; データ再取得</button>'
         )
       + '</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:5px">'
-      + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">主題 (subject)</div>'
-      + '<select id="s4BindSubj" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindSubjChange()">' + subjOpts + '</select></div>'
+      + '<div style="display:grid;grid-template-columns:' + (showSecondary ? '1fr 1fr 1fr' : '1fr 1fr') + ';gap:6px;margin-bottom:5px">'
+      + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象 (primary)</div>'
+      + '<select id="s4BindPrimary" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindEntityChange()">' + primaryOpts + '</select></div>'
+      + (showSecondary
+          ? '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象2 ※必須</div>'
+            + '<select id="s4BindSecondary" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindEntityChange()">' + secondaryOpts + '</select></div>'
+          : '')
       + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">観点 (aspect)</div>'
       + '<select id="s4BindAspect" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindAspectChange()">' + aspectOpts + '</select></div>'
       + '</div>';
-    if (b.subject !== 'generic') {
-      html += '<div style="display:grid;grid-template-columns:' + (showSecondary ? '1fr 1fr' : '1fr') + ';gap:6px">'
-        + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象 (primary)</div>'
-        + '<select id="s4BindPrimary" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindEntityChange()">' + primaryOpts + '</select></div>';
-      if (showSecondary) {
-        html += '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象2 (secondary) ※必須</div>'
-          + '<select id="s4BindSecondary" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindEntityChange()">' + secondaryOpts + '</select></div>';
-      }
-      html += '</div>';
-    }
+    // hidden subj field — 後方互換のため _s4SaveCurrent 用に残す
+    html += '<input type="hidden" id="s4BindSubj" value="' + _e(inferredSubj) + '">';
     if (recipe && recipe.description) {
       html += '<div style="font-size:10px;color:#6080b0;margin-top:5px">&#x1F4D6; ' + _e(recipe.description) + '</div>';
     }
@@ -1267,11 +1279,20 @@ function getUI() {
     _s4Render();
   };
 
-  /* ── binding: primary/secondary 変更時 → フルrebuildで dataSlots も更新 ── */
+  /* ── binding: primary/secondary 変更時 → subject自動推定 + フルrebuild ── */
   window.s4OnBindEntityChange = function() {
     _s4SaveCurrent();
     const m = window.APP.modules?.[window.APP.s4.activeTab];
-    if (!m) return;
+    if (!m || !m.binding) return;
+    // 現在の aspect が新 subject の recipes に存在しなければ先頭にリセット
+    const recipes = (window.APP.s4.recipes || []).filter(r => r.subject === m.binding.subject);
+    const validAspects = recipes.map(r => r.aspect);
+    if (!validAspects.includes(m.binding.aspect)) {
+      recipes.sort((a, b) => (a.priority || 'Z').localeCompare(b.priority || 'Z'));
+      m.binding.aspect = recipes[0]?.aspect || 'free';
+      const recipe = window.APP.s4.recipesByKey?.[m.binding.subject + '.' + m.binding.aspect];
+      m.binding.customSlotKeys = recipe?.defaultSelection || null;
+    }
     m._evalSlots = null;
     if (typeof window.s4Rebuild === 'function') {
       window.s4Rebuild();
@@ -1345,17 +1366,27 @@ function getUI() {
     if (tp) m.type      = tp.value;
     if (sd) m.scriptDir = sd.value;
 
-    // binding 編集状態の収集
+    // binding 編集状態の収集（primary/secondary は "subject||label" 形式）
+    function _parseEntityVal(v) {
+      if (!v) return { subject: null, label: null };
+      const ix = v.indexOf('||');
+      if (ix < 0) return { subject: null, label: v };
+      return { subject: v.slice(0, ix), label: v.slice(ix + 2) };
+    }
     const bsubj   = document.getElementById('s4BindSubj');
     const baspect = document.getElementById('s4BindAspect');
     const bprim   = document.getElementById('s4BindPrimary');
     const bsec    = document.getElementById('s4BindSecondary');
     if (bsubj || baspect || bprim || bsec) {
       m.binding = m.binding || {};
-      if (bsubj)   m.binding.subject   = bsubj.value;
-      if (baspect) m.binding.aspect    = baspect.value;
-      if (bprim)   m.binding.primary   = bprim.value || null;
-      if (bsec)    m.binding.secondary = bsec.value  || null;
+      const pp = _parseEntityVal(bprim?.value);
+      const ss = _parseEntityVal(bsec?.value);
+      // subject は primary から自動推定（hidden の bsubj は表示用 fallback）
+      if (pp.subject)      m.binding.subject = pp.subject;
+      else if (bsubj)      m.binding.subject = bsubj.value;
+      if (baspect)         m.binding.aspect  = baspect.value;
+      m.binding.primary    = pp.label || null;
+      m.binding.secondary  = ss.label || null;
     }
     // customSlotKeys: dataSlots プルダウンから収集
     const slotKeyEls = document.querySelectorAll('.s4-slot-key');

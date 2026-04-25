@@ -214,17 +214,19 @@ ${siLabels.length ? siLabels.join(' / ') : '(なし)'}
 
 【絶対ルール】
 1. 1枚目は opening、最後は ending（固定）
-2. 全モジュールに scriptDir と binding を必ず記入
-3. binding は { subject, aspect, primary, secondary?, customSlotKeys? } の形式
+2. 全モジュールに **type** と **scriptDir** と **binding** を必ず記入
+3. type: opening / insight / stats / reaction / profile / comparison / history / matchcard / matchcenter / ending
+   - **multi-variety!! 同じ type を連続させない / opening と ending 以外は重複OKだがバリエーション豊富に**
+4. binding は { subject, aspect, primary, secondary?, customSlotKeys? } の形式
    - subject: player / team / manager / match / transfer / tournament / generic
    - aspect: 下記【主題.観点 一覧】から選ぶ（subject ごとに使える観点が決まる）
    - primary: 取得済みSIラベルから選ぶ（generic は null 可）
    - secondary: 対比型（comparison系）でのみ使う2つ目のラベル
    - customSlotKeys: dataSlots 系で表示したいスロットkey配列（4個推奨）。省略時は default
-4. opening/ending は binding={"subject":"generic","aspect":"free","primary":null}
-5. insight モジュールは binding={"subject":"generic","aspect":"free","primary":null} + catchphrases（3〜5個）必須
-6. reaction モジュールは binding={"subject":"generic","aspect":"free","primary":null} + comments（7個、日本語訳済み）必須
-7. dataSlots / matchData などのデータ値は **コード側で自動充填** されるので、AIは値を埋めなくてよい（binding と customSlotKeys だけ正しく指定）
+5. opening/ending/insight/reaction は binding={"subject":"generic","aspect":"free","primary":null}
+6. insight モジュールは catchphrases（3〜5個）必須
+7. reaction モジュールは comments（7個、日本語訳済み）必須
+8. dataSlots / matchData などのデータ値は **コード側で自動充填** されるので、AIは値を埋めなくてよい（binding と customSlotKeys だけ正しく指定）
 
 【主題.観点 一覧】
 ${formatRecipesForPrompt()}
@@ -236,23 +238,23 @@ ${formatRecipesForPrompt()}
 
 JSONのみ返すこと（説明・マークダウン不要）。以下は例：
 {"modules": [
-  {"title":"衝撃！ハーランドの偉業","scriptDir":"...","reason":"視聴者を掴む",
+  {"type":"opening","title":"衝撃！ハーランドの偉業","scriptDir":"...","reason":"視聴者を掴む",
    "binding":{"subject":"generic","aspect":"free","primary":null}},
-  {"title":"HAALANDの偉業","scriptDir":"...","reason":"...",
+  {"type":"insight","title":"HAALANDの偉業","scriptDir":"...","reason":"...",
    "binding":{"subject":"generic","aspect":"free","primary":null},
    "catchphrases":["18歳でCL8得点","ドルトムントで80ゴール","3年連続得点王"]},
-  {"title":"今期スタッツ","scriptDir":"...","reason":"...",
+  {"type":"stats","title":"今期スタッツ","scriptDir":"...","reason":"...",
    "binding":{"subject":"player","aspect":"careerStats","primary":"Erling Haaland",
               "customSlotKeys":["goals","assists","rating","xG"]}},
-  {"title":"マドリー vs バルサ H2H","scriptDir":"...","reason":"...",
-   "binding":{"subject":"match","aspect":"h2h","primary":"Real Madrid vs Barcelona",
-              "secondary":"-","customSlotKeys":["wins","draws","losses","lastResult"]}},
-  {"title":"試合詳細","scriptDir":"...","reason":"...",
+  {"type":"comparison","title":"マドリー vs バルサ H2H","scriptDir":"...","reason":"...",
+   "binding":{"subject":"team","aspect":"h2h","primary":"Real Madrid",
+              "secondary":"Barcelona","customSlotKeys":["wins","draws","losses","lastResult"]}},
+  {"type":"matchcenter","title":"試合詳細","scriptDir":"...","reason":"...",
    "binding":{"subject":"match","aspect":"matchStats","primary":"Real Madrid vs Barcelona"}},
-  {"title":"海外の声","scriptDir":"...","reason":"...",
+  {"type":"reaction","title":"海外の声","scriptDir":"...","reason":"...",
    "binding":{"subject":"generic","aspect":"free","primary":null},
-   "comments":[{"text":"...","score":0},...7件]},
-  {"title":"まとめ","scriptDir":"...","reason":"...",
+   "comments":[{"text":"...","score":0}]},
+  {"type":"ending","title":"まとめ","scriptDir":"...","reason":"...",
    "binding":{"subject":"generic","aspect":"free","primary":null}}
 ]}`;
 
@@ -314,7 +316,10 @@ JSONのみ返すこと（説明・マークダウン不要）。以下は例：
     // 各モジュールに binding がある場合はビルダーで自動充填
     // binding 無しはレガシー（AIが直接 dataSlots を記入したケース）として尊重
     let buildOk = 0, buildSkip = 0, buildFail = 0;
-    for (const mod of mods) {
+    const VALID_TYPES = new Set(['opening','insight','stats','reaction','profile','comparison','history','matchcard','matchcenter','ending']);
+    for (let mi = 0; mi < mods.length; mi++) {
+      const mod = mods[mi];
+
       // scriptDir が無ければ補完
       if (!mod.scriptDir || !mod.scriptDir.trim()) {
         mod.scriptDir = defaultScriptDir[mod.type] || '';
@@ -323,6 +328,18 @@ JSONのみ返すこと（説明・マークダウン不要）。以下は例：
       // binding 無しなら type から推測（できる範囲で）
       if (!mod.binding || !mod.binding.subject) {
         mod.binding = inferBindingFromType(mod);
+      }
+
+      // type が無効/未定義の場合の fallback
+      if (!mod.type || !VALID_TYPES.has(mod.type)) {
+        // generic.free 系は位置で推測
+        if (mod.binding?.subject === 'generic') {
+          if (mi === 0) mod.type = 'opening';
+          else if (mi === mods.length - 1) mod.type = 'ending';
+          else if (Array.isArray(mod.comments) && mod.comments.length) mod.type = 'reaction';
+          else mod.type = 'insight';
+        }
+        // binding 系は recipe.template から後で確定（builderで上書きされる）
       }
 
       // generic.free（opening/ending/insight/reaction）はビルダー実行不要
@@ -896,7 +913,7 @@ function getUI() {
       + '<div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;">'
       + '<div>'
       + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:5px;">&#x1F39E; スライドタイプ</div>'
-      + '<select id="s3TypeSel" class="inp" style="width:100%;">' + typeOpts + '</select>'
+      + '<select id="s3TypeSel" class="inp" style="width:100%;" onchange="s3OnTypeChange()">' + typeOpts + '</select>'
       + '</div>'
       + '<div style="display:flex;flex-direction:column;justify-content:flex-end;gap:6px;">'
       + '<div style="background:'+col+';color:#fff;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:bold;text-align:center;">'
@@ -1310,6 +1327,12 @@ function getUI() {
       s3RenderEditor();
     }
   });
+
+  /* タイプ変更時：エディタを再描画して該当UI（dataSlots/catchphrases等）に切替 */
+  window.s3OnTypeChange = function() {
+    _s3SaveCurrent();
+    s3RenderEditor();
+  };
 
   /* slotKey 変更時：選択 slot の評価値を value 入力に自動転記 ── */
   document.addEventListener('change', function(e) {
