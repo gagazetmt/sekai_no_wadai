@@ -529,13 +529,19 @@ router.get('/v2/recipes', (req, res) => {
 
 // モジュール再構築：binding 変更や customSlotKeys 変更時にビルダー実行 → 1モジュール返す
 router.post('/v2/rebuild-module', async (req, res) => {
-  const { postId, idx, binding, persist } = req.body;
+  const { postId, idx, binding, persist, evalOnly } = req.body;
   if (!postId || idx == null || !binding) {
     return res.status(400).json({ error: 'postId + idx + binding required' });
   }
   try {
     const { buildModuleFromBinding, buildAllEvaluatedSlots } = require('../scripts/v2_story/builder');
     const siData = safeJson(siPath(postId), {});
+
+    // evalOnly: プルダウン表示用の値のみ取得（重い buildModuleFromBinding をスキップ）
+    if (evalOnly) {
+      const evaluatedSlots = await buildAllEvaluatedSlots(binding, { siData });
+      return res.json({ ok: true, evaluatedSlots, persisted: false });
+    }
 
     const r = await buildModuleFromBinding(binding, { siData });
     if (!r.ok) return res.status(400).json({ ok: false, error: r.error });
@@ -793,6 +799,10 @@ function getUI() {
   function _s4Render() {
     _s4RenderTabs();
     _s4RenderEditor();
+    const i = window.APP.s4?.activeTab ?? 0;
+    if (window.APP.modules?.[i] && typeof _s4FetchEvalSlots === 'function') {
+      _s4FetchEvalSlots(i);
+    }
   }
 
   function _s4RenderTabs() {
@@ -1116,10 +1126,10 @@ function getUI() {
     if (b.subject !== 'generic') {
       html += '<div style="display:grid;grid-template-columns:' + (showSecondary ? '1fr 1fr' : '1fr') + ';gap:6px">'
         + '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象 (primary)</div>'
-        + '<select id="s4BindPrimary" class="inp" style="font-size:11px;padding:4px 6px;width:100%">' + primaryOpts + '</select></div>';
+        + '<select id="s4BindPrimary" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindEntityChange()">' + primaryOpts + '</select></div>';
       if (showSecondary) {
         html += '<div><div style="font-size:9px;color:#8a9aba;margin-bottom:2px">対象2 (secondary) ※必須</div>'
-          + '<select id="s4BindSecondary" class="inp" style="font-size:11px;padding:4px 6px;width:100%">' + secondaryOpts + '</select></div>';
+          + '<select id="s4BindSecondary" class="inp" style="font-size:11px;padding:4px 6px;width:100%" onchange="s4OnBindEntityChange()">' + secondaryOpts + '</select></div>';
       }
       html += '</div>';
     }
@@ -1188,7 +1198,37 @@ function getUI() {
     _s4SaveCurrent();
     window.APP.s4.activeTab = i;
     _s4Render();
+    _s4FetchEvalSlots(i);
   };
+
+  /* ── eval slots を背景で取得（プルダウン「label：値」表示用）
+         dataSlots / matchData 等のユーザー編集状態は触らない ── */
+  async function _s4FetchEvalSlots(idx) {
+    const m    = window.APP.modules?.[idx];
+    const post = window.APP.selected;
+    if (!m || !post?.id) return;
+    if (!m.binding?.subject || !m.binding?.aspect) return;
+    if (m.binding.subject === 'generic') return;
+    if (Array.isArray(m._evalSlots) && m._evalSlots.length) return;
+    try {
+      const r = await fetch('/api/v2/rebuild-module', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId:  post.id,
+          idx:     idx,
+          binding: m.binding,
+          persist: false,
+          evalOnly: true,
+        }),
+      });
+      const j = await r.json();
+      if (!j.ok) return;
+      m._evalSlots = j.evaluatedSlots || [];
+      if (window.APP.s4.activeTab === idx) _s4RenderEditor();
+    } catch (_) { /* silent */ }
+  }
+  window._s4FetchEvalSlots = _s4FetchEvalSlots;
 
   /* ── binding: subject 変更時 → aspect プルダウン更新 ── */
   window.s4OnBindSubjChange = function() {
@@ -1207,6 +1247,7 @@ function getUI() {
     m.binding.primary = null;
     m.binding.secondary = null;
     m.binding.customSlotKeys = recipes[0]?.defaultSelection || null;
+    m._evalSlots = null;
     _s4Render();
   };
 
@@ -1222,6 +1263,16 @@ function getUI() {
     m.binding.aspect = newAsp;
     const recipe = window.APP.s4.recipesByKey?.[m.binding.subject + '.' + newAsp];
     m.binding.customSlotKeys = recipe?.defaultSelection || null;
+    m._evalSlots = null;
+    _s4Render();
+  };
+
+  /* ── binding: primary/secondary 変更時 → eval キャッシュ無効化 ── */
+  window.s4OnBindEntityChange = function() {
+    _s4SaveCurrent();
+    const m = window.APP.modules?.[window.APP.s4.activeTab];
+    if (!m) return;
+    m._evalSlots = null;
     _s4Render();
   };
 
