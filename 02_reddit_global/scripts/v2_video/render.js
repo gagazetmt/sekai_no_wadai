@@ -28,6 +28,7 @@ const { buildProfileHTML }    = require('./slides/profile');
 const { buildStatsHTML }      = require('./slides/stats');
 const { buildComparisonHTML } = require('./slides/comparison');
 const { buildReactionHTML }   = require('./slides/reaction');
+const { imgDataUri }          = require('./slides/_common');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const W = 1920, H = 1080, FPS = 30;
@@ -60,18 +61,43 @@ function updateJob(jobId, patch) {
 
 // タイプ別に適切な slide HTML 生成関数を選ぶ
 function buildSlideHTML(mod) {
+  let html;
   switch (mod.type) {
-    case 'opening':     return buildOpeningHTML(mod);
-    case 'ending':      return buildEndingHTML(mod);
-    case 'insight':     return buildInsightHTML(mod);
-    case 'history':     return buildHistoryHTML(mod);
-    case 'matchcard':   return buildMatchcardHTML(mod);
-    case 'stats':       return buildStatsHTML(mod);
-    case 'profile':     return buildProfileHTML(mod);
-    case 'comparison':  return buildComparisonHTML(mod);
-    case 'reaction':    return buildReactionHTML(mod);
-    default:            return buildUniversalHTML(mod);
+    case 'opening':     html = buildOpeningHTML(mod);    break;
+    case 'ending':      html = buildEndingHTML(mod);     break;
+    case 'insight':     html = buildInsightHTML(mod);    break;
+    case 'history':     html = buildHistoryHTML(mod);    break;
+    case 'matchcard':   html = buildMatchcardHTML(mod);  break;
+    case 'stats':       html = buildStatsHTML(mod);      break;
+    case 'profile':     html = buildProfileHTML(mod);    break;
+    case 'comparison':  html = buildComparisonHTML(mod); break;
+    case 'reaction':    html = buildReactionHTML(mod);   break;
+    default:            html = buildUniversalHTML(mod);
   }
+
+  // mod.images[0] を背景画像として注入（matchcard はレイアウト複雑なので除外）
+  if (mod.type !== 'matchcard' && Array.isArray(mod.images) && mod.images.length) {
+    // /images/... は project root 相対パス。leading / を剥がして imgDataUri に渡す
+    const relPath = mod.images[0].replace(/^\//, '');
+    const dataUri = imgDataUri(relPath);
+    if (dataUri) {
+      const bgCss = `
+.slide::before {
+  content: ''; position: absolute; inset: 0; z-index: 0;
+  background: url('${dataUri}') center/cover;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.slide::after {
+  content: ''; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(6,14,28,0.45) 0%, rgba(6,14,28,0.75) 100%);
+  pointer-events: none;
+}
+`;
+      html = html.replace('</style>', bgCss + '</style>');
+    }
+  }
+  return html;
 }
 
 // 1スライドを Puppeteer + ffmpeg で MP4 化

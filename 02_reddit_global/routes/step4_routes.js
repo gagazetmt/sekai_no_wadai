@@ -174,6 +174,22 @@ router.get('/v2/preview-slide', (req, res) => {
       case 'reaction':    html = buildReactionHTML(mod);    break;
       default:            html = buildUniversalHTML(mod);
     }
+
+    // mod.images[0] を背景として注入（matchcard 除外）
+    if (mod.type !== 'matchcard' && Array.isArray(mod.images) && mod.images.length) {
+      const { imgDataUri } = require('../scripts/v2_video/slides/_common');
+      const relPath = mod.images[0].replace(/^\//, '');
+      const dataUri = imgDataUri(relPath);
+      if (dataUri) {
+        const bgCss = `
+.slide::before { content: ''; position: absolute; inset: 0; z-index: 0;
+  background: url('${dataUri}') center/cover; opacity: 0.55; pointer-events: none; }
+.slide::after { content: ''; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(6,14,28,0.45) 0%, rgba(6,14,28,0.75) 100%); pointer-events: none; }
+`;
+        html = html.replace('</style>', bgCss + '</style>');
+      }
+    }
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
 });
@@ -297,16 +313,20 @@ function getUI() {
       const isCmp = m.type === 'comparison';
       dataHtml = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📊 dataSlots</div>'
         + m.dataSlots.map(function(s, idx) {
+            const delBtn = '<button class="s4-slot-del" data-idx="' + idx + '" title="この行を削除" '
+              + 'style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:13px;padding:0 6px;line-height:24px;height:24px;align-self:center;">×</button>';
             if (isCmp) {
-              return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:4px;">'
+              return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;margin-bottom:4px;">'
                 + '<input class="inp s4-cmp-label" data-idx="' + idx + '" value="' + _esc(s.label||'') + '" placeholder="LABEL" style="font-size:11px;padding:4px 6px;">'
                 + '<input class="inp s4-cmp-left" data-idx="' + idx + '" value="' + _esc(s.leftValue||'') + '" placeholder="左" style="font-size:11px;padding:4px 6px;color:#93c5fd;">'
                 + '<input class="inp s4-cmp-right" data-idx="' + idx + '" value="' + _esc(s.rightValue||'') + '" placeholder="右" style="font-size:11px;padding:4px 6px;color:#fca5a5;">'
+                + delBtn
                 + '</div>';
             } else {
-              return '<div style="display:grid;grid-template-columns:140px 1fr;gap:6px;margin-bottom:4px;">'
+              return '<div style="display:grid;grid-template-columns:140px 1fr 28px;gap:6px;margin-bottom:4px;">'
                 + '<input class="inp s4-slot-label" data-idx="' + idx + '" value="' + _esc(s.label||'') + '" placeholder="ラベル" style="font-size:11px;padding:4px 6px;">'
                 + '<input class="inp s4-slot-value" data-idx="' + idx + '" value="' + _esc(s.value||'') + '" placeholder="値" style="font-size:11px;padding:4px 6px;">'
+                + delBtn
                 + '</div>';
             }
           }).join('');
@@ -380,7 +400,7 @@ function getUI() {
       if (m.type === 'comparison' && m.secondary) targets.push(m.secondary);
 
       const sections = [];
-      targets.forEach(function(name) {
+      targets.forEach(function(name, sideIdx) {
         if (!name) return;
         const fields = _extractBindFields(window.APP.s4.siData, name);
         if (!fields.length) return;
@@ -389,22 +409,31 @@ function getUI() {
           if (!grouped[f.section]) grouped[f.section] = [];
           grouped[f.section].push(f);
         });
-        sections.push({ name, grouped });
+        sections.push({ name, grouped, sideIdx });
       });
+
+      const isCmp = m.type === 'comparison';
 
       if (sections.length) {
         bindHtml = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📋 利用可能なバインドデータ（クリックで dataSlots に追加）</div>'
           + '<div style="background:#0d1220;border-radius:6px;padding:8px;max-height:260px;overflow-y:auto;">'
           + sections.map(function(sec) {
+              // comparison: sideIdx 0=左, 1=右
+              const sideLabel = isCmp
+                ? (sec.sideIdx === 0
+                    ? ' <span style="color:#93c5fd;font-size:9px;font-weight:normal;">[左カラムに追加]</span>'
+                    : ' <span style="color:#fca5a5;font-size:9px;font-weight:normal;">[右カラムに追加]</span>')
+                : '';
+              const sideAttr = isCmp ? ' data-side="' + (sec.sideIdx === 0 ? 'left' : 'right') + '"' : '';
               return '<div style="font-size:11px;color:#7dc8ff;font-weight:bold;margin-bottom:4px;border-bottom:1px solid #1a2540;padding-bottom:2px;">'
-                + _esc(sec.name)
+                + _esc(sec.name) + sideLabel
                 + '</div>'
                 + Object.entries(sec.grouped).map(function(arr) {
                     const section = arr[0], items = arr[1];
                     return '<div style="font-size:10px;color:#8a9aba;margin:6px 0 3px;">' + _esc(section) + '</div>'
                       + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">'
                       + items.map(function(f) {
-                          return '<button class="s4-bind-add" data-label="' + _esc(f.label) + '" data-value="' + _esc(String(f.value)) + '" '
+                          return '<button class="s4-bind-add" data-label="' + _esc(f.label) + '" data-value="' + _esc(String(f.value)) + '"' + sideAttr + ' '
                             + 'style="font-size:10px;padding:3px 8px;background:#1a2540;color:#e0e0e0;border:1px solid #2a3050;border-radius:3px;cursor:pointer;">'
                             + '+ ' + _esc(f.label) + ': <span style="color:#10b981">' + _esc(String(f.value)) + '</span>'
                             + '</button>';
@@ -450,7 +479,16 @@ function getUI() {
     });
     el.querySelectorAll('.s4-bind-add').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        s4AddBind(btn.getAttribute('data-label'), btn.getAttribute('data-value'));
+        s4AddBind(
+          btn.getAttribute('data-label'),
+          btn.getAttribute('data-value'),
+          btn.getAttribute('data-side') || null
+        );
+      });
+    });
+    el.querySelectorAll('.s4-slot-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        s4DeleteSlot(parseInt(btn.getAttribute('data-idx'), 10));
       });
     });
   }
@@ -610,19 +648,41 @@ function getUI() {
   }
 
   /* ── バインドデータ: dataSlots に追加 ── */
-  window.s4AddBind = function(label, value) {
+  /*   side='left'/'right' (comparison用) で左右指定。null なら自動 */
+  window.s4AddBind = function(label, value, side) {
+    _collectInputs();
     const i = window.APP.s4.activeTab;
     const m = window.APP.s4.modules[i];
     if (!m) return;
     if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
     if (m.type === 'comparison') {
-      // 既存の同 label があれば右側に入れる、なければ左側だけ埋める新規行
-      const exist = m.dataSlots.find(s => s.label === label && (!s.rightValue || s.rightValue === ''));
-      if (exist) exist.rightValue = value;
-      else m.dataSlots.push({ label, leftValue: value, rightValue: '' });
+      if (side === 'right') {
+        // 同 label の既存行があれば右に補填、なければ右だけ入った新規行
+        const exist = m.dataSlots.find(s => s.label === label && (!s.rightValue || s.rightValue === ''));
+        if (exist) exist.rightValue = value;
+        else m.dataSlots.push({ label, leftValue: '', rightValue: value });
+      } else {
+        // left or null: 同 label の既存行があれば左に補填、なければ左だけの新規行
+        const exist = m.dataSlots.find(s => s.label === label && (!s.leftValue || s.leftValue === ''));
+        if (exist) exist.leftValue = value;
+        else m.dataSlots.push({ label, leftValue: value, rightValue: '' });
+      }
     } else {
       m.dataSlots.push({ label, value });
     }
+    _renderEditor();
+    _saveModulesQuiet();
+    _reloadPreview();
+  };
+
+  /* ── dataSlot 行を削除 ── */
+  window.s4DeleteSlot = function(idx) {
+    _collectInputs();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m || !Array.isArray(m.dataSlots)) return;
+    if (idx < 0 || idx >= m.dataSlots.length) return;
+    m.dataSlots.splice(idx, 1);
     _renderEditor();
     _saveModulesQuiet();
     _reloadPreview();
