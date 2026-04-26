@@ -228,7 +228,7 @@ function getUI() {
 (function() {
   'use strict';
   window.APP = window.APP || {};
-  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {} };
+  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null };
 
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
@@ -250,6 +250,11 @@ function getUI() {
       const s = await fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(post.id));
       window.APP.s4.imageSelections = s.selections || {};
     } catch (_) { window.APP.s4.imageSelections = {}; }
+    /* si_data も読み込む（バインドデータプルダウン用）*/
+    try {
+      const sd = await fetchJson('/api/v3/si?postId=' + encodeURIComponent(post.id));
+      window.APP.s4.siData = sd || null;
+    } catch (_) { window.APP.s4.siData = null; }
     _renderTabs();
     _renderEditor();
     _reloadPreview();
@@ -329,7 +334,7 @@ function getUI() {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
 
-    /* Step 3.5 で選択した画像のギャラリー（全カード共通プール） */
+    /* Step 3.5 で選択した画像のギャラリー（全カード共通プール・このカードで使うものを選択） */
     let galleryHtml = '';
     const allSelections = window.APP.s4.imageSelections || {};
     const seen = new Set();
@@ -340,13 +345,23 @@ function getUI() {
         if (!seen.has(p)) { seen.add(p); pool.push(p); }
       });
     });
+    const cardImgs = Array.isArray(m.images) ? m.images : [];
     if (pool.length) {
       galleryHtml = ''
-        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ 共通画像プール (' + pool.length + '枚・全スライドで利用可)</div>'
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ 共通画像プール ('
+        + pool.length + '枚) <span style="color:#10b981;font-weight:normal;margin-left:6px;">このカードで '
+        + cardImgs.length + ' 枚選択中</span></div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;max-height:200px;overflow-y:auto;">'
         + pool.map(function(p) {
-            return '<div style="position:relative;width:96px;height:72px;border:1px solid #2a3050;border-radius:3px;overflow:hidden;background:#000;">'
-              + '<img src="' + _esc(p) + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">'
+            const isSel = cardImgs.indexOf(p) >= 0;
+            return '<div onclick="s4ToggleImage(\'' + _esc(p).replace(/'/g, "\\'") + '\')" '
+              + 'style="position:relative;width:96px;height:72px;border:3px solid '
+              + (isSel ? '#ff4d4d' : '#2a3050')
+              + ';border-radius:3px;overflow:hidden;background:#000;cursor:pointer;'
+              + (isSel ? 'box-shadow:0 0 8px rgba(255,77,77,0.5);' : '')
+              + '">'
+              + '<img src="' + _esc(p) + '" style="width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;" loading="lazy">'
+              + (isSel ? '<div style="position:absolute;top:0;right:0;background:#ff4d4d;color:#fff;padding:1px 4px;font-size:9px;font-weight:bold;">✓</div>' : '')
               + '</div>';
           }).join('')
         + '</div>';
@@ -354,6 +369,57 @@ function getUI() {
       galleryHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
         + '🖼️ Step 3.5 で画像がまだ選択されていません'
         + '</div>';
+    }
+
+    /* バインドデータ・プルダウン (stats/profile/comparison/history カード用) */
+    let bindHtml = '';
+    const showBind = ['stats', 'profile', 'comparison', 'history'].includes(m.type);
+    if (showBind && window.APP.s4.siData) {
+      const { entity } = _parseMainKey(m.mainKey || '');
+      const targets = [entity];
+      if (m.type === 'comparison' && m.secondary) targets.push(m.secondary);
+
+      const sections = [];
+      targets.forEach(function(name) {
+        if (!name) return;
+        const fields = _extractBindFields(window.APP.s4.siData, name);
+        if (!fields.length) return;
+        const grouped = {};
+        fields.forEach(function(f) {
+          if (!grouped[f.section]) grouped[f.section] = [];
+          grouped[f.section].push(f);
+        });
+        sections.push({ name, grouped });
+      });
+
+      if (sections.length) {
+        bindHtml = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📋 利用可能なバインドデータ（クリックで dataSlots に追加）</div>'
+          + '<div style="background:#0d1220;border-radius:6px;padding:8px;max-height:260px;overflow-y:auto;">'
+          + sections.map(function(sec) {
+              return '<div style="font-size:11px;color:#7dc8ff;font-weight:bold;margin-bottom:4px;border-bottom:1px solid #1a2540;padding-bottom:2px;">'
+                + _esc(sec.name)
+                + '</div>'
+                + Object.entries(sec.grouped).map(function(arr) {
+                    const section = arr[0], items = arr[1];
+                    return '<div style="font-size:10px;color:#8a9aba;margin:6px 0 3px;">' + _esc(section) + '</div>'
+                      + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">'
+                      + items.map(function(f) {
+                          const lblEsc = _esc(f.label).replace(/'/g, "\\'");
+                          const valEsc = _esc(String(f.value)).replace(/'/g, "\\'");
+                          return '<button onclick="s4AddBind(\'' + lblEsc + '\', \'' + valEsc + '\')" '
+                            + 'style="font-size:10px;padding:3px 8px;background:#1a2540;color:#e0e0e0;border:1px solid #2a3050;border-radius:3px;cursor:pointer;">'
+                            + '+ ' + _esc(f.label) + ': <span style="color:#10b981">' + _esc(String(f.value)) + '</span>'
+                            + '</button>';
+                        }).join('')
+                      + '</div>';
+                  }).join('');
+            }).join('')
+          + '</div>';
+      } else {
+        bindHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
+          + '📋 該当エントリのバインドデータが取得できませんでした（sofa.ok=false の可能性）'
+          + '</div>';
+      }
     }
 
     el.innerHTML = ''
@@ -374,6 +440,7 @@ function getUI() {
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">narration</div>'
       + '<textarea class="inp" id="s4Narr' + i + '" oninput="s4OnInput()" style="display:block;width:100%;font-size:12px;padding:6px 8px;min-height:120px;resize:vertical;">' + _esc(m.narration||'') + '</textarea>'
       + galleryHtml
+      + bindHtml
       + dataHtml
       + extraHtml;
   }
@@ -465,6 +532,90 @@ function getUI() {
       _saveModulesQuiet();
       _reloadPreview();
     }, 1000);
+  };
+
+  /* ── 画像ギャラリー: トグル選択 ── */
+  window.s4ToggleImage = function(path) {
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    if (!Array.isArray(m.images)) m.images = [];
+    const idx = m.images.indexOf(path);
+    if (idx >= 0) m.images.splice(idx, 1);
+    else          m.images.push(path);
+    _renderEditor();
+    _saveModulesQuiet();
+    _reloadPreview();
+  };
+
+  /* ── バインドデータ: si.boxes から該当エントリの利用可能フィールドを抽出 ── */
+  function _findEntityItem(items, name) {
+    if (!items?.length || !name) return null;
+    const en = String(name).toLowerCase().trim();
+    let hit = items.find(it => (it.label || '').toLowerCase() === en);
+    if (hit) return hit;
+    return items.find(it => {
+      const lab = (it.label || '').toLowerCase();
+      return lab.includes(en) || en.includes(lab);
+    }) || null;
+  }
+  function _extractBindFields(siData, entityName) {
+    const items = siData?.boxes?.entity?.items || [];
+    const item = _findEntityItem(items, entityName);
+    if (!item) return [];
+    const out = [];
+    const sofa = item.sofa || {};
+    function _push(section, obj) {
+      if (!obj || typeof obj !== 'object') return;
+      Object.entries(obj).forEach(([k, v]) => {
+        if (v == null || typeof v === 'object') return;
+        out.push({ section, label: k, value: String(v) });
+      });
+    }
+    if (sofa.ok) {
+      _push('今季スタッツ',     sofa.seasonStats);
+      _push('直近試合スタッツ',  sofa.lastMatchStats);
+      _push('チーム成績',        sofa.currentTeamStats);
+      _push('総合パフォーマンス', sofa.overallPerformance);
+      // 直接フィールド
+      if (sofa.team?.name)        out.push({ section: '基本情報', label: 'チーム',         value: sofa.team.name });
+      if (sofa.position)          out.push({ section: '基本情報', label: 'ポジション',     value: sofa.position });
+      if (sofa.leagueName)        out.push({ section: '基本情報', label: 'リーグ',         value: sofa.leagueName });
+      if (sofa.country)           out.push({ section: '基本情報', label: '国',             value: sofa.country });
+      if (sofa.standing)          out.push({ section: '基本情報', label: '順位',           value: String(sofa.standing) });
+      if (sofa.recentAvgRating)   out.push({ section: '基本情報', label: '平均レーティング', value: String(sofa.recentAvgRating) });
+      if (sofa.managerName)       out.push({ section: '基本情報', label: '監督',           value: sofa.managerName });
+    }
+    // wiki も少しだけ拾う（生年月日・代表など簡易メタを抜けたら）
+    if (item.wiki?.ok && item.wiki.title) {
+      out.push({ section: 'Wiki', label: 'Wikipedia見出し', value: item.wiki.title });
+    }
+    return out;
+  }
+  function _parseMainKey(mk) {
+    if (!mk) return { type: 'unknown', entity: '' };
+    const idx = mk.indexOf(':');
+    if (idx < 0) return { type: mk, entity: '' };
+    return { type: mk.slice(0, idx).trim(), entity: mk.slice(idx + 1).trim() };
+  }
+
+  /* ── バインドデータ: dataSlots に追加 ── */
+  window.s4AddBind = function(label, value) {
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
+    if (m.type === 'comparison') {
+      // 既存の同 label があれば右側に入れる、なければ左側だけ埋める新規行
+      const exist = m.dataSlots.find(s => s.label === label && (!s.rightValue || s.rightValue === ''));
+      if (exist) exist.rightValue = value;
+      else m.dataSlots.push({ label, leftValue: value, rightValue: '' });
+    } else {
+      m.dataSlots.push({ label, value });
+    }
+    _renderEditor();
+    _saveModulesQuiet();
+    _reloadPreview();
   };
 
   /* ── ナレーション再生成 ── */

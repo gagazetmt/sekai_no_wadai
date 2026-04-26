@@ -30,6 +30,14 @@ function safeJson(file, fallback) {
 function siPath(postId)      { return path.join(SI_DIR,   (postId||'unknown').replace(/[/\?%*:|"<>.]/g,'_') + '.json'); }
 function modulesPath(postId) { return path.join(DATA_DIR, (postId||'unknown').replace(/[/\?%*:|"<>.]/g,'_') + '_modules.json'); }
 
+// ─── /api/v3/si : si.boxes そのものを返す（Step3.5/Step4 用）──
+router.get('/v3/si', (req, res) => {
+  const postId = req.query.postId;
+  const empty  = { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } };
+  if (!postId) return res.json(empty);
+  res.json(safeJson(siPath(postId), empty));
+});
+
 // ─── /api/v3/main-tags : メインタグ一覧（プルダウン用）─────
 router.get('/v3/main-tags', (req, res) => {
   const postId = req.query.postId;
