@@ -314,7 +314,7 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       } catch (_) {}
     }
 
-    // ⑦ チームロゴ取得（matchcenter で表示）── 並列、失敗時 null
+    // ⑦ チームロゴ取得（matchcard で表示）── 並列、失敗時 null
     const [homeLogo, awayLogo] = await Promise.all([
       homeTeamId ? apiGetImage(`/team/${homeTeamId}/image`) : Promise.resolve(null),
       awayTeamId ? apiGetImage(`/team/${awayTeamId}/image`) : Promise.resolve(null),

@@ -198,6 +198,4 @@ ${buildSubtitleBar(narr, { height: 90, maxLineLen: 32 })}`;
 }
 
 // profile も同じテンプレ（用途違いだけ）
-const buildProfileHTML = buildStatsHTML;
-
-module.exports = { buildStatsHTML, buildProfileHTML };
+module.exports = { buildStatsHTML };

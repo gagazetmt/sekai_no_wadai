@@ -156,8 +156,8 @@ router.get('/v2/preview-slide', (req, res) => {
     const { buildInsightHTML }    = require('../scripts/v2_video/slides/insight');
     const { buildHistoryHTML }    = require('../scripts/v2_video/slides/history');
     const { buildMatchcardHTML }  = require('../scripts/v2_video/slides/matchcard');
-    const { buildMatchcenterHTML }= require('../scripts/v2_video/slides/matchcenter');
-    const { buildStatsHTML, buildProfileHTML } = require('../scripts/v2_video/slides/stats');
+    const { buildProfileHTML }    = require('../scripts/v2_video/slides/profile');
+    const { buildStatsHTML }      = require('../scripts/v2_video/slides/stats');
     const { buildComparisonHTML } = require('../scripts/v2_video/slides/comparison');
     const { buildReactionHTML }   = require('../scripts/v2_video/slides/reaction');
 
@@ -168,7 +168,6 @@ router.get('/v2/preview-slide', (req, res) => {
       case 'insight':     html = buildInsightHTML(mod);     break;
       case 'history':     html = buildHistoryHTML(mod);     break;
       case 'matchcard':   html = buildMatchcardHTML(mod);   break;
-      case 'matchcenter': html = buildMatchcenterHTML(mod); break;
       case 'stats':       html = buildStatsHTML(mod);       break;
       case 'profile':     html = buildProfileHTML(mod);     break;
       case 'comparison':  html = buildComparisonHTML(mod);  break;
@@ -320,7 +319,7 @@ function getUI() {
           }).join('');
     }
 
-    const ALL_TYPES = ['opening','insight','stats','reaction','comparison','history','matchcard','matchcenter','ending'];
+    const ALL_TYPES = ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ending'];
     const typeOpts = ALL_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
@@ -413,7 +412,7 @@ function getUI() {
     if (newType === 'reaction' && (!m.comments || !m.comments.length)) {
       m.comments = Array.from({length: 7}, () => ({ text: '', score: 0 }));
     }
-    if (['stats','matchcard','history'].includes(newType) && (!m.dataSlots || !m.dataSlots.length)) {
+    if (['stats','profile','history'].includes(newType) && (!m.dataSlots || !m.dataSlots.length)) {
       m.dataSlots = [{label:'',value:''},{label:'',value:''},{label:'',value:''},{label:'',value:''}];
     }
     if (newType === 'comparison' && (!m.dataSlots || !m.dataSlots.length || m.dataSlots[0]?.value !== undefined)) {

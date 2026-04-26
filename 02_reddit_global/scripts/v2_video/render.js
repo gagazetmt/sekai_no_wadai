@@ -24,8 +24,8 @@ const { buildUniversalHTML }  = require('./slides/universal');
 const { buildInsightHTML }    = require('./slides/insight');
 const { buildHistoryHTML }    = require('./slides/history');
 const { buildMatchcardHTML }  = require('./slides/matchcard');
-const { buildMatchcenterHTML }= require('./slides/matchcenter');
-const { buildStatsHTML, buildProfileHTML } = require('./slides/stats');
+const { buildProfileHTML }    = require('./slides/profile');
+const { buildStatsHTML }      = require('./slides/stats');
 const { buildComparisonHTML } = require('./slides/comparison');
 const { buildReactionHTML }   = require('./slides/reaction');
 
@@ -66,7 +66,6 @@ function buildSlideHTML(mod) {
     case 'insight':     return buildInsightHTML(mod);
     case 'history':     return buildHistoryHTML(mod);
     case 'matchcard':   return buildMatchcardHTML(mod);
-    case 'matchcenter': return buildMatchcenterHTML(mod);
     case 'stats':       return buildStatsHTML(mod);
     case 'profile':     return buildProfileHTML(mod);
     case 'comparison':  return buildComparisonHTML(mod);

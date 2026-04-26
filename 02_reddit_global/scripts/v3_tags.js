@@ -63,7 +63,7 @@ const SUB_TAGS_BY_KEY = {
   ],
   // === match系 ===
   'sofa.match': [
-    { value: 'match_stats',     label: '試合スタッツ', type: 'matchcard'  },
+    { value: 'match_stats',     label: '試合スタッツ', type: 'profile'    },
     { value: 'team_compare',    label: 'チーム比較',   type: 'comparison' },
     { value: 'player_compare',  label: '選手比較',     type: 'comparison' },
     { value: 'manager_compare', label: '監督比較',     type: 'comparison' },
@@ -74,7 +74,7 @@ const SUB_TAGS_BY_KEY = {
 //   'opening' / 'toc' / ...      → fixed
 //   'entity:<label>'             → entity (role は siData から取得)
 //   'match:<label>'              → match (従タグ必要)
-//   'matchcenter:<label>'        → matchcenter (従タグ不要、type=matchcenter固定)
+//   'matchcard:<label>'          → matchcard (従タグ不要、type=matchcard固定)
 function parseMainKey(mainKey, siData) {
   const fixed = FIXED_MAIN_TAGS.find(t => t.key === mainKey);
   if (fixed) return { kind: 'fixed', def: fixed };
@@ -83,10 +83,10 @@ function parseMainKey(mainKey, siData) {
     const e = (siData?.boxes?.entity?.items || []).find(x => x.label === label);
     return { kind: 'entity', label, role: e?.role || 'player', item: e };
   }
-  if (typeof mainKey === 'string' && mainKey.startsWith('matchcenter:')) {
-    const label = mainKey.slice(12);
+  if (typeof mainKey === 'string' && mainKey.startsWith('matchcard:')) {
+    const label = mainKey.slice(10);
     const m = (siData?.boxes?.match?.items || []).find(x => x.label === label);
-    return { kind: 'matchcenter', label, item: m };
+    return { kind: 'matchcard', label, item: m };
   }
   if (typeof mainKey === 'string' && mainKey.startsWith('match:')) {
     const label = mainKey.slice(6);
@@ -113,15 +113,15 @@ function getSubTagsForMain(mainKey, siData) {
   if (p.kind === 'match') {
     return (SUB_TAGS_BY_KEY['sofa.match'] || []).map(s => ({ ...s, source: 'sofa' }));
   }
-  if (p.kind === 'matchcenter') return [];
+  if (p.kind === 'matchcard') return [];
   return [];
 }
 
 // メイン+サブ から type を決定
 function resolveType(mainKey, subSource, subValue, siData) {
   const p = parseMainKey(mainKey, siData);
-  if (p.kind === 'fixed')       return p.def.type;
-  if (p.kind === 'matchcenter') return 'matchcenter';
+  if (p.kind === 'fixed')     return p.def.type;
+  if (p.kind === 'matchcard') return 'matchcard';
   const subs = getSubTagsForMain(mainKey, siData);
   const hit = subs.find(s => s.source === subSource && s.value === subValue);
   return hit?.type || 'insight';
@@ -146,9 +146,9 @@ function listMainTags(siData) {
       kind:  'match',
     });
     list.push({
-      key:   'matchcenter:' + m.label,
-      label: m.label + ' [マッチセンター]',
-      kind:  'matchcenter',
+      key:   'matchcard:' + m.label,
+      label: m.label + ' [マッチカード]',
+      kind:  'matchcard',
     });
   });
   return list;

@@ -159,20 +159,20 @@ ${outlineLines}
 
 - 全カード共通：
   - "title": 短い見出し（10〜25文字）
-  - "narration": 視聴者に語りかける口調の本文（type=opening/ending/insight/reaction は120〜250文字、stats/comparison/history/matchcard は60〜180文字）
+  - "narration": 視聴者に語りかける口調の本文（type=opening/ending/insight/reaction は120〜250文字、stats/profile/comparison/history/matchcard は60〜180文字）
 
 - type 別の追加フィールド：
   - opening / ending: 追加なし
   - insight: "catchphrases": [短句×3〜5、各15文字以内、事実+数字を含む]
   - reaction: "comments": [{"text":"...","score":0}×7] — 上記【元コメント抜粋】から面白い7件を選び日本語意訳
   - stats / history: "dataSlots": [{"label":"...","value":"..."}×4〜8]
-  - matchcard: "dataSlots": **必ず4個** [{"label":"...","value":"..."}]
+  - profile: "dataSlots": **必ず4個** [{"label":"...","value":"..."}]
     例: [{"label":"大会","value":"ラ・リーガ第32節"},{"label":"会場","value":"ベニート・ビジャマリン"},{"label":"日付","value":"2026-04-24"},{"label":"スコア","value":"1-1"}]
     候補: 大会 / 会場 / 日付 / スコア / 主役選手 / 得点者 / 観客数 / レフェリー / 結果
     ※ homeTeam / awayTeam は別途自動注入されるので dataSlots に含めない
   - comparison: "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]
-  - matchcenter: 追加フィールド不要（matchData は自動注入）。narration のみ書く
-    ※ mainKey="matchcenter:<試合label>" の主タグ。試合の総合プレビュー（スコア/フォーメーション/スタッツ全部入り）
+  - matchcard: 追加フィールド不要（matchData は自動注入）。narration のみ書く
+    ※ mainKey="matchcard:<試合label>" の主タグ。試合の総合プレビュー（スコア/フォーメーション/スタッツ全部入り）
 
 【データ抽出ルール（厳守）】
 - mainKey="entity:<名前>" のカードでは、上記 [entity 一覧] の該当エントリを **データソース** として使う
@@ -243,7 +243,7 @@ JSON のみ返す（マークダウン不要）：
       };
     });
 
-    // ── 後処理: matchcard / matchcenter / comparison(対match) は match siData から
+    // ── 後処理: profile / matchcard / comparison(対match) は match siData から
     //          homeTeam / awayTeam / matchData を自動注入 ──
     merged.forEach(m => {
       if (!m.mainKey) return;
@@ -252,8 +252,8 @@ JSON のみ返す（マークダウン不要）：
         m.siBindingLeft  = m.mainKey.slice(7);
         m.siBindingRight = m.secondary;
       }
-      // mainKey="match:<label>" / "matchcenter:<label>" → matchを引く
-      const mcPrefix = m.mainKey.startsWith('matchcenter:') ? 'matchcenter:' : null;
+      // mainKey="match:<label>" / "matchcard:<label>" → matchを引く
+      const mcPrefix = m.mainKey.startsWith('matchcard:') ? 'matchcard:' : null;
       const mPrefix  = m.mainKey.startsWith('match:') ? 'match:' : mcPrefix;
       if (mPrefix) {
         const matchLabel = m.mainKey.slice(mPrefix.length);
@@ -262,14 +262,14 @@ JSON のみ返す（マークダウン不要）：
         const parts = matchLabel.split(/\s+vs\s+/i).map(s => s.trim());
         m.homeTeam  = data?.homeTeam  || parts[0] || 'HOME';
         m.awayTeam  = data?.awayTeam  || parts[1] || 'AWAY';
-        m.homeLogo  = data?.homeLogo || null;     // matchcard 用
+        m.homeLogo  = data?.homeLogo || null;     // profile (試合プレビュー) 用
         m.awayLogo  = data?.awayLogo || null;
         m.homeScore = data?.homeScore;
         m.awayScore = data?.awayScore;
         m.matchDate = data?.matchDate || '';
         m.scoreline = data?.scoreline || '';
-        // matchcenter は matchData オブジェクトを期待（拡張版）
-        if (m.type === 'matchcenter' && data?.ok) {
+        // matchcard はフォーメーション付き matchData オブジェクトを期待（拡張版）
+        if (m.type === 'matchcard' && data?.ok) {
           m.matchData = {
             homeTeam:   data.homeTeam,
             awayTeam:   data.awayTeam,

@@ -41,7 +41,9 @@ function imageOutDir(postId, moduleIdx) {
   return path.join(IMG_BASE, safeId(postId), String(moduleIdx));
 }
 
-// "player:Bellingham" → { type: 'player', entity: 'Bellingham' }
+// "entity:Jude Bellingham" → { type: 'entity', entity: 'Jude Bellingham' }
+// "matchcard:home_vs_away" → { type: 'matchcard', entity: 'home_vs_away' }
+// "opening" / "ending" → { type: 'opening', entity: '' }
 function parseMainKey(mainKey) {
   if (!mainKey) return { type: 'unknown', entity: '' };
   const idx = mainKey.indexOf(':');
@@ -49,46 +51,115 @@ function parseMainKey(mainKey) {
   return { type: mainKey.slice(0, idx).trim(), entity: mainKey.slice(idx + 1).trim() };
 }
 
-// si_data から選手・監督の所属チーム名を解決
+// type:"entity" の場合、si から role (player/manager/team) を推測する
+//   - si.boxes.entity.items[].role を優先
+//   - si に該当 entity がない場合は team_x_accounts.json と照合 (team判定)
+function inferEntityRole(si, entityName) {
+  if (!entityName) return null;
+  const items = si?.boxes?.entity?.items || [];
+  const item = findEntityItem(items, entityName);
+  if (item?.role) return item.role;
+  // フォールバック: チームマップに entity 名があれば team 扱い
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const mapPath = path.join(__dirname, '..', 'logos', 'team_x_accounts.json');
+    const map = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+    const teams = map.teams || {};
+    const en = entityName.toLowerCase().trim();
+    for (const k of Object.keys(teams)) {
+      if (k.toLowerCase() === en) return 'team';
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 部分一致でも entity item を見つける
+function findEntityItem(items, entityName) {
+  if (!items?.length || !entityName) return null;
+  const en = entityName.toLowerCase().trim();
+  // 完全一致を優先
+  let hit = items.find(it => (it.label || '').toLowerCase() === en);
+  if (hit) return hit;
+  // 部分一致（label が entityName を含む or 逆）
+  hit = items.find(it => {
+    const lab = (it.label || '').toLowerCase();
+    return lab.includes(en) || en.includes(lab);
+  });
+  return hit || null;
+}
+
+// si_data (V3 boxes構造) から選手・監督の所属チーム名を解決
+//   優先順位:
+//     1. 該当 entity の sofa.team / sofa.player.team から取る (理想形)
+//     2. wiki.extract から team_x_accounts のキーで部分マッチ (本命)
+//     3. 同じ post 内の role: "team" entity を使う (フォールバック)
 function resolveTeamForEntity(si, entityName) {
   if (!si || !entityName) return null;
-  // si は { "EntityName": { ok, siType, ...sofaData } } の形式
-  const entry = si[entityName] || Object.values(si).find(e =>
-    e?.siType === 'player' || e?.siType === 'manager'
-  );
-  if (!entry || !entry.ok) return null;
-  return entry.team?.name
-      || entry.data?.team?.name
-      || entry.player?.team?.name
-      || entry.club
-      || null;
+  const items = si?.boxes?.entity?.items || [];
+  if (!items.length) return null;
+
+  const target = findEntityItem(items, entityName);
+
+  // Step 1: sofa が成功してれば、そこから取得
+  if (target?.sofa?.ok) {
+    const t = target.sofa.team?.name
+           || target.sofa.player?.team?.name
+           || target.sofa.data?.team?.name
+           || target.sofa.club
+           || null;
+    if (t) return t;
+  }
+
+  // Step 2: wiki.extract から team_x_accounts のキーで照合 (一番正確)
+  if (target?.wiki?.extract) {
+    try {
+      const fs   = require('fs');
+      const path = require('path');
+      const mapPath = path.join(__dirname, '..', 'logos', 'team_x_accounts.json');
+      const map  = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+      const teams = map.teams || {};
+      const extract = target.wiki.extract;
+      // 長い名前から先にマッチ（"Real Madrid" を "Real" より優先）
+      const teamNames = Object.keys(teams).sort((a, b) => b.length - a.length);
+      for (const name of teamNames) {
+        if (extract.includes(name)) return name;
+      }
+    } catch (_) { /* skip */ }
+  }
+
+  // Step 3: 同じ post に role:"team" の entity があれば使う（曖昧フォールバック）
+  const teamItems = items.filter(it => it.role === 'team');
+  if (teamItems.length) return teamItems[0].label;
+
+  return null;
 }
 
 // si_data から最新の match の kickoff (ISO) を抽出
 function resolveMatchKickoff(si) {
-  if (!si) return null;
-  for (const key of Object.keys(si)) {
-    const e = si[key];
-    if (e?.siType !== 'match') continue;
-    const ts = e.startTimestamp || e.startDateTimestamp || e.kickoffTimestamp;
+  const items = si?.boxes?.match?.items || [];
+  for (const m of items) {
+    const sofa = m.sofa || m;
+    const ts = sofa.startTimestamp || sofa.startDateTimestamp || sofa.kickoffTimestamp;
     if (ts) return new Date(ts * 1000).toISOString();
-    if (e.kickoff)   return e.kickoff;
-    if (e.startDate) return e.startDate;
+    if (sofa.kickoff)   return sofa.kickoff;
+    if (sofa.startDate) return sofa.startDate;
   }
   return null;
 }
 
 // si_data から match の 両チーム名を取得
 function resolveMatchTeams(si) {
-  if (!si) return [];
-  for (const key of Object.keys(si)) {
-    const e = si[key];
-    if (e?.siType !== 'match') continue;
-    const home = e.homeTeam?.name || e.home?.name || e.homeName;
-    const away = e.awayTeam?.name || e.away?.name || e.awayName;
-    return [home, away].filter(Boolean);
+  const items = si?.boxes?.match?.items || [];
+  for (const m of items) {
+    const sofa = m.sofa || m;
+    const home = sofa.homeTeam?.name || sofa.home?.name || sofa.homeName;
+    const away = sofa.awayTeam?.name || sofa.away?.name || sofa.awayName;
+    if (home || away) return [home, away].filter(Boolean);
   }
-  return [];
+  // フォールバック: entity から role:"team" を2つ取る
+  const teamItems = (si?.boxes?.entity?.items || []).filter(it => it.role === 'team');
+  return teamItems.slice(0, 2).map(it => it.label);
 }
 
 // ファイルパス → ブラウザ用URL（/images/...）
@@ -120,30 +191,40 @@ router.post('/v35/fetch-images', async (req, res) => {
     const outDir = imageOutDir(postId, moduleIdx);
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
+    // --- type が "entity" なら role を si から推測 ---
+    //   実際のmainKey形式は "entity:<label>" で role情報なし。si.boxes.entity.items から引く。
+    let effectiveType = type;
+    if (type === 'entity') {
+      const inferred = inferEntityRole(si, entity);
+      effectiveType = inferred || 'entity';   // 推測失敗なら 'entity' のまま (X名前/時間ソートはスキップ)
+    }
+
     // --- チーム名と試合時刻を解決 ---
     let teamName     = null;
     let teamNameAway = null;       // match の場合は2つ目のチーム
     let matchKickoff = null;
 
-    if (type === 'team') {
+    if (effectiveType === 'team') {
       teamName = entity;
-    } else if (type === 'player' || type === 'manager') {
+    } else if (effectiveType === 'player' || effectiveType === 'manager') {
       teamName     = resolveTeamForEntity(si, entity);
       matchKickoff = resolveMatchKickoff(si);
-    } else if (type === 'match' || type === 'matchcard' || type === 'matchcenter') {
+    } else if (effectiveType === 'match' || effectiveType === 'matchcard') {
       const teams  = resolveMatchTeams(si);
       teamName     = teams[0] || null;
       teamNameAway = teams[1] || null;
       matchKickoff = resolveMatchKickoff(si);
-    } else if (type === 'news') {
+    } else if (effectiveType === 'news') {
       // news は entity にキーワード入る想定。X名前ソートは実行不可。
+    } else if (effectiveType === 'entity') {
+      // role 推測失敗 = チーム解決不能。Wikimedia のみ実行。
     }
 
     // --- 並列取得タスク組み立て ---
     const tasks = [];
 
     // 1. X 名前ソート（player/manager のみ）
-    if ((type === 'player' || type === 'manager') && teamName && entity) {
+    if ((effectiveType === 'player' || effectiveType === 'manager') && teamName && entity) {
       tasks.push(
         fetchOfficialXImagesByName(teamName, entity, '', 6, { outDir })
           .then(paths => ({ source: 'x_by_name', paths }))
@@ -201,6 +282,7 @@ router.post('/v35/fetch-images', async (req, res) => {
       ok: true,
       mainKey,
       type,
+      effectiveType,
       entity,
       teamName,
       teamNameAway,

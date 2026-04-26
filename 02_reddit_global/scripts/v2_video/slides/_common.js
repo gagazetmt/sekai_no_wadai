@@ -233,7 +233,7 @@ const I18N = {
 function _t(s) { return s == null ? '' : (I18N[String(s).trim()] || s); }
 
 // ═══════════════════════════════════════════════════════════
-// チーム名 → 3文字略称（matchcenter専用、他スライドでは未使用）
+// チーム名 → 3文字略称（matchcard専用、他スライドでは未使用）
 // ═══════════════════════════════════════════════════════════
 const TEAM_ABBR = {
   'Manchester City': 'MCI', 'Manchester United': 'MUN', 'Liverpool': 'LIV', 'Arsenal': 'ARS', 'Chelsea': 'CHE',
