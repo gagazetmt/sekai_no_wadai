@@ -172,6 +172,7 @@ ${outlineLines}
     ※ homeTeam / awayTeam は別途自動注入されるので dataSlots に含めない
   - comparison: "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]
   - matchcenter: 追加フィールド不要（matchData は自動注入）。narration のみ書く
+    ※ mainKey="matchcenter:<試合label>" の主タグ。試合の総合プレビュー（スコア/フォーメーション/スタッツ全部入り）
 
 【データ抽出ルール（厳守）】
 - mainKey="entity:<名前>" のカードでは、上記 [entity 一覧] の該当エントリを **データソース** として使う
@@ -251,12 +252,13 @@ JSON のみ返す（マークダウン不要）：
         m.siBindingLeft  = m.mainKey.slice(7);
         m.siBindingRight = m.secondary;
       }
-      // mainKey="match:<label>" → matchを引く
-      if (m.mainKey.startsWith('match:')) {
-        const matchLabel = m.mainKey.slice(6);
+      // mainKey="match:<label>" / "matchcenter:<label>" → matchを引く
+      const mcPrefix = m.mainKey.startsWith('matchcenter:') ? 'matchcenter:' : null;
+      const mPrefix  = m.mainKey.startsWith('match:') ? 'match:' : mcPrefix;
+      if (mPrefix) {
+        const matchLabel = m.mainKey.slice(mPrefix.length);
         const matchItem  = (si.boxes.match?.items || []).find(x => x.label === matchLabel);
         const data       = matchItem?.data;
-        // 名前の fallback：data 内 → label split
         const parts = matchLabel.split(/\s+vs\s+/i).map(s => s.trim());
         m.homeTeam  = data?.homeTeam  || parts[0] || 'HOME';
         m.awayTeam  = data?.awayTeam  || parts[1] || 'AWAY';
@@ -264,15 +266,8 @@ JSON のみ返す（マークダウン不要）：
         m.awayScore = data?.awayScore;
         m.matchDate = data?.matchDate || '';
         m.scoreline = data?.scoreline || '';
-        // matchcenter は matchData オブジェクトを期待
+        // matchcenter は matchData オブジェクトを期待（拡張版）
         if (m.type === 'matchcenter' && data?.ok) {
-          // sofa.match の stats は [{name, home, away}] 形式 → flat へ
-          const flatStats = {};
-          if (Array.isArray(data.stats)) {
-            data.stats.forEach(s => {
-              if (s?.name) flatStats[s.name] = `${s.home ?? '-'} / ${s.away ?? '-'}`;
-            });
-          }
           m.matchData = {
             homeTeam:   data.homeTeam,
             awayTeam:   data.awayTeam,
@@ -281,9 +276,16 @@ JSON のみ返す（マークダウン不要）：
             tournament: data.tournament,
             matchDate:  data.matchDate,
             venue:      data.venue,
+            attendance: data.attendance,
+            scoreline:  data.scoreline,
             goals:      Array.isArray(data.goals) ? data.goals : [],
-            stats:      flatStats,
+            cards:      Array.isArray(data.cards) ? data.cards : [],
+            subs:       Array.isArray(data.subs)  ? data.subs  : [],
+            stats:      data.stats || {},                  // {name:{home,away}}
+            formations: data.formations || { home: null, away: null },
+            lineup:     data.lineup     || { home: [], away: [] },
             topPlayers: Array.isArray(data.topPlayers) ? data.topPlayers : [],
+            h2hSummary: data.h2hSummary || null,
           };
         }
       }

@@ -147,8 +147,8 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       tournament = match.tournament?.name || null;
     }
 
-    // ③ incidents（得点・カード）
-    let goals = [], cards = [];
+    // ③ incidents（得点・カード・交代）
+    let goals = [], cards = [], subs = [];
     if (!incRaw?.__err) {
       const incidents = incRaw.incidents || [];
       for (const inc of incidents) {
@@ -174,10 +174,19 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
             color:  inc.incidentClass === 'red' ? 'レッド'
                   : inc.incidentClass === 'yellowRed' ? '2枚目イエロー→退場' : 'イエロー',
           });
+        } else if (inc.incidentType === 'substitution') {
+          subs.push({
+            time: inc.time, timeStr,
+            playerIn:  inc.playerIn?.name  || '不明',
+            playerOut: inc.playerOut?.name || '不明',
+            isHome:    inc.isHome,
+            team:      inc.isHome ? homeTeamName : awayTeamName,
+          });
         }
       }
       goals.sort((a, b) => a.time - b.time);
       cards.sort((a, b) => a.time - b.time);
+      subs.sort((a, b) => a.time - b.time);
     }
 
     // ④ 試合スタッツ（ポゼッション・シュート等）
@@ -196,6 +205,7 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
     let topPlayers  = [];
     let playerStats = {};
     let formations  = { home: null, away: null };
+    let lineup      = { home: [], away: [] };  // 先発11人 (pos: GK/DF/MF/FW)
     if (!lineupRaw?.__err) {
       const lineupData = lineupRaw;
       formations.home = lineupData.home?.formation || null;
@@ -203,6 +213,22 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
 
       const home = lineupData.home?.players || [];
       const away = lineupData.away?.players || [];
+
+      // SofaScore position コード → 内部 pos 名
+      const POS_MAP = { G: 'goalkeeper', D: 'defender', M: 'midfielder', F: 'forward' };
+      function _toLineup(arr) {
+        return arr
+          .filter(p => !p.substitute)  // 先発のみ
+          .map(p => ({
+            name:    p.player?.name || '',
+            jersey:  p.jerseyNumber || p.shirtNumber || null,
+            pos:     POS_MAP[p.position] || 'midfielder',
+          }))
+          .filter(x => x.name);
+      }
+      lineup.home = _toLineup(home);
+      lineup.away = _toLineup(away);
+
       const allPlayers = [
         ...home.map(p => ({ ...p, team: 'home' })),
         ...away.map(p => ({ ...p, team: 'away' })),
@@ -301,8 +327,10 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       scoreline,
       goals,
       cards,
+      subs,
       stats,
       formations,
+      lineup,
       topPlayers,
       playerStats,
       h2hMatches,

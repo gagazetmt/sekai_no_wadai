@@ -71,9 +71,10 @@ const SUB_TAGS_BY_KEY = {
 };
 
 // メインキー文字列を解析
-//   'opening' / 'toc' / ...  → fixed
-//   'entity:<label>'         → entity (role は siData から取得)
-//   'match:<label>'          → match
+//   'opening' / 'toc' / ...      → fixed
+//   'entity:<label>'             → entity (role は siData から取得)
+//   'match:<label>'              → match (従タグ必要)
+//   'matchcenter:<label>'        → matchcenter (従タグ不要、type=matchcenter固定)
 function parseMainKey(mainKey, siData) {
   const fixed = FIXED_MAIN_TAGS.find(t => t.key === mainKey);
   if (fixed) return { kind: 'fixed', def: fixed };
@@ -81,6 +82,11 @@ function parseMainKey(mainKey, siData) {
     const label = mainKey.slice(7);
     const e = (siData?.boxes?.entity?.items || []).find(x => x.label === label);
     return { kind: 'entity', label, role: e?.role || 'player', item: e };
+  }
+  if (typeof mainKey === 'string' && mainKey.startsWith('matchcenter:')) {
+    const label = mainKey.slice(12);
+    const m = (siData?.boxes?.match?.items || []).find(x => x.label === label);
+    return { kind: 'matchcenter', label, item: m };
   }
   if (typeof mainKey === 'string' && mainKey.startsWith('match:')) {
     const label = mainKey.slice(6);
@@ -107,13 +113,15 @@ function getSubTagsForMain(mainKey, siData) {
   if (p.kind === 'match') {
     return (SUB_TAGS_BY_KEY['sofa.match'] || []).map(s => ({ ...s, source: 'sofa' }));
   }
+  if (p.kind === 'matchcenter') return [];
   return [];
 }
 
 // メイン+サブ から type を決定
 function resolveType(mainKey, subSource, subValue, siData) {
   const p = parseMainKey(mainKey, siData);
-  if (p.kind === 'fixed') return p.def.type;
+  if (p.kind === 'fixed')       return p.def.type;
+  if (p.kind === 'matchcenter') return 'matchcenter';
   const subs = getSubTagsForMain(mainKey, siData);
   const hit = subs.find(s => s.source === subSource && s.value === subValue);
   return hit?.type || 'insight';
@@ -136,6 +144,11 @@ function listMainTags(siData) {
       key:   'match:' + m.label,
       label: m.label + ' [試合]',
       kind:  'match',
+    });
+    list.push({
+      key:   'matchcenter:' + m.label,
+      label: m.label + ' [マッチセンター]',
+      kind:  'matchcenter',
     });
   });
   return list;
