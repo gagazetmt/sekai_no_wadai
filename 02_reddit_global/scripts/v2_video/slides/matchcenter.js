@@ -38,6 +38,128 @@ const STAT_MAP = [
   ['Yellow cards',        'イエロー',     ''],
 ];
 
+// 大会名・会場・主要チーム名 → 日本語
+const I18N = {
+  // 大会
+  'FA Cup': 'FAカップ',
+  'EFL Cup': 'リーグカップ',
+  'Premier League': 'プレミアリーグ',
+  'La Liga': 'ラ・リーガ',
+  'LaLiga': 'ラ・リーガ',
+  'Bundesliga': 'ブンデスリーガ',
+  'Serie A': 'セリエA',
+  'Ligue 1': 'リーグ・アン',
+  'Eredivisie': 'エールディヴィジ',
+  'UEFA Champions League': 'UEFAチャンピオンズリーグ',
+  'Champions League': 'チャンピオンズリーグ',
+  'UEFA Europa League': 'UEFAヨーロッパリーグ',
+  'Europa League': 'ヨーロッパリーグ',
+  'UEFA Conference League': 'UEFAカンファレンスリーグ',
+  'FIFA World Cup': 'FIFAワールドカップ',
+  'UEFA European Championship': 'UEFA欧州選手権',
+  'Copa America': 'コパ・アメリカ',
+  'Copa del Rey': 'コパ・デル・レイ',
+  'DFB-Pokal': 'DFBポカール',
+  'Coppa Italia': 'コッパ・イタリア',
+  'Coupe de France': 'クープ・ドゥ・フランス',
+  'Supercopa de España': 'スーパーコパ・デ・エスパーニャ',
+  'Community Shield': 'コミュニティ・シールド',
+  // 会場
+  'Wembley Stadium': 'ウェンブリー',
+  'Wembley': 'ウェンブリー',
+  'Old Trafford': 'オールド・トラッフォード',
+  'Anfield': 'アンフィールド',
+  'Etihad Stadium': 'エティハド',
+  'Stamford Bridge': 'スタンフォード・ブリッジ',
+  'Emirates Stadium': 'エミレーツ',
+  'Tottenham Hotspur Stadium': 'トッテナム・ホットスパー・スタジアム',
+  'St. James\' Park': 'セント・ジェームズ・パーク',
+  'Goodison Park': 'グディソン・パーク',
+  'Santiago Bernabéu': 'サンチアゴ・ベルナベウ',
+  'Camp Nou': 'カンプ・ノウ',
+  'Spotify Camp Nou': 'カンプ・ノウ',
+  'Wanda Metropolitano': 'メトロポリターノ',
+  'Cívitas Metropolitano': 'メトロポリターノ',
+  'Allianz Arena': 'アリアンツ・アレーナ',
+  'Signal Iduna Park': 'ジグナル・イドゥナ・パルク',
+  'San Siro': 'サン・シーロ',
+  'Giuseppe Meazza': 'サン・シーロ',
+  'Allianz Stadium': 'アリアンツ・スタジアム',
+  'Stadio Olimpico': 'スタディオ・オリンピコ',
+  'Parc des Princes': 'パルク・デ・プランス',
+  // 主要チーム（プレミア）
+  'Manchester City': 'マンチェスター・シティ',
+  'Manchester United': 'マンチェスター・ユナイテッド',
+  'Liverpool': 'リヴァプール',
+  'Arsenal': 'アーセナル',
+  'Chelsea': 'チェルシー',
+  'Tottenham Hotspur': 'トッテナム',
+  'Tottenham': 'トッテナム',
+  'Newcastle United': 'ニューカッスル',
+  'Newcastle': 'ニューカッスル',
+  'Aston Villa': 'アストン・ヴィラ',
+  'West Ham United': 'ウェストハム',
+  'West Ham': 'ウェストハム',
+  'Brighton & Hove Albion': 'ブライトン',
+  'Brighton': 'ブライトン',
+  'Crystal Palace': 'クリスタル・パレス',
+  'Everton': 'エヴァートン',
+  'Wolverhampton Wanderers': 'ウルブス',
+  'Wolves': 'ウルブス',
+  'Brentford': 'ブレントフォード',
+  'Fulham': 'フラム',
+  'Bournemouth': 'ボーンマス',
+  'Nottingham Forest': 'ノッティンガム・フォレスト',
+  'Leicester City': 'レスター',
+  'Leicester': 'レスター',
+  'Leeds United': 'リーズ',
+  'Southampton': 'サウサンプトン',
+  // ラ・リーガ
+  'Real Madrid': 'レアル・マドリード',
+  'Real Madrid CF': 'レアル・マドリード',
+  'Barcelona': 'バルセロナ',
+  'FC Barcelona': 'バルセロナ',
+  'Atlético Madrid': 'アトレティコ・マドリード',
+  'Atletico Madrid': 'アトレティコ・マドリード',
+  'Atlético de Madrid': 'アトレティコ・マドリード',
+  'Real Betis': 'ベティス',
+  'Real Sociedad': 'レアル・ソシエダ',
+  'Athletic Bilbao': 'ビルバオ',
+  'Athletic Club': 'ビルバオ',
+  'Sevilla': 'セビージャ',
+  'Valencia': 'バレンシア',
+  'Villarreal': 'ビジャレアル',
+  // ブンデスリーガ
+  'Bayern Munich': 'バイエルン・ミュンヘン',
+  'FC Bayern München': 'バイエルン・ミュンヘン',
+  'Borussia Dortmund': 'ドルトムント',
+  'RB Leipzig': 'ライプツィヒ',
+  'Bayer Leverkusen': 'レヴァークーゼン',
+  'Eintracht Frankfurt': 'フランクフルト',
+  'Borussia Mönchengladbach': 'ボルシアMG',
+  // セリエA
+  'Juventus': 'ユヴェントス',
+  'Inter': 'インテル',
+  'Inter Milan': 'インテル',
+  'AC Milan': 'ミラン',
+  'Milan': 'ミラン',
+  'Napoli': 'ナポリ',
+  'Roma': 'ローマ',
+  'AS Roma': 'ローマ',
+  'Lazio': 'ラツィオ',
+  'Atalanta': 'アタランタ',
+  // リーグ・アン
+  'PSG': 'パリ・サン＝ジェルマン',
+  'Paris Saint-Germain': 'パリ・サン＝ジェルマン',
+  'Marseille': 'マルセイユ',
+  'Olympique de Marseille': 'マルセイユ',
+  'Lyon': 'リヨン',
+  'Olympique Lyonnais': 'リヨン',
+  'Monaco': 'モナコ',
+  'AS Monaco': 'モナコ',
+};
+function _t(s) { return s == null ? '' : (I18N[String(s).trim()] || s); }
+
 function _toInt(v) {
   if (v == null) return 0;
   const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10);
@@ -46,13 +168,15 @@ function _toInt(v) {
 
 function buildMatchcenterHTML(mod) {
   const md = mod.matchData || {};
-  const homeTeam  = md.homeTeam  || mod.homeTeam  || 'HOME';
-  const awayTeam  = md.awayTeam  || mod.awayTeam  || 'AWAY';
+  const homeTeamRaw = md.homeTeam  || mod.homeTeam  || 'HOME';
+  const awayTeamRaw = md.awayTeam  || mod.awayTeam  || 'AWAY';
+  const homeTeam  = _t(homeTeamRaw);
+  const awayTeam  = _t(awayTeamRaw);
   const homeScore = md.homeScore ?? mod.homeScore ?? 0;
   const awayScore = md.awayScore ?? mod.awayScore ?? 0;
-  const tournament = md.tournament || mod.title || 'MATCH';
+  const tournament = _t(md.tournament || mod.title || 'MATCH');
   const matchDate  = md.matchDate || mod.matchDate || '';
-  const venue      = md.venue || '';
+  const venue      = _t(md.venue || '');
   const subText    = mod.narration || '';
 
   // ── イベントを home/away に振り分けてフォーマット ──
@@ -96,12 +220,12 @@ function buildMatchcenterHTML(mod) {
       kickoff:   kickoffText,
       status, scoreTime,
       home: {
-        abbr: String(homeTeam).slice(0, 3).toUpperCase(),
+        abbr: String(homeTeamRaw).slice(0, 3).toUpperCase(),
         name: homeTeam, score: homeScore,
         goals: homeGoals, reds: homeReds, subs: homeSubs,
       },
       away: {
-        abbr: String(awayTeam).slice(0, 3).toUpperCase(),
+        abbr: String(awayTeamRaw).slice(0, 3).toUpperCase(),
         name: awayTeam, score: awayScore,
         goals: awayGoals, reds: awayReds, subs: awaySubs,
       },
@@ -110,40 +234,28 @@ function buildMatchcenterHTML(mod) {
     statsData: finalStats,
   });
 
-  // ── 1280×720 wrapper を 1.5x スケールで 1920×1080 にフィット ──
+  // ── 1280×640 wrapper を 1.5x スケールで 1920×960 にフィット
+  //    残り 1080-960=120px を字幕バーが占める ──
   const extraStyles = `
 .slide { background: #ffffff; }
 .mc-scale {
   position: absolute; top: 0; left: 0;
-  width: 1280px; height: 720px;
+  width: 1280px; height: 640px;
   transform-origin: top left;
   transform: scale(1.5);
 }
 .wrapper {
-  width: 1280px; height: 720px;
+  width: 1280px; height: 640px;
   display: flex; flex-direction: column; position: relative; overflow: hidden;
   background: #fff;
   font-family: 'Barlow', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
   color: #111;
 }
 .wrapper * { box-sizing: border-box; }
-.topbar {
-  flex-shrink: 0; height: 36px;
-  background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.1);
-  display: flex; align-items: center; justify-content: flex-end;
-  padding: 0 24px;
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: #666;
-}
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.status-pill {
-  background: rgba(46,125,50,0.12); border: 1px solid rgba(46,125,50,0.35);
-  color: #2e7d32; padding: 2px 12px; border-radius: 12px;
-  font-size: 11px; font-weight: 600; letter-spacing: 1.5px;
-}
 .main {
   flex: 1; display: grid; grid-template-columns: 552px 1fr;
-  overflow: hidden; padding: 16px 42px 23px 42px; gap: 16px; align-items: start;
+  overflow: hidden; padding: 10px 42px 12px 42px; gap: 16px; align-items: start;
 }
 .left-col {
   display: flex; flex-direction: column;
@@ -168,7 +280,7 @@ function buildMatchcenterHTML(mod) {
   color: #666; letter-spacing: 0.3px; white-space: nowrap; margin-left: 10px;
 }
 .score-block {
-  flex-shrink: 0; padding: 12px 24px 16px;
+  flex-shrink: 0; padding: 8px 24px 10px;
   border-bottom: 1px solid rgba(0,0,0,0.1);
   background: linear-gradient(160deg, #f5f5f5 0%, #fff 100%);
 }
@@ -234,8 +346,8 @@ function buildMatchcenterHTML(mod) {
 }
 .pitch {
   position: relative;
-  height: calc(720px - 36px - 8px);
-  max-height: calc(720px - 36px - 8px);
+  height: calc(640px - 16px);
+  max-height: calc(640px - 16px);
   width: auto; aspect-ratio: 78 / 100;
   background: #1a4a1e; border-radius: 6px; overflow: hidden;
   box-shadow: 0 4px 32px rgba(0,0,0,0.6);
@@ -276,10 +388,6 @@ function buildMatchcenterHTML(mod) {
   const slideBody = `
 <div class="mc-scale">
 <div class="wrapper">
-  <div class="topbar">
-    <span></span>
-    <span class="status-pill" id="match-status">${esc(status)}</span>
-  </div>
   <div class="main">
     <div class="left-col">
       <div class="league-info-block">
@@ -351,7 +459,7 @@ function buildMatchcenterHTML(mod) {
   </div>
 </div>
 </div>
-${buildSubtitleBar(subText, { height: 100, maxLineLen: 36 })}
+${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
 <script>
 (function() {
   const PAYLOAD = ${dataPayload};
