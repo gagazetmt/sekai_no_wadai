@@ -422,7 +422,7 @@ function buildMatchcenterHTML(mod) {
 .wrapper * { box-sizing: border-box; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .main {
-  flex: 1; display: grid; grid-template-columns: 9fr 11fr;
+  flex: 1; display: grid; grid-template-columns: 11fr 10fr;
   overflow: hidden; padding: 6px 16px 8px 16px; gap: 16px; align-items: stretch;
 }
 .left-col {
@@ -532,7 +532,7 @@ function buildMatchcenterHTML(mod) {
   position: relative;
   height: calc(640px - 8px);
   max-height: calc(640px - 8px);
-  width: auto; aspect-ratio: 105 / 100;
+  width: auto; aspect-ratio: 90 / 100;
   background: #1a4a1e; border-radius: 6px; overflow: hidden;
   box-shadow: 0 4px 32px rgba(0,0,0,0.6);
 }
