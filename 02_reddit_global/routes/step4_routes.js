@@ -329,14 +329,22 @@ function getUI() {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
 
-    /* Step 3.5 で選択した画像のギャラリー */
+    /* Step 3.5 で選択した画像のギャラリー（全カード共通プール） */
     let galleryHtml = '';
-    const selectedImgs = (window.APP.s4.imageSelections || {})[String(i)] || [];
-    if (selectedImgs.length) {
+    const allSelections = window.APP.s4.imageSelections || {};
+    const seen = new Set();
+    const pool = [];
+    Object.values(allSelections).forEach(function(arr) {
+      if (!Array.isArray(arr)) return;
+      arr.forEach(function(p) {
+        if (!seen.has(p)) { seen.add(p); pool.push(p); }
+      });
+    });
+    if (pool.length) {
       galleryHtml = ''
-        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ Step3.5 で選択した画像 (' + selectedImgs.length + '枚)</div>'
-        + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;">'
-        + selectedImgs.map(function(p) {
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ 共通画像プール (' + pool.length + '枚・全スライドで利用可)</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;max-height:200px;overflow-y:auto;">'
+        + pool.map(function(p) {
             return '<div style="position:relative;width:96px;height:72px;border:1px solid #2a3050;border-radius:3px;overflow:hidden;background:#000;">'
               + '<img src="' + _esc(p) + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">'
               + '</div>';
@@ -344,7 +352,7 @@ function getUI() {
         + '</div>';
     } else {
       galleryHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
-        + '🖼️ Step 3.5 でこのカードの画像が選択されていません'
+        + '🖼️ Step 3.5 で画像がまだ選択されていません'
         + '</div>';
     }
 
