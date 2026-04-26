@@ -227,16 +227,18 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     <span class="header-sub">Local Launcher — port ${PORT}</span>
   </div>
   <div class="steps">
-    <div class="step-nav active" id="nav1" onclick="goStep(1)">1. 案件選択</div>
-    <div class="step-nav"        id="nav2" onclick="goStep(2)">2. SI情報取得</div>
-    <div class="step-nav"        id="nav3" onclick="goStep(3)">3. 構成提案</div>
-    <div class="step-nav"        id="nav4" onclick="goStep(4)">4. シナリオ編集</div>
+    <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
+    <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. SI情報取得</div>
+    <div class="step-nav"        id="nav3"  onclick="goStep(3)">3. 構成提案</div>
+    <div class="step-nav"        id="nav35" onclick="goStep(35)">3.5 画像選定</div>
+    <div class="step-nav"        id="nav4"  onclick="goStep(4)">4. シナリオ編集</div>
   </div>
   <div class="content-scroll">
     <!-- 各 Step の UI（routes/*.js から注入） -->
     ${s1UI()}
     ${s2UI()}
     ${s3UI()}
+    ${s35UI()}
     ${s4UI()}
   </div>
 </div>
@@ -275,7 +277,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 3, 4].forEach(i => {
+  [1, 2, 3, 35, 4].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';

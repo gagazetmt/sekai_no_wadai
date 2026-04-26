@@ -238,10 +238,195 @@ router.get('/v35/get-selection', (req, res) => {
   res.json(j);
 });
 
-// ─── UI: Phase 1 はバックエンドのみ。空文字列を返す ──────────
-// Phase 3 でタブUI / プレビュー / チェックボックス選択を実装する
+// ─── UI: Step3.5 タブのHTML+CSS+JS を返す ──────────────────
 function getUI() {
-  return '';
+  return `
+<div id="step35" class="step-container" style="display:none">
+<div style="padding:0 20px 20px;">
+
+  <!-- TOP PANEL -->
+  <div class="panel" style="margin-bottom:14px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span id="s35Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件を選択してください</span>
+      <button class="btn btn-sm" id="s35BtnFetchAll" style="background:#3b82f6;color:#fff;">📥 全カード一括取得</button>
+      <button class="btn btn-sm" id="s35BtnSave" style="background:#10b981;color:#fff;">💾 選択を保存</button>
+      <button class="btn btn-success" id="s35BtnNext" style="font-size:13px;padding:8px 18px;">→ Step4 (動画生成)</button>
+      <span id="s35Msg" style="font-size:12px;color:#8a9aba;"></span>
+    </div>
+    <div style="font-size:11px;color:#8a9aba;margin-top:6px;">📸 各カードの mainKey に応じて X公式 (名前/時間ソート) + Wikimedia から画像を取得し、サムネをクリックして選択。動画背景に使われる。</div>
+  </div>
+
+  <!-- カード別エリア -->
+  <div id="s35CardList"></div>
+
+</div>
+</div>
+
+<style>
+.s35-thumb { position:relative; width:120px; height:90px; border:3px solid #2a3050; border-radius:4px; cursor:pointer; background:#000; overflow:hidden; transition:border-color 0.15s; }
+.s35-thumb:hover { border-color:#5a7da0; }
+.s35-thumb.selected { border-color:#ff4d4d; box-shadow:0 0 8px rgba(255,77,77,0.6); }
+.s35-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.s35-thumb .check { position:absolute; top:0; right:0; background:#ff4d4d; color:#fff; padding:2px 6px; font-size:10px; font-weight:bold; }
+.s35-grouplabel { font-size:11px; color:var(--c); font-weight:bold; margin:8px 0 5px 0; }
+.s35-grid { display:flex; gap:6px; flex-wrap:wrap; }
+.s35-empty { padding:20px; text-align:center; font-size:12px; color:#5a6a8a; }
+</style>
+
+<script>(function(){
+  'use strict';
+
+  window.APP = window.APP || {};
+  window.APP.s35 = { modules: [], images: {}, selections: {} };
+
+  function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _msg(s) { const e = document.getElementById('s35Msg'); if (e) e.innerHTML = s; }
+
+  /* ── 初期化 (goStep(35) で呼ばれる) ── */
+  window.step35Init = async function() {
+    const post = window.APP.selected;
+    document.getElementById('s35Title').textContent = post
+      ? (post.titleJa || post.title || '(タイトル不明)').slice(0, 80)
+      : '案件を選択してください';
+    if (!post?.id) { window.APP.s35.modules = []; _renderCards(); return; }
+
+    try {
+      // modules 読込
+      const m = await fetchJson('/api/v3/modules?postId=' + encodeURIComponent(post.id));
+      window.APP.s35.modules = m.modules || [];
+      // 既存選択読込
+      const s = await fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(post.id));
+      window.APP.s35.selections = s.selections || {};
+    } catch (e) {
+      console.warn('[Step3.5] init failed:', e.message);
+    }
+    _renderCards();
+  };
+
+  /* ── カード一覧描画 ── */
+  function _renderCards() {
+    const el = document.getElementById('s35CardList');
+    if (!el) return;
+    const mods = window.APP.s35.modules || [];
+    if (!mods.length) {
+      el.innerHTML = '<div class="s35-empty">Step3 でモジュールを作成してから戻ってきてください。</div>';
+      return;
+    }
+    el.innerHTML = mods.map((m, idx) => _renderCard(m, idx)).join('');
+  }
+
+  function _renderCard(m, idx) {
+    const mainKey  = m.mainKey || '';
+    const imgGroups = window.APP.s35.images[idx];
+    const sel       = window.APP.s35.selections[idx] || [];
+
+    const btnLabel = imgGroups ? '🔄 再取得' : '📥 画像取得';
+    const btnHTML  = '<button class="btn btn-sm" onclick="s35Fetch(' + idx + ')" style="background:#3b82f6;color:#fff;">' + btnLabel + '</button>';
+
+    let body = '';
+    if (imgGroups) {
+      body =
+          _renderGroup('X公式・名前ソート',          imgGroups.x_by_name,      idx, sel)
+        + _renderGroup('X公式・時間ソート',          imgGroups.x_by_time,      idx, sel)
+        + _renderGroup('X公式・時間ソート (Away)',   imgGroups.x_by_time_away, idx, sel)
+        + _renderGroup('Wikimedia Commons',          imgGroups.wikimedia,      idx, sel);
+      if (!body) body = '<div class="s35-empty">画像が取得できませんでした（チーム解決失敗 or 該当なし）</div>';
+    }
+
+    return ''
+      + '<div class="panel" style="margin-bottom:14px;">'
+      +   '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">'
+      +     '<span style="background:var(--c);padding:3px 8px;border-radius:4px;font-size:11px;color:#fff;font-weight:bold;">#' + (idx+1) + '</span>'
+      +     '<span style="font-size:13px;font-weight:bold;color:#7dc8ff">' + _esc(mainKey || '(空)') + '</span>'
+      +     '<span style="font-size:11px;color:#8a9aba">' + _esc(m.title || m.type || '') + '</span>'
+      +     '<span style="flex:1"></span>'
+      +     btnHTML
+      +     '<span style="font-size:11px;color:#10b981;">' + sel.length + ' 枚選択中</span>'
+      +   '</div>'
+      +   body
+      + '</div>';
+  }
+
+  function _renderGroup(label, paths, idx, sel) {
+    if (!paths || !paths.length) return '';
+    return ''
+      + '<div style="margin-bottom:10px;">'
+      +   '<div class="s35-grouplabel">' + _esc(label) + ' <span style="color:#5a6a8a;font-weight:normal">(' + paths.length + '枚)</span></div>'
+      +   '<div class="s35-grid">'
+      +     paths.map(p => {
+            const isSel = sel.includes(p);
+            return '<div class="s35-thumb' + (isSel ? ' selected' : '') + '" onclick="s35Toggle(' + idx + ', \\'' + p.replace(/'/g, "\\\\'") + '\\')">'
+              + '<img src="' + p + '" loading="lazy">'
+              + (isSel ? '<div class="check">✓</div>' : '')
+              + '</div>';
+          }).join('')
+      +   '</div>'
+      + '</div>';
+  }
+
+  /* ── 画像取得 (1カード) ── */
+  window.s35Fetch = async function(idx) {
+    const post = window.APP.selected;
+    const m    = window.APP.s35.modules[idx];
+    if (!post?.id || !m) return;
+    _msg('⏳ 画像取得中... (#' + (idx+1) + ')');
+    try {
+      const r = await fetchJson('/api/v35/fetch-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, mainKey: m.mainKey || '' }),
+      });
+      window.APP.s35.images[idx] = r.images || {};
+      _msg('✅ #' + (idx+1) + ' 取得完了 (' + (r.total || 0) + '枚 / team=' + _esc(r.teamName || '?') + ')');
+    } catch (e) {
+      _msg('❌ #' + (idx+1) + ' 取得失敗: ' + e.message);
+    }
+    _renderCards();
+  };
+
+  /* ── 選択トグル ── */
+  window.s35Toggle = function(idx, path) {
+    const cur = window.APP.s35.selections[idx] || [];
+    const i = cur.indexOf(path);
+    if (i >= 0) cur.splice(i, 1);
+    else        cur.push(path);
+    window.APP.s35.selections[idx] = cur;
+    _renderCards();
+  };
+
+  /* ── ボタン: 全カード一括取得 ── */
+  document.getElementById('s35BtnFetchAll')?.addEventListener('click', async () => {
+    const mods = window.APP.s35.modules || [];
+    if (!mods.length) { _msg('カードがありません'); return; }
+    if (!confirm('全 ' + mods.length + ' カードの画像を取得します（' + (mods.length * 3) + '回前後のAPIコール）。OK?')) return;
+    for (let i = 0; i < mods.length; i++) {
+      await window.s35Fetch(i);
+    }
+    _msg('✅ 全カード取得完了 (' + mods.length + '件)');
+  });
+
+  /* ── ボタン: 選択を保存 ── */
+  document.getElementById('s35BtnSave')?.addEventListener('click', async () => {
+    const post = window.APP.selected;
+    if (!post?.id) { _msg('案件未選択'); return; }
+    try {
+      await fetchJson('/api/v35/save-selection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, selections: window.APP.s35.selections }),
+      });
+      _msg('✅ 保存完了');
+    } catch (e) {
+      _msg('❌ 保存失敗: ' + e.message);
+    }
+  });
+
+  /* ── ボタン: Step4 へ ── */
+  document.getElementById('s35BtnNext')?.addEventListener('click', () => {
+    if (typeof window.goStep === 'function') window.goStep(4);
+  });
+
+})();</script>`;
 }
 
 module.exports = { router, getUI };
