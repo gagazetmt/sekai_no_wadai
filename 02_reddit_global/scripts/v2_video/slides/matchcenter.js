@@ -160,6 +160,75 @@ const I18N = {
 };
 function _t(s) { return s == null ? '' : (I18N[String(s).trim()] || s); }
 
+// チーム名 → 3文字略称
+const TEAM_ABBR = {
+  // Premier
+  'Manchester City': 'MCI',
+  'Manchester United': 'MUN',
+  'Liverpool': 'LIV',
+  'Arsenal': 'ARS',
+  'Chelsea': 'CHE',
+  'Tottenham Hotspur': 'TOT',           'Tottenham': 'TOT',
+  'Newcastle United': 'NEW',            'Newcastle': 'NEW',
+  'Aston Villa': 'AVL',
+  'West Ham United': 'WHU',             'West Ham': 'WHU',
+  'Brighton & Hove Albion': 'BHA',      'Brighton': 'BHA',
+  'Crystal Palace': 'CRY',
+  'Everton': 'EVE',
+  'Wolverhampton Wanderers': 'WOL',     'Wolves': 'WOL',
+  'Brentford': 'BRE',
+  'Fulham': 'FUL',
+  'Bournemouth': 'BOU',
+  'Nottingham Forest': 'NFO',
+  'Leicester City': 'LEI',              'Leicester': 'LEI',
+  'Leeds United': 'LEE',
+  'Southampton': 'SOU',
+  'Burnley': 'BUR',
+  'Sheffield United': 'SHU',
+  // La Liga
+  'Real Madrid': 'RMA',                 'Real Madrid CF': 'RMA',
+  'Barcelona': 'BAR',                   'FC Barcelona': 'BAR',
+  'Atlético Madrid': 'ATM',             'Atletico Madrid': 'ATM',  'Atlético de Madrid': 'ATM',
+  'Real Betis': 'BET',
+  'Real Sociedad': 'RSO',
+  'Athletic Bilbao': 'ATH',             'Athletic Club': 'ATH',
+  'Sevilla': 'SEV',
+  'Valencia': 'VAL',
+  'Villarreal': 'VIL',
+  // Bundesliga
+  'Bayern Munich': 'BAY',               'FC Bayern München': 'BAY',
+  'Borussia Dortmund': 'BVB',
+  'RB Leipzig': 'RBL',
+  'Bayer Leverkusen': 'B04',
+  'Eintracht Frankfurt': 'SGE',
+  'Borussia Mönchengladbach': 'BMG',
+  // Serie A
+  'Juventus': 'JUV',
+  'Inter': 'INT',                       'Inter Milan': 'INT',
+  'AC Milan': 'MIL',                    'Milan': 'MIL',
+  'Napoli': 'NAP',
+  'Roma': 'ROM',                        'AS Roma': 'ROM',
+  'Lazio': 'LAZ',
+  'Atalanta': 'ATA',
+  // Ligue 1
+  'PSG': 'PSG',                         'Paris Saint-Germain': 'PSG',
+  'Marseille': 'OM',                    'Olympique de Marseille': 'OM',
+  'Lyon': 'OL',                         'Olympique Lyonnais': 'OL',
+  'Monaco': 'MON',                      'AS Monaco': 'MON',
+};
+function _abbr(name) {
+  if (!name) return '???';
+  const trimmed = String(name).trim();
+  if (TEAM_ABBR[trimmed]) return TEAM_ABBR[trimmed];
+  // フォールバック: FC/AC/AS等のprefixを除去 → 多語なら頭文字結合 / 1語なら頭3文字
+  const cleaned = trimmed.replace(/^(FC|AC|AS|SC|SK|RC|CD)\s+/i, '');
+  const words = cleaned.split(/\s+/);
+  if (words.length >= 2) {
+    return words.map(w => w[0] || '').join('').slice(0, 3).toUpperCase();
+  }
+  return cleaned.slice(0, 3).toUpperCase();
+}
+
 // 選手名 → カタカナ短縮（マップ外は last word のみ）
 const PLAYER_NAMES = {
   // === Manchester City ===
@@ -317,12 +386,12 @@ function buildMatchcenterHTML(mod) {
       kickoff:   kickoffText,
       status, scoreTime,
       home: {
-        abbr: String(homeTeamRaw).slice(0, 3).toUpperCase(),
+        abbr: _abbr(homeTeamRaw),
         name: homeTeam, score: homeScore,
         goals: homeGoals, reds: homeReds, subs: homeSubs,
       },
       away: {
-        abbr: String(awayTeamRaw).slice(0, 3).toUpperCase(),
+        abbr: _abbr(awayTeamRaw),
         name: awayTeam, score: awayScore,
         goals: awayGoals, reds: awayReds, subs: awaySubs,
       },
@@ -383,18 +452,14 @@ function buildMatchcenterHTML(mod) {
 }
 .score-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .team-info { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-.team-badge {
-  width: 48px; height: 48px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 900; letter-spacing: 1px;
-}
-.badge-home { background: rgba(79,195,247,0.2); border: 1.5px solid #1a9fd4; color: #111; }
-.badge-away { background: rgba(239,83,80,0.2);  border: 1.5px solid #e53935; color: #111; }
 .team-label {
-  font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700;
-  letter-spacing: 0.5px; text-align: center; width: 100%;
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 56px; font-weight: 900;
+  letter-spacing: 4px; text-align: center; line-height: 1;
+  width: 100%;
 }
+.team-label-home { color: #1a9fd4; }
+.team-label-away { color: #e53935; }
 .score-center { text-align: center; min-width: 160px; }
 .score-nums {
   font-family: 'Barlow Condensed', sans-serif; font-size: 72px; font-weight: 900;
@@ -470,10 +535,10 @@ function buildMatchcenterHTML(mod) {
 .p-away .p-dot { background: #ef5350; color: #fff; }
 .p-gk .p-dot   { background: #e6a800 !important; color: #0d1117 !important; border-color: rgba(255,255,255,0.9); }
 .p-name {
-  margin-top: 2px; font-size: 19px; font-weight: 600;
-  font-family: 'Barlow Condensed', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; letter-spacing: 0.3px;
-  color: #fff; background: rgba(0,0,0,0.6); padding: 1px 5px; border-radius: 2px;
-  white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px; font-size: 12px; font-weight: 600;
+  font-family: 'Barlow Condensed', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; letter-spacing: 0;
+  color: #fff; background: rgba(0,0,0,0.65); padding: 1px 4px; border-radius: 2px;
+  white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;
 }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .score-block  { animation: fadeUp 0.5s ease both; }
@@ -497,8 +562,7 @@ function buildMatchcenterHTML(mod) {
       <div class="score-block">
         <div class="score-row">
           <div class="team-info">
-            <div class="team-badge badge-home" id="badge-home">HOM</div>
-            <div class="team-label" id="team-home">${esc(homeTeam)}</div>
+            <div class="team-label team-label-home" id="team-home">${esc(_abbr(homeTeamRaw))}</div>
           </div>
           <div class="score-center">
             <div class="score-nums">
@@ -509,8 +573,7 @@ function buildMatchcenterHTML(mod) {
             <div class="score-time" id="score-time">${esc(scoreTime)}</div>
           </div>
           <div class="team-info">
-            <div class="team-badge badge-away" id="badge-away">AWY</div>
-            <div class="team-label" id="team-away">${esc(awayTeam)}</div>
+            <div class="team-label team-label-away" id="team-away">${esc(_abbr(awayTeamRaw))}</div>
           </div>
         </div>
         <div class="goals-row">
@@ -568,9 +631,6 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
   function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   function applyMatchData() {
-    document.getElementById('badge-home').textContent     = matchData.home.abbr;
-    document.getElementById('badge-away').textContent     = matchData.away.abbr;
-
     function buildEvents(d) {
       return (d.goals||[]).map(g => '<div class="goal-item">' + esc(g) + '</div>').join('')
            + (d.reds ||[]).map(r => '<div class="red-item">'  + esc(r) + '</div>').join('');
