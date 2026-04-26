@@ -122,7 +122,7 @@ function buildMatchcardHTML(mod) {
   // ── 1280×640 wrapper を 1.5x スケールで 1920×960 にフィット
   //    残り 1080-960=120px を字幕バーが占める ──
   const extraStyles = `
-.slide { background: #ffffff; }
+.slide { background: ${PALETTE.bg}; }
 .mc-scale {
   position: absolute; top: 0; left: 0;
   width: 1280px; height: 640px;
@@ -132,9 +132,9 @@ function buildMatchcardHTML(mod) {
 .wrapper {
   width: 1280px; height: 640px;
   display: flex; flex-direction: column; position: relative; overflow: hidden;
-  background: #fff;
+  background: ${PALETTE.bg};
   font-family: 'Barlow', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
-  color: #111;
+  color: ${PALETTE.text};
 }
 .wrapper * { box-sizing: border-box; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
@@ -144,30 +144,30 @@ function buildMatchcardHTML(mod) {
 }
 .left-col {
   display: flex; flex-direction: column;
-  border: 1px solid rgba(0,0,0,0.55); border-radius: 6px;
-  overflow: hidden; background: #fff; height: auto;
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+  overflow: hidden; background: ${PALETTE.surface}; height: auto;
 }
 .league-info-block {
   display: flex; align-items: center; padding: 8px 24px 0;
-  background: linear-gradient(160deg, #f5f5f5 0%, #fff 100%);
+  background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);
 }
 .league-name-row {
   display: flex; align-items: center; gap: 8px;
   font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 700;
-  color: #111; letter-spacing: 0.5px; white-space: nowrap;
+  color: ${PALETTE.text}; letter-spacing: 0.5px; white-space: nowrap;
 }
 .league-name-row .dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #e6a800;
-  box-shadow: 0 0 6px #e6a800; animation: pulse 2s ease-in-out infinite; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: 50%; background: ${PALETTE.accent};
+  box-shadow: 0 0 6px ${PALETTE.accent}; animation: pulse 2s ease-in-out infinite; flex-shrink: 0;
 }
 .kickoff-inline {
   font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 400;
-  color: #666; letter-spacing: 0.3px; white-space: nowrap; margin-left: 10px;
+  color: ${PALETTE.muted}; letter-spacing: 0.3px; white-space: nowrap; margin-left: 10px;
 }
 .score-block {
   flex-shrink: 0; padding: 8px 24px 10px;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
-  background: linear-gradient(160deg, #f5f5f5 0%, #fff 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);
 }
 .score-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .team-info { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
@@ -187,8 +187,8 @@ function buildMatchcardHTML(mod) {
   letter-spacing: 1px;
   width: 70px; height: 70px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.15);
-  color: #111;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+  color: ${PALETTE.text};
 }
 .team-abbr {
   font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
@@ -197,21 +197,21 @@ function buildMatchcardHTML(mod) {
   width: 100%; padding: 0 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.team-abbr-home { color: #1a9fd4; }
-.team-abbr-away { color: #e53935; }
+.team-abbr-home { color: ${PALETTE.blue}; }
+.team-abbr-away { color: ${PALETTE.red}; }
 .score-center { text-align: center; min-width: 160px; }
 .score-nums {
   font-family: 'Barlow Condensed', sans-serif; font-size: 72px; font-weight: 900;
   line-height: 1; letter-spacing: 6px; white-space: nowrap;
 }
-.s-sep  { color: #666; font-size: 42px; margin: 0 4px; }
-.score-time { font-size: 13px; color: #666; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; font-family: 'Barlow Condensed', sans-serif; }
+.s-sep  { color: ${PALETTE.muted}; font-size: 42px; margin: 0 4px; }
+.score-time { font-size: 13px; color: ${PALETTE.muted}; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; font-family: 'Barlow Condensed', sans-serif; }
 .goals-row {
   display: flex; justify-content: space-between; margin-top: 4px;
-  font-size: 18px; color: #666; line-height: 1.7; gap: 8px;
+  font-size: 18px; color: ${PALETTE.muted}; line-height: 1.7; gap: 8px;
 }
-.goals-home { color: #111; flex: 1; overflow: hidden; }
-.goals-away { text-align: right; color: #111; flex: 1; overflow: hidden; }
+.goals-home { color: ${PALETTE.text}; flex: 1; overflow: hidden; }
+.goals-away { text-align: right; color: ${PALETTE.text}; flex: 1; overflow: hidden; }
 .goal-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .goal-item::before { content: '⚽ '; }
 .red-item::before  { content: '🟥 '; }
@@ -219,20 +219,20 @@ function buildMatchcardHTML(mod) {
 .subs-row {
   flex-shrink: 0; display: flex; justify-content: space-between;
   padding: 3px 20px 8px; font-size: 13px;
-  border-bottom: 1px solid rgba(0,0,0,0.1); gap: 8px; line-height: 1.7;
+  border-bottom: 1px solid rgba(255,255,255,0.08); gap: 8px; line-height: 1.7;
 }
-.subs-home { color: #111; flex: 1; overflow: hidden; }
-.subs-away { text-align: right; color: #111; flex: 1; overflow: hidden; }
+.subs-home { color: ${PALETTE.text}; flex: 1; overflow: hidden; }
+.subs-away { text-align: right; color: ${PALETTE.text}; flex: 1; overflow: hidden; }
 .sub-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub-item::before { content: '🔄 '; }
 .formation-row {
   flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;
-  padding: 5px 24px; background: #e8e8e8; border-bottom: 1px solid rgba(0,0,0,0.1);
+  padding: 5px 24px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.08);
   font-family: 'Barlow Condensed', sans-serif; font-size: 20px; letter-spacing: 0.5px; text-transform: uppercase;
 }
-.form-home { color: #111; font-weight: 700; }
-.form-label { color: #666; font-size: 17px; }
-.form-away  { color: #111; font-weight: 700; }
+.form-home { color: ${PALETTE.text}; font-weight: 700; }
+.form-label { color: ${PALETTE.muted}; font-size: 17px; }
+.form-away  { color: ${PALETTE.text}; font-weight: 700; }
 .stats-block {
   flex: 1; overflow: hidden; padding: 8px 24px 6px;
   display: flex; flex-direction: column; gap: 5px;
@@ -469,13 +469,13 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;width:100%;';
       row.innerHTML =
-        '<div style="font-size:24px;min-width:42px;text-align:right;font-family:Barlow Condensed,sans-serif;font-weight:700;color:#111;">' + hDisp + '</div>'
-      + '<div style="width:110px;text-align:center;font-size:17px;color:#666;flex-shrink:0;">' + esc(s.label) + '</div>'
-      + '<div style="flex:1;height:6px;background:#e8e8e8;border-radius:4px;overflow:hidden;display:flex;">'
+        '<div style="font-size:24px;min-width:42px;text-align:right;font-family:Barlow Condensed,sans-serif;font-weight:700;color:#fff;">' + hDisp + '</div>'
+      + '<div style="width:110px;text-align:center;font-size:17px;color:#94a3b8;flex-shrink:0;">' + esc(s.label) + '</div>'
+      + '<div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;display:flex;">'
       + '  <div style="width:' + hw + '%;background:linear-gradient(to right,rgba(79,195,247,0.45),#4fc3f7);border-radius:4px 0 0 4px;"></div>'
       + '  <div style="width:' + aw + '%;background:linear-gradient(to left,rgba(239,83,80,0.45),#ef5350);border-radius:0 4px 4px 0;"></div>'
       + '</div>'
-      + '<div style="font-size:24px;min-width:42px;text-align:left;font-family:Barlow Condensed,sans-serif;font-weight:700;color:#111;">' + aDisp + '</div>';
+      + '<div style="font-size:24px;min-width:42px;text-align:left;font-family:Barlow Condensed,sans-serif;font-weight:700;color:#fff;">' + aDisp + '</div>';
       container.appendChild(row);
     });
   }

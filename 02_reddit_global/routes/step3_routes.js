@@ -104,13 +104,17 @@ router.post('/v3/generate-scenario', async (req, res) => {
     }
     function _matchBlock(it) {
       if (!it.data?.ok) return `- "${it.label}" : 取得失敗`;
+      // matchcard ナレーションで使う「得点」「レッドカード退場」を含める
+      const redCards = (it.data.cards || [])
+        .filter(c => c.color === 'レッド' || c.color === '2枚目イエロー→退場');
       return `- "${it.label}" : ${JSON.stringify({
         scoreline: it.data.scoreline, date: it.data.matchDate,
         tournament: it.data.tournament, venue: it.data.venue,
-        goals: (it.data.goals || []).slice(0, 5),
+        goals: (it.data.goals || []).slice(0, 8),
+        redCards,                                            // ★退場のみ
         topPlayers: (it.data.topPlayers || []).slice(0, 3),
         h2hSummary: it.data.h2hSummary,
-      }).slice(0, 700)}`;
+      }).slice(0, 900)}`;
     }
     function _searchBlock(it) {
       if (!it.data?.organic) return `- "${it.label}" : 結果なし`;
@@ -159,20 +163,27 @@ ${outlineLines}
 
 - 全カード共通：
   - "title": 短い見出し（10〜25文字）
-  - "narration": 視聴者に語りかける口調の本文（type=opening/ending/insight/reaction は120〜250文字、stats/profile/comparison/history/matchcard は60〜180文字）
+  - "narration": 視聴者に語りかける口調の本文 — **40秒前後のボリューム = 250〜320文字目安**
+    ※ 例外: type=opening は narration="" 空文字（タイトル表示のみで読み上げなし）
+    ※ データやニュース文脈を活用し、試合の流れや背景を「さらっと説明」する密度で書く
 
-- type 別の追加フィールド：
-  - opening / ending: 追加なし
-  - insight: "catchphrases": [短句×3〜5、各15文字以内、事実+数字を含む]
-  - reaction: "comments": [{"text":"...","score":0}×7] — 上記【元コメント抜粋】から面白い7件を選び日本語意訳
-  - stats / history: "dataSlots": [{"label":"...","value":"..."}×4〜8]
+- type 別の追加フィールド + ナレーション方針：
+  - opening: 追加なし。**"narration": "" を必ず空文字で返す**
+  - ending: 視聴者への投げかけや登録誘導を含めて250〜320文字
+  - insight: "catchphrases": [短句×3〜5、各15文字以内、事実+数字を含む]。narration は深掘り解説
+  - reaction: "comments": [{"text":"...","score":0}×7] — 上記【元コメント抜粋】から面白い7件を選び日本語意訳。narration は反応の前置き
+  - stats / history: "dataSlots": [{"label":"...","value":"..."}×4〜8]。narration はデータの背景や流れを語る
   - profile: "dataSlots": **必ず4個** [{"label":"...","value":"..."}]
     例: [{"label":"大会","value":"ラ・リーガ第32節"},{"label":"会場","value":"ベニート・ビジャマリン"},{"label":"日付","value":"2026-04-24"},{"label":"スコア","value":"1-1"}]
     候補: 大会 / 会場 / 日付 / スコア / 主役選手 / 得点者 / 観客数 / レフェリー / 結果
     ※ homeTeam / awayTeam は別途自動注入されるので dataSlots に含めない
-  - comparison: "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]
-  - matchcard: 追加フィールド不要（matchData は自動注入）。narration のみ書く
-    ※ mainKey="matchcard:<試合label>" の主タグ。試合の総合プレビュー（スコア/フォーメーション/スタッツ全部入り）
+    ※ narration はタイトル内容を事実ベースで概要説明（試合がいつ・どこで・どんな大会だったか等）
+  - comparison: "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]。narration は比較の意義を解説
+  - matchcard: 追加フィールド不要（matchData は自動注入）。**narration は試合のドラマを時系列ストーリーで語る**：
+    ・上記 [match 一覧] の goals と redCards を参照
+    ・例: 「23分、ベリンガムが先制点を叩き込んだ。しかし67分、ヴィニシウスがレッドカードで退場、試合の流れが一変…」
+    ・得点者・退場者の名前と分数を必ず織り込み、「点が入った→流れが変わった→決着」の物語構造で
+    ・スコアラインだけ羅列するのではなく、試合の起伏を視聴者が追体験できる文章に
 
 【データ抽出ルール（厳守）】
 - mainKey="entity:<名前>" のカードでは、上記 [entity 一覧] の該当エントリを **データソース** として使う
