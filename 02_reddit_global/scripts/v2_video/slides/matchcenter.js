@@ -351,8 +351,8 @@ function buildMatchcenterHTML(mod) {
 .wrapper * { box-sizing: border-box; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .main {
-  flex: 1; display: grid; grid-template-columns: 1fr 2fr;
-  overflow: hidden; padding: 10px 42px 12px 42px; gap: 16px; align-items: start;
+  flex: 1; display: grid; grid-template-columns: 1fr 1.4fr;
+  overflow: hidden; padding: 6px 16px 8px 16px; gap: 16px; align-items: stretch;
 }
 .left-col {
   display: flex; flex-direction: column;
@@ -434,17 +434,17 @@ function buildMatchcenterHTML(mod) {
   display: flex; flex-direction: column; gap: 5px;
 }
 .right-col {
-  display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
-  padding: 4px 10px; overflow: hidden; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px; overflow: hidden; height: 100%;
 }
 .pitch-outer {
   position: relative; width: 100%; height: 100%;
-  display: flex; align-items: center; justify-content: flex-start; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
 }
 .pitch {
   position: relative;
-  height: calc(640px - 16px);
-  max-height: calc(640px - 16px);
+  height: calc(640px - 8px);
+  max-height: calc(640px - 8px);
   width: auto; aspect-ratio: 78 / 100;
   background: #1a4a1e; border-radius: 6px; overflow: hidden;
   box-shadow: 0 4px 32px rgba(0,0,0,0.6);
@@ -471,9 +471,9 @@ function buildMatchcenterHTML(mod) {
 .p-gk .p-dot   { background: #e6a800 !important; color: #0d1117 !important; border-color: rgba(255,255,255,0.9); }
 .p-name {
   margin-top: 2px; font-size: 19px; font-weight: 600;
-  font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.3px;
+  font-family: 'Barlow Condensed', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; letter-spacing: 0.3px;
   color: #fff; background: rgba(0,0,0,0.6); padding: 1px 5px; border-radius: 2px;
-  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis;
 }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .score-block  { animation: fadeUp 0.5s ease both; }
