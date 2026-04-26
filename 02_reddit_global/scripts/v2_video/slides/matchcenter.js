@@ -160,6 +160,94 @@ const I18N = {
 };
 function _t(s) { return s == null ? '' : (I18N[String(s).trim()] || s); }
 
+// 選手名 → カタカナ短縮（マップ外は last word のみ）
+const PLAYER_NAMES = {
+  // === Manchester City ===
+  'Ederson': 'エデルソン',
+  'James Trafford': 'トラッフォード',
+  'Stefan Ortega': 'オルテガ',
+  'Rúben Dias': 'ディアス',           'Ruben Dias': 'ディアス',
+  'John Stones': 'ストーンズ',
+  'Manuel Akanji': 'アカンジ',
+  'Joško Gvardiol': 'グヴァルディオル', 'Josko Gvardiol': 'グヴァルディオル',
+  'Nathan Aké': 'アケ',                'Nathan Ake': 'アケ',
+  'Rayan Aït-Nouri': 'アイト＝ヌーリ',  'Rayan Ait-Nouri': 'アイト＝ヌーリ',
+  'Kyle Walker': 'ウォーカー',
+  'Rodri': 'ロドリ',
+  'Mateo Kovačić': 'コヴァチッチ',     'Mateo Kovacic': 'コヴァチッチ',
+  'Matheus Nunes': 'M.ヌネス',
+  'Tijani Reijnders': 'レイナース',
+  'Bernardo Silva': 'B.シウバ',
+  'Phil Foden': 'フォーデン',
+  'Kevin De Bruyne': 'デ・ブライネ',
+  'Jack Grealish': 'グリーリッシュ',
+  'Rayan Cherki': 'シェルキ',
+  'Savinho': 'サビーニョ',
+  'Jérémy Doku': 'ドク',               'Jeremy Doku': 'ドク',
+  'Erling Haaland': 'ハーランド',
+  'Omar Marmoush': 'マルムーシュ',
+  'Nico González': 'N.ゴンサレス',     'Nico Gonzalez': 'N.ゴンサレス',
+  'Ilkay Gündoğan': 'ギュンドアン',     'Ilkay Gundogan': 'ギュンドアン',
+  // === Southampton ===
+  'Aaron Ramsdale': 'ラムズデール',
+  'Gavin Bazunu': 'バズヌ',
+  'Alex McCarthy': 'マッカーシー',
+  'Kyle Walker-Peters': 'ウォーカー＝ピータース',
+  'Jan Bednarek': 'ベドナレク',
+  'Taylor Harwood-Bellis': 'ハーウッド＝ベリス',
+  'Welington': 'ウェリントン',         'Wellington': 'ウェリントン',
+  'James Bree': 'ブリー',
+  'Nathan Wood': 'ウッド',
+  'Mateus Fernandes': 'M.フェルナンデス',
+  'Flynn Downes': 'ダウンズ',
+  'Adam Lallana': 'ララーナ',
+  'Joe Aribo': 'アリボ',
+  'Caspar Jander': 'ヤンダー',
+  'Will Smallbone': 'スモールボーン',
+  'Cameron Archer': 'アーチャー',
+  'Ross Stewart': 'R.スチュワート',
+  'Finn Azaz': 'アザズ',
+  'Tom Fellows': 'フェロウズ',
+  'Taylor Richards': 'T.リチャーズ',
+  'Joe Lumley': 'ラムリー',
+  // === スーパースター（汎用） ===
+  'Lionel Messi': 'メッシ',
+  'Cristiano Ronaldo': 'C.ロナウド',
+  'Kylian Mbappé': 'エムバペ',         'Kylian Mbappe': 'エムバペ',
+  'Jude Bellingham': 'ベリンガム',
+  'Vinícius Júnior': 'ヴィニシウス',   'Vinicius Junior': 'ヴィニシウス',
+  'Rodrygo': 'ロドリゴ',
+  'Robert Lewandowski': 'レヴァンドフスキ',
+  'Lamine Yamal': 'ヤマル',
+  'Pedri': 'ペドリ',
+  'Gavi': 'ガビ',
+  'Frenkie de Jong': 'デ・ヨング',
+  'Harry Kane': 'ケイン',
+  'Mohamed Salah': 'サラー',
+  'Bukayo Saka': 'サカ',
+  'Martin Ødegaard': 'ウーデゴール',   'Martin Odegaard': 'ウーデゴール',
+  'Kai Havertz': 'ハフェルツ',
+  'Declan Rice': 'ライス',
+  'Bruno Fernandes': 'B.フェルナンデス',
+  'Marcus Rashford': 'ラッシュフォード',
+  'Cole Palmer': 'パーマー',
+  'Florian Wirtz': 'ヴィルツ',
+  'Kingsley Coman': 'コマン',
+  'Joshua Kimmich': 'キミッヒ',
+  'Manuel Neuer': 'ノイアー',
+  'Thibaut Courtois': 'クルトワ',
+  'Marc-André ter Stegen': 'テア・シュテーゲン',
+  'Marc-Andre ter Stegen': 'テア・シュテーゲン',
+};
+function _player(raw) {
+  if (!raw) return '';
+  const t = String(raw).trim();
+  if (PLAYER_NAMES[t]) return PLAYER_NAMES[t];
+  // フォールバック: スペース区切りの最後の単語のみ（First/Middle省略）
+  const parts = t.split(/\s+/);
+  return parts[parts.length - 1] || t;
+}
+
 // '2026-04-25' → '2026年4月25日'
 function _fmtDate(d) {
   const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -186,19 +274,20 @@ function buildMatchcenterHTML(mod) {
   const venue      = _t(md.venue || '');
   const subText    = mod.narration || '';
 
-  // ── イベントを home/away に振り分けてフォーマット ──
-  const _evt = g => `${g.player || '不明'} ${g.timeStr || (g.time != null ? g.time + "'" : '')}`;
+  // ── イベントを home/away に振り分けてフォーマット（選手名はカタカナ短縮）──
+  const _evt = g => `${_player(g.player) || '不明'} ${g.timeStr || (g.time != null ? g.time + "'" : '')}`;
   const homeGoals = (md.goals || []).filter(g => g.isHome).map(_evt);
   const awayGoals = (md.goals || []).filter(g => !g.isHome).map(_evt);
   const homeReds  = (md.cards || []).filter(c => c.isHome && c.color && c.color !== 'イエロー').map(_evt);
   const awayReds  = (md.cards || []).filter(c => !c.isHome && c.color && c.color !== 'イエロー').map(_evt);
-  const _sub = s => `${s.playerOut || '?'} → ${s.playerIn || '?'} ${s.timeStr || (s.time != null ? s.time + "'" : '')}`;
+  const _sub = s => `${_player(s.playerOut) || '?'} → ${_player(s.playerIn) || '?'} ${s.timeStr || (s.time != null ? s.time + "'" : '')}`;
   const homeSubs  = (md.subs || []).filter(s => s.isHome).map(_sub);
   const awaySubs  = (md.subs || []).filter(s => !s.isHome).map(_sub);
 
-  // ── lineup（先発11人）──
-  const homeLineup = (md.lineup?.home && md.lineup.home.length) ? md.lineup.home : DEFAULT_LINEUP;
-  const awayLineup = (md.lineup?.away && md.lineup.away.length) ? md.lineup.away : DEFAULT_LINEUP;
+  // ── lineup（先発11人）──選手名をカタカナ短縮
+  const _mapLineup = arr => arr.map(p => ({ ...p, name: _player(p.name) }));
+  const homeLineup = (md.lineup?.home && md.lineup.home.length) ? _mapLineup(md.lineup.home) : DEFAULT_LINEUP;
+  const awayLineup = (md.lineup?.away && md.lineup.away.length) ? _mapLineup(md.lineup.away) : DEFAULT_LINEUP;
 
   // ── stats を STAT_MAP 順で抽出 ──
   const statsArr = [];
@@ -468,6 +557,7 @@ function buildMatchcenterHTML(mod) {
 </div>
 </div>
 ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
+<div style="position:absolute;top:0;left:0;width:1920px;height:1080px;border:4px dashed #ff2266;pointer-events:none;z-index:9999;box-sizing:border-box;"></div>
 <script>
 (function() {
   const PAYLOAD = ${dataPayload};
