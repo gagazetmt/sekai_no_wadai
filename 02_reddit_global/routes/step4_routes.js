@@ -354,7 +354,7 @@ function getUI() {
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;max-height:200px;overflow-y:auto;">'
         + pool.map(function(p) {
             const isSel = cardImgs.indexOf(p) >= 0;
-            return '<div onclick="s4ToggleImage(\'' + _esc(p).replace(/'/g, "\\'") + '\')" '
+            return '<div class="s4-thumb-toggle" data-path="' + _esc(p) + '" '
               + 'style="position:relative;width:96px;height:72px;border:3px solid '
               + (isSel ? '#ff4d4d' : '#2a3050')
               + ';border-radius:3px;overflow:hidden;background:#000;cursor:pointer;'
@@ -404,9 +404,7 @@ function getUI() {
                     return '<div style="font-size:10px;color:#8a9aba;margin:6px 0 3px;">' + _esc(section) + '</div>'
                       + '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">'
                       + items.map(function(f) {
-                          const lblEsc = _esc(f.label).replace(/'/g, "\\'");
-                          const valEsc = _esc(String(f.value)).replace(/'/g, "\\'");
-                          return '<button onclick="s4AddBind(\'' + lblEsc + '\', \'' + valEsc + '\')" '
+                          return '<button class="s4-bind-add" data-label="' + _esc(f.label) + '" data-value="' + _esc(String(f.value)) + '" '
                             + 'style="font-size:10px;padding:3px 8px;background:#1a2540;color:#e0e0e0;border:1px solid #2a3050;border-radius:3px;cursor:pointer;">'
                             + '+ ' + _esc(f.label) + ': <span style="color:#10b981">' + _esc(String(f.value)) + '</span>'
                             + '</button>';
@@ -443,6 +441,18 @@ function getUI() {
       + bindHtml
       + dataHtml
       + extraHtml;
+
+    /* data属性経由のクリックハンドラ登録（インラインonclickの quote地獄回避）*/
+    el.querySelectorAll('.s4-thumb-toggle').forEach(function(div) {
+      div.addEventListener('click', function() {
+        s4ToggleImage(div.getAttribute('data-path'));
+      });
+    });
+    el.querySelectorAll('.s4-bind-add').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        s4AddBind(btn.getAttribute('data-label'), btn.getAttribute('data-value'));
+      });
+    });
   }
 
   function _collectInputs() {
