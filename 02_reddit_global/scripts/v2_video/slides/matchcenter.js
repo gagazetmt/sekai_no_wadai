@@ -160,6 +160,13 @@ const I18N = {
 };
 function _t(s) { return s == null ? '' : (I18N[String(s).trim()] || s); }
 
+// '2026-04-25' → '2026年4月25日'
+function _fmtDate(d) {
+  const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return d || '';
+  return `${m[1]}年${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
+}
+
 function _toInt(v) {
   if (v == null) return 0;
   const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10);
@@ -210,8 +217,9 @@ function buildMatchcenterHTML(mod) {
   const hasResult  = (md.scoreline || homeScore !== 0 || awayScore !== 0);
   const status     = hasResult ? '試合終了' : 'プレビュー';
   const scoreTime  = hasResult ? "試合終了 · 90'" : 'キックオフ前';
-  const leagueText = tournament + (matchDate ? ` · ${matchDate}` : '');
-  const kickoffText= [matchDate, venue].filter(Boolean).join(' · ') || '試合詳細';
+  const dateJa     = _fmtDate(matchDate);
+  const leagueText = tournament || '試合詳細';
+  const kickoffText= [dateJa, venue].filter(Boolean).join(' · ') || '';
 
   // ── データを JS embed ──
   const dataPayload = JSON.stringify({
@@ -254,7 +262,7 @@ function buildMatchcenterHTML(mod) {
 .wrapper * { box-sizing: border-box; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .main {
-  flex: 1; display: grid; grid-template-columns: 552px 1fr;
+  flex: 1; display: grid; grid-template-columns: 1fr 2fr;
   overflow: hidden; padding: 10px 42px 12px 42px; gap: 16px; align-items: start;
 }
 .left-col {
@@ -284,8 +292,8 @@ function buildMatchcenterHTML(mod) {
   border-bottom: 1px solid rgba(0,0,0,0.1);
   background: linear-gradient(160deg, #f5f5f5 0%, #fff 100%);
 }
-.score-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.team-info { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.score-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.team-info { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
 .team-badge {
   width: 48px; height: 48px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -298,10 +306,10 @@ function buildMatchcenterHTML(mod) {
   letter-spacing: 0.5px; text-align: center; width: 100%;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
-.score-center { text-align: center; }
+.score-center { text-align: center; min-width: 160px; }
 .score-nums {
   font-family: 'Barlow Condensed', sans-serif; font-size: 72px; font-weight: 900;
-  line-height: 1; letter-spacing: 6px;
+  line-height: 1; letter-spacing: 6px; white-space: nowrap;
 }
 .s-sep  { color: #666; font-size: 42px; margin: 0 4px; }
 .score-time { font-size: 13px; color: #666; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; font-family: 'Barlow Condensed', sans-serif; }
