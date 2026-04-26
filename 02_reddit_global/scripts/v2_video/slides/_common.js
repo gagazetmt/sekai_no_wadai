@@ -71,18 +71,77 @@ ${extraStyles}
 </html>`;
 }
 
-// 字幕テキストを 2 行に自然分割（日本語向け）
+// mod.images[] を type 別に bgImage / leftImage / rightImage / homeImage / awayImage に展開
+//   - opening/ending/insight/reaction/stats/history: bgImage = images[0]
+//   - profile: bgImage(左カラム), awayImage(右カラム上 右側), homeImage(右カラム上 左側)
+//   - comparison: leftImage = images[0], rightImage = images[1]
+//   - matchcard: 既存ロゴ運用なのでスキップ
+//   ※ leading "/" を剥がして imgDataUri が project-root 相対で解決できるようにする
+function mapImagesToModule(mod) {
+  if (!mod) return mod;
+  const imgs = (Array.isArray(mod.images) ? mod.images : []).map(p => String(p || '').replace(/^\//, ''));
+  if (!imgs.length) return mod;
+  const m = { ...mod };
+  switch (mod.type) {
+    case 'opening':
+    case 'ending':
+    case 'insight':
+    case 'reaction':
+    case 'stats':
+    case 'history':
+      if (!m.bgImage) m.bgImage = imgs[0];
+      break;
+    case 'profile':
+      if (!m.bgImage)   m.bgImage   = imgs[0];   // 左カラム メイン
+      if (!m.awayImage) m.awayImage = imgs[1];   // 右カラム上 右側
+      if (!m.homeImage) m.homeImage = imgs[2];   // 右カラム上 左側
+      break;
+    case 'comparison':
+      if (!m.leftImage)  m.leftImage  = imgs[0];
+      if (!m.rightImage) m.rightImage = imgs[1];
+      break;
+    case 'matchcard':
+      // 既存運用維持
+      break;
+    default:
+      if (!m.bgImage) m.bgImage = imgs[0];
+  }
+  return m;
+}
+
+// 字幕テキストを 2 行に自然分割（日本語向け、各行〜20文字目安）
+//   - 入力が長すぎる場合は最初の文 (。！？で終わる) または ~40文字 で truncate
 //   - 句読点・スペース・「だ」「ます」「です」「！」「？」等の区切りを優先
 //   - 区切りなければ中央付近で強制分割
-//   - 30〜36字を超えたらフォントサイズも自動で1段階下げる
-function splitSubtitle(text, maxLineLen = 36) {
-  const t = String(text || '').trim();
+function splitSubtitle(text, maxLineLen = 20) {
+  let t = String(text || '').trim();
   if (!t) return { lines: [], fontSize: null };
+
+  // ── 長文を最初の文で truncate ──
+  const TARGET_TOTAL = maxLineLen * 2;
+  if (t.length > TARGET_TOTAL + 10) {
+    // 最初の強い区切り（。！？!?）を探す
+    const m = t.match(/^([\s\S]{1,55}?[。！？!?])/);
+    if (m && m[1].length <= TARGET_TOTAL + 15) {
+      t = m[1].trim();
+    } else {
+      // 強い区切りがなければ TARGET_TOTAL で読点系で切る
+      const softIdx = (function() {
+        const soft = ['、', ',', ' ', '・'];
+        for (let i = Math.min(TARGET_TOTAL + 5, t.length - 1); i > TARGET_TOTAL * 0.5; i--) {
+          if (soft.includes(t[i])) return i;
+        }
+        return -1;
+      })();
+      t = (softIdx > 0 ? t.slice(0, softIdx) : t.slice(0, TARGET_TOTAL)).trim();
+    }
+  }
+
   if (t.length <= maxLineLen) return { lines: [t], fontSize: null };
 
   // 自然な区切り候補（位置, 強さ）を抽出
   const candidates = [];
-  const breaks = ['。', '！', '？', '!', '?', '、', ',', ' ', '。', '・'];
+  const breaks = ['。', '！', '？', '!', '?', '、', ',', ' ', '・'];
   for (let i = Math.floor(t.length * 0.3); i < Math.floor(t.length * 0.7); i++) {
     if (breaks.includes(t[i])) candidates.push({ pos: i + 1, score: 10 - Math.abs(t.length / 2 - i) / 10 });
   }
@@ -105,11 +164,11 @@ function splitSubtitle(text, maxLineLen = 36) {
   const line2 = t.slice(splitAt).trim();
   const longest = Math.max(line1.length, line2.length);
 
-  // 1行が長すぎたらフォント縮小
+  // 1行が長すぎたらフォント縮小（保険）
   let fontSize = null;
-  if (longest > 30) fontSize = 32;
-  if (longest > 38) fontSize = 28;
-  if (longest > 46) fontSize = 24;
+  if (longest > 22) fontSize = 32;
+  if (longest > 26) fontSize = 28;
+  if (longest > 30) fontSize = 24;
 
   return { lines: [line1, line2], fontSize };
 }
@@ -121,7 +180,7 @@ function buildSubtitleBar(text, options = {}) {
   const t = String(text || '').trim();
   if (!t) return '';
   const height = options.height || 110;
-  const maxLineLen = options.maxLineLen || 36;
+  const maxLineLen = options.maxLineLen || 20;
   const { lines, fontSize } = splitSubtitle(t, maxLineLen);
   const fontStyle = fontSize ? `font-size: ${fontSize}px;` : '';
   const linesHtml = lines.map(l => `<div>${esc(l)}</div>`).join('');
@@ -325,7 +384,7 @@ function _fmtDate(d) {
 }
 
 module.exports = {
-  W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar,
+  W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, mapImagesToModule,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,
 };

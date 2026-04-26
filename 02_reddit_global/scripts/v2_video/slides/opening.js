@@ -23,13 +23,13 @@ function buildOpeningHTML(mod) {
   ${bg ? `background-image: url('${bg}');` : ''}
   background-size: cover;
   background-position: center;
-  filter: brightness(0.35);
+  filter: brightness(0.62);
   ${bg ? 'animation: bgZoom 8s ease-out forwards;' : ''}
 }
 @keyframes bgZoom { from { transform: scale(1); } to { transform: scale(1.1); } }
 .bg-overlay {
   position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgba(6,14,28,0.55) 0%, rgba(6,14,28,0.85) 100%);
+  background: linear-gradient(135deg, rgba(6,14,28,0.30) 0%, rgba(6,14,28,0.55) 100%);
 }
 .title-wrap {
   position: absolute; inset: 0;

@@ -160,35 +160,23 @@ router.get('/v2/preview-slide', (req, res) => {
     const { buildStatsHTML }      = require('../scripts/v2_video/slides/stats');
     const { buildComparisonHTML } = require('../scripts/v2_video/slides/comparison');
     const { buildReactionHTML }   = require('../scripts/v2_video/slides/reaction');
+    const { mapImagesToModule }   = require('../scripts/v2_video/slides/_common');
+
+    // images[] を type 別の slot に展開してから build
+    const m = mapImagesToModule(mod);
 
     let html;
-    switch (mod.type) {
-      case 'opening':     html = buildOpeningHTML(mod);     break;
-      case 'ending':      html = buildEndingHTML(mod);      break;
-      case 'insight':     html = buildInsightHTML(mod);     break;
-      case 'history':     html = buildHistoryHTML(mod);     break;
-      case 'matchcard':   html = buildMatchcardHTML(mod);   break;
-      case 'stats':       html = buildStatsHTML(mod);       break;
-      case 'profile':     html = buildProfileHTML(mod);     break;
-      case 'comparison':  html = buildComparisonHTML(mod);  break;
-      case 'reaction':    html = buildReactionHTML(mod);    break;
-      default:            html = buildUniversalHTML(mod);
-    }
-
-    // mod.images[0] を背景として注入（matchcard 除外）
-    if (mod.type !== 'matchcard' && Array.isArray(mod.images) && mod.images.length) {
-      const { imgDataUri } = require('../scripts/v2_video/slides/_common');
-      const relPath = mod.images[0].replace(/^\//, '');
-      const dataUri = imgDataUri(relPath);
-      if (dataUri) {
-        const bgCss = `
-.slide::before { content: ''; position: absolute; inset: 0; z-index: 0;
-  background: url('${dataUri}') center/cover; opacity: 0.55; pointer-events: none; }
-.slide::after { content: ''; position: absolute; inset: 0; z-index: 1;
-  background: linear-gradient(180deg, rgba(6,14,28,0.45) 0%, rgba(6,14,28,0.75) 100%); pointer-events: none; }
-`;
-        html = html.replace('</style>', bgCss + '</style>');
-      }
+    switch (m.type) {
+      case 'opening':     html = buildOpeningHTML(m);     break;
+      case 'ending':      html = buildEndingHTML(m);      break;
+      case 'insight':     html = buildInsightHTML(m);     break;
+      case 'history':     html = buildHistoryHTML(m);     break;
+      case 'matchcard':   html = buildMatchcardHTML(m);   break;
+      case 'stats':       html = buildStatsHTML(m);       break;
+      case 'profile':     html = buildProfileHTML(m);     break;
+      case 'comparison':  html = buildComparisonHTML(m);  break;
+      case 'reaction':    html = buildReactionHTML(m);    break;
+      default:            html = buildUniversalHTML(m);
     }
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }

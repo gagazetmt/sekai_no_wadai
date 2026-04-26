@@ -14,11 +14,13 @@ function buildEndingHTML(mod) {
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
   background-size: cover;
   background-position: center;
-  filter: brightness(0.25);
+  filter: brightness(0.62);
 }
 .bg-overlay {
   position: absolute; inset: 0;
-  background: radial-gradient(ellipse 80% 60% at 50% 60%, rgba(245,158,11,0.08) 0%, transparent 70%);
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 60%, rgba(245,158,11,0.10) 0%, transparent 70%),
+    linear-gradient(135deg, rgba(6,14,28,0.30) 0%, rgba(6,14,28,0.55) 100%);
 }
 .end-wrap {
   position: absolute; inset: 0;
