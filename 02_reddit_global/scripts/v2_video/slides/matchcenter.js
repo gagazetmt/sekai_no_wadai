@@ -474,10 +474,11 @@ function buildMatchcenterHTML(mod) {
   color: #111;
 }
 .team-abbr {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 24px; font-weight: 800;
-  letter-spacing: 2px; text-align: center; line-height: 1;
-  width: 100%;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  font-size: 16px; font-weight: 700;
+  letter-spacing: 0; text-align: center; line-height: 1.2;
+  width: 100%; padding: 0 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .team-abbr-home { color: #1a9fd4; }
 .team-abbr-away { color: #e53935; }
@@ -546,15 +547,21 @@ function buildMatchcenterHTML(mod) {
   display: flex; flex-direction: column; align-items: center; pointer-events: none;
 }
 .p-dot {
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 38px; height: 38px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Barlow Condensed', sans-serif; font-size: 7.5px; font-weight: 800;
-  letter-spacing: 0.3px; border: 2px solid rgba(255,255,255,0.7);
+  font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 800;
+  letter-spacing: 0.3px; border: 2px solid rgba(255,255,255,0.85);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  background-size: cover; background-position: center top; background-repeat: no-repeat;
+  overflow: hidden;
 }
-.p-home .p-dot { background: #4fc3f7; color: #0d1117; }
-.p-away .p-dot { background: #ef5350; color: #fff; }
-.p-gk .p-dot   { background: #e6a800 !important; color: #0d1117 !important; border-color: rgba(255,255,255,0.9); }
+.p-home .p-dot { background-color: #4fc3f7; color: #0d1117; }
+.p-away .p-dot { background-color: #ef5350; color: #fff; }
+.p-gk .p-dot   { background-color: #e6a800 !important; color: #0d1117 !important; border-color: rgba(255,255,255,0.95); }
+.p-photo .p-dot { color: transparent; }
+.p-home.p-photo .p-dot { border-color: #4fc3f7; }
+.p-away.p-photo .p-dot { border-color: #ef5350; }
+.p-gk.p-photo .p-dot   { border-color: #e6a800 !important; }
 .p-name {
   margin-top: 2px; font-size: 13px; font-weight: 600;
   font-family: 'Barlow Condensed', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; letter-spacing: 0;
@@ -584,7 +591,7 @@ function buildMatchcenterHTML(mod) {
         <div class="score-row">
           <div class="team-info">
             <div class="team-logo">${homeLogo ? `<img src="${homeLogo}" alt="">` : `<span class="team-logo-fb">${esc(_abbr(homeTeamRaw))}</span>`}</div>
-            <div class="team-abbr team-abbr-home">${esc(_abbr(homeTeamRaw))}</div>
+            <div class="team-abbr team-abbr-home">${esc(homeTeam)}</div>
           </div>
           <div class="score-center">
             <div class="score-nums">
@@ -596,7 +603,7 @@ function buildMatchcenterHTML(mod) {
           </div>
           <div class="team-info">
             <div class="team-logo">${awayLogo ? `<img src="${awayLogo}" alt="">` : `<span class="team-logo-fb">${esc(_abbr(awayTeamRaw))}</span>`}</div>
-            <div class="team-abbr team-abbr-away">${esc(_abbr(awayTeamRaw))}</div>
+            <div class="team-abbr team-abbr-away">${esc(awayTeam)}</div>
           </div>
         </div>
         <div class="goals-row">
@@ -718,12 +725,18 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
     document.getElementById('fl-away').textContent = fa;
     [...layoutPlayers(lineups.HOME, true), ...layoutPlayers(lineups.AWAY, false)].forEach(p => {
       const div = document.createElement('div');
-      div.className = 'player ' + (p.isHome ? 'p-home' : 'p-away') + ' ' + (p.pos === 'goalkeeper' ? 'p-gk' : '');
+      const hasPhoto = !!p.photo;
+      div.className = 'player ' + (p.isHome ? 'p-home' : 'p-away')
+                    + (p.pos === 'goalkeeper' ? ' p-gk' : '')
+                    + (hasPhoto ? ' p-photo' : '');
       div.style.left = p.x + '%';
       div.style.top  = p.y + '%';
       const fz = nameFontSize(p.name);
       const nameStyle = fz ? ' style="font-size:' + fz + '"' : '';
-      div.innerHTML = '<div class="p-dot">' + posLabel(p.pos) + '</div><div class="p-name"' + nameStyle + '>' + esc(p.name) + '</div>';
+      const dotStyle  = hasPhoto ? ' style="background-image:url(' + p.photo + ')"' : '';
+      const dotText   = hasPhoto ? '' : posLabel(p.pos);
+      div.innerHTML = '<div class="p-dot"' + dotStyle + '>' + dotText + '</div>'
+                    + '<div class="p-name"' + nameStyle + '>' + esc(p.name) + '</div>';
       pitch.appendChild(div);
     });
   }

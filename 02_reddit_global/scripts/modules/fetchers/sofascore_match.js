@@ -216,18 +216,25 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
 
       // SofaScore position コード → 内部 pos 名
       const POS_MAP = { G: 'goalkeeper', D: 'defender', M: 'midfielder', F: 'forward' };
-      function _toLineup(arr) {
-        return arr
+      async function _toLineup(arr) {
+        const players = arr
           .filter(p => !p.substitute)  // 先発のみ
           .map(p => ({
+            id:      p.player?.id || null,
             name:    p.player?.name || '',
             jersey:  p.jerseyNumber || p.shirtNumber || null,
             pos:     POS_MAP[p.position] || 'midfielder',
           }))
           .filter(x => x.name);
+        // 選手顔写真を並列取得（id がある選手のみ、失敗時 null）
+        await Promise.all(players.map(async p => {
+          if (!p.id) return;
+          p.photo = await apiGetImage(`/player/${p.id}/image`).catch(() => null);
+        }));
+        return players;
       }
-      lineup.home = _toLineup(home);
-      lineup.away = _toLineup(away);
+      lineup.home = await _toLineup(home);
+      lineup.away = await _toLineup(away);
 
       const allPlayers = [
         ...home.map(p => ({ ...p, team: 'home' })),
