@@ -17,14 +17,16 @@ const PORT = 3004;
 app.use(express.json({ limit: '100mb' }));
 
 // ─── 各ステップのルート（API + UI を完全独立で管理）───────
-const { router: s1Router, getUI: s1UI } = require('./routes/step1_routes');
-const { router: s2Router, getUI: s2UI } = require('./routes/step2_routes');
-const { router: s3Router, getUI: s3UI } = require('./routes/step3_routes');
-const { router: s4Router, getUI: s4UI } = require('./routes/step4_routes');
+const { router: s1Router,  getUI: s1UI  } = require('./routes/step1_routes');
+const { router: s2Router,  getUI: s2UI  } = require('./routes/step2_routes');
+const { router: s3Router,  getUI: s3UI  } = require('./routes/step3_routes');
+const { router: s35Router, getUI: s35UI } = require('./routes/step35_routes');
+const { router: s4Router,  getUI: s4UI  } = require('./routes/step4_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
 app.use('/api', s3Router);
+app.use('/api', s35Router);
 app.use('/api', s4Router);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
@@ -334,8 +336,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 app.listen(PORT, () => {
   console.log(`[${new Date().toISOString()}] ⚽ V2 Pro RED @ http://localhost:${PORT}`);
-  console.log('  Step1: 案件選択    → routes/step1_routes.js');
-  console.log('  Step2: SI情報取得  → routes/step2_routes.js');
-  console.log('  Step3: 構成提案    → routes/step3_routes.js');
-  console.log('  Step4: シナリオ編集 → routes/step4_routes.js');
+  console.log('  Step1:   案件選択    → routes/step1_routes.js');
+  console.log('  Step2:   SI情報取得  → routes/step2_routes.js');
+  console.log('  Step3:   構成提案    → routes/step3_routes.js');
+  console.log('  Step3.5: 画像選定    → routes/step35_routes.js');
+  console.log('  Step4:   シナリオ編集 → routes/step4_routes.js');
 });

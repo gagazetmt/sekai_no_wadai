@@ -192,7 +192,108 @@ async function fetchOfficialXImagesFromQuery(query, prefix, limit = 5) {
   } catch { return []; }
 }
 
-module.exports = { fetchXImages, fetchXComments, fetchOfficialXImages, fetchOfficialXImagesFromQuery };
+// ─── Step3.5 用: エンゲージメント順で取得する共通ヘルパ ──────────────────
+// 検索 → likeCount + retweetCount で降順ソート → 画像DL
+// outDir 指定で保存先ディレクトリを切替可能（未指定なら既存 IMG_DIR）
+async function searchAndDownloadByEngagement(query, prefix, limit, opts = {}) {
+  if (!API_KEY) { console.warn("TWITTER_API_IO_KEY not set"); return []; }
+  if (!query)   return [];
+
+  const queryType = opts.queryType || "Top";
+  const outDir    = opts.outDir    || IMG_DIR;
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+  let tweets = [];
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await axios.get(BASE_URL + "/twitter/tweet/advanced_search", {
+        headers: { "X-API-Key": API_KEY },
+        params:  { query, queryType },
+        timeout: 20000,
+      });
+      tweets = res.data?.tweets || res.data?.data?.tweets || res.data?.data || [];
+      if (!Array.isArray(tweets)) tweets = [];
+      break;
+    } catch (e) {
+      if (attempt === 2) { console.warn("TwitterAPI.io error:", e.message); return []; }
+      console.warn(`TwitterAPI.io retry (${attempt}/2):`, e.message);
+    }
+  }
+
+  // エンゲージメント降順ソート（likes + retweets）
+  tweets.sort((a, b) => {
+    const engA = (a.likeCount || a.favorite_count || a.likes || 0)
+               + (a.retweetCount || a.retweet_count || a.retweets || 0);
+    const engB = (b.likeCount || b.favorite_count || b.likes || 0)
+               + (b.retweetCount || b.retweet_count || b.retweets || 0);
+    return engB - engA;
+  });
+
+  const imagePaths = [];
+  const seenUrls   = new Set();
+  for (const tweet of tweets) {
+    if (imagePaths.length >= limit) break;
+    const mediaUrls = extractMediaUrls(tweet);
+    let perTweetCount = 0;
+    for (const url of mediaUrls) {
+      if (imagePaths.length >= limit) break;
+      if (perTweetCount >= 2) break;       // バリエーション確保
+      if (seenUrls.has(url)) continue;
+      try {
+        const ext      = url.includes(".png") ? "png" : "jpg";
+        const fileName = prefix + (imagePaths.length + 1) + "." + ext;
+        const filePath = path.join(outDir, fileName);
+        await downloadImage(url, filePath);
+        imagePaths.push(filePath);
+        seenUrls.add(url);
+        perTweetCount++;
+      } catch { /* skip */ }
+    }
+  }
+  return imagePaths;
+}
+
+// ─── 名前ソート: クラブ公式 × 選手/監督名 含むツイート → いいね順 ───────────
+// 例: from:realmadrid "Bellingham" filter:images -filter:retweets
+async function fetchOfficialXImagesByName(teamName, entityName, prefix, limit = 6, opts = {}) {
+  const handle = resolveTeamHandle(teamName);
+  if (!handle || !entityName) return [];
+  // entityName をダブルクォートで包んで完全一致検索
+  const query = `from:${handle} "${entityName}" filter:images -filter:retweets`;
+  return searchAndDownloadByEngagement(query, prefix + "_byname", limit, { queryType: "Top", outDir: opts.outDir });
+}
+
+// ─── 時間ソート: クラブ公式 × 期間指定 → いいね順 ─────────────────────────
+// opts.since / opts.until は YYYY-MM-DD（未指定なら直近168h〜未来24h）
+// opts.matchKickoff (ISO) があれば前後24hに自動で絞る
+async function fetchOfficialXImagesByTime(teamName, prefix, limit = 6, opts = {}) {
+  const handle = resolveTeamHandle(teamName);
+  if (!handle) return [];
+
+  let since, until;
+  if (opts.matchKickoff) {
+    const ko    = new Date(opts.matchKickoff);
+    since = new Date(ko.getTime() - 24 * 3600 * 1000).toISOString().slice(0, 10);
+    until = new Date(ko.getTime() + 24 * 3600 * 1000).toISOString().slice(0, 10);
+  } else {
+    const now = new Date();
+    since = opts.since || new Date(now.getTime() - 168 * 3600 * 1000).toISOString().slice(0, 10);
+    until = opts.until || new Date(now.getTime() + 24 * 3600 * 1000).toISOString().slice(0, 10);
+  }
+
+  const query = `from:${handle} filter:images -filter:retweets since:${since} until:${until}`;
+  return searchAndDownloadByEngagement(query, prefix + "_bytime", limit, { queryType: "Top", outDir: opts.outDir });
+}
+
+module.exports = {
+  fetchXImages,
+  fetchXComments,
+  fetchOfficialXImages,
+  fetchOfficialXImagesFromQuery,
+  fetchOfficialXImagesByName,
+  fetchOfficialXImagesByTime,
+  resolveTeamHandle,
+};
 
 // ── CLI実行 ──
 if (require.main === module) {
