@@ -262,6 +262,8 @@ JSON のみ返す（マークダウン不要）：
         const parts = matchLabel.split(/\s+vs\s+/i).map(s => s.trim());
         m.homeTeam  = data?.homeTeam  || parts[0] || 'HOME';
         m.awayTeam  = data?.awayTeam  || parts[1] || 'AWAY';
+        m.homeLogo  = data?.homeLogo || null;     // matchcard 用
+        m.awayLogo  = data?.awayLogo || null;
         m.homeScore = data?.homeScore;
         m.awayScore = data?.awayScore;
         m.matchDate = data?.matchDate || '';

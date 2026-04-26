@@ -1,11 +1,11 @@
 // scripts/v2_video/slides/opening.js
 // オープニング：背景画像（ダーク）+ タイトルカード
 
-const { PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, _t } = require('./_common');
 
 function buildOpeningHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
-  const title = mod.title || mod.narration || 'OPENING';
+  const title = _t(mod.title || mod.narration || 'OPENING');
   const sub   = mod.narration && mod.title && mod.narration !== mod.title ? mod.narration : '';
 
   // タイトルが長い場合は 2行に自然分割（読みやすさ重視）

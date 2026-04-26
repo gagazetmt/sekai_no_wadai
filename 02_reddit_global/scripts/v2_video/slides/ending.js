@@ -1,11 +1,11 @@
 // scripts/v2_video/slides/ending.js
 // エンディング：締めメッセージ + チャンネル登録促し
 
-const { PALETTE, esc, imgDataUri, wrapHTML } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, _t } = require('./_common');
 
 function buildEndingHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
-  const title = mod.title || 'ありがとう！';
+  const title = _t(mod.title) || 'ありがとう！';
   const narr  = mod.narration || '';
 
   const extraStyles = `

@@ -2,7 +2,7 @@
 // History スライド：左ヒーロー画像 + 右タイムライン（ドット+カード）
 // テンプレート元: /history/index.html
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t } = require('./_common');
 
 function buildHistoryHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
@@ -25,7 +25,7 @@ function buildHistoryHTML(mod) {
   events = events.slice(0, 5);
 
   // タイトル・サブタイトル
-  const heroTitle   = (mod.title || '').replace(/ /g, '<br>');
+  const heroTitle   = _t(mod.title || '').replace(/ /g, '<br>');
   const heroSubject = mod.type === 'history' ? 'JOURNEY' : (mod.type || '').toUpperCase();
   const subText     = mod.narration || '';
 

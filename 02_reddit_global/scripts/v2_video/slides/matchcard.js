@@ -2,7 +2,7 @@
 // Matchcard スライド：試合プレビュー（左=メイン画像+タイトル / 右=HOME/AWAYミニ+データ行4件）
 // テンプレート元: /matchcard/index.html（= 型1）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t } = require('./_common');
 
 function buildMatchcardHTML(mod) {
   // dataSlots 4件を data-row で使う
@@ -10,12 +10,13 @@ function buildMatchcardHTML(mod) {
   while (slots.length < 4) slots.push({ label: '', value: '' });
 
   const mainImg  = imgDataUri(mod.bgImage);
-  const homeImg  = imgDataUri(mod.homeImage);
-  const awayImg  = imgDataUri(mod.awayImage);
-  const mainTitle = mod.title || 'MATCH PREVIEW';
+  // ロゴが取れていればそれ、無ければ既存 imgDataUri 経由のローカル画像
+  const homeImg  = mod.homeLogo || imgDataUri(mod.homeImage);
+  const awayImg  = mod.awayLogo || imgDataUri(mod.awayImage);
+  const mainTitle = _t(mod.title) || 'MATCH PREVIEW';
   const subText   = mod.narration || '';
-  const homeLabel = mod.homeTeam || 'HOME';
-  const awayLabel = mod.awayTeam || 'AWAY';
+  const homeLabel = _t(mod.homeTeam) || 'HOME';
+  const awayLabel = _t(mod.awayTeam) || 'AWAY';
 
   const extraStyles = `
 .slide { display: flex; background: ${PALETTE.bg}; }

@@ -2,14 +2,21 @@
 // Comparison スライド：型4 ベース（左右画像 + VS + 中央データ比較行）
 // テンプレート元: /型４/index.html
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t, _player } = require('./_common');
 
 function buildComparisonHTML(mod) {
   const leftBg  = imgDataUri(mod.leftImage)  || imgDataUri(mod.bgImage);
   const rightBg = imgDataUri(mod.rightImage);
-  const leftName  = mod.siBindingLeft  || 'PLAYER A';
-  const rightName = mod.siBindingRight || 'PLAYER B';
-  const title     = mod.title || 'COMPARISON';
+  // チーム or 選手の主役名。マップに有れば日本語、無ければ last word
+  function _entityName(raw) {
+    if (!raw) return '';
+    const ja = _t(raw);
+    if (ja !== raw) return ja;       // チーム/会場/大会のヒット
+    return _player(raw);             // 選手名 or last word fallback
+  }
+  const leftName  = _entityName(mod.siBindingLeft)  || 'PLAYER A';
+  const rightName = _entityName(mod.siBindingRight) || 'PLAYER B';
+  const title     = _t(mod.title) || 'COMPARISON';
   const narr      = mod.narration || '';
 
   // dataSlots: [{label, leftValue, rightValue}, ...]

@@ -2,15 +2,23 @@
 // Stats / Profile スライド：型3 ベース（左=画像 / 右=データカード2x2 grid）
 // テンプレート元: /型３/index.html
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t, _player } = require('./_common');
+
+// チーム or 選手 → 日本語/カタカナ
+function _entityName(raw) {
+  if (!raw) return '';
+  const ja = _t(raw);
+  if (ja !== raw) return ja;
+  return _player(raw);
+}
 
 function buildStatsHTML(mod) {
   const bg     = imgDataUri(mod.bgImage);
   const slots  = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 6);
   while (slots.length < 4) slots.push({ label: '', value: '' });
 
-  const title    = mod.title || mod.siBinding || 'STATS';
-  const subTitle = mod.siBinding || (mod.type === 'profile' ? 'PROFILE' : 'STATISTICS');
+  const title    = _t(mod.title) || _entityName(mod.siBinding) || 'STATS';
+  const subTitle = _entityName(mod.siBinding) || (mod.type === 'profile' ? 'PROFILE' : 'STATISTICS');
   const narr     = mod.narration || '';
 
   // type バッジの色（profile=紫 / stats=緑）
