@@ -192,8 +192,8 @@ async function fetchOfficialXImagesFromQuery(query, prefix, limit = 5) {
   } catch { return []; }
 }
 
-// ─── Step3.5 用: エンゲージメント順で取得する共通ヘルパ ──────────────────
-// 検索 → likeCount + retweetCount で降順ソート → 画像DL
+// ─── Step3.5 用: 検索 → ソート → 画像DL の共通ヘルパ ─────────────────
+// opts.sortBy: 'engagement' (default) | 'recency'
 // outDir 指定で保存先ディレクトリを切替可能（未指定なら既存 IMG_DIR）
 async function searchAndDownloadByEngagement(query, prefix, limit, opts = {}) {
   if (!API_KEY) { console.warn("TWITTER_API_IO_KEY not set"); return []; }
@@ -201,6 +201,7 @@ async function searchAndDownloadByEngagement(query, prefix, limit, opts = {}) {
 
   const queryType = opts.queryType || "Top";
   const outDir    = opts.outDir    || IMG_DIR;
+  const sortBy    = opts.sortBy    || "engagement";
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
   let tweets = [];
@@ -220,14 +221,24 @@ async function searchAndDownloadByEngagement(query, prefix, limit, opts = {}) {
     }
   }
 
-  // エンゲージメント降順ソート（likes + retweets）
-  tweets.sort((a, b) => {
-    const engA = (a.likeCount || a.favorite_count || a.likes || 0)
-               + (a.retweetCount || a.retweet_count || a.retweets || 0);
-    const engB = (b.likeCount || b.favorite_count || b.likes || 0)
-               + (b.retweetCount || b.retweet_count || b.retweets || 0);
-    return engB - engA;
-  });
+  // ソート
+  if (sortBy === "recency") {
+    // 新しい順
+    tweets.sort((a, b) => {
+      const tA = new Date(a.createdAt || a.created_at || 0).getTime() || 0;
+      const tB = new Date(b.createdAt || b.created_at || 0).getTime() || 0;
+      return tB - tA;
+    });
+  } else {
+    // エンゲージメント降順（likes + retweets）
+    tweets.sort((a, b) => {
+      const engA = (a.likeCount || a.favorite_count || a.likes || 0)
+                 + (a.retweetCount || a.retweet_count || a.retweets || 0);
+      const engB = (b.likeCount || b.favorite_count || b.likes || 0)
+                 + (b.retweetCount || b.retweet_count || b.retweets || 0);
+      return engB - engA;
+    });
+  }
 
   const imagePaths = [];
   const seenUrls   = new Set();
@@ -263,9 +274,9 @@ async function fetchOfficialXImagesByName(teamName, entityName, prefix, limit = 
   return searchAndDownloadByEngagement(query, prefix + "_byname", limit, { queryType: "Top", outDir: opts.outDir });
 }
 
-// ─── 時間ソート: クラブ公式 × 期間指定 → いいね順 ─────────────────────────
+// ─── 時間ソート: クラブ公式 × 期間指定 → 新しい順 ─────────────────────────
 // opts.since / opts.until は YYYY-MM-DD（未指定なら直近168h〜未来24h）
-// opts.matchKickoff (ISO) があれば前後24hに自動で絞る
+// opts.matchKickoff (ISO) があれば前後36h(=計72h窓)に自動で絞る
 async function fetchOfficialXImagesByTime(teamName, prefix, limit = 6, opts = {}) {
   const handle = resolveTeamHandle(teamName);
   if (!handle) return [];
@@ -273,8 +284,8 @@ async function fetchOfficialXImagesByTime(teamName, prefix, limit = 6, opts = {}
   let since, until;
   if (opts.matchKickoff) {
     const ko    = new Date(opts.matchKickoff);
-    since = new Date(ko.getTime() - 24 * 3600 * 1000).toISOString().slice(0, 10);
-    until = new Date(ko.getTime() + 24 * 3600 * 1000).toISOString().slice(0, 10);
+    since = new Date(ko.getTime() - 36 * 3600 * 1000).toISOString().slice(0, 10);
+    until = new Date(ko.getTime() + 36 * 3600 * 1000).toISOString().slice(0, 10);
   } else {
     const now = new Date();
     since = opts.since || new Date(now.getTime() - 168 * 3600 * 1000).toISOString().slice(0, 10);
@@ -282,7 +293,11 @@ async function fetchOfficialXImagesByTime(teamName, prefix, limit = 6, opts = {}
   }
 
   const query = `from:${handle} filter:images -filter:retweets since:${since} until:${until}`;
-  return searchAndDownloadByEngagement(query, prefix + "_bytime", limit, { queryType: "Top", outDir: opts.outDir });
+  return searchAndDownloadByEngagement(query, prefix + "_bytime", limit, {
+    queryType: "Latest",
+    sortBy:    "recency",
+    outDir:    opts.outDir,
+  });
 }
 
 module.exports = {

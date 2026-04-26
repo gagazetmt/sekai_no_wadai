@@ -226,7 +226,7 @@ router.post('/v35/fetch-images', async (req, res) => {
     // 1. X 名前ソート（player/manager のみ）
     if ((effectiveType === 'player' || effectiveType === 'manager') && teamName && entity) {
       tasks.push(
-        fetchOfficialXImagesByName(teamName, entity, '', 6, { outDir })
+        fetchOfficialXImagesByName(teamName, entity, '', 10, { outDir })
           .then(paths => ({ source: 'x_by_name', paths }))
           .catch(e => { console.warn('[x_by_name]', e.message); return { source: 'x_by_name', paths: [] }; })
       );
@@ -237,7 +237,7 @@ router.post('/v35/fetch-images', async (req, res) => {
     // 2. X 時間ソート（teamName が解決できた場合）
     if (teamName) {
       tasks.push(
-        fetchOfficialXImagesByTime(teamName, '', 6, { outDir, matchKickoff })
+        fetchOfficialXImagesByTime(teamName, '', 10, { outDir, matchKickoff })
           .then(paths => ({ source: 'x_by_time', paths }))
           .catch(e => { console.warn('[x_by_time]', e.message); return { source: 'x_by_time', paths: [] }; })
       );
@@ -248,7 +248,7 @@ router.post('/v35/fetch-images', async (req, res) => {
     // 3. match の場合は away も時間ソート
     if (teamNameAway) {
       tasks.push(
-        fetchOfficialXImagesByTime(teamNameAway, 'away', 4, { outDir, matchKickoff })
+        fetchOfficialXImagesByTime(teamNameAway, 'away', 10, { outDir, matchKickoff })
           .then(paths => ({ source: 'x_by_time_away', paths }))
           .catch(e => { console.warn('[x_by_time_away]', e.message); return { source: 'x_by_time_away', paths: [] }; })
       );
