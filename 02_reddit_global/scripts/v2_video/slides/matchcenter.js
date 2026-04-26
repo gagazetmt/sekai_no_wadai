@@ -336,6 +336,8 @@ function buildMatchcenterHTML(mod) {
   const awayTeamRaw = md.awayTeam  || mod.awayTeam  || 'AWAY';
   const homeTeam  = _t(homeTeamRaw);
   const awayTeam  = _t(awayTeamRaw);
+  const homeLogo  = md.homeLogo || null;
+  const awayLogo  = md.awayLogo || null;
   const homeScore = md.homeScore ?? mod.homeScore ?? 0;
   const awayScore = md.awayScore ?? mod.awayScore ?? 0;
   const tournament = _t(md.tournament || mod.title || 'MATCH');
@@ -452,14 +454,33 @@ function buildMatchcenterHTML(mod) {
 }
 .score-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .team-info { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
-.team-label {
+.team-logo {
+  width: 70px; height: 70px;
+  display: flex; align-items: center; justify-content: center;
+}
+.team-logo img {
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain;
+  display: block;
+}
+.team-logo-fb {
   font-family: 'Barlow Condensed', sans-serif;
-  font-size: 56px; font-weight: 900;
-  letter-spacing: 4px; text-align: center; line-height: 1;
+  font-size: 22px; font-weight: 900;
+  letter-spacing: 1px;
+  width: 70px; height: 70px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.15);
+  color: #111;
+}
+.team-abbr {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 24px; font-weight: 800;
+  letter-spacing: 2px; text-align: center; line-height: 1;
   width: 100%;
 }
-.team-label-home { color: #1a9fd4; }
-.team-label-away { color: #e53935; }
+.team-abbr-home { color: #1a9fd4; }
+.team-abbr-away { color: #e53935; }
 .score-center { text-align: center; min-width: 160px; }
 .score-nums {
   font-family: 'Barlow Condensed', sans-serif; font-size: 72px; font-weight: 900;
@@ -535,10 +556,10 @@ function buildMatchcenterHTML(mod) {
 .p-away .p-dot { background: #ef5350; color: #fff; }
 .p-gk .p-dot   { background: #e6a800 !important; color: #0d1117 !important; border-color: rgba(255,255,255,0.9); }
 .p-name {
-  margin-top: 2px; font-size: 12px; font-weight: 600;
+  margin-top: 2px; font-size: 13px; font-weight: 600;
   font-family: 'Barlow Condensed', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; letter-spacing: 0;
   color: #fff; background: rgba(0,0,0,0.65); padding: 1px 4px; border-radius: 2px;
-  white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
 }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .score-block  { animation: fadeUp 0.5s ease both; }
@@ -562,7 +583,8 @@ function buildMatchcenterHTML(mod) {
       <div class="score-block">
         <div class="score-row">
           <div class="team-info">
-            <div class="team-label team-label-home" id="team-home">${esc(_abbr(homeTeamRaw))}</div>
+            <div class="team-logo">${homeLogo ? `<img src="${homeLogo}" alt="">` : `<span class="team-logo-fb">${esc(_abbr(homeTeamRaw))}</span>`}</div>
+            <div class="team-abbr team-abbr-home">${esc(_abbr(homeTeamRaw))}</div>
           </div>
           <div class="score-center">
             <div class="score-nums">
@@ -573,7 +595,8 @@ function buildMatchcenterHTML(mod) {
             <div class="score-time" id="score-time">${esc(scoreTime)}</div>
           </div>
           <div class="team-info">
-            <div class="team-label team-label-away" id="team-away">${esc(_abbr(awayTeamRaw))}</div>
+            <div class="team-logo">${awayLogo ? `<img src="${awayLogo}" alt="">` : `<span class="team-logo-fb">${esc(_abbr(awayTeamRaw))}</span>`}</div>
+            <div class="team-abbr team-abbr-away">${esc(_abbr(awayTeamRaw))}</div>
           </div>
         </div>
         <div class="goals-row">
@@ -677,6 +700,16 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
   }
   function posLabel(pos) { return ({ goalkeeper:'GK', defender:'DF', midfielder:'MF', forward:'FW' })[pos] || ''; }
 
+  // 選手名 文字数 → フォントサイズ調整（8文字以下デフォルト、長いほど縮小）
+  function nameFontSize(name) {
+    const len = String(name || '').length;
+    if (len <= 8)  return null;     // デフォルト 13px
+    if (len <= 10) return '12px';
+    if (len <= 12) return '11px';
+    if (len <= 14) return '10px';
+    return '9px';
+  }
+
   function renderPitch() {
     const pitch = document.getElementById('pitch');
     const fh = detectFormation(lineups.HOME);
@@ -688,7 +721,9 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
       div.className = 'player ' + (p.isHome ? 'p-home' : 'p-away') + ' ' + (p.pos === 'goalkeeper' ? 'p-gk' : '');
       div.style.left = p.x + '%';
       div.style.top  = p.y + '%';
-      div.innerHTML = '<div class="p-dot">' + posLabel(p.pos) + '</div><div class="p-name">' + esc(p.name) + '</div>';
+      const fz = nameFontSize(p.name);
+      const nameStyle = fz ? ' style="font-size:' + fz + '"' : '';
+      div.innerHTML = '<div class="p-dot">' + posLabel(p.pos) + '</div><div class="p-name"' + nameStyle + '>' + esc(p.name) + '</div>';
       pitch.appendChild(div);
     });
   }

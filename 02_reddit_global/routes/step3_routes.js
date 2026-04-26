@@ -273,6 +273,8 @@ JSON のみ返す（マークダウン不要）：
             awayTeam:   data.awayTeam,
             homeScore:  data.homeScore,
             awayScore:  data.awayScore,
+            homeLogo:   data.homeLogo || null,
+            awayLogo:   data.awayLogo || null,
             tournament: data.tournament,
             matchDate:  data.matchDate,
             venue:      data.venue,

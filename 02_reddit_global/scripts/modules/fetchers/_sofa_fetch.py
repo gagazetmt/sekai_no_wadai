@@ -43,6 +43,7 @@ def main():
     headers     = {**DEFAULT_HEADERS, **(req.get("headers") or {})}
     timeout     = req.get("timeout", 20)
     impersonate = req.get("impersonate", "chrome131")
+    binary      = bool(req.get("binary", False))
 
     if not url:
         print(json.dumps({"ok": False, "error": "url required"}))
@@ -58,11 +59,20 @@ def main():
 
     try:
         r = requests.get(url, **kwargs)
-        print(json.dumps({
-            "ok":     True,
-            "status": r.status_code,
-            "body":   r.text,
-        }, ensure_ascii=False))
+        if binary:
+            import base64
+            print(json.dumps({
+                "ok":     True,
+                "status": r.status_code,
+                "body":   base64.b64encode(r.content).decode("ascii"),
+                "binary": True,
+            }))
+        else:
+            print(json.dumps({
+                "ok":     True,
+                "status": r.status_code,
+                "body":   r.text,
+            }, ensure_ascii=False))
     except Exception as e:
         print(json.dumps({"ok": False, "error": str(e)[:300]}))
 

@@ -37,14 +37,16 @@ function _pickProxy() {
 
 /**
  * Python subprocess で HTTP リクエストして JSON 応答を返す
+ *   options.binary=true なら body は base64 文字列（画像取得用）
  */
-function _callPython(urlPath) {
+function _callPython(urlPath, options = {}) {
   return new Promise((resolve, reject) => {
     const payload = {
       url:         `${BASE_URL}${urlPath}`,
       proxy:       _pickProxy(),
       timeout:     REQ_TIMEOUT_S,
       impersonate: 'chrome131',
+      binary:      !!options.binary,
     };
     const proc = spawn('python3', [PY_SCRIPT]);
     let stdout = '';
@@ -151,4 +153,40 @@ async function apiGetLight(endpoint) {
   throw _httpErr(res.status, res.body);
 }
 
-module.exports = { apiGet, apiGetLight, BASE_URL };
+// 画像取得（バイナリ）→ data URI 文字列を返す。失敗時は null
+async function apiGetImage(endpoint) {
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    await _waitRateLimit();
+    if (attempt > 1) await _sleep(800 * attempt);
+    let res;
+    try { res = await _callPython(endpoint, { binary: true }); }
+    catch (e) {
+      _lastCallTs = Date.now();
+      if (attempt < MAX_ATTEMPTS) continue;
+      return null;
+    }
+    _lastCallTs = Date.now();
+    if (!res.ok) {
+      if (_isProxyError(res.error) && attempt < MAX_ATTEMPTS) continue;
+      return null;
+    }
+    if (res.status === 200 && res.body) {
+      // SofaScore のチームロゴは PNG だが、念のため magic check
+      const sniff = Buffer.from(res.body, 'base64').slice(0, 8).toString('hex');
+      const mime  = sniff.startsWith('89504e47') ? 'image/png'
+                  : sniff.startsWith('ffd8ff')   ? 'image/jpeg'
+                  : sniff.startsWith('47494638') ? 'image/gif'
+                  : 'image/png';
+      return `data:${mime};base64,${res.body}`;
+    }
+    if ((res.status === 403 || res.status === 429) && attempt < MAX_ATTEMPTS) {
+      await _sleep(RETRY_WAIT_MS);
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
+
+module.exports = { apiGet, apiGetLight, apiGetImage, BASE_URL };

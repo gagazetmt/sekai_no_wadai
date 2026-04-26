@@ -7,7 +7,7 @@
 //  ⑤ /event/{id}/lineups       → 選手個人スタッツ・ラインアップ
 //  ⑥ /team/{homeId}/events/last/0 → H2H直近5試合（オプション、homeId/awayIdが取れたら）
 
-const { apiGet } = require('./_sofa_common');
+const { apiGet, apiGetImage } = require('./_sofa_common');
 
 // チーム名 → teamId を1件取得
 async function _findTeamId(teamName) {
@@ -307,6 +307,12 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       } catch (_) {}
     }
 
+    // ⑦ チームロゴ取得（matchcenter で表示）── 並列、失敗時 null
+    const [homeLogo, awayLogo] = await Promise.all([
+      homeTeamId ? apiGetImage(`/team/${homeTeamId}/image`) : Promise.resolve(null),
+      awayTeamId ? apiGetImage(`/team/${awayTeamId}/image`) : Promise.resolve(null),
+    ]);
+
     const scoreline = awayScore != null
       ? `${homeTeamName} ${homeScore ?? '?'} - ${awayScore} ${awayTeamName}`
       : `${homeTeamName} ${homeScore ?? '?'} ${awayTeamName}`;
@@ -318,6 +324,8 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       awayTeam:  awayTeamName,
       homeTeamId,
       awayTeamId,
+      homeLogo,
+      awayLogo,
       homeScore: homeScore ?? null,
       awayScore: awayScore ?? null,
       matchDate,
