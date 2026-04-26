@@ -228,7 +228,7 @@ function getUI() {
 (function() {
   'use strict';
   window.APP = window.APP || {};
-  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null };
+  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {} };
 
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
@@ -245,6 +245,11 @@ function getUI() {
       window.APP.s4.modules = j.modules || [];
       window.APP.modules    = window.APP.s4.modules;
     } catch (_) { window.APP.s4.modules = []; }
+    /* Step 3.5 で選択した画像も読み込む */
+    try {
+      const s = await fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(post.id));
+      window.APP.s4.imageSelections = s.selections || {};
+    } catch (_) { window.APP.s4.imageSelections = {}; }
     _renderTabs();
     _renderEditor();
     _reloadPreview();
@@ -324,6 +329,25 @@ function getUI() {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
 
+    /* Step 3.5 で選択した画像のギャラリー */
+    let galleryHtml = '';
+    const selectedImgs = (window.APP.s4.imageSelections || {})[String(i)] || [];
+    if (selectedImgs.length) {
+      galleryHtml = ''
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ Step3.5 で選択した画像 (' + selectedImgs.length + '枚)</div>'
+        + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;">'
+        + selectedImgs.map(function(p) {
+            return '<div style="position:relative;width:96px;height:72px;border:1px solid #2a3050;border-radius:3px;overflow:hidden;background:#000;">'
+              + '<img src="' + _esc(p) + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">'
+              + '</div>';
+          }).join('')
+        + '</div>';
+    } else {
+      galleryHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
+        + '🖼️ Step 3.5 でこのカードの画像が選択されていません'
+        + '</div>';
+    }
+
     el.innerHTML = ''
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">'
       + '<div style="display:flex;align-items:center;gap:6px;">'
@@ -341,6 +365,7 @@ function getUI() {
       + '<pre style="background:#0d1220;padding:6px 8px;border-radius:4px;font-size:10px;color:#94a3b8;margin-bottom:10px;max-height:60px;overflow-y:auto;">' + _esc(m.scriptDir||'(なし)') + '</pre>'
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">narration</div>'
       + '<textarea class="inp" id="s4Narr' + i + '" oninput="s4OnInput()" style="display:block;width:100%;font-size:12px;padding:6px 8px;min-height:120px;resize:vertical;">' + _esc(m.narration||'') + '</textarea>'
+      + galleryHtml
       + dataHtml
       + extraHtml;
   }
