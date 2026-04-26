@@ -208,7 +208,9 @@ function getUI() {
     <div>
       <div class="panel" style="padding:10px;">
         <div style="font-size:11px;color:#8a9aba;font-weight:bold;margin-bottom:6px;">🖼️ プレビュー（1920×1080 縮小表示）</div>
-        <iframe id="s4PreviewFrame" style="width:100%;height:380px;border:1px solid #1a2540;border-radius:6px;background:#000;"></iframe>
+        <div id="s4PreviewWrap" style="position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:1px solid #1a2540;border-radius:6px;background:#000;">
+          <iframe id="s4PreviewFrame" scrolling="no" style="position:absolute;top:0;left:0;width:1920px;height:1080px;border:0;transform-origin:top left;"></iframe>
+        </div>
       </div>
       <div class="panel" style="margin-top:12px;">
         <div style="font-size:11px;color:#8a9aba;font-weight:bold;margin-bottom:6px;">📦 生成済み動画</div>
@@ -474,13 +476,29 @@ function getUI() {
     _msg('✅ 保存しました');
   });
 
+  /* ── プレビュー縮小スケール再計算 ── */
+  function _resizePreview() {
+    const wrap  = document.getElementById('s4PreviewWrap');
+    const frame = document.getElementById('s4PreviewFrame');
+    if (!wrap || !frame) return;
+    const w = wrap.clientWidth || 1;
+    frame.style.transform = 'scale(' + (w / 1920) + ')';
+  }
+  if (!window.APP.s4._resizeBound) {
+    window.addEventListener('resize', _resizePreview);
+    window.APP.s4._resizeBound = true;
+  }
+
   /* ── プレビュー再読み込み ── */
   function _reloadPreview() {
     const post = window.APP.selected;
     if (!post?.id) return;
     const i = window.APP.s4.activeTab;
     const url = '/api/v2/preview-slide?postId=' + encodeURIComponent(post.id) + '&idx=' + i + '&_=' + Date.now();
-    document.getElementById('s4PreviewFrame').src = url;
+    const f = document.getElementById('s4PreviewFrame');
+    f.onload = _resizePreview;
+    f.src = url;
+    _resizePreview();
   }
 
   /* ── 動画一覧読み込み ── */

@@ -128,7 +128,8 @@ router.post('/v3/generate-scenario', async (req, res) => {
 
     // ── outline ブロック化 ──
     const outlineLines = mods.map((m, i) => {
-      const tags = `main="${m.mainKey}"` + (m.subSource ? ` sub="${m.subSource}:${m.subValue}"` : '');
+      let tags = `main="${m.mainKey}"` + (m.subSource ? ` sub="${m.subSource}:${m.subValue}"` : '');
+      if (m.secondary) tags += ` secondary="${m.secondary}"`;
       return `${i+1}. type=${m.type} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
     }).join('\n');
 
@@ -177,7 +178,9 @@ ${outlineLines}
 - mainKey="match:<...>" のカードは [match 一覧] を使う
 - 一次情報だけで完結しない場合も、保有情報を解析して受け渡す。例: 選手の各チームへの移籍年とゴール数 → wiki.extract や sofa から抽出して並べる
 - subValue が "history" → dataSlots は {label:年, value:出来事} の時系列
-- subValue が "compare" → dataSlots は左右比較形式
+- subValue が "compare" → dataSlots は左右比較形式 [{label,leftValue,rightValue}]
+  - mainKey="entity:<X>" + secondary="<Y>" の場合：**leftValue=Xの値 / rightValue=Yの値**
+  - 両者の wiki + sofa を [entity 一覧] から参照し、同じ指標を左右で揃えること
 - subValue が "season" / "match" / "profile" → dataSlots は {label, value} の現在系
 - subValue が "titles" → dataSlots は獲得トロフィー一覧
 
@@ -243,6 +246,11 @@ JSON のみ返す（マークダウン不要）：
     //          homeTeam / awayTeam / matchData を自動注入 ──
     merged.forEach(m => {
       if (!m.mainKey) return;
+      // entity 系の comparison: siBindingLeft/Right を primary/secondary から
+      if (m.type === 'comparison' && m.mainKey.startsWith('entity:') && m.secondary) {
+        m.siBindingLeft  = m.mainKey.slice(7);
+        m.siBindingRight = m.secondary;
+      }
       // mainKey="match:<label>" → matchを引く
       if (m.mainKey.startsWith('match:')) {
         const matchLabel = m.mainKey.slice(6);
@@ -350,9 +358,9 @@ function getUI() {
       // 空ならデフォルト3行 (opening / 1空行 / ending)
       if (!window.APP.s3.modules.length) {
         window.APP.s3.modules = [
-          { mainKey: 'opening',  subSource: null, subValue: null, type: 'opening', scriptDir: '' },
-          { mainKey: '',         subSource: null, subValue: null, type: '',        scriptDir: '' },
-          { mainKey: 'ending',   subSource: null, subValue: null, type: 'ending',  scriptDir: '' },
+          { mainKey: 'opening',  subSource: null, subValue: null, secondary: null, type: 'opening', scriptDir: '' },
+          { mainKey: '',         subSource: null, subValue: null, secondary: null, type: '',        scriptDir: '' },
+          { mainKey: 'ending',   subSource: null, subValue: null, secondary: null, type: 'ending',  scriptDir: '' },
         ];
       }
     } catch (e) {
@@ -374,13 +382,18 @@ function getUI() {
 
     // 各行 HTML
     el.innerHTML = mods.map(function(m, idx) {
-      const mainOpts = _buildMainOptions(m.mainKey);
-      const subOpts  = _buildSubOptions(m.mainKey, m.subSource, m.subValue);
+      const mainOpts   = _buildMainOptions(m.mainKey);
+      const subOpts    = _buildSubOptions(m.mainKey, m.subSource, m.subValue);
+      const showSec    = _needsSecondary(m);
+      const secCol     = showSec
+        ? '<select class="inp s3-secondary" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnSecondaryChange(' + idx + ')">' + _buildSecondaryOptions(m.mainKey, m.secondary || '') + '</select>'
+        : '<span style="font-size:10px;color:#3a4560;align-self:center;text-align:center;">—</span>';
       return ''
-        + '<div class="s3-row" data-idx="' + idx + '" style="display:grid;grid-template-columns:30px 200px 200px 1fr 28px 28px 28px;gap:6px;align-items:start;margin-bottom:6px;padding:8px;background:#0d1220;border-radius:6px;">'
+        + '<div class="s3-row" data-idx="' + idx + '" style="display:grid;grid-template-columns:30px 200px 200px 180px 1fr 28px 28px 28px;gap:6px;align-items:start;margin-bottom:6px;padding:8px;background:#0d1220;border-radius:6px;">'
         + '<span style="font-size:10px;color:#8a9aba;text-align:center;padding-top:8px;">#' + (idx+1) + '</span>'
         + '<select class="inp s3-main" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnMainChange(' + idx + ')">' + mainOpts + '</select>'
         + '<select class="inp s3-sub"  data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnSubChange(' + idx + ')">' + subOpts + '</select>'
+        + secCol
         + '<textarea class="inp s3-script" data-idx="' + idx + '" placeholder="脚本指示（このスライドで何を伝えるか具体的に）"'
         + ' style="font-size:11px;padding:5px 8px;min-height:54px;resize:vertical;" oninput="s3OnScriptInput(' + idx + ')">' + _esc(m.scriptDir||'') + '</textarea>'
         + '<button class="btn btn-sm" onclick="s3MoveRow(' + idx + ',-1)" style="background:#475569;color:#fff;padding:4px 6px;font-size:11px;height:fit-content;">↑</button>'
@@ -388,6 +401,22 @@ function getUI() {
         + '<button class="btn btn-sm" onclick="s3RemoveRow(' + idx + ')"  style="background:#ef4444;color:#fff;padding:4px 6px;font-size:11px;height:fit-content;">×</button>'
         + '</div>';
     }).join('');
+  }
+
+  /* secondary 表示判定: comparison型 かつ entity 主タグ */
+  function _needsSecondary(m) {
+    return m && m.type === 'comparison' && typeof m.mainKey === 'string' && m.mainKey.startsWith('entity:');
+  }
+
+  function _buildSecondaryOptions(mainKey, currentLabel) {
+    const tags = window.APP.s3.mainTags || [];
+    const cands = tags.filter(function(t) { return t.kind === 'entity' && t.key !== mainKey; });
+    const opts = ['<option value="">-- 比較対象 --</option>'];
+    cands.forEach(function(t) {
+      const v = t.key.slice(7);  // 'entity:' を剥がす
+      opts.push('<option value="' + _esc(v) + '"' + (v === currentLabel ? ' selected' : '') + '>' + _esc(t.label) + '</option>');
+    });
+    return opts.join('');
   }
 
   function _buildMainOptions(currentKey) {
@@ -433,9 +462,10 @@ function getUI() {
     _collectInputs();
     const m = window.APP.s3.modules[idx];
     const sel = document.querySelectorAll('.s3-main')[idx];
-    m.mainKey = sel.value;
+    m.mainKey   = sel.value;
     m.subSource = null;
     m.subValue  = null;
+    m.secondary = null;
     m.type      = '';  // サブ選択で決まる
     // 固定タグなら type 直接決定
     const t = (window.APP.s3.mainTags || []).find(x => x.key === m.mainKey);
@@ -460,7 +490,17 @@ function getUI() {
     } else {
       m.subSource = null;
       m.subValue  = null;
+      m.type      = '';
     }
+    // comparison以外になったらsecondaryクリア
+    if (m.type !== 'comparison') m.secondary = null;
+    _renderOutline();
+  };
+  window.s3OnSecondaryChange = function(idx) {
+    _collectInputs();
+    const m = window.APP.s3.modules[idx];
+    const sel = document.querySelector('.s3-secondary[data-idx="' + idx + '"]');
+    if (sel) m.secondary = sel.value || null;
   };
   window.s3OnScriptInput = function(idx) {
     const m = window.APP.s3.modules[idx];
@@ -491,7 +531,7 @@ function getUI() {
   /* ── 行追加 ── */
   document.getElementById('s3BtnAddRow').addEventListener('click', function() {
     _collectInputs();
-    window.APP.s3.modules.push({ mainKey: '', subSource: null, subValue: null, type: '', scriptDir: '' });
+    window.APP.s3.modules.push({ mainKey: '', subSource: null, subValue: null, secondary: null, type: '', scriptDir: '' });
     _renderOutline();
   });
 
