@@ -699,7 +699,7 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
       const line = players.filter(p => p.pos === pos);
       line.forEach((pl, i) => {
         const n = line.length;
-        const x = n === 1 ? 50 : 18 + (64 / (n - 1)) * i;
+        const x = n === 1 ? 50 : 10 + (80 / (n - 1)) * i;
         result.push(Object.assign({}, pl, { x: x, y: yLines[li], isHome: isHome }));
       });
     });
