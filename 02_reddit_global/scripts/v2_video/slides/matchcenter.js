@@ -628,7 +628,7 @@ function buildMatchcenterHTML(mod) {
       <div class="pitch-outer">
         <div style="display:flex;flex-direction:column;align-items:flex-start;height:100%;justify-content:center;gap:4px;width:100%;">
           <div class="pitch" id="pitch">
-            <svg class="pitch-svg" viewBox="0 0 100 154" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <svg class="pitch-svg" viewBox="14 0 72 154" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="14" y="2"  width="72" height="150" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
               <line x1="14" y1="77" x2="86" y2="77" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
               <circle cx="50" cy="77" r="11.5" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
