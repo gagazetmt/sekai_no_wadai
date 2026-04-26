@@ -422,7 +422,7 @@ function buildMatchcenterHTML(mod) {
 .wrapper * { box-sizing: border-box; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .main {
-  flex: 1; display: grid; grid-template-columns: 1fr 1fr;
+  flex: 1; display: grid; grid-template-columns: 9fr 11fr;
   overflow: hidden; padding: 6px 16px 8px 16px; gap: 16px; align-items: stretch;
 }
 .left-col {
@@ -475,7 +475,7 @@ function buildMatchcenterHTML(mod) {
 }
 .team-abbr {
   font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
-  font-size: 16px; font-weight: 700;
+  font-size: 13px; font-weight: 700;
   letter-spacing: 0; text-align: center; line-height: 1.2;
   width: 100%; padding: 0 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -532,7 +532,7 @@ function buildMatchcenterHTML(mod) {
   position: relative;
   height: calc(640px - 8px);
   max-height: calc(640px - 8px);
-  width: auto; aspect-ratio: 95 / 100;
+  width: auto; aspect-ratio: 105 / 100;
   background: #1a4a1e; border-radius: 6px; overflow: hidden;
   box-shadow: 0 4px 32px rgba(0,0,0,0.6);
 }
@@ -547,7 +547,7 @@ function buildMatchcenterHTML(mod) {
   display: flex; flex-direction: column; align-items: center; pointer-events: none;
 }
 .p-dot {
-  width: 38px; height: 38px; border-radius: 50%;
+  width: 45px; height: 45px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 800;
   letter-spacing: 0.3px; border: 2px solid rgba(255,255,255,0.85);
