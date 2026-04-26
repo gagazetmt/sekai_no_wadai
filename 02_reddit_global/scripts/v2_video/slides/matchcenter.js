@@ -351,7 +351,7 @@ function buildMatchcenterHTML(mod) {
 .wrapper * { box-sizing: border-box; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .main {
-  flex: 1; display: grid; grid-template-columns: 1fr 1.4fr;
+  flex: 1; display: grid; grid-template-columns: 1fr 1fr;
   overflow: hidden; padding: 6px 16px 8px 16px; gap: 16px; align-items: stretch;
 }
 .left-col {
