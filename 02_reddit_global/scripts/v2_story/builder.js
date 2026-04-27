@@ -51,6 +51,8 @@ function buildMatchData(matchEntity) {
     goals:      Array.isArray(matchEntity.goals) ? matchEntity.goals : [],
     stats:      flatStats,
     topPlayers: Array.isArray(matchEntity.topPlayers) ? matchEntity.topPlayers : [],
+    lineup:     matchEntity.lineup     || { home: [], away: [] },
+    formations: matchEntity.formations || { home: null, away: null },
   };
 }
 

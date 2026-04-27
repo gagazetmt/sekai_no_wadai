@@ -115,8 +115,9 @@ function buildMatchcardHTML(mod) {
         goals: awayGoals, reds: awayReds, subs: awaySubs,
       },
     },
-    lineups:   { HOME: homeLineup, AWAY: awayLineup },
-    statsData: finalStats,
+    lineups:    { HOME: homeLineup, AWAY: awayLineup },
+    formations: { HOME: md.formations?.home || null, AWAY: md.formations?.away || null },
+    statsData:  finalStats,
   });
 
   // ── 1280×640 wrapper を 1.5x スケールで 1920×960 にフィット
@@ -371,9 +372,10 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
 <script>
 (function() {
   const PAYLOAD = ${dataPayload};
-  const matchData = PAYLOAD.matchData;
-  const lineups   = PAYLOAD.lineups;
-  const statsData = PAYLOAD.statsData;
+  const matchData  = PAYLOAD.matchData;
+  const lineups    = PAYLOAD.lineups;
+  const formations = PAYLOAD.formations || {};
+  const statsData  = PAYLOAD.statsData;
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -408,17 +410,56 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
     return def + '-' + mid + '-' + fwd;
   }
 
-  function layoutPlayers(players, isHome) {
-    const order = ['goalkeeper','defender','midfielder','forward'];
-    const yLines = isHome ? [6,17,30,42] : [94,83,70,58];
-    const result = [];
-    order.forEach((pos, li) => {
-      const line = players.filter(p => p.pos === pos);
-      line.forEach((pl, i) => {
-        const n = line.length;
-        const x = n === 1 ? 50 : 10 + (80 / (n - 1)) * i;
-        result.push(Object.assign({}, pl, { x: x, y: yLines[li], isHome: isHome }));
+  // "4-2-3-1" → [4,2,3,1]。合計10にならない/不正なら null（呼び出し側がフォールバック）
+  function parseFormation(s) {
+    if (!s || typeof s !== 'string') return null;
+    const parts = s.split('-').map(n => parseInt(n, 10)).filter(n => n > 0);
+    const sum = parts.reduce((a,b) => a+b, 0);
+    if (parts.length < 2 || sum !== 10) return null;
+    return parts;
+  }
+  function distributeY(n, start, end) {
+    if (n <= 1) return [start];
+    const step = (end - start) / (n - 1);
+    return Array.from({ length: n }, (_, i) => start + step * i);
+  }
+
+  function layoutPlayers(players, formation, isHome) {
+    const yStart = isHome ? 6  : 94;
+    const yEnd   = isHome ? 42 : 58;
+    const bands  = parseFormation(formation);
+
+    // フォールバック：formation 不明 → 旧 G/D/M/F 4ライン方式
+    if (!bands) {
+      const order = ['goalkeeper','defender','midfielder','forward'];
+      const yLines = isHome ? [6,17,30,42] : [94,83,70,58];
+      const result = [];
+      order.forEach((pos, li) => {
+        const line = players.filter(p => p.pos === pos);
+        line.forEach((pl, i) => {
+          const n = line.length;
+          const x = n === 1 ? 50 : 10 + (80 / (n - 1)) * i;
+          result.push(Object.assign({}, pl, { x, y: yLines[li], isHome }));
+        });
       });
+      return result;
+    }
+
+    // formation バンド分割：GK + bands.length バンド
+    // SofaScore lineup 配列は slot 1〜11 の順なので、頭から順にバンドへ詰める
+    const yLines = distributeY(bands.length + 1, yStart, yEnd);
+    const result = [];
+    if (players[0]) {
+      result.push(Object.assign({}, players[0], { x: 50, y: yLines[0], isHome }));
+    }
+    let cursor = 1;
+    bands.forEach((count, bandIdx) => {
+      for (let i = 0; i < count; i++) {
+        const pl = players[cursor++];
+        if (!pl) continue;
+        const x = count === 1 ? 50 : 10 + (80 / (count - 1)) * i;
+        result.push(Object.assign({}, pl, { x, y: yLines[bandIdx + 1], isHome }));
+      }
     });
     return result;
   }
@@ -436,11 +477,12 @@ ${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
 
   function renderPitch() {
     const pitch = document.getElementById('pitch');
-    const fh = detectFormation(lineups.HOME);
-    const fa = detectFormation(lineups.AWAY);
+    // SofaScore の formation 文字列を優先（"4-2-3-1" 等のバンド情報を保持）
+    const fh = formations.HOME || detectFormation(lineups.HOME);
+    const fa = formations.AWAY || detectFormation(lineups.AWAY);
     document.getElementById('fl-home').textContent = fh;
     document.getElementById('fl-away').textContent = fa;
-    [...layoutPlayers(lineups.HOME, true), ...layoutPlayers(lineups.AWAY, false)].forEach(p => {
+    [...layoutPlayers(lineups.HOME, fh, true), ...layoutPlayers(lineups.AWAY, fa, false)].forEach(p => {
       const div = document.createElement('div');
       const hasPhoto = !!p.photo;
       div.className = 'player ' + (p.isHome ? 'p-home' : 'p-away')
