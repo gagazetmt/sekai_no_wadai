@@ -36,6 +36,130 @@ router.get('/v2/modules', (req, res) => {
   res.json(safeJson(modulesPath(postId), { modules: [] }));
 });
 
+// ─── /v2/recipe-slots : binding 経由で comparison カードの全 availableSlots を実値評価 ─
+// Input:  ?postId=...&moduleIdx=N
+// Output: { ok, subject, aspect, primary, secondary,
+//           selected: [...keys],
+//           categories: [{ name, slots: [{key, label, leftValue, rightValue, priority}] }] }
+router.get('/v2/recipe-slots', (req, res) => {
+  try {
+    const { getRecipe, findEntity, buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+    const postId    = req.query.postId;
+    const moduleIdx = parseInt(req.query.moduleIdx, 10);
+    if (!postId || Number.isNaN(moduleIdx)) {
+      return res.status(400).json({ error: 'postId + moduleIdx required' });
+    }
+    const modulesData = safeJson(modulesPath(postId), { modules: [] });
+    const mod = (modulesData.modules || [])[moduleIdx];
+    if (!mod) return res.status(404).json({ error: 'module not found' });
+
+    // binding が無ければ legacy → siBindingLeft/Right + type=comparison から推測
+    let binding = mod.binding;
+    if (!binding && mod.type === 'comparison' && mod.siBindingLeft && mod.siBindingRight) {
+      const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+      const items = si.boxes?.entity?.items || [];
+      const findRole = (label) => items.find(it => it.label === label)?.role || null;
+      const r1 = findRole(mod.siBindingLeft);
+      const r2 = findRole(mod.siBindingRight);
+      let subject, aspect;
+      if (r1 === 'player'  && r2 === 'player')  { subject = 'player';  aspect = 'compareCareerStats'; }
+      else if (r1 === 'team'    && r2 === 'team')    { subject = 'team';    aspect = 'compareSeasonStats'; }
+      else if (r1 === 'manager' && r2 === 'manager') { subject = 'manager'; aspect = 'compareCareer'; }
+      if (subject) binding = { subject, aspect, primary: mod.siBindingLeft, secondary: mod.siBindingRight };
+    }
+    if (!binding?.subject || !binding?.aspect) {
+      return res.json({ ok: false, error: 'comparison binding が解決できませんでした' });
+    }
+
+    const recipe = getRecipe(binding.subject, binding.aspect);
+    if (!recipe?.availableSlots?.length) {
+      return res.json({ ok: false, error: `recipe "${binding.subject}.${binding.aspect}" が無効` });
+    }
+
+    const si = safeJson(siPath(postId), { boxes: {} });
+    const primaryData   = findEntity(si, binding.subject, binding.primary);
+    const secondaryData = binding.secondary ? findEntity(si, binding.subject, binding.secondary) : null;
+
+    // 全 availableSlots を評価して category 別にグループ化
+    const groups = {};
+    recipe.availableSlots.forEach(slot => {
+      const cat = slot.category || 'その他';
+      if (!groups[cat]) groups[cat] = [];
+      const leftValue  = primaryData   ? String(slot.extract(primaryData,   {}) ?? '-') : '-';
+      const rightValue = secondaryData ? String(slot.extract(secondaryData, {}) ?? '-') : '-';
+      groups[cat].push({
+        key:      slot.key,
+        label:    slot.label,
+        priority: slot.priority || 0,
+        leftValue, rightValue,
+      });
+    });
+
+    // category 内で priority降順
+    Object.values(groups).forEach(arr => arr.sort((a, b) => (b.priority || 0) - (a.priority || 0)));
+    // category 自体は最大 priority 降順
+    const categories = Object.entries(groups)
+      .map(([name, slots]) => ({ name, slots, maxPriority: Math.max(...slots.map(s => s.priority || 0)) }))
+      .sort((a, b) => b.maxPriority - a.maxPriority)
+      .map(({ name, slots }) => ({ name, slots }));
+
+    // 現在 dataSlots に入ってる key を集計
+    const selected = (mod.dataSlots || [])
+      .map(s => s.slotKey)
+      .filter(Boolean);
+
+    res.json({
+      ok: true,
+      subject:   binding.subject,
+      aspect:    binding.aspect,
+      primary:   binding.primary,
+      secondary: binding.secondary,
+      defaultSelection: recipe.defaultSelection || [],
+      selected,
+      categories,
+    });
+  } catch (e) {
+    console.error('[v2/recipe-slots]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── /v2/apply-slot-keys : binding ベースでスロット選択を更新 ─
+// Input:  { postId, moduleIdx, customSlotKeys: ['k1', ...] }
+// Output: { ok, dataSlots }  ← 永続化も実施
+router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
+  try {
+    const { getRecipe, findEntity, buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+    const { postId, moduleIdx, customSlotKeys } = req.body || {};
+    if (!postId || moduleIdx == null || !Array.isArray(customSlotKeys)) {
+      return res.status(400).json({ error: 'postId + moduleIdx + customSlotKeys[] required' });
+    }
+    const mp = modulesPath(postId);
+    const modulesData = safeJson(mp, { modules: [] });
+    const mod = (modulesData.modules || [])[moduleIdx];
+    if (!mod) return res.status(404).json({ error: 'module not found' });
+    if (!mod.binding) return res.status(400).json({ error: 'module に binding が無い' });
+
+    const recipe = getRecipe(mod.binding.subject, mod.binding.aspect);
+    if (!recipe) return res.status(400).json({ error: 'recipe 解決失敗' });
+
+    const si = safeJson(siPath(postId), { boxes: {} });
+    const primaryData   = findEntity(si, mod.binding.subject, mod.binding.primary);
+    const secondaryData = mod.binding.secondary ? findEntity(si, mod.binding.subject, mod.binding.secondary) : null;
+
+    const validKeys = new Set(recipe.availableSlots.map(s => s.key));
+    const keys = customSlotKeys.filter(k => validKeys.has(k));
+    mod.dataSlots = buildDataSlotsFromRecipe(recipe, primaryData, secondaryData, keys, {});
+    mod.binding = { ...mod.binding, customSlotKeys: keys };
+
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+    res.json({ ok: true, dataSlots: mod.dataSlots, customSlotKeys: keys });
+  } catch (e) {
+    console.error('[v2/apply-slot-keys]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v2/regen-narration : 1カードのナレーション再生成 ─
 router.post('/v2/regen-narration', async (req, res) => {
   const { postId, idx } = req.body;
@@ -232,7 +356,7 @@ function getUI() {
 (function() {
   'use strict';
   window.APP = window.APP || {};
-  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null };
+  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null, recipeSlotsByIdx: {}, openCategoriesByIdx: {} };
 
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
@@ -382,7 +506,23 @@ function getUI() {
     /* バインドデータ・プルダウン (stats/profile/comparison/history カード用) */
     let bindHtml = '';
     const showBind = ['stats', 'profile', 'comparison', 'history'].includes(m.type);
-    if (showBind && window.APP.s4.siData) {
+
+    /* comparison + binding 解決可能 → 新しい recipe accordion UI */
+    const hasBinding = m.type === 'comparison'
+      && (m.binding?.subject || (m.siBindingLeft && m.siBindingRight));
+    if (hasBinding) {
+      const cached = window.APP.s4.recipeSlotsByIdx[i];
+      if (!cached) {
+        bindHtml = '<div class="recipe-slots-placeholder" data-idx="' + i + '" '
+          + 'style="font-size:11px;color:#5a6a8a;margin:14px 0 0;padding:10px;background:#0d1220;border-radius:6px;text-align:center;">'
+          + '⏳ レシピメトリック読込中…</div>';
+      } else if (!cached.ok) {
+        bindHtml = '<div style="font-size:10px;color:#fca5a5;margin:14px 0 0;padding:10px;background:#0d1220;border-radius:6px;text-align:center;">'
+          + '⚠️ ' + _esc(cached.error || 'recipe解決失敗') + '</div>';
+      } else {
+        bindHtml = _renderRecipeSlots(cached, i);
+      }
+    } else if (showBind && window.APP.s4.siData) {
       const { entity } = _parseMainKey(m.mainKey || '');
       const targets = [entity];
       if (m.type === 'comparison' && m.secondary) targets.push(m.secondary);
@@ -479,7 +619,142 @@ function getUI() {
         s4DeleteSlot(parseInt(btn.getAttribute('data-idx'), 10));
       });
     });
+
+    /* recipe accordion: 未ロードの placeholder があれば fetch */
+    el.querySelectorAll('.recipe-slots-placeholder').forEach(function(div) {
+      const idx = parseInt(div.getAttribute('data-idx'), 10);
+      if (!Number.isNaN(idx)) _loadRecipeSlots(idx);
+    });
+    /* recipe accordion: category 開閉 */
+    el.querySelectorAll('.s4-cat-header').forEach(function(hdr) {
+      hdr.addEventListener('click', function() {
+        const idx = parseInt(hdr.getAttribute('data-idx'), 10);
+        const cat = hdr.getAttribute('data-cat');
+        const map = window.APP.s4.openCategoriesByIdx[idx] || {};
+        map[cat] = !map[cat];
+        window.APP.s4.openCategoriesByIdx[idx] = map;
+        _renderEditor();
+      });
+    });
+    /* recipe accordion: ➕/✓ ボタン → apply-slot-keys */
+    el.querySelectorAll('.s4-recipe-toggle').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        const key = btn.getAttribute('data-key');
+        if (Number.isNaN(idx) || !key) return;
+        s4ToggleRecipeSlot(idx, key);
+      });
+    });
   }
+
+  /* recipe accordion: HTML レンダラ */
+  function _renderRecipeSlots(data, idx) {
+    const open  = window.APP.s4.openCategoriesByIdx[idx] || {};
+    const sel   = new Set(data.selected || []);
+    const cats  = data.categories || [];
+    const total = cats.reduce((n, c) => n + (c.slots?.length || 0), 0);
+
+    const head = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;display:flex;align-items:center;gap:8px;">'
+      + '🔗 メトリック選択 <span style="font-size:9px;color:#8a9aba;font-weight:normal;">'
+      + _esc(data.subject) + '.' + _esc(data.aspect) + ' / '
+      + _esc(data.primary || '?') + ' vs ' + _esc(data.secondary || '?')
+      + '</span><span style="flex:1;"></span>'
+      + '<span style="font-size:9px;color:#10b981;">' + sel.size + ' / 5 選択中</span>'
+      + '</div>';
+
+    const body = cats.map(function(cat) {
+      const isOpen   = !!open[cat.name];
+      const selCount = (cat.slots || []).filter(s => sel.has(s.key)).length;
+      const arrow    = isOpen ? '▼' : '▶';
+      const header = '<div class="s4-cat-header" data-idx="' + idx + '" data-cat="' + _esc(cat.name) + '" '
+        + 'style="cursor:pointer;display:flex;align-items:center;padding:6px 10px;background:#1a2540;border-radius:4px;margin-bottom:4px;font-size:11px;color:#e0e0e0;font-weight:bold;gap:6px;">'
+        + '<span style="color:#8a9aba;">' + arrow + '</span>'
+        + '<span>' + _esc(cat.name) + '</span>'
+        + '<span style="color:#5a6a8a;font-weight:normal;font-size:10px;">(' + (cat.slots?.length || 0) + ')</span>'
+        + '<span style="flex:1;"></span>'
+        + (selCount ? '<span style="font-size:9px;color:#10b981;">✓' + selCount + '</span>' : '')
+        + '</div>';
+      if (!isOpen) return header;
+      const items = (cat.slots || []).map(function(s) {
+        const isSel = sel.has(s.key);
+        const prio  = s.priority >= 9 ? '🔥' : (s.priority >= 7 ? '⭐' : '');
+        return '<div class="s4-recipe-toggle" data-idx="' + idx + '" data-key="' + _esc(s.key) + '" '
+          + 'style="display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;padding:5px 10px;cursor:pointer;border-radius:3px;'
+          + 'background:' + (isSel ? '#0e3b1f' : '#0d1220') + ';margin-bottom:2px;align-items:center;font-size:11px;'
+          + 'border:1px solid ' + (isSel ? '#10b981' : 'transparent') + ';">'
+          + '<span style="color:' + (isSel ? '#10b981' : '#7dc8ff') + ';font-weight:bold;width:16px;text-align:center;">' + (isSel ? '✓' : '+') + '</span>'
+          + '<span style="color:#e0e0e0;">' + _esc(s.label) + '</span>'
+          + '<span style="font-size:10px;color:#94a3b8;">'
+          + '<span style="color:#93c5fd;">' + _esc(s.leftValue) + '</span>'
+          + ' <span style="color:#5a6a8a;">vs</span> '
+          + '<span style="color:#fca5a5;">' + _esc(s.rightValue) + '</span>'
+          + '</span>'
+          + '<span style="font-size:9px;color:#5a6a8a;width:30px;text-align:right;">' + prio + ' ' + (s.priority || 0) + '</span>'
+          + '</div>';
+      }).join('');
+      return header + '<div style="padding:4px 6px 8px;">' + items + '</div>';
+    }).join('');
+
+    return head + '<div style="background:#0d1220;border-radius:6px;padding:6px;max-height:340px;overflow-y:auto;">'
+      + body + '</div>';
+  }
+
+  /* recipe slot を fetch + キャッシュ + 再描画 */
+  async function _loadRecipeSlots(idx) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    try {
+      const data = await fetchJson('/api/v2/recipe-slots?postId='
+        + encodeURIComponent(post.id) + '&moduleIdx=' + idx);
+      window.APP.s4.recipeSlotsByIdx[idx] = data;
+      // デフォルトで category を全閉じ（ユーザー操作で開く）
+      if (!window.APP.s4.openCategoriesByIdx[idx]) {
+        window.APP.s4.openCategoriesByIdx[idx] = {};
+      }
+      _renderEditor();
+    } catch (e) {
+      window.APP.s4.recipeSlotsByIdx[idx] = { ok: false, error: e.message };
+      _renderEditor();
+    }
+  }
+
+  /* スロットの選択をトグル → サーバーに送信して dataSlots 反映 */
+  window.s4ToggleRecipeSlot = async function(idx, key) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const cached = window.APP.s4.recipeSlotsByIdx[idx];
+    if (!cached?.ok) return;
+    const sel = new Set(cached.selected || []);
+    if (sel.has(key)) sel.delete(key);
+    else {
+      if (sel.size >= 5) {
+        _msg('5メトリック選択済 — どれかを外してから追加してください');
+        return;
+      }
+      sel.add(key);
+    }
+    const keys = Array.from(sel);
+    try {
+      const r = await fetchJson('/api/v2/apply-slot-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, customSlotKeys: keys }),
+      });
+      if (!r.ok) throw new Error(r.error || 'apply 失敗');
+      // モジュールに反映
+      const m = window.APP.s4.modules[idx];
+      if (m) {
+        m.dataSlots = r.dataSlots;
+        if (m.binding) m.binding.customSlotKeys = r.customSlotKeys;
+      }
+      // キャッシュの selected を更新
+      cached.selected = r.customSlotKeys;
+      _renderEditor();
+      _reloadPreview();
+    } catch (e) {
+      _msg('❌ スロット更新失敗: ' + e.message);
+    }
+  };
 
   function _collectInputs() {
     const i = window.APP.s4.activeTab;
