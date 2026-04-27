@@ -132,13 +132,24 @@ function buildStatsHTML(mod) {
   color: #6080b0;
   letter-spacing: 1px;
   text-transform: uppercase;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 .card-value {
   font-size: 64px;
   font-weight: 900;
   color: ${PALETTE.text};
-  line-height: 1;
+  line-height: 1.05;
   letter-spacing: -1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 /* 字幕 */
@@ -163,18 +174,36 @@ function buildStatsHTML(mod) {
 }
 `;
 
+  // 値の長さに応じてカード値のフォントを縮小（base 64px）
+  function _valFont(text) {
+    const len = String(text || '').length;
+    if (len <= 4)  return 64;
+    if (len <= 6)  return 56;
+    if (len <= 9)  return 44;
+    if (len <= 13) return 34;
+    if (len <= 18) return 26;
+    return 22;
+  }
+  function _labelFont(text) {
+    const len = String(text || '').length;
+    if (len <= 8)  return 22;
+    if (len <= 12) return 19;
+    if (len <= 16) return 16;
+    return 14;
+  }
+
   const cardsHtml = slots.slice(0, 6).map(s => {
     // merged を優先（"今季ゴール：24"）、無ければ label/value 個別
+    let lbl, val;
     if (s.merged && s.merged.includes('：')) {
-      const [lbl, val] = s.merged.split('：');
-      return `<div class="data-card">
-        <div class="card-label">${esc(lbl || '')}</div>
-        <div class="card-value">${esc(val || '-')}</div>
-      </div>`;
+      [lbl, val] = s.merged.split('：');
+    } else {
+      lbl = s.label || '';
+      val = s.value || '-';
     }
     return `<div class="data-card">
-      <div class="card-label">${esc(s.label || '')}</div>
-      <div class="card-value">${esc(s.value || '-')}</div>
+      <div class="card-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
+      <div class="card-value" style="font-size:${_valFont(val)}px">${esc(val)}</div>
     </div>`;
   }).join('');
 

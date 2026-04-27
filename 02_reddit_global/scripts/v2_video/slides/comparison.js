@@ -176,7 +176,14 @@ function buildComparisonHTML(mod) {
   width: 35%;
   font-size: 56px;
   font-weight: 900;
-  line-height: 1;
+  line-height: 1.05;
+  /* 長文は2行まで折り返し可能 + はみ出しは省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  hyphens: auto;
 }
 .val-left {
   text-align: right;
@@ -188,22 +195,30 @@ function buildComparisonHTML(mod) {
   padding-left: 40px;
   color: #fca5a5;
 }
-/* 数値比較で勝ってる方を白くハイライト */
-.val.win  { color: ${PALETTE.text}; font-size: 64px; }
-.val.lose { opacity: 0.55; font-size: 48px; }
+/* 数値比較で勝ってる方を白くハイライト（色だけ。フォントサイズは長さで動的調整） */
+.val.win  { color: ${PALETTE.text}; }
+.val.lose { opacity: 0.55; }
 
 .label-col {
   width: 30%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: 0 8px;
 }
 .label-text {
   color: #94a3b8;
   font-size: 22px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   text-align: center;
+  line-height: 1.15;
+  /* 長文は2行まで */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 `;
 
@@ -216,13 +231,42 @@ function buildComparisonHTML(mod) {
     return [' lose', ' win'];
   }
 
+  // 値の文字数 → フォントサイズ（base 56px、win=+8 / lose=-8 を内包）
+  function _valFont(text, mod) {
+    const base  = mod === 'win' ? 64 : (mod === 'lose' ? 48 : 56);
+    const len   = String(text || '').length;
+    if (len <= 5)  return base;
+    if (len <= 7)  return Math.round(base * 0.82);
+    if (len <= 10) return Math.round(base * 0.66);
+    if (len <= 14) return Math.round(base * 0.52);
+    if (len <= 20) return Math.round(base * 0.42);
+    return Math.round(base * 0.34);  // 21文字超
+  }
+  // ラベル文字数 → フォントサイズ（base 22px）
+  function _labelFont(text) {
+    const len = String(text || '').length;
+    if (len <= 7)  return 22;
+    if (len <= 10) return 19;
+    if (len <= 14) return 16;
+    if (len <= 18) return 14;
+    return 12;
+  }
+
   const rowsHtml = slots.length
     ? slots.map(s => {
         const [lc, rc] = compareSides(s);
+        const lv = String(s.leftValue  || '-');
+        const rv = String(s.rightValue || '-');
+        const lb = String(s.label      || '');
+        const lMod = (lc || '').trim();
+        const rMod = (rc || '').trim();
+        const lFs = _valFont(lv, lMod) + 'px';
+        const rFs = _valFont(rv, rMod) + 'px';
+        const lbFs = _labelFont(lb) + 'px';
         return `<div class="data-row">
-          <div class="val val-left${lc}">${esc(s.leftValue || '-')}</div>
-          <div class="label-col"><div class="label-text">${esc(s.label || '')}</div></div>
-          <div class="val val-right${rc}">${esc(s.rightValue || '-')}</div>
+          <div class="val val-left${lc}" style="font-size:${lFs}">${esc(lv)}</div>
+          <div class="label-col"><div class="label-text" style="font-size:${lbFs}">${esc(lb)}</div></div>
+          <div class="val val-right${rc}" style="font-size:${rFs}">${esc(rv)}</div>
         </div>`;
       }).join('')
     : '<div style="text-align:center;color:#5a6a8a;font-size:24px">対比データなし</div>';

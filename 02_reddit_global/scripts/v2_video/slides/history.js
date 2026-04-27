@@ -170,13 +170,23 @@ function buildHistoryHTML(mod) {
   font-size: 34px;
   font-weight: 800;
   color: ${PALETTE.text};
-  line-height: 1.25;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 .tl-sub {
   font-size: 22px;
   font-weight: 500;
   color: ${PALETTE.muted};
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 .sub-bar {
   position: absolute;
@@ -198,13 +208,32 @@ function buildHistoryHTML(mod) {
 }
 `;
 
+  // タイトル文字数 → フォントサイズ（base 34px）
+  function _titleFont(text) {
+    const len = String(text || '').length;
+    if (len <= 14) return 34;
+    if (len <= 20) return 28;
+    if (len <= 28) return 23;
+    if (len <= 38) return 19;
+    return 16;
+  }
+  function _subFont(text) {
+    const len = String(text || '').length;
+    if (len <= 18) return 22;
+    if (len <= 28) return 19;
+    if (len <= 40) return 16;
+    return 14;
+  }
+
   const eventsHtml = events.map((e, i) => {
     const isLast = i === events.length - 1;
+    const ttl = String(e.title || '');
+    const sub = String(e.sub   || '');
     return `<div class="tl-event${isLast ? ' current' : ''}">
       <div class="tl-date">${esc(e.date)}</div>
       <div class="tl-card">
-        <div class="tl-title">${esc(e.title)}</div>
-        ${e.sub ? `<div class="tl-sub">${esc(e.sub)}</div>` : ''}
+        <div class="tl-title" style="font-size:${_titleFont(ttl)}px">${esc(ttl)}</div>
+        ${e.sub ? `<div class="tl-sub" style="font-size:${_subFont(sub)}px">${esc(sub)}</div>` : ''}
       </div>
     </div>`;
   }).join('');

@@ -117,17 +117,29 @@ function buildProfileHTML(mod) {
   font-size: 28px;
   font-weight: 700;
   color: #6080b0;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 .row-value {
   flex: 1;
   background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 14px;
-  display: flex; align-items: center;
-  padding-left: 35px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  align-items: center;
+  padding: 8px 24px 8px 35px;
   font-size: 46px;
   font-weight: 900;
   color: ${PALETTE.text};
+  line-height: 1.05;
+  overflow: hidden;
+  word-break: break-word;
 }
 .sub-bar {
   position: absolute;
@@ -149,11 +161,31 @@ function buildProfileHTML(mod) {
 }
 `;
 
-  const dataRows = slots.map(s => `
-    <div class="data-row">
-      <div class="row-label">${esc(s.label || '')}</div>
-      <div class="row-value">${esc(s.value || '-')}</div>
-    </div>`).join('');
+  // 値の長さに応じてフォント縮小（base 46px）
+  function _valFont(text) {
+    const len = String(text || '').length;
+    if (len <= 6)  return 46;
+    if (len <= 9)  return 38;
+    if (len <= 13) return 30;
+    if (len <= 18) return 24;
+    return 20;
+  }
+  function _labelFont(text) {
+    const len = String(text || '').length;
+    if (len <= 6)  return 28;
+    if (len <= 10) return 23;
+    if (len <= 14) return 19;
+    return 16;
+  }
+
+  const dataRows = slots.map(s => {
+    const lbl = s.label || '';
+    const val = s.value || '-';
+    return `<div class="data-row">
+      <div class="row-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
+      <div class="row-value" style="font-size:${_valFont(val)}px">${esc(val)}</div>
+    </div>`;
+  }).join('');
 
   const slideBody = `
 <div class="panel-left">
