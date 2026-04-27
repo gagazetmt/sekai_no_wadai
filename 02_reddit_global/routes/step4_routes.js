@@ -160,6 +160,167 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
   }
 });
 
+// ─── /v2/ask-slot-ai : リトルAI 自然言語で dataSlots を埋める ─
+// Input:  { postId, moduleIdx, userPrompt, mode: 'replace'|'append' }
+// Output: { ok, dataSlots: [...新スロット], applied: true|false, mode }
+router.post('/v2/ask-slot-ai', express.json(), async (req, res) => {
+  const { postId, moduleIdx, userPrompt, mode } = req.body || {};
+  if (!postId || moduleIdx == null || !userPrompt) {
+    return res.status(400).json({ error: 'postId + moduleIdx + userPrompt required' });
+  }
+  const applyMode = mode === 'replace' ? 'replace' : 'append';
+  try {
+    const mp = modulesPath(postId);
+    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+    const modulesData = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const idx = parseInt(moduleIdx, 10);
+    const mod = modulesData.modules?.[idx];
+    if (!mod) return res.status(404).json({ error: 'idx out of range' });
+
+    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+    const items = si.boxes?.entity?.items || [];
+
+    // mainKey から主体エンティティ抽出
+    const _parseMK = (k) => {
+      if (!k) return { type: 'unknown', name: '' };
+      const c = k.indexOf(':');
+      return c < 0 ? { type: k, name: '' } : { type: k.slice(0, c), name: k.slice(c + 1) };
+    };
+    const { name: primary } = _parseMK(mod.mainKey || '');
+    const secondary = mod.type === 'comparison' ? (mod.secondary || mod.binding?.secondary) : null;
+
+    function _entityContext(label) {
+      if (!label) return '';
+      const it = items.find(x => x.label === label) || {};
+      const wikiExtract = it.wiki?.extract || '';
+      const wikitext    = it.wiki?.wikitext || '';
+      const sofa        = it.sofa || {};
+      // sofa は JSON、長すぎ防止に最大 1500 char
+      const sofaStr = sofa.ok ? JSON.stringify({
+        name: sofa.name || sofa.teamName,
+        position: sofa.position, team: sofa.team,
+        league: sofa.leagueName, country: sofa.country,
+        currentTeam: sofa.currentTeam,
+        seasonStats: sofa.seasonStats,
+        lastMatchStats: sofa.lastMatchStats,
+        recentAvgRating: sofa.recentAvgRating,
+        last5Matches: sofa.last5Matches,
+        positionStats: sofa.positionStats,
+        standing: sofa.standing,
+        career: sofa.career,
+        overallPerformance: sofa.overallPerformance,
+        currentTeamStats: sofa.currentTeamStats,
+        honours: sofa.honours,
+        trophySummary: sofa.trophySummary,
+        marketValue: sofa.marketValue,
+        contractUntil: sofa.contractUntil,
+      }).slice(0, 1500) : 'sofa:取得失敗';
+
+      return `=== 主体: ${label} (${it.role || '?'}) ===
+[Wikipedia 要約]
+${wikiExtract.slice(0, 1500)}
+
+[Wikipedia 生データ抜粋（infobox / career / honours 等含む）]
+${wikitext.slice(0, 5000)}
+
+[SofaScore]
+${sofaStr}
+`;
+    }
+
+    const ctxPrimary   = _entityContext(primary);
+    const ctxSecondary = secondary ? _entityContext(secondary) : '';
+
+    // type 別の shape 指定
+    const shapeMap = {
+      history:    '[{"label":"年（YYYY 等）","value":"出来事の説明（数字含む）"}]',
+      stats:      '[{"label":"指標名","value":"値（数字+単位）"}]',
+      profile:    '[{"label":"項目名","value":"値"}]',
+      comparison: '[{"label":"指標名","leftValue":"primaryの値","rightValue":"secondaryの値"}]',
+    };
+    const shape = shapeMap[mod.type] || shapeMap.stats;
+
+    const existingSlotsStr = (Array.isArray(mod.dataSlots) && mod.dataSlots.length)
+      ? '\n【既存スロット（参考）】\n' + JSON.stringify(mod.dataSlots).slice(0, 800)
+      : '';
+
+    const prompt = `あなたはサッカーデータ抽出AI。下記のデータから、ユーザーの注文に従ってスライドのデータスロットを生成してください。
+
+【スライド情報】
+type: ${mod.type}
+title: ${mod.title || ''}
+mainKey: ${mod.mainKey || '?'}
+${secondary ? 'secondary: ' + secondary : ''}
+${existingSlotsStr}
+
+【利用可能データ】
+${ctxPrimary}
+${ctxSecondary}
+
+【ユーザー注文】
+${userPrompt}
+
+【出力ルール（厳守）】
+- shape: ${shape}
+- データに明示されていない値・固有名は **絶対に出さない**（推測・記憶からの補完NG）
+- 数字（試合数・ゴール数・年齢等）は元データに数値として現れているもののみ
+- ユーザーの注文に従う（順序・粒度・件数）
+- 件数: 通常 4〜10件、ユーザー注文に明示があればそれに従う
+- 余計な解説や前置きを入れず、JSONのみ返す
+
+【出力】JSONのみ（マークダウン不要）:
+{"dataSlots": [...]}`;
+
+    let raw, parsed = null, used = 'deepseek';
+    try {
+      raw = await callAI({
+        forceProvider: 'deepseek',
+        model: 'deepseek-chat', max_tokens: 2500,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const m1 = raw && raw.match(/\{[\s\S]*\}/);
+      if (m1) parsed = JSON.parse(m1[0]);
+    } catch (e) { console.warn('[ask-slot-ai] deepseek 例外:', e.message); }
+    if (!Array.isArray(parsed?.dataSlots)) {
+      try {
+        raw = await callAI({
+          forceProvider: 'anthropic',
+          model: 'claude-haiku-4-5-20251001', max_tokens: 2500,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const m2 = raw && raw.match(/\{[\s\S]*\}/);
+        if (m2) parsed = JSON.parse(m2[0]);
+        used = 'haiku';
+      } catch (_) {}
+    }
+    if (!Array.isArray(parsed?.dataSlots)) {
+      return res.status(500).json({ error: 'AI応答のパースに失敗' });
+    }
+
+    const newSlots = parsed.dataSlots;
+    let finalSlots;
+    if (applyMode === 'append' && Array.isArray(mod.dataSlots)) {
+      finalSlots = [...mod.dataSlots, ...newSlots];
+    } else {
+      finalSlots = newSlots;
+    }
+
+    mod.dataSlots = finalSlots;
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+
+    res.json({
+      ok:        true,
+      dataSlots: finalSlots,
+      added:     newSlots,
+      mode:      applyMode,
+      used,
+    });
+  } catch (e) {
+    console.error('[v2/ask-slot-ai]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v2/regen-narration : 1カードのナレーション再生成 ─
 router.post('/v2/regen-narration', async (req, res) => {
   const { postId, idx } = req.body;
@@ -594,6 +755,22 @@ function getUI() {
       + '<pre style="background:#0d1220;padding:6px 8px;border-radius:4px;font-size:10px;color:#94a3b8;margin-bottom:10px;max-height:60px;overflow-y:auto;">' + _esc(m.scriptDir||'(なし)') + '</pre>'
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">narration</div>'
       + '<textarea class="inp" id="s4Narr' + i + '" oninput="s4OnInput()" style="display:block;width:100%;font-size:12px;padding:6px 8px;min-height:120px;resize:vertical;">' + _esc(m.narration||'') + '</textarea>'
+      /* ✨ リトル AI: 自然言語で dataSlots を生成 */
+      + '<div style="margin-top:14px;padding:8px;background:#0d1220;border:1px solid #2a3050;border-radius:6px;">'
+      +   '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:6px;display:flex;align-items:center;gap:6px;">'
+      +     '✨ AI でデータスロット生成'
+      +     '<span style="flex:1"></span>'
+      +     '<span class="s4-ai-status" data-idx="' + i + '" style="font-size:10px;color:#5a6a8a;font-weight:normal;"></span>'
+      +   '</div>'
+      +   '<textarea class="inp s4-ai-prompt" data-idx="' + i + '" placeholder="例: メッシのキャリア、ユース→プロのクラブ加入年と試合数・ゴール数を時系列で" '
+      +     'style="display:block;width:100%;font-size:11px;padding:5px 8px;min-height:50px;resize:vertical;background:#0a0d18;color:#e0e0e0;border:1px solid #1a2540;"></textarea>'
+      +   '<div style="display:flex;gap:6px;margin-top:6px;">'
+      +     '<button class="btn btn-sm s4-ai-append" data-idx="' + i + '" style="background:#3b82f6;color:#fff;font-size:10px;padding:4px 10px;">➕ 追記</button>'
+      +     '<button class="btn btn-sm s4-ai-replace" data-idx="' + i + '" style="background:#dc2626;color:#fff;font-size:10px;padding:4px 10px;">🔄 全置換</button>'
+      +     '<span style="flex:1"></span>'
+      +     '<span style="font-size:9px;color:#5a6a8a;align-self:center;">DeepSeek 既定 → 失敗時 Haiku</span>'
+      +   '</div>'
+      + '</div>'
       + galleryHtml
       + bindHtml
       + dataHtml
@@ -617,6 +794,20 @@ function getUI() {
     el.querySelectorAll('.s4-slot-del').forEach(function(btn) {
       btn.addEventListener('click', function() {
         s4DeleteSlot(parseInt(btn.getAttribute('data-idx'), 10));
+      });
+    });
+
+    /* リトル AI: 追記/全置換 ボタン */
+    el.querySelectorAll('.s4-ai-append').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        s4AskSlotAI(parseInt(btn.getAttribute('data-idx'), 10), 'append');
+      });
+    });
+    el.querySelectorAll('.s4-ai-replace').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        if (!confirm('現在の dataSlots を全部上書きしますか？')) return;
+        s4AskSlotAI(idx, 'replace');
       });
     });
 
@@ -717,6 +908,33 @@ function getUI() {
       _renderEditor();
     }
   }
+
+  /* リトル AI: 自然言語で dataSlots を生成（append / replace） */
+  window.s4AskSlotAI = async function(idx, mode) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const ta = document.querySelector('.s4-ai-prompt[data-idx="' + idx + '"]');
+    const userPrompt = (ta?.value || '').trim();
+    if (!userPrompt) { _msg('AI に頼む内容を書いてね'); return; }
+    const status = document.querySelector('.s4-ai-status[data-idx="' + idx + '"]');
+    if (status) status.textContent = '⏳ 生成中...';
+    try {
+      const r = await fetchJson('/api/v2/ask-slot-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, mode }),
+      });
+      if (!r.ok) throw new Error(r.error || 'AI 失敗');
+      const m = window.APP.s4.modules[idx];
+      if (m) m.dataSlots = r.dataSlots;
+      if (status) status.textContent = '✅ ' + (r.added?.length || 0) + '件生成 (' + (r.used || 'deepseek') + ')';
+      _renderEditor();
+      _reloadPreview();
+    } catch (e) {
+      if (status) status.textContent = '❌ ' + e.message;
+      _msg('❌ AI 生成失敗: ' + e.message);
+    }
+  };
 
   /* スロットの選択をトグル → サーバーに送信して dataSlots 反映 */
   window.s4ToggleRecipeSlot = async function(idx, key) {
