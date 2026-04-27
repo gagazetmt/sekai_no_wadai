@@ -160,6 +160,206 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
   }
 });
 
+// ─── /v2/ai-fill-slide : スライド丸ごと AI 1発（type/title/dataSlots/narration）─
+// Input:  { postId, moduleIdx, userPrompt }
+// Output: { ok, type, title, dataSlots, narration, used }
+router.post('/v2/ai-fill-slide', express.json(), async (req, res) => {
+  const { postId, moduleIdx, userPrompt } = req.body || {};
+  if (!postId || moduleIdx == null || !userPrompt) {
+    return res.status(400).json({ error: 'postId + moduleIdx + userPrompt required' });
+  }
+  try {
+    const mp = modulesPath(postId);
+    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+    const modulesData = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const idx = parseInt(moduleIdx, 10);
+    const mod = modulesData.modules?.[idx];
+    if (!mod) return res.status(404).json({ error: 'idx out of range' });
+
+    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+    const items = si.boxes?.entity?.items || [];
+
+    const _parseMK = (k) => {
+      if (!k) return { type: 'unknown', name: '' };
+      const c = k.indexOf(':');
+      return c < 0 ? { type: k, name: '' } : { type: k.slice(0, c), name: k.slice(c + 1) };
+    };
+    const { name: primary } = _parseMK(mod.mainKey || '');
+    const secondary = mod.secondary || mod.binding?.secondary || null;
+
+    const { extractCareerFromInfobox, extractHonoursSection } = require('../scripts/modules/fetchers/wikipedia');
+
+    function _entityContext(label) {
+      if (!label) return '';
+      const it = items.find(x => x.label === label) || {};
+      const wikiExtract = it.wiki?.extract || '';
+      const wikitext    = it.wiki?.wikitext || '';
+      const sofa        = it.sofa || {};
+
+      let careerStr = '';
+      if (wikitext) {
+        try {
+          const career = extractCareerFromInfobox(wikitext);
+          if (career?.length) {
+            careerStr = career.map(c => {
+              const yrs = (c.years?.start || '?') + '-' + (c.years?.end || '現在');
+              const stats = [
+                c.caps  != null ? c.caps  + '試合'  : null,
+                c.goals != null ? c.goals + 'ゴール' : null,
+              ].filter(Boolean).join(' ');
+              return `${yrs}: ${c.club || '?'}${stats ? ' ' + stats : ''}`;
+            }).join('\n');
+          }
+        } catch (_) {}
+      }
+
+      let honoursStr = '';
+      if (wikitext) {
+        try {
+          const honours = extractHonoursSection(wikitext);
+          if (honours?.length) {
+            honoursStr = honours.map(h =>
+              `[${h.category}]\n${(h.items || []).slice(0, 12).join('\n')}`
+            ).join('\n\n');
+          }
+        } catch (_) {}
+      }
+
+      const sofaStr = sofa.ok ? JSON.stringify({
+        name: sofa.name || sofa.teamName,
+        position: sofa.position, team: sofa.team,
+        league: sofa.leagueName, country: sofa.country,
+        currentTeam: sofa.currentTeam,
+        seasonStats: sofa.seasonStats,
+        lastMatchStats: sofa.lastMatchStats,
+        recentAvgRating: sofa.recentAvgRating,
+        positionStats: sofa.positionStats,
+        standing: sofa.standing,
+        career: sofa.career,
+        overallPerformance: sofa.overallPerformance,
+        currentTeamStats: sofa.currentTeamStats,
+        honours: sofa.honours,
+        trophySummary: sofa.trophySummary,
+        marketValue: sofa.marketValue,
+        contractUntil: sofa.contractUntil,
+      }).slice(0, 1500) : 'sofa:取得失敗';
+
+      return `=== 主体: ${label} (${it.role || '?'}) ===
+[Wikipedia 要約]
+${wikiExtract.slice(0, 1500)}
+${careerStr ? `
+[Wikipedia キャリアテーブル]
+${careerStr}
+` : ''}${honoursStr ? `
+[Wikipedia 獲得タイトル]
+${honoursStr}
+` : ''}
+[Wikipedia 生データ抜粋]
+${wikitext.slice(0, 3000)}
+
+[SofaScore]
+${sofaStr}
+`;
+    }
+
+    const ctxPrimary   = _entityContext(primary);
+    const ctxSecondary = secondary ? _entityContext(secondary) : '';
+
+    const prompt = `あなたはサッカーYouTubeの脚本AI。スライド1枚の本体を完全に組み立てる。
+type / title / dataSlots / narration を**一気通貫で**生成してください。
+
+【現状（参考、変更可）】
+type: ${mod.type || '?'}
+title: ${mod.title || ''}
+mainKey: ${mod.mainKey || '?'}
+${secondary ? 'secondary: ' + secondary : ''}
+脚本指示: ${mod.scriptDir || '(指示なし)'}
+
+【利用可能データ】
+${ctxPrimary}
+${ctxSecondary}
+
+【ユーザー注文】
+${userPrompt}
+
+【生成ルール（厳守）】
+- type は注文の意図に合わせて選ぶ（許容: insight/stats/profile/comparison/history/reaction）
+  ・2人/2チーム比較なら "comparison"
+  ・時系列の来歴・年表なら "history"
+  ・数字データ並べる → "stats"
+  ・基本情報カード → "profile"
+  ・コメント反応 → "reaction"
+  ・観点抽出 → "insight"
+- dataSlots shape は type に応じて：
+  ・comparison: [{"label":"指標","leftValue":"primaryの値","rightValue":"secondaryの値"}]
+  ・history:    [{"label":"年(YYYY)","value":"出来事"}]
+  ・stats/profile: [{"label":"項目","value":"値"}]
+  ・insight: dataSlots は空配列、代わりに catchphrases を別途返してOK（今回は dataSlots 中心で）
+- 件数: 4〜10件
+- データに**明示されていない**値・固有名・数字は **絶対** 出さない（推測補完NG）
+- narration:
+  ・**dataSlots と整合する**（dataSlots の数字・名前を使って語る）
+  ・250〜320文字（40秒目安）
+  ・視聴者に語りかける口調、熱量と説得力
+- title: 10〜25文字、フックのある表現
+
+【出力】JSONのみ（マークダウン不要）:
+{
+  "type": "...",
+  "title": "...",
+  "dataSlots": [...],
+  "narration": "..."
+}`;
+
+    let raw, parsed = null, used = 'deepseek';
+    try {
+      raw = await callAI({
+        forceProvider: 'deepseek',
+        model: 'deepseek-chat', max_tokens: 3500,
+        messages: [{ role: 'user', content: prompt }],
+      });
+      const m1 = raw && raw.match(/\{[\s\S]*\}/);
+      if (m1) parsed = JSON.parse(m1[0]);
+    } catch (e) { console.warn('[ai-fill-slide] deepseek 例外:', e.message); }
+    if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
+      try {
+        raw = await callAI({
+          forceProvider: 'anthropic',
+          model: 'claude-sonnet-4-6', max_tokens: 3500,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const m2 = raw && raw.match(/\{[\s\S]*\}/);
+        if (m2) parsed = JSON.parse(m2[0]);
+        used = 'sonnet';
+      } catch (_) {}
+    }
+    if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
+      return res.status(500).json({ error: 'AI応答のパースに失敗' });
+    }
+
+    // 反映（既存の siBindingLeft/Right や homeTeam/awayTeam 等の補助フィールドは温存）
+    const ALLOWED_TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard'];
+    if (ALLOWED_TYPES.includes(parsed.type)) mod.type = parsed.type;
+    if (typeof parsed.title === 'string')     mod.title = parsed.title;
+    if (typeof parsed.narration === 'string') mod.narration = parsed.narration;
+    mod.dataSlots = parsed.dataSlots;
+
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+
+    res.json({
+      ok:        true,
+      type:      mod.type,
+      title:     mod.title,
+      dataSlots: mod.dataSlots,
+      narration: mod.narration,
+      used,
+    });
+  } catch (e) {
+    console.error('[v2/ai-fill-slide]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v2/ask-slot-ai : リトルAI 自然言語で dataSlots を埋める ─
 // Input:  { postId, moduleIdx, userPrompt, mode: 'replace'|'append' }
 // Output: { ok, dataSlots: [...新スロット], applied: true|false, mode }
@@ -795,7 +995,23 @@ function getUI() {
       + '<pre style="background:#0d1220;padding:6px 8px;border-radius:4px;font-size:10px;color:#94a3b8;margin-bottom:10px;max-height:60px;overflow-y:auto;">' + _esc(m.scriptDir||'(なし)') + '</pre>'
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">narration</div>'
       + '<textarea class="inp" id="s4Narr' + i + '" oninput="s4OnInput()" style="display:block;width:100%;font-size:12px;padding:6px 8px;min-height:120px;resize:vertical;">' + _esc(m.narration||'') + '</textarea>'
-      /* ✨ リトル AI: 自然言語で dataSlots を生成 */
+      /* 🪄 スライド全部おまかせ AI（type/title/dataSlots/narration を一気通貫） */
+      + '<div style="margin-top:14px;padding:10px;background:#1a1d2e;border:1px solid #6366f1;border-radius:6px;">'
+      +   '<div style="font-size:12px;color:#a5b4fc;font-weight:bold;margin-bottom:6px;display:flex;align-items:center;gap:6px;">'
+      +     '🪄 スライド全部おまかせ AI'
+      +     '<span style="font-size:9px;color:#8a9aba;font-weight:normal;">type / dataSlots / narration を一気通貫</span>'
+      +     '<span style="flex:1"></span>'
+      +     '<span class="s4-fill-status" data-idx="' + i + '" style="font-size:10px;color:#5a6a8a;font-weight:normal;"></span>'
+      +   '</div>'
+      +   '<textarea class="inp s4-fill-prompt" data-idx="' + i + '" placeholder="例: メッシとロナウドの比較。デビュー年・年齢・通算ゴール・バロンドール・主要タイトルを比較で。ナレーションは2人の違いを語って" '
+      +     'style="display:block;width:100%;font-size:11px;padding:5px 8px;min-height:60px;resize:vertical;background:#0a0d18;color:#e0e0e0;border:1px solid #2a2f4a;"></textarea>'
+      +   '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;">'
+      +     '<button class="btn btn-sm s4-fill-go" data-idx="' + i + '" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 14px;font-weight:bold;">🪄 生成</button>'
+      +     '<span style="flex:1"></span>'
+      +     '<span style="font-size:9px;color:#5a6a8a;">DeepSeek 既定 → 失敗時 Sonnet</span>'
+      +   '</div>'
+      + '</div>'
+      /* ✨ リトル AI: 自然言語で dataSlots を生成（既存 - dataSlots だけ触る用） */
       + '<div style="margin-top:14px;padding:8px;background:#0d1220;border:1px solid #2a3050;border-radius:6px;">'
       +   '<div style="font-size:11px;color:var(--c);font-weight:bold;margin-bottom:6px;display:flex;align-items:center;gap:6px;">'
       +     '✨ AI でデータスロット生成'
@@ -834,6 +1050,13 @@ function getUI() {
     el.querySelectorAll('.s4-slot-del').forEach(function(btn) {
       btn.addEventListener('click', function() {
         s4DeleteSlot(parseInt(btn.getAttribute('data-idx'), 10));
+      });
+    });
+
+    /* 🪄 スライド全部おまかせ AI ボタン */
+    el.querySelectorAll('.s4-fill-go').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        s4FillSlideAI(parseInt(btn.getAttribute('data-idx'), 10));
       });
     });
 
@@ -948,6 +1171,42 @@ function getUI() {
       _renderEditor();
     }
   }
+
+  /* 🪄 スライド全部おまかせ AI: type/title/dataSlots/narration を一気通貫生成 */
+  window.s4FillSlideAI = async function(idx) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const ta = document.querySelector('.s4-fill-prompt[data-idx="' + idx + '"]');
+    const userPrompt = (ta?.value || '').trim();
+    if (!userPrompt) { _msg('注文内容を書いてね'); return; }
+    const status = document.querySelector('.s4-fill-status[data-idx="' + idx + '"]');
+    if (status) status.textContent = '⏳ 全体生成中...';
+    if (!confirm('現在のスライドの type / title / dataSlots / narration を AI 生成で上書きします。OK?')) {
+      if (status) status.textContent = '';
+      return;
+    }
+    try {
+      const r = await fetchJson('/api/v2/ai-fill-slide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt }),
+      });
+      if (!r.ok) throw new Error(r.error || '生成失敗');
+      const m = window.APP.s4.modules[idx];
+      if (m) {
+        if (r.type)      m.type      = r.type;
+        if (r.title)     m.title     = r.title;
+        if (r.narration) m.narration = r.narration;
+        m.dataSlots = r.dataSlots || [];
+      }
+      if (status) status.textContent = '✅ 生成完了 (' + (r.used || 'deepseek') + ')';
+      _renderEditor();
+      _reloadPreview();
+    } catch (e) {
+      if (status) status.textContent = '❌ ' + e.message;
+      _msg('❌ 生成失敗: ' + e.message);
+    }
+  };
 
   /* リトル AI: 自然言語で dataSlots を生成（append / replace） */
   window.s4AskSlotAI = async function(idx, mode) {
