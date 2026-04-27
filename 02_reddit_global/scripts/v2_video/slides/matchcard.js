@@ -120,18 +120,18 @@ function buildMatchcardHTML(mod) {
     statsData:  finalStats,
   });
 
-  // ── 1280×640 wrapper を 1.5x スケールで 1920×960 にフィット
-  //    残り 1080-960=120px を字幕バーが占める ──
+  // ── 1280×720 wrapper を 1.5x スケールで 1920×1080 にフィット
+  //    matchcard は字幕バー無し（情報密度が高くナレーションで補強不要）──
   const extraStyles = `
 .slide { background: ${PALETTE.bg}; }
 .mc-scale {
   position: absolute; top: 0; left: 0;
-  width: 1280px; height: 640px;
+  width: 1280px; height: 720px;
   transform-origin: top left;
   transform: scale(1.5);
 }
 .wrapper {
-  width: 1280px; height: 640px;
+  width: 1280px; height: 720px;
   display: flex; flex-direction: column; position: relative; overflow: hidden;
   background: ${PALETTE.bg};
   font-family: 'Barlow', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
@@ -248,8 +248,8 @@ function buildMatchcardHTML(mod) {
 }
 .pitch {
   position: relative;
-  height: calc(640px - 8px);
-  max-height: calc(640px - 8px);
+  height: calc(720px - 8px);
+  max-height: calc(720px - 8px);
   width: auto; aspect-ratio: 90 / 100;
   background: #1a4a1e; border-radius: 6px; overflow: hidden;
   box-shadow: 0 4px 32px rgba(0,0,0,0.6);
@@ -367,7 +367,6 @@ function buildMatchcardHTML(mod) {
   </div>
 </div>
 </div>
-${buildSubtitleBar(subText, { height: 120, maxLineLen: 36 })}
 <div style="position:absolute;top:0;left:0;width:1920px;height:1080px;border:4px dashed #ff2266;pointer-events:none;z-index:9999;box-sizing:border-box;"></div>
 <script>
 (function() {
