@@ -265,15 +265,61 @@ ${sofaStr}
     const ctxPrimary   = _entityContext(primary);
     const ctxSecondary = secondary ? _entityContext(secondary) : '';
 
+    // ── 案件全体の文脈（saved_projects.json から）──
+    let projectCtx = '';
+    try {
+      const sp = safeJson(path.join(DATA_DIR, 'saved_projects.json'), []);
+      const proj = (Array.isArray(sp) ? sp : []).find(p => p.id === postId);
+      if (proj) {
+        const topComments = (proj.raw?.comments || [])
+          .slice(0, 5)
+          .map(c => '- ' + (c.bodyJa || c.body || '').slice(0, 160))
+          .filter(s => s.length > 4)
+          .join('\n');
+        projectCtx = `【案件全体の文脈】
+タイトル: ${proj.title || proj.titleOrig || '(?)'}
+原題: ${proj.titleOrig || '(?)'}
+${topComments ? '上位コメント抜粋:\n' + topComments : ''}`;
+      }
+    } catch (_) {}
+
+    // ── 前後スライドの要約（連続性の橋渡し用）──
+    const allMods = modulesData.modules || [];
+    function _sumSlide(m, prefix) {
+      if (!m) return '';
+      const ds = (m.dataSlots || []).slice(0, 3).map(s =>
+        s.leftValue != null
+          ? `${s.label}: ${s.leftValue} vs ${s.rightValue}`
+          : `${s.label}: ${s.value}`
+      ).join(' / ');
+      return `[${prefix} type=${m.type} title=${m.title || ''}]
+  narration: ${(m.narration || '').slice(0, 200)}
+  dataSlots: ${ds || '(なし)'}`;
+    }
+    const prevSlides = [
+      _sumSlide(allMods[idx - 2], '#' + (idx - 1)),
+      _sumSlide(allMods[idx - 1], '#' + idx),
+    ].filter(Boolean).join('\n');
+    const nextSlides = [
+      _sumSlide(allMods[idx + 1], '#' + (idx + 2)),
+      _sumSlide(allMods[idx + 2], '#' + (idx + 3)),
+    ].filter(Boolean).join('\n');
+
     const prompt = `あなたはサッカーYouTubeの脚本AI。スライド1枚の本体を完全に組み立てる。
 type / title / dataSlots / narration を**一気通貫で**生成してください。
 
-【現状（参考、変更可）】
+${projectCtx}
+
+【現スライド情報（# ${idx + 1} 枚目 / 全 ${allMods.length} 枚）】
 type: ${mod.type || '?'}
 title: ${mod.title || ''}
 mainKey: ${mod.mainKey || '?'}
 ${secondary ? 'secondary: ' + secondary : ''}
 脚本指示: ${mod.scriptDir || '(指示なし)'}
+
+${prevSlides ? '【前のスライド（流れの上流）】\n' + prevSlides : ''}
+
+${nextSlides ? '【後のスライド（流れの下流）】\n' + nextSlides : ''}
 
 【利用可能データ】
 ${ctxPrimary}
@@ -297,10 +343,18 @@ ${userPrompt}
   ・insight: dataSlots は空配列、代わりに catchphrases を別途返してOK（今回は dataSlots 中心で）
 - 件数: 4〜10件
 - データに**明示されていない**値・固有名・数字は **絶対** 出さない（推測補完NG）
+- **通算値（通算ゴール・通算試合等）は キャリアテーブル の合計値を計算して出す**
+  例: バルサ672 + PSG 32 + マイアミ N → 「合計XXX」と算出
+  ※案件タイトルに「961ゴール」のような最新数字があれば、そちらを優先（更新が早い）
 - narration:
   ・**dataSlots と整合する**（dataSlots の数字・名前を使って語る）
   ・250〜320文字（40秒目安）
   ・視聴者に語りかける口調、熱量と説得力
+  ・**前後のスライドと自然につながる橋渡しの語り口**を必ず使う：
+    ・冒頭は前スライドからの転換（例「ここで」「ところで」「では」「数字を比較してみましょう」）
+    ・末尾は次スライドへ意識を誘導（例「まさに〜の領域に達しようとしている」「次に注目すべきは〜」）
+    ・前スライドで既に語った数字を不自然に再放出しない
+    ・案件全体のメインテーマ（タイトル参照）を絶対に外さない
 - title: 10〜25文字、フックのある表現
 
 【出力】JSONのみ（マークダウン不要）:
