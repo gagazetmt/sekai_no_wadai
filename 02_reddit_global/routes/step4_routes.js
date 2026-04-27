@@ -439,6 +439,84 @@ ${userPrompt}
       return res.status(500).json({ error: 'AI応答のパースに失敗' });
     }
 
+    // ── Pass 2: DeepSeek 自己監修（事実整合性チェック）──
+    //   元データと生成結果を突き合わせ、矛盾を検出して修正版を返させる。
+    //   失敗時は Pass 1 の結果をそのまま使う（フェイルセーフ）。
+    let reviewIssues = [];
+    let reviewUsed   = false;
+    try {
+      const reviewPrompt = `あなたはサッカーYouTube脚本の事実整合性チェッカー。
+別のAIが生成した narration / dataSlots を、元データと突き合わせて矛盾があれば指摘・修正してください。
+
+【元データ】
+${ctxPrimary}
+${ctxSecondary}
+${ctxH2H}
+
+【生成結果（チェック対象）】
+type: ${parsed.type}
+title: ${parsed.title || ''}
+dataSlots: ${JSON.stringify(parsed.dataSlots).slice(0, 2000)}
+narration:
+${parsed.narration || ''}
+
+【チェック観点（厳密に）】
+1. narration 内の固有数字（順位/ゴール数/試合数/年/勝敗）が元データに辿れるか
+2. narration 内の **リーグ名・大会名** が元データの leagueName と一致するか
+   ・元データの leagueName が "UEFA Champions League" なのに narration が「リーグ戦◯位」と書いてたら誤り
+   ・"Bundesliga" / "Premier League" 等の国内リーグ名と「リーグ戦」が一致してれば正
+   ・standing は leagueName が示す競技の順位であることを忘れずに
+3. dataSlots の値と narration の説明が同じ事実を指しているか
+4. 元データに**明示されていない**数字（CL優勝回数、通算試合数等）を narration や dataSlots が出してないか
+   ・H2H ブロックがあれば「直近5試合」等の範囲付き表現になっているか（「全期間 X勝Y敗」と断言してないか）
+5. 通算値の計算（複数クラブのcaps合計など）が元データから検算できるか
+6. 固有名詞（チーム名・選手名）が元データの綴りと一致するか
+
+【修正方針】
+- narration の修正は **最小限・ピンポイント**で。文体・前後スライドとの繋ぎは維持
+- dataSlots の修正は数字や固有名の誤りのみ
+- 元データに該当が無い数字は「データ未取得」と記すか narration から削除
+- 「矛盾なし」なら issues は空配列、fixed には元の値をそのまま入れて返す
+
+【出力】JSONのみ（マークダウン不要）:
+{
+  "issues": [
+    { "where": "narration|dataSlots", "claim": "問題箇所の引用", "data_says": "元データの該当値（無ければ「無」）", "fix": "修正方針" }
+  ],
+  "fixed": {
+    "type": "${parsed.type}",
+    "title": "...",
+    "dataSlots": [...],
+    "narration": "..."
+  }
+}`;
+
+      const reviewRaw = await callAI({
+        forceProvider: 'deepseek',
+        model: 'deepseek-chat', max_tokens: 3500,
+        messages: [{ role: 'user', content: reviewPrompt }],
+      });
+      const rm = reviewRaw && reviewRaw.match(/\{[\s\S]*\}/);
+      if (rm) {
+        const reviewed = JSON.parse(rm[0]);
+        if (Array.isArray(reviewed.issues) && reviewed.fixed?.type && Array.isArray(reviewed.fixed.dataSlots)) {
+          reviewIssues = reviewed.issues;
+          if (reviewIssues.length > 0) {
+            console.log(`[ai-fill-slide] 自己監修で ${reviewIssues.length} 件の矛盾検出 → 修正適用`);
+            reviewIssues.forEach(iss =>
+              console.log(`  - [${iss.where}] "${iss.claim}" → ${iss.fix}`)
+            );
+            parsed = reviewed.fixed;
+            reviewUsed = true;
+          } else {
+            console.log('[ai-fill-slide] 自己監修パス（矛盾なし）');
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[ai-fill-slide] 自己監修例外（Pass1結果を使用）:', e.message);
+    }
+
     // 反映（既存の siBindingLeft/Right や homeTeam/awayTeam 等の補助フィールドは温存）
     const ALLOWED_TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard'];
     if (ALLOWED_TYPES.includes(parsed.type)) mod.type = parsed.type;
@@ -455,6 +533,8 @@ ${userPrompt}
       dataSlots: mod.dataSlots,
       narration: mod.narration,
       used,
+      reviewed:    reviewUsed,
+      reviewIssues,
     });
   } catch (e) {
     console.error('[v2/ai-fill-slide]', e);
@@ -1570,9 +1650,22 @@ function getUI() {
         if (r.narration) m.narration = r.narration;
         m.dataSlots = r.dataSlots || [];
       }
-      if (status) status.textContent = '✅ 生成完了 (' + (r.used || 'deepseek') + ')';
+      let suffix = '';
+      if (r.reviewed && Array.isArray(r.reviewIssues) && r.reviewIssues.length) {
+        suffix = ' / 🔍 自己監修で ' + r.reviewIssues.length + ' 件修正';
+      } else if (r.reviewIssues && r.reviewIssues.length === 0) {
+        suffix = ' / 🔍 監修OK';
+      }
+      if (status) status.textContent = '✅ 生成完了 (' + (r.used || 'deepseek') + ')' + suffix;
       _renderEditor();
       _reloadPreview();
+      // 監修で修正があった場合、何が直されたか軽く通知
+      if (r.reviewed && r.reviewIssues?.length) {
+        const summary = r.reviewIssues.slice(0, 3).map(function(it) {
+          return '• [' + (it.where || '?') + '] ' + (it.claim || '').slice(0, 60) + ' → ' + (it.fix || '').slice(0, 60);
+        }).join('\\n');
+        _msg('🔍 自己監修で ' + r.reviewIssues.length + ' 件修正:\\n' + summary);
+      }
     } catch (e) {
       if (status) status.textContent = '❌ ' + e.message;
       _msg('❌ 生成失敗: ' + e.message);
