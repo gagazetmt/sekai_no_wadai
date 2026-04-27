@@ -402,13 +402,22 @@ ${postList}`;
 
 // ─── メイン ───────────────────────────────────────────────────────────────────
 async function main() {
+  // 入力: 新形式 stories_YYYY_MM_DD.json (アンダースコア)
+  //       旧形式 candidates_YYYY-MM-DD.json も互換のためフォールバック
+  const storiesFile    = path.join(DATA_DIR, `stories_${dateArg.replace(/-/g, "_")}.json`);
   const candidatesFile = path.join(DATA_DIR, `candidates_${dateArg}.json`);
-  if (!fs.existsSync(candidatesFile)) {
-    console.error(`❌ candidates_${dateArg}.json が見つかりません。先に fetch_daily_candidates.js を実行してください。`);
+  let candidatesData;
+  if (fs.existsSync(storiesFile)) {
+    candidatesData = JSON.parse(fs.readFileSync(storiesFile, "utf8"));
+    console.log(`📥 入力: stories_${dateArg.replace(/-/g, "_")}.json (${(candidatesData.posts || []).length}件)`);
+  } else if (fs.existsSync(candidatesFile)) {
+    candidatesData = JSON.parse(fs.readFileSync(candidatesFile, "utf8"));
+    console.log(`📥 入力: candidates_${dateArg}.json (旧形式・${(candidatesData.posts || []).length}件)`);
+  } else {
+    console.error(`❌ 入力ファイルが見つかりません: stories_${dateArg.replace(/-/g, "_")}.json / candidates_${dateArg}.json`);
+    console.error(`   先に fetch_daily_candidates.js を実行してください。`);
     process.exit(1);
   }
-
-  const candidatesData = JSON.parse(fs.readFileSync(candidatesFile, "utf8"));
   const allPosts = (candidatesData.posts || []).map(p => ({ ...p, type: p.type || detectType(p.title||"") }));
 
   // 過去168時間（7日分）の content JSON を確認してスキップ対象を把握
