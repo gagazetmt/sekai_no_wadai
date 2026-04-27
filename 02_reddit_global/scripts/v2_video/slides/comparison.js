@@ -301,7 +301,7 @@ function buildComparisonHTML(mod) {
   </div>
 </div>
 
-${buildSubtitleBar(narr, { height: 110, maxLineLen: 32 })}`;
+${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

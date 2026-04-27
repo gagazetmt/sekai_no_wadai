@@ -74,12 +74,10 @@ function audioDirFor(postId) {
 async function ensureSlideAudio(mod, idx, postId) {
   if (Array.isArray(mod.audio) && mod.audio.length) return false; // 既に生成済
   const narr = String(mod.narration || '').trim();
-  if (!narr) return false; // ナレ無しは無音でOK
+  // reaction はコメントだけでも音声化対象（narration が空でも進む）
+  if (!narr && mod.type !== 'reaction') return false;
 
-  const chunkAware = ['insight', 'reaction', 'history'].includes(mod.type);
-  const chunks = chunkAware
-    ? tts.splitIntoChunks(mod.narration, mod.narrationChunks)
-    : [narr];
+  const chunks = tts.buildChunksForModule(mod);
   if (!chunks.length) return false;
 
   const dir = audioDirFor(postId);
@@ -281,11 +279,17 @@ async function main() {
   const outVideo  = path.join(VIDEO_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20)}_${ts}.mp4`);
   if (!fs.existsSync(workDir)) fs.mkdirSync(workDir, { recursive: true });
 
-  // ── TTS 自動生成フェーズ（narration あり / audio 未生成のスライドのみ）──
+  // ── TTS 自動生成フェーズ（narration ありか reaction の comments あり / audio 未生成のスライドのみ）──
   updateJob(jobId, { status: 'tts-generating', totalSlides: modules.length });
   const targets = modules
     .map((m, i) => ({ i, m }))
-    .filter(({ m }) => String(m.narration || '').trim() && !(Array.isArray(m.audio) && m.audio.length));
+    .filter(({ m }) => {
+      if (Array.isArray(m.audio) && m.audio.length) return false;
+      const hasNarr = !!String(m.narration || '').trim();
+      const reactionHasComments = m.type === 'reaction'
+        && Array.isArray(m.comments) && m.comments.some(c => String(c?.text || '').trim());
+      return hasNarr || reactionHasComments;
+    });
   if (targets.length) {
     console.log(`🎙️ TTS自動生成: ${targets.length}/${modules.length} スライド`);
     for (let k = 0; k < targets.length; k++) {

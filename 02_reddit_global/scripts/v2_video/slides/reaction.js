@@ -5,7 +5,7 @@
 //   - 太い黒枠（3px、ハイライトは4px）
 //   - 上から順に slideDown アニメーション
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
 
 // V1 の CMT_BG / CMT_BG_HL カラーパレット
 const CMT_BG    = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
@@ -125,7 +125,7 @@ function buildReactionHTML(mod) {
 <div class="bg-overlay"></div>
 <div class="r-title">&#x1F4AC; ${esc(title)}</div>
 <div class="comments-area">${cardsHtml}</div>
-${buildSubtitleBar(narr, { height: 110, maxLineLen: 32 })}`;
+${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

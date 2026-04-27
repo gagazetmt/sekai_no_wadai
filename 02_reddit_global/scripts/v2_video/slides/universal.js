@@ -2,7 +2,7 @@
 // 汎用フォールバック：背景 + タイトル + ナレーションテキスト
 // stats / profile / comparison / reaction など、個別テンプレを書いてない型の fallback
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod } = require('./_common');
 
 function buildUniversalHTML(mod) {
   const bg    = imgDataUri(mod.bgImage);

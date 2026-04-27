@@ -2,7 +2,7 @@
 // Stats / Profile スライド：型3 ベース（左=画像 / 右=データカード2x2 grid）
 // テンプレート元: /型３/index.html
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t, _player } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, _t, _player } = require('./_common');
 
 // チーム or 選手 → 日本語/カタカナ
 function _entityName(raw) {
@@ -141,7 +141,8 @@ function buildStatsHTML(mod) {
 .card-value {
   font-size: 64px;
   font-weight: 900;
-  color: ${PALETTE.text};
+  color: #FFD700;  /* 黄金色 — データを目立たせる */
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 18px rgba(255, 215, 0, 0.25);
   line-height: 1.05;
   letter-spacing: -1px;
   display: -webkit-box;
@@ -222,7 +223,7 @@ function buildStatsHTML(mod) {
   <div class="type-badge">${esc((mod.type || '').toUpperCase())}</div>
   <div class="card-grid">${cardsHtml}</div>
 </div>
-${buildSubtitleBar(narr, { height: 90, maxLineLen: 32 })}`;
+${buildSubtitleBar(subtitleArgFromMod(mod), { height: 90, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

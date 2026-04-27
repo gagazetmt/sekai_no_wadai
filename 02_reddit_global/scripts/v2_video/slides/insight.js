@@ -2,7 +2,7 @@
 // Insight スライド：キャッチコピーが上から順にフェードイン（V1 再現）
 // テンプレート元: /insight/index.html（プレビュー版から editor を除外して1920x1080 に最適化）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
 
 function buildInsightHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
@@ -90,7 +90,7 @@ function buildInsightHTML(mod) {
 <div class="catchphrases">
   ${phrases.map(p => `<div class="phrase">${esc(p)}</div>`).join('')}
 </div>
-${buildSubtitleBar(subText, { height: 110, maxLineLen: 32 })}`;
+${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

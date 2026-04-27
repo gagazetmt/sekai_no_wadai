@@ -174,13 +174,74 @@ function splitSubtitle(text, maxLineLen = 20) {
 }
 
 // 字幕バー HTML を生成（共通）
+//   引数1: テキスト文字列 OR チャンク配列 [{ text, durationSec }, ...]
 //   options.height（px）: 字幕バー高さ。デフォルト 110
-//   options.maxLineLen   : 1行最大文字数。デフォルト 36
-function buildSubtitleBar(text, options = {}) {
-  const t = String(text || '').trim();
-  if (!t) return '';
+//   options.maxLineLen   : 1行最大文字数。デフォルト 32
+//   options.tailPadMs    : 末尾余韻ms（音声側 TAIL_PAD_MS と揃える）。デフォルト 400
+//
+// 文字列が渡された場合は従来通り静的字幕。
+// チャンク配列が渡された場合は各チャンクのテキストを音声タイミングに合わせて切替表示。
+function buildSubtitleBar(textOrChunks, options = {}) {
   const height = options.height || 110;
   const maxLineLen = options.maxLineLen || 20;
+
+  // チャンク配列 → タイミング連動字幕
+  if (Array.isArray(textOrChunks) && textOrChunks.length) {
+    const items = textOrChunks
+      .map(c => ({
+        text: String(c?.text || '').trim(),
+        durationSec: Number(c?.durationSec) || 0,
+      }))
+      .filter(c => c.text);
+    if (items.length === 0) return '';
+    if (items.length === 1) return buildSubtitleBar(items[0].text, options);
+
+    const tailPadSec = (options.tailPadMs ?? 400) / 1000;
+    let cum = 0;
+    const segs = items.map((c, i) => {
+      const start = cum;
+      cum += c.durationSec;
+      const end = cum;
+      const { lines, fontSize } = splitSubtitle(c.text, maxLineLen);
+      return { idx: i, start, end, lines, fontSize };
+    });
+    const totalSec = cum + tailPadSec;
+    if (totalSec <= 0) return buildSubtitleBar(items[0].text, options);
+
+    const FADE_SEC = 0.08;
+    const fadePct  = (FADE_SEC / totalSec * 100);
+
+    const keyframes = segs.map(s => {
+      const sPct = (s.start / totalSec * 100);
+      const ePct = (s.end / totalSec * 100);
+      const sIn  = Math.min(sPct + fadePct, ePct);
+      const eOut = Math.max(ePct - fadePct, sPct);
+      return `@keyframes v2subc_${s.idx} {`
+        + `0%{opacity:0}`
+        + `${sPct.toFixed(3)}%{opacity:0}`
+        + `${sIn.toFixed(3)}%{opacity:1}`
+        + `${eOut.toFixed(3)}%{opacity:1}`
+        + `${ePct.toFixed(3)}%{opacity:0}`
+        + `100%{opacity:0}}`;
+    }).join('\n');
+
+    const chunkDivs = segs.map(s => {
+      const fontStyle = s.fontSize ? `font-size:${s.fontSize}px;` : '';
+      const linesHtml = s.lines.map(l => `<div>${esc(l)}</div>`).join('');
+      return `<div class="v2-sub-chunk" style="opacity:0;animation:v2subc_${s.idx} ${totalSec.toFixed(3)}s linear forwards;">`
+        + `<div class="v2-sub-text" style="${fontStyle}">${linesHtml}</div></div>`;
+    }).join('');
+
+    return `<style>${keyframes}
+      .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
+      .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+      .v2-sub-text{color:#fff;font-size:38px;font-weight:800;text-align:center;padding:0 70px;line-height:1.35;}
+    </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
+  }
+
+  // 従来パス（単一テキスト・静的字幕）
+  const t = String(textOrChunks || '').trim();
+  if (!t) return '';
   const { lines, fontSize } = splitSubtitle(t, maxLineLen);
   const fontStyle = fontSize ? `font-size: ${fontSize}px;` : '';
   const linesHtml = lines.map(l => `<div>${esc(l)}</div>`).join('');
@@ -190,6 +251,14 @@ function buildSubtitleBar(text, options = {}) {
     + `display:flex;align-items:center;justify-content:center;z-index:20">`
     + `<div style="color:#fff;font-size:38px;font-weight:800;text-align:center;`
     + `padding:0 70px;line-height:1.35;${fontStyle}">${linesHtml}</div></div>`;
+}
+
+// modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。
+function subtitleArgFromMod(mod) {
+  if (mod && Array.isArray(mod.audio) && mod.audio.length > 1) {
+    return mod.audio;
+  }
+  return mod?.narration || '';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -384,7 +453,7 @@ function _fmtDate(d) {
 }
 
 module.exports = {
-  W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, mapImagesToModule,
+  W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,
 };

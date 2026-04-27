@@ -42,24 +42,58 @@ const ALLOWED_EMOTIONS = new Set([
   'happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'neutral'
 ]);
 
+// 数字 → ひらがな読み（0〜9999 までカバー）
+//   29 → "にじゅうきゅう"
+//   100 → "ひゃく"
+//   3000 → "さんぜん"
+function numToFullJa(n) {
+  n = parseInt(n, 10);
+  if (!Number.isFinite(n) || n < 0) return String(n);
+  if (n === 0) return 'ゼロ';
+  const ones  = ['', 'いち','に','さん','よん','ご','ろく','なな','はち','きゅう'];
+  const ten100 = (h) => h === 1 ? 'ひゃく' : h === 3 ? 'さんびゃく' : h === 6 ? 'ろっぴゃく' : h === 8 ? 'はっぴゃく' : ones[h] + 'ひゃく';
+  const ten1000 = (k) => k === 1 ? 'せん' : k === 3 ? 'さんぜん' : k === 8 ? 'はっせん' : ones[k] + 'せん';
+  if (n < 10) return ones[n];
+  if (n < 100) {
+    const t = Math.floor(n / 10), o = n % 10;
+    const tStr = t === 1 ? 'じゅう' : ones[t] + 'じゅう';
+    return tStr + (o ? ones[o] : '');
+  }
+  if (n < 1000) {
+    const h = Math.floor(n / 100), rest = n % 100;
+    return ten100(h) + (rest ? numToFullJa(rest) : '');
+  }
+  if (n < 10000) {
+    const k = Math.floor(n / 1000), rest = n % 1000;
+    return ten1000(k) + (rest ? numToFullJa(rest) : '');
+  }
+  return String(n);
+}
+
+// 1桁用（スコア "3-1" 等で従来から使ってる "ふた/みっつ" 系の短縮形は使わない）
+function numToJa1(n) {
+  const v = parseInt(n, 10);
+  const d = ['ゼロ','いち','に','さん','よん','ご','ろく','なな','はち','きゅう'];
+  if (v < 10) return d[v] || String(v);
+  return numToFullJa(v);
+}
+
 // 日本語ナレ向けの軽サニタイズ（読み崩れ防止）
 //  - スコア表記 "3-1" を「さんたいいち」風に
+//  - "29試合" のような 数字+カウンター を「にじゅうきゅうしあい」風にカタカナ化
+//    （TTSが「ふたじゅうきゅう」のような誤読を出す問題への対策）
 //  - 中点・全角スラッシュ等を整える
 //  - 連続空白の正規化
 function sanitizeForTts(text) {
   if (!text) return '';
-  const numToJa = (n) => {
-    const v = parseInt(n, 10);
-    const d = ['ぜろ','いち','に','さん','よん','ご','ろく','なな','はち','きゅう'];
-    if (v < 10) return d[v];
-    if (v === 10) return 'じゅう';
-    return 'じゅう' + d[v - 10];
-  };
-  // 辞書置換 → スコア → 括弧/中点/改行の順
+  // 辞書置換 → スコア → 数字+単位 → 括弧/中点/改行の順
   return applyJpDict(String(text))
     // "3-1" / "3−1" / "3ー1" 等のスコア → 「さんたいいち」
     .replace(/(\d+)\s*[-－ー−–—]\s*(\d+)/g, (_m, a, b) =>
-      `${numToJa(a)}たい${numToJa(b)}`)
+      `${numToJa1(a)}たい${numToJa1(b)}`)
+    // 数字+カウンター → カタカナ読み（よく出る単位を網羅）
+    .replace(/(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|分|秒|億|万|千|度|度目|個)/g,
+      (_m, num, unit) => numToFullJa(num) + unit)
     // 全角・半角の括弧を読みやすく
     .replace(/【([^】]+)】/g, '$1')
     .replace(/〝([^〟]+)〟/g, '$1')
@@ -183,9 +217,31 @@ function probeDurationSec(filePath) {
   }
 }
 
+// モジュールタイプを考慮してTTSチャンクを構築する。
+//   - reaction: narration の冒頭 + comments[] を順次音声化（コメントも読み上げる）
+//   - insight / history: chunkAware（narrationを文末分割）
+//   - その他: narration を1つのチャンクに
+function buildChunksForModule(mod) {
+  if (!mod) return [];
+  const chunkAware = ['insight', 'reaction', 'history'].includes(mod.type);
+  const baseChunks = chunkAware
+    ? splitIntoChunks(mod.narration, mod.narrationChunks)
+    : [String(mod.narration || '').trim()].filter(Boolean);
+
+  if (mod.type === 'reaction') {
+    const commentChunks = (Array.isArray(mod.comments) ? mod.comments : [])
+      .map(c => String(c?.text || '').trim())
+      .filter(Boolean)
+      .slice(0, 7);
+    return [...baseChunks, ...commentChunks];
+  }
+  return baseChunks;
+}
+
 module.exports = {
   generateMiniMaxTTS,
   splitIntoChunks,
+  buildChunksForModule,
   sanitizeForTts,
   probeDurationSec,
   DEFAULT_VOICE,

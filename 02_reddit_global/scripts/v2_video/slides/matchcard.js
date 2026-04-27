@@ -4,7 +4,7 @@
 // テンプレート元: /match_center_wide.html (1280x720) を transform: scale(1.5) で 1920x1080 化
 
 const {
-  PALETTE, esc, wrapHTML, buildSubtitleBar,
+  PALETTE, esc, wrapHTML, buildSubtitleBar, subtitleArgFromMod,
   _t, _abbr, _player, _fmtDate,
 } = require('./_common');
 

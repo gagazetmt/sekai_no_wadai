@@ -2,7 +2,7 @@
 // Profile スライド (旧 matchcard)：試合プレビュー（左=メイン画像+タイトル / 右=HOME/AWAYミニ+データ行4件）
 // テンプレート元: /matchcard/index.html（= 型1）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, _t } = require('./_common');
 
 function buildProfileHTML(mod) {
   // dataSlots 4件を data-row で使う
@@ -127,7 +127,7 @@ function buildProfileHTML(mod) {
 .row-value {
   flex: 1;
   background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,215,0,0.25);
   border-radius: 14px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -136,7 +136,8 @@ function buildProfileHTML(mod) {
   padding: 8px 24px 8px 35px;
   font-size: 46px;
   font-weight: 900;
-  color: ${PALETTE.text};
+  color: #FFD700;  /* 黄金色 — データを目立たせる */
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 18px rgba(255, 215, 0, 0.22);
   line-height: 1.05;
   overflow: hidden;
   word-break: break-word;
@@ -207,7 +208,7 @@ function buildProfileHTML(mod) {
   </div>
   <div class="data-list">${dataRows}</div>
 </div>
-${buildSubtitleBar(subText, { height: 90, maxLineLen: 32 })}`;
+${buildSubtitleBar(subtitleArgFromMod(mod), { height: 90, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }
