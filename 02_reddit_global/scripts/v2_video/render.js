@@ -32,7 +32,22 @@ const { mapImagesToModule }   = require('./slides/_common');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const W = 1920, H = 1080, FPS = 30;
-const SLIDE_DURATION_MS = 8000; // Phase 4a: 各スライド固定8秒（音声長依存は Phase 4b で）
+const DEFAULT_SLIDE_MS = 8000;   // 音声無しスライドのフォールバック
+const TAIL_PAD_MS      = 400;    // 音声末尾の余韻
+const MAX_SLIDE_MS     = 60000;  // 暴走防止
+
+// 音声チャンク合計 + 余韻 → スライド長(ms)を決定。音声無しなら DEFAULT
+function slideDurationMs(mod) {
+  const a = Array.isArray(mod.audio) ? mod.audio : [];
+  if (a.length) {
+    const sumSec = a.reduce((s, c) => s + (c.durationSec || 0), 0);
+    if (sumSec > 0) {
+      const ms = Math.round(sumSec * 1000) + TAIL_PAD_MS;
+      return Math.min(ms, MAX_SLIDE_MS);
+    }
+  }
+  return DEFAULT_SLIDE_MS;
+}
 
 const BASE_DIR     = path.join(__dirname, '..', '..');
 const DATA_DIR     = path.join(BASE_DIR, 'data');
@@ -115,6 +130,59 @@ async function renderSlide(page, html, durationMs, outPath) {
   await done;
 }
 
+// 1モジュールのナレーションを 1ファイルにまとめる。指定 durationMs に pad。
+//   - mod.audio が無ければ「無音」を生成して返す
+//   - chunk が複数あれば concat → apad で全体長に揃える
+function buildSlideAudio(mod, durationMs, outPath) {
+  const a = Array.isArray(mod.audio) ? mod.audio : [];
+  const durSec = (durationMs / 1000).toFixed(3);
+
+  if (!a.length) {
+    // 無音生成
+    execSync(
+      `"${FFMPEG}" -y -f lavfi -i anullsrc=r=44100:cl=stereo -t ${durSec} -c:a aac -b:a 128k "${outPath}"`,
+      { stdio: 'pipe' }
+    );
+    return;
+  }
+
+  // chunk を絶対パスに正規化
+  const absFiles = a.map(c => path.resolve(BASE_DIR, c.file));
+  // すべて存在チェック（不在は無音にフォールバック）
+  const missing = absFiles.filter(f => !fs.existsSync(f));
+  if (missing.length === absFiles.length) {
+    console.warn('  ⚠️ chunk audio 全て不在 → 無音');
+    execSync(`"${FFMPEG}" -y -f lavfi -i anullsrc=r=44100:cl=stereo -t ${durSec} -c:a aac -b:a 128k "${outPath}"`, { stdio: 'pipe' });
+    return;
+  }
+
+  // 単一 chunk なら concat 不要
+  if (absFiles.length === 1) {
+    execSync(
+      `"${FFMPEG}" -y -i "${absFiles[0]}" -af "apad=whole_dur=${durSec}" -ar 44100 -ac 2 -c:a aac -b:a 128k "${outPath}"`,
+      { stdio: 'pipe' }
+    );
+    return;
+  }
+
+  // 複数 chunk → concat filter で結合（mp3 ヘッダ衝突回避のため demuxer ではなく filter）
+  const inputs = absFiles.map(f => `-i "${f}"`).join(' ');
+  const filterIn = absFiles.map((_, i) => `[${i}:a]`).join('');
+  const filterStr = `${filterIn}concat=n=${absFiles.length}:v=0:a=1[c];[c]apad=whole_dur=${durSec}[out]`;
+  execSync(
+    `"${FFMPEG}" -y ${inputs} -filter_complex "${filterStr}" -map "[out]" -ar 44100 -ac 2 -c:a aac -b:a 128k "${outPath}"`,
+    { stdio: 'pipe' }
+  );
+}
+
+// video-only mp4 + audio mp4 → mux mp4
+function muxAV(videoPath, audioPath, outPath) {
+  execSync(
+    `"${FFMPEG}" -y -i "${videoPath}" -i "${audioPath}" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 128k -shortest "${outPath}"`,
+    { stdio: 'pipe' }
+  );
+}
+
 async function main() {
   const postId = process.argv[2];
   const jobId  = process.argv[3] || `job_${Date.now()}`;
@@ -162,40 +230,49 @@ async function main() {
   await page.setViewport({ width: W, height: H });
 
   const slideMp4s = [];
+  let totalMs = 0;
 
   try {
     for (let i = 0; i < modules.length; i++) {
-      const mod  = modules[i];
-      const html = buildSlideHTML(mod);
-      const out  = path.join(workDir, `slide_${String(i).padStart(2, '0')}.mp4`);
-      console.log(`[${i+1}/${modules.length}] ${mod.type} "${(mod.title||'').slice(0,30)}" → レンダリング中...`);
-      await renderSlide(page, html, SLIDE_DURATION_MS, out);
-      slideMp4s.push(out);
+      const mod      = modules[i];
+      const html     = buildSlideHTML(mod);
+      const durMs    = slideDurationMs(mod);
+      totalMs += durMs;
+      const videoOnly = path.join(workDir, `slide_${String(i).padStart(2, '0')}_v.mp4`);
+      const audioOnly = path.join(workDir, `slide_${String(i).padStart(2, '0')}_a.m4a`);
+      const muxed     = path.join(workDir, `slide_${String(i).padStart(2, '0')}.mp4`);
+      const audioCount = Array.isArray(mod.audio) ? mod.audio.length : 0;
+      console.log(`[${i+1}/${modules.length}] ${mod.type} "${(mod.title||'').slice(0,30)}" / ${(durMs/1000).toFixed(1)}s / chunks=${audioCount} → レンダリング中...`);
+      await renderSlide(page, html, durMs, videoOnly);
+      buildSlideAudio(mod, durMs, audioOnly);
+      muxAV(videoOnly, audioOnly, muxed);
+      slideMp4s.push(muxed);
       updateJob(jobId, { doneSlides: i + 1 });
     }
   } finally {
     await browser.close();
   }
 
-  // concat
+  // concat (各 slide は video+audio を持っている)
   updateJob(jobId, { status: 'concatenating' });
   console.log('🔗 concat中...');
   const concatList = path.join(workDir, 'concat.txt');
   fs.writeFileSync(concatList, slideMp4s.map(p => `file '${p.replace(/\\/g, '/')}'`).join('\n'));
-  const videoOnly = path.join(workDir, 'video_only.mp4');
-  execSync(`"${FFMPEG}" -y -f concat -safe 0 -i "${concatList}" -c copy "${videoOnly}"`, { stdio: 'pipe' });
+  const concatMp4  = path.join(workDir, 'concat.mp4');
+  // codec 揃えるため re-encode（slide ごとに同じ encoder で作っているので copy でも基本OKだが安全側）
+  execSync(`"${FFMPEG}" -y -f concat -safe 0 -i "${concatList}" -c copy "${concatMp4}"`, { stdio: 'pipe' });
 
-  // BGM を乗せる
+  // BGM を 18% で重ねる（ナレーションを邪魔しない）
   updateJob(jobId, { status: 'mixing-audio' });
-  console.log('🎵 BGM乗せ中...');
-  const totalSec = modules.length * SLIDE_DURATION_MS / 1000;
+  console.log('🎵 BGM ミックス中...');
+  const totalSec = (totalMs / 1000).toFixed(3);
   if (fs.existsSync(BGM_PATH)) {
-    const cmd = `"${FFMPEG}" -y -i "${videoOnly}" -stream_loop -1 -i "${BGM_PATH}" ` +
-                `-filter_complex "[1:a]volume=0.2[bgm];[bgm]atrim=0:${totalSec}[a]" ` +
-                `-map 0:v -map "[a]" -c:v copy -c:a aac -shortest "${outVideo}"`;
+    const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${BGM_PATH}" ` +
+                `-filter_complex "[1:a]volume=0.18,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
+                `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
     execSync(cmd, { stdio: 'pipe' });
   } else {
-    fs.copyFileSync(videoOnly, outVideo);
+    fs.copyFileSync(concatMp4, outVideo);
   }
 
   updateJob(jobId, {

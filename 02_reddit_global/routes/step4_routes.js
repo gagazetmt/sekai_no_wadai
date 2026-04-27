@@ -717,6 +717,140 @@ router.get('/v2/videos', (req, res) => {
   } catch (e) { res.json({ videos: [], error: e.message }); }
 });
 
+// ═══════════════════════════════════════════════════════════
+// MiniMax TTS (Phase 5)
+// ═══════════════════════════════════════════════════════════
+
+const AUDIO_DIR = path.join(DATA_DIR, 'v2_audio');
+if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
+
+function audioDirFor(postId) {
+  const safe = (postId || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_');
+  const dir  = path.join(AUDIO_DIR, safe);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+// ─── /v2/tts-presets : voice + model 候補リスト + デフォルト ──
+router.get('/v2/tts-presets', (req, res) => {
+  try {
+    const tts = require('../scripts/v2_video/tts_minimax');
+    res.json({
+      voices: tts.PRESET_VOICES,
+      models: tts.PRESET_MODELS,
+      defaultVoice: tts.DEFAULT_VOICE,
+      defaultModel: tts.DEFAULT_MODEL,
+      emotions: ['(なし)', ...tts.ALLOWED_EMOTIONS],
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── /v2/tts-preview : 試聴用 (保存しない、base64 mp3 を返す) ──
+router.post('/v2/tts-preview', express.json({ limit: '512kb' }), async (req, res) => {
+  try {
+    const { generateMiniMaxTTS } = require('../scripts/v2_video/tts_minimax');
+    const { text, voiceId, model, emotion, speed, vol, pitch } = req.body || {};
+    if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
+
+    const tmpFile = path.join(AUDIO_DIR, `_preview_${Date.now()}_${Math.random().toString(36).slice(2,6)}.mp3`);
+    await generateMiniMaxTTS({
+      text: String(text).slice(0, 800),  // 試聴は800字までに制限
+      outputPath: tmpFile,
+      voiceId, model, emotion, speed, vol, pitch,
+    });
+    const buf = fs.readFileSync(tmpFile);
+    try { fs.unlinkSync(tmpFile); } catch (_) {}
+    res.json({ ok: true, mime: 'audio/mpeg', base64: buf.toString('base64') });
+  } catch (e) {
+    console.warn('[tts-preview]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── /v2/tts-module : 確定生成 (chunk ごとに保存し module.audio[] にメタ書込) ──
+router.post('/v2/tts-module', express.json(), async (req, res) => {
+  try {
+    const { generateMiniMaxTTS, splitIntoChunks, probeDurationSec } = require('../scripts/v2_video/tts_minimax');
+    const { postId, moduleIdx, voiceId, model, emotion, speed, vol, pitch } = req.body || {};
+    if (!postId) return res.status(400).json({ error: 'postId required' });
+    const idx = parseInt(moduleIdx, 10);
+    if (Number.isNaN(idx)) return res.status(400).json({ error: 'moduleIdx required' });
+
+    const mp = modulesPath(postId);
+    const data = safeJson(mp, null);
+    if (!data?.modules?.[idx]) return res.status(404).json({ error: 'module not found' });
+    const mod = data.modules[idx];
+
+    // chunk決定: opening/ending は narration のみ。chunk連動 type (insight/reaction/history) は narrationChunks 優先
+    const chunkAware = ['insight', 'reaction', 'history'].includes(mod.type);
+    const chunks = chunkAware
+      ? splitIntoChunks(mod.narration, mod.narrationChunks)
+      : [String(mod.narration || '').trim()].filter(Boolean);
+
+    if (!chunks.length) return res.status(400).json({ error: 'narration empty' });
+
+    const dir = audioDirFor(postId);
+    // 旧ファイルを掃除
+    try {
+      fs.readdirSync(dir).filter(f => f.startsWith(`m${String(idx).padStart(2,'0')}_`)).forEach(f => {
+        try { fs.unlinkSync(path.join(dir, f)); } catch (_) {}
+      });
+    } catch (_) {}
+
+    const audio = [];
+    for (let c = 0; c < chunks.length; c++) {
+      const fname = `m${String(idx).padStart(2,'0')}_c${String(c).padStart(2,'0')}.mp3`;
+      const out   = path.join(dir, fname);
+      await generateMiniMaxTTS({
+        text: chunks[c],
+        outputPath: out,
+        voiceId, model, emotion, speed, vol, pitch,
+      });
+      const dur = probeDurationSec(out);
+      audio.push({
+        chunkIdx: c,
+        text: chunks[c],
+        file: path.relative(path.join(__dirname, '..'), out).replace(/\\/g, '/'),
+        durationSec: dur,
+      });
+    }
+
+    // module に書き戻し
+    mod.tts = {
+      voiceId: voiceId || undefined,
+      model:   model   || undefined,
+      emotion: emotion || undefined,
+      speed:   speed   ?? undefined,
+      vol:     vol     ?? undefined,
+      pitch:   pitch   ?? undefined,
+      generatedAt: new Date().toISOString(),
+    };
+    mod.audio = audio;
+    fs.writeFileSync(mp, JSON.stringify(data, null, 2));
+
+    res.json({ ok: true, audio, totalDurationSec: audio.reduce((a, b) => a + (b.durationSec || 0), 0) });
+  } catch (e) {
+    console.warn('[tts-module]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── /v2/tts-audio : 生成済 mp3 を直接返す (UI再生用) ──
+router.get('/v2/tts-audio', (req, res) => {
+  try {
+    const { postId, moduleIdx, chunkIdx } = req.query;
+    if (!postId) return res.status(400).send('postId required');
+    const c = parseInt(chunkIdx || '0', 10);
+    const m = parseInt(moduleIdx, 10);
+    if (Number.isNaN(m)) return res.status(400).send('moduleIdx required');
+    const dir = audioDirFor(postId);
+    const fname = `m${String(m).padStart(2,'0')}_c${String(c).padStart(2,'0')}.mp3`;
+    const fp    = path.join(dir, fname);
+    if (!fs.existsSync(fp)) return res.status(404).send('not found');
+    res.set('Content-Type', 'audio/mpeg').sendFile(fp);
+  } catch (e) { res.status(500).send(e.message); }
+});
+
 // ─── /v2/preview-slide : 1モジュールのスライドHTML ──────
 router.get('/v2/preview-slide', (req, res) => {
   const { postId, idx } = req.query;
@@ -811,7 +945,7 @@ function getUI() {
 (function() {
   'use strict';
   window.APP = window.APP || {};
-  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null, recipeSlotsByIdx: {}, openCategoriesByIdx: {} };
+  window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null, recipeSlotsByIdx: {}, openCategoriesByIdx: {}, ttsPresets: null };
 
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
@@ -838,6 +972,11 @@ function getUI() {
       const sd = await fetchJson('/api/v3/si?postId=' + encodeURIComponent(post.id));
       window.APP.s4.siData = sd || null;
     } catch (_) { window.APP.s4.siData = null; }
+    /* TTS preset を一度だけ読み込む */
+    if (!window.APP.s4.ttsPresets) {
+      try { window.APP.s4.ttsPresets = await fetchJson('/api/v2/tts-presets'); }
+      catch (_) { window.APP.s4.ttsPresets = { voices: [], models: [], emotions: ['(なし)'] }; }
+    }
     _renderTabs();
     _renderEditor();
     _reloadPreview();
@@ -861,6 +1000,63 @@ function getUI() {
         + '<span style="font-size:10px;">' + _esc((m.title || '').slice(0,10)) + '</span>'
         + '</div>';
     }).join('');
+  }
+
+  /* ── TTS パネル HTML 構築 ── */
+  function _buildTtsPanelHtml(m, i) {
+    const presets = window.APP.s4.ttsPresets || { voices: [], models: [], emotions: ['(なし)'] };
+    const tts = m.tts || {};
+    const curVoice   = tts.voiceId  || presets.defaultVoice || (presets.voices[0]?.id || '');
+    const curModel   = tts.model    || presets.defaultModel || (presets.models[0]?.id || '');
+    const curSpeed   = (tts.speed   != null) ? tts.speed   : 1.0;
+    const curEmotion = tts.emotion  || '';
+
+    const voiceOpts = presets.voices.map(function(v) {
+      return '<option value="' + _esc(v.id) + '"' + (v.id === curVoice ? ' selected' : '') + '>' + _esc(v.label) + '</option>';
+    }).join('');
+    const modelOpts = presets.models.map(function(m2) {
+      return '<option value="' + _esc(m2.id) + '"' + (m2.id === curModel ? ' selected' : '') + '>' + _esc(m2.label) + '</option>';
+    }).join('');
+    const emotionOpts = (presets.emotions || ['(なし)']).map(function(e) {
+      const v = e === '(なし)' ? '' : e;
+      return '<option value="' + _esc(v) + '"' + (v === curEmotion ? ' selected' : '') + '>' + _esc(e) + '</option>';
+    }).join('');
+
+    let audioListHtml = '';
+    if (Array.isArray(m.audio) && m.audio.length) {
+      const totalSec = m.audio.reduce(function(a, b) { return a + (b.durationSec || 0); }, 0);
+      audioListHtml = '<div style="margin-top:8px;padding:6px 8px;background:#0a0d18;border-radius:4px;">'
+        + '<div style="font-size:10px;color:#10b981;margin-bottom:4px;">✅ 生成済 ' + m.audio.length + ' chunk / 合計 ' + totalSec.toFixed(1) + '秒</div>'
+        + m.audio.map(function(a, ai) {
+            return '<div style="display:flex;gap:6px;align-items:center;font-size:10px;color:#94a3b8;margin-bottom:2px;">'
+              + '<button class="btn btn-sm s4-tts-play-chunk" data-idx="' + i + '" data-cidx="' + ai + '" style="background:#1a2540;color:#7dc8ff;font-size:10px;padding:1px 8px;">▶</button>'
+              + '<span style="color:#5a6a8a;">[' + (ai+1) + '/' + m.audio.length + '] ' + (a.durationSec||0).toFixed(1) + 's</span>'
+              + '<span style="flex:1;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _esc((a.text||'').slice(0,60)) + '</span>'
+              + '</div>';
+          }).join('')
+        + '</div>';
+    }
+
+    return '<div style="margin-top:14px;padding:10px;background:#0d1220;border:1px solid #4c1d95;border-radius:6px;">'
+      +   '<div style="font-size:12px;color:#a78bfa;font-weight:bold;margin-bottom:6px;display:flex;align-items:center;gap:6px;">'
+      +     '🎙️ MiniMax TTS'
+      +     '<span style="font-size:9px;color:#5a6a8a;font-weight:normal;">クローン声 + 試聴 + chunk一括生成</span>'
+      +     '<span style="flex:1"></span>'
+      +     '<span class="s4-tts-status" data-idx="' + i + '" style="font-size:10px;color:#5a6a8a;font-weight:normal;"></span>'
+      +   '</div>'
+      +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">'
+      +     '<select class="inp" id="s4TtsVoice" style="font-size:10px;padding:3px 6px;">' + voiceOpts + '</select>'
+      +     '<select class="inp" id="s4TtsModel" style="font-size:10px;padding:3px 6px;">' + modelOpts + '</select>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:10px;color:#94a3b8;">'
+      +     '<label>速度 <input class="inp" type="number" id="s4TtsSpeed" min="0.5" max="2" step="0.05" value="' + curSpeed + '" style="width:60px;font-size:10px;padding:2px 4px;"></label>'
+      +     '<label>感情 <select class="inp" id="s4TtsEmotion" style="font-size:10px;padding:2px 4px;">' + emotionOpts + '</select></label>'
+      +     '<span style="flex:1"></span>'
+      +     '<button class="btn btn-sm" onclick="s4TtsPreview()" style="background:#1a2540;color:#a78bfa;font-size:10px;padding:4px 10px;">▶ 試聴</button>'
+      +     '<button class="btn btn-sm" onclick="s4TtsGenerate()" style="background:#7c3aed;color:#fff;font-size:10px;padding:4px 10px;font-weight:bold;">💾 確定生成</button>'
+      +   '</div>'
+      +   audioListHtml
+      + '</div>';
   }
 
   /* ── エディタ描画 ── */
@@ -1049,6 +1245,8 @@ function getUI() {
       + '<pre style="background:#0d1220;padding:6px 8px;border-radius:4px;font-size:10px;color:#94a3b8;margin-bottom:10px;max-height:60px;overflow-y:auto;">' + _esc(m.scriptDir||'(なし)') + '</pre>'
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">narration</div>'
       + '<textarea class="inp" id="s4Narr' + i + '" oninput="s4OnInput()" style="display:block;width:100%;font-size:12px;padding:6px 8px;min-height:120px;resize:vertical;">' + _esc(m.narration||'') + '</textarea>'
+      /* 🎙️ MiniMax TTS パネル */
+      + _buildTtsPanelHtml(m, i)
       /* 🪄 スライド全部おまかせ AI（type/title/dataSlots/narration を一気通貫） */
       + '<div style="margin-top:14px;padding:10px;background:#1a1d2e;border:1px solid #6366f1;border-radius:6px;">'
       +   '<div style="font-size:12px;color:#a5b4fc;font-weight:bold;margin-bottom:6px;display:flex;align-items:center;gap:6px;">'
@@ -1152,6 +1350,20 @@ function getUI() {
         if (Number.isNaN(idx) || !key) return;
         s4ToggleRecipeSlot(idx, key);
       });
+    });
+
+    /* 🎙️ TTS: chunk 単発再生 */
+    el.querySelectorAll('.s4-tts-play-chunk').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx  = parseInt(btn.getAttribute('data-idx'),  10);
+        const cidx = parseInt(btn.getAttribute('data-cidx'), 10);
+        s4TtsPlayChunk(idx, cidx);
+      });
+    });
+    /* 🎙️ TTS: select/input 変更時に collect → 保存（永続化）*/
+    ['s4TtsVoice','s4TtsModel','s4TtsSpeed','s4TtsEmotion'].forEach(function(id) {
+      const e2 = document.getElementById(id);
+      if (e2) e2.addEventListener('change', function() { _collectInputs(); _saveModulesQuiet(); });
     });
   }
 
@@ -1368,6 +1580,19 @@ function getUI() {
         score: Number(ss[idx]?.value) || 0,
       }));
     }
+    /* TTS settings (panel が画面に出てる場合のみ拾う) */
+    const tv = document.getElementById('s4TtsVoice');
+    const tm = document.getElementById('s4TtsModel');
+    const tsp = document.getElementById('s4TtsSpeed');
+    const te = document.getElementById('s4TtsEmotion');
+    if (tv || tm || tsp || te) {
+      m.tts = Object.assign({}, m.tts || {}, {
+        voiceId: tv?.value || (m.tts?.voiceId || ''),
+        model:   tm?.value || (m.tts?.model   || ''),
+        speed:   tsp?.value ? Number(tsp.value) : (m.tts?.speed ?? 1.0),
+        emotion: te?.value || '',
+      });
+    }
   }
 
   /* ── タブ切替 ── */
@@ -1544,6 +1769,71 @@ function getUI() {
         _msg('❌ 失敗');
       }
     } catch (e) { _msg('❌ ' + e.message); }
+  };
+
+  /* ── 🎙️ TTS: 試聴 (現ナレ全文を1回投げて即再生・保存しない) ── */
+  window.s4TtsPreview = async function() {
+    _collectInputs();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    const status = document.querySelector('.s4-tts-status[data-idx="' + i + '"]');
+    const text = (m.narration || '').trim();
+    if (!text) { if (status) status.textContent = '❌ ナレーション空'; return; }
+    if (status) status.textContent = '⏳ 試聴生成中...';
+    try {
+      const j = await fetchJson('/api/v2/tts-preview', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text.slice(0, 800),
+          voiceId: m.tts?.voiceId,
+          model:   m.tts?.model,
+          speed:   m.tts?.speed,
+          emotion: m.tts?.emotion || undefined,
+        }),
+      });
+      if (!j.ok) throw new Error(j.error || '失敗');
+      const audio = new Audio('data:' + j.mime + ';base64,' + j.base64);
+      audio.play();
+      if (status) status.textContent = '▶ 再生中';
+    } catch (e) { if (status) status.textContent = '❌ ' + e.message; }
+  };
+
+  /* ── 🎙️ TTS: 確定生成 (chunk全部 → サーバ保存 → module.audio[]更新) ── */
+  window.s4TtsGenerate = async function() {
+    _collectInputs();
+    const post = window.APP.selected;
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!post?.id || !m) return;
+    const status = document.querySelector('.s4-tts-status[data-idx="' + i + '"]');
+    if (!confirm('chunk全部を MiniMax で生成して保存します。続行？')) return;
+    if (status) status.textContent = '⏳ 生成中...（数十秒）';
+    try {
+      await _saveModulesQuiet();
+      const j = await fetchJson('/api/v2/tts-module', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: post.id, moduleIdx: i,
+          voiceId: m.tts?.voiceId,
+          model:   m.tts?.model,
+          speed:   m.tts?.speed,
+          emotion: m.tts?.emotion || undefined,
+        }),
+      });
+      if (!j.ok) throw new Error(j.error || '失敗');
+      m.audio = j.audio;
+      _renderEditor();
+      if (status) status.textContent = '✅ ' + j.audio.length + 'chunk / ' + (j.totalDurationSec||0).toFixed(1) + 's';
+    } catch (e) { if (status) status.textContent = '❌ ' + e.message; }
+  };
+
+  /* ── 🎙️ TTS: chunk 単発再生 ── */
+  window.s4TtsPlayChunk = function(idx, cidx) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const url = '/api/v2/tts-audio?postId=' + encodeURIComponent(post.id) + '&moduleIdx=' + idx + '&chunkIdx=' + cidx + '&_=' + Date.now();
+    new Audio(url).play();
   };
 
   /* ── 保存（手動 + 自動） ── */
