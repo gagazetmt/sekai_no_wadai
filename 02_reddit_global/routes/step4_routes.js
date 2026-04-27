@@ -29,6 +29,45 @@ function safeJson(file, fallback) {
 function modulesPath(postId) { return path.join(DATA_DIR, (postId || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_') + '_modules.json'); }
 function siPath(postId)      { return path.join(SI_DIR,   (postId || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_') + '.json'); }
 
+// 2チームエンティティ間のH2H（直接対決）コンテキスト文字列を返す。
+//   - secondary が無い、または片方が team でないなら空文字
+//   - SofaScore /team/{id}/events/last/0 を経由（チーム名 → ID 解決込み）
+//   - 直近5試合とチーム1視点の通算成績(その範囲内)を返す
+async function _h2hContextIfTeams(items, primary, secondary) {
+  if (!primary || !secondary) return '';
+  const itP = items.find(x => x.label === primary)   || {};
+  const itS = items.find(x => x.label === secondary) || {};
+  if (itP.role !== 'team' || itS.role !== 'team') return '';
+  try {
+    const { fetchRecentH2H } = require('../scripts/modules/fetchers/sofascore_match');
+    const h2h = await fetchRecentH2H(primary, secondary, 5);
+    if (!h2h || !h2h.length) return '';
+    const lines = h2h.map(e => {
+      const d  = e.date || '?';
+      const sc = (e.homeScore != null && e.awayScore != null) ? `${e.homeScore}-${e.awayScore}` : '?';
+      return `  ${d}: ${e.homeTeam} ${sc} ${e.awayTeam} (${e.tournament || ''})`;
+    }).join('\n');
+    let w = 0, d = 0, l = 0;
+    h2h.forEach(e => {
+      if (e.homeScore == null || e.awayScore == null) return;
+      const isHome = e.homeTeam === primary;
+      const my = isHome ? e.homeScore : e.awayScore;
+      const op = isHome ? e.awayScore : e.homeScore;
+      if (my > op) w++;
+      else if (my < op) l++;
+      else d++;
+    });
+    return `=== H2H (直接対決): ${primary} vs ${secondary} ===
+${primary}視点: ${w}勝${d}分${l}敗（直近${h2h.length}試合）
+${lines}
+※これより古い試合のデータは未取得。通算戦績（全期間）の数字は推測しないこと。
+`;
+  } catch (e) {
+    console.warn('[h2h-context]', e.message);
+    return '';
+  }
+}
+
 // ─── /v2/modules : 読み込み ─────────────────────────────
 router.get('/v2/modules', (req, res) => {
   const postId = req.query.postId;
@@ -240,9 +279,13 @@ router.post('/v2/ai-fill-slide', express.json(), async (req, res) => {
         currentTeamStats: sofa.currentTeamStats,
         honours: sofa.honours,
         trophySummary: sofa.trophySummary,
+        topPlayers: sofa.topPlayers,
+        last5: sofa.last5,
+        recentForm: sofa.recentForm,
+        teamStats: sofa.teamStats,
         marketValue: sofa.marketValue,
         contractUntil: sofa.contractUntil,
-      }).slice(0, 1500) : 'sofa:取得失敗';
+      }).slice(0, 2200) : 'sofa:取得失敗';
 
       return `=== 主体: ${label} (${it.role || '?'}) ===
 [Wikipedia 要約]
@@ -264,6 +307,7 @@ ${sofaStr}
 
     const ctxPrimary   = _entityContext(primary);
     const ctxSecondary = secondary ? _entityContext(secondary) : '';
+    const ctxH2H       = await _h2hContextIfTeams(items, primary, secondary);
 
     // ── 案件全体の文脈（saved_projects.json から）──
     let projectCtx = '';
@@ -324,6 +368,7 @@ ${nextSlides ? '【後のスライド（流れの下流）】\n' + nextSlides : 
 【利用可能データ】
 ${ctxPrimary}
 ${ctxSecondary}
+${ctxH2H}
 
 【ユーザー注文】
 ${userPrompt}
@@ -343,6 +388,9 @@ ${userPrompt}
   ・insight: dataSlots は空配列、代わりに catchphrases を別途返してOK（今回は dataSlots 中心で）
 - 件数: 4〜10件
 - データに**明示されていない**値・固有名・数字は **絶対** 出さない（推測補完NG）
+  ・該当データが見つからない場合は値に「データ未取得」と入れる（数字を捏造しない）
+  ・特に「過去対戦成績（全期間）」「優勝回数」「歴代記録」のような長期データは、本プロンプト内のデータに無ければ推測しない
+  ・H2H ブロックがある場合：その範囲（直近5試合等）の数字のみ使用OK。「全期間」と表記しない
 - **通算値（通算ゴール・通算試合等）は キャリアテーブル の合計値を計算して出す**
   例: バルサ672 + PSG 32 + マイアミ N → 「合計XXX」と算出
   ※案件タイトルに「961ゴール」のような最新数字があれば、そちらを優先（更新が早い）
@@ -524,6 +572,7 @@ ${sofaStr}
 
     const ctxPrimary   = _entityContext(primary);
     const ctxSecondary = secondary ? _entityContext(secondary) : '';
+    const ctxH2H       = await _h2hContextIfTeams(items, primary, secondary);
 
     // type 別の shape 指定
     const shapeMap = {
@@ -550,6 +599,7 @@ ${existingSlotsStr}
 【利用可能データ】
 ${ctxPrimary}
 ${ctxSecondary}
+${ctxH2H}
 
 【ユーザー注文】
 ${userPrompt}
@@ -557,6 +607,9 @@ ${userPrompt}
 【出力ルール（厳守）】
 - shape: ${shape}
 - データに明示されていない値・固有名は **絶対に出さない**（推測・記憶からの補完NG）
+  ・該当データが見つからない場合は値に「データ未取得」と入れる
+  ・「過去対戦成績（全期間）」「歴代CL優勝回数」等の長期データは、プロンプト内に明示されたものだけ採用
+  ・H2H ブロックの数字は「直近5試合」等の範囲付きで使うこと（全期間と書かない）
 - 数字（試合数・ゴール数・年齢等）は元データに数値として現れているもののみ
 - ユーザーの注文に従う（順序・粒度・件数）
 - 件数: 通常 4〜10件、ユーザー注文に明示があればそれに従う
@@ -1919,11 +1972,27 @@ function getUI() {
     try {
       const j = await fetchJson('/api/v2/video-status?jobId=' + encodeURIComponent(id));
       const el = document.getElementById('s4JobStatus');
-      el.innerHTML = '<div>status: <b>' + _esc(j.status||'?') + '</b></div>'
-        + (j.progress ? '<div>progress: ' + _esc(JSON.stringify(j.progress)) + '</div>' : '')
+      const statusLabel = ({
+        'queued':         '⏳ キュー待ち',
+        'starting':       '🚀 起動中',
+        'tts-generating': '🎙️ TTS生成中',
+        'rendering':      '🎬 レンダリング中',
+        'concatenating':  '🔗 結合中',
+        'mixing-audio':   '🎵 BGMミックス中',
+        'done':           '✅ 完成',
+        'error':          '❌ エラー',
+        'failed':         '❌ 失敗',
+      })[j.status] || j.status || '?';
+      let progress = '';
+      if (j.status === 'tts-generating' && j.ttsTotal) {
+        progress = ' (' + (j.ttsDone||0) + '/' + j.ttsTotal + ')';
+      } else if (j.status === 'rendering' && j.totalSlides) {
+        progress = ' (' + (j.doneSlides||0) + '/' + j.totalSlides + ')';
+      }
+      el.innerHTML = '<div><b>' + _esc(statusLabel) + '</b>' + _esc(progress) + '</div>'
         + (j.error    ? '<div style="color:#ef4444;">error: ' + _esc(j.error) + '</div>' : '')
-        + (j.outputUrl? '<div><a href="' + j.outputUrl + '" target="_blank" style="color:#10b981;">▶ ' + _esc(j.outputFile||'video') + '</a></div>' : '');
-      if (j.status === 'done' || j.status === 'failed') {
+        + (j.outputVideo ? '<div style="margin-top:4px;"><a href="/' + _esc(j.outputVideo) + '" target="_blank" style="color:#10b981;">▶ ' + _esc(j.outputVideo.split('/').pop()) + '</a></div>' : '');
+      if (j.status === 'done' || j.status === 'failed' || j.status === 'error') {
         _loadVideos();
         return;  // ポーリング終了
       }

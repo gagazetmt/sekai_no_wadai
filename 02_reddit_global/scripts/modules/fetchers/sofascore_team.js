@@ -75,9 +75,11 @@ async function fetchSofaScoreTeam(teamName) {
 
     // ③ 直近5試合
     let last5 = [];
+    let recentForm = null;  // "WWLDD" 形式（新しい順）
     if (!evRaw?.__err) {
       const finished = (evRaw.events || []).filter(e => e.status?.type === 'finished').reverse();
       last5 = finished.slice(-5).reverse().map(e => formatTeamMatch(e, teamId));
+      recentForm = last5.map(m => m.result).join('');
     }
 
     // ④ 次試合（リーグ情報取得のため）
@@ -95,8 +97,8 @@ async function fetchSofaScoreTeam(teamName) {
       }
     }
 
-    // ⑤⑥⑦ 並列取得（順位 + 試合平均スタッツ + Wikipedia honours）
-    const [stRaw, statsRaw, wikiRaw] = await Promise.all([
+    // ⑤⑥⑦⑧ 並列取得（順位 + 試合平均スタッツ + Wikipedia honours + チーム内トップ選手）
+    const [stRaw, statsRaw, wikiRaw, topRaw] = await Promise.all([
       tournamentId && seasonId
         ? apiGet(`/unique-tournament/${tournamentId}/season/${seasonId}/standings/total`).catch(e => ({ __err: e }))
         : Promise.resolve({ __err: 'no tournamentId' }),
@@ -106,6 +108,9 @@ async function fetchSofaScoreTeam(teamName) {
       teamName
         ? fetchWikipediaWikitext(teamName).catch(() => ({ ok: false }))
         : Promise.resolve({ ok: false }),
+      tournamentId && seasonId
+        ? apiGet(`/team/${teamId}/unique-tournament/${tournamentId}/season/${seasonId}/top-players/overall`).catch(e => ({ __err: e }))
+        : Promise.resolve({ __err: 'no tournamentId' }),
     ]);
 
     // ⑤ 順位
@@ -155,15 +160,55 @@ async function fetchSofaScoreTeam(teamName) {
     // ⑦ Wikipedia honours 集計
     const honours = wikiRaw?.ok ? extractHonoursSection(wikiRaw.wikitext) : [];
     const _allItems = honours.flatMap(h => h.items || []);
-    const _matchAny = (re) => _allItems.filter(it => re.test(it)).length;
-    const trophySummary = {
-      total:        _allItems.length,
-      leagueTitles: _matchAny(/league|liga|premier|serie a|bundesliga|ligue 1|eredivisie|primeira/i),
-      cupTitles:    _matchAny(/\bcup\b|copa|coupe|pokal|coppa/i),
-      clTitles:     _matchAny(/champions league|uefa champions/i),
-      uefaSuper:    _matchAny(/uefa super cup/i),
-      worldClub:    _matchAny(/(fifa club world|club world cup|intercontinental)/i),
+
+    // 各 item から「優勝回数」を抽出する。
+    //   形式例:
+    //     "UEFA Champions League: 6 (1973–74, ...)"   → 6
+    //     "European Cup / UEFA Champions League: 6"   → 6
+    //     "FA Cup: 14"                                → 14
+    //     "Premier League (1)"                        → 1
+    //   括弧内の年カウントもフォールバックで使う
+    const _countTitles = (item) => {
+      const colonM = item.match(/:\s*(\d{1,2})\b/);
+      if (colonM) return parseInt(colonM[1], 10);
+      const parenM = item.match(/\((\d{1,2})\)/);
+      if (parenM) return parseInt(parenM[1], 10);
+      // 括弧内の年(YYYY)の数で代用
+      const years = (item.match(/\b(19|20)\d{2}\b/g) || []).length;
+      return years || 1;
     };
+    const _sumTitles = (re) =>
+      _allItems.filter(it => re.test(it)).reduce((s, it) => s + _countTitles(it), 0);
+
+    const trophySummary = {
+      total:        _allItems.reduce((s, it) => s + _countTitles(it), 0),
+      leagueTitles: _sumTitles(/league|liga|premier|serie a|bundesliga|ligue 1|eredivisie|primeira/i),
+      cupTitles:    _sumTitles(/\bcup\b|copa|coupe|pokal|coppa/i) - _sumTitles(/(european cup|cup winners|champions league|uefa cup|super cup|world cup|intercontinental)/i),
+      // European Cup（1955-1992 旧称）と UEFA Champions League を両方カウント。"Cup Winners' Cup" は除外
+      clTitles:     _sumTitles(/(?:european cup(?!\s*winners)|uefa champions|champions league)/i),
+      uefaSuper:    _sumTitles(/uefa super cup/i),
+      uefaCup:      _sumTitles(/uefa cup\b|europa league/i),
+      cupWinners:   _sumTitles(/cup winners(?:'|s)?\s*cup/i),
+      worldClub:    _sumTitles(/(fifa club world|club world cup|intercontinental)/i),
+    };
+
+    // ⑧ チーム内トップ選手（得点・アシスト・評価点 各TOP3）
+    let topPlayers = null;
+    if (!topRaw.__err) {
+      const tp = topRaw.topPlayers || {};
+      const _pick = (arr, statKey) => (arr || []).slice(0, 3).map(x => ({
+        name:       x.player?.name,
+        playerId:   x.player?.id,
+        position:   x.player?.position,
+        appearances: x.statistics?.appearances ?? null,
+        value:      x.statistics?.[statKey] ?? null,
+      }));
+      topPlayers = {
+        goals:      _pick(tp.goals,           'goals'),
+        assists:    _pick(tp.assists,         'assists'),
+        rating:     _pick(tp.rating,          'rating'),
+      };
+    }
 
     return {
       ok:          true,
@@ -181,7 +226,9 @@ async function fetchSofaScoreTeam(teamName) {
       teamStats,         // 試合平均（avgGoals/avgPossession/passAcc 等）
       honours,           // [{ category, items }] Wikipedia 由来
       trophySummary,     // { total, leagueTitles, cupTitles, clTitles, ... }
+      topPlayers,        // { goals: [...3], assists: [...3], rating: [...3] }
       last5,
+      recentForm,        // "WWLDD" 直近5試合フォーム（新しい順）
     };
   } catch (e) {
     if (e.response?.status === 403) {

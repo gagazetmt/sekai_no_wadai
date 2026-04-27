@@ -229,12 +229,49 @@ function extractNationalCareerFromInfobox(wikitext) {
     .sort((a, b) => a.index - b.index);
 }
 
+// {{Football team honours table}} など、テンプレ形式の honours を抽出
+//   | competition1 = European Cup / [[UEFA Champions League]]
+//   | total1       = 6
+//   | seasons1     = 1973-74, 1974-75, ...
+// → [{ category: 'Honours', items: ['UEFA Champions League: 6 (1973-74, ...)'] }]
+function extractHonoursTable(wikitext) {
+  if (!wikitext) return [];
+  // テーブルテンプレを全部拾う（複数あっても良い）
+  const tableRe = /\{\{\s*Football team honours[\s\S]*?\n\}\}/gi;
+  const matches = wikitext.match(tableRe) || [];
+  if (!matches.length) return [];
+
+  const items = [];
+  for (const tbl of matches) {
+    const rows = {};
+    const fieldRe = /\|\s*(competition|total|seasons?)\s*(\d+)\s*=\s*([^\n|]*?)(?=\n|$|\|)/g;
+    let m;
+    while ((m = fieldRe.exec(tbl)) !== null) {
+      const idx = parseInt(m[2], 10);
+      rows[idx] = rows[idx] || {};
+      const key = m[1].toLowerCase().replace(/^seasons$/, 'seasons');
+      rows[idx][key] = stripWikilinks(m[3]).trim();
+    }
+    Object.values(rows)
+      .filter(r => r.competition && (r.total || r.seasons))
+      .forEach(r => {
+        const total = r.total || (r.seasons ? (r.seasons.match(/,/g) || []).length + 1 : '');
+        const seasonsBit = r.seasons ? ` (${r.seasons})` : '';
+        items.push(`${r.competition}: ${total}${seasonsBit}`);
+      });
+  }
+  return items.length ? [{ category: 'Honours', items }] : [];
+}
+
 // Honours セクションを抽出 → [{ category, items: [...] }, ...]
 function extractHonoursSection(wikitext) {
   if (!wikitext) return [];
   // == Honours == セクションを抽出（次のレベル2セクションまで）
   const m = wikitext.match(/==\s*Honours?\s*==([\s\S]*?)(?=\n==[^=]|$)/i);
-  if (!m) return [];
+  if (!m) {
+    // ページ内にセクションが無くても、テンプレ形式があれば拾う
+    return extractHonoursTable(wikitext);
+  }
   const body = m[1];
 
   // サブセクション：=== カテゴリ === 以下の * リスト
@@ -256,6 +293,13 @@ function extractHonoursSection(wikitext) {
       .filter(Boolean)
       .map(x => stripWikilinks(x[1]));
     if (items.length) result.push({ category: 'Honours', items });
+  }
+  // それでも空（テンプレ形式のみ使われている記事）→ テンプレを拾う
+  if (!result.length) {
+    const fromTable = extractHonoursTable(body);
+    if (fromTable.length) return fromTable;
+    // セクション内じゃなく全文も試す（記事末尾にある場合あり）
+    return extractHonoursTable(wikitext);
   }
   return result;
 }
@@ -325,6 +369,7 @@ module.exports = {
   extractCareerFromInfobox,
   extractNationalCareerFromInfobox,
   extractHonoursSection,
+  extractHonoursTable,
   fetchPlayerCareerEvents,
   fetchTeamHonoursEvents,
   stripWikilinks,
