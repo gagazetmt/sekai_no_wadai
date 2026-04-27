@@ -9,6 +9,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.e
 const axios = require('axios');
 const fs    = require('fs');
 const path  = require('path');
+const { applyJpDict } = require('./jp_dict');
 
 const API_URL    = 'https://api-uw.minimax.io/v1/t2a_v2';
 const MODEL      = process.env.MINIMAX_TTS_MODEL || 'speech-02-turbo';
@@ -54,7 +55,8 @@ function sanitizeForTts(text) {
     if (v === 10) return 'じゅう';
     return 'じゅう' + d[v - 10];
   };
-  return String(text)
+  // 辞書置換 → スコア → 括弧/中点/改行の順
+  return applyJpDict(String(text))
     // "3-1" / "3−1" / "3ー1" 等のスコア → 「さんたいいち」
     .replace(/(\d+)\s*[-－ー−–—]\s*(\d+)/g, (_m, a, b) =>
       `${numToJa(a)}たい${numToJa(b)}`)
