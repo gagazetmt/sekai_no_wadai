@@ -1003,6 +1003,47 @@ function getUI() {
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
 
+  /* ── このモジュールが参照するラベル一覧を返す。Step3.5 と同じキー文字列を返す。 ── */
+  function _labelsForModule(m) {
+    if (!m) return [];
+    const out = [];
+    const mk = m.mainKey || '';
+    const colon = mk.indexOf(':');
+    const type   = colon < 0 ? mk : mk.slice(0, colon);
+    const entity = colon < 0 ? '' : mk.slice(colon + 1);
+
+    // matchcard は SI の両チーム名を team:Home / team:Away として展開
+    if (type === 'matchcard' || type === 'match') {
+      const si = window.APP.s4.siData || {};
+      const matches = si?.boxes?.match?.items || [];
+      let home = null, away = null;
+      for (const mm of matches) {
+        const sofa = mm.sofa || mm;
+        home = home || sofa.homeTeam?.name || sofa.home?.name || sofa.homeName;
+        away = away || sofa.awayTeam?.name || sofa.away?.name || sofa.awayName;
+        if (home && away) break;
+      }
+      if (!home || !away) {
+        const teamItems = (si?.boxes?.entity?.items || []).filter(it => it.role === 'team');
+        if (!home && teamItems[0]) home = teamItems[0].label;
+        if (!away && teamItems[1]) away = teamItems[1].label;
+      }
+      if (home) out.push('team:' + home);
+      if (away) out.push('team:' + away);
+    } else if (type === 'opening' || type === 'ending' || !mk) {
+      // ラベル無し
+    } else {
+      out.push(mk);
+    }
+
+    const sec = m.secondary || (m.binding && m.binding.secondary);
+    if (sec) {
+      out.push(sec.indexOf(':') >= 0 ? sec : ('entity:' + sec));
+    }
+    // 重複除去
+    return Array.from(new Set(out));
+  }
+
   /* ── 初期化 ── */
   window.step4Init = async function() {
     const post = window.APP.selected;
@@ -1170,27 +1211,35 @@ function getUI() {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
 
-    /* Step 3.5 で選択した画像のギャラリー（全カード共通プール・このカードで使うものを選択） */
+    /* Step 3.5 で選択した画像のギャラリー（このカードのラベルに該当する画像のみ表示） */
+    //   - mod.mainKey と mod.secondary を見て、該当する selections だけ抽出
+    //   - matchcard / opening 等は SI から関連 team ラベルを引いてくる（Step3.5 と同じロジック）
     let galleryHtml = '';
     const allSelections = window.APP.s4.imageSelections || {};
+    const cardLabels = _labelsForModule(m);
     const seen = new Set();
-    const pool = [];
-    Object.values(allSelections).forEach(function(arr) {
+    const pool = []; // [{ path, fromLabel }]
+    cardLabels.forEach(function(lbl) {
+      const arr = allSelections[lbl];
       if (!Array.isArray(arr)) return;
       arr.forEach(function(p) {
-        if (!seen.has(p)) { seen.add(p); pool.push(p); }
+        if (!seen.has(p)) { seen.add(p); pool.push({ path: p, fromLabel: lbl }); }
       });
     });
     const cardImgs = Array.isArray(m.images) ? m.images : [];
     if (pool.length) {
+      const labelLine = cardLabels.length
+        ? '<span style="color:#5a6a8a;font-weight:normal;margin-left:6px;font-size:10px;">対象ラベル: ' + cardLabels.map(_esc).join(' / ') + '</span>'
+        : '';
       galleryHtml = ''
-        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ 共通画像プール ('
-        + pool.length + '枚) <span style="color:#10b981;font-weight:normal;margin-left:6px;">このカードで '
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ ラベル別画像プール ('
+        + pool.length + '枚)' + labelLine + ' <span style="color:#10b981;font-weight:normal;margin-left:6px;">このカードで '
         + cardImgs.length + ' 枚選択中</span></div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;max-height:200px;overflow-y:auto;">'
-        + pool.map(function(p) {
+        + pool.map(function(it) {
+            const p = it.path;
             const isSel = cardImgs.indexOf(p) >= 0;
-            return '<div class="s4-thumb-toggle" data-path="' + _esc(p) + '" '
+            return '<div class="s4-thumb-toggle" data-path="' + _esc(p) + '" title="' + _esc(it.fromLabel) + '" '
               + 'style="position:relative;width:96px;height:72px;border:3px solid '
               + (isSel ? '#ff4d4d' : '#2a3050')
               + ';border-radius:3px;overflow:hidden;background:#000;cursor:pointer;'
@@ -1202,8 +1251,11 @@ function getUI() {
           }).join('')
         + '</div>';
     } else {
+      const hint = cardLabels.length
+        ? 'このカードのラベル「' + cardLabels.map(_esc).join(' / ') + '」に対する画像がまだ選択されていません'
+        : 'このカードはラベルを持ちません（opening/ending 等）';
       galleryHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
-        + '🖼️ Step 3.5 で画像がまだ選択されていません'
+        + '🖼️ ' + hint + ' — Step 3.5 で取得・選択してください'
         + '</div>';
     }
 
