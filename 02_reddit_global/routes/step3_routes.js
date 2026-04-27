@@ -18,6 +18,44 @@ const SI_DIR   = path.join(DATA_DIR, 'si_data');
 const { listMainTags, getSubTagsForMain, resolveType, parseMainKey } = require('../scripts/v3_tags');
 const { callAI } = require('../scripts/ai_client');
 const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
+const { getRecipe, findEntity, buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+
+// comparison カードの recipe メタ情報を取得（player/team/manager 自動判別）
+function getComparisonMeta(mod, siData) {
+  if (mod.type !== 'comparison') return null;
+  if (!mod.mainKey?.startsWith('entity:') || !mod.secondary) return null;
+
+  const primary   = mod.mainKey.slice(7);
+  const secondary = mod.secondary;
+  const items = siData?.boxes?.entity?.items || [];
+  const findRole = (label) => items.find(it => it.label === label)?.role || null;
+  const r1 = findRole(primary);
+  const r2 = findRole(secondary);
+
+  let subject, aspect;
+  if (r1 === 'player'  && r2 === 'player')  { subject = 'player';  aspect = 'compareCareerStats'; }
+  else if (r1 === 'team'    && r2 === 'team')    { subject = 'team';    aspect = 'compareSeasonStats'; }
+  else if (r1 === 'manager' && r2 === 'manager') { subject = 'manager'; aspect = 'compareCareer'; }
+  else return null;
+
+  const recipe = getRecipe(subject, aspect);
+  if (!recipe?.availableSlots?.length) return null;
+
+  const primaryData   = findEntity(siData, subject, primary);
+  const secondaryData = findEntity(siData, subject, secondary);
+  if (!primaryData || !secondaryData) return null;
+
+  return {
+    subject, aspect, recipe,
+    primary, secondary, primaryData, secondaryData,
+    availableSlots: recipe.availableSlots.map(s => ({
+      key: s.key, label: s.label,
+      category: s.category || '-',
+      priority: s.priority || 0,
+    })),
+    defaultSelection: recipe.defaultSelection || [],
+  };
+}
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -145,6 +183,39 @@ router.post('/v3/generate-scenario', async (req, res) => {
       return `${i+1}. type=${m.type} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
     }).join('\n');
 
+    // ── comparison カードのメタを集める（AIに customSlotKeys を選ばせる） ──
+    const comparisonMetaByIdx = {};
+    mods.forEach((m, i) => {
+      const meta = getComparisonMeta(m, si);
+      if (meta) comparisonMetaByIdx[i] = meta;
+    });
+    const compIdxs = Object.keys(comparisonMetaByIdx);
+    const comparisonSection = compIdxs.length ? (() => {
+      const lines = compIdxs.map(idx => {
+        const meta = comparisonMetaByIdx[idx];
+        const slots = meta.availableSlots
+          .slice()
+          .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+          .map(s => `    - "${s.key}" (priority:${s.priority}, ${s.category}): ${s.label}`)
+          .join('\n');
+        return `カード#${parseInt(idx)+1} (${meta.subject}: ${meta.primary} vs ${meta.secondary} / aspect=${meta.aspect}):\n${slots}`;
+      }).join('\n\n');
+      return `
+
+━━━ 【comparison カード メトリック選定】━━━
+以下の comparison カードでは、dataSlots ではなく **customSlotKeys**（5キーの配列）を返してください。
+値はサーバー側で実データから自動充填されるので、AI は keys 選定のみ。
+
+${lines}
+
+【選定ルール（厳守）】
+- customSlotKeys は **5つ**（厳密に5）
+- priority 9以上から **最低3つ**含める
+- 残り2つは文脈（scriptDir, narration の意図）に応じて選ぶ — priority 低くてもOK
+- カテゴリは**複数にまたがる**よう分散（例: 攻撃3 + 守備1 + 評価1）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    })() : '';
+
     // ── プロンプト ──
     const prompt = `あなたはサッカーYouTubeのプロ脚本家です。
 以下の outline と取得済み素材から、各カードの本体（narration、データ、キャッチコピー等）を生成してください。
@@ -186,7 +257,8 @@ ${outlineLines}
     候補: 大会 / 会場 / 日付 / スコア / 主役選手 / 得点者 / 観客数 / レフェリー / 結果
     ※ homeTeam / awayTeam は別途自動注入されるので dataSlots に含めない
     ※ narration はタイトル内容を事実ベースで概要説明（試合がいつ・どこで・どんな大会だったか等）
-  - comparison: "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]。narration は比較の意義を解説
+  - comparison: 通常は "dataSlots": [{"label":"...","leftValue":"...","rightValue":"..."}×4〜8]。
+    ただし下記【comparison カード メトリック選定】セクションで指定されたカードでは **dataSlots は返さず、代わりに "customSlotKeys": ["key1","key2","key3","key4","key5"] を返す**。narration は比較の意義を解説。
   - matchcard: 追加フィールド不要（matchData は自動注入）。**narration は試合のドラマを時系列ストーリーで語る**：
     ・上記 [match 一覧] の goals と redCards を参照
     ・例: 「23分、ベリンガムが先制点を叩き込んだ。しかし67分、ヴィニシウスがレッドカードで退場、試合の流れが一変…」
@@ -214,7 +286,7 @@ JSON のみ返す（マークダウン不要）：
 {"modules":[
   {"title":"...","narration":"...",...type別フィールド},
   ... (${mods.length}枚)
-]}`;
+]}${comparisonSection}`;
 
     console.log(`[Step3 v3] generate-scenario: ${mods.length}カード / DeepSeek 試行`);
 
@@ -312,6 +384,33 @@ JSON のみ返す（マークダウン不要）：
           };
         }
       }
+    });
+
+    // ── 後処理: comparison カードの customSlotKeys → dataSlots を実値で再構築 ──
+    merged.forEach((m, i) => {
+      const meta = comparisonMetaByIdx[i];
+      if (!meta) return;
+      const aiOut = parsed.modules[i] || {};
+      let keys = Array.isArray(aiOut.customSlotKeys) ? aiOut.customSlotKeys.filter(Boolean) : [];
+      // AI が無効キーや件数違いを返したら defaultSelection で補完
+      const validKeys = new Set(meta.recipe.availableSlots.map(s => s.key));
+      keys = keys.filter(k => validKeys.has(k));
+      if (keys.length < 5) {
+        const fillers = meta.defaultSelection.filter(k => !keys.includes(k));
+        keys = [...keys, ...fillers].slice(0, 5);
+      } else if (keys.length > 5) {
+        keys = keys.slice(0, 5);
+      }
+      m.dataSlots = buildDataSlotsFromRecipe(
+        meta.recipe, meta.primaryData, meta.secondaryData, keys, {}
+      );
+      m.binding = {
+        subject:        meta.subject,
+        aspect:         meta.aspect,
+        primary:        meta.primary,
+        secondary:      meta.secondary,
+        customSlotKeys: keys,
+      };
     });
 
     // 永続化
