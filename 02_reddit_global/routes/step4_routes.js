@@ -1771,6 +1771,57 @@ function getUI() {
       return lab.includes(en) || en.includes(lab);
     }) || null;
   }
+  /* ── SofaScore の英語キー → 日本語表示名 マップ ── */
+  const _LABEL_JA = {
+    // 共通スタッツ
+    appearances: '出場', goals: 'ゴール', assists: 'アシスト', rating: '評価',
+    minutesPlayed: '出場分', yellowCards: '警告', redCards: '退場',
+    expectedGoals: 'xG', xG: 'xG',
+    keyPasses: 'キーパス', bigChancesCreated: 'ビッグチャンス創出',
+    bigChancesMissed: 'ビッグチャンス逃失', successfulDribbles: 'ドリブル成功',
+    totalShots: 'シュート数', shotsOnTarget: '枠内シュート',
+    accuratePassesPct: 'パス成功率', accuratePassesPercentage: 'パス成功率',
+    tackles: 'タックル', interceptions: 'インターセプト',
+    cleanSheets: '完封', cleanSheet: '完封',
+    saves: 'セーブ', savedFromBox: 'ボックス内セーブ',
+    savedShotsFromInsideTheBox: 'ボックス内セーブ',
+    goalsPrevented: '失点防止', goalsConceded: '失点',
+    clearances: 'クリア', duelsWon: 'デュエル勝',
+    aerialDuelsWon: '空中戦勝', blockedShots: 'ブロック',
+    // 試合スタッツ
+    date: '日付', tournament: '大会', opponent: '相手', score: 'スコア',
+    shots: 'シュート', passes: 'パス数',
+    dribbles: 'ドリブル', dribblesWon: 'ドリブル成功',
+    touches: 'タッチ数', wasFouled: '被ファウル', fouls: 'ファウル',
+    // 基本情報
+    name: '名前', position: 'ポジション', nationality: '国籍',
+    team: '所属', teamName: '所属', club: '所属',
+    age: '年齢', height: '身長', weight: '体重',
+    preferredFoot: '利き足', shirtNumber: '背番号', jerseyNumber: '背番号',
+    marketValue: '市場価値', contractUntil: '契約満了', contractUntilTimestamp: '契約満了',
+    leagueName: 'リーグ', league: 'リーグ', seasonYear: 'シーズン',
+    managerName: '監督', country: '国',
+    standing: '順位', position_rank: '順位',
+    recentAvgRating: '直近平均評価',
+    // チーム集計
+    matches: '試合数', wins: '勝', draws: '分', losses: '敗',
+    points: '勝ち点', goalsFor: '得点', goalsAgainst: '失点',
+    avgGoalsScored: '平均得点', avgGoalsConceded: '平均失点',
+    avgPossession: '平均支配率', passAccuracy: 'パス精度',
+    avgShots: '平均シュート', avgShotsOnTarget: '平均枠内シュート',
+    avgCorners: '平均CK', avgFouls: '平均ファウル', avgYellows: '平均警告',
+    avgxG: '平均xG', founded: '創立', venue: '本拠地',
+    recentForm: '直近フォーム', played: '試合数',
+  };
+  function _jaLabel(key) {
+    if (!key) return '';
+    if (_LABEL_JA[key]) return _LABEL_JA[key];
+    // camelCase → スペース区切り（フォールバック・読みやすさ向上）
+    return String(key)
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/^./, c => c.toUpperCase());
+  }
+
   function _extractBindFields(siData, entityName) {
     const items = siData?.boxes?.entity?.items || [];
     const item = _findEntityItem(items, entityName);
@@ -1781,7 +1832,7 @@ function getUI() {
       if (!obj || typeof obj !== 'object') return;
       Object.entries(obj).forEach(([k, v]) => {
         if (v == null || typeof v === 'object') return;
-        out.push({ section, label: k, value: String(v) });
+        out.push({ section, label: _jaLabel(k), key: k, value: String(v) });
       });
     }
     if (sofa.ok) {

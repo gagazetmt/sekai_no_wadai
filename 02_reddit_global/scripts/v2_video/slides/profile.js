@@ -161,21 +161,23 @@ function buildProfileHTML(mod) {
 }
 `;
 
-  // 値の長さに応じてフォント縮小（base 46px）
+  // 値の長さに応じてフォント縮小（base 56px）
   function _valFont(text) {
     const len = String(text || '').length;
-    if (len <= 6)  return 46;
-    if (len <= 9)  return 38;
-    if (len <= 13) return 30;
-    if (len <= 18) return 24;
-    return 20;
+    if (len <= 6)  return 56;
+    if (len <= 9)  return 46;
+    if (len <= 13) return 36;
+    if (len <= 18) return 28;
+    return 24;
   }
+  // ラベルは何の項目か即座にわかる大きさ（base 36px）
   function _labelFont(text) {
     const len = String(text || '').length;
-    if (len <= 6)  return 28;
-    if (len <= 10) return 23;
-    if (len <= 14) return 19;
-    return 16;
+    if (len <= 6)  return 36;
+    if (len <= 10) return 30;
+    if (len <= 14) return 26;
+    if (len <= 18) return 22;
+    return 20;
   }
 
   const dataRows = slots.map(s => {

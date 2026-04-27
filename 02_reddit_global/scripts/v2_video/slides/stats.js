@@ -127,12 +127,11 @@ function buildStatsHTML(mod) {
   border-radius: 4px 0 0 4px;
 }
 .card-label {
-  font-size: 22px;
-  font-weight: 700;
-  color: #6080b0;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  line-height: 1.15;
+  font-size: 32px;
+  font-weight: 800;
+  color: #8aa8d8;
+  letter-spacing: 0.5px;
+  line-height: 1.18;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -174,22 +173,24 @@ function buildStatsHTML(mod) {
 }
 `;
 
-  // 値の長さに応じてカード値のフォントを縮小（base 64px）
+  // 値の長さに応じてカード値のフォントを縮小（base 78px）
   function _valFont(text) {
     const len = String(text || '').length;
-    if (len <= 4)  return 64;
-    if (len <= 6)  return 56;
-    if (len <= 9)  return 44;
-    if (len <= 13) return 34;
-    if (len <= 18) return 26;
-    return 22;
+    if (len <= 4)  return 78;
+    if (len <= 6)  return 68;
+    if (len <= 9)  return 54;
+    if (len <= 13) return 42;
+    if (len <= 18) return 32;
+    return 26;
   }
+  // ラベルは「何の数字か」を視認できる大きさを優先（base 32px）
   function _labelFont(text) {
     const len = String(text || '').length;
-    if (len <= 8)  return 22;
-    if (len <= 12) return 19;
-    if (len <= 16) return 16;
-    return 14;
+    if (len <= 6)  return 32;
+    if (len <= 10) return 28;
+    if (len <= 14) return 24;
+    if (len <= 18) return 20;
+    return 18;
   }
 
   const cardsHtml = slots.slice(0, 6).map(s => {

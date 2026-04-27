@@ -242,14 +242,15 @@ function buildComparisonHTML(mod) {
     if (len <= 20) return Math.round(base * 0.42);
     return Math.round(base * 0.34);  // 21文字超
   }
-  // ラベル文字数 → フォントサイズ（base 22px）
+  // ラベル文字数 → フォントサイズ（base 30px）
+  // 真ん中の項目名が見えないと比較スライドが「何の比較なのか」分からなくなるので大きめに
   function _labelFont(text) {
     const len = String(text || '').length;
-    if (len <= 7)  return 22;
-    if (len <= 10) return 19;
-    if (len <= 14) return 16;
-    if (len <= 18) return 14;
-    return 12;
+    if (len <= 6)  return 30;
+    if (len <= 10) return 26;
+    if (len <= 14) return 22;
+    if (len <= 18) return 19;
+    return 17;
   }
 
   const rowsHtml = slots.length
