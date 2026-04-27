@@ -189,12 +189,46 @@ router.post('/v2/ask-slot-ai', express.json(), async (req, res) => {
     const { name: primary } = _parseMK(mod.mainKey || '');
     const secondary = mod.type === 'comparison' ? (mod.secondary || mod.binding?.secondary) : null;
 
+    // Wikipedia 構造化抽出（Honours / Career table）
+    const { extractCareerFromInfobox, extractHonoursSection } = require('../scripts/modules/fetchers/wikipedia');
+
     function _entityContext(label) {
       if (!label) return '';
       const it = items.find(x => x.label === label) || {};
       const wikiExtract = it.wiki?.extract || '';
       const wikitext    = it.wiki?.wikitext || '';
       const sofa        = it.sofa || {};
+
+      // キャリアテーブル抽出（infobox の career セクション）
+      let careerStr = '';
+      if (wikitext) {
+        try {
+          const career = extractCareerFromInfobox(wikitext);
+          if (career?.length) {
+            careerStr = career.map(c => {
+              const yrs = (c.years?.start || '?') + '-' + (c.years?.end || '現在');
+              const stats = [
+                c.caps  != null ? c.caps  + '試合'  : null,
+                c.goals != null ? c.goals + 'ゴール' : null,
+              ].filter(Boolean).join(' ');
+              return `${yrs}: ${c.club || '?'}${stats ? ' ' + stats : ''}`;
+            }).join('\n');
+          }
+        } catch (_) {}
+      }
+
+      // 獲得タイトル抽出（Honours セクション）
+      let honoursStr = '';
+      if (wikitext) {
+        try {
+          const honours = extractHonoursSection(wikitext);
+          if (honours?.length) {
+            honoursStr = honours.map(h =>
+              `[${h.category}]\n${(h.items || []).slice(0, 12).join('\n')}`
+            ).join('\n\n');
+          }
+        } catch (_) {}
+      }
       // sofa は JSON、長すぎ防止に最大 1500 char
       const sofaStr = sofa.ok ? JSON.stringify({
         name: sofa.name || sofa.teamName,
@@ -219,9 +253,15 @@ router.post('/v2/ask-slot-ai', express.json(), async (req, res) => {
       return `=== 主体: ${label} (${it.role || '?'}) ===
 [Wikipedia 要約]
 ${wikiExtract.slice(0, 1500)}
-
-[Wikipedia 生データ抜粋（infobox / career / honours 等含む）]
-${wikitext.slice(0, 5000)}
+${careerStr ? `
+[Wikipedia キャリアテーブル（infoboxから構造化抽出）]
+${careerStr}
+` : ''}${honoursStr ? `
+[Wikipedia 獲得タイトル（Honoursセクション）]
+${honoursStr}
+` : ''}
+[Wikipedia 生データ抜粋（補足）]
+${wikitext.slice(0, 3000)}
 
 [SofaScore]
 ${sofaStr}
