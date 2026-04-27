@@ -7,6 +7,7 @@
 //  ⑤ /unique-tournament/{t}/season/{s}/standings/total → 順位・今期スタッツ
 
 const { apiGet } = require('./_sofa_common');
+const { fetchWikipediaWikitext, extractHonoursSection } = require('./wikipedia');
 
 async function searchTeam(teamName) {
   try {
@@ -94,27 +95,75 @@ async function fetchSofaScoreTeam(teamName) {
       }
     }
 
-    // ⑤ 順位（今期スタッツ）
+    // ⑤⑥⑦ 並列取得（順位 + 試合平均スタッツ + Wikipedia honours）
+    const [stRaw, statsRaw, wikiRaw] = await Promise.all([
+      tournamentId && seasonId
+        ? apiGet(`/unique-tournament/${tournamentId}/season/${seasonId}/standings/total`).catch(e => ({ __err: e }))
+        : Promise.resolve({ __err: 'no tournamentId' }),
+      tournamentId && seasonId
+        ? apiGet(`/team/${teamId}/unique-tournament/${tournamentId}/season/${seasonId}/statistics/overall`).catch(e => ({ __err: e }))
+        : Promise.resolve({ __err: 'no tournamentId' }),
+      teamName
+        ? fetchWikipediaWikitext(teamName).catch(() => ({ ok: false }))
+        : Promise.resolve({ ok: false }),
+    ]);
+
+    // ⑤ 順位
     let standing = null;
-    if (tournamentId && seasonId) {
-      try {
-        const st = await apiGet(`/unique-tournament/${tournamentId}/season/${seasonId}/standings/total`);
-        const rows = st.standings?.[0]?.rows || [];
-        const row  = rows.find(r => r.team?.id === teamId);
-        if (row) {
-          standing = {
-            position:     row.position,
-            played:       row.matches,
-            wins:         row.wins,
-            draws:        row.draws,
-            losses:       row.losses,
-            goalsFor:     row.scoresFor,
-            goalsAgainst: row.scoresAgainst,
-            points:       row.points,
-          };
-        }
-      } catch (_) {}
+    if (!stRaw.__err) {
+      const rows = stRaw.standings?.[0]?.rows || [];
+      const row  = rows.find(r => r.team?.id === teamId);
+      if (row) {
+        standing = {
+          position:     row.position,
+          played:       row.matches,
+          wins:         row.wins,
+          draws:        row.draws,
+          losses:       row.losses,
+          goalsFor:     row.scoresFor,
+          goalsAgainst: row.scoresAgainst,
+          points:       row.points,
+        };
+      }
     }
+
+    // ⑥ 試合平均スタッツ
+    let teamStats = null;
+    if (!statsRaw.__err) {
+      const s = statsRaw.statistics || {};
+      const apps = s.matches || s.appearances || standing?.played || 0;
+      const safeAvg = (total) => apps ? parseFloat((total / apps).toFixed(2)) : null;
+      teamStats = {
+        matches:           apps,
+        avgGoalsScored:    s.goalsScored != null ? safeAvg(s.goalsScored) : null,
+        avgGoalsConceded:  s.goalsConceded != null ? safeAvg(s.goalsConceded) : null,
+        avgShots:          s.shots != null ? safeAvg(s.shots) : null,
+        avgShotsOnTarget:  s.shotsOnTarget != null ? safeAvg(s.shotsOnTarget) : null,
+        avgPossession:     s.averageBallPossession != null ? parseFloat(Number(s.averageBallPossession).toFixed(1)) : null,
+        passAccuracy:      s.accuratePassesPercentage != null ? parseFloat(Number(s.accuratePassesPercentage).toFixed(1)) : null,
+        avgCorners:        s.corners != null ? safeAvg(s.corners) : null,
+        avgFouls:          s.fouls != null ? safeAvg(s.fouls) : null,
+        avgYellows:        s.yellowCards != null ? safeAvg(s.yellowCards) : null,
+        cleanSheets:       s.cleanSheets ?? null,
+        bigChancesCreated: s.bigChancesCreated ?? null,
+        bigChancesMissed:  s.bigChancesMissed ?? null,
+        expectedGoals:     s.expectedGoals != null ? parseFloat(Number(s.expectedGoals).toFixed(2)) : null,
+        avgxG:             s.expectedGoals != null && apps ? parseFloat((s.expectedGoals / apps).toFixed(2)) : null,
+      };
+    }
+
+    // ⑦ Wikipedia honours 集計
+    const honours = wikiRaw?.ok ? extractHonoursSection(wikiRaw.wikitext) : [];
+    const _allItems = honours.flatMap(h => h.items || []);
+    const _matchAny = (re) => _allItems.filter(it => re.test(it)).length;
+    const trophySummary = {
+      total:        _allItems.length,
+      leagueTitles: _matchAny(/league|liga|premier|serie a|bundesliga|ligue 1|eredivisie|primeira/i),
+      cupTitles:    _matchAny(/\bcup\b|copa|coupe|pokal|coppa/i),
+      clTitles:     _matchAny(/champions league|uefa champions/i),
+      uefaSuper:    _matchAny(/uefa super cup/i),
+      worldClub:    _matchAny(/(fifa club world|club world cup|intercontinental)/i),
+    };
 
     return {
       ok:          true,
@@ -129,6 +178,9 @@ async function fetchSofaScoreTeam(teamName) {
       leagueName,
       seasonYear,
       standing,
+      teamStats,         // 試合平均（avgGoals/avgPossession/passAcc 等）
+      honours,           // [{ category, items }] Wikipedia 由来
+      trophySummary,     // { total, leagueTitles, cupTitles, clTitles, ... }
       last5,
     };
   } catch (e) {
