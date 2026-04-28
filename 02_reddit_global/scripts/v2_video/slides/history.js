@@ -1,33 +1,118 @@
 // scripts/v2_video/slides/history.js
 // History スライド：左ヒーロー画像 + 右タイムライン（ドット+カード）
-// テンプレート元: /history/index.html
+//   - 1〜7 件可変
+//   - 音声 chunk と substring match で各 event の登場時刻を検出 → 並べ替え
+//   - センチメンタル方針：純 fade のみ（slide なし）
+//   - 数字+単位を金色ハイライト（年代・冠・歳・度目 等）
+//   - 最新イベント dot は緑脈動を維持
+//   - hero-subject / tl-header は AI 動的生成 or 日本語既定
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, _t } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t } = require('./_common');
+
+const MAX_EVENTS = 7;
+
+// 数字+単位を金色ハイライト（insight と共通の語彙＋年代対応）
+function _highlightNumbers(escapedText) {
+  return escapedText.replace(
+    /([\d０-９]+(?:[\.,．，][\d０-９]+)?)\s*(年|年代|試合|ゴール|得点|アシスト|億|万|歳|位|連勝|連敗|連覇|周年|シーズン|度目|冠|勝|敗|本|点|個|G|A|％|%)/g,
+    '<span class="hl-num">$1$2</span>'
+  );
+}
+
+// catchphrase / event title を音声 chunk と照合
+function _matchToChunk(text, chunks) {
+  const tokens = String(text || '')
+    .replace(/[の・はがをにでとや、。…!?！？「」『』【】（）\s〜ー]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length >= 2);
+  if (!tokens.length || !chunks.length) return -1;
+  let bestIdx = -1, bestScore = 0;
+  chunks.forEach((c, i) => {
+    const t = String(c.text || '');
+    const score = tokens.reduce((s, tok) => s + (t.includes(tok) ? tok.length : 0), 0);
+    if (score > bestScore) { bestScore = score; bestIdx = i; }
+  });
+  return bestScore > 0 ? bestIdx : -1;
+}
+
+// 件数で min-height / フォントサイズ／余白を動的調整
+function _layoutForCount(n) {
+  if (n <= 3) return { gap: 32, padTop: 80, padBottom: 100, maxTitle: 36, maxSub: 24 };
+  if (n <= 5) return { gap: 22, padTop: 70, padBottom: 96,  maxTitle: 32, maxSub: 22 };
+  if (n === 6) return { gap: 16, padTop: 60, padBottom: 92, maxTitle: 28, maxSub: 19 };
+  return        { gap: 12, padTop: 56, padBottom: 90,  maxTitle: 25, maxSub: 17 }; // 7件
+}
+
+function _titleFont(text, layout) {
+  const len = String(text || '').length;
+  const m = layout.maxTitle;
+  if (len <= 14) return m;
+  if (len <= 20) return Math.max(m - 4, 22);
+  if (len <= 28) return Math.max(m - 9, 19);
+  if (len <= 38) return Math.max(m - 13, 16);
+  return Math.max(m - 16, 14);
+}
+function _subFont(text, layout) {
+  const len = String(text || '').length;
+  const m = layout.maxSub;
+  if (len <= 18) return m;
+  if (len <= 28) return Math.max(m - 3, 17);
+  if (len <= 40) return Math.max(m - 6, 14);
+  return Math.max(m - 8, 13);
+}
 
 function buildHistoryHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+
   // dataSlots から events を組み立てる（label = 日付, value = タイトル）
-  // catchphrases があれば「タイトル」として使う（narrationChunks との1対1対応）
-  let events = [];
+  let eventsRaw = [];
   if (Array.isArray(mod.dataSlots) && mod.dataSlots.length) {
-    events = mod.dataSlots.map((s, i) => ({
+    eventsRaw = mod.dataSlots.map((s, i) => ({
       date:  s.label || `${i+1}`,
       title: s.value || (mod.catchphrases?.[i] || ''),
       sub:   mod.narrationChunks?.[i] || '',
     }));
   } else if (Array.isArray(mod.catchphrases) && mod.catchphrases.length) {
-    events = mod.catchphrases.map((p, i) => ({
+    eventsRaw = mod.catchphrases.map((p, i) => ({
       date:  `${i+1}`,
       title: p,
       sub:   mod.narrationChunks?.[i] || '',
     }));
   }
-  events = events.slice(0, 5);
+  eventsRaw = eventsRaw.slice(0, MAX_EVENTS);
 
-  // タイトル・サブタイトル
+  const layout = _layoutForCount(eventsRaw.length);
+
+  // ── 登場タイミング決定（insight と同じロジック） ─────────
+  const audio = Array.isArray(mod.audio) ? mod.audio : [];
+  const totalSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 8;
+  const chunkStarts = audio.map((_, i) =>
+    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+  const startSec = 0.5;
+  const lastSec  = Math.max(totalSec - 1.5, startSec + 1);
+  const evenStep = eventsRaw.length > 1 ? (lastSec - startSec) / (eventsRaw.length - 1) : 0;
+
+  const tempDelays = eventsRaw.map((e, i) => {
+    // event の title + date から検出（日付単独だと弱いので title 主体）
+    const cIdx = audio.length ? _matchToChunk(`${e.title} ${e.date}`, audio) : -1;
+    return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
+  });
+
+  // 検出 delay 順に並べ替え（早く話される event を画面上に）
+  //   ただし「最新イベント」(緑脈動) を判別できなくなるので、元順での "最後" を記憶
+  const originalLastIdx = eventsRaw.length - 1;
+  const orderIdx = eventsRaw.map((_, i) => i)
+    .sort((a, b) => (tempDelays[a] - tempDelays[b]) || (a - b));
+  const events = orderIdx.map(i => ({
+    ...eventsRaw[i],
+    isLastInData: i === originalLastIdx, // データ上の最新を保持
+  }));
+  const delays = orderIdx.map(i => tempDelays[i]);
+
+  // タイトル系 ─ AI 生成 or 既定（日本語）
   const heroTitle   = _t(mod.title || '').replace(/ /g, '<br>');
-  const heroSubject = mod.type === 'history' ? 'JOURNEY' : (mod.type || '').toUpperCase();
-  const subText     = mod.narration || '';
+  const heroSubject = (mod.historyHero            && String(mod.historyHero).trim())            || '軌跡';
+  const tlHeader    = (mod.historyMilestoneLabel  && String(mod.historyMilestoneLabel).trim())  || '主な歩み';
 
   const extraStyles = `
 .slide { display: flex; }
@@ -43,7 +128,9 @@ function buildHistoryHTML(mod) {
   ${bg ? `background-image: url('${bg}');` : `background: ${PALETTE.surface};`}
   background-size: cover;
   background-position: center;
+  ${bg ? 'animation: bgZoom 14s ease-out forwards;' : ''}
 }
+@keyframes bgZoom { from { transform: scale(1); } to { transform: scale(1.05); } }
 .panel-hero .overlay {
   position: absolute; inset: 0;
   background: linear-gradient(to right,
@@ -74,7 +161,7 @@ function buildHistoryHTML(mod) {
 .panel-timeline {
   flex: 1;
   height: 100%;
-  padding: 80px 80px 100px 60px;
+  padding: ${layout.padTop}px 80px ${layout.padBottom}px 60px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -86,7 +173,6 @@ function buildHistoryHTML(mod) {
   font-weight: 700;
   color: #6080b0;
   letter-spacing: 4px;
-  text-transform: uppercase;
   margin-bottom: 10px;
 }
 .tl-body {
@@ -105,9 +191,10 @@ function buildHistoryHTML(mod) {
   background: linear-gradient(to bottom, rgba(245, 158, 11, 0.8), rgba(245, 158, 11, 0.1));
   border-radius: 2px;
 }
+/* ── センチメンタル方針：純 fade のみ。slide 動きなし ── */
 @keyframes evtFadeIn {
-  from { opacity: 0; transform: translateX(-40px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 @keyframes dotPulse {
   0%   { box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.4); }
@@ -119,19 +206,13 @@ function buildHistoryHTML(mod) {
   display: flex;
   align-items: center;
   gap: 40px;
-  padding: 12px 0;
-  /* 初期は非表示。delayで順次フェードイン */
+  padding: 8px 0;
   opacity: 0;
-  animation: evtFadeIn 0.55s ease-out forwards;
+  animation: evtFadeIn 0.85s ease-in-out forwards;
 }
-.tl-event:nth-child(1) { animation-delay: 0.30s; }
-.tl-event:nth-child(2) { animation-delay: 1.50s; }
-.tl-event:nth-child(3) { animation-delay: 2.70s; }
-.tl-event:nth-child(4) { animation-delay: 3.90s; }
-.tl-event:nth-child(5) { animation-delay: 5.10s; }
-/* 最新イベントの dot だけ脈動 */
-.tl-event.current::before {
-  animation: dotPulse 1.6s ease-in-out 5.30s infinite;
+/* 最新イベント dot の緑脈動：データ最終 event のみ、最終 delay 後から開始 */
+.tl-event.is-last::before {
+  animation: dotPulse 1.6s ease-in-out infinite;
 }
 .tl-event::before {
   content: '';
@@ -146,7 +227,7 @@ function buildHistoryHTML(mod) {
   transform: translateY(-50%);
   z-index: 2;
 }
-.tl-event.current::before {
+.tl-event.is-last::before {
   background: ${PALETTE.green};
   box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4), 0 0 20px rgba(16, 185, 129, 0.5);
 }
@@ -163,11 +244,10 @@ function buildHistoryHTML(mod) {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 14px;
-  padding: 18px 28px;
-  display: flex; flex-direction: column; gap: 6px;
+  padding: 14px 28px;
+  display: flex; flex-direction: column; gap: 4px;
 }
 .tl-title {
-  font-size: 34px;
   font-weight: 800;
   color: ${PALETTE.text};
   line-height: 1.2;
@@ -178,7 +258,6 @@ function buildHistoryHTML(mod) {
   word-break: break-word;
 }
 .tl-sub {
-  font-size: 22px;
   font-weight: 500;
   color: ${PALETTE.muted};
   line-height: 1.3;
@@ -188,52 +267,27 @@ function buildHistoryHTML(mod) {
   overflow: hidden;
   word-break: break-word;
 }
-.sub-bar {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 90px;
-  background: rgba(0, 0, 0, 0.90);
-  border-top: 3px solid rgba(245, 158, 11, 0.5);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 20;
-}
-.sub-bar .sub-text {
-  color: ${PALETTE.text};
-  font-size: 36px;
-  font-weight: 800;
-  text-align: center;
-  padding: 0 60px;
-  max-height: 76px;
-  overflow: hidden;
+/* 数字+単位ハイライト：金色＋強グロー */
+.hl-num {
+  color: #fcd34d;
+  font-weight: 900;
+  text-shadow: 0 0 14px rgba(252, 211, 77, 0.7), 0 2px 10px rgba(0,0,0,0.8);
 }
 `;
 
-  // タイトル文字数 → フォントサイズ（base 34px）
-  function _titleFont(text) {
-    const len = String(text || '').length;
-    if (len <= 14) return 34;
-    if (len <= 20) return 28;
-    if (len <= 28) return 23;
-    if (len <= 38) return 19;
-    return 16;
-  }
-  function _subFont(text) {
-    const len = String(text || '').length;
-    if (len <= 18) return 22;
-    if (len <= 28) return 19;
-    if (len <= 40) return 16;
-    return 14;
-  }
-
-  const eventsHtml = events.map((e, i) => {
-    const isLast = i === events.length - 1;
+  const eventsHtml = events.map((e, displayIdx) => {
     const ttl = String(e.title || '');
     const sub = String(e.sub   || '');
-    return `<div class="tl-event${isLast ? ' current' : ''}">
-      <div class="tl-date">${esc(e.date)}</div>
+    const dateHtml = _highlightNumbers(esc(String(e.date || '')));
+    const ttlHtml  = _highlightNumbers(esc(ttl));
+    const subHtml  = _highlightNumbers(esc(sub));
+    const delay = delays[displayIdx].toFixed(2);
+    const lastClass = e.isLastInData ? ' is-last' : '';
+    return `<div class="tl-event${lastClass}" style="animation-delay:${delay}s;${e.isLastInData ? `--pulse-delay:${(parseFloat(delay) + 0.3).toFixed(2)}s;` : ''}">
+      <div class="tl-date">${dateHtml}</div>
       <div class="tl-card">
-        <div class="tl-title" style="font-size:${_titleFont(ttl)}px">${esc(ttl)}</div>
-        ${e.sub ? `<div class="tl-sub" style="font-size:${_subFont(sub)}px">${esc(sub)}</div>` : ''}
+        <div class="tl-title" style="font-size:${_titleFont(ttl, layout)}px">${ttlHtml}</div>
+        ${e.sub ? `<div class="tl-sub" style="font-size:${_subFont(sub, layout)}px">${subHtml}</div>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -248,7 +302,7 @@ function buildHistoryHTML(mod) {
   </div>
 </div>
 <div class="panel-timeline">
-  <div class="tl-header">KEY MILESTONES</div>
+  <div class="tl-header">${esc(tlHeader)}</div>
   <div class="tl-body">${eventsHtml}</div>
 </div>
 ${buildSubtitleBar(subtitleArgFromMod(mod), { height: 90, maxLineLen: 32 })}`;
