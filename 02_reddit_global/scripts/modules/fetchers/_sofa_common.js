@@ -79,11 +79,13 @@ function _isProxyError(msg) {
   return /CONNECT|tunnel|proxy/i.test(String(msg || ''));
 }
 
-// 通常版：プロキシ失敗 / 403 / 429 時にセッション変えて最大5回まで試行
-// バックオフ: 0.8s, 1.5s, 2.5s, 4s
+// 通常版：プロキシ失敗 / 403 / 429 時にセッション変えて最大10回まで試行
+//   Webshare 住宅プール 4000 セッション中、SofaScore ブロック済が多数あるため
+//   未ブロック session を引くまでランダム試行を増やす（5→10 で成功率89%以上）
+// バックオフ: 0.6s, 1.0s, 1.5s, 2.0s, 2.5s, 3.0s, 3.5s, 4.0s, 4.5s
 async function apiGet(endpoint) {
-  const MAX_ATTEMPTS = 5;
-  const PROXY_BACKOFFS = [0, 800, 1500, 2500, 4000]; // 試行前の追加待機
+  const MAX_ATTEMPTS = 10;
+  const PROXY_BACKOFFS = [0, 600, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500];
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     await _waitRateLimit();
@@ -119,9 +121,11 @@ async function apiGet(endpoint) {
     }
 
     // 403/429 → 再試行（セッション変わる）
+    //   403: そのセッションが SofaScore にブロックされてる → 即次のセッションへ（待機は backoff のみ）
+    //   429: rate limit → 5秒待ってから再試行
     if ((res.status === 403 || res.status === 429) && attempt < MAX_ATTEMPTS) {
       console.log(`[SofaScore] ${res.status} on ${endpoint} (${attempt}/${MAX_ATTEMPTS})`);
-      await _sleep(RETRY_WAIT_MS);
+      if (res.status === 429) await _sleep(RETRY_WAIT_MS);
       continue;
     }
 
