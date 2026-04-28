@@ -212,8 +212,9 @@ async function main() {
   // 試合中の得点速報スレを除外（"Lazio [2]-1 Udinese - Pedro 80'" 等）
   //   - [N]-N または N-[N] パターン（角括弧が片側スコアを囲む = ライブ得点速報）
   //   - "Match Thread:" / "Pre-Match" / "Half Time:" / "Full Time:" 等の試合進行スレ
+  //   - 末尾「N'」「N+M'」（試合中の経過分表記）= 角括弧なしでもライブ進行
   //   後段で post-match analysis を取り逃さないよう、ライブ進行系のみ厳選除外
-  const REDDIT_NG_TITLE = /\[\d+\]\s*[-–]\s*\d+|\d+\s*[-–]\s*\[\d+\]|^Match\s+Thread:|^Pre[\s-]?Match\s+Thread:|^Half[\s-]?Time:|^Full[\s-]?Time:/i;
+  const REDDIT_NG_TITLE = /\[\d+\]\s*[-–]\s*\d+|\d+\s*[-–]\s*\[\d+\]|^Match\s+Thread:|^Pre[\s-]?Match\s+Thread:|^Half[\s-]?Time:|^Full[\s-]?Time:|\d+\+?\d*\s*['′ʼ]\s*$/i;
 
   const seen = new Map(); // permalink → post
   for (const sort of REDDIT_SOURCES) {
