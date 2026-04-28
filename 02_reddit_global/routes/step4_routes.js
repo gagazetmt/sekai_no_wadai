@@ -518,11 +518,12 @@ ${parsed.narration || ''}
     }
 
     // 反映（既存の siBindingLeft/Right や homeTeam/awayTeam 等の補助フィールドは温存）
+    // matchcard は matchData ベースで dataSlots を使わないので、AI が返しても空に固定
     const ALLOWED_TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard'];
     if (ALLOWED_TYPES.includes(parsed.type)) mod.type = parsed.type;
     if (typeof parsed.title === 'string')     mod.title = parsed.title;
     if (typeof parsed.narration === 'string') mod.narration = parsed.narration;
-    mod.dataSlots = parsed.dataSlots;
+    mod.dataSlots = (mod.type === 'matchcard') ? [] : parsed.dataSlots;
 
     fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
 
@@ -1041,7 +1042,8 @@ function getUI() {
     if (!m) return;
 
     let dataHtml = '';
-    if (Array.isArray(m.dataSlots) && m.dataSlots.length) {
+    // matchcard は matchData (試合データ) を表示するテンプレで dataSlots は使わない
+    if (Array.isArray(m.dataSlots) && m.dataSlots.length && m.type !== 'matchcard') {
       const isCmp = m.type === 'comparison';
       dataHtml = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📊 dataSlots</div>'
         + m.dataSlots.map(function(s, idx) {
@@ -1086,15 +1088,13 @@ function getUI() {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
 
-    /* Step 3.5 で選択した画像のギャラリー（このカードのラベルに該当する画像のみ表示） */
-    //   - mod.mainKey と mod.secondary を見て、該当する selections だけ抽出
-    //   - matchcard / opening 等は SI から関連 team ラベルを引いてくる（Step3.5 と同じロジック）
+    /* Step 3.5 で選択した画像のギャラリー（全ラベルの選定済画像を1プールで共有表示） */
+    //   - 全 selections をフラットに展開して、どのスライドからでも全画像を選べる
     let galleryHtml = '';
     const allSelections = window.APP.s4.imageSelections || {};
-    const cardLabels = _labelsForModule(m);
     const seen = new Set();
     const pool = []; // [{ path, fromLabel }]
-    cardLabels.forEach(function(lbl) {
+    Object.keys(allSelections).forEach(function(lbl) {
       const arr = allSelections[lbl];
       if (!Array.isArray(arr)) return;
       arr.forEach(function(p) {
@@ -1103,12 +1103,10 @@ function getUI() {
     });
     const cardImgs = Array.isArray(m.images) ? m.images : [];
     if (pool.length) {
-      const labelLine = cardLabels.length
-        ? '<span style="color:#5a6a8a;font-weight:normal;margin-left:6px;font-size:10px;">対象ラベル: ' + cardLabels.map(_esc).join(' / ') + '</span>'
-        : '';
       galleryHtml = ''
-        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ ラベル別画像プール ('
-        + pool.length + '枚)' + labelLine + ' <span style="color:#10b981;font-weight:normal;margin-left:6px;">このカードで '
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ 共有画像プール ('
+        + pool.length + '枚)<span style="color:#5a6a8a;font-weight:normal;margin-left:6px;font-size:10px;">全スライド共通</span>'
+        + ' <span style="color:#10b981;font-weight:normal;margin-left:6px;">このカードで '
         + cardImgs.length + ' 枚選択中</span></div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;max-height:200px;overflow-y:auto;">'
         + pool.map(function(it) {
@@ -1126,11 +1124,8 @@ function getUI() {
           }).join('')
         + '</div>';
     } else {
-      const hint = cardLabels.length
-        ? 'このカードのラベル「' + cardLabels.map(_esc).join(' / ') + '」に対する画像がまだ選択されていません'
-        : 'このカードはラベルを持ちません（opening/ending 等）';
       galleryHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
-        + '🖼️ ' + hint + ' — Step 3.5 で取得・選択してください'
+        + '🖼️ 画像がまだ選択されていません — Step 3.5 で取得・選択してください'
         + '</div>';
     }
 

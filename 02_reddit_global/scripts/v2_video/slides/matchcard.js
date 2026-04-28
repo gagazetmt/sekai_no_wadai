@@ -4,7 +4,7 @@
 // テンプレート元: /match_center_wide.html (1280x720) を transform: scale(1.5) で 1920x1080 化
 
 const {
-  PALETTE, esc, wrapHTML, buildSubtitleBar, subtitleArgFromMod,
+  PALETTE, esc, wrapHTML,
   _t, _abbr, _player, _fmtDate,
 } = require('./_common');
 
@@ -367,7 +367,6 @@ function buildMatchcardHTML(mod) {
   </div>
 </div>
 </div>
-<div style="position:absolute;top:0;left:0;width:1920px;height:1080px;border:4px dashed #ff2266;pointer-events:none;z-index:9999;box-sizing:border-box;"></div>
 <script>
 (function() {
   const PAYLOAD = ${dataPayload};

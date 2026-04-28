@@ -176,11 +176,11 @@ router.post('/v3/generate-scenario', async (req, res) => {
       m.type = resolveType(m.mainKey, m.subSource, m.subValue, si) || m.type || 'insight';
     });
 
-    // ── outline ブロック化 ──
+    // ── outline ブロック化（idx は 1 始まり = 1..mods.length）──
     const outlineLines = mods.map((m, i) => {
       let tags = `main="${m.mainKey}"` + (m.subSource ? ` sub="${m.subSource}:${m.subValue}"` : '');
       if (m.secondary) tags += ` secondary="${m.secondary}"`;
-      return `${i+1}. type=${m.type} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
+      return `idx=${i+1}: type=${m.type} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
     }).join('\n');
 
     // ── comparison カードのメタを集める（AIに customSlotKeys を選ばせる） ──
@@ -241,6 +241,7 @@ ${outlineLines}
 各カードに対して必要なフィールドを全部 JSON で返す：
 
 - 全カード共通：
+  - "idx": **outline の番号（1始まり）と完全一致**。1, 2, 3, ..., ${mods.length} の順で必ず出力
   - "title": 短い見出し（10〜25文字）
   - "narration": 視聴者に語りかける口調の本文 — **40秒前後のボリューム = 250〜320文字目安**
     ※ 例外: type=opening は narration="" 空文字（タイトル表示のみで読み上げなし）
@@ -282,10 +283,11 @@ ${outlineLines}
 - あなたの学習データ（2024年〜）は古い。現在の監督・所属はデータからのみ参照
 - 前後カードの文脈が自然につながるように構成する
 
-JSON のみ返す（マークダウン不要）：
+JSON のみ返す（マークダウン不要）。**idx は outline の番号 1〜${mods.length} と完全一致**で全カード網羅：
 {"modules":[
-  {"title":"...","narration":"...",...type別フィールド},
-  ... (${mods.length}枚)
+  {"idx":1,"title":"...","narration":"...",...type別フィールド},
+  {"idx":2,"title":"...","narration":"...",...type別フィールド},
+  ... (合計 ${mods.length}枚 / idx は 1 から ${mods.length} まで欠番なし)
 ]}${comparisonSection}`;
 
     console.log(`[Step3 v3] generate-scenario: ${mods.length}カード / DeepSeek 試行`);
@@ -318,17 +320,31 @@ JSON のみ返す（マークダウン不要）：
     }
     if (!parsed?.modules) return res.status(500).json({ error: '生成失敗（JSON parse fail）' });
 
-    // outline と AI返却をマージ（順序保持）
+    // ── AI 出力を idx (1始まり) でインデックス化（順序ズレ・取りこぼしを防ぐ）──
+    // idx 欠落の場合は配列順 (1始まり扱い) にフォールバック
+    const aiByIdx = {};
+    (parsed.modules || []).forEach((ai, k) => {
+      const idx = Number.isFinite(ai?.idx) ? Number(ai.idx) : (k + 1);
+      if (!aiByIdx[idx]) aiByIdx[idx] = ai;
+    });
+    const aiIdxs = Object.keys(aiByIdx).map(Number).sort((a, b) => a - b);
+    const expectedIdxs = mods.map((_, i) => i + 1);
+    const missing = expectedIdxs.filter(x => !aiByIdx[x]);
+    if (missing.length) console.warn(`[Step3 v3] AI出力 idx 欠番:`, missing, '/ 取得した idx:', aiIdxs);
+
+    // outline と AI返却をマージ（idx ベース・順序保持）
     // type はクライアント送信値を信用せず、必ずサーバー側で v3_tags.resolveType で決定
+    // matchcard は matchData ベースなので dataSlots を強制的に空にする（AIが誤って返しても無視）
     const merged = mods.map((src, i) => {
-      const ai = parsed.modules[i] || {};
+      const ai = aiByIdx[i + 1] || {};
       const resolvedType = resolveType(src.mainKey, src.subSource, src.subValue, si);
+      const finalType = resolvedType || src.type || 'insight';
       return {
         ...src,
-        type:         resolvedType || src.type || 'insight',
+        type:         finalType,
         title:        ai.title        || src.title        || `スライド${i+1}`,
         narration:    ai.narration    || '',
-        dataSlots:    ai.dataSlots    || [],
+        dataSlots:    finalType === 'matchcard' ? [] : (ai.dataSlots || []),
         catchphrases: ai.catchphrases || [],
         comments:     ai.comments     || [],
       };
@@ -390,7 +406,7 @@ JSON のみ返す（マークダウン不要）：
     merged.forEach((m, i) => {
       const meta = comparisonMetaByIdx[i];
       if (!meta) return;
-      const aiOut = parsed.modules[i] || {};
+      const aiOut = aiByIdx[i + 1] || {};
       let keys = Array.isArray(aiOut.customSlotKeys) ? aiOut.customSlotKeys.filter(Boolean) : [];
       // AI が無効キーや件数違いを返したら defaultSelection で補完
       const validKeys = new Set(meta.recipe.availableSlots.map(s => s.key));
