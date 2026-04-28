@@ -18,12 +18,14 @@ function _entityName(raw) {
   return _player(raw);
 }
 
-// 件数別 grid layout（6-8件は 3-4列、4件は 2列、3件以下は 1行）
+// 件数別 grid layout（横2 列を基本に、縦の行数で件数をさばく）
+//   profile: 4件 → 2x2（コンパクトで impact 大きい）
+//   stats:   6件 → 2x3（基本形）/ 7-8件 → 2x4
 function _gridLayout(count) {
-  if (count <= 3) return { cols: count, gap: 18, maxValFont: 78, maxLabelFont: 32, padTop: 80, padBottom: 130 };
-  if (count === 4) return { cols: 2, gap: 18, maxValFont: 78, maxLabelFont: 32, padTop: 80, padBottom: 130 };
-  if (count <= 6) return { cols: 3, gap: 16, maxValFont: 68, maxLabelFont: 28, padTop: 70, padBottom: 120 };
-  return            { cols: 4, gap: 14, maxValFont: 56, maxLabelFont: 24, padTop: 60, padBottom: 116 }; // 7-8件
+  if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 36, padTop: 80, padBottom: 130 };
+  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 34, padTop: 80, padBottom: 130 }; // profile 2x2
+  if (count <= 6) return { cols: 2, gap: 16, maxValFont: 76, maxLabelFont: 32, padTop: 70, padBottom: 120 }; // stats 2x3 ← 基本形
+  return            { cols: 2, gap: 14, maxValFont: 60, maxLabelFont: 26, padTop: 60, padBottom: 116 };       // stats 2x4 (7-8件)
 }
 
 // label を chunk text と部分一致で対応付け（active 強調用）
