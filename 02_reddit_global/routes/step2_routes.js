@@ -14,11 +14,12 @@ const path    = require('path');
 
 const { callAI }                = require('../scripts/ai_client');
 const { fetchWikipediaSafe }    = require('../scripts/modules/fetchers/wikipedia');
-const { fetchSofaScorePlayer }  = require('../scripts/modules/fetchers/sofascore_player');
-const { fetchSofaScoreTeam }    = require('../scripts/modules/fetchers/sofascore_team');
-const { fetchSofaScoreManager } = require('../scripts/modules/fetchers/sofascore_manager');
-const { fetchSofaScoreMatch }   = require('../scripts/modules/fetchers/sofascore_match');
-const { fetchSerper }           = require('../scripts/modules/fetchers/serper_module');
+const { fetchSofaScorePlayer }     = require('../scripts/modules/fetchers/sofascore_player');
+const { fetchSofaScoreTeam }       = require('../scripts/modules/fetchers/sofascore_team');
+const { fetchSofaScoreManager }    = require('../scripts/modules/fetchers/sofascore_manager');
+const { fetchSofaScoreMatch }      = require('../scripts/modules/fetchers/sofascore_match');
+const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
+const { fetchSerper }              = require('../scripts/modules/fetchers/serper_module');
 
 const router = express.Router();
 const SI_DIR = path.join(__dirname, '..', 'data', 'si_data');
@@ -138,12 +139,12 @@ JSONのみ返す（マークダウン不要）。例：
 
 // ─── 個別 fetcher（box種別 + label）─────────────────────
 async function _fetchEntity(label, role) {
-  // Wiki + Sofa 並列取得（roleごとに sofa fetcher を選択、tournamentはWikiのみ）
+  // Wiki + Sofa 並列取得（roleごとに sofa fetcher を選択）
   const sofaFetcher = ({
     player:     fetchSofaScorePlayer,
     manager:    fetchSofaScoreManager,
     team:       fetchSofaScoreTeam,
-    tournament: null,
+    tournament: fetchSofaScoreTournament,
   })[role];
 
   const tasks = [

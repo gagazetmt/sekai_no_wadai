@@ -56,6 +56,26 @@ function fmtFloat(v, digits = 2, fallback = '-') {
   return Number(v).toFixed(digits);
 }
 
+// 大会順位表 1行を「チーム名 勝点XX (W-D-L GD±YY)」に整形
+function _fmtStandingRow(standings, pos) {
+  if (!Array.isArray(standings) || pos < 1 || pos > standings.length) return '-';
+  const r = standings[pos - 1];
+  if (!r || !r.teamName) return '-';
+  const gd  = r.goalDiff != null ? (r.goalDiff > 0 ? `+${r.goalDiff}` : `${r.goalDiff}`) : '-';
+  const wdl = `${r.wins||0}-${r.draws||0}-${r.losses||0}`;
+  return `${r.teamName} 勝点${r.points ?? '-'} (${wdl} GD${gd})`;
+}
+
+// 大会得点王/アシスト王 1人を「選手名(チーム) Nゴール」等に整形
+function _fmtTopPlayer(p, key = 'goals') {
+  if (!p?.name) return '-';
+  const team = p.teamName ? `(${p.teamName})` : '';
+  if (key === 'goals')   return `${p.name}${team} ${p.goals ?? '-'}ゴール`;
+  if (key === 'assists') return `${p.name}${team} ${p.assists ?? '-'}アシスト`;
+  if (key === 'rating')  return `${p.name}${team} 評定${fmtFloat(p.rating, 2)}`;
+  return p.name;
+}
+
 // SIデータから entity を取得（label一致）
 function findEntity(siData, subject, label) {
   const box = SUBJECT_BOX_MAP[subject];
@@ -451,6 +471,48 @@ const RECIPES = {
         extract: (d) => d?.h2hMatches?.[0]?.scoreline || '-' },
     ],
     defaultSelection: ['h2hRecord', 'tournament', 'venue', 'matchDate'],
+  },
+
+  // ── A14. リーグ大会の順位表（優勝争い/CL圏/残留 全部いける）─────────
+  //   data = sofascore_tournament の戻り値 { standings: [...], topScorers: [...] }
+  //   AI が customSlotKeys で「優勝争い → pos1,pos2,pos3,topScorer1」のように
+  //   状況に応じて選定。サーバが実値充填するため捏造値ゼロ。
+  'tournament.standings': {
+    priority: 'A',
+    label: 'リーグ順位表（優勝/CL/残留）',
+    description: '大会全順位表から指定行を表示。優勝争い・CL圏争い・降格争いを文脈に応じて編成',
+    template: 'stats',
+    sources: ['sofa.tournament'],
+    populates: 'dataSlots',
+    availableSlots: [
+      // ── 優勝争い（上位）──
+      { key: 'pos1', label: '1位',   category: '優勝',  priority: 10, extract: d => _fmtStandingRow(d?.standings, 1) },
+      { key: 'pos2', label: '2位',   category: '優勝',  priority: 10, extract: d => _fmtStandingRow(d?.standings, 2) },
+      { key: 'pos3', label: '3位',   category: '優勝',  priority: 9,  extract: d => _fmtStandingRow(d?.standings, 3) },
+      // ── CL圏争い（中位）──
+      { key: 'pos4', label: '4位',   category: 'CL圏', priority: 9,  extract: d => _fmtStandingRow(d?.standings, 4) },
+      { key: 'pos5', label: '5位',   category: 'CL圏', priority: 8,  extract: d => _fmtStandingRow(d?.standings, 5) },
+      { key: 'pos6', label: '6位',   category: 'CL圏', priority: 7,  extract: d => _fmtStandingRow(d?.standings, 6) },
+      { key: 'pos7', label: '7位',   category: 'CL圏', priority: 6,  extract: d => _fmtStandingRow(d?.standings, 7) },
+      { key: 'pos8', label: '8位',   category: 'CL圏', priority: 5,  extract: d => _fmtStandingRow(d?.standings, 8) },
+      // ── 降格争い（下位）──
+      { key: 'last1', label: '最下位',     category: '降格',  priority: 9,  extract: d => _fmtStandingRow(d?.standings, d?.standings?.length || 0) },
+      { key: 'last2', label: 'ブービー',   category: '降格',  priority: 8,  extract: d => _fmtStandingRow(d?.standings, (d?.standings?.length || 1) - 1) },
+      { key: 'last3', label: '降格圏3番手', category: '降格', priority: 7,  extract: d => _fmtStandingRow(d?.standings, (d?.standings?.length || 2) - 2) },
+      { key: 'last4', label: '降格圏4番手', category: '降格', priority: 6,  extract: d => _fmtStandingRow(d?.standings, (d?.standings?.length || 3) - 3) },
+      { key: 'last5', label: '残留ボーダー上', category: '降格', priority: 5,  extract: d => _fmtStandingRow(d?.standings, (d?.standings?.length || 4) - 4) },
+      // ── 得点王・アシスト王 ──
+      { key: 'topScorer1', label: '得点王',    category: '個人賞', priority: 9,  extract: d => _fmtTopPlayer(d?.topScorers?.[0],   'goals') },
+      { key: 'topScorer2', label: '得点2位',   category: '個人賞', priority: 7,  extract: d => _fmtTopPlayer(d?.topScorers?.[1],   'goals') },
+      { key: 'topScorer3', label: '得点3位',   category: '個人賞', priority: 6,  extract: d => _fmtTopPlayer(d?.topScorers?.[2],   'goals') },
+      { key: 'topAssist1', label: 'アシスト王', category: '個人賞', priority: 8, extract: d => _fmtTopPlayer(d?.topAssists?.[0],   'assists') },
+      { key: 'topRated1',  label: '評定1位',   category: '個人賞', priority: 7,  extract: d => _fmtTopPlayer(d?.topRated?.[0],     'rating') },
+      // ── 大会全体プロフ ──
+      { key: 'season',  label: 'シーズン', category: '大会', priority: 5, extract: d => fmtNum(d?.seasonYear) },
+      { key: 'country', label: '主催国',   category: '大会', priority: 4, extract: d => fmtNum(d?.country) },
+      { key: 'name',    label: '大会名',   category: '大会', priority: 4, extract: d => fmtNum(d?.name) },
+    ],
+    defaultSelection: ['pos1', 'pos2', 'pos3', 'topScorer1'],  // 優勝争い既定
   },
 
   // ════════════════════════════════════════════════════════════

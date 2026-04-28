@@ -98,10 +98,35 @@ router.post('/v3/generate-scenario', async (req, res) => {
       const role = it.role;
       const wikiSum = it.wiki?.ok
         ? `wiki:{title:"${it.wiki.title || ''}",extract:"${(it.wiki.extract || '').slice(0, 250)}"}` : 'wiki:×';
-      const sofaSum = it.sofa?.ok
-        ? `sofa:${JSON.stringify({
-            name: it.sofa.name || it.sofa.teamName,
-            position: it.sofa.position, team: it.sofa.team,
+      let sofaSum = 'sofa:×';
+      if (it.sofa?.ok) {
+        // role 別にAIへ渡すフィールドを最適化
+        let payload;
+        if (role === 'tournament') {
+          // 大会：順位表 + 得点王ランキング（standings は最大10件まで圧縮）
+          payload = {
+            name: it.sofa.name, country: it.sofa.country,
+            seasonYear: it.sofa.seasonYear,
+            standings:  (it.sofa.standings || []).slice(0, 10),
+            relegationRace: it.sofa.relegationRace,
+            topScorers: (it.sofa.topScorers || []).slice(0, 3),
+            topAssists: (it.sofa.topAssists || []).slice(0, 3),
+          };
+        } else if (role === 'team') {
+          // チーム：last5（直近実結果）+ recentForm を必ず含める。AIが過去/未来を混同しないため
+          payload = {
+            teamName: it.sofa.teamName, league: it.sofa.leagueName, country: it.sofa.country,
+            standing: it.sofa.standing, manager: it.sofa.managerName,
+            seasonStats: it.sofa.seasonStats, teamStats: it.sofa.teamStats,
+            recentForm: it.sofa.recentForm,                      // "WWLDD" 形式
+            last5:      (it.sofa.last5 || []).slice(0, 5),       // 直近5試合の実結果（過去のみ）
+            topPlayers: (it.sofa.topPlayers || []).slice(0, 3),
+            trophySummary: it.sofa.trophySummary,
+          };
+        } else {
+          // player / manager（既存）
+          payload = {
+            name: it.sofa.name, position: it.sofa.position, team: it.sofa.team,
             league: it.sofa.leagueName, country: it.sofa.country,
             standing: it.sofa.standing, manager: it.sofa.managerName,
             seasonStats: it.sofa.seasonStats, lastMatchStats: it.sofa.lastMatchStats,
@@ -109,7 +134,12 @@ router.post('/v3/generate-scenario', async (req, res) => {
             currentTeam: it.sofa.currentTeam,
             overallPerformance: it.sofa.overallPerformance,
             currentTeamStats: it.sofa.currentTeamStats,
-          }).slice(0, 700)}` : 'sofa:×';
+          };
+        }
+        // role別に表示量を可変（tournamentは順位表が太いので増量）
+        const cap = role === 'tournament' ? 1500 : role === 'team' ? 1200 : 700;
+        sofaSum = `sofa:${JSON.stringify(payload).slice(0, cap)}`;
+      }
       return `- "${it.label}" [${role}]\n  ${wikiSum}\n  ${sofaSum}`;
     }
     function _matchBlock(it) {
@@ -249,10 +279,14 @@ ${outlineLines}
 - subValue が "titles" → dataSlots は獲得トロフィー一覧
 
 【ハルシネーション禁止 — 厳守】
-- 値・固有名は必ず上記取得済みデータに明記されているもののみ
+- 値・固有名は必ず上記取得済きデータに明記されているもののみ
 - データに無いものは出力しない（推測・記憶からの補完絶対NG）
 - あなたの学習データ（2024年〜）は古い。現在の監督・所属はデータからのみ参照
 - 前後カードの文脈が自然につながるように構成する
+- **試合結果の混同厳禁**: チーム entity の sofa.last5 が「**実際に行われた直近の試合結果**」。それ以外の試合（次節予定等）の結果は絶対に書かない
+  ・「前節〇〇戦は2-0で勝利」と書くなら、必ず last5[0] の opponent と score に一致すること
+  ・データに無い試合結果（例: 5/3予定の試合の結果）を予測・捏造しない
+  ・「次節は〇〇戦」と書く場合は「予定」「控える」など未確定であることを明示
 
 JSON のみ返す（マークダウン不要）。**idx は outline の番号 1〜${mods.length} と完全一致**で全カード網羅：
 {"modules":[

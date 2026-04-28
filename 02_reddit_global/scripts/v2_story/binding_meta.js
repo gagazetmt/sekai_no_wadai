@@ -17,6 +17,8 @@
 const { getRecipe } = require('./recipes');
 
 // 1エンティティのデータを SI box (entity/match) から引く
+//   subject = player/team/manager/tournament → boxes.entity.items から sofa を返す
+//   subject = match                          → boxes.match.items から data を返す
 function _findEntityData(siData, subject, label) {
   if (!siData || !label) return null;
   if (subject === 'match') {
@@ -71,7 +73,10 @@ function inferBindingForMod(mod, siData) {
     let aspect = null;
     if (mod.type === 'profile') aspect = 'profile';
     else if (mod.type === 'stats') {
-      aspect = role === 'team' ? 'seasonStats' : role === 'player' ? 'careerStats' : 'recentForm';
+      if      (role === 'team')       aspect = 'seasonStats';
+      else if (role === 'player')     aspect = 'careerStats';
+      else if (role === 'tournament') aspect = 'standings';     // ← 大会の stats = リーグ順位表
+      else                            aspect = 'recentForm';
     }
     if (aspect) return { subject: role, aspect, primary, secondary: null };
   }
