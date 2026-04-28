@@ -208,12 +208,20 @@ async function main() {
 
   // 1. Redditから取得 (#1-4, #1-5) - hot/rising/new から混合取得して鮮度確保
   console.log("📡 Redditから案件を探索中... (hot+rising+new)");
+
+  // 試合中の得点速報スレを除外（"Lazio [2]-1 Udinese - Pedro 80'" 等）
+  //   - [N]-N または N-[N] パターン（角括弧が片側スコアを囲む = ライブ得点速報）
+  //   - "Match Thread:" / "Pre-Match" / "Half Time:" / "Full Time:" 等の試合進行スレ
+  //   後段で post-match analysis を取り逃さないよう、ライブ進行系のみ厳選除外
+  const REDDIT_NG_TITLE = /\[\d+\]\s*[-–]\s*\d+|\d+\s*[-–]\s*\[\d+\]|^Match\s+Thread:|^Pre[\s-]?Match\s+Thread:|^Half[\s-]?Time:|^Full[\s-]?Time:/i;
+
   const seen = new Map(); // permalink → post
   for (const sort of REDDIT_SOURCES) {
     const json = await redditGet(`https://www.reddit.com/r/soccer/${sort}.json?limit=50`);
     (json?.data?.children || [])
       .map(c => c.data)
       .filter(p => !p.stickied && p.score >= REDDIT_MIN_SCORE)  // ← ハードル: score閾値
+      .filter(p => !REDDIT_NG_TITLE.test(p.title))               // ← 試合中速報スレ除外
       .forEach(p => {
         if (!seen.has(p.permalink)) {
           seen.set(p.permalink, {
@@ -233,11 +241,20 @@ async function main() {
     .slice(0, REDDIT_SELECT_N);
   console.log(`  📊 探索${seen.size}件 / 既出${seen.size - fresh.length}除外 / 残${fresh.length}件 → 上位${redditPosts.length}件選定 (score>=${REDDIT_MIN_SCORE})`);
 
-  // 各Reddit案件のコメントを取得
+  // 各Reddit案件のコメントを取得（AutoModerator/ボット系コメントは除外）
+  //   除外対象: 自動投稿（ミラーリンク・統計スレ告知・bot自己紹介）
+  //   "I am a bot" / "私は自動ボットです" / "MIRROR" / "重複投稿は削除されます" 等
+  const REDDIT_BOT_BODY = /(I am a bot|私は自動ボットです|自動ボット|AutoModerator|Mirrors?:|ミラー[／\s]|別角度はこちら|重複投稿は削除されます|このスレは統計スレ|このコメントに返信でどうぞ|Stats Thread:|Beep boop)/i;
+  // ボット投稿者名（authorベースでも弾く）
+  const REDDIT_BOT_AUTHOR = /^(AutoModerator|MirrorBot|.*[Bb]ot)$/;
+
   for (const p of redditPosts) {
-    const cJson = await redditGet(`https://www.reddit.com${p.permalink}.json?limit=${COMMENT_LIMIT}&sort=top&depth=1`);
-    p.comments = (cJson?.[1]?.data?.children || [])
+    const cJson = await redditGet(`https://www.reddit.com${p.permalink}.json?limit=${COMMENT_LIMIT * 2}&sort=top&depth=1`);
+    const raw = cJson?.[1]?.data?.children || [];
+    p.comments = raw
       .filter(c => c.kind === "t1" && c.data.body && c.data.body !== "[deleted]")
+      .filter(c => !REDDIT_BOT_BODY.test(c.data.body))
+      .filter(c => !REDDIT_BOT_AUTHOR.test(c.data.author || ''))
       .slice(0, COMMENT_LIMIT)
       .map(c => ({ body: c.data.body.slice(0, 500), score: c.data.score }));
   }
