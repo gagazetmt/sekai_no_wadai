@@ -52,9 +52,9 @@ function _matchLabelToChunk(label, chunks) {
 function buildStatsHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
 
-  // dataSlots: stats は 6-8、profile は 4 を想定
+  // dataSlots: stats / profile ともに 6-8 件を想定（基本 2x3 grid）
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 8);
-  const minCount = mod.type === 'stats' ? 6 : 4;
+  const minCount = (mod.type === 'stats' || mod.type === 'profile') ? 6 : 4;
   while (slots.length < minCount) slots.push({ label: '', value: '' });
   const layout = _gridLayout(slots.length);
 

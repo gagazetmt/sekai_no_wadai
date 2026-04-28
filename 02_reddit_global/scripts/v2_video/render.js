@@ -145,7 +145,9 @@ function buildSlideHTML(mod) {
     case 'history':     return buildHistoryHTML(m);
     case 'matchcard':   return buildMatchcardHTML(m);
     case 'stats':       return buildStatsHTML(m);
-    case 'profile':     return buildProfileHTML(m);
+    // profile は stats と同じテンプレ（左=人物・チーム画像 / 右=データカード grid）
+    //   旧 buildProfileHTML（試合プレビュー型）は実装が matchcard と重複しており未使用
+    case 'profile':     return buildStatsHTML(m);
     case 'comparison':  return buildComparisonHTML(m);
     case 'reaction':    return buildReactionHTML(m);
     default:            return buildUniversalHTML(m);
