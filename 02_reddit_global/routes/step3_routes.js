@@ -107,20 +107,25 @@ router.post('/v3/generate-scenario', async (req, res) => {
           payload = {
             name: it.sofa.name, country: it.sofa.country,
             seasonYear: it.sofa.seasonYear,
-            standings:  (it.sofa.standings || []).slice(0, 10),
+            standings:      Array.isArray(it.sofa.standings)      ? it.sofa.standings.slice(0, 10)     : [],
             relegationRace: it.sofa.relegationRace,
-            topScorers: (it.sofa.topScorers || []).slice(0, 3),
-            topAssists: (it.sofa.topAssists || []).slice(0, 3),
+            topScorers:     Array.isArray(it.sofa.topScorers)     ? it.sofa.topScorers.slice(0, 3)     : [],
+            topAssists:     Array.isArray(it.sofa.topAssists)     ? it.sofa.topAssists.slice(0, 3)     : [],
           };
         } else if (role === 'team') {
           // チーム：last5（直近実結果）+ recentForm を必ず含める。AIが過去/未来を混同しないため
+          //   topPlayers は { goals:[...], assists:[...], rating:[...] } のオブジェクト形式なので
+          //   goals 上位3名だけ展開（チーム内得点王として AI が言及できれば十分）
+          const topScorers = Array.isArray(it.sofa.topPlayers?.goals)
+            ? it.sofa.topPlayers.goals.slice(0, 3)
+            : [];
           payload = {
             teamName: it.sofa.teamName, league: it.sofa.leagueName, country: it.sofa.country,
             standing: it.sofa.standing, manager: it.sofa.managerName,
             seasonStats: it.sofa.seasonStats, teamStats: it.sofa.teamStats,
             recentForm: it.sofa.recentForm,                      // "WWLDD" 形式
-            last5:      (it.sofa.last5 || []).slice(0, 5),       // 直近5試合の実結果（過去のみ）
-            topPlayers: (it.sofa.topPlayers || []).slice(0, 3),
+            last5:      Array.isArray(it.sofa.last5) ? it.sofa.last5.slice(0, 5) : [],
+            topScorers,                                          // チーム内得点上位3
             trophySummary: it.sofa.trophySummary,
           };
         } else {
