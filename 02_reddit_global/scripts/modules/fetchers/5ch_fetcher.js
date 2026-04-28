@@ -11,15 +11,42 @@ const HEADERS = {
   'Accept-Language': 'ja-JP,ja;q=0.9',
 };
 
-const MIN_COUNT   = 30;   // 最低レス数（緩和: 50→30）
-const MAX_THREADS = 6;    // 板ごとの最大取得スレ数（緩和: 4→6）
+const MIN_COUNT   = 30;   // 最低レス数
+const MAX_THREADS = 15;   // 板ごとの最大取得スレ数（dedup後の選定母数を増やすため拡張: 6→15）
 const MAX_COMMENTS = 12;  // 取得するコメント数
 
-// 除外タイトルパターン（共通）
-// スレッド番号系: ★N / No.N / Part N / vol.N / 巻末の " N"
-// 冗長スレ系:    応援スレ / 雑談 / 質問 / 総合スレ / チラ裏 / ネタスレ / 実況スレ / TV実況 / なんJ / なんG
-// 追加: 「応援」を含む全部（◇◆〇〇 1275◇◆ や 中井卓大.17 など継続スレ）
-const NG_TITLE = /レイプ|殺|刺し|死体|謎の|羽山|あんかけ|餌后|口ｄ|スポーツである|[Ppｐ][Aaａ][Rrｒ][Ttｔ][\s\.]*\d+|[Vv][Oo][Ll][\s\.]*\d+|パート\s*\d+|応援|ファンスレ|雑談スレ|質問スレ|総合スレ|総合雑談|チラ裏|ネタスレ|実況スレ|TV実況|放送実況|なんJ|なんG|No\.?\s*\d+|★\s*\d+|\s\d+$|\d+\s*[†◇◆★【】♪♫\?\!\(\)〓■□╋]+\s*$|[\.！\!]\d+\s*$/;
+// 除外タイトルパターン（カテゴリ別に配列化、可読性優先）
+//   タイトルがいずれかにマッチしたら NG。動画化に向かない継続スレ・議論スレ・応援スレを弾く。
+const NG_PATTERNS = [
+  // ── センシティブ
+  /レイプ|殺|刺し|死体/,
+  /謎の|羽山|あんかけ|餌后|口ｄ|スポーツである/,
+
+  // ── スレッド番号系（パート・Vol・No・★・☆）
+  /(part|vol)\s*\.?\s*\d+/i,
+  /パート\s*\d+/,
+  /No\.?\s*\d+/,
+  /[★☆]\s*\d+/,
+
+  // ── 末尾が「数字」または「数字+装飾記号」スレ番号慣習
+  //    "1000ゴール" など数字+単位のコンテンツは弾かないよう、必ず末尾$ベース判定
+  /\s\d+\s*$/,                                            // 末尾「 1267」
+  /\d+\s*[†◇◆★☆【】♪♫\?\!\(\)〓■□╋\+＋]+\s*[【】♪♫\(\)\+＋\s]*$/, // 「1267╋＋」「1267◇◆」
+  /[\.！\!]\d+\s*$/,                                      // 「.17」「！2」
+  /代表\s*\d+\s*$/,                                        // 「代表1」（応援スレ命名）
+  /\d+\s*【[^】]*】\s*$/,                                   // 「☆2【ワッチョイ無】」末尾装飾
+
+  // ── 継続スレ・冗長スレ系（日本語）
+  /応援|ファンスレ|推しスレ|雑談スレ|質問スレ|総合スレ|総合雑談|チラ裏|ネタスレ|実況スレ|TV実況|放送実況|なんJ|なんG/,
+
+  // ── 海外応援スレ用語（クラブ・代表サポーター用）
+  /The Blues|Forza|Vamos|Avanti|Albicelestes|Selec[aã]o|Furia|Hala\s|Gunners|Reds\b|Wir\sSind/i,
+];
+
+function isNgTitle(title) {
+  if (!title) return true;
+  return NG_PATTERNS.some(re => re.test(title));
+}
 
 // 板設定
 const BOARDS = [
@@ -65,7 +92,7 @@ function parseSubject(text, filterFn) {
   }).filter(t =>
     t.threadId && t.threadId !== '9990000001' &&
     t.count >= MIN_COUNT &&
-    !NG_TITLE.test(t.title) &&
+    !isNgTitle(t.title) &&
     (!filterFn || filterFn(t.title))
   ).sort((a, b) => b.count - a.count);
 }

@@ -243,8 +243,13 @@ async function main() {
   }
 
   // 2. 5chから取得 (#1-5)
+  //    Reddit と同じく、dedup を slice の前に行う（5ch top スレは継続スレが多くて
+  //    ほぼ固定なので、未取得分を上から優先選定しないと毎回同じ10件が弾かれる）
   console.log("📡 5chから案件を取得中...");
-  const fivechPosts = (await fetch5chCandidates(iso)).slice(0, FIVECH_SELECT_N);
+  const fivechRaw = await fetch5chCandidates(iso);
+  const fivechFresh = fivechRaw.filter(p => !existingIds.has(p.id));
+  const fivechPosts = fivechFresh.slice(0, FIVECH_SELECT_N);
+  console.log(`  📊 5ch探索${fivechRaw.length}件 / 既出${fivechRaw.length - fivechFresh.length}除外 / 残${fivechFresh.length}件 → 上位${fivechPosts.length}件選定`);
 
   // 3. マージと翻訳 (#1-6)
   const combined = [...redditPosts, ...fivechPosts];
