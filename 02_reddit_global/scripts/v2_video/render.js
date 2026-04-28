@@ -39,6 +39,7 @@ const TAIL_PAD_MS      = 400;    // 音声末尾の余韻
 const MAX_SLIDE_MS     = 60000;  // 暴走防止
 
 // 音声チャンク合計 + 余韻 → スライド長(ms)を決定。音声無しなら DEFAULT
+//   opening は無音時 6秒（タイトル冒頭のテンポ重視）、それ以外は 8秒
 function slideDurationMs(mod) {
   const a = Array.isArray(mod.audio) ? mod.audio : [];
   if (a.length) {
@@ -48,7 +49,7 @@ function slideDurationMs(mod) {
       return Math.min(ms, MAX_SLIDE_MS);
     }
   }
-  return DEFAULT_SLIDE_MS;
+  return mod?.type === 'opening' ? 6000 : DEFAULT_SLIDE_MS;
 }
 
 const BASE_DIR     = path.join(__dirname, '..', '..');
