@@ -82,7 +82,7 @@ router.get('/v2/modules', (req, res) => {
 //           categories: [{ name, slots: [{key, label, leftValue, rightValue, priority}] }] }
 router.get('/v2/recipe-slots', (req, res) => {
   try {
-    const { getRecipe, findEntity, buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+    const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
     const postId    = req.query.postId;
     const moduleIdx = parseInt(req.query.moduleIdx, 10);
     if (!postId || Number.isNaN(moduleIdx)) {
@@ -92,40 +92,22 @@ router.get('/v2/recipe-slots', (req, res) => {
     const mod = (modulesData.modules || [])[moduleIdx];
     if (!mod) return res.status(404).json({ error: 'module not found' });
 
-    // binding が無ければ legacy → siBindingLeft/Right + type=comparison から推測
-    let binding = mod.binding;
-    if (!binding && mod.type === 'comparison' && mod.siBindingLeft && mod.siBindingRight) {
-      const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
-      const items = si.boxes?.entity?.items || [];
-      const findRole = (label) => items.find(it => it.label === label)?.role || null;
-      const r1 = findRole(mod.siBindingLeft);
-      const r2 = findRole(mod.siBindingRight);
-      let subject, aspect;
-      if (r1 === 'player'  && r2 === 'player')  { subject = 'player';  aspect = 'compareCareerStats'; }
-      else if (r1 === 'team'    && r2 === 'team')    { subject = 'team';    aspect = 'compareSeasonStats'; }
-      else if (r1 === 'manager' && r2 === 'manager') { subject = 'manager'; aspect = 'compareCareer'; }
-      if (subject) binding = { subject, aspect, primary: mod.siBindingLeft, secondary: mod.siBindingRight };
+    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+    const meta = getBindingMeta(mod, si);
+    if (!meta) {
+      return res.json({ ok: false, error: 'binding が解決できませんでした（SIデータ未取得 or レシピ未対応）' });
     }
-    if (!binding?.subject || !binding?.aspect) {
-      return res.json({ ok: false, error: 'comparison binding が解決できませんでした' });
-    }
-
-    const recipe = getRecipe(binding.subject, binding.aspect);
-    if (!recipe?.availableSlots?.length) {
-      return res.json({ ok: false, error: `recipe "${binding.subject}.${binding.aspect}" が無効` });
-    }
-
-    const si = safeJson(siPath(postId), { boxes: {} });
-    const primaryData   = findEntity(si, binding.subject, binding.primary);
-    const secondaryData = binding.secondary ? findEntity(si, binding.subject, binding.secondary) : null;
 
     // 全 availableSlots を評価して category 別にグループ化
+    //   isCompare=false の場合 rightValue は '-' に固定（単体カードは左カラム値だけ意味がある）
     const groups = {};
-    recipe.availableSlots.forEach(slot => {
+    meta.recipe.availableSlots.forEach(slot => {
       const cat = slot.category || 'その他';
       if (!groups[cat]) groups[cat] = [];
-      const leftValue  = primaryData   ? String(slot.extract(primaryData,   {}) ?? '-') : '-';
-      const rightValue = secondaryData ? String(slot.extract(secondaryData, {}) ?? '-') : '-';
+      const leftValue  = String(slot.extract(meta.primaryData, { side: 'home' }) ?? '-');
+      const rightValue = meta.secondaryData
+        ? String(slot.extract(meta.secondaryData, { side: 'away' }) ?? '-')
+        : '-';
       groups[cat].push({
         key:      slot.key,
         label:    slot.label,
@@ -134,26 +116,22 @@ router.get('/v2/recipe-slots', (req, res) => {
       });
     });
 
-    // category 内で priority降順
     Object.values(groups).forEach(arr => arr.sort((a, b) => (b.priority || 0) - (a.priority || 0)));
-    // category 自体は最大 priority 降順
     const categories = Object.entries(groups)
       .map(([name, slots]) => ({ name, slots, maxPriority: Math.max(...slots.map(s => s.priority || 0)) }))
       .sort((a, b) => b.maxPriority - a.maxPriority)
       .map(({ name, slots }) => ({ name, slots }));
 
-    // 現在 dataSlots に入ってる key を集計
-    const selected = (mod.dataSlots || [])
-      .map(s => s.slotKey)
-      .filter(Boolean);
+    const selected = (mod.dataSlots || []).map(s => s.slotKey).filter(Boolean);
 
     res.json({
       ok: true,
-      subject:   binding.subject,
-      aspect:    binding.aspect,
-      primary:   binding.primary,
-      secondary: binding.secondary,
-      defaultSelection: recipe.defaultSelection || [],
+      subject:    meta.subject,
+      aspect:     meta.aspect,
+      primary:    meta.primary,
+      secondary:  meta.secondary,
+      isCompare:  meta.isCompare,
+      defaultSelection: meta.defaultSelection,
       selected,
       categories,
     });
@@ -168,7 +146,8 @@ router.get('/v2/recipe-slots', (req, res) => {
 // Output: { ok, dataSlots }  ← 永続化も実施
 router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
   try {
-    const { getRecipe, findEntity, buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+    const { buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+    const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
     const { postId, moduleIdx, customSlotKeys } = req.body || {};
     if (!postId || moduleIdx == null || !Array.isArray(customSlotKeys)) {
       return res.status(400).json({ error: 'postId + moduleIdx + customSlotKeys[] required' });
@@ -177,19 +156,21 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
     const modulesData = safeJson(mp, { modules: [] });
     const mod = (modulesData.modules || [])[moduleIdx];
     if (!mod) return res.status(404).json({ error: 'module not found' });
-    if (!mod.binding) return res.status(400).json({ error: 'module に binding が無い' });
 
-    const recipe = getRecipe(mod.binding.subject, mod.binding.aspect);
-    if (!recipe) return res.status(400).json({ error: 'recipe 解決失敗' });
+    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+    const meta = getBindingMeta(mod, si);
+    if (!meta) return res.status(400).json({ error: 'binding解決失敗（SIデータ未取得 or レシピ未対応）' });
 
-    const si = safeJson(siPath(postId), { boxes: {} });
-    const primaryData   = findEntity(si, mod.binding.subject, mod.binding.primary);
-    const secondaryData = mod.binding.secondary ? findEntity(si, mod.binding.subject, mod.binding.secondary) : null;
-
-    const validKeys = new Set(recipe.availableSlots.map(s => s.key));
+    const validKeys = new Set(meta.recipe.availableSlots.map(s => s.key));
     const keys = customSlotKeys.filter(k => validKeys.has(k));
-    mod.dataSlots = buildDataSlotsFromRecipe(recipe, primaryData, secondaryData, keys, {});
-    mod.binding = { ...mod.binding, customSlotKeys: keys };
+    mod.dataSlots = buildDataSlotsFromRecipe(meta.recipe, meta.primaryData, meta.secondaryData, keys, {});
+    mod.binding = {
+      subject:        meta.subject,
+      aspect:         meta.aspect,
+      primary:        meta.primary,
+      secondary:      meta.secondary,
+      customSlotKeys: keys,
+    };
 
     fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
     res.json({ ok: true, dataSlots: mod.dataSlots, customSlotKeys: keys });
@@ -524,6 +505,47 @@ ${parsed.narration || ''}
     if (typeof parsed.title === 'string')     mod.title = parsed.title;
     if (typeof parsed.narration === 'string') mod.narration = parsed.narration;
     mod.dataSlots = (mod.type === 'matchcard') ? [] : parsed.dataSlots;
+
+    // ── レシピマッチカードは dataSlots を実値で再構築（AI捏造値を上書き）──
+    //   解決した type + mainKey + secondary が A判定レシピと一致すれば、
+    //   AI 出力の dataSlots を SI 実値で書き換える。値を AI に妄想させない仕組み。
+    try {
+      const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
+      const { buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+      const meta = getBindingMeta(mod, si);
+      if (meta && Array.isArray(parsed.dataSlots)) {
+        // AI が出した dataSlots の label を recipe のキー label と fuzzy 一致させて keys を抽出
+        //   一致しなければ defaultSelection で補完
+        const aiLabels = parsed.dataSlots.map(s => String(s?.label || '').trim()).filter(Boolean);
+        const labelToKey = new Map(meta.recipe.availableSlots.map(s => [s.label, s.key]));
+        let keys = aiLabels
+          .map(l => labelToKey.get(l) || meta.recipe.availableSlots.find(s => s.label.includes(l) || l.includes(s.label))?.key)
+          .filter(Boolean);
+        // 重複除去
+        keys = Array.from(new Set(keys));
+        const targetMin = meta.isCompare ? 5 : 4;
+        const targetMax = meta.isCompare ? 5 : 6;
+        if (keys.length < targetMin) {
+          const fillers = meta.defaultSelection.filter(k => !keys.includes(k));
+          keys = [...keys, ...fillers].slice(0, targetMax);
+        } else if (keys.length > targetMax) {
+          keys = keys.slice(0, targetMax);
+        }
+        mod.dataSlots = buildDataSlotsFromRecipe(
+          meta.recipe, meta.primaryData, meta.secondaryData, keys, {}
+        );
+        mod.binding = {
+          subject:        meta.subject,
+          aspect:         meta.aspect,
+          primary:        meta.primary,
+          secondary:      meta.secondary,
+          customSlotKeys: keys,
+        };
+        console.log(`[ai-fill-slide] レシピ実値充填: ${meta.subject}.${meta.aspect} / keys=[${keys.join(',')}]`);
+      }
+    } catch (e) {
+      console.warn('[ai-fill-slide] レシピ実値充填スキップ:', e.message);
+    }
 
     fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
 
@@ -1133,9 +1155,13 @@ function getUI() {
     let bindHtml = '';
     const showBind = ['stats', 'profile', 'comparison', 'history'].includes(m.type);
 
-    /* comparison + binding 解決可能 → 新しい recipe accordion UI */
-    const hasBinding = m.type === 'comparison'
-      && (m.binding?.subject || (m.siBindingLeft && m.siBindingRight));
+    /* レシピが解決可能なカードは recipe accordion UI を出す（comparison/stats/profile/history） */
+    //   comparison は従来通り siBindingLeft/Right も有効
+    //   stats/profile は binding.subject + binding.aspect が揃ってれば対象
+    const hasBinding = (
+      (m.type === 'comparison' && (m.binding?.subject || (m.siBindingLeft && m.siBindingRight)))
+      || (['stats','profile'].includes(m.type) && m.binding?.subject && m.binding?.aspect)
+    );
     if (hasBinding) {
       const cached = window.APP.s4.recipeSlotsByIdx[i];
       if (!cached) {
