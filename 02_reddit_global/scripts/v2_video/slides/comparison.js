@@ -1,8 +1,38 @@
 // scripts/v2_video/slides/comparison.js
 // Comparison スライド：型4 ベース（左右画像 + VS + 中央データ比較行）
 // テンプレート元: /型４/index.html
+//
+//  演出:
+//   - 画像: 左右で時差 fade in（左 0.4s → 右 0.5s）
+//   - 名前タグ: 縦ゴーストトレイル（下から浮上 + 本体 fade in）
+//   - 上部バナー: 上から滑り込み
+//   - VS バッジ: 下方配置（テキスト被り解消）+ pulse animation
+//   - データ行: 該当 chunk 再生中だけ active（金枠 + scale + glow）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, _t, _player } = require('./_common');
+const {
+  PALETTE, esc, imgDataUri, wrapHTML,
+  buildSubtitleBar, subtitleArgFromMod,
+  _t, _player,
+} = require('./_common');
+
+// label を chunk text と部分一致で対応付け（active 強調用）
+function _matchLabelToChunk(label, chunks) {
+  const t = String(label || '').trim();
+  if (!t || !chunks.length) return -1;
+  for (let i = 0; i < chunks.length; i++) {
+    if (String(chunks[i].text || '').includes(t)) return i;
+  }
+  const tokens = t.replace(/[の・はがをにでとや、。「」（）\s〜ー]/g, ' ')
+    .split(/\s+/).filter(s => s.length >= 2);
+  if (!tokens.length) return -1;
+  let best = -1, bestScore = 0;
+  chunks.forEach((c, i) => {
+    const text = String(c.text || '');
+    const score = tokens.reduce((s, tk) => s + (text.includes(tk) ? tk.length : 0), 0);
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  return bestScore > 0 ? best : -1;
+}
 
 function buildComparisonHTML(mod) {
   const leftBg  = imgDataUri(mod.leftImage)  || imgDataUri(mod.bgImage);
@@ -17,15 +47,44 @@ function buildComparisonHTML(mod) {
   const leftName  = _entityName(mod.siBindingLeft)  || 'PLAYER A';
   const rightName = _entityName(mod.siBindingRight) || 'PLAYER B';
   const title     = _t(mod.title) || 'COMPARISON';
-  const narr      = mod.narration || '';
 
   // dataSlots: [{label, leftValue, rightValue}, ...]
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 5);
 
+  // ── 音声 chunk 解析（行 active 制御用） ─────────────────
+  const audio = Array.isArray(mod.audio) ? mod.audio : [];
+  const audioSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 0;
+  const totalSec = audioSec + 0.4 || 8;
+  const chunkStarts = audio.map((_, i) =>
+    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+  const slotChunkIdx = slots.map(s => audio.length ? _matchLabelToChunk(s.label, audio) : -1);
+
+  // 行 active 用 keyframes 生成
+  const rowActiveStyles = slots.map((_, i) => {
+    const cIdx = slotChunkIdx[i];
+    if (cIdx < 0 || !audio.length) return '';
+    const start = chunkStarts[cIdx];
+    const dur   = audio[cIdx].durationSec || 1;
+    const end   = start + dur;
+    const fadeIn = 0.25, fadeOut = 0.30;
+    const p = (sec) => Math.max(0, Math.min(100, sec / totalSec * 100));
+    const preStartPct = p(start - fadeIn);
+    const startPct    = p(start);
+    const endPct      = p(end);
+    const postEndPct  = p(end + fadeOut);
+    return `
+@keyframes rowActive_${i} {
+  0%, ${preStartPct.toFixed(2)}%      { background-color: transparent; transform: scale(1); box-shadow: none; }
+  ${startPct.toFixed(2)}%, ${endPct.toFixed(2)}%  { background-color: rgba(252,211,77,0.06); transform: scale(1.02); box-shadow: 0 0 0 1px rgba(252,211,77,0.40), inset 0 0 30px rgba(252,211,77,0.18); }
+  ${postEndPct.toFixed(2)}%, 100%     { background-color: transparent; transform: scale(1); box-shadow: none; }
+}
+.data-row.active-${i} { animation: rowActive_${i} ${totalSec.toFixed(2)}s linear forwards; }`;
+  }).join('\n');
+
   const extraStyles = `
 .slide { display: flex; background: ${PALETTE.bg}; }
 
-/* 上部バナー */
+/* 上部バナー：上から下に滑り込み */
 .top-banner {
   position: absolute;
   top: 0; left: 0; right: 0;
@@ -34,6 +93,11 @@ function buildComparisonHTML(mod) {
   border-bottom: 4px solid ${PALETTE.accent};
   display: flex; align-items: center; justify-content: center;
   z-index: 20;
+  animation: bannerDown 0.4s ease-out backwards;
+}
+@keyframes bannerDown {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
 }
 .module-label {
   color: ${PALETTE.accent};
@@ -75,12 +139,16 @@ function buildComparisonHTML(mod) {
   position: absolute; inset: 0;
   background-size: cover;
   background-position: center top;
+  opacity: 0;
 }
+@keyframes imgFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .panel-left .panel-bg {
   ${leftBg ? `background-image: url('${leftBg}');` : `background: linear-gradient(160deg, #1e3a8a 0%, ${PALETTE.bg} 100%);`}
+  animation: imgFadeIn 0.4s ease-out 0.1s forwards;
 }
 .panel-right .panel-bg {
   ${rightBg ? `background-image: url('${rightBg}');` : `background: linear-gradient(160deg, #7f1d1d 0%, ${PALETTE.bg} 100%);`}
+  animation: imgFadeIn 0.5s ease-out 0.2s forwards;
 }
 .panel-left .panel-fade {
   position: absolute; inset: 0;
@@ -106,14 +174,38 @@ function buildComparisonHTML(mod) {
     rgba(8,18,32,0.90) 100%);
 }
 
-/* 名前タグ */
+/* 名前タグ：本体 + 縦ゴーストトレイル（下から浮上） */
 .name-tag {
   position: absolute;
   bottom: 145px;
   left: 0; right: 0;
-  text-align: center;
   padding: 0 20px;
   z-index: 5;
+}
+.name-real, .name-trail {
+  text-align: center;
+  position: relative;
+}
+.name-trail {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  animation: nameTrail 0.55s ease-out 0.5s backwards;
+}
+.name-real {
+  opacity: 0;
+  animation: nameAppear 0.55s ease-out 0.6s forwards;
+  z-index: 1;
+}
+@keyframes nameTrail {
+  from { transform: translateY(60px); opacity: 1; }
+  to   { transform: translateY(0);    opacity: 0; }
+}
+@keyframes nameAppear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .player-name {
   font-size: 38px;
@@ -141,11 +233,12 @@ function buildComparisonHTML(mod) {
   position: relative;
   z-index: 10;
 }
+/* VS バッジ：データ行とテキストの被り解消で下方配置（字幕バー直上）+ pulse */
 .vs-badge {
   position: absolute;
-  top: 50%;
+  bottom: 130px;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%) scale(1);
   width: 88px; height: 88px;
   background: ${PALETTE.accent};
   border-radius: 50%;
@@ -155,6 +248,15 @@ function buildComparisonHTML(mod) {
   color: #000;
   z-index: 30;
   box-shadow: 0 0 0 6px rgba(245,158,11,0.25), 0 0 0 12px rgba(245,158,11,0.10);
+  animation: vsAppear 0.5s ease-out 0.7s backwards, vsPulse 2.5s ease-in-out 1.4s infinite;
+}
+@keyframes vsAppear {
+  from { transform: translateX(-50%) scale(0.6); opacity: 0; }
+  to   { transform: translateX(-50%) scale(1);   opacity: 1; }
+}
+@keyframes vsPulse {
+  0%, 100% { transform: translateX(-50%) scale(1);    box-shadow: 0 0 0 6px rgba(245,158,11,0.25), 0 0 0 12px rgba(245,158,11,0.10); }
+  50%      { transform: translateX(-50%) scale(1.06); box-shadow: 0 0 0 9px rgba(245,158,11,0.40), 0 0 0 18px rgba(245,158,11,0.18); }
 }
 .data-rows {
   display: flex;
@@ -169,6 +271,9 @@ function buildComparisonHTML(mod) {
   width: 100%;
   border-bottom: 1px solid rgba(255,255,255,0.07);
   position: relative;
+  border-radius: 8px;
+  transform-origin: center;
+  transition: none; /* keyframes が制御 */
 }
 .data-row:last-child { border-bottom: none; }
 
@@ -220,6 +325,9 @@ function buildComparisonHTML(mod) {
   overflow: hidden;
   word-break: break-word;
 }
+
+/* 行 active 用 keyframes（chunk マッチした row だけ生成） */
+${rowActiveStyles}
 `;
 
   // 数値比較で大きい方をハイライト
@@ -254,7 +362,7 @@ function buildComparisonHTML(mod) {
   }
 
   const rowsHtml = slots.length
-    ? slots.map(s => {
+    ? slots.map((s, i) => {
         const [lc, rc] = compareSides(s);
         const lv = String(s.leftValue  || '-');
         const rv = String(s.rightValue || '-');
@@ -264,13 +372,26 @@ function buildComparisonHTML(mod) {
         const lFs = _valFont(lv, lMod) + 'px';
         const rFs = _valFont(rv, rMod) + 'px';
         const lbFs = _labelFont(lb) + 'px';
-        return `<div class="data-row">
+        const activeClass = (slotChunkIdx[i] >= 0 && audio.length) ? ` active-${i}` : '';
+        return `<div class="data-row${activeClass}">
           <div class="val val-left${lc}" style="font-size:${lFs}">${esc(lv)}</div>
           <div class="label-col"><div class="label-text" style="font-size:${lbFs}">${esc(lb)}</div></div>
           <div class="val val-right${rc}" style="font-size:${rFs}">${esc(rv)}</div>
         </div>`;
       }).join('')
     : '<div style="text-align:center;color:#5a6a8a;font-size:24px">対比データなし</div>';
+
+  // 名前タグ HTML（実体 + ゴーストトレイル）
+  const _nameTagHtml = (name, side) => `<div class="name-tag">
+    <div class="name-trail">
+      <div class="player-name">${esc(name)}</div>
+      <div class="team-tag">${side}</div>
+    </div>
+    <div class="name-real">
+      <div class="player-name">${esc(name)}</div>
+      <div class="team-tag">${side}</div>
+    </div>
+  </div>`;
 
   const slideBody = `
 <div class="top-banner"><div class="module-label">${esc(title)}</div></div>
@@ -279,10 +400,7 @@ function buildComparisonHTML(mod) {
   <div class="panel-bg"></div>
   <div class="panel-fade"></div>
   <div class="panel-top-fade"></div>
-  <div class="name-tag">
-    <div class="player-name">${esc(leftName)}</div>
-    <div class="team-tag">LEFT</div>
-  </div>
+  ${_nameTagHtml(leftName, 'LEFT')}
 </div>
 
 <div class="panel-center">
@@ -295,10 +413,7 @@ function buildComparisonHTML(mod) {
   <div class="panel-bg"></div>
   <div class="panel-fade"></div>
   <div class="panel-top-fade"></div>
-  <div class="name-tag">
-    <div class="player-name">${esc(rightName)}</div>
-    <div class="team-tag">RIGHT</div>
-  </div>
+  ${_nameTagHtml(rightName, 'RIGHT')}
 </div>
 
 ${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
