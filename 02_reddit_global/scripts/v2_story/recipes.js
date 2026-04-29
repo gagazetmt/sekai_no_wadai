@@ -76,6 +76,16 @@ function _fmtTopPlayer(p, key = 'goals') {
   return p.name;
 }
 
+// 直近5戦の1行を「○ vs Tunisia 2-0」風に整形
+function _fmtLast5Row(r) {
+  if (!r) return '-';
+  const mark = r.result === 'W' ? '○' : r.result === 'L' ? '●' : '△';
+  const opp  = r.opponent || '?';
+  const venue = r.isHome ? 'H' : 'A';
+  const score = r.score || '';
+  return `${mark} ${venue} ${opp} ${score}`.trim();
+}
+
 // SIデータから entity を取得（label一致）
 function findEntity(siData, subject, label) {
   const box = SUBJECT_BOX_MAP[subject];
@@ -141,7 +151,7 @@ const RECIPES = {
     populates: 'dataSlots',
     availableSlots: [
       { key: 'position',    label: 'ポジション',  extract: d => fmtNum(d?.position) },
-      { key: 'age',         label: '年齢',        extract: d => fmtNum(d?.age) + '歳' },
+      { key: 'age',         label: '年齢',        extract: d => d?.age != null ? d.age + '歳' : '-' },
       { key: 'nationality', label: '国籍',        extract: d => fmtNum(d?.nationality) },
       { key: 'team',        label: '所属',        extract: d => fmtNum(d?.team) },
       { key: 'height',      label: '身長',        extract: d => d?.height ? d.height + 'cm' : '-' },
@@ -151,6 +161,9 @@ const RECIPES = {
       { key: 'marketValue', label: '市場価値',    extract: d => fmtNum(d?.marketValue) },
       { key: 'contractUntil', label: '契約満了',  extract: d => fmtNum(d?.contractUntil) },
       { key: 'league',      label: 'リーグ',      extract: d => fmtNum(d?.leagueName) },
+      // ── Wikipedia 由来 ──
+      { key: 'wikiBio',     label: '紹介文',      extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
+      { key: 'wikiDesc',    label: '一行紹介',    extract: d => fmtNum(d?._wiki?.description) },
     ],
     defaultSelection: ['position', 'age', 'nationality', 'marketValue'],
   },
@@ -249,19 +262,25 @@ const RECIPES = {
       { key: 'manager',     label: '監督',         extract: d => fmtNum(d?.managerName) },
       { key: 'venue',       label: 'スタジアム',   extract: d => fmtNum(d?.venue) },
       { key: 'marketValue', label: '総資産',       extract: d => fmtNum(d?.marketValue) },
+      { key: 'recentForm',  label: '直近フォーム', extract: d => fmtNum(d?.recentForm) },
+      // ── Wikipedia 由来 ──
+      { key: 'wikiBio',     label: '紹介文',       extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
+      { key: 'wikiDesc',    label: '一行紹介',     extract: d => fmtNum(d?._wiki?.description) },
     ],
     defaultSelection: ['league', 'manager', 'founded', 'marketValue'],
   },
 
   // ── A6. チームの今季成績 ────────────────────────────────────
+  // 国内クラブ → standing 系 / 代表チーム → recentForm + last5 系で対応
   'team.seasonStats': {
     priority: 'A',
     label: 'チームの今季成績',
-    description: 'クラブ1つの今季リーグ成績（順位・勝点・W/D/L・得失点）',
+    description: 'クラブ1つの今季リーグ成績（順位・勝点・W/D/L・得失点）。代表チームは直近5戦で代替',
     template: 'stats',
     sources: ['sofa.team'],
     populates: 'dataSlots',
     availableSlots: [
+      // ── 国内リーグ (standing) ベース ──
       { key: 'position', label: '順位',     extract: d => d?.standing?.position != null ? d.standing.position + '位' : '-' },
       { key: 'points',   label: '勝点',     extract: d => fmtNum(d?.standing?.points) },
       { key: 'wins',     label: '勝利',     extract: d => fmtNum(d?.standing?.wins) },
@@ -275,6 +294,21 @@ const RECIPES = {
       { key: 'played',   label: '試合数',   extract: d => fmtNum(d?.standing?.played) },
       { key: 'wdlStr',   label: 'W-D-L',
         extract: d => d?.standing ? `${d.standing.wins||0}-${d.standing.draws||0}-${d.standing.losses||0}` : '-' },
+      // ── 代表チーム / 国際大会向け ──
+      { key: 'recentForm', label: '直近フォーム',
+        extract: d => fmtNum(d?.recentForm) },
+      { key: 'last1',     label: '直近の試合',
+        extract: d => _fmtLast5Row(d?.last5?.[0]) },
+      { key: 'last2',     label: '直近2試合前',
+        extract: d => _fmtLast5Row(d?.last5?.[1]) },
+      { key: 'last3',     label: '直近3試合前',
+        extract: d => _fmtLast5Row(d?.last5?.[2]) },
+      { key: 'last5wins',  label: '直近5戦勝数',
+        extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'W').length) : '-' },
+      { key: 'last5losses', label: '直近5戦敗数',
+        extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'L').length) : '-' },
+      { key: 'manager',   label: '監督',
+        extract: d => fmtNum(d?.managerName) },
     ],
     defaultSelection: ['position', 'points', 'wins', 'gf'],
   },

@@ -17,8 +17,13 @@
 const { getRecipe } = require('./recipes');
 
 // 1エンティティのデータを SI box (entity/match) から引く
-//   subject = player/team/manager/tournament → boxes.entity.items から sofa を返す
+//   subject = player/team/manager/tournament → boxes.entity.items の sofa + wiki を merge
 //   subject = match                          → boxes.match.items から data を返す
+//
+// merge ルール:
+//   - sofa.ok があれば sofa を主、wiki を `_wiki` プロパティで添える
+//   - sofa.ok 無いが wiki.ok ある場合は wiki だけ使う（_wiki も同じものを指す）
+//   - 両方無ければ null
 function _findEntityData(siData, subject, label) {
   if (!siData || !label) return null;
   if (subject === 'match') {
@@ -27,7 +32,13 @@ function _findEntityData(siData, subject, label) {
   }
   const it = (siData.boxes?.entity?.items || []).find(x => x.label === label);
   if (!it) return null;
-  return it.sofa?.ok ? it.sofa : null;
+  const sofaOk = !!it.sofa?.ok;
+  const wikiOk = !!it.wiki?.ok;
+  if (!sofaOk && !wikiOk) return null;
+  return {
+    ...(sofaOk ? it.sofa : {}),
+    _wiki: wikiOk ? it.wiki : null,
+  };
 }
 
 // SI items から label の role を解決（player/team/manager 自動判別用）
