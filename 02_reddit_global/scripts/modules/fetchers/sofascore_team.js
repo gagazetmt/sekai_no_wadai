@@ -49,10 +49,13 @@ async function fetchSofaScoreTeam(teamName) {
     if (!team) return { ok: false, error: `SofaScore に "${teamName}" が見つかりません` };
     const teamId = team.id;
 
-    // ②③④ 並列取得（detail / events last / events next）────────
-    const [tdRaw, evRaw, nxRaw] = await Promise.all([
+    // ②③④ 並列取得（detail / events last 3ページ分 / events next）
+    //   events/last/0,1,2 で計~90試合（代表チームの前回W杯まで遡れる）
+    const [tdRaw, evRaw, evRaw1, evRaw2, nxRaw] = await Promise.all([
       apiGet(`/team/${teamId}`).catch(e => ({ __err: e })),
       apiGet(`/team/${teamId}/events/last/0`).catch(e => ({ __err: e })),
+      apiGet(`/team/${teamId}/events/last/1`).catch(e => ({ __err: e })),
+      apiGet(`/team/${teamId}/events/last/2`).catch(e => ({ __err: e })),
       apiGet(`/team/${teamId}/events/next/0`).catch(e => ({ __err: e })),
     ]);
 
@@ -73,16 +76,28 @@ async function fetchSofaScoreTeam(teamName) {
           : `€${(marketValue / 1_000).toFixed(0)}K`)
       : null;
 
-    // ③ 直近試合（last5 + 全 events も保持して集計に使う）
+    // ③ 直近試合（last5 + 過去3ページ分 ~90試合を集計用に保持）
     let last5 = [];
     let recentForm = null;  // "WWLDD" 形式（新しい順）
-    let allRecentMatches = [];  // 30試合分（代表チーム集計用）
-    if (!evRaw?.__err) {
-      const finished = (evRaw.events || []).filter(e => e.status?.type === 'finished').reverse();
-      last5 = finished.slice(-5).reverse().map(e => formatTeamMatch(e, teamId));
+    let allRecentMatches = [];
+    {
+      const merged = [
+        ...((evRaw?.events) || []),
+        ...((evRaw1?.events) || []),
+        ...((evRaw2?.events) || []),
+      ];
+      // event ID で重複除去（pagination のオーバーラップ対策）
+      const seenIds = new Set();
+      const dedup = merged.filter(e => {
+        if (!e?.id || seenIds.has(e.id)) return false;
+        seenIds.add(e.id); return true;
+      });
+      const finished = dedup.filter(e => e.status?.type === 'finished');
+      // 新しい順（startTimestamp 降順）
+      finished.sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0));
+      allRecentMatches = finished.map(e => formatTeamMatch(e, teamId));
+      last5 = allRecentMatches.slice(0, 5);
       recentForm = last5.map(m => m.result).join('');
-      // 全試合を保持（最大30程度、新しい順）→ 集計関数で使う
-      allRecentMatches = finished.slice(-30).reverse().map(e => formatTeamMatch(e, teamId));
     }
 
     // ④ 次試合（リーグ情報取得のため）
@@ -263,15 +278,25 @@ async function fetchSofaScoreTeam(teamName) {
       (m.date || '').startsWith(String(currentYear)));
     const lastYearMatches  = allRecentMatches.filter(m =>
       (m.date || '').startsWith(String(currentYear - 1)));
+    // FIFA World Cup 本大会のみ（Qual 除外）
     const wcMatches        = allRecentMatches.filter(m =>
-      /FIFA World Cup(?!.*Qual)/i.test(m.tournament || ''));
+      /FIFA World Cup(?!.*(Qual|Women))/i.test(m.tournament || ''));
     const wcQualMatches    = allRecentMatches.filter(m =>
       /World Cup.*Qual/i.test(m.tournament || ''));
+    // 直近のW杯本大会の年（試合があれば）→ "Last World Cup" の年表示用
+    const lastWorldCupYear = wcMatches.length
+      ? Math.max(...wcMatches.map(m => parseInt((m.date || '').slice(0, 4), 10)).filter(Boolean))
+      : null;
+    const lastWorldCupMatches = lastWorldCupYear
+      ? wcMatches.filter(m => (m.date || '').startsWith(String(lastWorldCupYear)))
+      : [];
 
     const seasonAggregate = {
       thisYear:  _aggregate(thisYearMatches),
       lastYear:  _aggregate(lastYearMatches),
-      worldCup:  _aggregate(wcMatches),
+      worldCup:        _aggregate(wcMatches),         // 全W杯試合（取得範囲内）
+      lastWorldCup:    _aggregate(lastWorldCupMatches),  // 直近大会のみ
+      lastWorldCupYear,                                // 例: 2022
       wcQual:    _aggregate(wcQualMatches),
       // 大会別ブレイクダウン（最大8大会まで保持）
       byTournament: (() => {

@@ -167,6 +167,47 @@ const TEAM_GENERAL_SLOTS = [
   { key: 'last3',     label: '直近3試合前',   extract: d => _fmtLast5Row(d?.last5?.[2]) },
   { key: 'last5wins',  label: '直近5戦勝数',  extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'W').length) : '-' },
   { key: 'last5losses', label: '直近5戦敗数', extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'L').length) : '-' },
+  // === 現監督在任成績 ===
+  { key: 'currentManagerName',    label: '現監督',           extract: d => fmtNum(d?.currentManagerStats?.name) },
+  { key: 'currentManagerSince',   label: '現監督就任',       extract: d => fmtNum(d?.currentManagerStats?.since) },
+  { key: 'currentManagerRecord',  label: '現監督W-D-L',
+    extract: d => {
+      const m = d?.currentManagerStats;
+      if (!m) return '-';
+      return `${m.wins||0}-${m.draws||0}-${m.losses||0}`;
+    }},
+  { key: 'currentManagerWinRate', label: '現監督勝率',       extract: d => d?.currentManagerStats?.winRate != null ? d.currentManagerStats.winRate + '%' : '-' },
+  { key: 'currentManagerTotal',   label: '現監督通算試合数', extract: d => fmtNum(d?.currentManagerStats?.total) },
+  // === 期間別集計（年・W杯・W杯予選）===
+  { key: 'thisYearRecord',  label: '今年成績',
+    extract: d => {
+      const a = d?.seasonAggregate?.thisYear;
+      if (!a?.total) return '-';
+      return `${a.total}試合 ${a.wins}-${a.draws}-${a.losses} (${a.goalsFor}-${a.goalsAgainst})`;
+    }},
+  { key: 'thisYearGoals',   label: '今年得点',  extract: d => fmtNum(d?.seasonAggregate?.thisYear?.goalsFor) },
+  { key: 'thisYearWins',    label: '今年勝数',  extract: d => fmtNum(d?.seasonAggregate?.thisYear?.wins) },
+  { key: 'lastYearRecord',  label: '昨年成績',
+    extract: d => {
+      const a = d?.seasonAggregate?.lastYear;
+      if (!a?.total) return '-';
+      return `${a.total}試合 ${a.wins}-${a.draws}-${a.losses} (${a.goalsFor}-${a.goalsAgainst})`;
+    }},
+  { key: 'lastWcRecord',    label: '前回W杯成績',
+    extract: d => {
+      const a = d?.seasonAggregate?.lastWorldCup;
+      const y = d?.seasonAggregate?.lastWorldCupYear;
+      if (!a?.total) return '-';
+      return `${y || '?'}年 ${a.total}試合 ${a.wins}-${a.draws}-${a.losses} (${a.goalsFor}-${a.goalsAgainst})`;
+    }},
+  { key: 'lastWcGoals',     label: '前回W杯得点', extract: d => fmtNum(d?.seasonAggregate?.lastWorldCup?.goalsFor) },
+  { key: 'wcQualRecord',    label: 'W杯予選成績',
+    extract: d => {
+      const a = d?.seasonAggregate?.wcQual;
+      if (!a?.total) return '-';
+      return `${a.total}試合 ${a.wins}-${a.draws}-${a.losses} (${a.goalsFor}-${a.goalsAgainst})`;
+    }},
+  { key: 'wcQualGoals',     label: 'W杯予選得点', extract: d => fmtNum(d?.seasonAggregate?.wcQual?.goalsFor) },
   // === Wikipedia ===
   { key: 'wikiBio',  label: '紹介文',       extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
   { key: 'wikiDesc', label: '一行紹介',     extract: d => fmtNum(d?._wiki?.description) },
@@ -561,10 +602,22 @@ const RECIPES = {
     description: '選手の怪我・離脱の年表',
     sources: ['wiki.sectionInjuries', 'news'], populates: 'dataSlots', historyShape: true,
   },
+  // ── A判定昇格: クラブの歴史・タイトル ──
   'team.history': {
-    priority: 'B', label: 'クラブの歴史・タイトル', template: 'history',
-    description: 'クラブの歴代偉業・タイトル獲得史',
-    sources: ['wiki.sectionHonours'], populates: 'dataSlots', historyShape: true,
+    priority: 'A', label: 'クラブの歴史・タイトル', template: 'stats',
+    description: '主要タイトル獲得回数（リーグ・カップ・CL・国際大会）',
+    sources: ['sofa.team.trophySummary'], populates: 'dataSlots',
+    availableSlots: [
+      { key: 'totalTrophies', label: '主要タイトル数', extract: d => d?.trophySummary?.total ? `${d.trophySummary.total}冠` : '-' },
+      { key: 'leagueTitles',  label: 'リーグ優勝',     extract: d => d?.trophySummary?.leagueTitles ? `${d.trophySummary.leagueTitles}回` : '-' },
+      { key: 'cupTitles',     label: 'カップ戦',       extract: d => d?.trophySummary?.cupTitles ? `${d.trophySummary.cupTitles}回` : '-' },
+      { key: 'clTitles',      label: 'CL優勝',         extract: d => d?.trophySummary?.clTitles ? `${d.trophySummary.clTitles}回` : '-' },
+      { key: 'uefaCup',       label: 'EL/UEFA杯',      extract: d => d?.trophySummary?.uefaCup ? `${d.trophySummary.uefaCup}回` : '-' },
+      { key: 'uefaSuper',     label: 'UEFAスーパー杯', extract: d => d?.trophySummary?.uefaSuper ? `${d.trophySummary.uefaSuper}回` : '-' },
+      { key: 'cupWinners',    label: 'カップ・ウィナーズ杯', extract: d => d?.trophySummary?.cupWinners ? `${d.trophySummary.cupWinners}回` : '-' },
+      { key: 'worldClub',     label: 'クラブW杯',      extract: d => d?.trophySummary?.worldClub ? `${d.trophySummary.worldClub}回` : '-' },
+    ],
+    defaultSelection: ['totalTrophies', 'leagueTitles', 'clTitles', 'cupTitles'],
   },
   'team.squad': {
     priority: 'B', label: 'チームの現有戦力', template: 'stats',
@@ -585,16 +638,31 @@ const RECIPES = {
     ],
     defaultSelection: ['nationality', 'age', 'currentTeam', 'formation'],
   },
+  // ── A判定昇格: 監督の来歴 ──
+  //   sofa.manager.career[]（既取得）から history テンプレ用 dataSlots を構築
   'manager.history': {
-    priority: 'B', label: '監督の来歴', template: 'history',
-    description: '監督のキャリア年表',
-    sources: ['wiki.sectionCareer', 'sofa.manager.career'], populates: 'dataSlots', historyShape: true,
+    priority: 'A', label: '監督の来歴', template: 'history',
+    description: '監督が指揮したクラブの年表（在任期間・通算成績）',
+    sources: ['sofa.manager.career'], populates: 'dataSlots',
+    historyShape: true,
+    needsManagerCareer: true,  // builder が career[] を {label:年, value:クラブ名+成績} に展開
+    availableSlots: [],
+    defaultSelection: [],
   },
+  // ── A判定昇格: 監督の獲得タイトル ──
   'manager.achievements': {
-    priority: 'B', label: '監督の獲得タイトル', template: 'stats',
-    description: '監督の獲得トロフィー',
-    sources: ['wiki.sectionHonours'], populates: 'dataSlots',
-    availableSlots: [], defaultSelection: [],
+    priority: 'A', label: '監督の獲得タイトル', template: 'stats',
+    description: '監督が指揮で獲得した主要トロフィー（リーグ・カップ・CL・クラブW杯）',
+    sources: ['sofa.manager.trophySummary'], populates: 'dataSlots',
+    availableSlots: [
+      { key: 'totalTrophies', label: '主要タイトル数', extract: d => d?.trophySummary?.total ? `${d.trophySummary.total}冠` : '-' },
+      { key: 'leagueTitles',  label: 'リーグ優勝',     extract: d => d?.trophySummary?.leagueTitles ? `${d.trophySummary.leagueTitles}回` : '-' },
+      { key: 'cupTitles',     label: 'カップ戦',       extract: d => d?.trophySummary?.cupTitles ? `${d.trophySummary.cupTitles}回` : '-' },
+      { key: 'clTitles',      label: 'CL優勝',         extract: d => d?.trophySummary?.clTitles ? `${d.trophySummary.clTitles}回` : '-' },
+      { key: 'uefaCup',       label: 'EL/UEFA杯',      extract: d => d?.trophySummary?.uefaCup ? `${d.trophySummary.uefaCup}回` : '-' },
+      { key: 'worldClub',     label: 'クラブW杯',      extract: d => d?.trophySummary?.worldClub ? `${d.trophySummary.worldClub}回` : '-' },
+    ],
+    defaultSelection: ['totalTrophies', 'leagueTitles', 'clTitles', 'cupTitles'],
   },
   'manager.recentForm': {
     priority: 'B', label: '監督の直近成績', template: 'stats',
@@ -650,11 +718,29 @@ const RECIPES = {
     description: '対戦カードの歴史的背景・名場面・ライバル関係',
     sources: ['news', 'wiki', 'reddit'], populates: 'comments',
   },
+  // ── A判定昇格: キーマッチアップ ──
+  //   match data の lineup から両チームのトッププレイヤーを比較
   'match.keyMatchups': {
-    priority: 'B', label: 'キーマッチアップ', template: 'comparison',
-    description: '試合の鍵を握る選手同士の対決',
-    sources: ['sofa.match.lineup'], populates: 'dataSlots', requiresSecondary: true,
-    availableSlots: [], defaultSelection: [],
+    priority: 'A', label: 'キーマッチアップ', template: 'comparison',
+    description: '試合の鍵を握る選手同士の対決（lineup の評定上位を comparison）',
+    sources: ['sofa.match.lineup'], populates: 'dataSlots',
+    requiresSecondary: true,
+    needsKeyMatchups: true,  // builder が両チーム lineup から選定
+    availableSlots: [
+      { key: 'topPlayer',     label: 'キープレイヤー', category: '主役',
+        extract: (d) => {
+          const tp = (d?.topPlayers || [])[0];
+          return tp?.name ? `${tp.name}(${tp.rating || '-'})` : '-';
+        } },
+      { key: 'topRating',     label: '最高評定',       category: '評価',
+        extract: (d) => {
+          const tp = (d?.topPlayers || [])[0];
+          return tp?.rating ? Number(tp.rating).toFixed(2) : '-';
+        } },
+      { key: 'goalScorers',   label: '得点者数',       category: '得点',
+        extract: (d) => Array.isArray(d?.goals) ? String(d.goals.length) : '-' },
+    ],
+    defaultSelection: ['topPlayer', 'topRating', 'goalScorers'],
   },
   'transfer.profile': {
     priority: 'B', label: '移籍の基本情報', template: 'stats',
@@ -692,7 +778,21 @@ const RECIPES = {
 
   'player.nationalTeam':   { priority: 'C', label: '選手の代表での活躍', template: 'stats',   description: '代表チームでの成績・出場記録', sources: ['sofa.player.national', 'wiki'], populates: 'dataSlots', availableSlots: [], defaultSelection: [] },
   'player.styleAnalysis':  { priority: 'C', label: '選手のプレースタイル', template: 'insight', description: '選手の特徴・強み・戦術的役割', sources: ['wiki', 'sofa.heatmap'], populates: 'catchphrases' },
-  'player.contractStatus': { priority: 'C', label: '選手の契約状況', template: 'stats',   description: '契約期間・違約金・延長交渉', sources: ['news'], populates: 'dataSlots', availableSlots: [], defaultSelection: [] },
+  // ── A判定昇格: 選手の契約状況 ──
+  'player.contractStatus': {
+    priority: 'A', label: '選手の契約状況', template: 'stats',
+    description: '契約満了・市場価値・所属クラブ・年齢など契約関連サマリ',
+    sources: ['sofa.player'], populates: 'dataSlots',
+    availableSlots: [
+      { key: 'team',          label: '所属クラブ',   extract: d => fmtNum(d?.team) },
+      { key: 'contractUntil', label: '契約満了',     extract: d => fmtNum(d?.contractUntil) },
+      { key: 'marketValue',   label: '市場価値',     extract: d => fmtNum(d?.marketValue) },
+      { key: 'age',           label: '年齢',         extract: d => d?.age != null ? d.age + '歳' : '-' },
+      { key: 'shirtNumber',   label: '背番号',       extract: d => d?.shirtNumber != null ? '#' + d.shirtNumber : '-' },
+      { key: 'league',        label: 'リーグ',       extract: d => fmtNum(d?.leagueName) },
+    ],
+    defaultSelection: ['team', 'contractUntil', 'marketValue', 'age'],
+  },
   'team.transferActivity': { priority: 'C', label: 'チームの近年の補強・放出', template: 'history', description: '直近シーズンの大型移籍', sources: ['news'], populates: 'dataSlots', historyShape: true },
   'manager.teamStatsUnder': { priority: 'C', label: '監督在任中のチーム統計', template: 'stats',   description: '監督が指揮した期間のクラブ成績', sources: ['sofa.manager'], populates: 'dataSlots', availableSlots: [], defaultSelection: [] },
   'manager.tactics':       { priority: 'C', label: '監督の戦術・哲学', template: 'insight', description: '監督のサッカー観・主戦略', sources: ['news', 'wiki'], populates: 'catchphrases' },
