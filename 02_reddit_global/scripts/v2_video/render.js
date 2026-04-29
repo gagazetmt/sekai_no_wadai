@@ -85,7 +85,26 @@ const DATA_DIR     = path.join(BASE_DIR, 'data');
 const VIDEO_DIR    = path.join(DATA_DIR, 'v2_videos');
 const JOB_DIR      = path.join(DATA_DIR, 'v2_jobs');
 const AUDIO_DIR    = path.join(DATA_DIR, 'v2_audio');
-const BGM_PATH     = path.join(BASE_DIR, 'bgm.mp3');
+const BGM_DIR      = path.join(BASE_DIR, 'bgm');
+const BGM_FALLBACK = path.join(BASE_DIR, 'bgm.mp3');  // 旧形式互換
+
+// BGM をランダム選曲（bgm/*.mp3 を全部リストして1つランダム選択）
+//   フォルダが空 or 無ければ旧 bgm.mp3 にフォールバック
+function pickBgm() {
+  try {
+    if (fs.existsSync(BGM_DIR)) {
+      const files = fs.readdirSync(BGM_DIR)
+        .filter(f => /\.(mp3|m4a|wav|aac)$/i.test(f))
+        .map(f => path.join(BGM_DIR, f));
+      if (files.length) {
+        const pick = files[Math.floor(Math.random() * files.length)];
+        console.log(`🎵 BGM選択: ${path.basename(pick)} (候補${files.length}曲から)`);
+        return pick;
+      }
+    }
+  } catch (_) {}
+  return fs.existsSync(BGM_FALLBACK) ? BGM_FALLBACK : null;
+}
 
 [VIDEO_DIR, JOB_DIR, AUDIO_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
@@ -502,12 +521,14 @@ async function main() {
   updateJob(jobId, { status: 'mixing-audio' });
   console.log('🎵 BGM ミックス中...');
   const totalSec = (totalMs / 1000).toFixed(3);
-  if (fs.existsSync(BGM_PATH)) {
-    const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${BGM_PATH}" ` +
+  const bgmPath = pickBgm();
+  if (bgmPath) {
+    const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${bgmPath}" ` +
                 `-filter_complex "[1:a]volume=0.18,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
                 `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
     execSync(cmd, { stdio: 'pipe' });
   } else {
+    console.warn('⚠️ BGM ファイルが無いのでミックススキップ');
     fs.copyFileSync(concatMp4, outVideo);
   }
 
