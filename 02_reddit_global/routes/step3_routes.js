@@ -763,6 +763,18 @@ function getUI() {
           { mainKey: '',         subSource: null, subValue: null, secondary: null, type: '',        scriptDir: '' },
           { mainKey: 'ending',   subSource: null, subValue: null, secondary: null, type: 'ending',  scriptDir: '' },
         ];
+      } else {
+        // ── 既存案件: opening 直後に toc が無ければ自動挿入 ──
+        const mods = window.APP.s3.modules;
+        const openingIdx = mods.findIndex(m => m.mainKey === 'opening');
+        const hasToc = mods.some(m => m.mainKey === 'toc');
+        if (openingIdx >= 0 && !hasToc) {
+          mods.splice(openingIdx + 1, 0, {
+            mainKey: 'toc', subSource: null, subValue: null, secondary: null,
+            type: 'toc', scriptDir: '本日の動画構成を3〜5項目で目次として提示',
+          });
+          console.log('[Step3] 目次スライドを自動挿入 (opening 直後)');
+        }
       }
     } catch (e) {
       console.warn('[Step3] 初期化失敗:', e.message);
