@@ -134,7 +134,10 @@ ${comments || '(なし)'}
   - 推測しない（タイトル・本文・コメントに登場するもののみ）
 - matches: 試合があれば「HomeTeam vs AwayTeam」最大2件
 - searches: ニュース検索キーワード（英語、選手名検索に使えるもの）最大3件
-  - 試合関連なら「TeamA TeamB date」「TeamA TeamB scorers」形式が望ましい
+  - **試合関連なら必ず "scorers" "goals" "key players" "match report" 等の選手名抽出キーワードを含める**
+    ・例OK: "PSG Bayern Munich semifinal goals scorers"
+    ・例OK: "PSG Bayern match report goals players"
+    ・例NG: "PSG Bayern 5-4 semifinal" （スコアだけだと総括記事に偏り選手名出ない）
 
 JSONのみ:
 {
@@ -160,16 +163,33 @@ JSONのみ:
   console.log(`  Phase1: entities ${phase1Entities.length} / matches ${matches.length} / searches ${searches.length}`);
 
   // ── Phase 2: 検索でニュース取得 → 追加選手抽出（DeepSeek）──
+  //   最大2クエリを並列で叩いて結果をマージ。1クエリだと当たり外れが大きいため
   let newsContext = '';
   if (searches.length) {
+    const queriesToTry = searches.slice(0, 2);
     try {
-      const news = await fetchSerper(searches[0]);
-      if (news?.organic?.length) {
-        newsContext = news.organic.slice(0, 8)
-          .map(r => `- ${r.title || ''}: ${(r.snippet || '').slice(0, 200)}`)
+      const newsResults = await Promise.all(queriesToTry.map(q =>
+        fetchSerper(q).catch(e => ({ ok: false, error: e.message }))
+      ));
+      const allOrganic = [];
+      newsResults.forEach((news, i) => {
+        if (news?.organic?.length) {
+          console.log(`  Serper: "${queriesToTry[i]}" → ${news.organic.length}件`);
+          allOrganic.push(...news.organic);
+        }
+      });
+      if (allOrganic.length) {
+        // タイトル重複排除
+        const seen = new Set();
+        const dedup = allOrganic.filter(r => {
+          const k = (r.title || '').trim().toLowerCase();
+          if (!k || seen.has(k)) return false;
+          seen.add(k); return true;
+        });
+        newsContext = dedup.slice(0, 12)
+          .map(r => `- ${r.title || ''}: ${(r.snippet || '').slice(0, 220)}`)
           .join('\n')
-          .slice(0, 2500);
-        console.log(`  Serper: "${searches[0]}" → ${news.organic.length}件`);
+          .slice(0, 3500);
       }
     } catch (e) { console.warn('[Step2 phase2-news] エラー:', e.message); }
   }
