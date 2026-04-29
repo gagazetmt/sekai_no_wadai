@@ -16,11 +16,9 @@ const BGM_DIR  = path.join(BASE_DIR, 'bgm');
 // 30秒前後のサッカー動画ナレ（複数文・盛り上がり込み）
 const NARRATION = `今シーズン、ハキミは絶好調だ。モロッコ代表のキャプテンとして、PSGでは右サイドの絶対的存在になっている。27分にゴール、40分にもアシスト。1試合で2得点関与の活躍を見せた。これがアフリカの星、ハキミの実力。今後のチャンピオンズリーグでも目が離せない。`;
 
+// 最終3候補（2026-04-30 確定）
 const VOICES = [
-  { id: 'moss_audio_6e0620ed-3af8-11f1-beb2-9257c801a481', label: '①クローン' },
   { id: 'Japanese_DominantMan',          label: '②DominantMan' },
-  { id: 'Japanese_LoyalKnight',          label: '④LoyalKnight' },
-  { id: 'Japanese_SportyStudent',        label: '⑥SportyStudent' },
   { id: 'Japanese_GenerousIzakayaOwner', label: '⑦IzakayaOwner' },
   { id: 'Japanese_InnocentBoy',          label: '⑨InnocentBoy' },
 ];
