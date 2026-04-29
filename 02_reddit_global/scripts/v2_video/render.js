@@ -40,9 +40,11 @@ const MAX_SLIDE_MS     = 60000;  // 暴走防止
 
 // 並列度（VPS は 6 コア / 11GB RAM）
 //   TTS: MiniMax API 同時 4 並列。レート制限考慮の上限
-//   RENDER: 共有 browser に 4 page 作って各 page をワーカーが担当
+//   RENDER: 共有 browser に N page 作って各 page をワーカーが担当
+//     並列度4だと CDP コールが 4ページ分キュー詰まりして
+//     Puppeteer protocolTimeout (30秒) で失敗が頻発。3 に下げて余裕を持たせる
 const TTS_CONCURRENCY    = 4;
-const RENDER_CONCURRENCY = 4;
+const RENDER_CONCURRENCY = 3;
 
 // 配列を limit 並列で順次処理（worker pool）
 //   onError: 失敗時に { idx, error } を渡される。job ファイルに記録するなどに利用
@@ -356,6 +358,10 @@ async function main() {
   const renderT0 = Date.now();
   const browser = await puppeteer.launch({
     headless: 'new',
+    // 共有 browser に複数 page を作る並列レンダ方式では、CDP コールが
+    // 他ページ分の処理待ちになり 30秒(デフォ) を超えて timeout する。
+    // 240秒に伸ばして長尺スライド × 並列処理に耐えるよう調整
+    protocolTimeout: 240_000,
     args: ['--no-sandbox', '--disable-setuid-sandbox', `--window-size=${W},${H}`],
   });
   const pages = await Promise.all(Array.from({ length: RENDER_CONCURRENCY }, async () => {
