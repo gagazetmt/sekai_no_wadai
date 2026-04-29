@@ -10,6 +10,7 @@ const { buildDataHeroThumb } = require('./templates/dataHero');
 const { buildRankingThumb }  = require('./templates/ranking');
 const { buildVsThumb }       = require('./templates/vs');
 const { buildQuestionThumb } = require('./templates/question');
+const { buildViralDataThumb } = require('./templates/viralData');
 
 // OP/ED スライドビルダー
 const { buildOpeningHTML: buildOpV1 } = require('../v2_video/slides/opening');
@@ -175,6 +176,52 @@ const thumbSamples = [];
   },
 ].forEach(s => {
   thumbSamples.push({ ...s, html: buildQuestionThumb(s.data) });
+});
+
+// ─── テンプレ L: 5ch反応集スタイル × データ ──
+[
+  {
+    name: 'thumb_L1_hakimi_viral',
+    label: 'L-1: ハキミ (5ch風データ)',
+    data: {
+      heroImage: IMG.hakimi,
+      title: 'ハキミ離脱でPSGどうなる',
+      titleHighlight: '想定外の事態にwww',
+      dataBadges: [
+        { value: '161試合', label: 'PSG在籍' },
+        { value: '6週', label: '離脱期間' },
+      ],
+    },
+  },
+  {
+    name: 'thumb_L2_olise_viral',
+    label: 'L-2: オリーセ (5ch風データ)',
+    data: {
+      heroImage: IMG.olise,
+      title: 'オリーセ覚醒の真相',
+      titleHighlight: '今季最強xG',
+      dataBadges: [
+        { value: '+5.2', label: 'xG超過' },
+        { value: '12G', label: '今季得点' },
+        { value: '評定7.8', label: '直近10戦平均' },
+      ],
+    },
+  },
+  {
+    name: 'thumb_L3_casemiro_viral',
+    label: 'L-3: カゼミーロ (5ch風データ)',
+    data: {
+      heroImage: IMG.casemiro,
+      title: 'カゼミーロ完全復活',
+      titleHighlight: 'マンU救世主にwww',
+      dataBadges: [
+        { value: '評定8.4', label: '直近試合' },
+        { value: '5勝1分', label: '今月戦績' },
+      ],
+    },
+  },
+].forEach(s => {
+  thumbSamples.push({ ...s, html: buildViralDataThumb(s.data) });
 });
 
 // ─── Light tone サンプル（4テンプレ × 1サンプル）──
@@ -451,6 +498,19 @@ ${thumbSamples.filter(s => /thumb_C\d+_/.test(s.name)).map(s => `
 <h3>テンプレD: 問いかけ型</h3>
 <div class="thumbs-grid">
 ${thumbSamples.filter(s => /thumb_D\d+_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
+
+<h3>🔥 テンプレL: 5ch反応集スタイル × データ（NEW）</h3>
+<p class="section-note">
+反応集系の派手で目を引くテイストを継承しつつ、コメントボックスを「データ箱」に置換。<br>
+データ密度の中身×バイラル系のキャッチー外見。
+</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_L\d+_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
