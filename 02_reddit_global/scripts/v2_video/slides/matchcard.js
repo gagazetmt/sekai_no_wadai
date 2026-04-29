@@ -430,9 +430,10 @@ function buildMatchcardHTML(mod) {
     const yEnd   = isHome ? 58 : 42;
     // 下側チーム（isHome）は SofaScore の slot 順（team-left 起点）と
     // 中継視点（viewer-right が team-right）が反転するため x をミラー
+    // x 範囲は 15〜85（両端の選手が画面端で見切れないよう内側に寄せる）
     const _xPos = (i, count) => {
       if (count === 1) return 50;
-      const raw = 10 + (80 / (count - 1)) * i;
+      const raw = 15 + (70 / (count - 1)) * i;
       return isHome ? (100 - raw) : raw;
     };
     const bands  = parseFormation(formation);

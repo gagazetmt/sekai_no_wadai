@@ -86,6 +86,92 @@ function _fmtLast5Row(r) {
   return `${mark} ${venue} ${opp} ${score}`.trim();
 }
 
+// ─── 共通スロットプール ──────────────────────────────────────
+//   profile / careerStats / seasonStats など、同一エンティティ系の
+//   レシピは「全部のデータを選択肢に出す」UX が望ましい。
+//   各レシピの defaultSelection で初期 4〜6 個を出し分ける。
+
+// 選手系（profile + careerStats を統合）
+const PLAYER_GENERAL_SLOTS = [
+  // === 基本情報 ===
+  { key: 'position',    label: 'ポジション',  extract: d => fmtNum(d?.position) },
+  { key: 'age',         label: '年齢',        extract: d => d?.age != null ? d.age + '歳' : '-' },
+  { key: 'nationality', label: '国籍',        extract: d => fmtNum(d?.nationality) },
+  { key: 'team',        label: '所属',        extract: d => fmtNum(d?.team) },
+  { key: 'height',      label: '身長',        extract: d => d?.height ? d.height + 'cm' : '-' },
+  { key: 'weight',      label: '体重',        extract: d => d?.weight ? d.weight + 'kg' : '-' },
+  { key: 'preferredFoot', label: '利き足',    extract: d => fmtNum(d?.preferredFoot) },
+  { key: 'shirtNumber', label: '背番号',      extract: d => d?.shirtNumber != null ? '#' + d.shirtNumber : '-' },
+  { key: 'marketValue', label: '市場価値',    extract: d => fmtNum(d?.marketValue) },
+  { key: 'contractUntil', label: '契約満了',  extract: d => fmtNum(d?.contractUntil) },
+  { key: 'league',      label: 'リーグ',      extract: d => fmtNum(d?.leagueName) },
+  // === 今季成績 ===
+  { key: 'goals',         label: 'ゴール',       extract: d => fmtNum(d?.seasonStats?.goals) },
+  { key: 'assists',       label: 'アシスト',     extract: d => fmtNum(d?.seasonStats?.assists) },
+  { key: 'apps',          label: '出場',         extract: d => d?.seasonStats?.appearances != null ? d.seasonStats.appearances + '試合' : '-' },
+  { key: 'minutes',       label: '出場時間',     extract: d => d?.seasonStats?.minutesPlayed ? d.seasonStats.minutesPlayed + '分' : '-' },
+  { key: 'rating',        label: '平均評定',     extract: d => fmtFloat(d?.seasonStats?.rating, 2) },
+  { key: 'xG',            label: 'xG',           extract: d => fmtFloat(d?.seasonStats?.expectedGoals, 2) },
+  { key: 'keyPasses',     label: 'キーパス',     extract: d => fmtNum(d?.seasonStats?.keyPasses) },
+  { key: 'yellowCards',   label: '警告',         extract: d => fmtNum(d?.seasonStats?.yellowCards) },
+  { key: 'redCards',      label: '退場',         extract: d => fmtNum(d?.seasonStats?.redCards) },
+  { key: 'recentAvgRating', label: '直近10戦平均', extract: d => fmtFloat(d?.recentAvgRating, 2) },
+  // === ポジション別（DF）===
+  { key: 'tackles',       label: 'タックル',     extract: d => fmtNum(d?.positionStats?.tackles) },
+  { key: 'interceptions', label: 'インターセプト', extract: d => fmtNum(d?.positionStats?.interceptions) },
+  { key: 'clearances',    label: 'クリア',       extract: d => fmtNum(d?.positionStats?.clearances) },
+  { key: 'duelsWon',      label: 'デュエル勝',   extract: d => fmtNum(d?.positionStats?.duelsWon) },
+  // === ポジション別（GK）===
+  { key: 'saves',         label: 'セーブ',       extract: d => fmtNum(d?.positionStats?.saves) },
+  { key: 'cleanSheets',   label: '完封',         extract: d => fmtNum(d?.positionStats?.cleanSheets) },
+  { key: 'goalsPrevented', label: 'ゴール阻止',  extract: d => fmtNum(d?.positionStats?.goalsPrevented) },
+  // === ポジション別（FW）===
+  { key: 'shotsOnTarget', label: '枠内シュート', extract: d => fmtNum(d?.positionStats?.shotsOnTarget) },
+  { key: 'bigChancesMissed', label: '決定機外し', extract: d => fmtNum(d?.positionStats?.bigChancesMissed) },
+  { key: 'successfulDribbles', label: 'ドリブル成功', extract: d => fmtNum(d?.positionStats?.successfulDribbles) },
+  // === CL ===
+  { key: 'uclGoals',      label: 'CL得点',       extract: d => fmtNum(d?.uclStats?.goals) },
+  { key: 'uclRating',     label: 'CL評定',       extract: d => fmtFloat(d?.uclStats?.rating, 2) },
+  // === Wikipedia ===
+  { key: 'wikiBio',       label: '紹介文',       extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
+  { key: 'wikiDesc',      label: '一行紹介',     extract: d => fmtNum(d?._wiki?.description) },
+];
+
+// チーム系（profile + seasonStats を統合・代表チーム対応も含む）
+const TEAM_GENERAL_SLOTS = [
+  // === 基本情報 ===
+  { key: 'league',      label: 'リーグ',       extract: d => fmtNum(d?.leagueName) },
+  { key: 'country',     label: '国',           extract: d => fmtNum(d?.country) },
+  { key: 'founded',     label: '創設',         extract: d => fmtNum(d?.founded) },
+  { key: 'manager',     label: '監督',         extract: d => fmtNum(d?.managerName) },
+  { key: 'venue',       label: 'スタジアム',   extract: d => fmtNum(d?.venue) },
+  { key: 'marketValue', label: '総資産',       extract: d => fmtNum(d?.marketValue) },
+  // === 国内リーグ (standing) ===
+  { key: 'position', label: '順位',     extract: d => d?.standing?.position != null ? d.standing.position + '位' : '-' },
+  { key: 'points',   label: '勝点',     extract: d => fmtNum(d?.standing?.points) },
+  { key: 'wins',     label: '勝利',     extract: d => fmtNum(d?.standing?.wins) },
+  { key: 'draws',    label: '引分',     extract: d => fmtNum(d?.standing?.draws) },
+  { key: 'losses',   label: '敗戦',     extract: d => fmtNum(d?.standing?.losses) },
+  { key: 'gf',       label: '得点',     extract: d => fmtNum(d?.standing?.goalsFor) },
+  { key: 'ga',       label: '失点',     extract: d => fmtNum(d?.standing?.goalsAgainst) },
+  { key: 'gd',       label: '得失点差',
+    extract: d => (d?.standing?.goalsFor != null && d?.standing?.goalsAgainst != null)
+      ? String(d.standing.goalsFor - d.standing.goalsAgainst) : '-' },
+  { key: 'played',   label: '試合数',   extract: d => fmtNum(d?.standing?.played) },
+  { key: 'wdlStr',   label: 'W-D-L',
+    extract: d => d?.standing ? `${d.standing.wins||0}-${d.standing.draws||0}-${d.standing.losses||0}` : '-' },
+  // === 直近フォーム / 代表チーム向け ===
+  { key: 'recentForm', label: '直近フォーム', extract: d => fmtNum(d?.recentForm) },
+  { key: 'last1',     label: '直近の試合',    extract: d => _fmtLast5Row(d?.last5?.[0]) },
+  { key: 'last2',     label: '直近2試合前',   extract: d => _fmtLast5Row(d?.last5?.[1]) },
+  { key: 'last3',     label: '直近3試合前',   extract: d => _fmtLast5Row(d?.last5?.[2]) },
+  { key: 'last5wins',  label: '直近5戦勝数',  extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'W').length) : '-' },
+  { key: 'last5losses', label: '直近5戦敗数', extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'L').length) : '-' },
+  // === Wikipedia ===
+  { key: 'wikiBio',  label: '紹介文',       extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
+  { key: 'wikiDesc', label: '一行紹介',     extract: d => fmtNum(d?._wiki?.description) },
+];
+
 // SIデータから entity を取得（label一致）
 function findEntity(siData, subject, label) {
   const box = SUBJECT_BOX_MAP[subject];
@@ -149,22 +235,7 @@ const RECIPES = {
     template: 'stats',
     sources: ['sofa.player', 'wiki.summary'],
     populates: 'dataSlots',
-    availableSlots: [
-      { key: 'position',    label: 'ポジション',  extract: d => fmtNum(d?.position) },
-      { key: 'age',         label: '年齢',        extract: d => d?.age != null ? d.age + '歳' : '-' },
-      { key: 'nationality', label: '国籍',        extract: d => fmtNum(d?.nationality) },
-      { key: 'team',        label: '所属',        extract: d => fmtNum(d?.team) },
-      { key: 'height',      label: '身長',        extract: d => d?.height ? d.height + 'cm' : '-' },
-      { key: 'weight',      label: '体重',        extract: d => d?.weight ? d.weight + 'kg' : '-' },
-      { key: 'preferredFoot', label: '利き足',    extract: d => fmtNum(d?.preferredFoot) },
-      { key: 'shirtNumber', label: '背番号',      extract: d => d?.shirtNumber != null ? '#' + d.shirtNumber : '-' },
-      { key: 'marketValue', label: '市場価値',    extract: d => fmtNum(d?.marketValue) },
-      { key: 'contractUntil', label: '契約満了',  extract: d => fmtNum(d?.contractUntil) },
-      { key: 'league',      label: 'リーグ',      extract: d => fmtNum(d?.leagueName) },
-      // ── Wikipedia 由来 ──
-      { key: 'wikiBio',     label: '紹介文',      extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
-      { key: 'wikiDesc',    label: '一行紹介',    extract: d => fmtNum(d?._wiki?.description) },
-    ],
+    availableSlots: PLAYER_GENERAL_SLOTS,
     defaultSelection: ['position', 'age', 'nationality', 'marketValue'],
   },
 
@@ -188,34 +259,7 @@ const RECIPES = {
     template: 'stats',
     sources: ['sofa.player'],
     populates: 'dataSlots',
-    availableSlots: [
-      { key: 'goals',         label: 'ゴール',       extract: d => fmtNum(d?.seasonStats?.goals) },
-      { key: 'assists',       label: 'アシスト',     extract: d => fmtNum(d?.seasonStats?.assists) },
-      { key: 'apps',          label: '出場',         extract: d => fmtNum(d?.seasonStats?.appearances) + '試合' },
-      { key: 'minutes',       label: '出場時間',     extract: d => d?.seasonStats?.minutesPlayed ? d.seasonStats.minutesPlayed + '分' : '-' },
-      { key: 'rating',        label: '平均評定',     extract: d => fmtFloat(d?.seasonStats?.rating, 2) },
-      { key: 'xG',            label: 'xG',           extract: d => fmtFloat(d?.seasonStats?.expectedGoals, 2) },
-      { key: 'keyPasses',     label: 'キーパス',     extract: d => fmtNum(d?.seasonStats?.keyPasses) },
-      { key: 'yellowCards',   label: '警告',         extract: d => fmtNum(d?.seasonStats?.yellowCards) },
-      { key: 'redCards',      label: '退場',         extract: d => fmtNum(d?.seasonStats?.redCards) },
-      { key: 'recentAvgRating', label: '直近10戦平均', extract: d => fmtFloat(d?.recentAvgRating, 2) },
-      // ポジション別（DF）
-      { key: 'tackles',       label: 'タックル',     extract: d => fmtNum(d?.positionStats?.tackles) },
-      { key: 'interceptions', label: 'インターセプト', extract: d => fmtNum(d?.positionStats?.interceptions) },
-      { key: 'clearances',    label: 'クリア',       extract: d => fmtNum(d?.positionStats?.clearances) },
-      { key: 'duelsWon',      label: 'デュエル勝',   extract: d => fmtNum(d?.positionStats?.duelsWon) },
-      // ポジション別（GK）
-      { key: 'saves',         label: 'セーブ',       extract: d => fmtNum(d?.positionStats?.saves) },
-      { key: 'cleanSheets',   label: '完封',         extract: d => fmtNum(d?.positionStats?.cleanSheets) },
-      { key: 'goalsPrevented', label: 'ゴール阻止',  extract: d => fmtNum(d?.positionStats?.goalsPrevented) },
-      // ポジション別（FW）
-      { key: 'shotsOnTarget', label: '枠内シュート', extract: d => fmtNum(d?.positionStats?.shotsOnTarget) },
-      { key: 'bigChancesMissed', label: '決定機外し', extract: d => fmtNum(d?.positionStats?.bigChancesMissed) },
-      { key: 'successfulDribbles', label: 'ドリブル成功', extract: d => fmtNum(d?.positionStats?.successfulDribbles) },
-      // CL
-      { key: 'uclGoals',      label: 'CL得点',       extract: d => fmtNum(d?.uclStats?.goals) },
-      { key: 'uclRating',     label: 'CL評定',       extract: d => fmtFloat(d?.uclStats?.rating, 2) },
-    ],
+    availableSlots: PLAYER_GENERAL_SLOTS,
     defaultSelection: ['goals', 'assists', 'rating', 'apps'],
   },
 
@@ -255,18 +299,7 @@ const RECIPES = {
     template: 'stats',
     sources: ['sofa.team', 'wiki.summary'],
     populates: 'dataSlots',
-    availableSlots: [
-      { key: 'league',      label: 'リーグ',       extract: d => fmtNum(d?.leagueName) },
-      { key: 'country',     label: '国',           extract: d => fmtNum(d?.country) },
-      { key: 'founded',     label: '創設',         extract: d => fmtNum(d?.founded) },
-      { key: 'manager',     label: '監督',         extract: d => fmtNum(d?.managerName) },
-      { key: 'venue',       label: 'スタジアム',   extract: d => fmtNum(d?.venue) },
-      { key: 'marketValue', label: '総資産',       extract: d => fmtNum(d?.marketValue) },
-      { key: 'recentForm',  label: '直近フォーム', extract: d => fmtNum(d?.recentForm) },
-      // ── Wikipedia 由来 ──
-      { key: 'wikiBio',     label: '紹介文',       extract: d => d?._wiki?.extract ? String(d._wiki.extract).slice(0, 120) : '-' },
-      { key: 'wikiDesc',    label: '一行紹介',     extract: d => fmtNum(d?._wiki?.description) },
-    ],
+    availableSlots: TEAM_GENERAL_SLOTS,
     defaultSelection: ['league', 'manager', 'founded', 'marketValue'],
   },
 
@@ -279,37 +312,7 @@ const RECIPES = {
     template: 'stats',
     sources: ['sofa.team'],
     populates: 'dataSlots',
-    availableSlots: [
-      // ── 国内リーグ (standing) ベース ──
-      { key: 'position', label: '順位',     extract: d => d?.standing?.position != null ? d.standing.position + '位' : '-' },
-      { key: 'points',   label: '勝点',     extract: d => fmtNum(d?.standing?.points) },
-      { key: 'wins',     label: '勝利',     extract: d => fmtNum(d?.standing?.wins) },
-      { key: 'draws',    label: '引分',     extract: d => fmtNum(d?.standing?.draws) },
-      { key: 'losses',   label: '敗戦',     extract: d => fmtNum(d?.standing?.losses) },
-      { key: 'gf',       label: '得点',     extract: d => fmtNum(d?.standing?.goalsFor) },
-      { key: 'ga',       label: '失点',     extract: d => fmtNum(d?.standing?.goalsAgainst) },
-      { key: 'gd',       label: '得失点差',
-        extract: d => (d?.standing?.goalsFor != null && d?.standing?.goalsAgainst != null)
-          ? String(d.standing.goalsFor - d.standing.goalsAgainst) : '-' },
-      { key: 'played',   label: '試合数',   extract: d => fmtNum(d?.standing?.played) },
-      { key: 'wdlStr',   label: 'W-D-L',
-        extract: d => d?.standing ? `${d.standing.wins||0}-${d.standing.draws||0}-${d.standing.losses||0}` : '-' },
-      // ── 代表チーム / 国際大会向け ──
-      { key: 'recentForm', label: '直近フォーム',
-        extract: d => fmtNum(d?.recentForm) },
-      { key: 'last1',     label: '直近の試合',
-        extract: d => _fmtLast5Row(d?.last5?.[0]) },
-      { key: 'last2',     label: '直近2試合前',
-        extract: d => _fmtLast5Row(d?.last5?.[1]) },
-      { key: 'last3',     label: '直近3試合前',
-        extract: d => _fmtLast5Row(d?.last5?.[2]) },
-      { key: 'last5wins',  label: '直近5戦勝数',
-        extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'W').length) : '-' },
-      { key: 'last5losses', label: '直近5戦敗数',
-        extract: d => Array.isArray(d?.last5) ? String(d.last5.filter(r => r?.result === 'L').length) : '-' },
-      { key: 'manager',   label: '監督',
-        extract: d => fmtNum(d?.managerName) },
-    ],
+    availableSlots: TEAM_GENERAL_SLOTS,
     defaultSelection: ['position', 'points', 'wins', 'gf'],
   },
 
