@@ -63,8 +63,8 @@ function buildDataHeroThumb(data = {}) {
   position: absolute;
   right: 0; top: 0; bottom: 0;
   width: 60%;
-  padding: 50px 50px 50px 80px;
-  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 30px 50px 40px 80px;
+  display: flex; flex-direction: column;
   z-index: 5;
 }
 
@@ -79,12 +79,18 @@ function buildDataHeroThumb(data = {}) {
   letter-spacing: 4px;
   border-radius: 4px;
   box-shadow: 0 4px 18px ${badgeColor}80;
+  margin-bottom: 14px;
 }
 
-.hero-num-zone { text-align: right; }
+/* 数字ゾーン: 上寄り配置 */
+.hero-num-zone {
+  text-align: right;
+  margin-top: ${badge ? '0' : '20px'};
+  margin-bottom: 20px;
+}
 .hero-num {
   font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 240px;
+  font-size: 220px;
   font-weight: 900;
   font-style: italic;
   color: ${p.accent};
@@ -94,32 +100,35 @@ function buildDataHeroThumb(data = {}) {
   display: inline-block;
 }
 .hero-label {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   color: ${p.text};
   letter-spacing: 4px;
-  margin-top: 8px;
+  margin-top: 4px;
   text-shadow: ${isLight ? 'none' : '0 2px 10px rgba(0,0,0,0.8)'};
 }
 
+/* キャッチ: 下寄り配置で 2行折返し対応 */
 .catch-zone {
   display: flex; flex-direction: column; align-items: flex-end;
-  font-size: 56px;
+  margin-top: auto;
+  font-size: 50px;
   font-weight: 900;
   color: ${p.text};
-  line-height: 1.18;
+  line-height: 1.22;
   ${isLight ? '' : `-webkit-text-stroke: 2px rgba(255,255,255,0.18);`}
   text-shadow: ${catchShadow};
   letter-spacing: 1px;
   max-width: 100%;
-  word-break: keep-all;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   text-align: right;
 }
 .catch-bar {
   display: block;
   width: 80px; height: 6px;
   background: ${p.accent};
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   box-shadow: 0 0 18px ${isLight ? 'rgba(194,116,10,0.4)' : 'rgba(245,158,11,0.5)'};
   align-self: flex-end;
 }

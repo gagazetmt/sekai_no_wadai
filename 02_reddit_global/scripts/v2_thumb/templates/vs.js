@@ -59,24 +59,42 @@ function buildVsThumb(data = {}) {
   display: flex; flex-direction: column; align-items: center;
   gap: 16px;
   padding: 0 24px;
+  position: relative;
 }
 .fighter.left { padding-right: 60px; }
 .fighter.right { padding-left: 60px; }
+/* ── 切り抜き風人物画像 ──
+     画像をやや大きく + 楕円 mask で柔らかい縁 + 強い色付きグロー
+     背景に同化したような「浮かび上がる」演出 */
 .fighter-photo {
-  width: 280px; height: 280px;
-  border-radius: 50%;
+  width: 320px; height: 360px;
   background-size: cover;
-  background-position: center 20%;
-  filter: contrast(1.1) saturate(1.1);
+  background-position: center 18%;
+  filter: contrast(1.18) saturate(1.15);
+  /* 楕円形に soft fade でカット感を出す */
+  -webkit-mask-image: radial-gradient(ellipse 50% 48% at 50% 45%, black 60%, transparent 92%);
+  mask-image: radial-gradient(ellipse 50% 48% at 50% 45%, black 60%, transparent 92%);
 }
 .fighter.left .fighter-photo {
-  border: 6px solid #3b82f6;
-  box-shadow: 0 0 36px rgba(59,130,246,0.65), 0 0 0 4px rgba(59,130,246,0.25) inset;
+  filter: contrast(1.18) saturate(1.15) drop-shadow(0 0 30px rgba(59,130,246,0.7)) drop-shadow(0 0 60px rgba(59,130,246,0.35)) drop-shadow(0 6px 18px rgba(0,0,0,0.6));
 }
 .fighter.right .fighter-photo {
-  border: 6px solid #ef4444;
-  box-shadow: 0 0 36px rgba(239,68,68,0.65), 0 0 0 4px rgba(239,68,68,0.25) inset;
+  filter: contrast(1.18) saturate(1.15) drop-shadow(0 0 30px rgba(239,68,68,0.7)) drop-shadow(0 0 60px rgba(239,68,68,0.35)) drop-shadow(0 6px 18px rgba(0,0,0,0.6));
 }
+/* 後ろに薄い色付き光彩（背景に同化させる）*/
+.fighter.left::before, .fighter.right::before {
+  content: '';
+  position: absolute;
+  width: 360px; height: 360px;
+  border-radius: 50%;
+  filter: blur(40px);
+  z-index: -1;
+  pointer-events: none;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.fighter.left::before  { background: radial-gradient(circle, rgba(59,130,246,0.45) 0%, transparent 70%); }
+.fighter.right::before { background: radial-gradient(circle, rgba(239,68,68,0.45) 0%, transparent 70%); }
 .fighter-name {
   font-size: 48px;
   font-weight: 900;

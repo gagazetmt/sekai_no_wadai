@@ -23,16 +23,38 @@ function buildQuestionThumb(data = {}) {
   ${bg ? `background-image: url('${bg}');` : `background: ${isLight ? 'radial-gradient(ellipse at 30% 50%, #fefaf2 0%, #efeae0 100%)' : 'radial-gradient(ellipse at 30% 50%, #1f2a4a 0%, #060a14 100%)'};`}
   background-size: cover;
   background-position: center;
-  filter: ${isLight ? 'brightness(0.95) contrast(1.05)' : 'brightness(0.45) contrast(1.08)'};
+  filter: ${isLight ? 'brightness(0.98) contrast(1.05)' : 'brightness(0.85) contrast(1.08)'};
 }
+/* 横帯オーバーレイ：上下明るい（画像のまま見せる）/ 中央暗い（タイトル映え）*/
 .bg-overlay {
   position: absolute; inset: 0;
   background: ${isLight
-    ? `radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(247,243,236,0.3) 100%),
-       linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(247,243,236,0.20) 100%)`
-    : `radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(6,14,28,0.7) 100%),
-       linear-gradient(180deg, rgba(6,14,28,0.30) 0%, rgba(6,14,28,0.55) 100%)`};
+    ? `linear-gradient(180deg,
+        rgba(255,255,255,0.0) 0%,
+        rgba(255,255,255,0.0) 22%,
+        rgba(8,12,24,0.78) 38%,
+        rgba(8,12,24,0.85) 60%,
+        rgba(255,255,255,0.0) 78%,
+        rgba(255,255,255,0.0) 100%)`
+    : `linear-gradient(180deg,
+        rgba(0,0,0,0.0) 0%,
+        rgba(0,0,0,0.0) 22%,
+        rgba(0,0,0,0.85) 38%,
+        rgba(0,0,0,0.85) 60%,
+        rgba(0,0,0,0.0) 78%,
+        rgba(0,0,0,0.0) 100%)`};
 }
+/* 暗帯左右の縁にアクセントライン */
+.band-line-top, .band-line-bot {
+  position: absolute;
+  left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, ${p.accent}, transparent);
+  z-index: 4;
+  box-shadow: 0 0 16px rgba(245,158,11,0.5);
+}
+.band-line-top { top: 36%; }
+.band-line-bot { top: 64%; }
 
 .qmark-bg {
   position: absolute;
@@ -47,23 +69,27 @@ function buildQuestionThumb(data = {}) {
   user-select: none;
 }
 
+/* 暗帯ゾーンに合わせて中央配置（top 36% から bottom 64% まで） */
 .question-zone {
   position: absolute;
-  top: 90px; left: 60px; right: 60px; bottom: 140px;
+  top: 36%; bottom: 36%;
+  left: 60px; right: 60px;
   display: flex; flex-direction: column; justify-content: center;
   z-index: 5;
 }
 .question-text {
-  font-size: 110px;
+  font-size: 96px;
   font-weight: 900;
-  color: ${p.text};
+  color: #fff;
   line-height: 1.15;
   letter-spacing: 1px;
-  ${isLight ? '' : '-webkit-text-stroke: 2.5px rgba(255,255,255,0.2);'}
-  text-shadow: ${isLight
-    ? `0 4px 12px rgba(0,0,0,0.10), 0 0 18px rgba(255,255,255,0.6)`
-    : `0 0 14px rgba(255,255,255,0.5), 0 0 32px rgba(245,158,11,0.5), 0 8px 32px rgba(0,0,0,0.95), 0 2px 6px rgba(0,0,0,1)`};
+  -webkit-text-stroke: 2px rgba(255,255,255,0.22);
+  text-shadow:
+    0 0 16px rgba(255,255,255,0.6),
+    0 0 36px rgba(245,158,11,0.55),
+    0 6px 24px rgba(0,0,0,0.9);
   word-break: keep-all;
+  text-align: center;
 }
 .question-text .accent {
   color: ${p.accent};
@@ -139,6 +165,8 @@ ${channelLogoStyleFor(tone)}
   const thumbBody = `
 <div class="bg-img"></div>
 <div class="bg-overlay"></div>
+<div class="band-line-top"></div>
+<div class="band-line-bot"></div>
 <div class="qmark-bg">?</div>
 ${heroImg ? `<div class="hero-photo-corner" style="background-image: url('${heroImg}')"></div>` : ''}
 <div class="question-zone">
