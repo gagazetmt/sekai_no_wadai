@@ -234,8 +234,8 @@ function buildSubtitleBar(textOrChunks, options = {}) {
 
     return `<style>${keyframes}
       .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
-      .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
-      .v2-sub-text{color:#fff;font-size:38px;font-weight:800;text-align:center;padding:0 70px;line-height:1.35;}
+      .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-top:8px;}
+      .v2-sub-text{color:#fff;font-size:38px;font-weight:800;text-align:center;padding:0 70px;line-height:1.32;}
     </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
   }
 
@@ -248,9 +248,9 @@ function buildSubtitleBar(textOrChunks, options = {}) {
 
   return `<div class="v2-sub-bar" style="position:absolute;bottom:0;left:0;right:0;height:${height}px;`
     + `background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);`
-    + `display:flex;align-items:center;justify-content:center;z-index:20">`
+    + `display:flex;align-items:center;justify-content:center;padding-top:8px;z-index:20">`
     + `<div style="color:#fff;font-size:38px;font-weight:800;text-align:center;`
-    + `padding:0 70px;line-height:1.35;${fontStyle}">${linesHtml}</div></div>`;
+    + `padding:0 70px;line-height:1.32;${fontStyle}">${linesHtml}</div></div>`;
 }
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。

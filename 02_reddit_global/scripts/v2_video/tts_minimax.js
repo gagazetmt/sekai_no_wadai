@@ -104,24 +104,25 @@ function sanitizeForTts(text) {
     .trim();
 }
 
-// ナレーション本文を chunk に分割（最大 ~180文字目安）
-//   1) narrationChunks[] が既にあれば優先
-//   2) 「。！？」で文末分割 → 短すぎる文は前後に結合
+// ナレーション本文を chunk に分割（最大 ~100文字目安）
+//   1) narrationChunks[] が既にあれば優先（AI による意味整合分割）
+//   2) 「。！？」で文末分割 → 短すぎる文は前後に結合（最大 100文字）
+//   ※ 旧 180文字 bundle だと 1 chunk が 30秒近くになり字幕が長時間切替らないため縮小
 function splitIntoChunks(text, existingChunks) {
   if (Array.isArray(existingChunks) && existingChunks.length) {
     return existingChunks.map(c => String(c || '').trim()).filter(Boolean);
   }
   if (!text) return [];
   const raw = String(text).trim();
-  if (raw.length <= 180) return [raw];
+  if (raw.length <= 100) return [raw];
 
   // 文末 (。！？) で分割
   const parts = raw.split(/(?<=[。！？])/).map(s => s.trim()).filter(Boolean);
-  // 短い文は次の文と結合（最大 180文字目安）
+  // 短い文は次の文と結合（最大 100文字目安）
   const out = [];
   let buf = '';
   for (const p of parts) {
-    if ((buf + p).length <= 180) {
+    if ((buf + p).length <= 100) {
       buf += p;
     } else {
       if (buf) out.push(buf);

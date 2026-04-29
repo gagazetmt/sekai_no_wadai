@@ -75,7 +75,11 @@ function buildInsightHTML(mod) {
   const lastSec  = Math.max(totalSec - 1.5, startSec + 1);
   const evenStep = phrasesRaw.length > 1 ? (lastSec - startSec) / (phrasesRaw.length - 1) : 0;
 
+  // 1:1 対応を優先：chunks 数 == phrases 数なら index ベースで直接マッピング
+  //   （AI が narrationChunks を catchphrases と同数で返した場合）
+  const directMapping = audio.length === phrasesRaw.length;
   const tempDelays = phrasesRaw.map((p, i) => {
+    if (directMapping) return chunkStarts[i] + 0.3;
     const cIdx = audio.length ? _matchPhraseToChunk(p, audio) : -1;
     return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
   });
