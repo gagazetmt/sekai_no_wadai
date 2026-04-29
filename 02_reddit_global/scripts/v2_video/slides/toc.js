@@ -7,7 +7,7 @@
 
 const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
 
-const MAX_ITEMS = 7;
+const MAX_ITEMS = 8;
 const TAIL_PAD_SEC = 0.4;  // 末尾余韻
 
 // 項目数で行高 / フォント / 番号フォントを動的調整
@@ -16,7 +16,8 @@ function _layoutForCount(n) {
   if (n <= 4) return { rowH: 110, titleFz: 50, numFz: 92 };
   if (n === 5) return { rowH: 96, titleFz: 44, numFz: 80 };
   if (n === 6) return { rowH: 84, titleFz: 38, numFz: 70 };
-  return        { rowH: 72, titleFz: 32, numFz: 60 };  // 7件
+  if (n === 7) return { rowH: 74, titleFz: 32, numFz: 60 };
+  return        { rowH: 64, titleFz: 28, numFz: 52 };  // 8件
 }
 
 function _itemFontSize(text, baseFz) {
