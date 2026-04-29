@@ -208,6 +208,31 @@ opEdSamples.push({ name: 'ed_v1_hakimi', label: 'ED V1 (現行)',  html: buildEd
 opEdSamples.push({ name: 'ed_v2_hakimi', label: 'ED V2 (要点サマリ)', html: buildEdV2(edSampleData) });
 opEdSamples.push({ name: 'ed_v3_hakimi', label: 'ED V3 (次回予告)', html: buildEdV3(edSampleData) });
 
+// フォールバック動作確認用追加サンプル
+const opNoHero = {
+  type: 'opening',
+  title: '【朗報】ベリンガム、復帰決定',
+  narration: '待望のベリンガム帰還。',
+  channelName: '5分でサッカー分析',
+  // heroNumber 無し → タイトル中央配置にフォールバック
+};
+opEdSamples.push({ name: 'op_v2_no_hero', label: 'OP V2 (heroなし → 中央配置)', html: buildOpV2(opNoHero) });
+
+const edCatchOnly = {
+  type: 'ending',
+  title: '次回もお楽しみに！',
+  narration: '今日のポイント振り返り。',
+  channelName: '5分でサッカー分析',
+  endingCta: { text: 'チャンネル登録お願い' },
+  // summaryStats 無し → catchphrases から数字+ラベル抽出
+  catchphrases: [
+    '24ゴール 史上最速',
+    '78%の決定機',
+    '5戦無敗の好調',
+  ],
+};
+opEdSamples.push({ name: 'ed_v2_catch_fallback', label: 'ED V2 (catchphrases fallback)', html: buildEdV2(edCatchOnly) });
+
 opEdSamples.forEach(s => saveHtml(s.name + '.html', s.html));
 
 // ─── インデックスページ ───────────────────────────────────

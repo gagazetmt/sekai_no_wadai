@@ -105,6 +105,7 @@ function buildDataHeroThumb(data = {}) {
 
 /* ── キャッチ ── */
 .catch-zone {
+  display: flex; flex-direction: column; align-items: flex-end;
   font-size: 56px;
   font-weight: 900;
   color: ${PALETTE.text};
@@ -119,15 +120,13 @@ function buildDataHeroThumb(data = {}) {
   word-break: keep-all;
   text-align: right;
 }
-.catch-zone::before {
-  content: '';
-  display: inline-block;
-  width: 60px; height: 6px;
+.catch-bar {
+  display: block;
+  width: 80px; height: 6px;
   background: ${PALETTE.accent};
   margin-bottom: 18px;
-  margin-right: auto;
-  margin-left: 0;
   box-shadow: 0 0 18px rgba(245,158,11,0.5);
+  align-self: flex-end;
 }
 
 ${channelLogoStyle}
@@ -142,7 +141,7 @@ ${channelLogoStyle}
     <div class="hero-num">${esc(heroNumber)}</div>
     ${heroLabel ? `<div class="hero-label">${esc(heroLabel)}</div>` : ''}
   </div>
-  <div class="catch-zone">${esc(catchText)}</div>
+  <div class="catch-zone"><span class="catch-bar"></span>${esc(catchText)}</div>
 </div>
 ${channelLogoHtml(channelName)}
 `;

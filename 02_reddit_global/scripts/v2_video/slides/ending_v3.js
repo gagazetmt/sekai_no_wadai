@@ -12,7 +12,7 @@ const {
 
 const SVG_BELL = '<svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0;"><path d="M12 22a2.2 2.2 0 0 0 2.2-2.2H9.8A2.2 2.2 0 0 0 12 22zm6.6-6.6V10A6.6 6.6 0 0 0 13 3.5V2.6a1 1 0 1 0-2 0v.9A6.6 6.6 0 0 0 5.4 10v5.4L4 17v.8h16V17l-1.4-1.6z"/></svg>';
 const SVG_THUMB = '<svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0;"><path d="M2 10h4.5v11H2zm6.5 11V10l5.5-9c.9 0 1.7.7 1.7 1.7v6.6h6.7c1 0 1.7.7 1.7 1.7l-1.7 8.4c-.2.9-.9 1.6-1.8 1.6H8.5z"/></svg>';
-const SVG_PLAY  = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;"><path d="M8 5v14l11-7z"/></svg>';
+const SVG_COMMENT = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0;"><path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/></svg>';
 
 function buildEndingHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
@@ -110,8 +110,9 @@ function buildEndingHTML(mod) {
   z-index: 5;
 }
 .comment-prompt-icon {
-  font-size: 32px;
+  display: inline-flex; align-items: center;
   margin-right: 12px;
+  color: ${PALETTE.accent};
 }
 
 /* ── ロゴ（中央寄り）+ CTA 大型ボタン ── */
@@ -160,7 +161,7 @@ function buildEndingHTML(mod) {
   <span class="next-header-jp">次回予告</span>
 </div>
 <div class="next-topic">${esc(nextTopic)}</div>
-<div class="comment-prompt"><span class="comment-prompt-icon">💬</span>${esc(commentPrompt)}</div>
+<div class="comment-prompt"><span class="comment-prompt-icon">${SVG_COMMENT}</span>${esc(commentPrompt)}</div>
 <div class="cta-zone-v3">
   <div class="channel-logo-end">${esc(channelName)}</div>
   <div class="cta-mega">${SVG_BELL}<span>${esc(ctaText)}</span>${SVG_THUMB}</div>

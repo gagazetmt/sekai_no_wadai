@@ -19,15 +19,24 @@ function buildEndingHTML(mod) {
   const ctaText = (mod.endingCta && mod.endingCta.text) || 'チャンネル登録お願い';
 
   // 要点 3つの数字（動画振り返り用）
-  //   AI が summaryStats を生成（無ければ catchphrases や dataSlots から fallback）
+  //   AI が summaryStats を生成。無ければ catchphrases から「数字+ラベル」を抽出
   let stats = [];
   if (Array.isArray(mod.summaryStats) && mod.summaryStats.length) {
     stats = mod.summaryStats.slice(0, 3);
   } else if (Array.isArray(mod.catchphrases) && mod.catchphrases.length) {
-    // catchphrases から数字+キーワード抽出を試みる
-    stats = mod.catchphrases.slice(0, 3).map(p => ({ value: '', label: String(p || '') }));
+    // catchphrases から数字+単位+キーワードを正規表現で抽出
+    //   「24ゴール 圧倒的決定力」→ value:"24ゴール", label:"圧倒的決定力"
+    //   数字が無い場合は label のみ
+    stats = mod.catchphrases.slice(0, 3).map(p => {
+      const text = String(p || '').trim();
+      const m = text.match(/^([\d,.\-+%][\d,.\-+%a-zA-Z万億試合ゴール得点本回連勝敗P点位歳秒]+)\s*[、,]?\s*(.*)$/);
+      if (m && m[1]) return { value: m[1], label: m[2] || '' };
+      return { value: '', label: text };
+    });
   }
-  while (stats.length < 3) stats.push({ value: '', label: '' });
+  // 3個に満たない場合はパディング（空カードは表示時にスキップ）
+  stats = stats.filter(s => s && (s.value || s.label));
+  while (stats.length < 3) stats.push(null);
 
   const subBarHtml = mod.narration ? buildSubtitleBar(subtitleArgFromMod(mod), { height: 110 }) : '';
 
@@ -105,6 +114,10 @@ function buildEndingHTML(mod) {
 .stat-card:nth-child(1) { animation-delay: 0.6s; }
 .stat-card:nth-child(2) { animation-delay: 0.85s; }
 .stat-card:nth-child(3) { animation-delay: 1.1s; }
+.stat-card-empty {
+  background: rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.15);
+}
 .stat-value {
   font-family: 'Georgia', serif;
   font-size: 110px;
@@ -171,10 +184,10 @@ function buildEndingHTML(mod) {
   <div class="recap-bar"></div>
 </div>
 <div class="stats-grid">
-  ${stats.map(s => `<div class="stat-card">
+  ${stats.map(s => s ? `<div class="stat-card">
     ${s.value ? `<div class="stat-value">${esc(s.value)}</div>` : ''}
     <div class="stat-label">${esc(s.label || '')}</div>
-  </div>`).join('')}
+  </div>` : `<div class="stat-card stat-card-empty"></div>`).join('')}
 </div>
 <div class="cta-zone">
   <div class="channel-logo-end">${esc(channelName)}</div>

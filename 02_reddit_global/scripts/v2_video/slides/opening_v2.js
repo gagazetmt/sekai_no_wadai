@@ -24,6 +24,7 @@ function buildOpeningHTML(mod) {
   const channelName = mod.channelName || '5分でサッカー分析';
   const heroNumber = String(mod.heroNumber || '').trim();  // 例: "63%" "24G" "5-4"
   const heroLabel = String(mod.heroLabel || '').trim();    // 例: "今日のキー数字"
+  const hasHero = !!heroNumber;  // 数字無しの場合はタイトル中央配置にフォールバック
 
   const badge = (mod.openingBadge && mod.openingBadge.text)
     ? { text: mod.openingBadge.text, color: mod.openingBadge.color || '#f59e0b', textColor: mod.openingBadge.textColor || '#000' }
@@ -146,19 +147,18 @@ function buildOpeningHTML(mod) {
   100% { transform: translateX(-560px); margin-top: 130px; }
 }
 
-/* ── タイトル（右からスライドイン）── */
+/* ── タイトル：hero がある場合は右半分、無い場合は中央配置 ── */
 .title-zone {
   position: absolute;
-  top: 50%; right: 80px;
+  top: 50%;
+  ${hasHero ? 'right: 80px; width: 950px; text-align: left;' : 'left: 80px; right: 80px; text-align: center;'}
   transform: translateY(-50%);
-  width: 950px;
-  text-align: left;
   z-index: 5;
   opacity: 0;
-  animation: titleSlide 0.65s cubic-bezier(0.22, 1, 0.36, 1) 1.5s forwards;
+  animation: titleSlide 0.65s cubic-bezier(0.22, 1, 0.36, 1) ${hasHero ? '1.5s' : '0.7s'} forwards;
 }
 @keyframes titleSlide {
-  from { opacity: 0; transform: translate(80px, -50%); }
+  from { opacity: 0; transform: translate(${hasHero ? '80px' : '0'}, -50%); }
   to   { opacity: 1; transform: translate(0, -50%); }
 }
 .badge {
