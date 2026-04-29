@@ -296,9 +296,9 @@ ${outlineLines}
 - 全カード共通：
   - "idx": **outline の番号（1始まり）と完全一致**。1, 2, 3, ..., ${mods.length} の順で必ず出力
   - "title": 短い見出し（10〜25文字）
-  - "narration": 視聴者に語りかける口調の本文 — **40秒前後のボリューム = 250〜320文字目安**
+  - "narration": 視聴者に語りかける口調の本文 — **28秒前後のボリューム = 170〜220文字目安**
     ※ 例外: type=opening は **40〜80文字の短い煽り文**（下記参照）
-    ※ データやニュース文脈を活用し、試合の流れや背景を「さらっと説明」する密度で書く
+    ※ **濃い情報だけ抽出**。前置き・繰り返し・「〜と言われています」等の冗長表現は削除。データに直結する事実と数字で勝負
 
 - type 別の追加フィールド + ナレーション方針：
   - opening:
@@ -309,23 +309,23 @@ ${outlineLines}
       候補: {"衝撃","#ef4444","#fff"} {"悲報","#ef4444","#fff"} {"朗報","#10b981","#fff"} {"速報","#f59e0b","#000"} {"独占","#8b5cf6","#fff"}
       ※ 案件のトーンに合わせて選ぶ。指定しない場合はサーバ側で title から自動推論
   - ending:
-    - "narration": 視聴者への投げかけや登録誘導を含めて250〜320文字
+    - "narration": 視聴者への投げかけや登録誘導を含めて 170〜220 文字
     - "endingCta": { "text": "CTAボタン文言(15文字以内)" }
       候補例: "チャンネル登録お願い" / "次回もお楽しみに" / "コメント教えて" / "高評価お願いします"
       ※ 動画の余韻に合った締めの言葉を選ぶ。指定しない場合は既定 "チャンネル登録 & いいね"
   - insight:
     - "catchphrases": [短句×3〜5、各15文字以内、事実+数字を含む]
-    - "narration": 250〜320字の深掘り解説
-    - "narrationChunks": **catchphrases と同数・同じ順序の文字列配列**。各 chunk は対応する catchphrase の内容を解説する文（50〜80文字目安）
-      ・例: catchphrases[0]="ペップ直系の戦術家" → narrationChunks[0]="〇〇は若い頃ペップに師事し戦術哲学を学んだ。"
+    - "narration": 170〜220 字の凝縮された深掘り解説
+    - "narrationChunks": **catchphrases と同数・同じ順序の文字列配列**。各 chunk は対応する catchphrase の内容を解説する文（**35〜55文字目安**）
+      ・例: catchphrases[0]="ペップ直系の戦術家" → narrationChunks[0]="若い頃ペップに師事し戦術哲学を学んだ。"
       ・narrationChunks の連結が narration に概ね一致するよう構成
       ・字幕とビジュアル phrase の同期を取るため、必ず同数で揃える
-  - reaction: "comments": [{"text":"...","score":0}×7] — 上記【元コメント抜粋】から面白い7件を選び日本語意訳。narration は反応の前置き
-  - stats: "dataSlots": [{"label":"...","value":"..."}×6〜8]。narration はデータの背景や流れを語る
+  - reaction: "comments": [{"text":"...","score":0}×7] — 上記【元コメント抜粋】から面白い7件を選び日本語意訳。narration は反応の前置き（170〜220字）
+  - stats: "dataSlots": [{"label":"...","value":"..."}×6〜8]。narration はデータの背景や流れを語る（170〜220字）
   - history:
     - "dataSlots": [{"label":"年(YYYY)","value":"出来事タイトル"}×4〜7] の時系列
-    - "narration": 250〜320字
-    - "narrationChunks": **dataSlots と同数・同じ順序の文字列配列**。各 chunk は対応する出来事を解説する文（50〜80文字目安）
+    - "narration": 170〜220 字
+    - "narrationChunks": **dataSlots と同数・同じ順序の文字列配列**。各 chunk は対応する出来事を解説する文（**35〜55文字目安**）
       ・例: dataSlots[0].value="バルサ加入" → narrationChunks[0]="13歳でラ・マシア入団、メッシの背中を追った日々。"
       ・narrationChunks の連結が narration に概ね一致するよう構成
       ・字幕と event 表示の同期を取るため、必ず同数で揃える

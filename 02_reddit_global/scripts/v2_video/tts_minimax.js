@@ -316,15 +316,22 @@ function probeDurationSec(filePath) {
 }
 
 // モジュールタイプを考慮してTTSチャンクを構築する。
-//   - reaction: narration の冒頭 + comments[] を順次音声化（コメントも読み上げる）
-//   - insight / history: chunkAware（narrationを文末分割）
-//   - その他: narration を1つのチャンクに
+//   - 全タイプで narration を文末分割（字幕が遷移するように）
+//   - insight / history: AI が指定した narrationChunks があればそれを優先
+//   - reaction: 上記 + comments[] を順次音声化（コメントも読み上げる）
+//   - opening: ナレーション短いので1チャンクのまま（無分割）
 function buildChunksForModule(mod) {
   if (!mod) return [];
-  const chunkAware = ['insight', 'reaction', 'history'].includes(mod.type);
-  const baseChunks = chunkAware
-    ? splitIntoChunks(mod.narration, mod.narrationChunks)
-    : [String(mod.narration || '').trim()].filter(Boolean);
+  const narr = String(mod.narration || '').trim();
+
+  // opening は短い煽り（〜80字）なので分割不要
+  let baseChunks;
+  if (mod.type === 'opening') {
+    baseChunks = narr ? [narr] : [];
+  } else {
+    // 全タイプで文末分割。narrationChunks があれば優先
+    baseChunks = splitIntoChunks(narr, mod.narrationChunks);
+  }
 
   if (mod.type === 'reaction') {
     const commentChunks = (Array.isArray(mod.comments) ? mod.comments : [])

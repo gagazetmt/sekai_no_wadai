@@ -423,20 +423,30 @@ function buildMatchcardHTML(mod) {
   }
 
   function layoutPlayers(players, formation, isHome) {
-    const yStart = isHome ? 6  : 94;
-    const yEnd   = isHome ? 42 : 58;
+    // 配置：HOME を下、AWAY を上（中継視点に合わせ）
+    //   isHome → 下半分（GK は最下、攻撃は中央寄り）
+    //   !isHome → 上半分（GK は最上、攻撃は中央寄り）
+    const yStart = isHome ? 94 : 6;
+    const yEnd   = isHome ? 58 : 42;
+    // 下側チーム（isHome）は SofaScore の slot 順（team-left 起点）と
+    // 中継視点（viewer-right が team-right）が反転するため x をミラー
+    const _xPos = (i, count) => {
+      if (count === 1) return 50;
+      const raw = 10 + (80 / (count - 1)) * i;
+      return isHome ? (100 - raw) : raw;
+    };
     const bands  = parseFormation(formation);
 
     // フォールバック：formation 不明 → 旧 G/D/M/F 4ライン方式
     if (!bands) {
       const order = ['goalkeeper','defender','midfielder','forward'];
-      const yLines = isHome ? [6,17,30,42] : [94,83,70,58];
+      const yLines = isHome ? [94,83,70,58] : [6,17,30,42];
       const result = [];
       order.forEach((pos, li) => {
         const line = players.filter(p => p.pos === pos);
         line.forEach((pl, i) => {
           const n = line.length;
-          const x = n === 1 ? 50 : 10 + (80 / (n - 1)) * i;
+          const x = _xPos(i, n);
           result.push(Object.assign({}, pl, { x, y: yLines[li], isHome }));
         });
       });
@@ -455,7 +465,7 @@ function buildMatchcardHTML(mod) {
       for (let i = 0; i < count; i++) {
         const pl = players[cursor++];
         if (!pl) continue;
-        const x = count === 1 ? 50 : 10 + (80 / (count - 1)) * i;
+        const x = _xPos(i, count);
         result.push(Object.assign({}, pl, { x, y: yLines[bandIdx + 1], isHome }));
       }
     });
