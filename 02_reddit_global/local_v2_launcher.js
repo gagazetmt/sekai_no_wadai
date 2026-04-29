@@ -69,10 +69,21 @@ body { font-family: sans-serif; background: var(--bg); color: var(--text);
 
 /* ── サイドバー（コンパクト化）── */
 .sidebar { width: 220px; background: #0d1220; border-right: 1px solid var(--border);
-           display: flex; flex-direction: column; flex-shrink: 0; }
+           display: flex; flex-direction: column; flex-shrink: 0;
+           transition: transform .25s ease; }
 .sidebar-header { padding: 12px 14px; background: #1a2540; color: var(--c);
-                  font-weight: 900; font-size: 12px; border-bottom: 1px solid #2a3560; letter-spacing: 1px; }
+                  font-weight: 900; font-size: 12px; border-bottom: 1px solid #2a3560; letter-spacing: 1px;
+                  display: flex; justify-content: space-between; align-items: center; }
+.sidebar-close { display: none; background: transparent; border: 1px solid #ff4d4d40;
+                 color: var(--c); padding: 4px 9px; border-radius: 4px; cursor: pointer;
+                 font-size: 14px; font-weight: bold; }
 .saved-list { flex: 1; overflow-y: auto; padding: 8px; }
+/* ── ハンバーガー（モバイル時のみ表示）── */
+.hamburger { display: none; background: transparent; border: 1px solid var(--c);
+             color: var(--c); padding: 6px 10px; border-radius: 6px; cursor: pointer;
+             font-size: 16px; font-weight: bold; min-height: 36px; }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+                   z-index: 998; }
 .lead-item { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
              padding: 8px 10px; margin-bottom: 6px; cursor: pointer; font-size: 11px;
              transition: border-color .15s; line-height: 1.35; word-break: break-all; }
@@ -151,34 +162,57 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
 .s3-tab-active { color: #fff; border-color: var(--c); }
 
 /* ════════════════════════════════════════════════
-   📱 モバイル対応 Phase A
-   横スクロール撲滅 / タップ領域確保 / 縦積み化
+   📱 タブレット (≤1024px) — 中間ブレイクポイント
+   サイドバーをやや狭く、ヘッダは保持
+   ════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .sidebar { width: 180px; }
+  .header h1 { font-size: 16px; }
+  .step-nav { padding: 10px 14px; }
+  .step-container { padding: 14px 16px; }
+}
+
+/* ════════════════════════════════════════════════
+   📱 モバイル (≤768px) — 完全レスポンシブ
+   ハンバーガー / 縦積み / タッチ最適化
    ════════════════════════════════════════════════ */
 @media (max-width: 768px) {
   /* ── ベース：縦積み、ページスクロール解放 ── */
   body { flex-direction: column; height: auto; min-height: 100vh; overflow: auto; }
 
-  /* ── サイドバー：上部に圧縮配置（内部スクロール）── */
-  .sidebar { width: 100%; max-height: 25vh; border-right: none;
-             border-bottom: 1px solid var(--border); }
+  /* ── サイドバー：オーバーレイ式（デフォ非表示・ハンバーガーで開閉）── */
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 999;
+             width: 80vw; max-width: 280px; max-height: 100vh;
+             border-right: 1px solid var(--border); border-bottom: none;
+             transform: translateX(-100%); box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-close { display: inline-block; }
+  .sidebar-overlay.show { display: block; }
+
+  /* ── ハンバーガー表示 ── */
+  .hamburger { display: inline-block; }
 
   /* ── メインエリア：オーバーフロー解放 ── */
   .main-area { width: 100%; overflow: visible; }
   .content-scroll { overflow-y: visible; }
 
   /* ── ヘッダ ── */
-  .header { padding: 10px 14px; flex-wrap: wrap; gap: 4px; }
-  .header h1 { font-size: 15px; }
-  .header-sub { font-size: 10px; }
+  .header { padding: 10px 12px; gap: 8px; }
+  .header h1 { font-size: 14px; flex: 1; min-width: 0; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+  .header-sub { display: none; }
 
   /* ── ステップナビ：横スクロール ── */
-  .steps { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .steps { overflow-x: auto; -webkit-overflow-scrolling: touch;
+           scrollbar-width: none; }
+  .steps::-webkit-scrollbar { display: none; }
   .step-nav { padding: 12px 14px; font-size: 12px; flex-shrink: 0;
-              min-height: 44px; display: flex; align-items: center; }
+              min-height: 44px; display: flex; align-items: center;
+              white-space: nowrap; }
 
   /* ── コンテンツ ── */
-  .step-container { padding: 12px 14px; }
-  .panel { padding: 14px; margin-bottom: 12px; }
+  .step-container { padding: 10px 12px; }
+  .panel { padding: 12px; margin-bottom: 12px; }
 
   /* ── ボタン：タップ領域 ≥ 40px ── */
   .btn { padding: 10px 16px; font-size: 13px; min-height: 40px; }
@@ -186,43 +220,83 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
 
   /* ── 入力欄：iOS自動ズーム防止のため font-size 16px ── */
   .inp { padding: 10px 12px; font-size: 16px; min-height: 40px; }
+  textarea.inp { min-height: 80px; }
 
   /* ── リスト系：タップ領域確保 ── */
-  .post-row { padding: 12px 14px; font-size: 13px; }
+  .post-row { padding: 12px 14px; font-size: 13px; flex-wrap: wrap; }
   .lead-item { padding: 12px 14px; font-size: 12px; }
   .cand-row, .si-hist-row { padding: 12px; font-size: 12px; }
   .time-summary { padding: 12px 14px; font-size: 12px; }
 
   /* ── pre：横スクロール保険 ── */
-  pre { font-size: 11px; padding: 10px; }
+  pre { font-size: 11px; padding: 10px; max-width: 100%;
+        overflow-x: auto; word-break: break-all; }
 
   /* ── Step3/4 のインライン2カラム grid を縦積みに上書き ── */
   [style*="grid-template-columns:1fr 1fr"] {
     grid-template-columns: 1fr !important;
   }
-  /* ── 画像ギャラリー 5列 → 2列 ── */
+  /* ── Step3 inline 4列 / 5列 grid を縦積みに ── */
   [style*="grid-template-columns:repeat(5,1fr)"] {
     grid-template-columns: repeat(2, 1fr) !important;
   }
+  [style*="grid-template-columns:repeat(4,1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* ── Step4 dataSlots 行レイアウト（label + value + 削除ボタン）── */
+  [style*="grid-template-columns:140px 1fr 28px"] {
+    grid-template-columns: 1fr 1fr 32px !important;
+  }
+  [style*="grid-template-columns:1fr 1fr 1fr 28px"] {
+    grid-template-columns: 1fr 1fr 1fr 32px !important;
+  }
+
+  /* ── Step4 プレビューを大きく（iframe scale は JS 側で再計算）── */
+  #s4PreviewWrap { width: 100% !important; }
 
   /* ── モジュールタブ ── */
   .s3-tab { padding: 12px 14px; font-size: 12px; min-width: 80px;
             min-height: 44px; display: inline-flex; align-items: center;
             justify-content: center; }
+
+  /* ── 画像ギャラリー：サムネ大きめに ── */
+  [style*="width:96px;height:72px"] {
+    width: 80px !important; height: 60px !important;
+  }
+}
+
+/* ════════════════════════════════════════════════
+   📱 小型モバイル (≤480px) — さらに最適化
+   ════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .header h1 { font-size: 13px; }
+  .step-nav { padding: 11px 10px; font-size: 11px; }
+  .step-container { padding: 8px 10px; }
+  .panel { padding: 10px; }
+  .btn { font-size: 12px; padding: 9px 12px; }
+  /* 5列グリッドを 1列に */
+  [style*="grid-template-columns:repeat(5,1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
 }
 </style>
 </head>
 <body>
 
 <!-- ─── サイドバー（保存済み案件）─── -->
-<div class="sidebar">
-  <div class="sidebar-header">📦 保存済み案件 (RED)</div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <span>📦 保存済み案件 (RED)</span>
+    <button class="sidebar-close" onclick="toggleSidebar(false)">✕</button>
+  </div>
   <div id="savedList" class="saved-list"></div>
 </div>
 
 <!-- ─── メインエリア ─── -->
 <div class="main-area">
   <div class="header">
+    <button class="hamburger" onclick="toggleSidebar(true)" aria-label="メニュー">☰</button>
     <h1>⚽ サッカーYT v2 Pro <span style="color:var(--c);">RED</span></h1>
     <span class="header-sub">Local Launcher — port ${PORT}</span>
   </div>
@@ -288,6 +362,16 @@ window.goStep = function(n) {
   if (typeof fn === 'function') fn();
 };
 
+/* ── ハンバーガー: サイドバー開閉（モバイル）── */
+window.toggleSidebar = function(open) {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!sidebar || !overlay) return;
+  if (open === undefined) open = !sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', open);
+  overlay.classList.toggle('show', open);
+};
+
 /* ── サイドバー描画 ── */
 window.renderSidebar = function() {
   document.getElementById('savedList').innerHTML = window.APP.saved.length
@@ -311,6 +395,7 @@ window.selectLead = function(idx) {
   window.APP.activeTab = 0;
   window.renderSidebar();
   window.goStep(2);
+  window.toggleSidebar(false);  // モバイルでは選択後にサイドバー閉じる
 };
 
 /* ── エスケープ（シェル用）── */

@@ -1621,20 +1621,25 @@ function getUI() {
     if (newType === 'comparison' && (!m.dataSlots || !m.dataSlots.length || m.dataSlots[0]?.value !== undefined)) {
       m.dataSlots = [{label:'',leftValue:'',rightValue:''},{label:'',leftValue:'',rightValue:''},{label:'',leftValue:'',rightValue:''},{label:'',leftValue:'',rightValue:''}];
     }
-    _saveModulesQuiet();
     _renderEditor();
-    setTimeout(_reloadPreview, 200);
+    _saveAndReload();
   };
+
+  /* ── プレビュー更新ヘルパ（保存→リロードを直列化）──
+     プレビュー API は disk の modules.json を読むため、
+     保存完了前にリロードすると古い内容が表示される（バグ原因）。
+     ここで必ず await してから reload する。 */
+  async function _saveAndReload() {
+    _collectInputs();
+    await _saveModulesQuiet();
+    _reloadPreview();
+  }
 
   /* ── 入力監視 → debounceでプレビュー更新 ── */
   let _previewTimer = null;
   window.s4OnInput = function() {
     clearTimeout(_previewTimer);
-    _previewTimer = setTimeout(function() {
-      _collectInputs();
-      _saveModulesQuiet();
-      _reloadPreview();
-    }, 1000);
+    _previewTimer = setTimeout(_saveAndReload, 1000);
   };
 
   /* ── 画像ギャラリー: トグル選択 ── */
@@ -1647,8 +1652,7 @@ function getUI() {
     if (idx >= 0) m.images.splice(idx, 1);
     else          m.images.push(path);
     _renderEditor();
-    _saveModulesQuiet();
-    _reloadPreview();
+    _saveAndReload();
   };
 
   /* ── バインドデータ: si.boxes から該当エントリの利用可能フィールドを抽出 ── */
@@ -1777,8 +1781,7 @@ function getUI() {
       m.dataSlots.push({ label, value });
     }
     _renderEditor();
-    _saveModulesQuiet();
-    _reloadPreview();
+    _saveAndReload();
   };
 
   /* ── dataSlot 行を削除 ── */
@@ -1790,8 +1793,7 @@ function getUI() {
     if (idx < 0 || idx >= m.dataSlots.length) return;
     m.dataSlots.splice(idx, 1);
     _renderEditor();
-    _saveModulesQuiet();
-    _reloadPreview();
+    _saveAndReload();
   };
 
   /* ── ナレーション再生成 ── */
@@ -1883,16 +1885,24 @@ function getUI() {
     new Audio(url).play();
   };
 
-  /* ── 保存（手動 + 自動） ── */
-  async function _saveModulesQuiet() {
+  /* ── 保存（直列化）──
+     入力連打で複数 POST が並走するとサーバ側で書き込み順が乱れ、
+     最後に到着したリクエストが「古い modules」で上書きする可能性がある。
+     Promise チェーンで必ず順次実行する。 */
+  let _saveChain = Promise.resolve();
+  function _saveModulesQuiet() {
     const post = window.APP.selected;
-    if (!post?.id) return;
-    try {
-      await fetchJson('/api/save-modules', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, modules: window.APP.s4.modules }),
-      });
-    } catch (_) {}
+    if (!post?.id) return Promise.resolve();
+    // チェーンに次の保存を追加（前の保存が完了するまで待つ）
+    _saveChain = _saveChain.then(async () => {
+      try {
+        await fetchJson('/api/save-modules', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postId: post.id, modules: window.APP.s4.modules }),
+        });
+      } catch (_) {}
+    });
+    return _saveChain;
   }
   document.getElementById('s4BtnSave').addEventListener('click', async function() {
     _collectInputs();
@@ -1913,14 +1923,36 @@ function getUI() {
     window.APP.s4._resizeBound = true;
   }
 
-  /* ── プレビュー再読み込み ── */
+  /* ── プレビュー再読み込み（エラー耐性付き）──
+     iframe load 失敗時は wrap に「プレビュー失敗」を出して原因が分かるように。 */
   function _reloadPreview() {
     const post = window.APP.selected;
     if (!post?.id) return;
     const i = window.APP.s4.activeTab;
     const url = '/api/v2/preview-slide?postId=' + encodeURIComponent(post.id) + '&idx=' + i + '&_=' + Date.now();
     const f = document.getElementById('s4PreviewFrame');
-    f.onload = _resizePreview;
+    if (!f) return;
+    // 古いハンドラ解除
+    f.onload = null; f.onerror = null;
+    f.onload = function() {
+      _resizePreview();
+      // iframe 内部が err ページ（500など）の場合の検知
+      try {
+        const doc = f.contentDocument;
+        if (doc && doc.title === 'err') {
+          const wrap = document.getElementById('s4PreviewWrap');
+          if (wrap && !wrap.querySelector('.s4-preview-err')) {
+            const e = document.createElement('div');
+            e.className = 's4-preview-err';
+            e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,77,77,0.18);color:#fff;font-size:13px;z-index:5;';
+            e.textContent = '⚠️ プレビュー失敗 - サーバーログ要確認';
+            wrap.appendChild(e);
+            setTimeout(() => e.remove(), 4000);
+          }
+        }
+      } catch (_) {}
+    };
+    f.onerror = function() { _msg('⚠️ プレビュー読込失敗'); };
     f.src = url;
     _resizePreview();
   }
