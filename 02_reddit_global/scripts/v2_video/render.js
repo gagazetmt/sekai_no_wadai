@@ -353,22 +353,28 @@ async function main() {
   updateJob(jobId, { status: 'rendering' });
 
   // ── Render フェーズ（並列）──
-  //   1 browser を共有、N page を作って worker pool で各スライドを並列レンダ
-  console.log(`🎬 Render: ${modules.length} スライド (並列度${RENDER_CONCURRENCY})`);
+  //   worker 毎に独立した browser インスタンス。
+  //   1 browser 共有方式は Chrome 内部スケジューラの偏りで、特定 worker のみ
+  //   CPU 優遇を受け、他 worker が CDP timeout で死亡する事象が頻発した。
+  //   独立 browser なら CDP キュー競合がそもそも発生しない。
+  //   メモリ: 1 browser ~500MB × N で VPS 11GB なら余裕
+  console.log(`🎬 Render: ${modules.length} スライド (並列度${RENDER_CONCURRENCY} / 独立browser)`);
   const renderT0 = Date.now();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    // 共有 browser に複数 page を作る並列レンダ方式では、CDP コールが
-    // 他ページ分の処理待ちになり 30秒(デフォ) を超えて timeout する。
-    // 240秒に伸ばして長尺スライド × 並列処理に耐えるよう調整
-    protocolTimeout: 240_000,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', `--window-size=${W},${H}`],
-  });
-  const pages = await Promise.all(Array.from({ length: RENDER_CONCURRENCY }, async () => {
-    const p = await browser.newPage();
-    await p.setViewport({ width: W, height: H });
-    return p;
+  const workerCtxs = await Promise.all(Array.from({ length: RENDER_CONCURRENCY }, async () => {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      protocolTimeout: 240_000,
+      args: [
+        '--no-sandbox', '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',  // /dev/shm 不足対策（VPS Docker 想定）
+        `--window-size=${W},${H}`,
+      ],
+    });
+    const page = await browser.newPage();
+    await page.setViewport({ width: W, height: H });
+    return { browser, page };
   }));
+  const pages = workerCtxs.map(c => c.page);
 
   // 各スライドの video-only / audio-only を別々に保持（xfade/acrossfade で繋ぐため）
   const TRANSITION_SEC = 0.4;  // クロスフェード時間（両側合わせ 0.4 秒）
@@ -412,7 +418,8 @@ async function main() {
       renderFails.forEach(f => console.warn(`     - スライド#${f.idx} (${f.type}): ${f.error}`));
     }
   } finally {
-    await browser.close();
+    // 全 worker browser を閉じる
+    await Promise.all(workerCtxs.map(c => c.browser.close().catch(() => {})));
   }
 
   // concat + xfade（クロスフェード）で繋ぐ
