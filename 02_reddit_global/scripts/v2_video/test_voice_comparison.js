@@ -12,17 +12,14 @@ const { generateMiniMaxTTS } = require('./tts_minimax');
 const TEST_TEXT = `今シーズン、ハキミは絶好調。モロッコ代表のキャプテンとして、PSGの右サイドで圧倒的な存在感を放っている。27分にゴール、40分にもアシスト。これがアフリカのスーパースターの実力だ。`;
 
 // ── 候補ボイス（Japanese 系統 + クローン）──
-//   サッカー実況系に向いてそうな男性・若者系を網羅
-//   ※ 番号は会話で参照しやすいように振ってある
+//   ③⑤⑧ は除外（2026-04-29 ユーザー判断）
+//   番号は会話参照用に固定（飛び番でも維持）
 const VOICES = [
   { id: 'moss_audio_6e0620ed-3af8-11f1-beb2-9257c801a481', label: '①【現行】クローン (master-voice)' },
   { id: 'Japanese_DominantMan',           label: '② DominantMan (覇王・命令的)' },
-  { id: 'Japanese_SeriousCommander',      label: '③ SeriousCommander (シリアス指揮官)' },
   { id: 'Japanese_LoyalKnight',           label: '④ LoyalKnight (忠誠の騎士)' },
-  { id: 'Japanese_OptimisticYouth',       label: '⑤ OptimisticYouth (前向き青年)' },
   { id: 'Japanese_SportyStudent',         label: '⑥ SportyStudent (スポーツ学生)' },
   { id: 'Japanese_GenerousIzakayaOwner',  label: '⑦ IzakayaOwner (ベテラン店主)' },
-  { id: 'Japanese_GentleButler',          label: '⑧ GentleButler (穏やか執事)' },
   { id: 'Japanese_InnocentBoy',           label: '⑨ InnocentBoy (若い少年)' },
 ];
 
