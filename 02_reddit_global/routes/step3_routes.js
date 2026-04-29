@@ -640,7 +640,6 @@ function getUI() {
       <span id="s3Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件を選択してください</span>
       <button class="btn btn-sm" id="s3BtnAddRow" style="background:#10b981;color:#fff;">＋ 行追加</button>
       <button class="btn btn-primary" id="s3BtnGenerate" style="font-size:13px;padding:8px 18px;">✨ 脚本生成（一括）</button>
-      <button class="btn btn-success" id="s3BtnNext" style="font-size:13px;padding:8px 18px;">→ Step4 (動画生成)</button>
       <span id="s3Msg" style="font-size:12px;color:#8a9aba;"></span>
     </div>
   </div>
@@ -865,12 +864,18 @@ function getUI() {
 
   /* ── 脚本生成 ── */
   document.getElementById('s3BtnGenerate').addEventListener('click', async function() {
+    const btn = this;
+    if (btn.disabled) return;  // 連打防止
     _collectInputs();
     const post = window.APP.selected;
     if (!post?.id) return;
     const mods = window.APP.s3.modules.filter(m => m.mainKey);
     if (!mods.length) { _msg('⚠ 行が空です'); return; }
-    _msg('⏳ Sonnet が脚本生成中...');
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    const origLabel = btn.textContent;
+    btn.textContent = '⏳ 生成中...';
+    _msg('⏳ Sonnet が脚本生成中...（60〜120秒、ブラウザを閉じないで）');
     try {
       const j = await fetchJson('/api/v3/generate-scenario', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -893,23 +898,12 @@ function getUI() {
       }
       _msg('✅ ' + window.APP.s3.modules.length + 'カード生成完了' + suffix);
     } catch (e) {
-      _msg('❌ ' + e.message);
+      _msg('❌ ' + e.message + '（サーバー側で完成してる場合あり。Step4で確認してから再生成判断を）');
+    } finally {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = origLabel;
     }
-  });
-
-  /* ── Step4 へ ── */
-  document.getElementById('s3BtnNext').addEventListener('click', async function() {
-    _collectInputs();
-    const post = window.APP.selected;
-    if (!post?.id) return;
-    // 保存してから遷移
-    try {
-      await fetchJson('/api/save-modules', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, modules: window.APP.s3.modules }),
-      });
-    } catch (_) {}
-    if (typeof window.goStep === 'function') window.goStep(4);
   });
 
   function _renderModulesPreview() {

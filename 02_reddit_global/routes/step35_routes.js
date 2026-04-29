@@ -385,7 +385,6 @@ function getUI() {
       <span id="s35Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件を選択してください</span>
       <button class="btn btn-sm" id="s35BtnFetchAll" style="background:#3b82f6;color:#fff;">📥 全ラベル一括取得</button>
       <button class="btn btn-sm" id="s35BtnSave" style="background:#10b981;color:#fff;">💾 選択を保存</button>
-      <button class="btn btn-success" id="s35BtnNext" style="font-size:13px;padding:8px 18px;">→ Step4 (動画生成)</button>
       <span id="s35Msg" style="font-size:12px;color:#8a9aba;"></span>
     </div>
     <div style="font-size:11px;color:#8a9aba;margin-top:6px;">📸 案件内のユニーク登場人物・チーム（ラベル）ごとに画像を取得。同じラベルを参照する複数スライドで自動共有される。</div>
@@ -583,11 +582,6 @@ function getUI() {
     } catch (e) {
       _msg('❌ 保存失敗: ' + e.message);
     }
-  });
-
-  /* ── ボタン: Step4 へ ── */
-  document.getElementById('s35BtnNext')?.addEventListener('click', () => {
-    if (typeof window.goStep === 'function') window.goStep(4);
   });
 
 })();</script>`;
