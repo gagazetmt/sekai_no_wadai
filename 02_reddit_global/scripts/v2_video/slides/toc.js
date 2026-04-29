@@ -1,14 +1,14 @@
 // scripts/v2_video/slides/toc.js
-// 目次スライド：書籍 / 雑誌風の Contents レイアウト
+// 目次スライド：書籍 / 雑誌風の Contents レイアウト + 演出強化
 //   - 大きな serif 連番 (01 / 02 / 03)
-//   - 連番と項目タイトルの間にドットリーダー（点線）
-//   - 中央にゴールド縦線で章を区切る
-//   - 上部に「CONTENTS」/「目次」のバイリンガル見出し
-//   - 各行が左から右へスライドイン
+//   - 上部「CONTENTS」/「目次」のバイリンガル見出し
+//   - chunk連動アクティブハイライト（ナレが触れた章が光る）
+//   - 背景にゴールドダスト（金粒が漂う雑誌的質感）
 
 const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
 
 const MAX_ITEMS = 7;
+const TAIL_PAD_SEC = 0.4;  // 末尾余韻
 
 // 項目数で行高 / フォント / 番号フォントを動的調整
 function _layoutForCount(n) {
@@ -26,6 +26,20 @@ function _itemFontSize(text, baseFz) {
   return Math.max(baseFz - 12, 24);
 }
 
+// 12粒のゴールドダスト（背景に漂う金粒）
+function _buildDust() {
+  const dusts = [];
+  for (let i = 0; i < 12; i++) {
+    const left = Math.random() * 100;
+    const dur  = 6 + Math.random() * 8;       // 6〜14秒
+    const delay = -Math.random() * dur;       // 開始位相をランダム化
+    const size = 3 + Math.random() * 4;       // 3〜7px
+    const opacity = 0.4 + Math.random() * 0.4;
+    dusts.push(`<div class="dust" style="left:${left.toFixed(1)}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;animation-duration:${dur.toFixed(1)}s;animation-delay:${delay.toFixed(2)}s;opacity:${opacity.toFixed(2)};"></div>`);
+  }
+  return dusts.join('');
+}
+
 function buildTocHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
   let items = [];
@@ -41,18 +55,40 @@ function buildTocHTML(mod) {
   const tocTitle = mod.title || '今日のラインナップ';
   const layout = _layoutForCount(items.length);
 
-  // 各項目の登場 delay
+  // ─── chunk連動アクティブハイライト計算 ───
+  //   audio chunks 数 == items 数 なら chunk 開始/終了に合わせて row をハイライト
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
   const chunkStarts = audio.map((_, i) =>
     audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+  const totalSec = audio.length
+    ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) + TAIL_PAD_SEC
+    : Math.max(items.length * 1.5, 5);
+  const canActive = audio.length === items.length && items.length > 0;
 
+  // 各行の登場 delay
   const startSec = 0.9;
   const interval = 0.4;
-  const delays = items.map((_, i) =>
-    audio.length === items.length
-      ? chunkStarts[i] + 0.3
-      : startSec + interval * i
+  const enterDelays = items.map((_, i) =>
+    canActive ? chunkStarts[i] + 0.05 : startSec + interval * i
   );
+
+  // chunk連動アクティブ用 keyframes
+  const activeKeyframes = canActive
+    ? items.map((_, i) => {
+        const start = chunkStarts[i];
+        const end = start + (audio[i].durationSec || 0);
+        const startPct = (start / totalSec * 100).toFixed(2);
+        const fadeInPct = Math.min(((start + 0.15) / totalSec * 100), 100).toFixed(2);
+        const fadeOutPct = Math.max(((end - 0.15) / totalSec * 100), 0).toFixed(2);
+        const endPct = (end / totalSec * 100).toFixed(2);
+        return `@keyframes rowActive${i} {
+          0%, ${startPct}% { background: transparent; transform: translateX(0) scale(1); border-left: 0 solid transparent; }
+          ${fadeInPct}% { background: rgba(245, 158, 11, 0.12); transform: translateX(0) scale(1.025); border-left: 6px solid ${PALETTE.accent}; padding-left: 14px; }
+          ${fadeOutPct}% { background: rgba(245, 158, 11, 0.12); transform: translateX(0) scale(1.025); border-left: 6px solid ${PALETTE.accent}; padding-left: 14px; }
+          ${endPct}%, 100% { background: transparent; transform: translateX(0) scale(1); border-left: 0 solid transparent; padding-left: 0; }
+        }`;
+      }).join('\n')
+    : '';
 
   const extraStyles = `
 .bg-img {
@@ -68,6 +104,31 @@ function buildTocHTML(mod) {
   background: linear-gradient(to bottom,
     rgba(8, 12, 24, 0.55) 0%,
     rgba(8, 12, 24, 0.85) 100%);
+}
+
+/* ─── ゴールドダスト（背景に漂う金粒）─── */
+.dust-layer {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.dust {
+  position: absolute;
+  bottom: -10px;
+  background: radial-gradient(circle, rgba(245,158,11,0.95) 0%, rgba(245,158,11,0.4) 40%, transparent 70%);
+  border-radius: 50%;
+  animation-name: floatUp;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  filter: blur(0.5px);
+}
+@keyframes floatUp {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 0.6; }
+  50%  { transform: translateY(-50vh) translateX(20px); opacity: 0.8; }
+  90%  { opacity: 0.6; }
+  100% { transform: translateY(-110vh) translateX(-15px); opacity: 0; }
 }
 
 /* ─── ヘッダー（CONTENTS / 目次）─── */
@@ -116,7 +177,7 @@ function buildTocHTML(mod) {
   z-index: 5;
 }
 
-/* 各行：番号 → ドットリーダー → タイトル の3カラム */
+/* 各行：書籍風グリッド（番号 / タイトル / 章バッジ）*/
 .toc-row {
   display: grid;
   grid-template-columns: ${Math.round(layout.numFz * 1.5)}px 1fr auto;
@@ -125,6 +186,10 @@ function buildTocHTML(mod) {
   min-height: ${layout.rowH}px;
   padding: 6px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 0 solid transparent;
+  transition: padding-left 0.2s;
+  border-radius: 0 6px 6px 0;
+  /* 登場アニメ */
   opacity: 0;
   transform: translateX(-40px);
   animation: rowSlideIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards;
@@ -135,7 +200,8 @@ function buildTocHTML(mod) {
 }
 .toc-row:last-child { border-bottom: none; }
 
-/* 章番号（書籍風 serif の大きい数字）*/
+${activeKeyframes}
+
 .toc-num {
   font-family: 'Georgia', 'Times New Roman', serif;
   font-size: ${layout.numFz}px;
@@ -146,6 +212,7 @@ function buildTocHTML(mod) {
   line-height: 1;
   text-align: right;
   letter-spacing: -3px;
+  transition: text-shadow 0.3s;
 }
 .toc-num-prefix {
   display: block;
@@ -159,7 +226,6 @@ function buildTocHTML(mod) {
   text-transform: uppercase;
 }
 
-/* タイトル（やや太め、シンプル）*/
 .toc-title {
   font-weight: 700;
   color: ${PALETTE.text};
@@ -169,7 +235,6 @@ function buildTocHTML(mod) {
   position: relative;
   padding-left: 28px;
 }
-/* タイトル左にチャプターマーク */
 .toc-title::before {
   content: '';
   position: absolute;
@@ -180,7 +245,6 @@ function buildTocHTML(mod) {
   box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
 }
 
-/* 右端の章番号バッジ（小さい "Ch.X"）*/
 .toc-badge {
   font-family: 'Georgia', serif;
   font-size: 13px;
@@ -190,13 +254,23 @@ function buildTocHTML(mod) {
   padding-left: 16px;
   border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
+
+/* アクティブ時のラベル明色化 */
+${canActive ? items.map((_, i) => `
+.toc-row.r${i} { animation: rowSlideIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards, rowActive${i} ${totalSec.toFixed(2)}s linear forwards; }
+.toc-row.r${i}.active-target .toc-num { text-shadow: 0 0 28px rgba(245, 158, 11, 0.8); }
+`).join('') : ''}
 `;
 
   const itemsHtml = items.map((it, i) => {
     const fz = _itemFontSize(it, layout.titleFz);
-    const d  = delays[i].toFixed(2);
+    const enterDelay = enterDelays[i].toFixed(2);
     const numStr = String(i + 1).padStart(2, '0');
-    return `<div class="toc-row" style="animation-delay:${d}s;">`
+    // 登場アニメだけのスタイル（chunk連動は keyframes 側）
+    const animStyle = canActive
+      ? `style="animation-delay:${enterDelay}s, 0s;"`
+      : `style="animation-delay:${enterDelay}s;"`;
+    return `<div class="toc-row r${i}" ${animStyle}>`
       + `<div class="toc-num"><span class="toc-num-prefix">No.</span>${numStr}</div>`
       + `<div class="toc-title" style="font-size:${fz}px;">${esc(it)}</div>`
       + `<div class="toc-badge">Chapter ${i + 1}</div>`
@@ -206,6 +280,7 @@ function buildTocHTML(mod) {
   const slideBody = `
 <div class="bg-img"></div>
 <div class="bg-overlay"></div>
+<div class="dust-layer">${_buildDust()}</div>
 <div class="toc-header">
   <span class="toc-header-en">Contents</span>
   <span class="toc-header-jp">${esc(tocTitle)}</span>
