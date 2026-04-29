@@ -73,13 +73,16 @@ async function fetchSofaScoreTeam(teamName) {
           : `€${(marketValue / 1_000).toFixed(0)}K`)
       : null;
 
-    // ③ 直近5試合
+    // ③ 直近試合（last5 + 全 events も保持して集計に使う）
     let last5 = [];
     let recentForm = null;  // "WWLDD" 形式（新しい順）
+    let allRecentMatches = [];  // 30試合分（代表チーム集計用）
     if (!evRaw?.__err) {
       const finished = (evRaw.events || []).filter(e => e.status?.type === 'finished').reverse();
       last5 = finished.slice(-5).reverse().map(e => formatTeamMatch(e, teamId));
       recentForm = last5.map(m => m.result).join('');
+      // 全試合を保持（最大30程度、新しい順）→ 集計関数で使う
+      allRecentMatches = finished.slice(-30).reverse().map(e => formatTeamMatch(e, teamId));
     }
 
     // ④ 次試合（リーグ情報取得のため）
@@ -97,8 +100,8 @@ async function fetchSofaScoreTeam(teamName) {
       }
     }
 
-    // ⑤⑥⑦⑧ 並列取得（順位 + 試合平均スタッツ + Wikipedia honours + チーム内トップ選手）
-    const [stRaw, statsRaw, wikiRaw, topRaw] = await Promise.all([
+    // ⑤⑥⑦⑧⑨ 並列取得（順位 + 試合平均 + wiki + トップ選手 + 監督経歴）
+    const [stRaw, statsRaw, wikiRaw, topRaw, mgrCareerRaw] = await Promise.all([
       tournamentId && seasonId
         ? apiGet(`/unique-tournament/${tournamentId}/season/${seasonId}/standings/total`).catch(e => ({ __err: e }))
         : Promise.resolve({ __err: 'no tournamentId' }),
@@ -111,6 +114,10 @@ async function fetchSofaScoreTeam(teamName) {
       tournamentId && seasonId
         ? apiGet(`/team/${teamId}/unique-tournament/${tournamentId}/season/${seasonId}/top-players/overall`).catch(e => ({ __err: e }))
         : Promise.resolve({ __err: 'no tournamentId' }),
+      // 現監督の career-history → このチームでの通算成績抽出に使う
+      managerId
+        ? apiGet(`/manager/${managerId}/career-history`).catch(e => ({ __err: e }))
+        : Promise.resolve({ __err: 'no managerId' }),
     ]);
 
     // ⑤ 順位
@@ -210,6 +217,76 @@ async function fetchSofaScoreTeam(teamName) {
       };
     }
 
+    // ⑨ 現監督の在任成績（manager career-history からこのチームのエントリを抽出）
+    let currentManagerStats = null;
+    if (!mgrCareerRaw.__err) {
+      const hist = mgrCareerRaw.careerHistory || [];
+      const myStint = hist.find(h => h.team?.id === teamId);
+      if (myStint) {
+        const p = myStint.performance || {};
+        const since = myStint.startTimestamp
+          ? new Date(myStint.startTimestamp * 1000).toISOString().slice(0, 10)
+          : null;
+        const total = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
+        currentManagerStats = {
+          name:    managerName,
+          since,
+          total:   p.total ?? total,
+          wins:    p.wins   ?? 0,
+          draws:   p.draws  ?? 0,
+          losses:  p.losses ?? 0,
+          points:  p.totalPoints ?? null,
+          winRate: total ? Math.round(((p.wins || 0) / total) * 100) : null,
+        };
+      }
+    }
+
+    // ⑩ 試合集計（代表チーム向け：年別 / 大会別 / 直近W杯）
+    //   allRecentMatches を使って動画題材になりそうなサマリを計算
+    const _aggregate = (matches) => {
+      const total = matches.length;
+      const wins = matches.filter(m => m.result === 'W').length;
+      const draws = matches.filter(m => m.result === 'D').length;
+      const losses = matches.filter(m => m.result === 'L').length;
+      // ゴール集計（score "2-1" → 自チーム2 / 相手1）
+      let goalsFor = 0, goalsAgainst = 0;
+      matches.forEach(m => {
+        const [a, b] = (m.score || '').split('-').map(s => parseInt(s.trim(), 10));
+        if (Number.isFinite(a)) goalsFor += a;
+        if (Number.isFinite(b)) goalsAgainst += b;
+      });
+      return { total, wins, draws, losses, goalsFor, goalsAgainst };
+    };
+
+    const currentYear = new Date().getFullYear();
+    const thisYearMatches  = allRecentMatches.filter(m =>
+      (m.date || '').startsWith(String(currentYear)));
+    const lastYearMatches  = allRecentMatches.filter(m =>
+      (m.date || '').startsWith(String(currentYear - 1)));
+    const wcMatches        = allRecentMatches.filter(m =>
+      /FIFA World Cup(?!.*Qual)/i.test(m.tournament || ''));
+    const wcQualMatches    = allRecentMatches.filter(m =>
+      /World Cup.*Qual/i.test(m.tournament || ''));
+
+    const seasonAggregate = {
+      thisYear:  _aggregate(thisYearMatches),
+      lastYear:  _aggregate(lastYearMatches),
+      worldCup:  _aggregate(wcMatches),
+      wcQual:    _aggregate(wcQualMatches),
+      // 大会別ブレイクダウン（最大8大会まで保持）
+      byTournament: (() => {
+        const groups = {};
+        allRecentMatches.forEach(m => {
+          const t = m.tournament || '?';
+          (groups[t] = groups[t] || []).push(m);
+        });
+        return Object.entries(groups)
+          .map(([name, ms]) => ({ name, ..._aggregate(ms) }))
+          .sort((a, b) => b.total - a.total)
+          .slice(0, 8);
+      })(),
+    };
+
     return {
       ok:          true,
       teamId,
@@ -229,6 +306,8 @@ async function fetchSofaScoreTeam(teamName) {
       topPlayers,        // { goals: [...3], assists: [...3], rating: [...3] }
       last5,
       recentForm,        // "WWLDD" 直近5試合フォーム（新しい順）
+      currentManagerStats,  // { name, since, total, wins, draws, losses, points, winRate }
+      seasonAggregate,      // { thisYear, lastYear, worldCup, wcQual, byTournament }
     };
   } catch (e) {
     if (e.response?.status === 403) {
