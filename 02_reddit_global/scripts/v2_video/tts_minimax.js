@@ -100,18 +100,23 @@ function numToJa1(n) {
   return numToFullJa(v);
 }
 
-// 「分」専用 - 音便（ぷん/ふん）を考慮した正確な読み生成
-//   1分=いっぷん / 27分=にじゅうななふん / 40分=よんじゅっぷん など
+// 「分」専用 - 音便（ぷん/うん）を考慮した正確な読み生成
+//   1分=いっぷん / 27分=にじゅうななうん / 40分=よんじゅっぷん など
+//
+// 【MiniMax制約対応】
+//   MiniMax の Japanese voice モデルは「ふ」が「ぶ」に音韻同化する不具合あり。
+//   2/5/7/9分 の本来「ふん」読みは MiniMax で「ぶん」になるため「うん」で代用。
+//   実音検証で「うん」が「ふん」に最も近く聞こえる音として採択（2026-04-29）
 function numToMinuteJa(nStr) {
   const v = parseInt(nStr, 10);
-  if (!Number.isFinite(v) || v < 0) return nStr + 'ふん';
-  if (v === 0) return 'ぜろふん';
-  if (v >= 100) return numToFullJa(v) + 'ふん';
+  if (!Number.isFinite(v) || v < 0) return nStr + 'うん';
+  if (v === 0) return 'ぜろうん';
+  if (v >= 100) return numToFullJa(v) + 'うん';
 
   const ONES = {
-    1: 'いっぷん',  2: 'にふん',    3: 'さんぷん',
-    4: 'よんぷん',  5: 'ごふん',    6: 'ろっぷん',
-    7: 'ななふん',  8: 'はっぷん',  9: 'きゅうふん',
+    1: 'いっぷん',  2: 'にうん',     3: 'さんぷん',
+    4: 'よんぷん',  5: 'ごうん',     6: 'ろっぷん',
+    7: 'ななうん',  8: 'はっぷん',   9: 'きゅううん',
   };
   const tensDigit = Math.floor(v / 10);
   const onesDigit = v % 10;
