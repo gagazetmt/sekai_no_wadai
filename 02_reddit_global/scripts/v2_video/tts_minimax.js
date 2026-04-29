@@ -11,6 +11,28 @@ const fs    = require('fs');
 const path  = require('path');
 const { applyJpDict } = require('./jp_dict');
 
+// ── kuroshiro 形態素解析器（漢字→ひらがな）の遅延初期化 ─────────
+//   起動時にロードすると render プロセス起動が3〜5秒遅れるので、
+//   初回 sanitizeForTts() 呼出時にだけ初期化（Promise キャッシュ）
+let _kuroshiroPromise = null;
+async function _getKuroshiro() {
+  if (_kuroshiroPromise) return _kuroshiroPromise;
+  _kuroshiroPromise = (async () => {
+    try {
+      const Kuroshiro = require('kuroshiro').default;
+      const KuromojiAnalyzer = require('kuroshiro-analyzer-kuromoji');
+      const k = new Kuroshiro();
+      await k.init(new KuromojiAnalyzer());
+      console.log('  ✓ kuroshiro 初期化完了（漢字→ひらがな自動変換 ON）');
+      return k;
+    } catch (e) {
+      console.warn('  ⚠️ kuroshiro 初期化失敗、辞書のみで継続:', e.message);
+      return null;  // null なら辞書のみ
+    }
+  })();
+  return _kuroshiroPromise;
+}
+
 const API_URL    = 'https://api-uw.minimax.io/v1/t2a_v2';
 const MODEL      = process.env.MINIMAX_TTS_MODEL || 'speech-02-turbo';
 const DEFAULT_VOICE = process.env.MINIMAX_DEFAULT_VOICE
@@ -78,30 +100,105 @@ function numToJa1(n) {
   return numToFullJa(v);
 }
 
-// 日本語ナレ向けの軽サニタイズ（読み崩れ防止）
-//  - スコア表記 "3-1" を「さんたいいち」風に
-//  - "29試合" のような 数字+カウンター を「にじゅうきゅうしあい」風にカタカナ化
-//    （TTSが「ふたじゅうきゅう」のような誤読を出す問題への対策）
-//  - 中点・全角スラッシュ等を整える
-//  - 連続空白の正規化
-function sanitizeForTts(text) {
+// 「分」専用 - 音便（ぷん/ふん）を考慮した正確な読み生成
+//   1分=いっぷん / 27分=にじゅうななふん / 40分=よんじゅっぷん など
+function numToMinuteJa(nStr) {
+  const v = parseInt(nStr, 10);
+  if (!Number.isFinite(v) || v < 0) return nStr + 'ふん';
+  if (v === 0) return 'ぜろふん';
+  if (v >= 100) return numToFullJa(v) + 'ふん';
+
+  const ONES = {
+    1: 'いっぷん',  2: 'にふん',    3: 'さんぷん',
+    4: 'よんぷん',  5: 'ごふん',    6: 'ろっぷん',
+    7: 'ななふん',  8: 'はっぷん',  9: 'きゅうふん',
+  };
+  const tensDigit = Math.floor(v / 10);
+  const onesDigit = v % 10;
+
+  // 十の位読み
+  let tensPart = '';
+  if (tensDigit > 0) {
+    if (tensDigit === 1) tensPart = 'じゅう';
+    else {
+      const tensOnes = ['', 'いち', 'に', 'さん', 'よん', 'ご', 'ろく', 'なな', 'はち', 'きゅう'];
+      tensPart = tensOnes[tensDigit] + 'じゅう';
+    }
+    // 一の位ゼロ → "じゅっぷん" に音便
+    if (onesDigit === 0) return tensPart.replace(/じゅう$/, 'じゅっぷん');
+  }
+  return tensPart + ONES[onesDigit];
+}
+
+// 英語序数（1st, 2nd, 3rd, ...）→ カタカナ
+//   "1stレグ" → "ファーストレグ"
+const ORDINAL_MAP = {
+  '1st': 'ファースト',  '2nd': 'セカンド',  '3rd': 'サード',
+  '4th': 'フォース',    '5th': 'フィフス',  '6th': 'シックス',
+  '7th': 'セブンス',    '8th': 'エイス',    '9th': 'ナインス',
+  '10th': 'テンス',
+};
+
+// 数字+単位 の単位読み（kuroshiro が「歳→とし」みたいに迷う漢字を確定読みで固める）
+//   ここで読みを与えることで kuroshiro 段階で再変換されない
+const UNIT_KANA = {
+  '試合': 'しあい',     'ゴール': 'ゴール',   '得点': 'とくてん',
+  '失点': 'しってん',   'アシスト': 'アシスト','キャップ': 'キャップ',
+  '歳':   'さい',       '回':     'かい',     '位':   'い',
+  '連勝': 'れんしょう', '連敗':   'れんぱい', '連覇': 'れんぱ',
+  '周年': 'しゅうねん', 'シーズン':'シーズン','チーム':'チーム',
+  '本':   'ほん',       '人':     'にん',     '秒':   'びょう',
+  '億':   'おく',       '万':     'まん',     '千':   'せん',
+  '度目': 'どめ',       '度':     'ど',       '個':   'こ',
+};
+
+// 日本語ナレ向けサニタイズ（読み崩れ防止 / ハイブリッド構成）
+//   1. 英語序数(1st/2nd/3rd等) → カタカナ
+//   2. 既存辞書 (jp_dict) を優先適用 — 固有名詞・サッカー専門語
+//   3. スコア "3-1" → 「さんたいいち」
+//   4. 数字+特殊単位（分は音便ぷん/ふん）
+//   5. 数字+一般単位（試合・ゴール 等）
+//   6. kuroshiro で残った漢字を自動でひらがな化
+//   7. 括弧・中点・改行を整形
+async function sanitizeForTts(text) {
   if (!text) return '';
-  // 辞書置換 → スコア → 数字+単位 → 括弧/中点/改行の順
-  return applyJpDict(String(text))
-    // "3-1" / "3−1" / "3ー1" 等のスコア → 「さんたいいち」
-    .replace(/(\d+)\s*[-－ー−–—]\s*(\d+)/g, (_m, a, b) =>
-      `${numToJa1(a)}たい${numToJa1(b)}`)
-    // 数字+カウンター → カタカナ読み（よく出る単位を網羅）
-    .replace(/(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|分|秒|億|万|千|度|度目|個)/g,
-      (_m, num, unit) => numToFullJa(num) + unit)
-    // 全角・半角の括弧を読みやすく
-    .replace(/【([^】]+)】/g, '$1')
-    .replace(/〝([^〟]+)〟/g, '$1')
-    // 中点除去
-    .replace(/[・·]/g, '')
-    // 改行 → 全角空白
-    .replace(/\r?\n+/g, '　')
-    .trim();
+  let s = String(text);
+
+  // 1) 英語序数 (1st, 2nd, 3rd ...)
+  s = s.replace(/\b(1st|2nd|3rd|[4-9]th|10th)\b/gi, (m) => ORDINAL_MAP[m.toLowerCase()] || m);
+
+  // 2) 既存辞書を優先適用（固有名詞 / サッカー語彙）
+  s = applyJpDict(s);
+
+  // 3) スコア "3-1" → 「さんたいいち」
+  s = s.replace(/(\d+)\s*[-－ー−–—]\s*(\d+)/g, (_m, a, b) =>
+    `${numToJa1(a)}たい${numToJa1(b)}`);
+
+  // 4) 「N分」音便（ぷん/ふん）— 一般単位処理より先にやる
+  s = s.replace(/(\d+)\s*分/g, (_m, n) => numToMinuteJa(n));
+
+  // 5) 数字+一般単位（単位もひらがな読みに置換、kuroshiro での誤読防止）
+  s = s.replace(/(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|秒|億|万|千|度目|度|個)/g,
+    (_m, num, unit) => numToFullJa(num) + (UNIT_KANA[unit] || unit));
+
+  // 6) kuroshiro で残った漢字を ひらがな化（初期化失敗時はスキップ）
+  try {
+    const k = await _getKuroshiro();
+    if (k) {
+      s = await k.convert(s, { to: 'hiragana' });
+    }
+  } catch (e) {
+    // 変換失敗してもサニタイズは続行
+    console.warn('  ⚠️ kuroshiro convert 失敗:', e.message);
+  }
+
+  // 7) 括弧・中点・改行整形
+  s = s.replace(/【([^】]+)】/g, '$1')
+       .replace(/〝([^〟]+)〟/g, '$1')
+       .replace(/[・·]/g, '')
+       .replace(/\r?\n+/g, '　')
+       .trim();
+  return s;
 }
 
 // ナレーション本文を chunk に分割（最大 ~100文字目安）
@@ -155,7 +252,7 @@ async function generateMiniMaxTTS(opts = {}) {
     throw new Error('MINIMAX_API_KEY / MINIMAX_GROUP_ID が未設定');
   }
 
-  const safeText = sanitizeForTts(text);
+  const safeText = await sanitizeForTts(text);
   if (!safeText) throw new Error('text after sanitize is empty');
 
   const voiceSetting = {
