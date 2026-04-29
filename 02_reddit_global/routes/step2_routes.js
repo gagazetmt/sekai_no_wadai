@@ -82,6 +82,27 @@ router.post('/si-data', (req, res) => {
 });
 
 // ─── /v3/suggest-labels : AIラベル提案（3ボックス分） ─────
+// ─── AI ラベル提案ヘルパ ───────────────────────────────────
+function _parseEntities(raw) {
+  const m = raw && raw.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (_) { return null; }
+}
+
+// 名前で重複排除（大文字小文字無視 / アクセント緩い扱い）
+function _dedupeEntities(...lists) {
+  const seen = new Set();
+  const out = [];
+  lists.flat().forEach(e => {
+    if (!e?.name || !e?.role) return;
+    const key = String(e.name).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').trim();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ name: String(e.name).trim(), role: String(e.role).trim() });
+  });
+  return out;
+}
+
 router.post('/v3/suggest-labels', async (req, res) => {
   const { post } = req.body;
   if (!post) return res.status(400).json({ error: 'post required' });
@@ -96,60 +117,109 @@ router.post('/v3/suggest-labels', async (req, res) => {
     .join('\n')
     .slice(0, 2500);
 
-  console.log('[Step2 v3] AIラベル提案:', (titleJa || title).slice(0, 60));
+  console.log('[Step2 v3] AIラベル提案 2段プロセス:', (titleJa || title).slice(0, 60));
 
-  try {
-    const raw = await callAI({
-      forceProvider: 'anthropic',
-      model:      'claude-sonnet-4-6',
-      max_tokens: 1000,
-      messages:   [{ role: 'user', content:
-`あなたはサッカーニュース解析の専門家です。以下の案件から、後続のSI取得用ラベルを3カテゴリで提案してください。
+  // ── Phase 1: 軽量ラベル提案（DeepSeek、チーム・大会・検索クエリ中心）──
+  const phase1Prompt = `あなたはサッカーニュース解析の専門家です。以下の案件から、SI取得用ラベルを3カテゴリで提案してください。
 
 【案件 (英語原文)】 ${title}
-${titleJa ? `【案件 (日本語訳)】 ${titleJa}\n` : ''}${selftext ? `\n【本文（Match Thread 等の場合は得点者リストあり）】\n${selftext}\n` : ''}
-【元コメント抜粋（最大15件）】
+${titleJa ? `【案件 (日本語訳)】 ${titleJa}\n` : ''}${selftext ? `\n【本文】\n${selftext}\n` : ''}
+【元コメント抜粋】
 ${comments || '(なし)'}
 
 【ルール】
-- entities: 案件に登場する固有名（選手・監督・チーム・大会）を最大12件、英語表記で
-  - role は "player" / "manager" / "team" / "tournament" のいずれか
-  - 公式名（Wikipedia/SofaScore で見つかる名前）で記入
-  - **試合関連の案件**（タイトルに "TeamA vs TeamB" や "X-Y" スコア表記がある場合）：
-    ・両チームの**主力得点者・スター選手 4〜6名**を必ず含める
-    ・選手の知識は最新（2025-26シーズン）に基づくこと。例: 2024年 PSG はメッシ・ムバッペ・ネイマールが既に退団、現在は Kvaratskhelia / Dembélé / Doué / Vitinha 等が主力
-    ・例: バイエルンの主力は Kane / Olise / Musiala / Kimmich / Sané 等
-  - selftext に「Goals: ...」リストがあれば、そこに登場する選手は必ず含める
-- matches: 試合があれば「HomeTeam vs AwayTeam」形式で最大2件（無ければ空配列）
-- searches: ニュース検索用キーワード（英語）を最大3件
+- entities: チーム・大会・確実に登場する選手・監督を最大8件
+  - role は "player" / "manager" / "team" / "tournament"
+  - 公式英語表記
+  - 推測しない（タイトル・本文・コメントに登場するもののみ）
+- matches: 試合があれば「HomeTeam vs AwayTeam」最大2件
+- searches: ニュース検索キーワード（英語、選手名検索に使えるもの）最大3件
+  - 試合関連なら「TeamA TeamB date」「TeamA TeamB scorers」形式が望ましい
 
-JSONのみ返す（マークダウン不要）。例：
+JSONのみ:
 {
-  "entities": [
-    {"name":"Harry Kane","role":"player"},
-    {"name":"Michael Olise","role":"player"},
-    {"name":"Ousmane Dembélé","role":"player"},
-    {"name":"Khvicha Kvaratskhelia","role":"player"},
-    {"name":"Bayern Munich","role":"team"},
-    {"name":"Paris Saint-Germain","role":"team"},
-    {"name":"UEFA Champions League","role":"tournament"}
-  ],
-  "matches": ["Paris Saint-Germain vs Bayern Munich"],
-  "searches": ["PSG Bayern semifinal 2026", "Champions League semifinal first leg 2025-26"]
-}` }],
+  "entities": [{"name":"...","role":"..."}],
+  "matches": ["..."],
+  "searches": ["..."]
+}`;
+
+  let phase1 = null;
+  try {
+    const raw = await callAI({
+      forceProvider: 'deepseek',
+      model: 'deepseek-chat', max_tokens: 800,
+      messages: [{ role: 'user', content: phase1Prompt }],
     });
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) return res.json({ entities: [], matches: [], searches: [] });
-    const parsed = JSON.parse(m[0]);
-    res.json({
-      entities: Array.isArray(parsed.entities) ? parsed.entities.filter(e => e?.name && e?.role) : [],
-      matches:  Array.isArray(parsed.matches)  ? parsed.matches.filter(Boolean)  : [],
-      searches: Array.isArray(parsed.searches) ? parsed.searches.filter(Boolean) : [],
-    });
-  } catch (e) {
-    console.error('[Step2 v3] AI提案エラー:', e.message);
-    res.json({ entities: [], matches: [], searches: [] });
+    phase1 = _parseEntities(raw);
+  } catch (e) { console.warn('[Step2 phase1] エラー:', e.message); }
+  if (!phase1) return res.json({ entities: [], matches: [], searches: [] });
+
+  const phase1Entities = Array.isArray(phase1.entities) ? phase1.entities : [];
+  const matches  = Array.isArray(phase1.matches)  ? phase1.matches.filter(Boolean)  : [];
+  const searches = Array.isArray(phase1.searches) ? phase1.searches.filter(Boolean) : [];
+  console.log(`  Phase1: entities ${phase1Entities.length} / matches ${matches.length} / searches ${searches.length}`);
+
+  // ── Phase 2: 検索でニュース取得 → 追加選手抽出（DeepSeek）──
+  let newsContext = '';
+  if (searches.length) {
+    try {
+      const news = await fetchSerper(searches[0]);
+      if (news?.organic?.length) {
+        newsContext = news.organic.slice(0, 8)
+          .map(r => `- ${r.title || ''}: ${(r.snippet || '').slice(0, 200)}`)
+          .join('\n')
+          .slice(0, 2500);
+        console.log(`  Serper: "${searches[0]}" → ${news.organic.length}件`);
+      }
+    } catch (e) { console.warn('[Step2 phase2-news] エラー:', e.message); }
   }
+
+  let phase2Entities = [];
+  if (newsContext) {
+    const phase2Prompt = `以下のニュース見出しに登場する**追加の選手・監督名**を抽出してください。
+
+【既存 entities（重複させない）】
+${phase1Entities.map(e => `- ${e.name} [${e.role}]`).join('\n') || '(なし)'}
+
+【ニュース見出し+概要】
+${newsContext}
+
+【案件タイトル】 ${titleJa || title}
+
+【ルール】
+- ニュース見出し・概要に **明示的に書かれてる人名** だけを entity 化（捏造禁止）
+- 公式英語表記（Khvicha Kvaratskhelia / Ousmane Dembélé 等）
+- role は "player" または "manager"
+- チーム・大会は不要（既存に含まれる）
+- 最大 8件の追加。既存と重複しないもののみ
+- 見出しに人名が無ければ空配列でOK
+
+JSONのみ:
+{"entities": [{"name":"...","role":"..."}]}`;
+
+    try {
+      const raw = await callAI({
+        forceProvider: 'deepseek',
+        model: 'deepseek-chat', max_tokens: 600,
+        messages: [{ role: 'user', content: phase2Prompt }],
+      });
+      const p2 = _parseEntities(raw);
+      if (Array.isArray(p2?.entities)) {
+        phase2Entities = p2.entities;
+        console.log(`  Phase2: 追加 entities ${phase2Entities.length}件`);
+      }
+    } catch (e) { console.warn('[Step2 phase2-ai] エラー:', e.message); }
+  }
+
+  // ── マージ・重複排除 ───────────────────────────────────
+  const merged = _dedupeEntities(phase1Entities, phase2Entities);
+  console.log(`  マージ後 entities: ${merged.length}件 (P1=${phase1Entities.length} + P2=${phase2Entities.length} - 重複)`);
+
+  res.json({
+    entities: merged,
+    matches,
+    searches,
+  });
 });
 
 // ─── 個別 fetcher（box種別 + label）─────────────────────
