@@ -8,7 +8,7 @@ const ROLE_SUFFIX = { player: '選手', manager: '監督', team: 'チーム', to
 // 固定メインタグ（従タグ無し、type 直接決定）
 const FIXED_MAIN_TAGS = [
   { key: 'opening',  label: 'オープニング', type: 'opening'  },
-  { key: 'toc',      label: '目次',         type: 'insight'  },
+  { key: 'toc',      label: '目次',         type: 'toc'      },  // 専用テンプレ
   { key: 'overview', label: '概要説明',     type: 'insight'  },
   { key: 'reaction', label: 'リアクション', type: 'reaction' },
   { key: 'ending',   label: 'エンディング', type: 'ending'   },

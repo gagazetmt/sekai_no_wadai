@@ -854,6 +854,7 @@ router.get('/v2/preview-slide', (req, res) => {
     const { buildStatsHTML }      = require('../scripts/v2_video/slides/stats');
     const { buildComparisonHTML } = require('../scripts/v2_video/slides/comparison');
     const { buildReactionHTML }   = require('../scripts/v2_video/slides/reaction');
+    const { buildTocHTML }        = require('../scripts/v2_video/slides/toc');
     const { mapImagesToModule }   = require('../scripts/v2_video/slides/_common');
 
     // images[] を type 別の slot に展開してから build
@@ -863,6 +864,7 @@ router.get('/v2/preview-slide', (req, res) => {
     switch (m.type) {
       case 'opening':     html = buildOpeningHTML(m);     break;
       case 'ending':      html = buildEndingHTML(m);      break;
+      case 'toc':         html = buildTocHTML(m);         break;
       case 'insight':     html = buildInsightHTML(m);     break;
       case 'history':     html = buildHistoryHTML(m);     break;
       case 'matchcard':   html = buildMatchcardHTML(m);   break;

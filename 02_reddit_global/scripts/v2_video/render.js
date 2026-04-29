@@ -30,6 +30,7 @@ const { buildProfileHTML }    = require('./slides/profile');
 const { buildStatsHTML }      = require('./slides/stats');
 const { buildComparisonHTML } = require('./slides/comparison');
 const { buildReactionHTML }   = require('./slides/reaction');
+const { buildTocHTML }        = require('./slides/toc');
 const { mapImagesToModule }   = require('./slides/_common');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
@@ -188,6 +189,7 @@ function buildSlideHTML(mod) {
   switch (m.type) {
     case 'opening':     return buildOpeningHTML(m);
     case 'ending':      return buildEndingHTML(m);
+    case 'toc':         return buildTocHTML(m);
     case 'insight':     return buildInsightHTML(m);
     case 'history':     return buildHistoryHTML(m);
     case 'matchcard':   return buildMatchcardHTML(m);
