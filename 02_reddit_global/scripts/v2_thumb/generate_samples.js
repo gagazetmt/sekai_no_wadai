@@ -27,6 +27,18 @@ function saveHtml(filename, html) {
   return filename;
 }
 
+// ─── 画像パスマップ（既存案件の image directories から借用）──
+const IMG = {
+  hakimi:  'images/_r_soccer_comments_1sygftm_hakimi_pulls_a_hamstring_/entity_Achraf_Hakimi/_byname1.jpg',
+  hakimi2: 'images/_r_soccer_comments_1sygftm_hakimi_pulls_a_hamstring_/entity_Achraf_Hakimi/_byname2.jpg',
+  morocco: 'images/_r_soccer_comments_1sygftm_hakimi_pulls_a_hamstring_/entity_morocco/_byname1.jpg',
+  olise:   'images/_r_soccer_comments_1swzqx1_would_bayern_reject_200m_for_olise_rummenigge_in_/entity_Michael_Olise/_byname1.jpg',
+  casemiro:'images/_r_soccer_comments_1sxdgza_manchester_united_1_0_brentford_casemiro_11_/entity_Casemiro/_byname1.jpg',
+  realMadrid:'images/_r_soccer_comments_1sxh6lt_la_liga_standings_after_matchweek_33_/entity_Real_Madrid/_bytime1.jpg',
+  barcelona:'images/_r_soccer_comments_1sxh6lt_la_liga_standings_after_matchweek_33_/entity_Barcelona/_bytime1.jpg',
+  bayern:  'images/_r_soccer_comments_1sxt9ji_with_this_seasons_semifinal_bayern_and_psg_have_/entity_Bayern_Munich/_bytime1.jpg',
+};
+
 // ─── サムネ サンプルデータ ──────────────────────────────────
 const thumbSamples = [];
 
@@ -36,6 +48,7 @@ const thumbSamples = [];
     name: 'thumb_A1_hakimi',
     label: 'A-1: ハキミ怪我',
     data: {
+      heroImage: IMG.hakimi,
       heroNumber: '161',
       heroLabel: 'PSGでの試合数',
       catch: 'ハキミ離脱の衝撃',
@@ -44,25 +57,27 @@ const thumbSamples = [];
     },
   },
   {
-    name: 'thumb_A2_dembele',
-    label: 'A-2: デンベレxG',
+    name: 'thumb_A2_olise',
+    label: 'A-2: オリーセ覚醒',
     data: {
+      heroImage: IMG.olise,
       heroNumber: '+5.2',
       heroLabel: 'xG超過',
-      catch: 'デンベレ 異次元の決定力',
+      catch: 'オリーセ 異次元の決定力',
       badge: '衝撃',
       badgeColor: '#ef4444',
     },
   },
   {
-    name: 'thumb_A3_haaland',
-    label: 'A-3: ハーランド100',
+    name: 'thumb_A3_casemiro',
+    label: 'A-3: カゼミーロ復活',
     data: {
-      heroNumber: '100',
-      heroLabel: 'プレミア通算ゴール',
-      catch: '最速到達の真相',
-      badge: '速報',
-      badgeColor: '#f59e0b',
+      heroImage: IMG.casemiro,
+      heroNumber: '8.4',
+      heroLabel: '直近試合 評定',
+      catch: 'カゼミーロ 完全復活',
+      badge: '朗報',
+      badgeColor: '#10b981',
     },
   },
 ].forEach(s => {
@@ -72,29 +87,29 @@ const thumbSamples = [];
 // テンプレB: ランキング × 2
 [
   {
-    name: 'thumb_B1_manu_top3',
-    label: 'B-1: マンU得点TOP3',
+    name: 'thumb_B1_psg_top3',
+    label: 'B-1: PSG主役TOP3',
     data: {
-      title: 'マンU 歴代得点 TOP3',
+      title: 'PSG 主役プレイヤーTOP3',
       items: [
-        { rank: 1, name: 'ボビー・チャールトン', value: '249ゴール' },
-        { rank: 2, name: 'ルーニー',           value: '253ゴール' },
-        { rank: 3, name: 'ロナウド',           value: '145ゴール' },
+        { rank: 1, name: 'ハキミ',    value: '161試合', image: IMG.hakimi },
+        { rank: 2, name: 'オリーセ',  value: '23ゴール', image: IMG.olise },
+        { rank: 3, name: 'カゼミーロ',value: '評定 8.4', image: IMG.casemiro },
       ],
-      bottomCatch: '意外な順位の真相は？',
+      bottomCatch: 'あなたの一番は？',
     },
   },
   {
-    name: 'thumb_B2_xg_top',
-    label: 'B-2: xG超過 TOP3',
+    name: 'thumb_B2_laliga_top3',
+    label: 'B-2: La Liga 順位 TOP3',
     data: {
-      title: 'プレミアxG超過 TOP3',
+      title: 'La Liga 上位3チーム',
       items: [
-        { rank: 1, name: 'サラー',     value: '+8.4' },
-        { rank: 2, name: 'ハーランド', value: '+6.2' },
-        { rank: 3, name: 'ワトキンス', value: '+5.7' },
+        { rank: 1, name: 'レアル・マドリード', value: '勝点85', image: IMG.realMadrid },
+        { rank: 2, name: 'バルセロナ',         value: '勝点78', image: IMG.barcelona },
+        { rank: 3, name: 'バイエルン',         value: '勝点72', image: IMG.bayern },
       ],
-      bottomCatch: '誰が一番のクラッチ？',
+      bottomCatch: '大混戦の優勝争い',
     },
   },
 ].forEach(s => {
@@ -104,27 +119,31 @@ const thumbSamples = [];
 // テンプレC: VS型 × 2
 [
   {
-    name: 'thumb_C1_messi_ronaldo',
-    label: 'C-1: メッシvsロナウド',
+    name: 'thumb_C1_hakimi_olise',
+    label: 'C-1: ハキミ vs オリーセ',
     data: {
-      title: 'GOAT 論争',
-      leftName: 'メッシ',
-      leftValue: 'バロンドール 8回',
-      rightName: 'ロナウド',
-      rightValue: 'CL得点王 7回',
-      bottomCatch: '数字で決着！',
+      title: '今季キーマン対決',
+      leftName: 'ハキミ',
+      leftValue: '6A 評定7.5',
+      leftImage: IMG.hakimi,
+      rightName: 'オリーセ',
+      rightValue: '12G 評定7.8',
+      rightImage: IMG.olise,
+      bottomCatch: 'どっちがPSG主役？',
     },
   },
   {
-    name: 'thumb_C2_bruno_cr7_manu',
-    label: 'C-2: ブルーノvsCR マンU時代',
+    name: 'thumb_C2_real_barca',
+    label: 'C-2: クラシコ',
     data: {
-      title: 'マンU通算',
-      leftName: 'ブルーノ',
-      leftValue: '106ゴール 96A',
-      rightName: 'ロナウド',
-      rightValue: '145ゴール 64A',
-      bottomCatch: 'どっちが伝説？',
+      title: '今季 クラシコ',
+      leftName: 'レアル',
+      leftValue: '勝点 85',
+      leftImage: IMG.realMadrid,
+      rightName: 'バルサ',
+      rightValue: '勝点 78',
+      rightImage: IMG.barcelona,
+      bottomCatch: '優勝はどっち？',
     },
   },
 ].forEach(s => {
@@ -137,6 +156,8 @@ const thumbSamples = [];
     name: 'thumb_D1_psg_question',
     label: 'D-1: PSGはどうなる？',
     data: {
+      bgImage: IMG.bayern,  // 試合の暗い背景として流用
+      heroImage: IMG.hakimi2,
       question: 'ハキミ離脱でPSGは？',
       subData: '失う 161試合の経験 / 5勝1分の好調も終焉',
       bottomBadge: '徹底分析',
@@ -146,6 +167,7 @@ const thumbSamples = [];
     name: 'thumb_D2_real_decline',
     label: 'D-2: レアル不振の真相',
     data: {
+      bgImage: IMG.realMadrid,
       question: 'なぜレアルは負ける？',
       subData: '勝ち点 -8 vs 昨年同時期 / 失点 +12',
       bottomBadge: '5分で解説',
@@ -158,45 +180,48 @@ const thumbSamples = [];
 // ─── Light tone サンプル（4テンプレ × 1サンプル）──
 const lightThumbs = [
   {
-    name: 'thumb_AL_dembele',
-    label: 'A-Light: デンベレ xG',
+    name: 'thumb_AL_olise',
+    label: 'A-Light: オリーセ xG',
     builder: buildDataHeroThumb,
     data: {
       tone: 'light',
+      heroImage: IMG.olise,
       heroNumber: '+5.2',
       heroLabel: 'xG超過',
-      catch: 'デンベレ 異次元の決定力',
+      catch: 'オリーセ 異次元の決定力',
       badge: '衝撃',
       badgeColor: '#dc2626',
     },
   },
   {
-    name: 'thumb_BL_topxg',
-    label: 'B-Light: xG超過 TOP3',
+    name: 'thumb_BL_psg_top3',
+    label: 'B-Light: PSG主役TOP3',
     builder: buildRankingThumb,
     data: {
       tone: 'light',
-      title: 'プレミアxG超過 TOP3',
+      title: 'PSG 主役プレイヤーTOP3',
       items: [
-        { rank: 1, name: 'サラー',     value: '+8.4' },
-        { rank: 2, name: 'ハーランド', value: '+6.2' },
-        { rank: 3, name: 'ワトキンス', value: '+5.7' },
+        { rank: 1, name: 'ハキミ',    value: '161試合', image: IMG.hakimi },
+        { rank: 2, name: 'オリーセ',  value: '23ゴール', image: IMG.olise },
+        { rank: 3, name: 'カゼミーロ',value: '評定 8.4', image: IMG.casemiro },
       ],
-      bottomCatch: '誰が一番のクラッチ？',
+      bottomCatch: 'あなたの一番は？',
     },
   },
   {
-    name: 'thumb_CL_messi_ronaldo',
-    label: 'C-Light: メッシvsロナウド',
+    name: 'thumb_CL_real_barca',
+    label: 'C-Light: クラシコ',
     builder: buildVsThumb,
     data: {
       tone: 'light',
-      title: 'GOAT 論争',
-      leftName: 'メッシ',
-      leftValue: 'バロンドール 8回',
-      rightName: 'ロナウド',
-      rightValue: 'CL得点王 7回',
-      bottomCatch: '数字で決着！',
+      title: '今季 クラシコ',
+      leftName: 'レアル',
+      leftValue: '勝点 85',
+      leftImage: IMG.realMadrid,
+      rightName: 'バルサ',
+      rightValue: '勝点 78',
+      rightImage: IMG.barcelona,
+      bottomCatch: '優勝はどっち？',
     },
   },
   {
@@ -205,6 +230,7 @@ const lightThumbs = [
     builder: buildQuestionThumb,
     data: {
       tone: 'light',
+      bgImage: IMG.realMadrid,
       question: 'なぜレアルは負ける？',
       subData: '勝ち点 -8 vs 昨年同時期 / 失点 +12',
       bottomBadge: '5分で解説',
@@ -228,6 +254,7 @@ const opSampleData = {
   channelName: '5分でサッカー分析',
   heroNumber: '161',
   heroLabel: '在籍試合数',
+  bgImage: IMG.hakimi,
 };
 
 opEdSamples.push({ name: 'op_v1_hakimi', label: 'OP V1 (現行) ハキミ',  html: buildOpV1(opSampleData) });
@@ -242,6 +269,7 @@ const opSampleData2 = {
   heroNumber: '5-4',
   heroLabel: 'CL準決勝',
   openingBadge: { text: '速報', color: '#f59e0b', textColor: '#000' },
+  bgImage: IMG.bayern,
 };
 
 opEdSamples.push({ name: 'op_v1_psg', label: 'OP V1 PSG vs Bayern',  html: buildOpV1(opSampleData2) });
@@ -262,6 +290,7 @@ const edSampleData = {
   ],
   nextTopic: 'ベリンガムが背負う重圧の真相',
   commentPrompt: 'あなたの予想を教えて！',
+  bgImage: IMG.hakimi2,
 };
 
 opEdSamples.push({ name: 'ed_v1_hakimi', label: 'ED V1 (現行)',  html: buildEdV1(edSampleData) });
