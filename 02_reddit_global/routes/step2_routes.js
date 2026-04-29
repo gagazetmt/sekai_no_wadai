@@ -88,39 +88,54 @@ router.post('/v3/suggest-labels', async (req, res) => {
 
   const title    = post.titleOrig || post.title || '';
   const titleJa  = post.titleJa   || '';
-  const comments = (post.raw?.comments || [])
-    .map(c => c.body || '').filter(Boolean).slice(0, 5).join('\n').slice(0, 600);
+  const selftext = (post.selftext || post.raw?.selftext || '').slice(0, 2000);
+  const commentsArr = (post.raw?.comments || []).map(c => c.body || '').filter(Boolean);
+  const comments = commentsArr
+    .slice(0, 15)
+    .map(c => c.replace(/\n+/g, ' ').slice(0, 180))
+    .join('\n')
+    .slice(0, 2500);
 
   console.log('[Step2 v3] AIラベル提案:', (titleJa || title).slice(0, 60));
 
   try {
     const raw = await callAI({
-      model:      'claude-haiku-4-5-20251001',
-      max_tokens: 700,
+      forceProvider: 'anthropic',
+      model:      'claude-sonnet-4-6',
+      max_tokens: 1000,
       messages:   [{ role: 'user', content:
 `あなたはサッカーニュース解析の専門家です。以下の案件から、後続のSI取得用ラベルを3カテゴリで提案してください。
 
 【案件 (英語原文)】 ${title}
-${titleJa ? `【案件 (日本語訳)】 ${titleJa}\n` : ''}
-【元コメント抜粋】 ${comments || '(なし)'}
+${titleJa ? `【案件 (日本語訳)】 ${titleJa}\n` : ''}${selftext ? `\n【本文（Match Thread 等の場合は得点者リストあり）】\n${selftext}\n` : ''}
+【元コメント抜粋（最大15件）】
+${comments || '(なし)'}
 
 【ルール】
-- entities: 案件に登場する固有名（選手・監督・チーム・大会）を最大8件、英語表記で
+- entities: 案件に登場する固有名（選手・監督・チーム・大会）を最大12件、英語表記で
   - role は "player" / "manager" / "team" / "tournament" のいずれか
   - 公式名（Wikipedia/SofaScore で見つかる名前）で記入
+  - **試合関連の案件**（タイトルに "TeamA vs TeamB" や "X-Y" スコア表記がある場合）：
+    ・両チームの**主力得点者・スター選手 4〜6名**を必ず含める
+    ・選手の知識は最新（2025-26シーズン）に基づくこと。例: 2024年 PSG はメッシ・ムバッペ・ネイマールが既に退団、現在は Kvaratskhelia / Dembélé / Doué / Vitinha 等が主力
+    ・例: バイエルンの主力は Kane / Olise / Musiala / Kimmich / Sané 等
+  - selftext に「Goals: ...」リストがあれば、そこに登場する選手は必ず含める
 - matches: 試合があれば「HomeTeam vs AwayTeam」形式で最大2件（無ければ空配列）
 - searches: ニュース検索用キーワード（英語）を最大3件
 
 JSONのみ返す（マークダウン不要）。例：
 {
   "entities": [
-    {"name":"Hector Bellerin","role":"player"},
-    {"name":"Real Madrid","role":"team"},
-    {"name":"Real Betis","role":"team"},
-    {"name":"Carlo Ancelotti","role":"manager"}
+    {"name":"Harry Kane","role":"player"},
+    {"name":"Michael Olise","role":"player"},
+    {"name":"Ousmane Dembélé","role":"player"},
+    {"name":"Khvicha Kvaratskhelia","role":"player"},
+    {"name":"Bayern Munich","role":"team"},
+    {"name":"Paris Saint-Germain","role":"team"},
+    {"name":"UEFA Champions League","role":"tournament"}
   ],
-  "matches": ["Real Madrid vs Real Betis"],
-  "searches": ["Bellerin late equalizer 2026", "La Liga title race"]
+  "matches": ["Paris Saint-Germain vs Bayern Munich"],
+  "searches": ["PSG Bayern semifinal 2026", "Champions League semifinal first leg 2025-26"]
 }` }],
     });
     const m = raw.match(/\{[\s\S]*\}/);

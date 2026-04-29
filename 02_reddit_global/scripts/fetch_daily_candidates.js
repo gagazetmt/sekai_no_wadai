@@ -230,7 +230,9 @@ async function main() {
             url: "https://www.reddit.com" + p.permalink,
             score: p.score, numComments: p.num_comments,
             created_utc: p.created_utc, permalink: p.permalink,
-            sortSource: sort, comments: [],
+            sortSource: sort,
+            selftext: (p.selftext || '').slice(0, 4000),  // Match Thread 本文（得点者リスト含む）
+            comments: [],
           });
         }
       });
