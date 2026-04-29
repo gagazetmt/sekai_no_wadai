@@ -155,6 +155,66 @@ const thumbSamples = [];
   thumbSamples.push({ ...s, html: buildQuestionThumb(s.data) });
 });
 
+// ─── Light tone サンプル（4テンプレ × 1サンプル）──
+const lightThumbs = [
+  {
+    name: 'thumb_AL_dembele',
+    label: 'A-Light: デンベレ xG',
+    builder: buildDataHeroThumb,
+    data: {
+      tone: 'light',
+      heroNumber: '+5.2',
+      heroLabel: 'xG超過',
+      catch: 'デンベレ 異次元の決定力',
+      badge: '衝撃',
+      badgeColor: '#dc2626',
+    },
+  },
+  {
+    name: 'thumb_BL_topxg',
+    label: 'B-Light: xG超過 TOP3',
+    builder: buildRankingThumb,
+    data: {
+      tone: 'light',
+      title: 'プレミアxG超過 TOP3',
+      items: [
+        { rank: 1, name: 'サラー',     value: '+8.4' },
+        { rank: 2, name: 'ハーランド', value: '+6.2' },
+        { rank: 3, name: 'ワトキンス', value: '+5.7' },
+      ],
+      bottomCatch: '誰が一番のクラッチ？',
+    },
+  },
+  {
+    name: 'thumb_CL_messi_ronaldo',
+    label: 'C-Light: メッシvsロナウド',
+    builder: buildVsThumb,
+    data: {
+      tone: 'light',
+      title: 'GOAT 論争',
+      leftName: 'メッシ',
+      leftValue: 'バロンドール 8回',
+      rightName: 'ロナウド',
+      rightValue: 'CL得点王 7回',
+      bottomCatch: '数字で決着！',
+    },
+  },
+  {
+    name: 'thumb_DL_real_decline',
+    label: 'D-Light: レアル不振',
+    builder: buildQuestionThumb,
+    data: {
+      tone: 'light',
+      question: 'なぜレアルは負ける？',
+      subData: '勝ち点 -8 vs 昨年同時期 / 失点 +12',
+      bottomBadge: '5分で解説',
+    },
+  },
+];
+lightThumbs.forEach(s => {
+  thumbSamples.push({ name: s.name, label: s.label, html: s.builder(s.data) });
+});
+
 // 全てのサムネHTMLを出力
 thumbSamples.forEach(s => saveHtml(s.name + '.html', s.html));
 
@@ -334,7 +394,7 @@ h3 { color: var(--accent); margin-top: 18px; font-size: 14px; letter-spacing: 1p
 
 <h3>テンプレA: データ強調型</h3>
 <div class="thumbs-grid">
-${thumbSamples.filter(s => s.name.startsWith('thumb_A')).map(s => `
+${thumbSamples.filter(s => /thumb_A\d+_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
@@ -343,7 +403,7 @@ ${thumbSamples.filter(s => s.name.startsWith('thumb_A')).map(s => `
 
 <h3>テンプレB: ランキング型</h3>
 <div class="thumbs-grid">
-${thumbSamples.filter(s => s.name.startsWith('thumb_B')).map(s => `
+${thumbSamples.filter(s => /thumb_B\d+_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
@@ -352,7 +412,7 @@ ${thumbSamples.filter(s => s.name.startsWith('thumb_B')).map(s => `
 
 <h3>テンプレC: VS型</h3>
 <div class="thumbs-grid">
-${thumbSamples.filter(s => s.name.startsWith('thumb_C')).map(s => `
+${thumbSamples.filter(s => /thumb_C\d+_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
@@ -361,7 +421,20 @@ ${thumbSamples.filter(s => s.name.startsWith('thumb_C')).map(s => `
 
 <h3>テンプレD: 問いかけ型</h3>
 <div class="thumbs-grid">
-${thumbSamples.filter(s => s.name.startsWith('thumb_D')).map(s => `
+${thumbSamples.filter(s => /thumb_D\d+_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
+
+<h2>☀️ Light tone バリエーション（4種）</h2>
+<p class="section-note">
+ダーク版と同じレイアウトで配色を明るめに。クリームペーパー風の落ち着いた印象。<br>
+A=データ強調 / B=ランキング / C=VS / D=問いかけ
+</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_[A-D]L_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>

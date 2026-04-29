@@ -19,6 +19,29 @@ const PALETTE = {
   purple:  '#8b5cf6',
 };
 
+// 明るめ tone パレット（同じレイアウトを軽快な印象にするため）
+//   - 背景: クリームホワイト〜ライトグレー
+//   - テキスト: 濃いネイビー（コントラスト維持）
+//   - アクセント: 同じゴールドだが少し濃い（背景明るい分）
+const PALETTE_LIGHT = {
+  bg:      '#f7f3ec',     // クリームペーパー
+  surface: '#ffffff',
+  panel:   '#fef3e0',     // 黄金薄
+  border:  '#e7d9c2',
+  text:    '#1a2240',     // 濃いネイビー
+  muted:   '#6a7591',
+  accent:  '#c2740a',     // 濃いゴールド（背景白でも目立つ）
+  accentBg:'#f59e0b',     // 強調背景には鮮やかゴールド
+  red:     '#dc2626',
+  green:   '#059669',
+  blue:    '#2563eb',
+  purple:  '#7c3aed',
+};
+
+function tonePalette(tone) {
+  return tone === 'light' ? PALETTE_LIGHT : PALETTE;
+}
+
 const CHANNEL_NAME = '5分でサッカー分析';
 const CHANNEL_ICON = '⚽';
 
@@ -49,7 +72,8 @@ function imgDataUri(filePath) {
 }
 
 // 1280×720 サムネイル用 HTML ラッパー
-function wrapThumb({ thumbBody, extraStyles = '', title = 'Thumbnail' }) {
+function wrapThumb({ thumbBody, extraStyles = '', title = 'Thumbnail', tone = 'dark' }) {
+  const p = tonePalette(tone);
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -61,14 +85,14 @@ html, body {
   width: ${TW}px;
   height: ${TH}px;
   overflow: hidden;
-  background: ${PALETTE.bg};
+  background: ${p.bg};
   font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", "メイリオ", sans-serif;
 }
 .thumb {
   width: ${TW}px;
   height: ${TH}px;
   position: relative;
-  color: ${PALETTE.text};
+  color: ${p.text};
   overflow: hidden;
 }
 ${extraStyles}
@@ -88,30 +112,36 @@ function channelLogoHtml(channelName = CHANNEL_NAME) {
   </div>`;
 }
 
-// チャンネルロゴの共通スタイル
-const channelLogoStyle = `
+// チャンネルロゴの共通スタイル（tone 切替対応）
+function channelLogoStyleFor(tone) {
+  const p = tonePalette(tone);
+  const isLight = tone === 'light';
+  return `
 .channel-logo {
   position: absolute;
   left: 24px; bottom: 24px;
   display: flex; align-items: center; gap: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 2px solid ${PALETTE.accent};
+  background: ${isLight ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.7)'};
+  border: 2px solid ${p.accent};
   padding: 8px 18px;
   border-radius: 6px;
   font-size: 22px;
   font-weight: 900;
-  color: ${PALETTE.text};
+  color: ${p.text};
   letter-spacing: 2px;
   z-index: 8;
   backdrop-filter: blur(4px);
+  box-shadow: ${isLight ? '0 4px 16px rgba(0,0,0,0.12)' : '0 4px 16px rgba(0,0,0,0.5)'};
 }
 .channel-logo .channel-icon {
   font-size: 24px;
-  color: ${PALETTE.accent};
+  color: ${p.accent};
 }
 `;
+}
+const channelLogoStyle = channelLogoStyleFor('dark');  // 後方互換
 
 module.exports = {
-  TW, TH, PALETTE, CHANNEL_NAME, CHANNEL_ICON,
-  esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyle,
+  TW, TH, PALETTE, PALETTE_LIGHT, tonePalette, CHANNEL_NAME, CHANNEL_ICON,
+  esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyle, channelLogoStyleFor,
 };
