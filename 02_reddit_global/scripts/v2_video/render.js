@@ -45,7 +45,8 @@ const TTS_CONCURRENCY    = 4;
 const RENDER_CONCURRENCY = 4;
 
 // 配列を limit 並列で順次処理（worker pool）
-async function processInParallel(items, limit, worker) {
+//   onError: 失敗時に { idx, error } を渡される。job ファイルに記録するなどに利用
+async function processInParallel(items, limit, worker, onError) {
   let nextIdx = 0;
   await Promise.all(Array.from({ length: limit }, async (_, workerIdx) => {
     while (true) {
@@ -55,6 +56,9 @@ async function processInParallel(items, limit, worker) {
         await worker(items[idx], idx, workerIdx);
       } catch (e) {
         console.warn(`  ⚠️ worker#${workerIdx} item#${idx} 失敗: ${e.message}`);
+        if (typeof onError === 'function') {
+          try { onError({ idx, error: e.message, stack: (e.stack || '').slice(0, 800) }); } catch (_) {}
+        }
       }
     }
   }));
@@ -367,11 +371,13 @@ async function main() {
   const slideDursMs = new Array(modules.length);
 
   let renderDone = 0;
+  const renderFails = [];
   try {
     await processInParallel(
       modules.map((m, i) => ({ i, m })),
       RENDER_CONCURRENCY,
       async ({ i, m: mod }, _idxInList, workerIdx) => {
+        const t0 = Date.now();
         const page = pages[workerIdx];
         const html = buildSlideHTML(mod);
         const durMs = slideDurationMs(mod);
@@ -379,16 +385,26 @@ async function main() {
         const videoOnly = path.join(workDir, `slide_${String(i).padStart(2, '0')}_v.mp4`);
         const audioOnly = path.join(workDir, `slide_${String(i).padStart(2, '0')}_a.m4a`);
         const audioCount = Array.isArray(mod.audio) ? mod.audio.length : 0;
-        console.log(`[w${workerIdx}/${i+1}] ${mod.type} "${(mod.title||'').slice(0,28)}" / ${(durMs/1000).toFixed(1)}s / chunks=${audioCount} → レンダ`);
+        console.log(`[w${workerIdx}/${i+1}] ${mod.type} "${(mod.title||'').slice(0,28)}" / ${(durMs/1000).toFixed(1)}s / chunks=${audioCount} → レンダ開始`);
         await renderSlide(page, html, durMs, videoOnly);
         await buildSlideAudio(mod, durMs, audioOnly);
         slideVideos[i] = videoOnly;
         slideAudios[i] = audioOnly;
         renderDone++;
-        updateJob(jobId, { doneSlides: renderDone });
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        console.log(`[w${workerIdx}/${i+1}] ✓ 完了 ${elapsed}秒`);
+        updateJob(jobId, { doneSlides: renderDone, totalSlides: modules.length });
+      },
+      ({ idx, error }) => {
+        renderFails.push({ idx: idx + 1, type: modules[idx]?.type || '?', error });
+        updateJob(jobId, { renderFails });
       }
     );
-    console.log(`🎬 Render完了: ${((Date.now() - renderT0) / 1000).toFixed(1)}秒`);
+    console.log(`🎬 Render完了: ${((Date.now() - renderT0) / 1000).toFixed(1)}秒 / 成功 ${renderDone}/${modules.length}`);
+    if (renderFails.length) {
+      console.warn(`  ⚠️ レンダ失敗 ${renderFails.length}件:`);
+      renderFails.forEach(f => console.warn(`     - スライド#${f.idx} (${f.type}): ${f.error}`));
+    }
   } finally {
     await browser.close();
   }
@@ -398,19 +414,38 @@ async function main() {
   console.log(`🔗 xfade concat中... (transition=${TRANSITION_SEC}s)`);
   const concatMp4 = path.join(workDir, 'concat.mp4');
 
+  // ── レンダ失敗(undefined) 排除：成功したスライドだけで繋ぐ ──
+  //   いずれかのスライドがレンダ失敗してても部分出力は完成させる方針
+  const successIdxs = [];
+  modules.forEach((_, i) => {
+    if (slideVideos[i] && slideAudios[i] && fs.existsSync(slideVideos[i]) && fs.existsSync(slideAudios[i])) {
+      successIdxs.push(i);
+    } else {
+      console.warn(`  ⚠️ スライド#${i+1} (${modules[i]?.type || '?'}) はレンダ失敗 → concat から除外`);
+    }
+  });
+  if (!successIdxs.length) throw new Error('全スライドのレンダに失敗');
+  const compactVideos = successIdxs.map(i => slideVideos[i]);
+  const compactAudios = successIdxs.map(i => slideAudios[i]);
+  const compactDursMs = successIdxs.map(i => slideDursMs[i]);
+  if (successIdxs.length < modules.length) {
+    console.warn(`  ⚠️ 部分出力モード: ${successIdxs.length}/${modules.length} スライドで動画生成`);
+    updateJob(jobId, { partial: true, successCount: successIdxs.length });
+  }
+
   // クロスフェードで全体時間が縮む: totalMs - TRANSITION * (N-1)
-  const N = slideVideos.length;
+  const N = compactVideos.length;
   const transitionMs = Math.round(TRANSITION_SEC * 1000);
-  const totalMs = slideDursMs.reduce((a, b) => a + b, 0) - transitionMs * Math.max(0, N - 1);
+  const totalMs = compactDursMs.reduce((a, b) => a + b, 0) - transitionMs * Math.max(0, N - 1);
 
   if (N === 1) {
     // 1スライドなら xfade 不要、単純 mux
-    muxAV(slideVideos[0], slideAudios[0], concatMp4);
+    muxAV(compactVideos[0], compactAudios[0], concatMp4);
   } else {
     // -i v0 v1 ... vN-1 a0 a1 ... aN-1 の順で全入力
     const inputs = [
-      ...slideVideos.map(p => `-i "${p}"`),
-      ...slideAudios.map(p => `-i "${p}"`),
+      ...compactVideos.map(p => `-i "${p}"`),
+      ...compactAudios.map(p => `-i "${p}"`),
     ].join(' ');
 
     // フィルタ式を組み立てる:
@@ -424,7 +459,7 @@ async function main() {
     let cumDur = 0;
     let prevV = '[0:v]';
     for (let i = 1; i < N; i++) {
-      cumDur += slideDursMs[i - 1] / 1000;
+      cumDur += compactDursMs[i - 1] / 1000;
       const offset = (cumDur - T * i).toFixed(3);
       const out = (i === N - 1) ? '[vout]' : `[v${i}]`;
       vParts.push(`${prevV}[${i}:v]xfade=transition=fade:duration=${T}:offset=${offset}${out}`);

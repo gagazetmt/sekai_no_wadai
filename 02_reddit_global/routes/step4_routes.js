@@ -657,8 +657,13 @@ router.post('/v2/generate-video', (req, res) => {
   }, null, 2));
 
   const renderScript = path.join(__dirname, '..', 'scripts', 'v2_video', 'render.js');
+  // ログをファイル保存（render.js の console.log / console.warn を全部キャプチャ）
+  //   診断目的：失敗時にどのスライドで何が起きたか追跡可能にする
+  const logPath = path.join(JOB_DIR, jobId + '.log');
+  const logFd   = fs.openSync(logPath, 'a');
   const proc = spawn('node', [renderScript, postId, jobId], {
-    detached: true, stdio: 'ignore', cwd: path.join(__dirname, '..'),
+    detached: true, stdio: ['ignore', logFd, logFd],
+    cwd: path.join(__dirname, '..'),
   });
   proc.unref();
 
