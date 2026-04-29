@@ -125,11 +125,8 @@ function buildInsightHTML(mod) {
   gap: ${layout.gap}px;
   z-index: 5;
 }
-.phrase-row {
-  position: relative;
-  min-height: ${layout.minHeight}px;
-}
-/* ── 本体（実体）：単純フェードイン ── */
+/* ── 単一動作：左にちょっとずれた状態 + opacity0 → 元位置 + opacity1 ──
+     本体が「すっと自然に左から入ってくる」演出。ghost 不要 */
 .phrase {
   display: flex;
   align-items: center;
@@ -147,29 +144,12 @@ function buildInsightHTML(mod) {
   line-height: 1.3;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
   opacity: 0;
-  animation: phraseAppear 0.55s ease-out forwards;
-  position: relative;
-  z-index: 1;
+  transform: translateX(-80px);
+  animation: phraseSlideIn 0.6s ease-out forwards;
 }
-/* ── ゴーストトレイル：左 -200px opacity1 → 元位置 opacity0 で消える ── */
-.phrase-trail {
-  position: absolute; inset: 0;
-  display: flex; align-items: center;
-  padding: 12px 36px;
-  border-left: 12px solid #fbbf24;
-  border-radius: 0 16px 16px 0;
-  background: linear-gradient(to right,
-    rgba(245, 158, 11, 0.55) 0%,
-    rgba(245, 158, 11, 0.25) 30%,
-    rgba(6, 14, 28, 0.0) 100%);
-  font-weight: 800;
-  color: ${PALETTE.text};
-  line-height: 1.3;
-  text-shadow: 0 0 16px rgba(252, 211, 77, 0.7), 0 2px 10px rgba(0,0,0,0.9);
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0;
-  animation: trailSlide 0.5s ease-out backwards;
+@keyframes phraseSlideIn {
+  from { transform: translateX(-80px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
 }
 /* 数字+単位ハイライト：金色＋強グロー */
 .hl-num {
@@ -177,24 +157,13 @@ function buildInsightHTML(mod) {
   font-weight: 900;
   text-shadow: 0 0 14px rgba(252, 211, 77, 0.7), 0 2px 10px rgba(0,0,0,0.8);
 }
-@keyframes phraseAppear {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes trailSlide {
-  from { transform: translateX(-200px); opacity: 1; }
-  to   { transform: translateX(0);      opacity: 0; }
-}
 `;
 
   const phrasesHtml = phrases.map((p, displayIdx) => {
     const fz   = _phraseFontSize(p, layout);
     const html = _highlightNumbers(esc(p));
     const d    = delays[displayIdx].toFixed(2);
-    return `<div class="phrase-row">
-      <div class="phrase-trail" style="font-size:${fz}px;animation-delay:${d}s;">${html}</div>
-      <div class="phrase"       style="font-size:${fz}px;animation-delay:${d}s;">${html}</div>
-    </div>`;
+    return `<div class="phrase" style="font-size:${fz}px;animation-delay:${d}s;">${html}</div>`;
   }).join('');
 
   const slideBody = `

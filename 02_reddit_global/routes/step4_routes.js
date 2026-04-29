@@ -181,10 +181,11 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
 });
 
 // ─── /v2/ai-fill-slide : スライド丸ごと AI 1発（type/title/dataSlots/narration）─
-// Input:  { postId, moduleIdx, userPrompt }
-// Output: { ok, type, title, dataSlots, narration, used }
+// Input:  { postId, moduleIdx, userPrompt, incremental? }
+//   incremental=true: 既存内容を最大限保持し、ユーザー注文の差分のみ適用（微調整モード）
+// Output: { ok, type, title, dataSlots, narration, used, reviewed, reviewIssues }
 router.post('/v2/ai-fill-slide', express.json(), async (req, res) => {
-  const { postId, moduleIdx, userPrompt } = req.body || {};
+  const { postId, moduleIdx, userPrompt, incremental } = req.body || {};
   if (!postId || moduleIdx == null || !userPrompt) {
     return res.status(400).json({ error: 'postId + moduleIdx + userPrompt required' });
   }
@@ -330,11 +331,33 @@ ${topComments ? '上位コメント抜粋:\n' + topComments : ''}`;
       _sumSlide(allMods[idx + 2], '#' + (idx + 3)),
     ].filter(Boolean).join('\n');
 
+    // ── 微調整モード時の現スライド snapshot を構築 ──
+    const currentSnapshot = incremental ? `
+【現スライド既存内容（保持の基準）】
+type:      ${mod.type || '?'}
+title:     ${mod.title || ''}
+narration: ${(mod.narration || '').slice(0, 600)}
+dataSlots: ${JSON.stringify(mod.dataSlots || []).slice(0, 1500)}
+${Array.isArray(mod.catchphrases) && mod.catchphrases.length ? 'catchphrases: ' + JSON.stringify(mod.catchphrases) : ''}
+` : '';
+
+    const incrementalRule = incremental ? `
+
+【★微調整モード（厳守）】
+- 上記「既存内容」を**最大限保持**し、ユーザー注文の差分のみ適用
+- ユーザーが「データを追加」と言ったら → dataSlots に新規項目を追加（既存項目は維持）
+- ユーザーが「ナレーションに〇〇を追加」と言ったら → 既存 narration に該当部分を組み込む（全文書き直しNG）
+- ユーザーが触れてない要素（type / title / 他のdataSlot等）は**そのまま維持**
+- 全体を作り直さない。注文された差分だけ反映する
+` : '';
+
     const prompt = `あなたはサッカーYouTubeの脚本AI。スライド1枚の本体を完全に組み立てる。
-type / title / dataSlots / narration を**一気通貫で**生成してください。
+${incremental
+  ? '既存内容を保持しながら、ユーザー注文の差分だけ適用して type / title / dataSlots / narration を返してください。'
+  : 'type / title / dataSlots / narration を**一気通貫で**生成してください。'}
 
 ${projectCtx}
-
+${currentSnapshot}
 【現スライド情報（# ${idx + 1} 枚目 / 全 ${allMods.length} 枚）】
 type: ${mod.type || '?'}
 title: ${mod.title || ''}
@@ -353,7 +376,7 @@ ${ctxH2H}
 
 【ユーザー注文】
 ${userPrompt}
-
+${incrementalRule}
 【生成ルール（厳守）】
 - type は注文の意図に合わせて選ぶ（許容: insight/stats/profile/comparison/history/reaction）
   ・2人/2チーム比較なら "comparison"
@@ -394,26 +417,28 @@ ${userPrompt}
   "narration": "..."
 }`;
 
-    let raw, parsed = null, used = 'deepseek';
+    // Sonnet 既定（B案・ハルシ抑制） → JSON崩れ時 DeepSeek フォールバック
+    let raw, parsed = null, used = 'sonnet';
     try {
       raw = await callAI({
-        forceProvider: 'deepseek',
-        model: 'deepseek-chat', max_tokens: 3500,
+        forceProvider: 'anthropic',
+        model: 'claude-sonnet-4-6', max_tokens: 3500,
         messages: [{ role: 'user', content: prompt }],
       });
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
       if (m1) parsed = JSON.parse(m1[0]);
-    } catch (e) { console.warn('[ai-fill-slide] deepseek 例外:', e.message); }
+    } catch (e) { console.warn('[ai-fill-slide] sonnet 例外:', e.message); }
     if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
+      console.warn('[ai-fill-slide] sonnet 失敗、DeepSeek にフォールバック');
       try {
         raw = await callAI({
-          forceProvider: 'anthropic',
-          model: 'claude-sonnet-4-6', max_tokens: 3500,
+          forceProvider: 'deepseek',
+          model: 'deepseek-chat', max_tokens: 3500,
           messages: [{ role: 'user', content: prompt }],
         });
         const m2 = raw && raw.match(/\{[\s\S]*\}/);
         if (m2) parsed = JSON.parse(m2[0]);
-        used = 'sonnet';
+        used = 'deepseek';
       } catch (_) {}
     }
     if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
@@ -473,8 +498,8 @@ ${parsed.narration || ''}
 }`;
 
       const reviewRaw = await callAI({
-        forceProvider: 'deepseek',
-        model: 'deepseek-chat', max_tokens: 3500,
+        forceProvider: 'anthropic',
+        model: 'claude-sonnet-4-6', max_tokens: 4000,
         messages: [{ role: 'user', content: reviewPrompt }],
       });
       const rm = reviewRaw && reviewRaw.match(/\{[\s\S]*\}/);
@@ -600,8 +625,8 @@ ${entityCtx}
 - JSONのみ: {"narration":"..."}`;
 
     const raw = await callAI({
-      forceProvider: 'deepseek',
-      model: 'deepseek-chat', max_tokens: 800,
+      forceProvider: 'anthropic',
+      model: 'claude-sonnet-4-6', max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     });
     const m1 = raw.match(/\{[\s\S]*\}/);
@@ -1258,11 +1283,15 @@ function getUI() {
       +   '</div>'
       +   '<textarea class="inp s4-fill-prompt" data-idx="' + i + '" placeholder="例: メッシとロナウドの比較。デビュー年・年齢・通算ゴール・バロンドール・主要タイトルを比較で。ナレーションは2人の違いを語って" '
       +     'style="display:block;width:100%;font-size:11px;padding:5px 8px;min-height:60px;resize:vertical;background:#0a0d18;color:#e0e0e0;border:1px solid #2a2f4a;"></textarea>'
-      +   '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;">'
-      +     '<button class="btn btn-sm s4-fill-go" data-idx="' + i + '" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 14px;font-weight:bold;">🪄 生成</button>'
+      +   '<div style="display:flex;gap:10px;margin-top:6px;align-items:center;flex-wrap:wrap;">'
+      +     '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#a5b4fc;cursor:pointer;user-select:none;">'
+      +       '<input type="checkbox" class="s4-fill-incremental" data-idx="' + i + '" style="margin:0;">'
+      +       '微調整モード（既存内容を保持して差分のみ適用）'
+      +     '</label>'
       +     '<span style="flex:1"></span>'
-      +     '<span style="font-size:9px;color:#5a6a8a;">DeepSeek 既定 → 失敗時 Sonnet</span>'
+      +     '<button class="btn btn-sm s4-fill-go" data-idx="' + i + '" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 14px;font-weight:bold;">🪄 生成</button>'
       +   '</div>'
+      +   '<div style="font-size:9px;color:#5a6a8a;margin-top:4px;">Sonnet 既定 → 失敗時 DeepSeek フォールバック</div>'
       + '</div>'
       + galleryHtml
       + bindHtml
@@ -1409,16 +1438,21 @@ function getUI() {
     }
   }
 
-  /* 🪄 スライド全部おまかせ AI: type/title/dataSlots/narration を一気通貫生成 */
+  /* 🪄 スライド全部おまかせ AI: type/title/dataSlots/narration を一気通貫生成（or 微調整） */
   window.s4FillSlideAI = async function(idx) {
     const post = window.APP.selected;
     if (!post?.id) return;
     const ta = document.querySelector('.s4-fill-prompt[data-idx="' + idx + '"]');
     const userPrompt = (ta?.value || '').trim();
     if (!userPrompt) { _msg('注文内容を書いてね'); return; }
+    const incCb = document.querySelector('.s4-fill-incremental[data-idx="' + idx + '"]');
+    const incremental = !!(incCb && incCb.checked);
     const status = document.querySelector('.s4-fill-status[data-idx="' + idx + '"]');
-    if (status) status.textContent = '⏳ 全体生成中...';
-    if (!confirm('現在のスライドの type / title / dataSlots / narration を AI 生成で上書きします。OK?')) {
+    if (status) status.textContent = incremental ? '⏳ 微調整中...' : '⏳ 全体生成中...';
+    const confirmMsg = incremental
+      ? '微調整モード: 既存内容を保持しつつ、注文の差分のみ適用します。OK?'
+      : '現在のスライドの type / title / dataSlots / narration を AI 生成で上書きします。OK?';
+    if (!confirm(confirmMsg)) {
       if (status) status.textContent = '';
       return;
     }
@@ -1426,7 +1460,7 @@ function getUI() {
       const r = await fetchJson('/api/v2/ai-fill-slide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt }),
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental }),
       });
       if (!r.ok) throw new Error(r.error || '生成失敗');
       const m = window.APP.s4.modules[idx];
