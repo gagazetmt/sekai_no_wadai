@@ -11,20 +11,23 @@ const MAX_ITEMS = 8;
 const TAIL_PAD_SEC = 0.4;  // 末尾余韻
 
 // 項目数で行高 / フォント / 番号フォントを動的調整
+//   行高はそのままで、フォントは行高ぎりぎりまで大きく
+//   numFz: line-height 1 / Georgia italic → 行高×0.85 まで
+//   titleFz: line-height 1.25 → 行高×0.65 まで
 function _layoutForCount(n) {
-  if (n <= 3) return { rowH: 130, titleFz: 60, numFz: 110 };
-  if (n <= 4) return { rowH: 110, titleFz: 50, numFz: 92 };
-  if (n === 5) return { rowH: 96, titleFz: 44, numFz: 80 };
-  if (n === 6) return { rowH: 84, titleFz: 38, numFz: 70 };
-  if (n === 7) return { rowH: 74, titleFz: 32, numFz: 60 };
-  return        { rowH: 64, titleFz: 28, numFz: 52 };  // 8件
+  if (n <= 3) return { rowH: 130, titleFz: 84, numFz: 130 };
+  if (n <= 4) return { rowH: 110, titleFz: 68, numFz: 110 };
+  if (n === 5) return { rowH: 96,  titleFz: 60, numFz: 96  };
+  if (n === 6) return { rowH: 84,  titleFz: 52, numFz: 84  };
+  if (n === 7) return { rowH: 74,  titleFz: 44, numFz: 72  };
+  return        { rowH: 64,  titleFz: 38, numFz: 62  };  // 8件
 }
 
 function _itemFontSize(text, baseFz) {
   const len = String(text || '').length;
   if (len <= 12) return baseFz;
-  if (len <= 18) return Math.max(baseFz - 6, 26);
-  return Math.max(baseFz - 12, 24);
+  if (len <= 18) return Math.max(baseFz - 4, 28);
+  return Math.max(baseFz - 10, 26);
 }
 
 // 12粒のゴールドダスト（背景に漂う金粒）
