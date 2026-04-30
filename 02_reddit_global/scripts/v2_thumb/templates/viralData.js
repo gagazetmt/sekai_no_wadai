@@ -70,15 +70,22 @@ function buildViralDataThumb(data = {}) {
   color: #fcd34d;
   letter-spacing: 10px;
   text-transform: uppercase;
+  text-shadow:
+    -1px 0 0 #fcd34d, 1px 0 0 #fcd34d,
+    0 -1px 0 #fcd34d, 0 1px 0 #fcd34d;
 }
 .breaking-jp {
-  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS PMincho', serif;
-  font-size: 42px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho Demibold', 'Yu Mincho', 'MS PMincho', serif;
+  font-size: 46px;
   font-weight: 900;
   color: #fff;
   letter-spacing: 3px;
-  -webkit-text-stroke: 2.5px #000;
-  text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
+  text-shadow:
+    -2px 0 0 #fff, 2px 0 0 #fff,
+    0 -2px 0 #fff, 0 2px 0 #fff,
+    -2px -2px 0 #fff, 2px 2px 0 #fff,
+    -2px 2px 0 #fff, 2px -2px 0 #fff,
+    4px 4px 8px rgba(0,0,0,0.85);
 }
 .breaking-dot {
   width: 12px; height: 12px;
@@ -142,32 +149,41 @@ function buildViralDataThumb(data = {}) {
   border-radius: 4px;
   border: 3px solid #000;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  text-shadow:
+    -1px 0 0 #fcd34d, 1px 0 0 #fcd34d,
+    0 -1px 0 #fcd34d, 0 1px 0 #fcd34d;
 }
 .stat-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', 'Georgia', serif;
   font-style: italic;
-  font-size: 132px;
+  font-size: 140px;
   font-weight: 900;
   color: #ef4444;
-  letter-spacing: -4px;
+  letter-spacing: -3px;
   line-height: 0.9;
-  -webkit-text-stroke: 4px #000;
-  text-shadow: 6px 6px 0 #000;
+  text-shadow:
+    -3px 0 0 #ef4444, 3px 0 0 #ef4444,
+    0 -3px 0 #ef4444, 0 3px 0 #ef4444,
+    -3px -3px 0 #ef4444, 3px 3px 0 #ef4444,
+    -3px 3px 0 #ef4444, 3px -3px 0 #ef4444,
+    8px 8px 16px rgba(0,0,0,0.95);
   white-space: nowrap;
 }
 .stat-label {
-  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
-  font-size: 26px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho Demibold', 'Yu Mincho', serif;
+  font-size: 28px;
   font-weight: 900;
   color: #000;
   letter-spacing: 2px;
   margin-top: 10px;
   line-height: 1.2;
   background: #fcd34d;
-  padding: 7px 22px;
+  padding: 8px 24px;
   border-radius: 4px;
   border: 3px solid #000;
-  -webkit-text-stroke: 0.8px #000;
+  text-shadow:
+    -1px 0 0 #000, 1px 0 0 #000,
+    0 -1px 0 #000, 0 1px 0 #000;
 }
 
 /* ── サブ統計（左下、小さめ）── */
@@ -186,20 +202,26 @@ function buildViralDataThumb(data = {}) {
 .ss-num {
   font-family: 'Bodoni 72', 'Didot', 'Georgia', serif;
   font-style: italic;
-  font-size: 40px;
+  font-size: 44px;
   font-weight: 900;
   color: #fcd34d;
   letter-spacing: -1px;
   line-height: 1;
-  -webkit-text-stroke: 1.5px #000;
-  text-shadow: 2px 2px 0 #000;
+  text-shadow:
+    -1px 0 0 #fcd34d, 1px 0 0 #fcd34d,
+    0 -1px 0 #fcd34d, 0 1px 0 #fcd34d,
+    -1px -1px 0 #fcd34d, 1px 1px 0 #fcd34d,
+    3px 3px 6px rgba(0,0,0,0.85);
 }
 .ss-label {
-  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
-  font-size: 14px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho Demibold', 'Yu Mincho', serif;
+  font-size: 15px;
   font-weight: 900;
   color: #fff;
   letter-spacing: 2px;
+  text-shadow:
+    -1px 0 0 #fff, 1px 0 0 #fff,
+    0 -1px 0 #fff, 0 1px 0 #fff;
 }
 
 /* ── 下部 黄色帯（水平・ゴツめ）── */
@@ -218,47 +240,44 @@ function buildViralDataThumb(data = {}) {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 .banner-line1 {
-  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS PMincho', 'Hiragino Mincho Pro', serif;
-  font-size: 84px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho Demibold', 'Yu Mincho', 'MS PMincho', serif;
+  font-size: 88px;
   font-weight: 900;
   color: #000;
   line-height: 1.05;
   letter-spacing: 2px;
   text-align: center;
   word-break: keep-all;
-  -webkit-text-stroke: 1.5px #000;
   text-shadow:
-    3px 3px 0 #fcd34d,
-    4px 4px 0 #000,
-    5px 5px 0 #fcd34d,
-    6px 6px 0 #000;
-  ${title.length > 14 ? 'font-size: 72px;' : ''}
-  ${title.length > 20 ? 'font-size: 60px;' : ''}
-  ${title.length > 26 ? 'font-size: 52px;' : ''}
-  ${title.length > 32 ? 'font-size: 44px;' : ''}
+    -2px 0 0 #000, 2px 0 0 #000,
+    0 -2px 0 #000, 0 2px 0 #000,
+    -2px -2px 0 #000, 2px 2px 0 #000,
+    -2px 2px 0 #000, 2px -2px 0 #000,
+    5px 5px 10px rgba(0,0,0,0.4);
+  ${title.length > 14 ? 'font-size: 76px;' : ''}
+  ${title.length > 20 ? 'font-size: 64px;' : ''}
+  ${title.length > 26 ? 'font-size: 54px;' : ''}
+  ${title.length > 32 ? 'font-size: 46px;' : ''}
 }
 .banner-line2 {
   display: ${titleHighlight ? 'inline-block' : 'none'};
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', 'Georgia', serif;
   font-style: italic;
-  font-size: 96px;
+  font-size: 104px;
   font-weight: 900;
   color: #ef4444;
   line-height: 1;
   letter-spacing: 0px;
   text-align: center;
-  -webkit-text-stroke: 4px #000;
   text-shadow:
-    -3px -3px 0 #000,
-    3px -3px 0 #000,
-    -3px 3px 0 #000,
-    3px 3px 0 #000,
-    6px 6px 0 #000,
-    7px 7px 0 #fcd34d,
-    8px 8px 0 #000;
+    -3px 0 0 #ef4444, 3px 0 0 #ef4444,
+    0 -3px 0 #ef4444, 0 3px 0 #ef4444,
+    -3px -3px 0 #ef4444, 3px 3px 0 #ef4444,
+    -3px 3px 0 #ef4444, 3px -3px 0 #ef4444,
+    8px 8px 14px rgba(0,0,0,0.85);
   word-break: keep-all;
-  ${titleHighlight && titleHighlight.length > 12 ? 'font-size: 80px;' : ''}
-  ${titleHighlight && titleHighlight.length > 18 ? 'font-size: 66px;' : ''}
+  ${titleHighlight && titleHighlight.length > 12 ? 'font-size: 88px;' : ''}
+  ${titleHighlight && titleHighlight.length > 18 ? 'font-size: 72px;' : ''}
 }
 
 /* ── 装飾: dot pattern オーバーレイ ── */
