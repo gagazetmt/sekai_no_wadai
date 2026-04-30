@@ -56,13 +56,11 @@ function buildTradingCardThumb(data = {}) {
 }
 @keyframes raysSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* ── トレカ ── */
+/* ── 横長トレカ ── */
 .card {
   position: absolute;
-  top: 30px; bottom: 30px; left: 50%;
-  transform: translateX(-50%);
-  width: 480px;
-  background: linear-gradient(160deg, #fcd34d 0%, #f59e0b 50%, #b45309 100%);
+  top: 70px; bottom: 70px; left: 40px; right: 40px;
+  background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 50%, #b45309 100%);
   border-radius: 24px;
   padding: 8px;
   box-shadow:
@@ -75,10 +73,11 @@ function buildTradingCardThumb(data = {}) {
 .card-inner {
   position: relative;
   width: 100%; height: 100%;
-  background: linear-gradient(180deg, #1a1f3a 0%, #061220 100%);
+  background: linear-gradient(135deg, #1a1f3a 0%, #061220 100%);
   border-radius: 18px;
   overflow: hidden;
   border: 3px solid rgba(252,211,77,0.5);
+  display: flex;
 }
 
 /* ホログラフィック風光沢 */
@@ -93,46 +92,69 @@ function buildTradingCardThumb(data = {}) {
     rgba(252,211,77,0.15) 55%,
     transparent 70%);
   pointer-events: none;
+  z-index: 2;
+}
+
+/* 左：写真エリア */
+.card-photo {
+  position: relative;
+  width: 50%; height: 100%;
+  ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #2a3560, #0d1220);'}
+  background-size: cover;
+  background-position: center 20%;
+  filter: contrast(1.18) saturate(1.18) brightness(1.05);
+  -webkit-mask-image: linear-gradient(90deg, black 78%, transparent 100%);
+  mask-image: linear-gradient(90deg, black 78%, transparent 100%);
+}
+
+/* 右：データブロック */
+.card-data {
+  position: relative;
+  width: 50%; height: 100%;
+  padding: 22px 28px 20px 28px;
+  display: flex; flex-direction: column;
+  z-index: 3;
 }
 
 /* カード内ヘッダ：選手名 / ポジション / 総合評価 */
 .card-header {
-  position: absolute;
-  top: 12px; left: 12px; right: 12px;
   display: flex; justify-content: space-between; align-items: flex-start;
-  z-index: 4;
+  gap: 16px;
 }
 .card-name-block {
-  flex: 1;
+  flex: 1; min-width: 0;
 }
 .card-team {
   font-family: 'Georgia', serif;
   font-style: italic;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: #fcd34d;
   letter-spacing: 4px;
   text-transform: uppercase;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .card-name {
-  font-size: 32px;
+  font-size: 44px;
   font-weight: 900;
   color: #fff;
   line-height: 1;
   letter-spacing: 1px;
-  -webkit-text-stroke: 1px #fcd34d;
+  -webkit-text-stroke: 1.5px #fcd34d;
   text-shadow: 0 0 10px rgba(252,211,77,0.5), 2px 2px 0 #000;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  word-break: keep-all;
+  ${playerName.length > 12 ? 'font-size: 36px;' : ''}
+  ${playerName.length > 18 ? 'font-size: 30px;' : ''}
 }
 .card-position {
   display: inline-block;
   font-family: 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
   color: #000;
   background: #fcd34d;
-  padding: 3px 12px;
+  padding: 4px 14px;
   border-radius: 4px;
   letter-spacing: 2px;
   border: 2px solid #000;
@@ -141,7 +163,7 @@ function buildTradingCardThumb(data = {}) {
 /* 総合評価（右上の大きな数字）*/
 .card-overall {
   position: relative;
-  width: 110px; height: 110px;
+  width: 140px; height: 140px;
   background: radial-gradient(circle at 35% 30%, #fef3c7 0%, #fcd34d 60%, #b45309 100%);
   border: 4px solid #000;
   border-radius: 50%;
@@ -151,62 +173,47 @@ function buildTradingCardThumb(data = {}) {
 }
 .card-overall-num {
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 56px;
+  font-size: 72px;
   font-weight: 900;
   color: #000;
-  letter-spacing: -2px;
+  letter-spacing: -3px;
   line-height: 1;
   -webkit-text-stroke: 1px #000;
 }
 .card-overall-label {
   font-family: 'Georgia', serif;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   color: #000;
   letter-spacing: 4px;
   margin-top: -2px;
 }
 
-/* 写真エリア（中央）*/
-.card-photo {
-  position: absolute;
-  top: 145px; left: 0; right: 0;
-  height: 350px;
-  ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #2a3560, #0d1220);'}
-  background-size: cover;
-  background-position: center 20%;
-  filter: contrast(1.18) saturate(1.18) brightness(1.05);
-  -webkit-mask-image: linear-gradient(180deg, black 80%, transparent 100%);
-  mask-image: linear-gradient(180deg, black 80%, transparent 100%);
-}
-
-/* スタッツグリッド（下部） */
+/* スタッツグリッド（右側下部） */
 .card-stats {
-  position: absolute;
-  bottom: 56px; left: 16px; right: 16px;
+  margin-top: auto;
   display: grid; grid-template-columns: repeat(${stats.length || 4}, 1fr);
-  gap: 8px;
-  z-index: 4;
+  gap: 10px;
 }
 .stat-cell {
   background: rgba(0,0,0,0.78);
   border: 2px solid #fcd34d;
   border-radius: 8px;
-  padding: 8px 4px;
+  padding: 12px 6px;
   text-align: center;
   box-shadow: 0 0 10px rgba(252,211,77,0.3) inset;
 }
 .stat-cell .sc-label {
   font-family: 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 900;
   color: #fcd34d;
   letter-spacing: 2px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 .stat-cell .sc-value {
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 26px;
+  font-size: 36px;
   font-weight: 900;
   color: #fff;
   letter-spacing: -1px;
@@ -216,69 +223,43 @@ function buildTradingCardThumb(data = {}) {
 
 /* カード下部 タグ */
 .card-bottom-tag {
-  position: absolute;
-  bottom: 14px; left: 50%;
-  transform: translateX(-50%);
+  text-align: center;
   font-family: 'Georgia', serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   color: #fcd34d;
   letter-spacing: 6px;
   text-transform: uppercase;
+  margin-top: 10px;
 }
 
-/* ── 左側 縦テキスト ── */
+/* ── 上部 横テキスト（縦テキスト廃止） ── */
 .left-vertical {
   position: absolute;
-  top: 50%; left: 28px;
-  transform: translateY(-50%) rotate(-90deg);
-  transform-origin: left center;
+  top: 18px; left: 50%;
+  transform: translateX(-50%);
   font-family: 'Georgia', serif;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 900;
   color: #fcd34d;
-  letter-spacing: 12px;
+  letter-spacing: 10px;
   text-transform: uppercase;
   white-space: nowrap;
-  z-index: 4;
+  z-index: 6;
   text-shadow: 0 0 12px rgba(252,211,77,0.5);
 }
 
-/* ── 右側 縦タグ ── */
-.right-tag {
-  position: absolute;
-  top: 50%; right: 28px;
-  transform: translateY(-50%);
-  display: flex; flex-direction: column;
-  gap: 12px;
-  z-index: 4;
-}
-.right-tag-item {
-  font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 16px;
-  font-weight: 900;
-  color: #fff;
-  background: rgba(0,0,0,0.85);
-  border-left: 4px solid #ef4444;
-  padding: 8px 14px;
-  border-radius: 0 6px 6px 0;
-  letter-spacing: 2px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  white-space: nowrap;
-}
-
-/* ── 下部 キャッチ ── */
+/* ── 下部 キャッチ（写真側にオーバーレイ） ── */
 .bottom-catch {
   display: ${bottomCatch ? 'block' : 'none'};
   position: absolute;
-  bottom: 22px; left: 50%;
-  transform: translateX(-50%) rotate(-1deg);
+  bottom: 90px; left: 70px;
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 900;
   color: #000;
   background: #fcd34d;
-  padding: 10px 28px;
+  padding: 10px 24px;
   border-radius: 8px;
   border: 3px solid #000;
   box-shadow: 0 8px 24px rgba(0,0,0,0.6);
@@ -314,25 +295,27 @@ function buildTradingCardThumb(data = {}) {
 <div class="card">
   <div class="card-inner">
     <div class="card-shine"></div>
-    <div class="card-header">
-      <div class="card-name-block">
-        <div class="card-team">${esc(teamLabel)}OFFICIAL</div>
-        <div class="card-name">${esc(playerName)}</div>
-        ${position ? `<div class="card-position">${esc(position)}</div>` : ''}
-      </div>
-      <div class="card-overall">
-        <div class="card-overall-num">${esc(String(overall))}</div>
-        <div class="card-overall-label">OVR</div>
-      </div>
-    </div>
     <div class="card-photo"></div>
-    ${stats.length ? `<div class="card-stats">
-      ${stats.map(s => `<div class="stat-cell">
-        <div class="sc-label">${esc(String(s.label || '').toUpperCase())}</div>
-        <div class="sc-value">${esc(String(s.value || ''))}</div>
-      </div>`).join('')}
-    </div>` : ''}
-    <div class="card-bottom-tag">2026 SEASON · DATA ANALYSIS</div>
+    <div class="card-data">
+      <div class="card-header">
+        <div class="card-name-block">
+          <div class="card-team">${esc(teamLabel)}OFFICIAL</div>
+          <div class="card-name">${esc(playerName)}</div>
+          ${position ? `<div class="card-position">${esc(position)}</div>` : ''}
+        </div>
+        <div class="card-overall">
+          <div class="card-overall-num">${esc(String(overall))}</div>
+          <div class="card-overall-label">OVR</div>
+        </div>
+      </div>
+      ${stats.length ? `<div class="card-stats">
+        ${stats.map(s => `<div class="stat-cell">
+          <div class="sc-label">${esc(String(s.label || '').toUpperCase())}</div>
+          <div class="sc-value">${esc(String(s.value || ''))}</div>
+        </div>`).join('')}
+      </div>` : ''}
+      <div class="card-bottom-tag">2026 · DATA ANALYSIS</div>
+    </div>
   </div>
 </div>
 ${bottomCatch ? `<div class="bottom-catch">${esc(bottomCatch)}</div>` : ''}

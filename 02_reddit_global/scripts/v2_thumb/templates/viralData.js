@@ -49,21 +49,22 @@ function buildViralDataThumb(data = {}) {
   pointer-events: none;
 }
 
-/* ── 上部 斜め赤リボン（BREAKING）── */
+/* ── 上部 赤リボン（BREAKING）水平 ── */
 .breaking-ribbon {
   position: absolute;
-  top: 18px; left: -40px;
-  width: 480px; height: 60px;
+  top: 24px; left: 24px;
+  height: 68px;
+  padding: 0 28px;
   background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
-  transform: rotate(-3deg);
   display: flex; align-items: center; justify-content: center;
-  gap: 14px;
+  gap: 16px;
   box-shadow: 0 8px 22px rgba(220,38,38,0.5), 0 0 0 3px #000 inset, 0 0 0 6px rgba(252,211,77,0.6);
+  border-radius: 6px;
   z-index: 8;
 }
 .breaking-en {
   font-family: 'Georgia', serif;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
   color: #fcd34d;
   letter-spacing: 8px;
@@ -71,11 +72,11 @@ function buildViralDataThumb(data = {}) {
 }
 .breaking-jp {
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 32px;
+  font-size: 38px;
   font-weight: 900;
   color: #fff;
   letter-spacing: 2px;
-  -webkit-text-stroke: 2px #000;
+  -webkit-text-stroke: 2.5px #000;
   text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
 }
 .breaking-dot {
@@ -90,7 +91,7 @@ function buildViralDataThumb(data = {}) {
 .stat-burst {
   position: absolute;
   top: 50%; right: 36px;
-  transform: translateY(-50%) rotate(-1deg);
+  transform: translateY(-50%);
   z-index: 7;
 }
 .burst-rays {
@@ -142,27 +143,27 @@ function buildViralDataThumb(data = {}) {
 }
 .stat-num {
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 96px;
+  font-size: 116px;
   font-weight: 900;
   color: #ef4444;
-  letter-spacing: -4px;
-  line-height: 0.92;
-  -webkit-text-stroke: 4px #000;
-  text-shadow: 5px 5px 0 #000;
+  letter-spacing: -5px;
+  line-height: 0.9;
+  -webkit-text-stroke: 5px #000;
+  text-shadow: 6px 6px 0 #000;
   white-space: nowrap;
 }
 .stat-label {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   color: #000;
-  letter-spacing: 1px;
-  margin-top: 8px;
+  letter-spacing: 1.5px;
+  margin-top: 10px;
   line-height: 1.2;
   background: #fcd34d;
-  padding: 6px 18px;
+  padding: 7px 20px;
   border-radius: 4px;
   border: 3px solid #000;
-  -webkit-text-stroke: 0.5px #000;
+  -webkit-text-stroke: 0.8px #000;
 }
 
 /* ── サブ統計（左下、小さめ）── */
@@ -176,7 +177,6 @@ function buildViralDataThumb(data = {}) {
   padding: 10px 18px;
   border-radius: 6px;
   z-index: 6;
-  transform: rotate(2deg);
   box-shadow: 0 8px 22px rgba(0,0,0,0.6), 0 0 18px rgba(252,211,77,0.4);
 }
 .ss-num {
@@ -196,62 +196,62 @@ function buildViralDataThumb(data = {}) {
   letter-spacing: 1px;
 }
 
-/* ── 下部 斜め黄色帯（-3°傾き）── */
+/* ── 下部 黄色帯（水平・ゴツめ）── */
 .tilt-banner {
   position: absolute;
-  bottom: 28px; left: -30px; right: -30px;
+  bottom: 28px; left: 24px; right: 24px;
   background: linear-gradient(180deg, #fde047 0%, #fbbf24 100%);
   border-top: 6px solid #000;
   border-bottom: 6px solid #000;
-  padding: 14px 60px 16px;
-  transform: rotate(-2.5deg);
+  padding: 18px 36px 20px;
+  border-radius: 8px;
   box-shadow: 0 12px 30px rgba(0,0,0,0.6), 0 0 0 4px #ef4444 inset;
   z-index: 5;
 }
 .tilt-banner-inner {
-  transform: rotate(0deg);
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 .banner-line1 {
   font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'メイリオ', sans-serif;
-  font-size: 64px;
+  font-size: 80px;
   font-weight: 900;
   color: #000;
   line-height: 1.05;
   letter-spacing: -2px;
   text-align: center;
   word-break: keep-all;
-  -webkit-text-stroke: 1px #000;
+  -webkit-text-stroke: 2px #000;
   text-shadow:
-    2px 2px 0 #fcd34d,
-    3px 3px 0 #000,
-    4px 4px 0 #fcd34d,
-    5px 5px 0 #000;
-  ${title.length > 18 ? 'font-size: 54px;' : ''}
-  ${title.length > 24 ? 'font-size: 46px;' : ''}
-  ${title.length > 30 ? 'font-size: 40px;' : ''}
+    3px 3px 0 #fcd34d,
+    4px 4px 0 #000,
+    5px 5px 0 #fcd34d,
+    6px 6px 0 #000;
+  ${title.length > 14 ? 'font-size: 68px;' : ''}
+  ${title.length > 20 ? 'font-size: 58px;' : ''}
+  ${title.length > 26 ? 'font-size: 50px;' : ''}
+  ${title.length > 32 ? 'font-size: 42px;' : ''}
 }
 .banner-line2 {
   display: ${titleHighlight ? 'inline-block' : 'none'};
   font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
-  font-size: 76px;
+  font-size: 92px;
   font-weight: 900;
   color: #ef4444;
   line-height: 1;
   letter-spacing: -3px;
   text-align: center;
-  -webkit-text-stroke: 3.5px #000;
+  -webkit-text-stroke: 4.5px #000;
   text-shadow:
-    -2px -2px 0 #000,
-    2px -2px 0 #000,
-    -2px 2px 0 #000,
-    2px 2px 0 #000,
-    5px 5px 0 #000,
-    6px 6px 0 #fcd34d,
-    7px 7px 0 #000;
+    -3px -3px 0 #000,
+    3px -3px 0 #000,
+    -3px 3px 0 #000,
+    3px 3px 0 #000,
+    6px 6px 0 #000,
+    7px 7px 0 #fcd34d,
+    8px 8px 0 #000;
   word-break: keep-all;
-  ${titleHighlight && titleHighlight.length > 14 ? 'font-size: 64px;' : ''}
-  ${titleHighlight && titleHighlight.length > 20 ? 'font-size: 54px;' : ''}
+  ${titleHighlight && titleHighlight.length > 12 ? 'font-size: 78px;' : ''}
+  ${titleHighlight && titleHighlight.length > 18 ? 'font-size: 64px;' : ''}
 }
 
 /* ── 装飾: dot pattern オーバーレイ ── */

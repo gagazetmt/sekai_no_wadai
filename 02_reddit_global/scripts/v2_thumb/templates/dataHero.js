@@ -44,7 +44,7 @@ function buildDataHeroThumb(data = {}) {
 .hero-photo {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 50%;
+  width: 64%;
   ${heroImg ? `background-image: url('${heroImg}');` : `background: ${isLight ? 'radial-gradient(circle at 50% 60%, #d8c8a8, #b8a888)' : 'radial-gradient(circle at 50% 60%, #2a3560, #0d1220)'};`}
   background-size: cover;
   background-position: center 25%;
@@ -54,7 +54,7 @@ function buildDataHeroThumb(data = {}) {
   content: '';
   position: absolute;
   right: 0; top: 0; bottom: 0;
-  width: 200px;
+  width: 110px;
   background: linear-gradient(to right, transparent 0%, ${p.bg} 100%);
 }
 
@@ -62,8 +62,8 @@ function buildDataHeroThumb(data = {}) {
 .data-zone {
   position: absolute;
   right: 0; top: 0; bottom: 0;
-  width: 60%;
-  padding: 30px 50px 40px 80px;
+  width: 44%;
+  padding: 30px 40px 40px 50px;
   display: flex; flex-direction: column;
   z-index: 5;
 }
@@ -90,11 +90,11 @@ function buildDataHeroThumb(data = {}) {
 }
 .hero-num {
   font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 220px;
+  font-size: 180px;
   font-weight: 900;
   font-style: italic;
   color: ${p.accent};
-  letter-spacing: -10px;
+  letter-spacing: -8px;
   line-height: 0.9;
   text-shadow: ${heroNumShadow};
   display: inline-block;
@@ -112,7 +112,7 @@ function buildDataHeroThumb(data = {}) {
 .catch-zone {
   display: flex; flex-direction: column; align-items: flex-end;
   margin-top: auto;
-  font-size: 50px;
+  font-size: 44px;
   font-weight: 900;
   color: ${p.text};
   line-height: 1.22;
