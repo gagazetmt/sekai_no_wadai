@@ -631,18 +631,6 @@ ${thumbSamples.filter(s => /thumb_L\d+_/.test(s.name)).map(s => `
 </div>`).join('')}
 </div>
 
-<h3>🏟️ テンプレM: STADIUM SCOREBOARD（夜の電光掲示板）</h3>
-<p class="section-note">
-LED風 monospace 数字 + 緑×ゴールド配色 + LIVE インジケータ。試合速報系で映える。
-</p>
-<div class="thumbs-grid">
-${thumbSamples.filter(s => /thumb_M\d+_/.test(s.name)).map(s => `
-<div class="thumb-card">
-  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
-  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
-</div>`).join('')}
-</div>
-
 <h3>📰 テンプレN: MAGAZINE COVER（雑誌表紙風）</h3>
 <p class="section-note">
 "FOOTBALL ANALYSIS" マストヘッド + 円形ステッカー × 3 + バーコード。エディトリアル感MAX。

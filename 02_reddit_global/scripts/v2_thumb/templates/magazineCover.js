@@ -94,41 +94,86 @@ function buildMagazineCoverThumb(data = {}) {
     linear-gradient(0deg, rgba(20,15,10,0.7) 0%, rgba(20,15,10,0.0) 35%);
 }
 
-/* ── 右側ステッカー（円形バッジ）── */
+/* ── 右側ステッカー（円形バッジ・大ぶり煌び）── */
 .stickers {
   position: absolute;
-  top: 110px; right: 30px;
-  display: flex; flex-direction: column; gap: 18px;
+  top: 100px; right: 24px;
+  display: flex; flex-direction: column; gap: 20px;
   z-index: 6;
 }
 .sticker {
-  width: 165px; height: 165px;
+  position: relative;
+  width: 200px; height: 200px;
   border-radius: 50%;
-  border: 5px solid;
+  border: 6px solid;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  box-shadow: 0 8px 22px rgba(0,0,0,0.6), 0 0 0 3px rgba(255,255,255,0.85) inset;
+  box-shadow:
+    0 0 0 4px rgba(255,255,255,0.85) inset,
+    0 0 0 8px #000,
+    0 0 30px rgba(252,211,77,0.6),
+    0 12px 28px rgba(0,0,0,0.75);
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
   text-align: center;
 }
+/* 各ステッカー外周にバースト（星型放射） */
+.sticker::before {
+  content: '';
+  position: absolute;
+  inset: -22px;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(252,211,77,0.55) 0deg 6deg,
+    transparent 6deg 22deg
+  );
+  filter: blur(1px);
+  border-radius: 50%;
+  z-index: -1;
+  opacity: 0.85;
+}
 .sticker:nth-child(1) { transform: rotate(-6deg); }
-.sticker:nth-child(2) { transform: rotate(4deg); margin-left: 28px; }
-.sticker:nth-child(3) { transform: rotate(-3deg); margin-left: -8px; }
+.sticker:nth-child(2) { transform: rotate(4deg); margin-left: 36px; }
+.sticker:nth-child(3) { transform: rotate(-3deg); margin-left: -12px; }
 .sticker .s-num {
-  font-size: 48px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  font-size: 64px;
   font-weight: 900;
-  letter-spacing: -1px;
+  letter-spacing: -2px;
   line-height: 1;
-  -webkit-text-stroke: 1.5px;
-  text-shadow: 2px 2px 0 currentColor;
+  -webkit-text-stroke: 2.5px #000;
+  text-shadow: 3px 3px 0 #000, 5px 5px 0 currentColor;
 }
 .sticker .s-label {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 900;
-  letter-spacing: 1px;
-  margin-top: 6px;
+  letter-spacing: 2px;
+  margin-top: 8px;
   line-height: 1.2;
+  font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: rgba(0,0,0,0.85);
+  color: #fcd34d !important;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 2px solid #fcd34d;
+  text-transform: uppercase;
+  font-style: normal;
+}
+/* 「NEW!」バッジ（先頭ステッカー上部） */
+.sticker:nth-child(1)::after {
+  content: 'NEW!';
+  position: absolute;
+  top: -18px; left: 50%;
+  transform: translateX(-50%) rotate(8deg);
   font-family: 'Georgia', serif;
+  font-size: 16px;
+  font-weight: 900;
   font-style: italic;
+  color: #000;
+  background: #fcd34d;
+  padding: 4px 14px;
+  border: 3px solid #000;
+  border-radius: 4px;
+  letter-spacing: 2px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
 /* ── 下部 大タイトル ── */
@@ -190,6 +235,40 @@ function buildMagazineCoverThumb(data = {}) {
   z-index: 4;
   opacity: 0.7;
 }
+
+/* ── スパークル散布（4箇所＋金キラ）── */
+.mc-sparkle {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(0 0 10px rgba(252,211,77,0.95));
+  z-index: 7;
+}
+.mc-sp-1 { top: 100px;  left: 50px;   width: 32px; height: 32px; }
+.mc-sp-2 { top: 320px;  left: 35%;    width: 26px; height: 26px; }
+.mc-sp-3 { bottom: 200px; left: 28%;  width: 38px; height: 38px; }
+.mc-sp-4 { top: 220px;  right: 250px; width: 30px; height: 30px; }
+.mc-sp-5 { bottom: 120px; right: 250px; width: 28px; height: 28px; }
+
+/* ── マストヘッド金箔ライン（既存4px+追加2層）── */
+.masthead { box-shadow: 0 4px 0 #000, 0 6px 0 #fcd34d, 0 10px 24px rgba(0,0,0,0.6); }
+
+/* ── 左下 KEY DATA リボン（さらに視線誘導）── */
+.kd-ribbon {
+  position: absolute;
+  top: 360px; left: 16px;
+  background: #ef4444;
+  color: #fcd34d;
+  font-family: 'Georgia', serif;
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 6px;
+  padding: 8px 18px 8px 24px;
+  border: 3px solid #000;
+  border-radius: 0 6px 6px 0;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+  z-index: 6;
+}
 `;
 
   // ステッカー色付け
@@ -201,11 +280,22 @@ function buildMagazineCoverThumb(data = {}) {
     </div>`;
   }).join('');
 
+  const sparkleSvg = `
+<svg viewBox="0 0 24 24" fill="#fcd34d" xmlns="http://www.w3.org/2000/svg">
+  <path d="M12 0L14 9L23 11L14 13L12 22L10 13L1 11L10 9Z"/>
+</svg>`;
+
   const thumbBody = `
 <div class="bg-base"></div>
 <div class="hero-cover"></div>
 <div class="cover-overlay"></div>
 <div class="barcode-strip"></div>
+<div class="kd-ribbon">KEY DATA</div>
+<div class="mc-sparkle mc-sp-1">${sparkleSvg}</div>
+<div class="mc-sparkle mc-sp-2">${sparkleSvg}</div>
+<div class="mc-sparkle mc-sp-3">${sparkleSvg}</div>
+<div class="mc-sparkle mc-sp-4">${sparkleSvg}</div>
+<div class="mc-sparkle mc-sp-5">${sparkleSvg}</div>
 <div class="masthead">
   <span class="masthead-title">FOOTBALL ANALYSIS</span>
   <span class="masthead-issue">${esc(issueLabel)}</span>

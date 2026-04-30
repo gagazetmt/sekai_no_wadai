@@ -23,13 +23,14 @@ function buildDataHeroThumb(data = {}) {
   const badgeColor = data.badgeColor || p.red;
   const channelName = data.channelName || CHANNEL_NAME;
 
-  // light tone 時はテキストシャドウ控えめ
+  // 数字: 多層ストローク + 黒影3段 で 3D ポップ感
   const heroNumShadow = isLight
-    ? `0 4px 12px rgba(194,116,10,0.25), 0 2px 4px rgba(0,0,0,0.15)`
-    : `0 0 40px rgba(245,158,11,0.55), 0 0 100px rgba(245,158,11,0.3), 0 8px 30px rgba(0,0,0,0.95)`;
+    ? `4px 4px 0 #b45309, 6px 6px 0 #000, 8px 12px 24px rgba(0,0,0,0.45)`
+    : `4px 4px 0 #b45309, 6px 6px 0 #000, 0 0 36px rgba(252,211,77,0.7), 8px 16px 30px rgba(0,0,0,0.95)`;
+  // キャッチ: 黒縁取り + 黄色グロー + ドロップシャドウ
   const catchShadow = isLight
-    ? `0 2px 8px rgba(0,0,0,0.10)`
-    : `0 0 12px rgba(255,255,255,0.4), 0 0 28px rgba(245,158,11,0.4), 0 6px 24px rgba(0,0,0,0.95)`;
+    ? `2px 2px 0 #000, 3px 3px 0 #fcd34d, 4px 4px 0 #000, 0 8px 18px rgba(0,0,0,0.35)`
+    : `2px 2px 0 #000, 3px 3px 0 #fcd34d, 4px 4px 0 #000, 0 0 22px rgba(252,211,77,0.55), 0 8px 22px rgba(0,0,0,0.95)`;
 
   const extraStyles = `
 .bg-gradient {
@@ -69,17 +70,28 @@ function buildDataHeroThumb(data = {}) {
 }
 
 .top-badge {
-  display: ${badge ? 'inline-block' : 'none'};
+  display: ${badge ? 'inline-flex' : 'none'};
+  align-items: center; gap: 10px;
   align-self: flex-start;
   background: ${badgeColor};
   color: #fff;
-  padding: 8px 22px;
-  font-size: 22px;
+  padding: 10px 24px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  font-size: 26px;
   font-weight: 900;
   letter-spacing: 4px;
-  border-radius: 4px;
-  box-shadow: 0 4px 18px ${badgeColor}80;
+  border: 3px solid #000;
+  border-radius: 6px;
+  box-shadow: 4px 4px 0 #000, 0 6px 22px ${badgeColor}80;
   margin-bottom: 14px;
+  -webkit-text-stroke: 1px #000;
+  text-shadow: 2px 2px 0 #000;
+}
+.top-badge::before {
+  content: '◆';
+  font-size: 22px;
+  color: #fcd34d;
+  text-shadow: 1px 1px 0 #000;
 }
 
 /* 数字ゾーン: 上寄り配置 */
@@ -89,36 +101,45 @@ function buildDataHeroThumb(data = {}) {
   margin-bottom: 20px;
 }
 .hero-num {
-  font-family: 'Georgia', 'Times New Roman', serif;
-  font-size: 180px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Arial Black', sans-serif;
+  font-size: 230px;
   font-weight: 900;
   font-style: italic;
   color: ${p.accent};
-  letter-spacing: -8px;
-  line-height: 0.9;
+  letter-spacing: -10px;
+  line-height: 0.88;
+  -webkit-text-stroke: 5px #000;
   text-shadow: ${heroNumShadow};
   display: inline-block;
+  transform: skewX(-6deg);
 }
 .hero-label {
-  font-size: 24px;
-  font-weight: 700;
-  color: ${p.text};
-  letter-spacing: 4px;
-  margin-top: 4px;
-  text-shadow: ${isLight ? 'none' : '0 2px 10px rgba(0,0,0,0.8)'};
+  display: inline-block;
+  font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-size: 26px;
+  font-weight: 900;
+  color: #000;
+  background: ${p.accent};
+  letter-spacing: 3px;
+  padding: 6px 16px;
+  margin-top: 8px;
+  border: 3px solid #000;
+  border-radius: 4px;
+  box-shadow: 3px 3px 0 #000;
 }
 
 /* キャッチ: 下寄り配置で 2行折返し対応 */
 .catch-zone {
   display: flex; flex-direction: column; align-items: flex-end;
   margin-top: auto;
-  font-size: 44px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Arial Black', sans-serif;
+  font-size: 56px;
   font-weight: 900;
   color: ${p.text};
-  line-height: 1.22;
-  ${isLight ? '' : `-webkit-text-stroke: 2px rgba(255,255,255,0.18);`}
+  line-height: 1.18;
+  -webkit-text-stroke: 3px #000;
   text-shadow: ${catchShadow};
-  letter-spacing: 1px;
+  letter-spacing: 0px;
   max-width: 100%;
   word-break: break-word;
   overflow-wrap: anywhere;
