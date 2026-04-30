@@ -71,12 +71,12 @@ function buildViralDataThumb(data = {}) {
 }
 .breaking-jp {
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 900;
   color: #fff;
   letter-spacing: 2px;
-  -webkit-text-stroke: 1px #000;
-  text-shadow: 2px 2px 0 #000;
+  -webkit-text-stroke: 2px #000;
+  text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
 }
 .breaking-dot {
   width: 12px; height: 12px;
@@ -142,26 +142,27 @@ function buildViralDataThumb(data = {}) {
 }
 .stat-num {
   font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 78px;
+  font-size: 96px;
   font-weight: 900;
   color: #ef4444;
-  letter-spacing: -3px;
-  line-height: 0.95;
-  -webkit-text-stroke: 3px #000;
-  text-shadow: 4px 4px 0 #000;
+  letter-spacing: -4px;
+  line-height: 0.92;
+  -webkit-text-stroke: 4px #000;
+  text-shadow: 5px 5px 0 #000;
   white-space: nowrap;
 }
 .stat-label {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 900;
   color: #000;
   letter-spacing: 1px;
-  margin-top: 6px;
+  margin-top: 8px;
   line-height: 1.2;
   background: #fcd34d;
-  padding: 4px 14px;
+  padding: 6px 18px;
   border-radius: 4px;
-  border: 2px solid #000;
+  border: 3px solid #000;
+  -webkit-text-stroke: 0.5px #000;
 }
 
 /* ── サブ統計（左下、小さめ）── */
@@ -213,39 +214,44 @@ function buildViralDataThumb(data = {}) {
 }
 .banner-line1 {
   font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'メイリオ', sans-serif;
-  font-size: 50px;
+  font-size: 64px;
   font-weight: 900;
   color: #000;
   line-height: 1.05;
-  letter-spacing: -1px;
+  letter-spacing: -2px;
   text-align: center;
   word-break: keep-all;
+  -webkit-text-stroke: 1px #000;
   text-shadow:
     2px 2px 0 #fcd34d,
-    3px 3px 0 #000;
-  ${title.length > 18 ? 'font-size: 42px;' : ''}
-  ${title.length > 24 ? 'font-size: 36px;' : ''}
+    3px 3px 0 #000,
+    4px 4px 0 #fcd34d,
+    5px 5px 0 #000;
+  ${title.length > 18 ? 'font-size: 54px;' : ''}
+  ${title.length > 24 ? 'font-size: 46px;' : ''}
+  ${title.length > 30 ? 'font-size: 40px;' : ''}
 }
 .banner-line2 {
   display: ${titleHighlight ? 'inline-block' : 'none'};
   font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
-  font-size: 60px;
+  font-size: 76px;
   font-weight: 900;
   color: #ef4444;
   line-height: 1;
-  letter-spacing: -2px;
+  letter-spacing: -3px;
   text-align: center;
-  -webkit-text-stroke: 2.5px #000;
+  -webkit-text-stroke: 3.5px #000;
   text-shadow:
     -2px -2px 0 #000,
     2px -2px 0 #000,
     -2px 2px 0 #000,
-    4px 4px 0 #000,
-    5px 5px 0 #fcd34d,
-    6px 6px 0 #000;
+    2px 2px 0 #000,
+    5px 5px 0 #000,
+    6px 6px 0 #fcd34d,
+    7px 7px 0 #000;
   word-break: keep-all;
-  ${titleHighlight && titleHighlight.length > 14 ? 'font-size: 50px;' : ''}
-  ${titleHighlight && titleHighlight.length > 20 ? 'font-size: 42px;' : ''}
+  ${titleHighlight && titleHighlight.length > 14 ? 'font-size: 64px;' : ''}
+  ${titleHighlight && titleHighlight.length > 20 ? 'font-size: 54px;' : ''}
 }
 
 /* ── 装飾: dot pattern オーバーレイ ── */

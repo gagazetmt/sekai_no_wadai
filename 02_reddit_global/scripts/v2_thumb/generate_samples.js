@@ -11,6 +11,9 @@ const { buildRankingThumb }  = require('./templates/ranking');
 const { buildVsThumb }       = require('./templates/vs');
 const { buildQuestionThumb } = require('./templates/question');
 const { buildViralDataThumb } = require('./templates/viralData');
+const { buildStadiumBoardThumb } = require('./templates/stadiumBoard');
+const { buildMagazineCoverThumb } = require('./templates/magazineCover');
+const { buildTradingCardThumb }  = require('./templates/tradingCard');
 
 // OP/ED スライドビルダー
 const { buildOpeningHTML: buildOpV1 } = require('../v2_video/slides/opening');
@@ -218,6 +221,140 @@ const thumbSamples = [];
   },
 ].forEach(s => {
   thumbSamples.push({ ...s, html: buildViralDataThumb(s.data) });
+});
+
+// ─── テンプレ M: STADIUM SCOREBOARD ──
+[
+  {
+    name: 'thumb_M1_psg_bayern',
+    label: 'M-1: PSG vs Bayern',
+    data: {
+      heroImage: IMG.bayern,
+      title: 'PSG vs バイエルン CL準決勝',
+      scoreLabel: 'PSG ━ BAYERN MUNICH',
+      scoreLeft: '5',
+      scoreRight: '4',
+      mainStat: { value: '+1', label: 'GOAL DIFFERENCE' },
+      subStats: [
+        { label: 'POSSESSION', value: '52%' },
+        { label: 'SHOTS',      value: '15' },
+        { label: 'XG',         value: '3.8' },
+      ],
+    },
+  },
+  {
+    name: 'thumb_M2_olise_data',
+    label: 'M-2: オリーセデータ',
+    data: {
+      heroImage: IMG.olise,
+      title: 'オリーセ 今夜の数字',
+      scoreLabel: 'OLISE · BAYERN',
+      mainStat: { value: '8.7', label: 'MATCH RATING' },
+      subStats: [
+        { label: 'GOALS',  value: '2' },
+        { label: 'XG',     value: '+2.1' },
+        { label: 'PASSES', value: '64' },
+      ],
+    },
+  },
+].forEach(s => {
+  thumbSamples.push({ ...s, html: buildStadiumBoardThumb(s.data) });
+});
+
+// ─── テンプレ N: MAGAZINE COVER ──
+[
+  {
+    name: 'thumb_N1_hakimi_cover',
+    label: 'N-1: ハキミ表紙',
+    data: {
+      heroImage: IMG.hakimi,
+      issueLabel: 'ISSUE 042',
+      title: 'ハキミ\nPSGの危機',
+      subtitle: '161試合の経験を失う',
+      stickers: [
+        { value: '161', label: 'PSG Apps',      color: 'red' },
+        { value: '+5.2', label: 'xG超過',        color: 'gold' },
+        { value: '6週',  label: 'Out',           color: 'green' },
+      ],
+    },
+  },
+  {
+    name: 'thumb_N2_olise_cover',
+    label: 'N-2: オリーセ表紙',
+    data: {
+      heroImage: IMG.olise,
+      issueLabel: 'ISSUE 043',
+      title: 'オリーセの真価',
+      subtitle: 'バイエルンが200億で奪う理由',
+      stickers: [
+        { value: '12G',  label: 'Goals',         color: 'red' },
+        { value: '7.8',  label: 'Avg Rating',    color: 'gold' },
+        { value: '+2.1', label: 'xG vs Real',    color: 'green' },
+      ],
+    },
+  },
+].forEach(s => {
+  thumbSamples.push({ ...s, html: buildMagazineCoverThumb(s.data) });
+});
+
+// ─── テンプレ O: TRADING CARD ──
+[
+  {
+    name: 'thumb_O1_hakimi_card',
+    label: 'O-1: ハキミ TCG',
+    data: {
+      heroImage: IMG.hakimi,
+      playerName: 'A. Hakimi',
+      position: 'RB · DF',
+      team: 'PSG',
+      overallRating: 89,
+      stats: [
+        { label: 'GOL', value: 4 },
+        { label: 'AST', value: 6 },
+        { label: 'RAT', value: '7.5' },
+        { label: 'APP', value: 18 },
+      ],
+      bottomCatch: 'PSG攻撃の心臓',
+    },
+  },
+  {
+    name: 'thumb_O2_olise_card',
+    label: 'O-2: オリーセ TCG',
+    data: {
+      heroImage: IMG.olise,
+      playerName: 'M. Olise',
+      position: 'RW · MF',
+      team: 'BAYERN',
+      overallRating: 87,
+      stats: [
+        { label: 'GOL', value: 12 },
+        { label: 'AST', value: 8 },
+        { label: 'RAT', value: '7.8' },
+        { label: 'XG',  value: '+5.2' },
+      ],
+      bottomCatch: '今季覚醒の異才',
+    },
+  },
+  {
+    name: 'thumb_O3_casemiro_card',
+    label: 'O-3: カゼミーロ TCG',
+    data: {
+      heroImage: IMG.casemiro,
+      playerName: 'Casemiro',
+      position: 'CDM · MF',
+      team: 'MAN UTD',
+      overallRating: 85,
+      stats: [
+        { label: 'INT', value: 47 },
+        { label: 'TKL', value: 62 },
+        { label: 'RAT', value: '8.4' },
+        { label: 'APP', value: 22 },
+      ],
+      bottomCatch: 'マンUの守護神',
+    },
+  },
+].forEach(s => {
+  thumbSamples.push({ ...s, html: buildTradingCardThumb(s.data) });
 });
 
 // ─── Light tone サンプル（4テンプレ × 1サンプル）──
@@ -482,12 +619,48 @@ ${thumbSamples.filter(s => /thumb_D\d+_/.test(s.name)).map(s => `
 </div>`).join('')}
 </div>
 
-<h3>🔥 テンプレL: 5ch反応集スタイル × データ（洗練版）</h3>
+<h3>🔥 テンプレL: BREAKING JUMBOTRON（5ch風 × データ）</h3>
 <p class="section-note">
-反応集の視覚インパクト × データ密度の中身。プレミアム統計バッジ・多層シャドウ文字・分析チャンネルストライプで洗練度UP。
+赤い斜めリボン + 円形プレミアムバッジ + 斜め黄色帯。フォント大幅増強。
 </p>
 <div class="thumbs-grid">
 ${thumbSamples.filter(s => /thumb_L\d+_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
+
+<h3>🏟️ テンプレM: STADIUM SCOREBOARD（夜の電光掲示板）</h3>
+<p class="section-note">
+LED風 monospace 数字 + 緑×ゴールド配色 + LIVE インジケータ。試合速報系で映える。
+</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_M\d+_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
+
+<h3>📰 テンプレN: MAGAZINE COVER（雑誌表紙風）</h3>
+<p class="section-note">
+"FOOTBALL ANALYSIS" マストヘッド + 円形ステッカー × 3 + バーコード。エディトリアル感MAX。
+</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_N\d+_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
+
+<h3>🃏 テンプレO: TRADING CARD（トレカ風）</h3>
+<p class="section-note">
+ホログラフィック金枠カード + OVR スコア + 4種スタッツグリッド。コレクション感×データ。
+</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_O\d+_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
