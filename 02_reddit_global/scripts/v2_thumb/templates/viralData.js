@@ -63,19 +63,20 @@ function buildViralDataThumb(data = {}) {
   z-index: 8;
 }
 .breaking-en {
-  font-family: 'Georgia', serif;
-  font-size: 16px;
+  font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 18px;
   font-weight: 900;
   color: #fcd34d;
-  letter-spacing: 8px;
+  letter-spacing: 10px;
   text-transform: uppercase;
 }
 .breaking-jp {
-  font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 38px;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS PMincho', serif;
+  font-size: 42px;
   font-weight: 900;
   color: #fff;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   -webkit-text-stroke: 2.5px #000;
   text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
 }
@@ -132,35 +133,38 @@ function buildViralDataThumb(data = {}) {
   transform: translateX(-50%);
   background: #ef4444;
   color: #fcd34d;
-  font-family: 'Georgia', serif;
-  font-size: 14px;
+  font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 16px;
   font-weight: 900;
-  letter-spacing: 6px;
-  padding: 6px 22px;
+  letter-spacing: 8px;
+  padding: 6px 24px;
   border-radius: 4px;
   border: 3px solid #000;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 .stat-num {
-  font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 116px;
+  font-family: 'Bodoni 72', 'Didot', 'Times New Roman', 'Georgia', serif;
+  font-style: italic;
+  font-size: 132px;
   font-weight: 900;
   color: #ef4444;
-  letter-spacing: -5px;
+  letter-spacing: -4px;
   line-height: 0.9;
-  -webkit-text-stroke: 5px #000;
+  -webkit-text-stroke: 4px #000;
   text-shadow: 6px 6px 0 #000;
   white-space: nowrap;
 }
 .stat-label {
-  font-size: 24px;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+  font-size: 26px;
   font-weight: 900;
   color: #000;
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
   margin-top: 10px;
   line-height: 1.2;
   background: #fcd34d;
-  padding: 7px 20px;
+  padding: 7px 22px;
   border-radius: 4px;
   border: 3px solid #000;
   -webkit-text-stroke: 0.8px #000;
@@ -180,8 +184,9 @@ function buildViralDataThumb(data = {}) {
   box-shadow: 0 8px 22px rgba(0,0,0,0.6), 0 0 18px rgba(252,211,77,0.4);
 }
 .ss-num {
-  font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 36px;
+  font-family: 'Bodoni 72', 'Didot', 'Georgia', serif;
+  font-style: italic;
+  font-size: 40px;
   font-weight: 900;
   color: #fcd34d;
   letter-spacing: -1px;
@@ -190,10 +195,11 @@ function buildViralDataThumb(data = {}) {
   text-shadow: 2px 2px 0 #000;
 }
 .ss-label {
-  font-size: 13px;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+  font-size: 14px;
   font-weight: 900;
   color: #fff;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
 }
 
 /* ── 下部 黄色帯（水平・ゴツめ）── */
@@ -212,35 +218,36 @@ function buildViralDataThumb(data = {}) {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 .banner-line1 {
-  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'メイリオ', sans-serif;
-  font-size: 80px;
+  font-family: 'Yu Mincho', 'Hiragino Mincho ProN', 'MS PMincho', 'Hiragino Mincho Pro', serif;
+  font-size: 84px;
   font-weight: 900;
   color: #000;
   line-height: 1.05;
-  letter-spacing: -2px;
+  letter-spacing: 2px;
   text-align: center;
   word-break: keep-all;
-  -webkit-text-stroke: 2px #000;
+  -webkit-text-stroke: 1.5px #000;
   text-shadow:
     3px 3px 0 #fcd34d,
     4px 4px 0 #000,
     5px 5px 0 #fcd34d,
     6px 6px 0 #000;
-  ${title.length > 14 ? 'font-size: 68px;' : ''}
-  ${title.length > 20 ? 'font-size: 58px;' : ''}
-  ${title.length > 26 ? 'font-size: 50px;' : ''}
-  ${title.length > 32 ? 'font-size: 42px;' : ''}
+  ${title.length > 14 ? 'font-size: 72px;' : ''}
+  ${title.length > 20 ? 'font-size: 60px;' : ''}
+  ${title.length > 26 ? 'font-size: 52px;' : ''}
+  ${title.length > 32 ? 'font-size: 44px;' : ''}
 }
 .banner-line2 {
   display: ${titleHighlight ? 'inline-block' : 'none'};
-  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
-  font-size: 92px;
+  font-family: 'Bodoni 72', 'Didot', 'Times New Roman', 'Georgia', serif;
+  font-style: italic;
+  font-size: 96px;
   font-weight: 900;
   color: #ef4444;
   line-height: 1;
-  letter-spacing: -3px;
+  letter-spacing: 0px;
   text-align: center;
-  -webkit-text-stroke: 4.5px #000;
+  -webkit-text-stroke: 4px #000;
   text-shadow:
     -3px -3px 0 #000,
     3px -3px 0 #000,
@@ -250,8 +257,8 @@ function buildViralDataThumb(data = {}) {
     7px 7px 0 #fcd34d,
     8px 8px 0 #000;
   word-break: keep-all;
-  ${titleHighlight && titleHighlight.length > 12 ? 'font-size: 78px;' : ''}
-  ${titleHighlight && titleHighlight.length > 18 ? 'font-size: 64px;' : ''}
+  ${titleHighlight && titleHighlight.length > 12 ? 'font-size: 80px;' : ''}
+  ${titleHighlight && titleHighlight.length > 18 ? 'font-size: 66px;' : ''}
 }
 
 /* ── 装飾: dot pattern オーバーレイ ── */
@@ -285,10 +292,12 @@ function buildViralDataThumb(data = {}) {
   border-bottom: 3px solid #fcd34d;
   border-left: 3px solid #fcd34d;
   padding: 6px 16px 6px 22px;
-  font-size: 13px;
+  font-family: 'Bodoni 72', 'Didot', 'Georgia', serif;
+  font-style: italic;
+  font-size: 14px;
   font-weight: 900;
   color: #fcd34d;
-  letter-spacing: 4px;
+  letter-spacing: 5px;
   z-index: 9;
   border-radius: 0 0 0 8px;
 }
