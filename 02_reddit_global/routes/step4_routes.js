@@ -1299,7 +1299,7 @@ function getUI() {
           + '<span style="font-size:11px;color:#a5b4fc;font-weight:bold;">' + (m.type === 'opening' ? '🎬 OP' : '🎬 ED') + ' バリアント:</span>'
           + ['v1','v2','v3'].map(function(v) {
               return '<label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:#e0e0e0;">'
-                + '<input type="radio" name="s4-variant-' + i + '" value="' + v + '"' + ((m.variant||'v1')===v?' checked':'') + ' onchange="s4ChangeVariant(' + i + ',\'' + v + '\')"> '
+                + '<input type="radio" name="s4-variant-' + i + '" value="' + v + '"' + ((m.variant||'v1')===v?' checked':'') + ' onchange="s4ChangeVariant(' + i + ',&#39;' + v + '&#39;)"> '
                 + v.toUpperCase() + '</label>';
             }).join('')
           + '<span style="flex:1"></span>'
