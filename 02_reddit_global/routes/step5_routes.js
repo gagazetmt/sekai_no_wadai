@@ -780,7 +780,7 @@ function getUI() {
         const sel = (STATE.selectedVideo && STATE.selectedVideo.file === v.file);
         const sizeStr = (v.size / 1024 / 1024).toFixed(1) + 'MB';
         return '<div onclick="s5PickVideo(\\''+_e(v.file)+'\\')" style="cursor:pointer;background:var(--panel);border:2px solid '+(sel?'var(--c)':'var(--border)')+';border-radius:6px;padding:8px;font-size:11px;">'
-          + '<video src="'+v.url+'" style="width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:4px;margin-bottom:6px;"></video>'
+          + '<video src="'+v.url+'" preload="none" controls style="width:100%;aspect-ratio:16/9;display:block;background:#000;border-radius:4px;margin-bottom:6px;"></video>'
           + '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);" title="'+_e(v.file)+'">'+_e(v.file)+'</div>'
           + '<div style="color:var(--muted);font-size:10px;">'+sizeStr+'</div></div>';
       }).join('');

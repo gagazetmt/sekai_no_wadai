@@ -832,7 +832,51 @@ router.get('/v2/tts-audio', (req, res) => {
   } catch (e) { res.status(500).send(e.message); }
 });
 
-// ─── /v2/preview-slide : 1モジュールのスライドHTML ──────
+// ─── スライドビルダ（require は1回だけ。リクエスト毎ロード回避）──
+const _slideBuilders = (() => {
+  const { buildOpeningHTML: opV1 } = require('../scripts/v2_video/slides/opening');
+  const { buildOpeningHTML: opV2 } = require('../scripts/v2_video/slides/opening_v2');
+  const { buildOpeningHTML: opV3 } = require('../scripts/v2_video/slides/opening_v3');
+  const { buildEndingHTML:  edV1 } = require('../scripts/v2_video/slides/ending');
+  const { buildEndingHTML:  edV2 } = require('../scripts/v2_video/slides/ending_v2');
+  const { buildEndingHTML:  edV3 } = require('../scripts/v2_video/slides/ending_v3');
+  return {
+    OPB: { v1: opV1, v2: opV2, v3: opV3 },
+    EDB: { v1: edV1, v2: edV2, v3: edV3 },
+    universal:  require('../scripts/v2_video/slides/universal').buildUniversalHTML,
+    insight:    require('../scripts/v2_video/slides/insight').buildInsightHTML,
+    history:    require('../scripts/v2_video/slides/history').buildHistoryHTML,
+    matchcard:  require('../scripts/v2_video/slides/matchcard').buildMatchcardHTML,
+    profile:    require('../scripts/v2_video/slides/profile').buildProfileHTML,
+    stats:      require('../scripts/v2_video/slides/stats').buildStatsHTML,
+    comparison: require('../scripts/v2_video/slides/comparison').buildComparisonHTML,
+    reaction:   require('../scripts/v2_video/slides/reaction').buildReactionHTML,
+    toc:        require('../scripts/v2_video/slides/toc').buildTocHTML,
+    mapImagesToModule: require('../scripts/v2_video/slides/_common').mapImagesToModule,
+  };
+})();
+
+function _buildSlideForPreview(mod) {
+  const { OPB, EDB, mapImagesToModule } = _slideBuilders;
+  const m = mapImagesToModule(mod);
+  const opVar = OPB[m.variant] ? m.variant : 'v1';
+  const edVar = EDB[m.variant] ? m.variant : 'v1';
+  switch (m.type) {
+    case 'opening':     return OPB[opVar](m);
+    case 'ending':      return EDB[edVar](m);
+    case 'toc':         return _slideBuilders.toc(m);
+    case 'insight':     return _slideBuilders.insight(m);
+    case 'history':     return _slideBuilders.history(m);
+    case 'matchcard':   return _slideBuilders.matchcard(m);
+    case 'stats':       return _slideBuilders.stats(m);
+    case 'profile':     return _slideBuilders.profile(m);
+    case 'comparison':  return _slideBuilders.comparison(m);
+    case 'reaction':    return _slideBuilders.reaction(m);
+    default:            return _slideBuilders.universal(m);
+  }
+}
+
+// ─── /v2/preview-slide : 1モジュールのスライドHTML（disk経由・後方互換） ──
 router.get('/v2/preview-slide', (req, res) => {
   const { postId, idx } = req.query;
   if (!postId) return res.status(400).send('<!doctype html><title>err</title><body>postId required</body>');
@@ -843,46 +887,16 @@ router.get('/v2/preview-slide', (req, res) => {
     const i = Math.max(0, Math.min(modules.length - 1, parseInt(idx || '0', 10)));
     const mod = modules[i];
     if (!mod) return res.status(404).send('<!doctype html><title>err</title><body>module out of range</body>');
+    res.set('Content-Type', 'text/html; charset=utf-8').send(_buildSlideForPreview(mod));
+  } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
+});
 
-    const { buildOpeningHTML: opV1 } = require('../scripts/v2_video/slides/opening');
-    const { buildOpeningHTML: opV2 } = require('../scripts/v2_video/slides/opening_v2');
-    const { buildOpeningHTML: opV3 } = require('../scripts/v2_video/slides/opening_v3');
-    const { buildEndingHTML:  edV1 } = require('../scripts/v2_video/slides/ending');
-    const { buildEndingHTML:  edV2 } = require('../scripts/v2_video/slides/ending_v2');
-    const { buildEndingHTML:  edV3 } = require('../scripts/v2_video/slides/ending_v3');
-    const OPB = { v1: opV1, v2: opV2, v3: opV3 };
-    const EDB = { v1: edV1, v2: edV2, v3: edV3 };
-    const { buildUniversalHTML }  = require('../scripts/v2_video/slides/universal');
-    const { buildInsightHTML }    = require('../scripts/v2_video/slides/insight');
-    const { buildHistoryHTML }    = require('../scripts/v2_video/slides/history');
-    const { buildMatchcardHTML }  = require('../scripts/v2_video/slides/matchcard');
-    const { buildProfileHTML }    = require('../scripts/v2_video/slides/profile');
-    const { buildStatsHTML }      = require('../scripts/v2_video/slides/stats');
-    const { buildComparisonHTML } = require('../scripts/v2_video/slides/comparison');
-    const { buildReactionHTML }   = require('../scripts/v2_video/slides/reaction');
-    const { buildTocHTML }        = require('../scripts/v2_video/slides/toc');
-    const { mapImagesToModule }   = require('../scripts/v2_video/slides/_common');
-
-    // images[] を type 別の slot に展開してから build
-    const m = mapImagesToModule(mod);
-    const opVar = OPB[m.variant] ? m.variant : 'v1';
-    const edVar = EDB[m.variant] ? m.variant : 'v1';
-
-    let html;
-    switch (m.type) {
-      case 'opening':     html = OPB[opVar](m);            break;
-      case 'ending':      html = EDB[edVar](m);            break;
-      case 'toc':         html = buildTocHTML(m);         break;
-      case 'insight':     html = buildInsightHTML(m);     break;
-      case 'history':     html = buildHistoryHTML(m);     break;
-      case 'matchcard':   html = buildMatchcardHTML(m);   break;
-      case 'stats':       html = buildStatsHTML(m);       break;
-      case 'profile':     html = buildProfileHTML(m);     break;
-      case 'comparison':  html = buildComparisonHTML(m);  break;
-      case 'reaction':    html = buildReactionHTML(m);    break;
-      default:            html = buildUniversalHTML(m);
-    }
-    res.set('Content-Type', 'text/html; charset=utf-8').send(html);
+// ─── /v2/preview-slide-inline : POST body で module を直接受け取り（disk read 無し・最速） ──
+router.post('/v2/preview-slide-inline', (req, res) => {
+  const { module: mod } = req.body || {};
+  if (!mod) return res.status(400).send('<!doctype html><title>err</title><body>module required</body>');
+  try {
+    res.set('Content-Type', 'text/html; charset=utf-8').send(_buildSlideForPreview(mod));
   } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
 });
 
@@ -1647,21 +1661,22 @@ function getUI() {
     _saveAndReload();
   };
 
-  /* ── プレビュー更新ヘルパ（保存→リロードを直列化）──
-     プレビュー API は disk の modules.json を読むため、
-     保存完了前にリロードすると古い内容が表示される（バグ原因）。
-     ここで必ず await してから reload する。 */
+  /* ── プレビュー更新ヘルパ（インライン化により、保存と並行）──
+     新版の _reloadPreview は disk read を経由せず、
+     mod を直接 POST → HTML を返す。
+     保存とプレビューを並行起動して体感速度を改善。 */
   async function _saveAndReload() {
     _collectInputs();
-    await _saveModulesQuiet();
-    _reloadPreview();
+    // 保存とプレビューを並行（プレビューは disk 経由じゃないので待つ必要無し）
+    _saveModulesQuiet();   // fire-and-forget（チェーンで直列化されるので race 無し）
+    _reloadPreview();      // 即時プレビュー
   }
 
-  /* ── 入力監視 → debounceでプレビュー更新 ── */
+  /* ── 入力監視 → 短い debounce で即時プレビュー反映 ── */
   let _previewTimer = null;
   window.s4OnInput = function() {
     clearTimeout(_previewTimer);
-    _previewTimer = setTimeout(_saveAndReload, 1000);
+    _previewTimer = setTimeout(_saveAndReload, 350);
   };
 
   /* ── OP/ED バリアント変更 ── */
@@ -1953,40 +1968,40 @@ function getUI() {
     window.APP.s4._resizeBound = true;
   }
 
-  /* ── プレビュー再読み込み（エラー耐性付き）──
-     iframe load 失敗時は wrap に「プレビュー失敗」を出して原因が分かるように。 */
-  function _reloadPreview() {
-    const post = window.APP.selected;
-    if (!post?.id) return;
+  /* ── プレビュー再読み込み（インライン高速版）──
+     mod を直接 POST → HTML 受信 → Blob URL で iframe.src
+     ・disk read 無し
+     ・保存完了を待たない（楽観プレビュー）
+     ・キャッシュバスター不要 */
+  let _lastPreviewBlobUrl = null;
+  let _reloadInFlight = false;
+  let _reloadAgainNeeded = false;
+  async function _reloadPreview() {
+    if (_reloadInFlight) { _reloadAgainNeeded = true; return; }
     const i = window.APP.s4.activeTab;
-    const url = '/api/v2/preview-slide?postId=' + encodeURIComponent(post.id) + '&idx=' + i + '&_=' + Date.now();
+    const mod = window.APP.s4.modules[i];
     const f = document.getElementById('s4PreviewFrame');
-    if (!f) return;
-    // 古いハンドラ解除
-    f.onload = null; f.onerror = null;
-    f.onload = function() {
-      _resizePreview();
-      // iframe 内部が err ページ（500など）の場合の検知
-      try {
-        const doc = f.contentDocument;
-        if (doc && doc.title === 'err') {
-          const wrap = document.getElementById('s4PreviewWrap');
-          if (wrap && !wrap.querySelector('.s4-preview-err')) {
-            const e = document.createElement('div');
-            e.className = 's4-preview-err';
-            e.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,77,77,0.18);color:#fff;font-size:13px;z-index:5;';
-            e.textContent = '⚠️ プレビュー失敗 - サーバーログ要確認';
-            wrap.appendChild(e);
-            setTimeout(() => e.remove(), 4000);
-          }
-        }
-      } catch (_) {}
-    };
-    f.onerror = function() { _msg('⚠️ プレビュー読込失敗'); };
-    f.src = url;
-    _resizePreview();
+    if (!mod || !f) return;
+    _reloadInFlight = true;
+    try {
+      const res = await fetch('/api/v2/preview-slide-inline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: mod }),
+      });
+      const html = await res.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      f.onload = null; f.onerror = null;
+      f.onload = function() { _resizePreview(); };
+      f.src = url;
+      if (_lastPreviewBlobUrl) URL.revokeObjectURL(_lastPreviewBlobUrl);
+      _lastPreviewBlobUrl = url;
+    } catch (_) {} finally {
+      _reloadInFlight = false;
+      if (_reloadAgainNeeded) { _reloadAgainNeeded = false; _reloadPreview(); }
+    }
   }
-
   /* ── 動画一覧読み込み ── */
   async function _loadVideos() {
     const post = window.APP.selected;
