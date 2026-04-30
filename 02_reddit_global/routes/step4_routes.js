@@ -844,8 +844,14 @@ router.get('/v2/preview-slide', (req, res) => {
     const mod = modules[i];
     if (!mod) return res.status(404).send('<!doctype html><title>err</title><body>module out of range</body>');
 
-    const { buildOpeningHTML }    = require('../scripts/v2_video/slides/opening');
-    const { buildEndingHTML }     = require('../scripts/v2_video/slides/ending');
+    const { buildOpeningHTML: opV1 } = require('../scripts/v2_video/slides/opening');
+    const { buildOpeningHTML: opV2 } = require('../scripts/v2_video/slides/opening_v2');
+    const { buildOpeningHTML: opV3 } = require('../scripts/v2_video/slides/opening_v3');
+    const { buildEndingHTML:  edV1 } = require('../scripts/v2_video/slides/ending');
+    const { buildEndingHTML:  edV2 } = require('../scripts/v2_video/slides/ending_v2');
+    const { buildEndingHTML:  edV3 } = require('../scripts/v2_video/slides/ending_v3');
+    const OPB = { v1: opV1, v2: opV2, v3: opV3 };
+    const EDB = { v1: edV1, v2: edV2, v3: edV3 };
     const { buildUniversalHTML }  = require('../scripts/v2_video/slides/universal');
     const { buildInsightHTML }    = require('../scripts/v2_video/slides/insight');
     const { buildHistoryHTML }    = require('../scripts/v2_video/slides/history');
@@ -859,11 +865,13 @@ router.get('/v2/preview-slide', (req, res) => {
 
     // images[] を type 別の slot に展開してから build
     const m = mapImagesToModule(mod);
+    const opVar = OPB[m.variant] ? m.variant : 'v1';
+    const edVar = EDB[m.variant] ? m.variant : 'v1';
 
     let html;
     switch (m.type) {
-      case 'opening':     html = buildOpeningHTML(m);     break;
-      case 'ending':      html = buildEndingHTML(m);      break;
+      case 'opening':     html = OPB[opVar](m);            break;
+      case 'ending':      html = EDB[edVar](m);            break;
       case 'toc':         html = buildTocHTML(m);         break;
       case 'insight':     html = buildInsightHTML(m);     break;
       case 'history':     html = buildHistoryHTML(m);     break;
@@ -1272,6 +1280,18 @@ function getUI() {
       + '</div>'
       + '<button class="btn btn-sm" onclick="s4RegenNarr()" style="background:#3b82f6;color:#fff;font-size:10px;padding:4px 10px;">↻ ナレーション再生成</button>'
       + '</div>'
+      + ((m.type === 'opening' || m.type === 'ending')
+        ? '<div style="display:flex;align-items:center;gap:10px;margin:0 0 10px 0;padding:8px 10px;background:#1a1d2e;border:1px solid #6366f1;border-radius:4px;flex-wrap:wrap;">'
+          + '<span style="font-size:11px;color:#a5b4fc;font-weight:bold;">' + (m.type === 'opening' ? '🎬 OP' : '🎬 ED') + ' バリアント:</span>'
+          + ['v1','v2','v3'].map(function(v) {
+              return '<label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:#e0e0e0;">'
+                + '<input type="radio" name="s4-variant-' + i + '" value="' + v + '"' + ((m.variant||'v1')===v?' checked':'') + ' onchange="s4ChangeVariant(' + i + ',\'' + v + '\')"> '
+                + v.toUpperCase() + '</label>';
+            }).join('')
+          + '<span style="flex:1"></span>'
+          + '<span style="font-size:10px;color:#5a6a8a;">' + (m.type === 'opening' ? 'V1=現行 / V2=数字フラッシュ / V3=タイトル爆発' : 'V1=現行 / V2=要点サマリ / V3=次回予告') + '</span>'
+          + '</div>'
+        : '')
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">タイトル</div>'
       + '<input class="inp" id="s4Title' + i + '" value="' + _esc(m.title||'') + '" oninput="s4OnInput()" style="display:block;width:100%;font-size:13px;padding:6px 8px;margin-bottom:10px;">'
       + '<div style="font-size:11px;color:#8a9aba;margin-bottom:4px;">脚本指示（読み取り専用）</div>'
@@ -1642,6 +1662,14 @@ function getUI() {
   window.s4OnInput = function() {
     clearTimeout(_previewTimer);
     _previewTimer = setTimeout(_saveAndReload, 1000);
+  };
+
+  /* ── OP/ED バリアント変更 ── */
+  window.s4ChangeVariant = function(idx, v) {
+    const m = window.APP.s4.modules[idx];
+    if (!m) return;
+    m.variant = v;
+    _saveAndReload();
   };
 
   /* ── 画像ギャラリー: トグル選択 ── */

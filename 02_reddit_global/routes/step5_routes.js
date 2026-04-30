@@ -20,17 +20,6 @@ const TEMPLATES = {
   O: { name: 'O: トレカ',        build: require('../scripts/v2_thumb/templates/tradingCard').buildTradingCardThumb },
 };
 
-const OP_BUILDERS = {
-  v1: require('../scripts/v2_video/slides/opening').buildOpeningHTML,
-  v2: require('../scripts/v2_video/slides/opening_v2').buildOpeningHTML,
-  v3: require('../scripts/v2_video/slides/opening_v3').buildOpeningHTML,
-};
-const ED_BUILDERS = {
-  v1: require('../scripts/v2_video/slides/ending').buildEndingHTML,
-  v2: require('../scripts/v2_video/slides/ending_v2').buildEndingHTML,
-  v3: require('../scripts/v2_video/slides/ending_v3').buildEndingHTML,
-};
-
 const ROOT_DIR = path.join(__dirname, '..');
 const THUMB_OUT_BASE = path.join(ROOT_DIR, 'data', 'v2_thumbs');
 const VIDEOS_BASE = path.join(ROOT_DIR, 'data', 'v2_videos');
@@ -147,37 +136,6 @@ router.delete('/v5/delete-saved', (req, res) => {
     if (fs.existsSync(target)) fs.unlinkSync(target);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ════════════════════════════════════════════════════════════
-// 🎬 OP/ED API
-// ════════════════════════════════════════════════════════════
-
-router.post('/v5/op-ed-preview', (req, res) => {
-  const { kind, variant, data } = req.body || {};
-  const builders = kind === 'ed' ? ED_BUILDERS : OP_BUILDERS;
-  const fn = builders[variant];
-  if (!fn) return res.status(400).send('unknown variant: ' + kind + '/' + variant);
-  try { res.type('html').send(fn(data || {})); }
-  catch (e) { res.status(500).send('build error: ' + e.message); }
-});
-
-router.get('/v5/get-op-ed', (req, res) => {
-  const { postId } = req.query;
-  if (!postId) return res.json({ opVariant: 'v1', edVariant: 'v1' });
-  const meta = readStep5(postId);
-  res.json({ opVariant: meta.opVariant || 'v1', edVariant: meta.edVariant || 'v1' });
-});
-
-router.post('/v5/save-op-ed', (req, res) => {
-  const { postId } = req.query;
-  const { opVariant, edVariant } = req.body || {};
-  if (!postId) return res.status(400).json({ error: 'postId required' });
-  const meta = readStep5(postId);
-  if (opVariant) meta.opVariant = opVariant;
-  if (edVariant) meta.edVariant = edVariant;
-  writeStep5(postId, meta);
-  res.json({ ok: true, opVariant: meta.opVariant, edVariant: meta.edVariant });
 });
 
 // ════════════════════════════════════════════════════════════
@@ -365,7 +323,6 @@ function getUI() {
   <!-- サブタブ -->
   <div id="s5-subnav" style="display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border);">
     <button onclick="s5GoSub('thumb')" id="s5sub-thumb" class="s5sub active">🎨 サムネ</button>
-    <button onclick="s5GoSub('oped')"  id="s5sub-oped"  class="s5sub">🎬 OP/ED</button>
     <button onclick="s5GoSub('meta')"  id="s5sub-meta"  class="s5sub">📝 メタデータ</button>
     <button onclick="s5GoSub('post')"  id="s5sub-post"  class="s5sub">🚀 投稿</button>
   </div>
@@ -410,30 +367,6 @@ function getUI() {
         </div>
         <div id="s5-saved-list" style="margin-top:14px;"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- ───── 🎬 OP/ED ───── -->
-  <div id="s5pane-oped" class="s5pane" style="display:none;">
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:18px;">
-      <div class="s5card">
-        <strong style="color:var(--c); font-size:12px; display:block; margin-bottom:8px;">🎬 オープニング</strong>
-        <div id="s5-op-radio" style="display:flex; flex-direction:column; gap:6px;"></div>
-        <div style="position:relative; aspect-ratio:16/9; background:#000; border:1px solid var(--border); border-radius:6px; overflow:hidden; margin-top:10px;">
-          <iframe id="s5-op-preview" style="position:absolute; top:0; left:0; width:1920px; height:1080px; border:0; transform-origin:top left;"></iframe>
-        </div>
-      </div>
-      <div class="s5card">
-        <strong style="color:var(--c); font-size:12px; display:block; margin-bottom:8px;">🎬 エンディング</strong>
-        <div id="s5-ed-radio" style="display:flex; flex-direction:column; gap:6px;"></div>
-        <div style="position:relative; aspect-ratio:16/9; background:#000; border:1px solid var(--border); border-radius:6px; overflow:hidden; margin-top:10px;">
-          <iframe id="s5-ed-preview" style="position:absolute; top:0; left:0; width:1920px; height:1080px; border:0; transform-origin:top left;"></iframe>
-        </div>
-      </div>
-    </div>
-    <div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-      <button onclick="s5SaveOpEd()" class="s5btn">💾 採用バリアント保存</button>
-      <span id="s5-oped-status" style="font-size:11px; color:var(--muted);">※ 次回の動画生成 (Step4) で反映されます</span>
     </div>
   </div>
 
@@ -508,8 +441,6 @@ function getUI() {
     data: null,
     images: [],
     activeImageField: null,
-    opVariant: 'v1',
-    edVariant: 'v1',
     selectedVideo: null,
     selectedThumb: null,
     meta: { title: '', description: '', tags: [], privacyStatus: 'private' },
@@ -618,13 +549,12 @@ function getUI() {
   // ═══ サブタブ切替 ═══
   window.s5GoSub = function(name) {
     STATE.sub = name;
-    ['thumb','oped','meta','post'].forEach(n => {
+    ['thumb','meta','post'].forEach(n => {
       const btn = document.getElementById('s5sub-' + n);
       const pane = document.getElementById('s5pane-' + n);
       if (btn) btn.className = 's5sub' + (n === name ? ' active' : '');
       if (pane) pane.style.display = (n === name ? '' : 'none');
     });
-    if (name === 'oped') initOpEdPane();
     if (name === 'meta') loadMeta();
     if (name === 'post') initPostPane();
   };
@@ -715,7 +645,7 @@ function getUI() {
     const w = iframe.parentElement.clientWidth;
     iframe.style.transform = 'scale(' + (w / 1280) + ')';
   }
-  window.addEventListener('resize', () => { fitThumbIframe(); fitOpEdIframes(); });
+  window.addEventListener('resize', () => { fitThumbIframe(); });
   window.s5Save = async function() {
     const id = postId() || '_unsorted';
     const labelEl = document.getElementById('s5-savelabel');
@@ -746,87 +676,6 @@ function getUI() {
     const id = postId() || '_unsorted';
     try { await fetch('/api/v5/delete-saved?postId=' + encodeURIComponent(id) + '&file=' + encodeURIComponent(file), { method: 'DELETE' }); await loadSavedThumbs(); }
     catch (e) { alert('削除失敗: ' + e.message); }
-  };
-
-  // ═══════════════════════════════════════════════════════
-  // 🎬 OP/ED
-  // ═══════════════════════════════════════════════════════
-  let _opedSampleData = null;
-  function getOpEdSampleData() {
-    if (_opedSampleData) return _opedSampleData;
-    const post = window.APP && window.APP.selected;
-    _opedSampleData = {
-      type: 'opening',
-      title: (post && post.title) || 'サンプルタイトル',
-      narration: '',
-      channelName: '5分でサッカー分析',
-      heroNumber: '161',
-      heroLabel: '主要データ',
-    };
-    return _opedSampleData;
-  }
-  function renderOpEdRadio(kind, current) {
-    const el = document.getElementById(kind === 'op' ? 's5-op-radio' : 's5-ed-radio');
-    el.innerHTML = ['v1','v2','v3'].map(v => {
-      const labels = { v1:'V1（現行）', v2:'V2（数字フラッシュ / 要点サマリ）', v3:'V3（タイトル爆発 / 次回予告）' };
-      const checked = v === current ? 'checked' : '';
-      return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text);">'
-        + '<input type="radio" name="s5-'+kind+'" value="'+v+'" '+checked+' onchange="s5PickVariant(\\''+kind+'\\',\\''+v+'\\')">'
-        + labels[v] + '</label>';
-    }).join('');
-  }
-  window.s5PickVariant = function(kind, v) {
-    if (kind === 'op') STATE.opVariant = v; else STATE.edVariant = v;
-    refreshOpEdPreview(kind);
-  };
-  async function refreshOpEdPreview(kind) {
-    const variant = kind === 'op' ? STATE.opVariant : STATE.edVariant;
-    const sample = { ...getOpEdSampleData() };
-    if (kind === 'ed') {
-      sample.type = 'ending';
-      sample.summaryStats = [{ value:'161', label:'主要データ' }, { value:'+5.2', label:'xG超過' }, { value:'8.4', label:'評価点' }];
-      sample.endingCta = { text: 'チャンネル登録お願い' };
-      sample.nextTopic = '次回予告';
-      sample.commentPrompt = 'コメ求む';
-    }
-    try {
-      const res = await fetch('/api/v5/op-ed-preview', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ kind, variant, data: sample }) });
-      const html = await res.text();
-      const blob = new Blob([html], { type:'text/html' });
-      const url = URL.createObjectURL(blob);
-      const iframe = document.getElementById('s5-' + kind + '-preview');
-      iframe.src = url;
-      setTimeout(fitOpEdIframes, 80);
-    } catch (e) { console.error('oped preview', e); }
-  }
-  function fitOpEdIframes() {
-    ['op','ed'].forEach(kind => {
-      const iframe = document.getElementById('s5-' + kind + '-preview'); if (!iframe) return;
-      const w = iframe.parentElement.clientWidth;
-      iframe.style.transform = 'scale(' + (w / 1920) + ')';
-    });
-  }
-  async function initOpEdPane() {
-    const id = postId();
-    if (id) {
-      try {
-        const r = await window.fetchJson('/api/v5/get-op-ed?postId=' + encodeURIComponent(id));
-        STATE.opVariant = r.opVariant || 'v1';
-        STATE.edVariant = r.edVariant || 'v1';
-      } catch (_) {}
-    }
-    renderOpEdRadio('op', STATE.opVariant);
-    renderOpEdRadio('ed', STATE.edVariant);
-    refreshOpEdPreview('op');
-    refreshOpEdPreview('ed');
-  }
-  window.s5SaveOpEd = async function() {
-    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
-    try {
-      await window.fetchJson('/api/v5/save-op-ed?postId=' + encodeURIComponent(id), { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ opVariant: STATE.opVariant, edVariant: STATE.edVariant }) });
-      document.getElementById('s5-oped-status').textContent = '✅ 保存完了: OP=' + STATE.opVariant + ' / ED=' + STATE.edVariant;
-      document.getElementById('s5-oped-status').style.color = 'var(--success)';
-    } catch (e) { alert('保存失敗: ' + e.message); }
   };
 
   // ═══════════════════════════════════════════════════════

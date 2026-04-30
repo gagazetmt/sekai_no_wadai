@@ -190,10 +190,10 @@ function updateJob(jobId, patch) {
 
 // タイプ別に適切な slide HTML 生成関数を選ぶ
 //   mod.images[] を type 別に bgImage / leftImage / rightImage / homeImage / awayImage に展開してから渡す
-function buildSlideHTML(mod, ctx = {}) {
+function buildSlideHTML(mod) {
   const m = mapImagesToModule(mod);
-  const opVar = (ctx.opVariant && OP_BUILDERS[ctx.opVariant]) ? ctx.opVariant : 'v1';
-  const edVar = (ctx.edVariant && ED_BUILDERS[ctx.edVariant]) ? ctx.edVariant : 'v1';
+  const opVar = (m.variant && OP_BUILDERS[m.variant]) ? m.variant : 'v1';
+  const edVar = (m.variant && ED_BUILDERS[m.variant]) ? m.variant : 'v1';
   switch (m.type) {
     case 'opening':     return OP_BUILDERS[opVar](m);
     case 'ending':      return ED_BUILDERS[edVar](m);
@@ -338,20 +338,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Step5 で選択された OP/ED variant を読み込む
-  const step5File = path.join(DATA_DIR, `${postId}_step5.json`);
-  let opVariant = 'v1', edVariant = 'v1';
-  if (fs.existsSync(step5File)) {
-    try {
-      const s5 = JSON.parse(fs.readFileSync(step5File, 'utf8'));
-      if (s5.opVariant && OP_BUILDERS[s5.opVariant]) opVariant = s5.opVariant;
-      if (s5.edVariant && ED_BUILDERS[s5.edVariant]) edVariant = s5.edVariant;
-      if (opVariant !== 'v1' || edVariant !== 'v1') {
-        console.log(`🎬 OP/ED variant: OP=${opVariant} / ED=${edVariant} (Step5 設定)`);
-      }
-    } catch (_) {}
-  }
-
   const ts        = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
   const workDir   = path.join(VIDEO_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20)}_${ts}`);
   const outVideo  = path.join(VIDEO_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20)}_${ts}.mp4`);
@@ -434,7 +420,7 @@ async function main() {
       async ({ i, m: mod }, _idxInList, workerIdx) => {
         const t0 = Date.now();
         const page = pages[workerIdx];
-        const html = buildSlideHTML(mod, { opVariant, edVariant });
+        const html = buildSlideHTML(mod);
         const durMs = slideDurationMs(mod);
         slideDursMs[i] = durMs;
         const videoOnly = path.join(workDir, `slide_${String(i).padStart(2, '0')}_v.mp4`);
