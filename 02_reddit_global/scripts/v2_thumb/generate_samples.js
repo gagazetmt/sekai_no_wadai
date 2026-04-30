@@ -178,17 +178,18 @@ const thumbSamples = [];
   thumbSamples.push({ ...s, html: buildQuestionThumb(s.data) });
 });
 
-// ─── テンプレ L: 5ch反応集スタイル × データ ──
+// ─── テンプレ L: 5ch反応集スタイル × データ（リネカ大胆刷新版）──
 [
   {
     name: 'thumb_L1_hakimi_viral',
     label: 'L-1: ハキミ離脱',
     data: {
       heroImage: IMG.hakimi,
+      breakingLabel: 'PSG崩壊の予兆',
       title: 'ハキミ離脱でPSGどうなる',
-      titleHighlight: '想定外の事態に',
-      mainStat: { value: '161試合', label: 'PSGでの実績' },
-      subStat:  { value: '6週', label: '離脱期間' },
+      titleHighlight: '衝撃の事態',
+      mainStat: { value: '161', label: 'PSG在籍試合' },
+      subStat:  { value: '6週', label: '離脱予想' },
     },
   },
   {
@@ -196,9 +197,10 @@ const thumbSamples = [];
     label: 'L-2: オリーセ覚醒',
     data: {
       heroImage: IMG.olise,
+      breakingLabel: '今季最強の数字',
       title: 'オリーセ覚醒の真相',
-      titleHighlight: '今季最強の数字',
-      mainStat: { value: '+5.2', label: 'xG超過 / 異次元' },
+      titleHighlight: '異次元xG',
+      mainStat: { value: '+5.2', label: 'xG超過 異次元' },
       subStat:  { value: '12G', label: '今季得点' },
     },
   },
@@ -207,6 +209,7 @@ const thumbSamples = [];
     label: 'L-3: カゼミーロ復活',
     data: {
       heroImage: IMG.casemiro,
+      breakingLabel: '不死鳥データ',
       title: 'カゼミーロ完全復活',
       titleHighlight: 'マンU救世主',
       mainStat: { value: '8.4', label: '直近試合 評定' },
