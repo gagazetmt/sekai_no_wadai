@@ -22,18 +22,23 @@ const { router: s2Router,  getUI: s2UI  } = require('./routes/step2_routes');
 const { router: s3Router,  getUI: s3UI  } = require('./routes/step3_routes');
 const { router: s35Router, getUI: s35UI } = require('./routes/step35_routes');
 const { router: s4Router,  getUI: s4UI  } = require('./routes/step4_routes');
+const { router: s5Router,  getUI: s5UI  } = require('./routes/step5_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
 app.use('/api', s3Router);
 app.use('/api', s35Router);
 app.use('/api', s4Router);
+app.use('/api', s5Router);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
 
 // 生成済み動画を静的配信（Step4 でブラウザ再生・ダウンロード）
 app.use('/v2_videos', require('express').static(path.join(__dirname, 'data', 'v2_videos')));
+
+// 生成済みサムネを静的配信（Step5 で表示・ダウンロード）
+app.use('/v2_thumbs', require('express').static(path.join(__dirname, 'data', 'v2_thumbs')));
 
 // テンプレートプレビュー（各モジュール型のHTMLを直接確認する用）
 ['insight', 'history', 'matchcard', 'matchcenter'].forEach(name => {
@@ -306,6 +311,7 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     <div class="step-nav"        id="nav3"  onclick="goStep(3)">3. 構成提案</div>
     <div class="step-nav"        id="nav35" onclick="goStep(35)">3.5 画像選定</div>
     <div class="step-nav"        id="nav4"  onclick="goStep(4)">4. シナリオ編集</div>
+    <div class="step-nav"        id="nav5"  onclick="goStep(5)">5. サムネ作成</div>
   </div>
   <div class="content-scroll">
     <!-- 各 Step の UI（routes/*.js から注入） -->
@@ -314,6 +320,7 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     ${s3UI()}
     ${s35UI()}
     ${s4UI()}
+    ${s5UI()}
   </div>
 </div>
 
@@ -351,7 +358,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 3, 35, 4].forEach(i => {
+  [1, 2, 3, 35, 4, 5].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
