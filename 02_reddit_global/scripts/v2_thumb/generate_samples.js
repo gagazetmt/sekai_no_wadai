@@ -182,42 +182,35 @@ const thumbSamples = [];
 [
   {
     name: 'thumb_L1_hakimi_viral',
-    label: 'L-1: ハキミ (5ch風データ)',
+    label: 'L-1: ハキミ離脱',
     data: {
       heroImage: IMG.hakimi,
       title: 'ハキミ離脱でPSGどうなる',
-      titleHighlight: '想定外の事態にwww',
-      dataBadges: [
-        { value: '161試合', label: 'PSG在籍' },
-        { value: '6週', label: '離脱期間' },
-      ],
+      titleHighlight: '想定外の事態に',
+      mainStat: { value: '161試合', label: 'PSGでの実績' },
+      subStat:  { value: '6週', label: '離脱期間' },
     },
   },
   {
     name: 'thumb_L2_olise_viral',
-    label: 'L-2: オリーセ (5ch風データ)',
+    label: 'L-2: オリーセ覚醒',
     data: {
       heroImage: IMG.olise,
       title: 'オリーセ覚醒の真相',
-      titleHighlight: '今季最強xG',
-      dataBadges: [
-        { value: '+5.2', label: 'xG超過' },
-        { value: '12G', label: '今季得点' },
-        { value: '評定7.8', label: '直近10戦平均' },
-      ],
+      titleHighlight: '今季最強の数字',
+      mainStat: { value: '+5.2', label: 'xG超過 / 異次元' },
+      subStat:  { value: '12G', label: '今季得点' },
     },
   },
   {
     name: 'thumb_L3_casemiro_viral',
-    label: 'L-3: カゼミーロ (5ch風データ)',
+    label: 'L-3: カゼミーロ復活',
     data: {
       heroImage: IMG.casemiro,
       title: 'カゼミーロ完全復活',
-      titleHighlight: 'マンU救世主にwww',
-      dataBadges: [
-        { value: '評定8.4', label: '直近試合' },
-        { value: '5勝1分', label: '今月戦績' },
-      ],
+      titleHighlight: 'マンU救世主',
+      mainStat: { value: '8.4', label: '直近試合 評定' },
+      subStat:  { value: '5勝1分', label: '今月戦績' },
     },
   },
 ].forEach(s => {
@@ -466,29 +459,11 @@ h3 { color: var(--accent); margin-top: 18px; font-size: 14px; letter-spacing: 1p
 </p>
 
 <h2>🎨 サムネイル候補（1280×720）</h2>
-<p class="section-note">クリックで原寸表示。サムネは静的画像（アニメなし）。</p>
+<p class="section-note">採用候補を3テンプレに絞込み: A=データ強調 / D=問いかけ / L=5ch風データ</p>
 
 <h3>テンプレA: データ強調型</h3>
 <div class="thumbs-grid">
 ${thumbSamples.filter(s => /thumb_A\d+_/.test(s.name)).map(s => `
-<div class="thumb-card">
-  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
-  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
-</div>`).join('')}
-</div>
-
-<h3>テンプレB: ランキング型</h3>
-<div class="thumbs-grid">
-${thumbSamples.filter(s => /thumb_B\d+_/.test(s.name)).map(s => `
-<div class="thumb-card">
-  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
-  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
-</div>`).join('')}
-</div>
-
-<h3>テンプレC: VS型</h3>
-<div class="thumbs-grid">
-${thumbSamples.filter(s => /thumb_C\d+_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
@@ -504,26 +479,12 @@ ${thumbSamples.filter(s => /thumb_D\d+_/.test(s.name)).map(s => `
 </div>`).join('')}
 </div>
 
-<h3>🔥 テンプレL: 5ch反応集スタイル × データ（NEW）</h3>
+<h3>🔥 テンプレL: 5ch反応集スタイル × データ（洗練版）</h3>
 <p class="section-note">
-反応集系の派手で目を引くテイストを継承しつつ、コメントボックスを「データ箱」に置換。<br>
-データ密度の中身×バイラル系のキャッチー外見。
+反応集の視覚インパクト × データ密度の中身。プレミアム統計バッジ・多層シャドウ文字・分析チャンネルストライプで洗練度UP。
 </p>
 <div class="thumbs-grid">
 ${thumbSamples.filter(s => /thumb_L\d+_/.test(s.name)).map(s => `
-<div class="thumb-card">
-  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
-  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
-</div>`).join('')}
-</div>
-
-<h2>☀️ Light tone バリエーション（4種）</h2>
-<p class="section-note">
-ダーク版と同じレイアウトで配色を明るめに。クリームペーパー風の落ち着いた印象。<br>
-A=データ強調 / B=ランキング / C=VS / D=問いかけ
-</p>
-<div class="thumbs-grid">
-${thumbSamples.filter(s => /thumb_[A-D]L_/.test(s.name)).map(s => `
 <div class="thumb-card">
   <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
   <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
