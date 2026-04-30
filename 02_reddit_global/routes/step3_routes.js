@@ -19,8 +19,7 @@ const JOB_DIR  = path.join(DATA_DIR, 'v3_jobs');
 const { listMainTags, getSubTagsForMain, resolveType, parseMainKey } = require('../scripts/v3_tags');
 const { callAI } = require('../scripts/ai_client');
 const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
-const { findEntity, buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
-const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
+const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(JOB_DIR))  fs.mkdirSync(JOB_DIR,  { recursive: true });
@@ -544,7 +543,7 @@ JSON のみ返す（マークダウン不要）。**idx は outline の番号 1�
       if (!meta) return;
       const aiOut = aiByIdx[i + 1] || {};
       let keys = Array.isArray(aiOut.customSlotKeys) ? aiOut.customSlotKeys.filter(Boolean) : [];
-      const validKeys = new Set(meta.recipe.availableSlots.map(s => s.key));
+      const validKeys = new Set(meta.availableSlots.map(s => s.key));
       keys = keys.filter(k => validKeys.has(k));
       // 件数の調整：比較=5固定 / 単体（stats/profile他）=6〜8
       const targetMin = meta.isCompare ? 5 : 6;
@@ -555,9 +554,7 @@ JSON のみ返す（マークダウン不要）。**idx は outline の番号 1�
       } else if (keys.length > targetMax) {
         keys = keys.slice(0, targetMax);
       }
-      m.dataSlots = buildDataSlotsFromRecipe(
-        meta.recipe, meta.primaryData, meta.secondaryData, keys, {}
-      );
+      m.dataSlots = buildDataSlotsFromMeta(meta, keys);
       m.binding = {
         subject:        meta.subject,
         aspect:         meta.aspect,

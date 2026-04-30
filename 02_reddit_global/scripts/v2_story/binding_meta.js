@@ -3,18 +3,21 @@
 //
 // 役割:
 //   モジュール (mod) と SI データから、subject/aspect を推論し、
-//   対応する Recipe + 実データ entity を引いて返す。
-//   結果のメタ情報を使えば「型はAI、値はコード充填」が可能。
+//   walker で availableSlots を全列挙する。
+//   結果のメタ情報を使えば「型はAI、値はコード充填」が成立。
+//
+// 旧版（〜2026-04-30）はレシピの availableSlots を上限としていたが、
+// 「使える情報が勝手に狭まる」問題のためレシピ撤廃 → 全 leaf 列挙に切替。
 //
 // 使い方:
 //   const { getBindingMeta } = require('./binding_meta');
 //   const meta = getBindingMeta(mod, siData);
-//   if (meta) {
-//     // meta.recipe.availableSlots を AI に customSlotKeys 選定させる
-//     // → buildDataSlotsFromRecipe(meta.recipe, meta.primaryData, meta.secondaryData, keys)
-//   }
+//   // meta.availableSlots を AI に customSlotKeys 選定させる
+//   // → buildDataSlotsFromMeta(meta, keys)
 
-const { getRecipe } = require('./recipes');
+'use strict';
+
+const { walkEntity, buildPairsForCompare } = require('./si_walker');
 
 // 1エンティティのデータを SI box (entity/match) から引く
 //   subject = player/team/manager/tournament → boxes.entity.items の sofa + wiki を merge
@@ -70,7 +73,7 @@ function inferBindingForMod(mod, siData) {
     const primary = mod.mainKey.slice(7), secondary = mod.secondary;
     const r1 = _findRole(siData, primary), r2 = _findRole(siData, secondary);
     let subject = null, aspect = null;
-    if (r1 === 'player'  && r2 === 'player')  { subject = 'player';  aspect = 'compareCareerStats'; }
+    if      (r1 === 'player'  && r2 === 'player')  { subject = 'player';  aspect = 'compareCareerStats'; }
     else if (r1 === 'team'    && r2 === 'team')    { subject = 'team';    aspect = 'compareSeasonStats'; }
     else if (r1 === 'manager' && r2 === 'manager') { subject = 'manager'; aspect = 'compareCareer'; }
     if (subject) return { subject, aspect, primary, secondary };
@@ -86,8 +89,9 @@ function inferBindingForMod(mod, siData) {
     else if (mod.type === 'stats') {
       if      (role === 'team')       aspect = 'seasonStats';
       else if (role === 'player')     aspect = 'careerStats';
-      else if (role === 'tournament') aspect = 'standings';     // ← 大会の stats = リーグ順位表
-      else                            aspect = 'recentForm';
+      else if (role === 'tournament') aspect = 'standings';
+      else if (role === 'manager')    aspect = 'overall';
+      else                            aspect = 'profile';
     }
     if (aspect) return { subject: role, aspect, primary, secondary: null };
   }
@@ -103,42 +107,80 @@ function inferBindingForMod(mod, siData) {
   return null;
 }
 
-// レシピメタを取得（A判定で availableSlots を持つレシピ全部に対応）
-//   - comparison（requiresSecondary）も非 comparison も同じ口で扱う
-//   - secondary は requiresSecondary レシピのみ必要
-//   - 戻り値の isCompare で 比較/単体 を分岐
+// availableSlots からデフォルト初期選択（priority 上位 N 件）を作る
+function _pickDefaultSelection(availableSlots, n = 5) {
+  return availableSlots
+    .slice()
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+    .slice(0, n)
+    .map(s => s.key);
+}
+
+// メタ取得：walker 経由で全 leaf を列挙
+//   - subject=match の場合は role='match' で walker
+//   - comparison は buildPairsForCompare で {leftValue, rightValue} に
 function getBindingMeta(mod, siData) {
   const inferred = inferBindingForMod(mod, siData);
   if (!inferred) return null;
   const { subject, aspect, primary, secondary } = inferred;
 
-  const recipe = getRecipe(subject, aspect);
-  if (!recipe?.availableSlots?.length) return null;
-
   const primaryData = _findEntityData(siData, subject, primary);
   if (!primaryData) return null;
+
+  // 比較判定：mod.type === 'comparison' AND secondary が解決できる
+  const isCompare = mod.type === 'comparison' && !!secondary;
   let secondaryData = null;
-  if (recipe.requiresSecondary) {
-    if (!secondary) return null;
+  if (isCompare) {
     secondaryData = _findEntityData(siData, subject, secondary);
     if (!secondaryData) return null;
   }
 
-  return {
-    subject, aspect, recipe,
-    primary, secondary, primaryData, secondaryData,
-    isCompare: !!recipe.requiresSecondary,
-    availableSlots: recipe.availableSlots.map(s => ({
+  // walker dispatch role
+  const role = subject === 'match' ? 'match' : subject;
+
+  let availableSlots;
+  if (isCompare) {
+    availableSlots = buildPairsForCompare(primaryData, secondaryData, role);
+  } else {
+    availableSlots = walkEntity(primaryData, role).map(s => ({
       key:      s.key,
       label:    s.label,
-      category: s.category || '-',
-      priority: s.priority || 0,
-    })),
-    defaultSelection: recipe.defaultSelection || [],
+      category: s.category,
+      priority: s.priority,
+      source:   s.source,
+      value:    s.value,
+    }));
+  }
+
+  if (!availableSlots.length) return null;
+
+  return {
+    subject, aspect,
+    primary, secondary, primaryData, secondaryData,
+    isCompare,
+    availableSlots,
+    defaultSelection: _pickDefaultSelection(availableSlots, isCompare ? 5 : 5),
   };
+}
+
+// メタ + customSlotKeys → mod.dataSlots を構築
+//   isCompare: [{slotKey, label, leftValue, rightValue}]
+//   non-compare: [{slotKey, label, value}]
+function buildDataSlotsFromMeta(meta, customSlotKeys) {
+  if (!meta || !Array.isArray(customSlotKeys)) return [];
+  const map = new Map(meta.availableSlots.map(s => [s.key, s]));
+  return customSlotKeys.map(k => {
+    const s = map.get(k);
+    if (!s) return null;
+    if (meta.isCompare) {
+      return { slotKey: k, label: s.label, leftValue: s.leftValue, rightValue: s.rightValue };
+    }
+    return { slotKey: k, label: s.label, value: s.value };
+  }).filter(Boolean);
 }
 
 module.exports = {
   getBindingMeta,
   inferBindingForMod,
+  buildDataSlotsFromMeta,
 };

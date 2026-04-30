@@ -98,16 +98,14 @@ router.get('/v2/recipe-slots', (req, res) => {
       return res.json({ ok: false, error: 'binding が解決できませんでした（SIデータ未取得 or レシピ未対応）' });
     }
 
-    // 全 availableSlots を評価して category 別にグループ化
-    //   isCompare=false の場合 rightValue は '-' に固定（単体カードは左カラム値だけ意味がある）
+    // walker 出力の availableSlots を category 別にグループ化
+    //   isCompare=false：value 1 列 / true：leftValue + rightValue
     const groups = {};
-    meta.recipe.availableSlots.forEach(slot => {
+    meta.availableSlots.forEach(slot => {
       const cat = slot.category || 'その他';
       if (!groups[cat]) groups[cat] = [];
-      const leftValue  = String(slot.extract(meta.primaryData, { side: 'home' }) ?? '-');
-      const rightValue = meta.secondaryData
-        ? String(slot.extract(meta.secondaryData, { side: 'away' }) ?? '-')
-        : '-';
+      const leftValue  = meta.isCompare ? slot.leftValue  : slot.value;
+      const rightValue = meta.isCompare ? slot.rightValue : '-';
       groups[cat].push({
         key:      slot.key,
         label:    slot.label,
@@ -146,8 +144,7 @@ router.get('/v2/recipe-slots', (req, res) => {
 // Output: { ok, dataSlots }  ← 永続化も実施
 router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
   try {
-    const { buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
-    const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
+    const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
     const { postId, moduleIdx, customSlotKeys } = req.body || {};
     if (!postId || moduleIdx == null || !Array.isArray(customSlotKeys)) {
       return res.status(400).json({ error: 'postId + moduleIdx + customSlotKeys[] required' });
@@ -159,11 +156,11 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
 
     const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
     const meta = getBindingMeta(mod, si);
-    if (!meta) return res.status(400).json({ error: 'binding解決失敗（SIデータ未取得 or レシピ未対応）' });
+    if (!meta) return res.status(400).json({ error: 'binding解決失敗（SIデータ未取得）' });
 
-    const validKeys = new Set(meta.recipe.availableSlots.map(s => s.key));
+    const validKeys = new Set(meta.availableSlots.map(s => s.key));
     const keys = customSlotKeys.filter(k => validKeys.has(k));
-    mod.dataSlots = buildDataSlotsFromRecipe(meta.recipe, meta.primaryData, meta.secondaryData, keys, {});
+    mod.dataSlots = buildDataSlotsFromMeta(meta, keys);
     mod.binding = {
       subject:        meta.subject,
       aspect:         meta.aspect,
@@ -531,22 +528,18 @@ ${parsed.narration || ''}
     if (typeof parsed.narration === 'string') mod.narration = parsed.narration;
     mod.dataSlots = (mod.type === 'matchcard') ? [] : parsed.dataSlots;
 
-    // ── レシピマッチカードは dataSlots を実値で再構築（AI捏造値を上書き）──
-    //   解決した type + mainKey + secondary が A判定レシピと一致すれば、
-    //   AI 出力の dataSlots を SI 実値で書き換える。値を AI に妄想させない仕組み。
+    // ── walker 経由で dataSlots を実値で再構築（AI捏造値を上書き）──
+    //   AI 出力 dataSlots の label を walker の availableSlots と fuzzy 一致 →
+    //   対応 key で実値を引き直す。値を AI に妄想させない仕組み。
     try {
-      const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
-      const { buildDataSlotsFromRecipe } = require('../scripts/v2_story/recipes');
+      const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
       const meta = getBindingMeta(mod, si);
       if (meta && Array.isArray(parsed.dataSlots)) {
-        // AI が出した dataSlots の label を recipe のキー label と fuzzy 一致させて keys を抽出
-        //   一致しなければ defaultSelection で補完
         const aiLabels = parsed.dataSlots.map(s => String(s?.label || '').trim()).filter(Boolean);
-        const labelToKey = new Map(meta.recipe.availableSlots.map(s => [s.label, s.key]));
+        const labelToKey = new Map(meta.availableSlots.map(s => [s.label, s.key]));
         let keys = aiLabels
-          .map(l => labelToKey.get(l) || meta.recipe.availableSlots.find(s => s.label.includes(l) || l.includes(s.label))?.key)
+          .map(l => labelToKey.get(l) || meta.availableSlots.find(s => s.label.includes(l) || l.includes(s.label))?.key)
           .filter(Boolean);
-        // 重複除去
         keys = Array.from(new Set(keys));
         const targetMin = meta.isCompare ? 5 : 4;
         const targetMax = meta.isCompare ? 5 : 6;
@@ -556,9 +549,7 @@ ${parsed.narration || ''}
         } else if (keys.length > targetMax) {
           keys = keys.slice(0, targetMax);
         }
-        mod.dataSlots = buildDataSlotsFromRecipe(
-          meta.recipe, meta.primaryData, meta.secondaryData, keys, {}
-        );
+        mod.dataSlots = buildDataSlotsFromMeta(meta, keys);
         mod.binding = {
           subject:        meta.subject,
           aspect:         meta.aspect,
@@ -566,10 +557,10 @@ ${parsed.narration || ''}
           secondary:      meta.secondary,
           customSlotKeys: keys,
         };
-        console.log(`[ai-fill-slide] レシピ実値充填: ${meta.subject}.${meta.aspect} / keys=[${keys.join(',')}]`);
+        console.log(`[ai-fill-slide] walker 実値充填: ${meta.subject}.${meta.aspect} / keys=[${keys.join(',')}]`);
       }
     } catch (e) {
-      console.warn('[ai-fill-slide] レシピ実値充填スキップ:', e.message);
+      console.warn('[ai-fill-slide] walker 実値充填スキップ:', e.message);
     }
 
     fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
