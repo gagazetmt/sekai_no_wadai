@@ -367,7 +367,7 @@ async function fetchModuleData(module, post) {
         let queries = [userQuery]; // フォールバック
         try {
           const planRaw = await callAI({
-            model:      'deepseek-chat',
+            model:      'deepseek-v4-flash',
             max_tokens: 400,
             messages:   [{ role: 'user', content:
               `サッカーYouTube動画のリサーチです。

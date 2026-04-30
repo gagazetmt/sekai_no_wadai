@@ -414,28 +414,28 @@ ${incrementalRule}
   "narration": "..."
 }`;
 
-    // Sonnet 既定（B案・ハルシ抑制） → JSON崩れ時 DeepSeek フォールバック
-    let raw, parsed = null, used = 'sonnet';
+    // V4-Flash 既定（5/1切替・コスト効率＋固有名詞精度） → JSON崩れ時 Sonnet フォールバック
+    let raw, parsed = null, used = 'v4flash';
     try {
       raw = await callAI({
-        forceProvider: 'anthropic',
-        model: 'claude-sonnet-4-6', max_tokens: 3500,
+        forceProvider: 'deepseek',
+        model: 'deepseek-v4-flash', max_tokens: 3500,
         messages: [{ role: 'user', content: prompt }],
       });
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
       if (m1) parsed = JSON.parse(m1[0]);
-    } catch (e) { console.warn('[ai-fill-slide] sonnet 例外:', e.message); }
+    } catch (e) { console.warn('[ai-fill-slide] v4flash 例外:', e.message); }
     if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
-      console.warn('[ai-fill-slide] sonnet 失敗、DeepSeek にフォールバック');
+      console.warn('[ai-fill-slide] v4flash 失敗、Sonnet にフォールバック');
       try {
         raw = await callAI({
-          forceProvider: 'deepseek',
-          model: 'deepseek-chat', max_tokens: 3500,
+          forceProvider: 'anthropic',
+          model: 'claude-sonnet-4-6', max_tokens: 3500,
           messages: [{ role: 'user', content: prompt }],
         });
         const m2 = raw && raw.match(/\{[\s\S]*\}/);
         if (m2) parsed = JSON.parse(m2[0]);
-        used = 'deepseek';
+        used = 'sonnet';
       } catch (_) {}
     }
     if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
@@ -474,6 +474,43 @@ ${parsed.narration || ''}
    ・H2H ブロックがあれば「直近5試合」等の範囲付き表現になっているか（「全期間 X勝Y敗」と断言してないか）
 5. 通算値の計算（複数クラブのcaps合計など）が元データから検算できるか
 6. 固有名詞（チーム名・選手名）が元データの綴りと一致するか
+
+【★時間軸の3層区別 — 致命的エラー防止（厳守）】
+データには3つの異なる時間軸のスタッツが存在します。混同・誤帰属は致命的エラー：
+
+(A) lastMatchStats = その1試合限定のスタッツ
+    ・tournament フィールドにその試合の大会名が記載される
+    ・narration で「今日の試合で N得点」「この試合で N アシスト」のみ使用OK
+    ・「今期」「通算」と書くのは誤り
+
+(B) seasonStats = 今シーズンの累積スタッツ（ほぼ国内リーグ限定）
+    ・sofa.leagueName が示すリーグ（"LaLiga"/"Premier League"/"Bundesliga"等）の累積
+    ・CL/EL/カップ戦の数字は含まれない
+    ・narration で「今季N得点」と書くなら必ず leagueName を併記
+      ✓「今季ラ・リーガで N 得点」「今季プレミアで N 得点」
+      ✗「今季CLで N 得点」（誤り。CL得点は別カテゴリ。修正対象）
+
+(C) 通算/career = 入手不可（選手の場合）
+    ・「CL通算 X 試合 N ゴール」「キャリア通算 N ゴール」等は元データに無い
+    ・**書いていたら narration から削除**
+    ・例外: 監督の overallPerformance は通算データなのでそのまま使ってOK
+
+【★大会名の混同検出】
+- 「リーガ」「ラ・リーガ」「La Liga」は全て同一（スペイン1部）
+- 「プレミア」「プレミアリーグ」「Premier League」「PL」は全て同一（イングランド1部）
+- 異なるリーグ名の混在は誤り：
+  ✗「アーセナルは現在リーガでPL首位」（リーガ＝La Liga なので矛盾。修正対象）
+  ✓「アーセナルはプレミアリーグで首位」
+
+【★固有名詞の翻字保持 — 致命的事故防止】
+元データの英語/スペイン語/スウェーデン語等の綴りを勝手にカタカナ変換しない。
+過去事故例（修正必須）：
+  ✗ Julián Álvarez → 「ホアン・アルバレス」（Juan ではない。Julián はスペイン語の「フリアン」）
+  ✓ Julián Álvarez → 「フリアン・アルバレス」または「ジュリアン・アルバレス」
+  ✗ Viktor Gyökeres → 「ヒョイビャー」「ヒョーケレス」（独自変換は禁止）
+  ✓ Viktor Gyökeres → 「ヴィクトル・ギョケレス」（標準的な日本語化）
+- Wikipedia extract に日本語表記があればそれを優先
+- 不明な場合は標準的な日本語表記に留める。当て字・推測カタカナ化は禁止
 
 【修正方針】
 - narration の修正は **最小限・ピンポイント**で。文体・前後スライドとの繋ぎは維持

@@ -377,9 +377,9 @@ JSON配列で、選んだインデックス（0開始）を期待度の高い順
 ${postList}`;
 
   try {
-    const raw = await callAI({ 
-      model: "deepseek-chat", 
-      max_tokens: 200, 
+    const raw = await callAI({
+      model: "deepseek-v4-flash",
+      max_tokens: 200,
       messages: [{ role: "user", content: prompt }] 
     });
     const m = raw.match(/\[[\d\s,]+\]/);

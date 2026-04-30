@@ -44,7 +44,7 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
       ? [{ role: "system", content: system }, ...messages]
       : messages;
     const res = await client.chat.completions.create({
-      model:      "deepseek-chat",
+      model:      "deepseek-v4-flash",
       max_tokens,
       messages:   msgs,
     });

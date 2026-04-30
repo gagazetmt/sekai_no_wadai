@@ -88,7 +88,7 @@ async function proposeModules(post) {
 ※ entities: type は "player" か "team" のみ（監督・大会は不要）。最大5件。SofaScoreで検索できる固有名詞のみ。英語必須`;
 
   const raw = await callAI({
-    model:      'deepseek-chat',
+    model:      'deepseek-v4-flash',
     max_tokens: 2000,
     messages:   [{ role: 'user', content: prompt }],
     system:     'サッカー専門のYouTubeディレクターです。JSONのみを返します。',

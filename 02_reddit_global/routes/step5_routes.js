@@ -204,7 +204,7 @@ JSON形式で返してください:
 
   try {
     const text = await callAI({
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       max_tokens: 2000,
       forceProvider: 'deepseek',
       system: sys,

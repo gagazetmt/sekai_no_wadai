@@ -163,7 +163,7 @@ JSONのみ:
   try {
     const raw = await callAI({
       forceProvider: 'deepseek',
-      model: 'deepseek-chat', max_tokens: 800,
+      model: 'deepseek-v4-flash', max_tokens: 800,
       messages: [{ role: 'user', content: phase1Prompt }],
     });
     phase1 = _parseEntities(raw);
@@ -242,7 +242,7 @@ JSONのみ:
     try {
       const raw = await callAI({
         forceProvider: 'deepseek',
-        model: 'deepseek-chat', max_tokens: 600,
+        model: 'deepseek-v4-flash', max_tokens: 600,
         messages: [{ role: 'user', content: phase2Prompt }],
       });
       const p2 = _parseEntities(raw);

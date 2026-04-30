@@ -124,7 +124,7 @@ ${moduleTexts}
 - データにない数字・記録は絶対に作らない（ハルシネーション禁止）`;
 
   const raw = await callAI({
-    model:      'deepseek-chat',
+    model:      'deepseek-v4-flash',
     max_tokens: 3000,
     messages:   [{ role: 'user', content: prompt }],
     system:     'あなたはサッカーYouTubeの専属脚本家です。JSONのみを返します。',

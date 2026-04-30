@@ -77,7 +77,7 @@ async function toHiragana(text) {
   const r = await axios.post(
     'https://api.deepseek.com/chat/completions',
     {
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       messages: [
         { role: 'system', content: HIRAGANA_PROMPT },
         { role: 'user',   content: text }
