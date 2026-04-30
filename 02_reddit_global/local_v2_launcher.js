@@ -435,4 +435,5 @@ app.listen(PORT, () => {
   console.log('  Step3:   構成提案    → routes/step3_routes.js');
   console.log('  Step3.5: 画像選定    → routes/step35_routes.js');
   console.log('  Step4:   シナリオ編集 → routes/step4_routes.js');
+  console.log('  Step5:   サムネ作成   → routes/step5_routes.js');
 });
