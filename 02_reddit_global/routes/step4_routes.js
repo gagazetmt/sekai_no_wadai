@@ -132,9 +132,54 @@ router.get('/v2/recipe-slots', (req, res) => {
       defaultSelection: meta.defaultSelection,
       selected,
       categories,
+      // Step B 追加: 利用可能レシピ + 現在採用中のレシピキー
+      recipes:        meta.recipes || [],
+      currentRecipeKey: mod.binding?.recipeKey || null,
     });
   } catch (e) {
     console.error('[v2/recipe-slots]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── /v2/apply-recipe : レシピを適用 → dataSlots 自動充填 ─
+// Input:  { postId, moduleIdx, recipeKey }
+// Output: { ok, dataSlots, customSlotKeys, recipeKey }
+router.post('/v2/apply-recipe', express.json(), (req, res) => {
+  try {
+    const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
+    const { expandRecipe, hasRecipe } = require('../scripts/v2_story/recipes_curated');
+    const { postId, moduleIdx, recipeKey } = req.body || {};
+    if (!postId || moduleIdx == null || !recipeKey) {
+      return res.status(400).json({ error: 'postId + moduleIdx + recipeKey required' });
+    }
+    if (!hasRecipe(recipeKey)) return res.status(400).json({ error: 'unknown recipeKey: ' + recipeKey });
+
+    const mp = modulesPath(postId);
+    const modulesData = safeJson(mp, { modules: [] });
+    const mod = (modulesData.modules || [])[moduleIdx];
+    if (!mod) return res.status(404).json({ error: 'module not found' });
+
+    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+    const meta = getBindingMeta(mod, si);
+    if (!meta) return res.status(400).json({ error: 'binding解決失敗' });
+
+    const keys = expandRecipe(recipeKey, meta.availableSlots);
+    if (!keys?.length) return res.status(400).json({ error: 'recipe 展開結果が空（walker に該当キー無し）' });
+
+    mod.dataSlots = buildDataSlotsFromMeta(meta, keys);
+    mod.binding = {
+      subject:        meta.subject,
+      aspect:         meta.aspect,
+      primary:        meta.primary,
+      secondary:      meta.secondary,
+      customSlotKeys: keys,
+      recipeKey,
+    };
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+    res.json({ ok: true, dataSlots: mod.dataSlots, customSlotKeys: keys, recipeKey });
+  } catch (e) {
+    console.error('[v2/apply-recipe]', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1471,6 +1516,16 @@ function getUI() {
         s4ToggleRecipeSlot(idx, key);
       });
     });
+    /* レシピセレクタ: change → apply-recipe（空値はカスタム継続で no-op）*/
+    el.querySelectorAll('.s4-recipe-selector').forEach(function(sel) {
+      sel.addEventListener('change', function() {
+        const idx = parseInt(sel.getAttribute('data-idx'), 10);
+        const recipeKey = sel.value;
+        if (Number.isNaN(idx)) return;
+        if (!recipeKey) return;  // カスタムへ戻す挙動は slot toggle 経由
+        s4ApplyRecipe(idx, recipeKey);
+      });
+    });
 
     /* 🎙️ TTS: chunk 単発再生 */
     el.querySelectorAll('.s4-tts-play-chunk').forEach(function(btn) {
@@ -1493,13 +1548,35 @@ function getUI() {
     const sel   = new Set(data.selected || []);
     const cats  = data.categories || [];
     const total = cats.reduce((n, c) => n + (c.slots?.length || 0), 0);
+    const recipes = data.recipes || [];
+    const currentRecipeKey = data.currentRecipeKey || '';
+    const currentRecipe    = recipes.find(r => r.key === currentRecipeKey);
 
-    const head = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;display:flex;align-items:center;gap:8px;">'
-      + '🔗 メトリック選択 <span style="font-size:9px;color:#8a9aba;font-weight:normal;">'
+    // ─ レシピバナー（recipes が1件以上ある時だけ）─
+    let recipeBanner = '';
+    if (recipes.length) {
+      const opts = '<option value="">— カスタム（個別選定）—</option>'
+        + recipes.map(r => '<option value="' + _esc(r.key) + '"'
+            + (r.key === currentRecipeKey ? ' selected' : '') + '>'
+            + _esc(r.label) + ' (' + (r.keys?.length || 0) + 'keys)</option>').join('');
+      recipeBanner = '<div style="margin:14px 0 10px;padding:10px 12px;background:#1a1d2e;border:1px solid #6366f1;border-radius:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+        + '<span style="font-size:11px;color:#a5b4fc;font-weight:bold;">📂 レシピ:</span>'
+        + '<select data-idx="' + idx + '" class="s4-recipe-selector inp" style="font-size:11px;padding:4px 8px;flex:1;min-width:200px;background:#0a0d18;color:#e0e0e0;">'
+        + opts
+        + '</select>'
+        + (currentRecipe
+            ? '<span style="font-size:9px;color:#5a6a8a;flex-basis:100%;">' + _esc(currentRecipe.description) + '</span>'
+            : '<span style="font-size:9px;color:#5a6a8a;flex-basis:100%;">↑ 選ぶと dataSlots が一発で組み上がる。下のアコーディオンで個別追加も可</span>')
+        + '</div>';
+    }
+
+    const head = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:8px 0 6px;display:flex;align-items:center;gap:8px;">'
+      + '🔍 全データ（' + total + ' slots）<span style="font-size:9px;color:#8a9aba;font-weight:normal;">'
       + _esc(data.subject) + '.' + _esc(data.aspect) + ' / '
-      + _esc(data.primary || '?') + ' vs ' + _esc(data.secondary || '?')
+      + _esc(data.primary || '?')
+      + (data.isCompare ? ' vs ' + _esc(data.secondary || '?') : '')
       + '</span><span style="flex:1;"></span>'
-      + '<span style="font-size:9px;color:#10b981;">' + sel.size + ' / 5 選択中</span>'
+      + '<span style="font-size:9px;color:#10b981;">' + sel.size + ' 採用中</span>'
       + '</div>';
 
     const body = cats.map(function(cat) {
@@ -1639,14 +1716,49 @@ function getUI() {
       const m = window.APP.s4.modules[idx];
       if (m) {
         m.dataSlots = r.dataSlots;
-        if (m.binding) m.binding.customSlotKeys = r.customSlotKeys;
+        if (m.binding) {
+          m.binding.customSlotKeys = r.customSlotKeys;
+          delete m.binding.recipeKey;     // 手動編集 = カスタム化
+        }
       }
-      // キャッシュの selected を更新
+      // キャッシュの selected と currentRecipeKey を更新（カスタム化）
       cached.selected = r.customSlotKeys;
+      cached.currentRecipeKey = null;
       _renderEditor();
       _reloadPreview();
     } catch (e) {
       _msg('❌ スロット更新失敗: ' + e.message);
+    }
+  };
+
+  /* レシピ適用: ドロップダウンで選んだレシピを dataSlots に展開 */
+  window.s4ApplyRecipe = async function(idx, recipeKey) {
+    const post = window.APP.selected;
+    if (!post?.id || !recipeKey) return;
+    try {
+      const r = await fetchJson('/api/v2/apply-recipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, recipeKey }),
+      });
+      if (!r.ok) throw new Error(r.error || 'レシピ適用失敗');
+      const m = window.APP.s4.modules[idx];
+      if (m) {
+        m.dataSlots = r.dataSlots;
+        m.binding = m.binding || {};
+        m.binding.customSlotKeys = r.customSlotKeys;
+        m.binding.recipeKey      = r.recipeKey;
+      }
+      const cached = window.APP.s4.recipeSlotsByIdx[idx];
+      if (cached) {
+        cached.selected         = r.customSlotKeys;
+        cached.currentRecipeKey = r.recipeKey;
+      }
+      _renderEditor();
+      _reloadPreview();
+      _msg('✅ レシピ適用: ' + recipeKey + ' (' + r.customSlotKeys.length + 'keys)');
+    } catch (e) {
+      _msg('❌ レシピ適用失敗: ' + e.message);
     }
   };
 
