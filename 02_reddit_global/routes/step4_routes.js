@@ -288,6 +288,23 @@ ${sofaStr}
     const ctxSecondary = secondary ? _entityContext(secondary) : '';
     const ctxH2H       = await _h2hContextIfTeams(items, primary, secondary);
 
+    // 利用可能レシピ（このスライドの primary entity に対するもの）
+    let recipesSection = '';
+    try {
+      const { getBindingMeta } = require('../scripts/v2_story/binding_meta');
+      const probeMeta = getBindingMeta(mod, si);
+      if (probeMeta?.recipes?.length) {
+        const lines = probeMeta.recipes.map(r => `  - "${r.key}": ${r.label} — ${r.description}`).join('\n');
+        recipesSection = `
+
+【利用可能レシピ（推奨：これを選ぶと意図がブレない）】
+${lines}
+
+JSON 出力で **"recipeKey": "<上記レシピキー>"** を返せば dataSlots は自動充填されます。
+レシピで意図がカバーできない場合のみ "dataSlots" を直接返してください（recipeKey と dataSlots の両方を返さない）。`;
+      }
+    } catch (_) {}
+
     // ── 案件全体の文脈（saved_projects.json から）──
     let projectCtx = '';
     try {
@@ -380,6 +397,7 @@ ${nextSlides ? '【後のスライド（流れの下流）】\n' + nextSlides : 
 ${ctxPrimary}
 ${ctxSecondary}
 ${ctxH2H}
+${recipesSection}
 
 【ユーザー注文】
 ${userPrompt}
@@ -420,9 +438,12 @@ ${incrementalRule}
 {
   "type": "...",
   "title": "...",
-  "dataSlots": [...],
+  "recipeKey": "<上記レシピキー>",   // 推奨：レシピで意図カバーできるなら
+  // または
+  "dataSlots": [...],                // レシピで足りない時のみ
   "narration": "..."
-}`;
+}
+※ recipeKey と dataSlots は **どちらか片方** だけ返す`;
 
     // Sonnet 既定（構成・データ選定・脚本品質を優先） → JSON崩れ時 v4flash 保険
     let raw, parsed = null, used = 'sonnet';
@@ -576,35 +597,55 @@ ${parsed.narration || ''}
     mod.dataSlots = (mod.type === 'matchcard') ? [] : parsed.dataSlots;
 
     // ── walker 経由で dataSlots を実値で再構築（AI捏造値を上書き）──
-    //   AI 出力 dataSlots の label を walker の availableSlots と fuzzy 一致 →
-    //   対応 key で実値を引き直す。値を AI に妄想させない仕組み。
+    //   優先順位:
+    //     ① AI が parsed.recipeKey を返した → walker キーに展開
+    //     ② AI が dataSlots を返した → label を fuzzy 一致 → walker キー特定
+    //   いずれも結果として walker の実値で書き換える。
     try {
       const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
+      const { expandRecipe, hasRecipe } = require('../scripts/v2_story/recipes_curated');
       const meta = getBindingMeta(mod, si);
-      if (meta && Array.isArray(parsed.dataSlots)) {
-        const aiLabels = parsed.dataSlots.map(s => String(s?.label || '').trim()).filter(Boolean);
-        const labelToKey = new Map(meta.availableSlots.map(s => [s.label, s.key]));
-        let keys = aiLabels
-          .map(l => labelToKey.get(l) || meta.availableSlots.find(s => s.label.includes(l) || l.includes(s.label))?.key)
-          .filter(Boolean);
-        keys = Array.from(new Set(keys));
-        const targetMin = meta.isCompare ? 5 : 4;
-        const targetMax = meta.isCompare ? 5 : 6;
-        if (keys.length < targetMin) {
-          const fillers = meta.defaultSelection.filter(k => !keys.includes(k));
-          keys = [...keys, ...fillers].slice(0, targetMax);
-        } else if (keys.length > targetMax) {
-          keys = keys.slice(0, targetMax);
+      if (meta) {
+        let keys = [];
+        let recipeKeyAdopted = null;
+        // ① recipeKey 優先
+        if (parsed.recipeKey && hasRecipe(parsed.recipeKey)) {
+          const expanded = expandRecipe(parsed.recipeKey, meta.availableSlots);
+          if (expanded?.length) {
+            keys = expanded;
+            recipeKeyAdopted = parsed.recipeKey;
+            console.log(`[ai-fill-slide] recipe採用: ${parsed.recipeKey} → ${expanded.length} keys`);
+          }
         }
-        mod.dataSlots = buildDataSlotsFromMeta(meta, keys);
-        mod.binding = {
-          subject:        meta.subject,
-          aspect:         meta.aspect,
-          primary:        meta.primary,
-          secondary:      meta.secondary,
-          customSlotKeys: keys,
-        };
-        console.log(`[ai-fill-slide] walker 実値充填: ${meta.subject}.${meta.aspect} / keys=[${keys.join(',')}]`);
+        // ② recipe 未採用 → AI dataSlots の label を fuzzy 一致
+        if (!keys.length && Array.isArray(parsed.dataSlots)) {
+          const aiLabels = parsed.dataSlots.map(s => String(s?.label || '').trim()).filter(Boolean);
+          const labelToKey = new Map(meta.availableSlots.map(s => [s.label, s.key]));
+          keys = aiLabels
+            .map(l => labelToKey.get(l) || meta.availableSlots.find(s => s.label.includes(l) || l.includes(s.label))?.key)
+            .filter(Boolean);
+          keys = Array.from(new Set(keys));
+          const targetMin = meta.isCompare ? 5 : 4;
+          const targetMax = meta.isCompare ? 5 : 6;
+          if (keys.length < targetMin) {
+            const fillers = meta.defaultSelection.filter(k => !keys.includes(k));
+            keys = [...keys, ...fillers].slice(0, targetMax);
+          } else if (keys.length > targetMax) {
+            keys = keys.slice(0, targetMax);
+          }
+        }
+        if (keys.length) {
+          mod.dataSlots = buildDataSlotsFromMeta(meta, keys);
+          mod.binding = {
+            subject:        meta.subject,
+            aspect:         meta.aspect,
+            primary:        meta.primary,
+            secondary:      meta.secondary,
+            customSlotKeys: keys,
+            ...(recipeKeyAdopted ? { recipeKey: recipeKeyAdopted } : {}),
+          };
+          console.log(`[ai-fill-slide] 実値充填: ${meta.subject}.${meta.aspect} / keys=${keys.length}${recipeKeyAdopted ? ' (recipe='+recipeKeyAdopted+')' : ''}`);
+        }
       }
     } catch (e) {
       console.warn('[ai-fill-slide] walker 実値充填スキップ:', e.message);

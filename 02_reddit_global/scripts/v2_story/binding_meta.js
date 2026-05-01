@@ -18,6 +18,7 @@
 'use strict';
 
 const { walkEntity, buildPairsForCompare } = require('./si_walker');
+const { applicableRecipes, expandRecipe, hasRecipe } = require('./recipes_curated');
 
 // 1エンティティのデータを SI box (entity/match) から引く
 //   subject = player/team/manager/tournament → boxes.entity.items の sofa + wiki を merge
@@ -154,12 +155,20 @@ function getBindingMeta(mod, siData) {
 
   if (!availableSlots.length) return null;
 
+  // 利用可能レシピ（walker キーセットを基に）
+  const recipes = applicableRecipes(
+    isCompare ? availableSlots.map(s => ({ key: s.key })) : availableSlots,
+    role,
+    isCompare
+  );
+
   return {
     subject, aspect,
     primary, secondary, primaryData, secondaryData,
     isCompare,
     availableSlots,
     defaultSelection: _pickDefaultSelection(availableSlots, isCompare ? 5 : 5),
+    recipes,         // 使えるレシピリスト [{key, label, description, keys}]
   };
 }
 
@@ -179,8 +188,25 @@ function buildDataSlotsFromMeta(meta, customSlotKeys) {
   }).filter(Boolean);
 }
 
+// recipeKey が指定されていれば walker 出力に展開、無ければ既存 customSlotKeys
+//   AI 出力の mod を受け取り「最終的な customSlotKeys 配列」を返す
+function resolveCustomSlotKeys(meta, mod) {
+  // 優先1: AI が customSlotKeys を直接指定
+  if (Array.isArray(mod?.customSlotKeys) && mod.customSlotKeys.length) {
+    return { keys: mod.customSlotKeys, source: 'custom' };
+  }
+  // 優先2: AI が recipeKey を指定 → 展開
+  if (mod?.recipeKey && hasRecipe(mod.recipeKey)) {
+    const expanded = expandRecipe(mod.recipeKey, meta.availableSlots);
+    if (expanded?.length) return { keys: expanded, source: 'recipe:' + mod.recipeKey };
+  }
+  // フォールバック: defaultSelection
+  return { keys: meta.defaultSelection || [], source: 'default' };
+}
+
 module.exports = {
   getBindingMeta,
   inferBindingForMod,
   buildDataSlotsFromMeta,
+  resolveCustomSlotKeys,
 };
