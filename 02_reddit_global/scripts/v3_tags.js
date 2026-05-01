@@ -118,13 +118,19 @@ function getSubTagsForMain(mainKey, siData) {
 }
 
 // メイン+サブ から type を決定
-function resolveType(mainKey, subSource, subValue, siData) {
+//   優先順位: ① fixed/matchcard 確定型 → ② sub マッチ → ③ AI 直接指定の type → ④ 'insight'
+//   subSource/subValue 無しでも AI が type を直接書いてれば採用する（バグ修正 2026-05-01）
+const VALID_TYPES = new Set(['opening','ending','toc','insight','stats','profile','comparison','history','reaction','matchcard','matchcenter']);
+function resolveType(mainKey, subSource, subValue, siData, aiType) {
   const p = parseMainKey(mainKey, siData);
   if (p.kind === 'fixed')     return p.def.type;
   if (p.kind === 'matchcard') return 'matchcard';
   const subs = getSubTagsForMain(mainKey, siData);
   const hit = subs.find(s => s.source === subSource && s.value === subValue);
-  return hit?.type || 'insight';
+  if (hit?.type) return hit.type;
+  // sub 未指定 → AI が直接 type を書いてれば採用
+  if (aiType && VALID_TYPES.has(aiType)) return aiType;
+  return 'insight';
 }
 
 // メインタグ一覧（プルダウン用）
