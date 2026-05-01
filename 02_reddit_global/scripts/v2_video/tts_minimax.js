@@ -285,22 +285,50 @@ async function generateMiniMaxTTS(opts = {}) {
     output_format: 'hex',
   };
 
-  const res = await axios.post(`${API_URL}?GroupId=${groupId}`, reqBody, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 60000,
-  });
+  // ── rate limit 対策: 失敗時に backoff リトライ（最大3回）──
+  //   MiniMax の RPM 制限（1分あたり呼出数）に瞬間的に引っかかった時用
+  const MAX_RETRIES = 3;
+  let lastErr = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await axios.post(`${API_URL}?GroupId=${groupId}`, reqBody, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 60000,
+      });
 
-  if (!res.data?.data?.audio) {
-    throw new Error(`MiniMax API: ${JSON.stringify(res.data?.base_resp || res.data)}`);
+      if (!res.data?.data?.audio) {
+        const respMsg = JSON.stringify(res.data?.base_resp || res.data);
+        // rate limit (1002) ならリトライ対象、それ以外は即 throw
+        if (/1002|rate limit/i.test(respMsg) && attempt < MAX_RETRIES) {
+          const waitMs = 65000 + attempt * 30000;  // 65s, 95s, 125s（RPM ウィンドウを跨ぐ）
+          console.warn(`  ⏳ MiniMax rate limit (attempt ${attempt + 1}/${MAX_RETRIES + 1}) → ${waitMs/1000}s 待機して再試行`);
+          await new Promise(r => setTimeout(r, waitMs));
+          continue;
+        }
+        throw new Error(`MiniMax API: ${respMsg}`);
+      }
+      // 出力先ディレクトリを保証
+      const dir = path.dirname(outputPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(outputPath, Buffer.from(res.data.data.audio, 'hex'));
+      return outputPath;
+    } catch (e) {
+      lastErr = e;
+      // ネットワーク系の一過性エラーも軽くリトライ（短いバックオフ）
+      const isTransient = /ECONNRESET|ETIMEDOUT|socket hang up/i.test(e.message || '');
+      if (isTransient && attempt < MAX_RETRIES) {
+        const waitMs = 3000 + attempt * 5000;
+        console.warn(`  ⏳ TTS 一過性エラー (${e.message?.slice(0, 60)}) → ${waitMs/1000}s 待機して再試行`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      throw e;
+    }
   }
-  // 出力先ディレクトリを保証
-  const dir = path.dirname(outputPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(outputPath, Buffer.from(res.data.data.audio, 'hex'));
-  return outputPath;
+  throw lastErr || new Error('MiniMax TTS unknown failure');
 }
 
 // mp3 ファイルから duration(秒) を取得 — ffprobe 経由

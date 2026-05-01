@@ -50,7 +50,7 @@ const MAX_SLIDE_MS     = 60000;  // 暴走防止
 //   RENDER: 共有 browser に N page 作って各 page をワーカーが担当
 //     並列度4だと CDP コールが 4ページ分キュー詰まりして
 //     Puppeteer protocolTimeout (30秒) で失敗が頻発。3 に下げて余裕を持たせる
-const TTS_CONCURRENCY    = 4;
+const TTS_CONCURRENCY    = 2;  // MiniMax の RPM 制限対策（4→2に下げ・2026-05-02）
 const RENDER_CONCURRENCY = 3;
 
 // 配列を limit 並列で順次処理（worker pool）
@@ -406,7 +406,7 @@ async function main() {
   const pages = workerCtxs.map(c => c.page);
 
   // 各スライドの video-only / audio-only を別々に保持（xfade/acrossfade で繋ぐため）
-  const TRANSITION_SEC = 0.4;  // クロスフェード時間（両側合わせ 0.4 秒）
+  const TRANSITION_SEC = 0.6;  // クロスフェード時間（0.4→0.6 で切替感を強化・2026-05-02）
   const slideVideos = new Array(modules.length);
   const slideAudios = new Array(modules.length);
   const slideDursMs = new Array(modules.length);
@@ -504,7 +504,7 @@ async function main() {
       cumDur += compactDursMs[i - 1] / 1000;
       const offset = (cumDur - T * i).toFixed(3);
       const out = (i === N - 1) ? '[vout]' : `[v${i}]`;
-      vParts.push(`${prevV}[${i}:v]xfade=transition=fade:duration=${T}:offset=${offset}${out}`);
+      vParts.push(`${prevV}[${i}:v]xfade=transition=fadeblack:duration=${T}:offset=${offset}${out}`);
       prevV = out;
     }
     const aParts = [];
