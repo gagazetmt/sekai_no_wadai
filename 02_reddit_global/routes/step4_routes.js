@@ -732,7 +732,6 @@ router.post('/v2/regen-narration', async (req, res) => {
 【カード情報】
 type: ${m.type}
 mainKey: ${m.mainKey || '?'}
-sub: ${m.subSource || '-'}:${m.subValue || '-'}
 title: ${m.title || ''}
 脚本指示: ${m.scriptDir || ''}
 
@@ -1414,7 +1413,7 @@ function getUI() {
       + '<select class="inp" id="s4TypeSel" onchange="s4OnTypeChange()" style="font-size:11px;padding:3px 6px;background:#0d1220;color:var(--c);font-weight:bold;">'
       + typeOpts
       + '</select>'
-      + '<span style="font-size:10px;color:#5a6a8a;">main=' + _esc(m.mainKey||'?') + (m.subSource ? ' / sub=' + _esc(m.subSource+':'+m.subValue) : '') + '</span>'
+      + '<span style="font-size:10px;color:#5a6a8a;">main=' + _esc(m.mainKey||'?') + '</span>'
       + '</div>'
       + '<button class="btn btn-sm" onclick="s4RegenNarr()" style="background:#3b82f6;color:#fff;font-size:10px;padding:4px 10px;">↻ ナレーション再生成</button>'
       + '</div>'
