@@ -164,10 +164,19 @@ router.post('/v3/propose-modules', express.json(), async (req, res) => {
 【案件タイトル】${titleJa}
 ${titleOrig ? `【原題】${titleOrig}` : ''}
 
-【案件本文（抜粋）】
+【案件本文（事実情報の主源）】
 ${bodyExcerpt || '(なし)'}
 
-${topComments ? `【上位コメント（視聴者の興味を示す指標）】\n${topComments}\n` : ''}
+${topComments ? `【上位コメント（視聴者の感想・予測・皮肉。事実ではない）】\n${topComments}\n` : ''}
+
+━━━ 【ファクト管理ルール（構成段階・厳守）】━━━
+- scriptDir / title に**確定的な事実**を書く時は **【案件本文】と【取得済みデータ】の範囲内** で
+- 【案件本文】が**未来形・予定形・推測形**で書いてる事象を、scriptDir で**完了形・確定形に書き換え禁止**
+  ❌例: 本文「復帰予定」 → scriptDir「復帰戦のサラーが…」
+  ✅例: 本文「復帰予定」 → scriptDir「復帰決定の報を受けて…」
+- 上位コメントは「視聴者の興味」を示すヒント。reaction 型スライドで「ファンの声」として紹介する用途のみ。地の文の事実として scriptDir に書かない
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ━━━ 取得済みデータ ━━━
 [entity 一覧]
 ${entityBlock}
@@ -332,6 +341,8 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
     // 必須でないが、付加情報として使う
     const post = postIn || {};
     const titleJa = post.titleJa || post.title || '(案件タイトル不明)';
+    const titleOrigScn = post.titleOrig || post.title || '';
+    const bodyExcerptScn = (post.raw?.bodyJa || post.raw?.body || post.selftext || '').slice(0, 800);
     const commentsRaw = (post.raw?.comments || [])
       .map(c => c.bodyJa || c.body || '').filter(Boolean).slice(0, 8).join(' / ').slice(0, 1500);
 
@@ -469,8 +480,19 @@ ${lines}
 以下の outline と取得済み素材から、各カードの本体（narration、データ、キャッチコピー等）を生成してください。
 
 【今日の日付】${todayJst}（JST）
-【案件】${titleJa}
-${commentsRaw ? `【元コメント抜粋】${commentsRaw}\n` : ''}
+【案件タイトル】${titleJa}
+${titleOrigScn && titleOrigScn !== titleJa ? `【原題】${titleOrigScn}\n` : ''}${bodyExcerptScn ? `【案件本文（事実情報の主源）】\n${bodyExcerptScn}\n` : ''}${commentsRaw ? `【上位コメント（視聴者の感想・予測・皮肉。事実ではない）】\n${commentsRaw}\n` : ''}
+
+━━━ 【ファクト管理ルール（厳守）】━━━
+- narration / title の地の文に書く事実は **【案件本文】と【取得済みデータ】に明記されてるもの限定**
+- 【案件本文】が**未来形・予定形・推測形**で書いてる事象を、**確定形・完了形に書き換え禁止**
+  ❌例: 本文「サラーは今季中に復帰予定」 → narration「復帰戦のサラー」「復帰した瞬間」
+  ✅例: 本文「サラーは今季中に復帰予定」 → narration「サラーが今季中に復帰予定」「復帰が決まった」
+- 本文に書かれてない出来事を「起きた」「した」と断定しない
+- 上位コメントは reaction 型で「ファンの声」として紹介するのは OK だが、地の文の事実根拠にはしない
+- 取得済み sofa/wiki データの数値（過去成績・通算など）は事実として使って OK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ━━━ 取得済みデータ ━━━
 [entity 一覧]
 ${entityBlock}

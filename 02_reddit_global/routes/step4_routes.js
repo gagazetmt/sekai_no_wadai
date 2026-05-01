@@ -294,6 +294,7 @@ ${sofaStr}
       const sp = safeJson(path.join(DATA_DIR, 'saved_projects.json'), []);
       const proj = (Array.isArray(sp) ? sp : []).find(p => p.id === postId);
       if (proj) {
+        const bodyExcerpt = (proj.raw?.bodyJa || proj.raw?.body || proj.selftext || '').slice(0, 600);
         const topComments = (proj.raw?.comments || [])
           .slice(0, 5)
           .map(c => '- ' + (c.bodyJa || c.body || '').slice(0, 160))
@@ -302,7 +303,16 @@ ${sofaStr}
         projectCtx = `【案件全体の文脈】
 タイトル: ${proj.title || proj.titleOrig || '(?)'}
 原題: ${proj.titleOrig || '(?)'}
-${topComments ? '上位コメント抜粋:\n' + topComments : ''}`;
+${bodyExcerpt ? '【案件本文（事実情報の主源）】\n' + bodyExcerpt + '\n' : ''}${topComments ? '【上位コメント（視聴者の感想・予測。事実ではない）】\n' + topComments + '\n' : ''}
+
+━━━ 【ファクト管理ルール（厳守）】━━━
+- narration / title の地の文に書く事実は **【案件本文】と sofa/wiki データの範囲内** で
+- 【案件本文】が**未来形・予定形・推測形**で書いてる事象を、narration で**確定形・完了形に書き換え禁止**
+  ❌例: 本文「復帰予定」 → narration「復帰戦のサラー」「復帰した瞬間」
+  ✅例: 本文「復帰予定」 → narration「復帰決定の報を受けて」「今季中の復帰へ」
+- 上位コメントは reaction 型で「ファンの声」として紹介する用途のみ。地の文の事実根拠にしない
+- sofa/wiki の数値（過去成績・通算・経歴）は事実として OK
+━━━━━━━━━━━━━━━━━━━━━━━━`;
       }
     } catch (_) {}
 
