@@ -159,15 +159,25 @@ JSONのみ:
   "searches": ["..."]
 }`;
 
+  // Sonnet 既定（label 厳密性・JSON 安定性を優先） → JSON parse 失敗時 v4flash 保険
+  async function _askPhase1(provider) {
+    const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
+    return callAI({ forceProvider: provider, model, max_tokens: 1500, messages: [{ role: 'user', content: phase1Prompt }] });
+  }
   let phase1 = null;
   try {
-    const raw = await callAI({
-      forceProvider: 'deepseek',
-      model: 'deepseek-v4-flash', max_tokens: 800,
-      messages: [{ role: 'user', content: phase1Prompt }],
-    });
+    const raw = await _askPhase1('anthropic');
     phase1 = _parseEntities(raw);
-  } catch (e) { console.warn('[Step2 phase1] エラー:', e.message); }
+    if (!phase1) console.warn('[Step2 phase1] sonnet JSON parse 失敗 / raw=' + (raw||'').slice(0, 200));
+  } catch (e) { console.warn('[Step2 phase1] sonnet 例外:', e.message); }
+  if (!phase1) {
+    console.warn('[Step2 phase1] sonnet 失敗、v4flash にフォールバック');
+    try {
+      const raw = await _askPhase1('deepseek');
+      phase1 = _parseEntities(raw);
+      if (!phase1) console.warn('[Step2 phase1] v4flash も JSON parse 失敗 / raw=' + (raw||'').slice(0, 200));
+    } catch (e) { console.warn('[Step2 phase1] v4flash 例外:', e.message); }
+  }
   if (!phase1) return res.json({ entities: [], matches: [], searches: [] });
 
   const phase1Entities = Array.isArray(phase1.entities) ? phase1.entities : [];
@@ -239,18 +249,27 @@ ${newsContext}
 JSONのみ:
 {"entities": [{"name":"...","role":"..."}]}`;
 
+    // Sonnet 既定 → v4flash 保険
+    async function _askPhase2(provider) {
+      const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
+      return callAI({ forceProvider: provider, model, max_tokens: 1200, messages: [{ role: 'user', content: phase2Prompt }] });
+    }
     try {
-      const raw = await callAI({
-        forceProvider: 'deepseek',
-        model: 'deepseek-v4-flash', max_tokens: 600,
-        messages: [{ role: 'user', content: phase2Prompt }],
-      });
+      const raw = await _askPhase2('anthropic');
       const p2 = _parseEntities(raw);
       if (Array.isArray(p2?.entities)) {
         phase2Entities = p2.entities;
-        console.log(`  Phase2: 追加 entities ${phase2Entities.length}件`);
+        console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (sonnet)`);
+      } else {
+        console.warn('[Step2 phase2-ai] sonnet JSON parse 失敗、v4flash にフォールバック');
+        const raw2 = await _askPhase2('deepseek');
+        const p2b = _parseEntities(raw2);
+        if (Array.isArray(p2b?.entities)) {
+          phase2Entities = p2b.entities;
+          console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (v4flash fb)`);
+        }
       }
-    } catch (e) { console.warn('[Step2 phase2-ai] エラー:', e.message); }
+    } catch (e) { console.warn('[Step2 phase2-ai] 例外:', e.message); }
   }
 
   // ── マージ・重複排除 ───────────────────────────────────

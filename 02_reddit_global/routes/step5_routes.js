@@ -202,18 +202,25 @@ ${summary}
 JSON形式で返してください:
 { "titles": ["...", "...", "..."], "description": "...", "tags": ["...", "...", ...] }`;
 
+  // Sonnet 既定 → JSON parse 失敗時 v4flash 保険
+  async function _ask(provider) {
+    const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
+    return callAI({ forceProvider: provider, model, max_tokens: 2000, system: sys, messages: [{ role: 'user', content: prompt }] });
+  }
   try {
-    const text = await callAI({
-      model: 'deepseek-v4-flash',
-      max_tokens: 2000,
-      forceProvider: 'deepseek',
-      system: sys,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    // JSON 抽出
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return res.status(500).json({ error: 'AI 応答に JSON 含まれず', raw: text.slice(0, 300) });
-    const parsed = JSON.parse(m[0]);
+    let text = '', parsed = null;
+    try {
+      text = await _ask('anthropic');
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) parsed = JSON.parse(m[0]);
+    } catch (e) { console.warn('[step5 meta-gen] sonnet 例外:', e.message); }
+    if (!parsed) {
+      console.warn('[step5 meta-gen] sonnet 失敗、v4flash にフォールバック');
+      text = await _ask('deepseek');
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) parsed = JSON.parse(m[0]);
+    }
+    if (!parsed) return res.status(500).json({ error: 'AI 応答に JSON 含まれず', raw: text.slice(0, 300) });
     res.json({ ok: true, ...parsed });
   } catch (e) {
     res.status(500).json({ error: e.message });
