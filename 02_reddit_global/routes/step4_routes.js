@@ -414,28 +414,28 @@ ${incrementalRule}
   "narration": "..."
 }`;
 
-    // V4-Flash 既定（5/1切替・コスト効率＋固有名詞精度） → JSON崩れ時 Sonnet フォールバック
-    let raw, parsed = null, used = 'v4flash';
+    // Sonnet 既定（構成・データ選定・脚本品質を優先） → JSON崩れ時 v4flash 保険
+    let raw, parsed = null, used = 'sonnet';
     try {
       raw = await callAI({
-        forceProvider: 'deepseek',
-        model: 'deepseek-v4-flash', max_tokens: 3500,
+        forceProvider: 'anthropic',
+        model: 'claude-sonnet-4-6', max_tokens: 3500,
         messages: [{ role: 'user', content: prompt }],
       });
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
       if (m1) parsed = JSON.parse(m1[0]);
-    } catch (e) { console.warn('[ai-fill-slide] v4flash 例外:', e.message); }
+    } catch (e) { console.warn('[ai-fill-slide] sonnet 例外:', e.message); }
     if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
-      console.warn('[ai-fill-slide] v4flash 失敗、Sonnet にフォールバック');
+      console.warn('[ai-fill-slide] sonnet 失敗、v4flash にフォールバック');
       try {
         raw = await callAI({
-          forceProvider: 'anthropic',
-          model: 'claude-sonnet-4-6', max_tokens: 3500,
+          forceProvider: 'deepseek',
+          model: 'deepseek-v4-flash', max_tokens: 3500,
           messages: [{ role: 'user', content: prompt }],
         });
         const m2 = raw && raw.match(/\{[\s\S]*\}/);
         if (m2) parsed = JSON.parse(m2[0]);
-        used = 'sonnet';
+        used = 'v4flash';
       } catch (_) {}
     }
     if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
