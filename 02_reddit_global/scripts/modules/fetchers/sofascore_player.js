@@ -1,9 +1,11 @@
 // scripts/modules/fetchers/sofascore_player.js
-// SofaScore 非公式API で選手スタッツを取得（最適化版: 4 API call）
+// SofaScore 非公式API で選手スタッツを取得
 //  ① /search/all/         → playerId
 //  ② /player/{id}         → 基本情報・市場価値・契約
 //  ③ /player/{id}/events/last/0 → 直近5試合 + 今試合スタッツ
-//  ④ /player/{id}/statistics    → 今期スタッツ
+//  ④ /player/{id}/statistics    → 全シーズンスタッツ（→ 今季 + シーズン履歴）
+//  ⑤ /player/{id}/national-team-statistics → 代表チーム成績
+//  ⑥ /player/{id}/transfer-history          → 移籍履歴
 
 const { apiGet } = require('./_sofa_common');
 const { callAI } = require('../../ai_client');
@@ -132,11 +134,13 @@ async function fetchSofaScorePlayer(playerNameEn) {
     if (!player) return { ok: false, error: `SofaScore に "${playerNameEn}" が見つかりません` };
     const playerId = player.id;
 
-    // ②③④ 並列取得（detail / events / statistics）────────────
-    const [pdRaw, evRaw, statsRaw] = await Promise.all([
+    // ②③④⑤⑥ 並列取得（detail / events / statistics / nat / transfer）─────
+    const [pdRaw, evRaw, statsRaw, natRaw, trnRaw] = await Promise.all([
       apiGet(`/player/${playerId}`).catch(e => ({ __err: e })),
       apiGet(`/player/${playerId}/events/last/0`).catch(e => ({ __err: e })),
       apiGet(`/player/${playerId}/statistics`).catch(e => ({ __err: e })),
+      apiGet(`/player/${playerId}/national-team-statistics`).catch(e => ({ __err: e })),
+      apiGet(`/player/${playerId}/transfer-history`).catch(e => ({ __err: e })),
     ]);
 
     // ② 詳細情報（市場価値・契約）
@@ -219,6 +223,84 @@ async function fetchSofaScorePlayer(playerNameEn) {
       }
     }
 
+    // ④' シーズン履歴: 全シーズン × 大会（出場0は除外、新→旧でソート）────
+    let seasonHistory = [];
+    if (!statsRaw?.__err) {
+      const allSeasons = statsRaw.seasons || [];
+      seasonHistory = allSeasons
+        .filter(s => (s.statistics?.appearances || 0) > 0 && s.uniqueTournament?.name)
+        .map(s => ({
+          seasonName:     s.season?.year || s.year,
+          seasonId:       s.season?.id,
+          tournamentName: s.uniqueTournament?.name,
+          tournamentId:   s.uniqueTournament?.id,
+          teamName:       s.team?.name,
+          teamId:         s.team?.id,
+          stats: {
+            appearances:        s.statistics?.appearances ?? null,
+            goals:              s.statistics?.goals ?? null,
+            assists:            s.statistics?.assists ?? null,
+            rating:             s.statistics?.rating ? parseFloat(Number(s.statistics.rating).toFixed(2)) : null,
+            minutesPlayed:      s.statistics?.minutesPlayed ?? null,
+            expectedGoals:      s.statistics?.expectedGoals ? parseFloat(Number(s.statistics.expectedGoals).toFixed(2)) : null,
+            keyPasses:          s.statistics?.keyPasses ?? null,
+            successfulDribbles: s.statistics?.successfulDribbles ?? null,
+            totalShots:         s.statistics?.totalShots ?? null,
+            shotsOnTarget:      s.statistics?.shotsOnTarget ?? null,
+            yellowCards:        s.statistics?.yellowCards ?? null,
+            redCards:           s.statistics?.redCards ?? null,
+            cleanSheets:        s.statistics?.cleanSheet ?? null,
+            saves:              s.statistics?.saves ?? null,
+          },
+        }))
+        .sort((a, b) => {
+          // 新しい順（year は "24/25" や 2024 形式）
+          const ay = String(a.seasonName || '').slice(0, 4);
+          const by = String(b.seasonName || '').slice(0, 4);
+          return by.localeCompare(ay);
+        });
+    }
+
+    // ⑤ 代表チーム成績 ────────────────────────────────────
+    let nationalTeam = null;
+    if (!natRaw?.__err) {
+      const stats = Array.isArray(natRaw.statistics) ? natRaw.statistics : [];
+      // 通算（appearances 多い順で代表エントリ）
+      const total = stats.reduce((a, s) => ({
+        appearances:    (a.appearances || 0) + (s.appearances || 0),
+        goals:          (a.goals       || 0) + (s.goals       || 0),
+        assists:        (a.assists     || 0) + (s.assists     || 0),
+      }), { appearances: 0, goals: 0, assists: 0 });
+      nationalTeam = {
+        teamName: natRaw.team?.name || stats[0]?.team?.name || null,
+        // 大会別エントリ（W杯/AFCONなど）
+        tournaments: stats.map(s => ({
+          tournamentName: s.tournament?.name || s.uniqueTournament?.name || null,
+          appearances:    s.appearances ?? null,
+          goals:          s.goals ?? null,
+          assists:        s.assists ?? null,
+        })),
+        // 通算
+        total,
+      };
+    }
+
+    // ⑥ 移籍履歴 ─────────────────────────────────────────
+    let transferHistory = [];
+    if (!trnRaw?.__err) {
+      const arr = Array.isArray(trnRaw.transferHistory) ? trnRaw.transferHistory : [];
+      transferHistory = arr.map(t => ({
+        from:        t.transferFrom?.name || null,
+        to:          t.transferTo?.name || null,
+        type:        t.type,             // 1: full, 2: loan, ...
+        fee:         t.transferFee || null,    // {value, currency}
+        feeStr:      t.transferFeeDescription || null,  // "€80M" など
+        date:        t.transferDateTimestamp
+          ? new Date(t.transferDateTimestamp * 1000).toISOString().slice(0, 10)
+          : null,
+      })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    }
+
     const position      = playerDetail.position || player.position || '';
     const positionStats = buildPositionStats(position, seasonStats);
 
@@ -267,6 +349,9 @@ async function fetchSofaScorePlayer(playerNameEn) {
       recentAvgRating,
       last5Matches,
       lastMatchStats,
+      seasonHistory,
+      nationalTeam,
+      transferHistory,
     };
   } catch (e) {
     if (e.response?.status === 403) {

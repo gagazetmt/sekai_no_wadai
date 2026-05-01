@@ -125,6 +125,67 @@ function walkPlayer(d) {
     });
   }
 
+  // ─ シーズン履歴（全シーズン × 大会、出場0除外、新→旧）─
+  // walker priority 設計: 直近5シーズン高 / それ以前は中〜低
+  if (Array.isArray(d.seasonHistory) && d.seasonHistory.length) {
+    d.seasonHistory.forEach((s, i) => {
+      const isRecent = i < 5;
+      const basePri  = isRecent ? 8 - i : 4;        // 直近 8,7,6,5,4 / 古い 4 固定
+      const cat      = isRecent ? 'シーズン履歴(直近5年)' : 'シーズン履歴(過去)';
+      const seasonLabel = `${s.seasonName || '?'} ${s.tournamentName || ''}`.trim();
+      const stats = s.stats || {};
+      // ラベル付き要約 1行（プルダウンで一覧性高い）
+      const summary = [
+        stats.appearances != null ? stats.appearances + '試合' : null,
+        stats.goals       != null ? stats.goals + 'G' : null,
+        stats.assists     != null ? stats.assists + 'A' : null,
+        stats.rating      != null ? '評定' + stats.rating : null,
+      ].filter(Boolean).join(' ');
+      push(`season_${i+1}_summary`, seasonLabel, summary, cat, basePri);
+      // 各項目（個別 slot として）— 直近5シーズンのみ細粒度化
+      if (isRecent) {
+        push(`season_${i+1}_apps`,    `${seasonLabel} 試合`,    fmtNum(stats.appearances), cat, basePri - 1);
+        push(`season_${i+1}_goals`,   `${seasonLabel} ゴール`,   fmtNum(stats.goals),       cat, basePri - 1);
+        push(`season_${i+1}_assists`, `${seasonLabel} アシスト`, fmtNum(stats.assists),     cat, basePri - 1);
+        push(`season_${i+1}_rating`,  `${seasonLabel} 評定`,     fmtFloat(stats.rating, 2), cat, basePri - 1);
+        if (stats.expectedGoals != null) push(`season_${i+1}_xG`, `${seasonLabel} xG`, fmtFloat(stats.expectedGoals, 2), cat, basePri - 2);
+      }
+    });
+  }
+
+  // ─ 代表チーム成績 ────────────────────────────────────
+  if (d.nationalTeam) {
+    const nt    = d.nationalTeam;
+    const tName = nt.teamName || '代表';
+    push('nat_team',     '代表チーム', tName, '代表チーム', 7);
+    if (nt.total) {
+      push('nat_apps',    `${tName} 通算試合`, fmtNum(nt.total.appearances), '代表チーム', 8);
+      push('nat_goals',   `${tName} 通算ゴール`, fmtNum(nt.total.goals),       '代表チーム', 8);
+      push('nat_assists', `${tName} 通算アシスト`, fmtNum(nt.total.assists),    '代表チーム', 6);
+    }
+    if (Array.isArray(nt.tournaments)) {
+      nt.tournaments.slice(0, 5).forEach((t, i) => {
+        const ttl = t.tournamentName || '?';
+        const summary = [
+          t.appearances != null ? t.appearances + '試合' : null,
+          t.goals != null ? t.goals + 'G' : null,
+          t.assists != null ? t.assists + 'A' : null,
+        ].filter(Boolean).join(' ');
+        if (summary) push(`nat_tour_${i+1}`, `代表 ${ttl}`, summary, '代表チーム', 6 - Math.min(i, 4));
+      });
+    }
+  }
+
+  // ─ 移籍履歴 ──────────────────────────────────────────
+  if (Array.isArray(d.transferHistory) && d.transferHistory.length) {
+    d.transferHistory.slice(0, 8).forEach((t, i) => {
+      const yrs = (t.date || '').slice(0, 4);
+      const fee = t.feeStr || (t.fee?.value ? `€${(t.fee.value / 1e6).toFixed(0)}M` : '');
+      const summary = `${yrs} ${t.from || '?'} → ${t.to || '?'}${fee ? ' ' + fee : ''}`.trim();
+      push(`transfer_${i+1}`, `移籍${i+1}`, summary, '移籍履歴', 6 - Math.min(i, 4));
+    });
+  }
+
   if (d._wiki?.extract)     push('wikiBio',  '紹介文',    String(d._wiki.extract).slice(0, 120), 'Wikipedia', 4);
   if (d._wiki?.description) push('wikiDesc', '一行紹介',  d._wiki.description,                   'Wikipedia', 5);
 
