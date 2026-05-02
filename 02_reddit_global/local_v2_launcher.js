@@ -34,6 +34,9 @@ app.use('/api', s5Router);
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
 
+// クラブ公式の選手プロフィール写真ストック（Phase 1 バックフィル成果物）
+app.use('/images_stock', require('express').static(path.join(__dirname, 'images_stock')));
+
 // 生成済み動画を静的配信（Step4 でブラウザ再生・ダウンロード）
 app.use('/v2_videos', require('express').static(path.join(__dirname, 'data', 'v2_videos')));
 
