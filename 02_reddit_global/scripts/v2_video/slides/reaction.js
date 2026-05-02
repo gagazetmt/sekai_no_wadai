@@ -6,7 +6,7 @@
 //   - 上から順に slideDown アニメーション
 //   - 各 comment は対応する音声 chunk が読まれる瞬間に登場 + 読まれてる間 active
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 // V1 の CMT_BG / CMT_BG_HL カラーパレット
 const CMT_BG    = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
@@ -36,10 +36,11 @@ function buildReactionHTML(mod) {
   //   → comment[i] が読まれる音声 chunk = audio[narrCount + i]
   const audio    = Array.isArray(mod.audio) ? mod.audio : [];
   const narrCount = Math.max(0, audio.length - comments.length);
+  // 先頭 LEAD_PAD_SEC を chunkStarts に加算 / totalSec も LEAD+TAIL 含む全体時間に揃える
   const chunkStarts = audio.map((_, i) =>
-    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
   const totalSec = audio.length
-    ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) + 0.4
+    ? (audio.reduce((s, c) => s + (c.durationSec || 0), 0) + LEAD_PAD_SEC + TAIL_PAD_SEC)
     : 8;
 
   // フォールバック登場間隔（音声チャンク不在時）

@@ -37,12 +37,14 @@ const { buildStatsHTML }      = require('./slides/stats');
 const { buildComparisonHTML } = require('./slides/comparison');
 const { buildReactionHTML }   = require('./slides/reaction');
 const { buildTocHTML }        = require('./slides/toc');
-const { mapImagesToModule }   = require('./slides/_common');
+const { mapImagesToModule, LEAD_PAD_SEC, TAIL_PAD_SEC }   = require('./slides/_common');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const W = 1920, H = 1080, FPS = 30;
 const DEFAULT_SLIDE_MS = 8000;   // 音声無しスライドのフォールバック
-const TAIL_PAD_MS      = 400;    // 音声末尾の余韻
+// 音声前後の無音インターバル（_common.js と共有・全スライド共通）
+const LEAD_PAD_MS = Math.round(LEAD_PAD_SEC * 1000);
+const TAIL_PAD_MS = Math.round(TAIL_PAD_SEC * 1000);
 const MAX_SLIDE_MS     = 60000;  // 暴走防止
 
 // 並列度（VPS は 6 コア / 11GB RAM）
@@ -73,14 +75,14 @@ async function processInParallel(items, limit, worker, onError) {
   }));
 }
 
-// 音声チャンク合計 + 余韻 → スライド長(ms)を決定。音声無しなら DEFAULT
+// 音声チャンク合計 + 前後インターバル → スライド長(ms)を決定。音声無しなら DEFAULT
 //   opening は無音時 6秒（タイトル冒頭のテンポ重視）、それ以外は 8秒
 function slideDurationMs(mod) {
   const a = Array.isArray(mod.audio) ? mod.audio : [];
   if (a.length) {
     const sumSec = a.reduce((s, c) => s + (c.durationSec || 0), 0);
     if (sumSec > 0) {
-      const ms = Math.round(sumSec * 1000) + TAIL_PAD_MS;
+      const ms = Math.round(sumSec * 1000) + LEAD_PAD_MS + TAIL_PAD_MS;
       return Math.min(ms, MAX_SLIDE_MS);
     }
   }
@@ -265,11 +267,13 @@ function _runFfmpeg(args) {
 
 // 1モジュールのナレーションを 1ファイルにまとめる。指定 durationMs に pad。
 //   - mod.audio が無ければ「無音」を生成して返す
-//   - chunk が複数あれば concat → apad で全体長に揃える
+//   - 音声がある場合は先頭に LEAD_PAD_SEC の silence を挟み、末尾は apad で全体長まで pad
+//     （字幕 / chunk 連動アニメ側も同じ LEAD/TAIL を使うので同期する）
 //   - async 化済（並列ワーカーから安全に呼べる）
 async function buildSlideAudio(mod, durationMs, outPath) {
   const a = Array.isArray(mod.audio) ? mod.audio : [];
   const durSec = (durationMs / 1000).toFixed(3);
+  const leadDurSec = LEAD_PAD_SEC.toFixed(3);
 
   if (!a.length) {
     return _runFfmpeg(['-y', '-f', 'lavfi', '-i', `anullsrc=r=44100:cl=stereo`,
@@ -284,16 +288,13 @@ async function buildSlideAudio(mod, durationMs, outPath) {
       '-t', durSec, '-c:a', 'aac', '-b:a', '128k', outPath]);
   }
 
-  if (absFiles.length === 1) {
-    return _runFfmpeg(['-y', '-i', absFiles[0], '-af', `apad=whole_dur=${durSec}`,
-      '-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k', outPath]);
-  }
-
-  // 複数 chunk → concat filter で結合
-  const inputArgs = [];
+  // 先頭 silence + chunk(s) を順次 concat → 末尾は apad で全体長まで pad
+  // silence を [0] 入力、その後 chunk 群を [1..N]
+  const inputArgs = ['-f', 'lavfi', '-t', leadDurSec, '-i', 'anullsrc=r=44100:cl=stereo'];
   absFiles.forEach(f => { inputArgs.push('-i', f); });
-  const filterIn  = absFiles.map((_, i) => `[${i}:a]`).join('');
-  const filterStr = `${filterIn}concat=n=${absFiles.length}:v=0:a=1[c];[c]apad=whole_dur=${durSec}[out]`;
+  const concatN = absFiles.length + 1;  // silence + chunks
+  const filterIn = ['[0:a]', ...absFiles.map((_, i) => `[${i + 1}:a]`)].join('');
+  const filterStr = `${filterIn}concat=n=${concatN}:v=0:a=1[c];[c]apad=whole_dur=${durSec}[out]`;
   return _runFfmpeg(['-y', ...inputArgs, '-filter_complex', filterStr, '-map', '[out]',
     '-ar', '44100', '-ac', '2', '-c:a', 'aac', '-b:a', '128k', outPath]);
 }
@@ -336,6 +337,27 @@ async function main() {
   if (!modules.length) {
     updateJob(jobId, { status: 'error', error: 'modules empty' });
     process.exit(1);
+  }
+
+  // ── TOC 自動挿入 ──
+  //   opening 直後（無ければ先頭）に toc を 1枚挿入。
+  //   tocItems は opening/toc/ending を除く全スライドの title から自動抽出。
+  //   章2件未満ならスキップ。既に toc を含む案件はそのまま尊重。
+  if (!modules.some(m => m && m.type === 'toc')) {
+    const chapters = modules
+      .filter(m => m && !['opening', 'toc', 'ending'].includes(m.type))
+      .map(m => String(m.title || '').trim())
+      .filter(Boolean);
+    if (chapters.length >= 2) {
+      const insertIdx = (modules[0] && modules[0].type === 'opening') ? 1 : 0;
+      modules.splice(insertIdx, 0, {
+        type: 'toc',
+        title: '今日のラインナップ',
+        tocItems: chapters.slice(0, 8),
+        narration: '',
+      });
+      console.log(`📑 TOC 自動挿入: ${chapters.length} 章 (slot ${insertIdx})`);
+    }
   }
 
   const ts        = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);

@@ -2,7 +2,7 @@
 // Insight スライド：キャッチコピーが上から順に登場（左からゴーストトレイル + 本体fadeIn）
 // テンプレート元: /insight/index.html（プレビュー版から editor を除外して1920x1080 に最適化）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 const MAX_PHRASES = 7;
 
@@ -67,12 +67,14 @@ function buildInsightHTML(mod) {
   //   3. マッチ無しは均等分散値にフォールバック
   //   4. 検出された delay 順に画面上下を並べ替え（早く出る phrase が画面上）
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
-  const totalSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 8;
+  // 先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
+  const audioSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 0;
+  const totalSec = audio.length ? (audioSec + LEAD_PAD_SEC + TAIL_PAD_SEC) : 8;
   const chunkStarts = audio.map((_, i) =>
-    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
 
-  const startSec = 0.5;
-  const lastSec  = Math.max(totalSec - 1.5, startSec + 1);
+  const startSec = LEAD_PAD_SEC + 0.5;  // 音声無し時もリードに続いて出る
+  const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1, startSec + 1);
   const evenStep = phrasesRaw.length > 1 ? (lastSec - startSec) / (phrasesRaw.length - 1) : 0;
 
   // 1:1 対応を優先：chunks 数 == phrases 数なら index ベースで直接マッピング

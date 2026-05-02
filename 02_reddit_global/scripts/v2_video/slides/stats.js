@@ -8,7 +8,7 @@
 //   - 名前ボックス: 下から浮上ゴーストトレイル + 本体 fade in（insight の縦版）
 //   - データカード: 該当 chunk が再生中だけ active（金枠 + scale 1.04 + グロー）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t, _player } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 // チーム or 選手 → 日本語/カタカナ
 function _entityName(raw) {
@@ -26,6 +26,20 @@ function _gridLayout(count) {
   if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 34, padTop: 80, padBottom: 130 }; // profile 2x2
   if (count <= 6) return { cols: 2, gap: 16, maxValFont: 76, maxLabelFont: 32, padTop: 70, padBottom: 120 }; // stats 2x3 ← 基本形
   return            { cols: 2, gap: 14, maxValFont: 60, maxLabelFont: 26, padTop: 60, padBottom: 116 };       // stats 2x4 (7-8件)
+}
+
+// 金粒パーティクル（左カラム背景の動き出し用・toc から流用、件数 8）
+function _buildDust() {
+  const dusts = [];
+  for (let i = 0; i < 8; i++) {
+    const left    = Math.random() * 100;
+    const dur     = 7 + Math.random() * 9;     // 7〜16秒
+    const delay   = -Math.random() * dur;       // 開始位相をランダム化
+    const size    = 3 + Math.random() * 4;      // 3〜7px
+    const opacity = 0.4 + Math.random() * 0.4;
+    dusts.push(`<div class="dust" style="left:${left.toFixed(1)}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;animation-duration:${dur.toFixed(1)}s;animation-delay:${delay.toFixed(2)}s;opacity:${opacity.toFixed(2)};"></div>`);
+  }
+  return dusts.join('');
 }
 
 // label を chunk text と部分一致で対応付け（active 強調用）
@@ -65,11 +79,13 @@ function buildStatsHTML(mod) {
   const badgeColor = mod.type === 'profile' ? '#8b5cf6' : '#10b981';
 
   // ── 音声 chunk 解析（カード active 制御用）─────────────
+  //   chunkStarts は先頭 LEAD_PAD_SEC（音声前無音）を加算。
+  //   totalSec も LEAD + TAIL を含めた全体時間に揃える（音声と動画の同期用）。
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
   const audioSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 0;
-  const totalSec = audioSec + 0.4 || 8;  // tail pad 含む。音声無いときは 8s 想定
+  const totalSec = audio.length ? (audioSec + LEAD_PAD_SEC + TAIL_PAD_SEC) : 8;
   const chunkStarts = audio.map((_, i) =>
-    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
 
   // 各 slot に chunk index を割当（ラベルが含まれる chunk）
   const slotChunkIdx = slots.map(s => {
@@ -77,8 +93,11 @@ function buildStatsHTML(mod) {
     return audio.length ? _matchLabelToChunk(lbl, audio) : -1;
   });
 
-  // カード active 用 keyframes 生成
+  // カード active 用 keyframes 生成（カード本体 + 値グロー脈動 + 波形アイコン opacity）
   //   chunk 範囲: 0.25s 前から fade in、終了 0.3s 後に fade out
+  //   - cardActive: 枠+scale+box-shadow (既存)
+  //   - valuePulse: active 期間中に値の text-shadow が 3回脈動（呼吸感）
+  //   - iconShow:   active 期間だけ波形アイコン opacity 1
   const cardActiveStyles = slots.map((_, i) => {
     const cIdx = slotChunkIdx[i];
     if (cIdx < 0 || !audio.length) return '';
@@ -91,13 +110,34 @@ function buildStatsHTML(mod) {
     const startPct    = p(start);
     const endPct      = p(end);
     const postEndPct  = p(end + fadeOut);
+    // 値脈動の山3つ（active 期間内を 1/4, 2/4, 3/4 で振動）
+    const span = endPct - startPct;
+    const m1 = startPct + span * 0.25;
+    const m2 = startPct + span * 0.50;
+    const m3 = startPct + span * 0.75;
     return `
 @keyframes cardActive_${i} {
   0%, ${preStartPct.toFixed(2)}%      { transform: scale(1);    border-color: rgba(255,255,255,0.10); box-shadow: 0 0 0 0 rgba(252,211,77,0); }
   ${startPct.toFixed(2)}%, ${endPct.toFixed(2)}%  { transform: scale(1.04); border-color: rgba(252,211,77,0.85); box-shadow: 0 0 0 3px rgba(252,211,77,0.30), 0 0 36px rgba(252,211,77,0.55); }
   ${postEndPct.toFixed(2)}%, 100%     { transform: scale(1);    border-color: rgba(255,255,255,0.10); box-shadow: 0 0 0 0 rgba(252,211,77,0); }
 }
-.data-card.active-${i} { animation: cardActive_${i} ${totalSec.toFixed(2)}s linear forwards; }`;
+.data-card.active-${i} { animation: cardActive_${i} ${totalSec.toFixed(2)}s linear forwards; }
+@keyframes valuePulse_${i} {
+  0%, ${preStartPct.toFixed(2)}%      { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 18px rgba(255,215,0,0.25); }
+  ${startPct.toFixed(2)}%             { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 24px rgba(255,215,0,0.55); }
+  ${m1.toFixed(2)}%                   { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 42px rgba(255,215,0,0.95); }
+  ${m2.toFixed(2)}%                   { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 24px rgba(255,215,0,0.55); }
+  ${m3.toFixed(2)}%                   { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 42px rgba(255,215,0,0.95); }
+  ${endPct.toFixed(2)}%               { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 24px rgba(255,215,0,0.55); }
+  ${postEndPct.toFixed(2)}%, 100%     { text-shadow: 0 2px 6px rgba(0,0,0,0.6), 0 0 18px rgba(255,215,0,0.25); }
+}
+.data-card.active-${i} .card-value { animation: valuePulse_${i} ${totalSec.toFixed(2)}s linear forwards; }
+@keyframes iconShow_${i} {
+  0%, ${preStartPct.toFixed(2)}%       { opacity: 0; }
+  ${startPct.toFixed(2)}%, ${endPct.toFixed(2)}%  { opacity: 1; }
+  ${postEndPct.toFixed(2)}%, 100%      { opacity: 0; }
+}
+.data-card.active-${i} .sound-wave { animation: iconShow_${i} ${totalSec.toFixed(2)}s linear forwards; }`;
   }).join('\n');
 
   const extraStyles = `
@@ -115,10 +155,38 @@ function buildStatsHTML(mod) {
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
   background-size: cover;
   background-position: center top;
+  /* 透明から 1.5秒かけて実像に → そのままゆっくり Ken Burns ズーム（写真が「生きてる」感） */
   opacity: 0;
-  animation: imgFadeIn 0.5s ease-out forwards;
+  transform: scale(1);
+  animation: imgFadeIn 1.5s ease-in-out forwards, kenBurns 18s ease-out forwards;
 }
 @keyframes imgFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kenBurns  { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+/* 金粒パーティクル（左カラム背景でじんわり漂う・toc と統一感） */
+.dust-layer {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.dust {
+  position: absolute;
+  bottom: -10px;
+  background: radial-gradient(circle, rgba(245,158,11,0.85) 0%, rgba(245,158,11,0.4) 40%, transparent 70%);
+  border-radius: 50%;
+  animation-name: dustFloat;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  filter: blur(0.5px);
+}
+@keyframes dustFloat {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 0.6; }
+  50%  { transform: translateY(-50vh) translateX(15px); opacity: 0.75; }
+  90%  { opacity: 0.55; }
+  100% { transform: translateY(-110vh) translateX(-12px); opacity: 0; }
+}
 .panel-img .img-fade {
   position: absolute; inset: 0;
   background: linear-gradient(to right,
@@ -126,6 +194,8 @@ function buildStatsHTML(mod) {
     transparent 55%,
     rgba(6,14,28,0.70) 80%,
     rgba(6,14,28,1.00) 100%);
+  opacity: 0;
+  animation: imgFadeIn 1.5s ease-in-out forwards;
 }
 .panel-img .img-vfade {
   position: absolute; inset: 0;
@@ -134,38 +204,28 @@ function buildStatsHTML(mod) {
     transparent 12%,
     transparent 75%,
     rgba(6,14,28,0.95) 100%);
+  opacity: 0;
+  animation: imgFadeIn 1.5s ease-in-out forwards;
 }
 
-/* 名前タグ：本体 + ゴーストトレイル（縦版） */
+/* 名前タグ：画像が実像化したあと、下から浮上 + フェードイン（dust の前面に） */
 .img-name-row {
   position: absolute;
   bottom: 130px;
   left: 0; right: 0;
   padding: 0 40px;
-}
-.img-name-real, .img-name-trail {
-  position: relative;
-}
-.img-name-trail {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-  opacity: 0;
-  animation: nameTrail 0.55s ease-out 0.4s backwards;
+  z-index: 5;
 }
 .img-name-real {
+  position: relative;
   opacity: 0;
-  animation: nameAppear 0.55s ease-out 0.5s forwards;
+  transform: translateY(60px);
+  animation: nameRise 0.85s ease-out 1.5s forwards;
   z-index: 1;
 }
-@keyframes nameTrail {
-  from { transform: translateY(80px); opacity: 1; }
-  to   { transform: translateY(0);    opacity: 0; }
-}
-@keyframes nameAppear {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+@keyframes nameRise {
+  from { opacity: 0; transform: translateY(60px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 .player-name {
   font-size: 56px;
@@ -231,6 +291,28 @@ function buildStatsHTML(mod) {
   background: ${PALETTE.accent};
   border-radius: 4px 0 0 4px;
 }
+/* 波形アイコン（active カードの右上に出る・読み上げ中サイン） */
+.sound-wave {
+  position: absolute;
+  top: 10px; right: 12px;
+  display: flex; gap: 3px;
+  align-items: flex-end;
+  height: 20px;
+  opacity: 0;
+  z-index: 5;
+}
+.sound-wave span {
+  display: block;
+  width: 3px;
+  background: ${PALETTE.accent};
+  border-radius: 2px;
+  transform-origin: bottom;
+  box-shadow: 0 0 8px rgba(245,158,11,0.7);
+}
+.sound-wave span:nth-child(1) { height: 60%;  animation: barWave 0.55s ease-in-out 0.00s infinite alternate; }
+.sound-wave span:nth-child(2) { height: 100%; animation: barWave 0.55s ease-in-out 0.18s infinite alternate; }
+.sound-wave span:nth-child(3) { height: 50%;  animation: barWave 0.55s ease-in-out 0.36s infinite alternate; }
+@keyframes barWave { from { transform: scaleY(0.30); } to { transform: scaleY(1); } }
 .card-label {
   font-weight: 800;
   color: #8aa8d8;
@@ -288,10 +370,16 @@ ${cardActiveStyles}
       lbl = s.label || '';
       val = s.value || '-';
     }
-    const activeClass = (slotChunkIdx[i] >= 0 && audio.length) ? ` active-${i}` : '';
+    const isActive = (slotChunkIdx[i] >= 0 && audio.length);
+    const activeClass = isActive ? ` active-${i}` : '';
+    // active カードのみ波形アイコン（active 期間だけ opacity 1 になる）
+    const wave = isActive
+      ? `<div class="sound-wave"><span></span><span></span><span></span></div>`
+      : '';
     return `<div class="data-card${activeClass}">
       <div class="card-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
       <div class="card-value" style="font-size:${_valFont(val)}px">${esc(val)}</div>
+      ${wave}
     </div>`;
   }).join('');
 
@@ -300,11 +388,8 @@ ${cardActiveStyles}
   <div class="img-bg"></div>
   <div class="img-fade"></div>
   <div class="img-vfade"></div>
+  <div class="dust-layer">${_buildDust()}</div>
   <div class="img-name-row">
-    <div class="img-name-trail">
-      <div class="player-name">${esc(title)}</div>
-      <div class="player-sub">${esc(subTitle)}</div>
-    </div>
     <div class="img-name-real">
       <div class="player-name">${esc(title)}</div>
       <div class="player-sub">${esc(subTitle)}</div>

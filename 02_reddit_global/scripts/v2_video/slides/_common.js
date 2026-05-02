@@ -6,6 +6,13 @@ const path = require('path');
 
 const W = 1920, H = 1080;
 
+// 全スライド共通: 音声前後の無音インターバル
+//   - 各スライド開始時、音声 / 字幕 / chunk 連動アニメは LEAD_PAD_SEC だけ遅らせて始まる
+//   - 末尾も TAIL_PAD_SEC の余韻を取る（次スライド遷移までの呼吸）
+//   - render.js の buildSlideAudio が先頭に silence pad、slideDurationMs が前後 pad を含めた長さを返す
+const LEAD_PAD_SEC = 1.5;
+const TAIL_PAD_SEC = 1.5;
+
 // 型3 ダークネイビー基調（全スライド共通）
 const PALETTE = {
   bg:      '#060e1c',
@@ -177,13 +184,16 @@ function splitSubtitle(text, maxLineLen = 20) {
 //   引数1: テキスト文字列 OR チャンク配列 [{ text, durationSec }, ...]
 //   options.height（px）: 字幕バー高さ。デフォルト 110
 //   options.maxLineLen   : 1行最大文字数。デフォルト 32
-//   options.tailPadMs    : 末尾余韻ms（音声側 TAIL_PAD_MS と揃える）。デフォルト 400
+//   options.leadPadMs    : 先頭の無音時間ms（音声側 LEAD_PAD と揃える）。デフォルト LEAD_PAD_SEC*1000
+//   options.tailPadMs    : 末尾余韻ms（音声側 TAIL_PAD と揃える）。デフォルト TAIL_PAD_SEC*1000
 //
-// 文字列が渡された場合は従来通り静的字幕。
-// チャンク配列が渡された場合は各チャンクのテキストを音声タイミングに合わせて切替表示。
+// 文字列が渡された場合（or items が1つだけ）は静的字幕。lead/tail パディングを跨いで常時表示。
+// チャンク配列が複数の場合は各チャンクのテキストを音声タイミングに合わせて切替表示。
 function buildSubtitleBar(textOrChunks, options = {}) {
   const height = options.height || 110;
   const maxLineLen = options.maxLineLen || 20;
+  const leadPadSec = (options.leadPadMs ?? LEAD_PAD_SEC * 1000) / 1000;
+  const tailPadSec = (options.tailPadMs ?? TAIL_PAD_SEC * 1000) / 1000;
 
   // チャンク配列 → タイミング連動字幕
   if (Array.isArray(textOrChunks) && textOrChunks.length) {
@@ -196,8 +206,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     if (items.length === 0) return '';
     if (items.length === 1) return buildSubtitleBar(items[0].text, options);
 
-    const tailPadSec = (options.tailPadMs ?? 400) / 1000;
-    let cum = 0;
+    let cum = leadPadSec;  // 先頭の無音区間は字幕も非表示
     const segs = items.map((c, i) => {
       const start = cum;
       cum += c.durationSec;

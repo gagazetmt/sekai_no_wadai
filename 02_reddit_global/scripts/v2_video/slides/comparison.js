@@ -12,7 +12,7 @@
 const {
   PALETTE, esc, imgDataUri, wrapHTML,
   buildSubtitleBar, subtitleArgFromMod,
-  _t, _player,
+  _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC,
 } = require('./_common');
 
 // label を chunk text と部分一致で対応付け（active 強調用）
@@ -52,11 +52,12 @@ function buildComparisonHTML(mod) {
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 5);
 
   // ── 音声 chunk 解析（行 active 制御用） ─────────────────
+  //   先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
   const audioSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 0;
-  const totalSec = audioSec + 0.4 || 8;
+  const totalSec = audio.length ? (audioSec + LEAD_PAD_SEC + TAIL_PAD_SEC) : 8;
   const chunkStarts = audio.map((_, i) =>
-    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
   const slotChunkIdx = slots.map(s => audio.length ? _matchLabelToChunk(s.label, audio) : -1);
 
   // 行 active 用 keyframes 生成

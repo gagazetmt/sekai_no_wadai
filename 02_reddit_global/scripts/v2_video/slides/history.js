@@ -7,7 +7,7 @@
 //   - 最新イベント dot は緑脈動を維持
 //   - hero-subject / tl-header は AI 動的生成 or 日本語既定
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 const MAX_EVENTS = 7;
 
@@ -85,11 +85,13 @@ function buildHistoryHTML(mod) {
 
   // ── 登場タイミング決定（insight と同じロジック） ─────────
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
-  const totalSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 8;
+  // 先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
+  const audioSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 0;
+  const totalSec = audio.length ? (audioSec + LEAD_PAD_SEC + TAIL_PAD_SEC) : 8;
   const chunkStarts = audio.map((_, i) =>
-    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
-  const startSec = 0.5;
-  const lastSec  = Math.max(totalSec - 1.5, startSec + 1);
+    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+  const startSec = LEAD_PAD_SEC + 0.5;
+  const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1, startSec + 1);
   const evenStep = eventsRaw.length > 1 ? (lastSec - startSec) / (eventsRaw.length - 1) : 0;
 
   // 1:1 対応を優先：chunks 数 == events 数なら index ベースで直接マッピング

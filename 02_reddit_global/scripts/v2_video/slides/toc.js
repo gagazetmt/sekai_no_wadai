@@ -5,10 +5,9 @@
 //   - chunk連動アクティブハイライト（ナレが触れた章が光る）
 //   - 背景にゴールドダスト（金粒が漂う雑誌的質感）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 const MAX_ITEMS = 8;
-const TAIL_PAD_SEC = 0.4;  // 末尾余韻
 
 // 項目数で行高 / フォント / 番号フォントを動的調整
 //   行高はそのままで、フォントは行高ぎりぎりまで大きく
@@ -62,15 +61,16 @@ function buildTocHTML(mod) {
   // ─── chunk連動アクティブハイライト計算 ───
   //   audio chunks 数 == items 数 なら chunk 開始/終了に合わせて row をハイライト
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
+  // 先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
   const chunkStarts = audio.map((_, i) =>
-    audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
   const totalSec = audio.length
-    ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) + TAIL_PAD_SEC
-    : Math.max(items.length * 1.5, 5);
+    ? (audio.reduce((s, c) => s + (c.durationSec || 0), 0) + LEAD_PAD_SEC + TAIL_PAD_SEC)
+    : Math.max(items.length * 1.5 + LEAD_PAD_SEC + TAIL_PAD_SEC, 5);
   const canActive = audio.length === items.length && items.length > 0;
 
-  // 各行の登場 delay
-  const startSec = 0.9;
+  // 各行の登場 delay（音声無しもリードに続いて出る）
+  const startSec = LEAD_PAD_SEC + 0.4;
   const interval = 0.4;
   const enterDelays = items.map((_, i) =>
     canActive ? chunkStarts[i] + 0.05 : startSec + interval * i

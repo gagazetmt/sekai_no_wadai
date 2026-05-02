@@ -485,7 +485,7 @@ function getUI() {
     const slideStr = (L.slidesUsing || []).map(i => '#' + (i + 1)).join(', ');
 
     return ''
-      + '<div class="panel" style="margin-bottom:14px;">'
+      + '<div class="panel" data-label-key="' + _esc(L.key) + '" style="margin-bottom:14px;">'
       +   '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">'
       +     '<span class="s35-rolebadge ' + _roleClass(L.role) + '">' + _esc(_roleJa(L.role)) + '</span>'
       +     '<span style="font-size:14px;font-weight:bold;color:#7dc8ff">' + _esc(L.displayName || L.key) + '</span>'
@@ -493,7 +493,7 @@ function getUI() {
       +     '<span style="font-size:11px;color:#8a9aba">使用スライド: ' + _esc(slideStr || '(なし)') + '</span>'
       +     '<span style="flex:1"></span>'
       +     btnHTML
-      +     '<span style="font-size:11px;color:#10b981;">' + sel.length + ' 枚選択中</span>'
+      +     '<span class="s35-sel-count" style="font-size:11px;color:#10b981;">' + sel.length + ' 枚選択中</span>'
       +   '</div>'
       +   body
       + '</div>';
@@ -547,15 +547,53 @@ function getUI() {
     _renderLabels();
   };
 
-  /* ── 選択トグル ── */
+  /* ── 選択トグル ──
+     全ラベル再描画すると <img> が一斉に再生成され、ブラウザのキャッシュ反映前は
+     背景の #000 が透けて他サムネが「真っ黒」に見えるため、
+     該当サムネのクラスとカウンタだけを部分更新する。 */
   window.s35Toggle = function(key, path) {
     const cur = window.APP.s35.selections[key] || [];
-    const i = cur.indexOf(path);
-    if (i >= 0) cur.splice(i, 1);
-    else        cur.push(path);
+    const i   = cur.indexOf(path);
+    const willSelect = (i < 0);
+    if (willSelect) cur.push(path);
+    else            cur.splice(i, 1);
     window.APP.s35.selections[key] = cur;
-    _renderLabels();
+    _updateThumbState(key, path, willSelect);
+    _updateLabelCounter(key);
   };
+
+  function _updateThumbState(key, path, isSelected) {
+    const list = document.getElementById('s35LabelList');
+    if (!list) return;
+    const thumbs = list.querySelectorAll('.s35-thumb');
+    for (const th of thumbs) {
+      if (th.getAttribute('data-key') !== key) continue;
+      if (th.getAttribute('data-path') !== path) continue;
+      if (isSelected) {
+        th.classList.add('selected');
+        if (!th.querySelector('.check')) {
+          const c = document.createElement('div');
+          c.className = 'check';
+          c.textContent = '✓';
+          th.appendChild(c);
+        }
+      } else {
+        th.classList.remove('selected');
+        const c = th.querySelector('.check');
+        if (c) c.remove();
+      }
+    }
+  }
+
+  function _updateLabelCounter(key) {
+    const panel = document.querySelector('[data-label-key="' + (window.CSS && CSS.escape ? CSS.escape(key) : key.replace(/"/g, '\\"')) + '"]');
+    if (!panel) return;
+    const cnt = panel.querySelector('.s35-sel-count');
+    if (cnt) {
+      const sel = window.APP.s35.selections[key] || [];
+      cnt.textContent = sel.length + ' 枚選択中';
+    }
+  }
 
   /* ── ボタン: 全ラベル一括取得 ── */
   document.getElementById('s35BtnFetchAll')?.addEventListener('click', async () => {

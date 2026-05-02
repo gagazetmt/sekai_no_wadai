@@ -206,25 +206,41 @@ async function sanitizeForTts(text) {
   return s;
 }
 
-// ナレーション本文を chunk に分割（最大 ~100文字目安）
+// ナレーション本文を chunk に分割（最大 ~80文字目安）
 //   1) narrationChunks[] が既にあれば優先（AI による意味整合分割）
-//   2) 「。！？」で文末分割 → 短すぎる文は前後に結合（最大 100文字）
-//   ※ 旧 180文字 bundle だと 1 chunk が 30秒近くになり字幕が長時間切替らないため縮小
+//   2) 「。！？!?」で1次分割
+//   3) 「。」が無い長文は「、,」で2次分割（読点で切る）
+//   4) それでも長い1チャンクは 60文字ずつ強制分割
+//   5) 短すぎる文は次と結合（最大 80文字）
+//   ※ 字幕バーの切替が動くよう、AI が句点を入れない長文でも必ず複数チャンクに割る
 function splitIntoChunks(text, existingChunks) {
   if (Array.isArray(existingChunks) && existingChunks.length) {
     return existingChunks.map(c => String(c || '').trim()).filter(Boolean);
   }
   if (!text) return [];
   const raw = String(text).trim();
-  if (raw.length <= 100) return [raw];
+  if (raw.length <= 80) return [raw];
 
-  // 文末 (。！？) で分割
-  const parts = raw.split(/(?<=[。！？])/).map(s => s.trim()).filter(Boolean);
-  // 短い文は次の文と結合（最大 100文字目安）
+  // 1次: 文末 (。！？!?) で分割
+  let parts = raw.split(/(?<=[。！？!?])/).map(s => s.trim()).filter(Boolean);
+
+  // 2次: 1個しか取れず & まだ長い → 読点で再分割
+  if (parts.length === 1 && parts[0].length > 80) {
+    parts = parts[0].split(/(?<=[、,])/).map(s => s.trim()).filter(Boolean);
+  }
+
+  // 3次: それでも 1個 & 長い → 60文字ずつ強制分割
+  if (parts.length === 1 && parts[0].length > 80) {
+    const t = parts[0];
+    parts = [];
+    for (let i = 0; i < t.length; i += 60) parts.push(t.slice(i, i + 60));
+  }
+
+  // 短い文は次の文と結合（最大 80文字目安）
   const out = [];
   let buf = '';
   for (const p of parts) {
-    if ((buf + p).length <= 100) {
+    if ((buf + p).length <= 80) {
       buf += p;
     } else {
       if (buf) out.push(buf);

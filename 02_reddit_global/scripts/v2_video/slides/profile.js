@@ -48,6 +48,14 @@ function buildProfileHTML(mod) {
   align-items: center;
   background: linear-gradient(to right, rgba(245,158,11,0.15), transparent);
   color: ${PALETTE.text};
+  /* 画像が消えたあと、下から浮上 + フェードイン */
+  opacity: 0;
+  transform: translateY(60px);
+  animation: titleRise 0.85s ease-out 1.5s forwards;
+}
+@keyframes titleRise {
+  from { opacity: 0; transform: translateY(60px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 .main-img-frame {
   flex: 1;
@@ -55,7 +63,11 @@ function buildProfileHTML(mod) {
   border-radius: 30px;
   overflow: hidden;
   background: rgba(0,0,0,0.3);
+  /* 透明から 1.5秒かけて実像に。以降そのまま残る */
+  opacity: 0;
+  animation: imgFadeIn 1.5s ease-in-out forwards;
 }
+@keyframes imgFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .main-img-frame .img-fill {
   width: 100%; height: 100%;
   ${mainImg ? `background-image: url('${mainImg}');` : ''}
