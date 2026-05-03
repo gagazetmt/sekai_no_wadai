@@ -24,14 +24,66 @@ const INDEX_FILE = path.join(__dirname, '..', 'data', 'players_official_index.js
 const SLEEP_MS   = 1500;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-// Premier League 上位6クラブ
+const LEAGUE_SLUG = 'premier-league';
+
+// Premier League 全クラブ（現行 20 + 過去 PL 経験 29 = 49）
+//   ID/slug は premierleague.com/clubs から取得した正規値
+//   現行クラブは 2025-26 シーズン基準
 const PL_CLUBS = {
-  'man-utd':   { id: 12, slug: 'Manchester-United',   name: 'Manchester United' },
-  'man-city':  { id: 11, slug: 'Manchester-City',     name: 'Manchester City' },
-  'liverpool': { id: 10, slug: 'Liverpool',           name: 'Liverpool' },
-  'arsenal':   { id: 1,  slug: 'Arsenal',             name: 'Arsenal' },
-  'chelsea':   { id: 4,  slug: 'Chelsea',             name: 'Chelsea' },
-  'tottenham': { id: 21, slug: 'Tottenham-Hotspur',   name: 'Tottenham' },
+  // ── 現行 PL 20クラブ (2025-26) ──
+  'arsenal':                  { id: 3,   slug: 'Arsenal',                  name: 'Arsenal' },
+  'aston-villa':              { id: 7,   slug: 'Aston-Villa',              name: 'Aston Villa' },
+  'bournemouth':              { id: 91,  slug: 'Bournemouth',              name: 'Bournemouth' },
+  'brentford':                { id: 94,  slug: 'Brentford',                name: 'Brentford' },
+  'brighton':                 { id: 36,  slug: 'Brighton-and-Hove-Albion', name: 'Brighton & Hove Albion' },
+  'burnley':                  { id: 90,  slug: 'Burnley',                  name: 'Burnley' },
+  'chelsea':                  { id: 8,   slug: 'Chelsea',                  name: 'Chelsea' },
+  'crystal-palace':           { id: 31,  slug: 'Crystal-Palace',           name: 'Crystal Palace' },
+  'everton':                  { id: 11,  slug: 'Everton',                  name: 'Everton' },
+  'fulham':                   { id: 54,  slug: 'Fulham',                   name: 'Fulham' },
+  'leeds':                    { id: 2,   slug: 'Leeds-United',             name: 'Leeds United' },
+  'liverpool':                { id: 14,  slug: 'Liverpool',                name: 'Liverpool' },
+  'man-city':                 { id: 43,  slug: 'Manchester-City',          name: 'Manchester City' },
+  'man-utd':                  { id: 1,   slug: 'Manchester-United',        name: 'Manchester United' },
+  'newcastle':                { id: 4,   slug: 'Newcastle-United',         name: 'Newcastle United' },
+  'nottingham-forest':        { id: 17,  slug: 'Nottingham-Forest',        name: 'Nottingham Forest' },
+  'sunderland':               { id: 56,  slug: 'Sunderland',               name: 'Sunderland' },
+  'tottenham':                { id: 6,   slug: 'Tottenham-Hotspur',        name: 'Tottenham Hotspur' },
+  'west-ham':                 { id: 21,  slug: 'West-Ham-United',          name: 'West Ham United' },
+  'wolves':                   { id: 39,  slug: 'Wolverhampton-Wanderers',  name: 'Wolverhampton Wanderers' },
+
+  // ── 過去 PL 経験あり 29クラブ（現在下部リーグでも squad 取れる場合あり） ──
+  'barnsley':                 { id: 37,  slug: 'Barnsley',                 name: 'Barnsley' },
+  'birmingham':               { id: 41,  slug: 'Birmingham-City',          name: 'Birmingham City' },
+  'blackburn':                { id: 5,   slug: 'Blackburn-Rovers',         name: 'Blackburn Rovers' },
+  'blackpool':                { id: 92,  slug: 'Blackpool',                name: 'Blackpool' },
+  'bolton':                   { id: 30,  slug: 'Bolton-Wanderers',         name: 'Bolton Wanderers' },
+  'bradford':                 { id: 55,  slug: 'Bradford-City',            name: 'Bradford City' },
+  'cardiff':                  { id: 97,  slug: 'Cardiff-City',             name: 'Cardiff City' },
+  'charlton':                 { id: 33,  slug: 'Charlton-Athletic',        name: 'Charlton Athletic' },
+  'coventry':                 { id: 9,   slug: 'Coventry-City',            name: 'Coventry City' },
+  'derby':                    { id: 24,  slug: 'Derby-County',             name: 'Derby County' },
+  'huddersfield':             { id: 38,  slug: 'Huddersfield-Town',        name: 'Huddersfield Town' },
+  'hull':                     { id: 88,  slug: 'Hull-City',                name: 'Hull City' },
+  'ipswich':                  { id: 40,  slug: 'Ipswich-Town',             name: 'Ipswich Town' },
+  'leicester':                { id: 13,  slug: 'Leicester-City',           name: 'Leicester City' },
+  'luton':                    { id: 102, slug: 'Luton-Town',               name: 'Luton Town' },
+  'middlesbrough':            { id: 25,  slug: 'Middlesbrough',            name: 'Middlesbrough' },
+  'norwich':                  { id: 45,  slug: 'Norwich-City',             name: 'Norwich City' },
+  'oldham':                   { id: 105, slug: 'Oldham-Athletic',          name: 'Oldham Athletic' },
+  'portsmouth':               { id: 47,  slug: 'Portsmouth',               name: 'Portsmouth' },
+  'qpr':                      { id: 52,  slug: 'Queens-Park-Rangers',      name: 'Queens Park Rangers' },
+  'reading':                  { id: 108, slug: 'Reading',                  name: 'Reading' },
+  'sheffield-united':         { id: 49,  slug: 'Sheffield-United',         name: 'Sheffield United' },
+  'sheffield-wednesday':      { id: 19,  slug: 'Sheffield-Wednesday',      name: 'Sheffield Wednesday' },
+  'southampton':              { id: 20,  slug: 'Southampton',              name: 'Southampton' },
+  'stoke':                    { id: 110, slug: 'Stoke-City',               name: 'Stoke City' },
+  'swansea':                  { id: 80,  slug: 'Swansea-City',             name: 'Swansea City' },
+  'swindon':                  { id: 46,  slug: 'Swindon-Town',             name: 'Swindon Town' },
+  'watford':                  { id: 57,  slug: 'Watford',                  name: 'Watford' },
+  'west-brom':                { id: 35,  slug: 'West-Bromwich-Albion',     name: 'West Bromwich Albion' },
+  'wigan':                    { id: 111, slug: 'Wigan-Athletic',           name: 'Wigan Athletic' },
+  'wimbledon':                { id: 1736,slug: 'Wimbledon',                name: 'Wimbledon' },
 };
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -142,7 +194,8 @@ async function tryDownloadHighRes(urls, outPath) {
 
 async function fetchClub(browser, key, club) {
   console.log(`\n=== ${club.name} ===`);
-  const outDir = path.join(STOCK_DIR, key);
+  // 階層化: images_stock/players_official/{league-slug}/{club-key}/
+  const outDir = path.join(STOCK_DIR, LEAGUE_SLUG, key);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   // 旧スクレイプ結果を残しつつ追記する想定（同 slug は上書き）
 
