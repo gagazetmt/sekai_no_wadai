@@ -100,9 +100,11 @@ cat ~/.ssh/web_claude_vps
 | `FOOTBALL_DATA_API_KEY` | football-data.org |
 | `REDDIT_PROXY_URL` | Reddit プロキシ |
 | `LOCAL_AGENT_IP` | Gateway モード用（VPS で使用） |
-| **`VPS_SSH_KEY`** | **上で発行した web_claude_vps の秘密鍵（中身全部）** |
+| **`VPS_SSH_KEY_B64`** | **web_claude_vps の秘密鍵を base64 化したもの 1行**（`base64 -w 0 ~/.ssh/web_claude_vps` で生成） |
 | **`VPS_HOST`** | `37.60.224.54` |
 | **`VPS_USER`** | `root` |
+
+> 注: 一部の Web Claude UI は環境変数を `KEY=VALUE` 1行ずつしか登録できないため、SSH 鍵は base64 化して 1行に押し込む。setup script が自動でデコードする。
 
 最後の3つ（VPS_*）が新規追加項目。
 

@@ -15,9 +15,15 @@ echo "[setup] Web Claude environment init..."
 pip3 install --break-system-packages curl-cffi 2>/dev/null || true
 
 # ─── VPS SSH 鍵を ~/.ssh/ に展開 ──
-if [ -n "$VPS_SSH_KEY" ]; then
+# Web Claude の環境変数 UI は KEY=VALUE 1行ずつしか登録できないため、
+# 鍵は base64 で1行化して VPS_SSH_KEY_B64 に入れる（旧 VPS_SSH_KEY も互換維持）
+if [ -n "$VPS_SSH_KEY_B64" ] || [ -n "$VPS_SSH_KEY" ]; then
   mkdir -p ~/.ssh
-  echo "$VPS_SSH_KEY" > ~/.ssh/web_claude_vps
+  if [ -n "$VPS_SSH_KEY_B64" ]; then
+    echo "$VPS_SSH_KEY_B64" | base64 -d > ~/.ssh/web_claude_vps
+  else
+    echo "$VPS_SSH_KEY" > ~/.ssh/web_claude_vps
+  fi
   chmod 600 ~/.ssh/web_claude_vps
 
   # ssh config: 'ssh vps' で繋がるエイリアス
