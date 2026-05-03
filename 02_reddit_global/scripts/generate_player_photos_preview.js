@@ -1,89 +1,169 @@
 // scripts/generate_player_photos_preview.js
-// players_official_index.json をもとに、クラブ別プレビュー HTML を生成
-//   出力先: images_stock/_preview.html (全クラブ一覧 + クラブ別タブ)
-//
-// VPS 静的配信経由で http://VPS:3004/images_stock/_preview.html で開ける
+// images_stock 配下の全インデックス（選手 / ロゴ / レジェンド）を読んで
+// 統合プレビュー HTML を生成
+//   出力: images_stock/_preview.html
+//   配信: http://VPS:3004/images_stock/_preview.html
 
 const fs   = require('fs');
 const path = require('path');
 
-const INDEX_FILE = path.join(__dirname, '..', 'data', 'players_official_index.json');
-const STOCK_DIR  = path.join(__dirname, '..', 'images_stock');
-const OUT_FILE   = path.join(STOCK_DIR, '_preview.html');
+const ROOT = path.join(__dirname, '..');
+const STOCK_DIR = path.join(ROOT, 'images_stock');
+const OUT_FILE  = path.join(STOCK_DIR, '_preview.html');
+
+const PLAYER_IDX = path.join(ROOT, 'data', 'players_official_index.json');
+const LOGO_IDX   = path.join(ROOT, 'data', 'club_logos_index.json');
+const LEGEND_IDX = path.join(ROOT, 'data', 'legends_index.json');
+
+function loadJson(file, fallback) {
+  if (!fs.existsSync(file)) return fallback;
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return fallback; }
+}
 
 function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function main() {
-  if (!fs.existsSync(INDEX_FILE)) {
-    console.error('Index not found:', INDEX_FILE);
-    process.exit(1);
-  }
-  const idx = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8'));
-  const players = Object.values(idx.players || {})
-    .filter(p => p.league === 'Premier League');  // 現状は PL のみ
+// localPath ("images_stock/.../foo.png") を /images_stock 配信用の相対パス ("...../foo.png") に
+function relPath(p) {
+  return String(p || '').replace(/^.*?images_stock\//, '');
+}
 
-  const byClub = {};
+function renderPlayerSection(idx) {
+  const players = Object.values(idx.players || {});
+  if (!players.length) return '';
+
+  const byLeagueClub = {};
   for (const p of players) {
-    if (!byClub[p.club]) byClub[p.club] = [];
-    byClub[p.club].push(p);
+    const lg = (p.league || 'Unknown').replace(/\s+/g, '-').toLowerCase();
+    const cl = p.club || 'unknown';
+    byLeagueClub[lg] = byLeagueClub[lg] || {};
+    byLeagueClub[lg][cl] = byLeagueClub[lg][cl] || [];
+    byLeagueClub[lg][cl].push(p);
   }
 
-  const clubKeys = Object.keys(byClub).sort();
-
-  const renderCard = (p) => {
-    // index.json の localPath は project root 起点 (images_stock/...)。
-    // /images_stock 静的配信に揃えて先頭 "images_stock/" を剥がす
-    const rel = p.localPath.replace(/^.*?images_stock\//, '');
-    const sizeKB = Math.round((p.sizeBytes || 0) / 1024);
-    const sz = (p.photoUrl?.match(/\/(\d+x\d+)\//) || [])[1] || '?';
-    return `<div class="card">
-      <div class="img-box"><img src="${esc(rel)}" alt="${esc(p.name)}" loading="lazy"></div>
-      <div class="name">${esc(p.name)}</div>
-      <div class="meta">${sizeKB}KB · ${esc(sz)}</div>
-    </div>`;
-  };
-
-  const sections = clubKeys.map(club => {
-    const items = byClub[club];
-    return `<section class="club-section">
-      <h2>${esc(club)} <span class="count">${items.length}名</span></h2>
-      <div class="grid">${items.map(renderCard).join('')}</div>
+  const sections = Object.entries(byLeagueClub).map(([lg, clubs]) => {
+    const clubBlocks = Object.entries(clubs).sort((a, b) => a[0].localeCompare(b[0])).map(([club, list]) => {
+      const cards = list.map(p => `
+        <div class="card">
+          <div class="img-box"><img src="${esc(relPath(p.localPath))}" alt="${esc(p.name)}" loading="lazy"></div>
+          <div class="name">${esc(p.name)}</div>
+          <div class="meta">${Math.round((p.sizeBytes||0)/1024)}KB · ${esc((p.photoUrl||'').match(/\/(\d+x\d+)\//)?.[1] || '?')}</div>
+        </div>`).join('');
+      return `<details class="club-block" open>
+        <summary>${esc(club)} <span class="count">${list.length}名</span></summary>
+        <div class="grid">${cards}</div>
+      </details>`;
+    }).join('');
+    return `<section class="league-section">
+      <h3>${esc(lg)} <span class="count">${Object.keys(clubs).length}クラブ / ${players.filter(p => (p.league||'').replace(/\s+/g,'-').toLowerCase()===lg).length}名</span></h3>
+      ${clubBlocks}
     </section>`;
-  }).join('\n');
+  }).join('');
+
+  return `<section id="players" class="major-section">
+    <h2>⚽ 選手プロフィール写真 <span class="count">${players.length}名</span></h2>
+    ${sections}
+  </section>`;
+}
+
+function renderLogoSection(idx) {
+  const clubs = Object.values(idx.clubs || {});
+  if (!clubs.length) return '';
+
+  const cards = clubs.sort((a, b) => (a.clubName || '').localeCompare(b.clubName || '')).map(c => `
+    <div class="card logo-card">
+      <div class="img-box logo-box"><img src="${esc(relPath(c.localPath))}" alt="${esc(c.clubName)}" loading="lazy"></div>
+      <div class="name">${esc(c.clubName)}</div>
+      <div class="meta">${esc(c.format || '?')} · ${Math.round((c.sizeBytes||0)/1024)}KB</div>
+    </div>`).join('');
+
+  return `<section id="logos" class="major-section">
+    <h2>📛 クラブロゴ・エンブレム <span class="count">${clubs.length}クラブ</span></h2>
+    <div class="grid">${cards}</div>
+  </section>`;
+}
+
+function renderLegendSection(idx) {
+  const inductees = Object.values(idx.inductees || {});
+  if (!inductees.length) return '';
+
+  const cards = inductees.sort((a, b) => (a.name || '').localeCompare(b.name || '')).map(L => `
+    <div class="card legend-card">
+      <div class="img-box wide"><img src="${esc(relPath(L.localPath))}" alt="${esc(L.name)}" loading="lazy"></div>
+      <div class="name">${esc(L.name)}</div>
+      <div class="meta">${Math.round((L.sizeBytes||0)/1024)}KB</div>
+    </div>`).join('');
+
+  return `<section id="legends" class="major-section">
+    <h2>🏆 Hall of Fame レジェンド <span class="count">${inductees.length}人</span></h2>
+    <div class="grid wide-grid">${cards}</div>
+  </section>`;
+}
+
+function main() {
+  const playerIdx = loadJson(PLAYER_IDX, {});
+  const logoIdx   = loadJson(LOGO_IDX, {});
+  const legendIdx = loadJson(LEGEND_IDX, {});
+
+  const playerCount = Object.keys(playerIdx.players || {}).length;
+  const logoCount   = Object.keys(logoIdx.clubs || {}).length;
+  const legendCount = Object.keys(legendIdx.inductees || {}).length;
 
   const html = `<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>選手プロフィール写真プレビュー</title>
+<title>images_stock プレビュー</title>
 <style>
-  body { background:#0f1117; color:#e0e0e0; font-family:sans-serif; margin:0; padding:24px; }
-  h1 { color:#ff3b3b; font-size:22px; margin-bottom:6px; }
-  .summary { color:#7dc8ff; font-size:13px; margin-bottom:24px; }
-  .club-section { margin-bottom:36px; }
-  .club-section h2 { color:#fcd34d; font-size:18px; border-bottom:2px solid #fcd34d; padding-bottom:6px; margin-bottom:14px; text-transform:uppercase; letter-spacing:2px; }
-  .club-section .count { font-size:13px; color:#94a3b8; margin-left:8px; letter-spacing:1px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:14px; }
+  body { background:#0f1117; color:#e0e0e0; font-family:sans-serif; margin:0; padding:0; }
+  header { padding:20px 24px; background:#1a1a26; border-bottom:3px solid #ff3b3b; position:sticky; top:0; z-index:100; }
+  header h1 { color:#ff3b3b; font-size:20px; margin:0 0 8px 0; }
+  header .nav a { color:#7dc8ff; margin-right:14px; font-size:13px; text-decoration:none; padding:4px 10px; background:#2a2a35; border-radius:4px; }
+  header .nav a:hover { background:#3d3d4d; }
+  header .summary { color:#94a3b8; font-size:12px; margin-top:6px; }
+  main { padding:24px; }
+  .major-section { margin-bottom:48px; }
+  .major-section h2 { color:#fcd34d; font-size:20px; border-bottom:2px solid #fcd34d; padding-bottom:8px; margin:0 0 18px 0; }
+  .major-section .count { font-size:13px; color:#94a3b8; margin-left:8px; letter-spacing:1px; font-weight:normal; }
+  .league-section { margin-bottom:36px; }
+  .league-section h3 { color:#7dc8ff; font-size:16px; margin:0 0 12px 0; text-transform:capitalize; }
+  .club-block { background:#1a1a26; border:1px solid #2a3050; border-radius:8px; margin-bottom:12px; padding:8px 14px; }
+  .club-block summary { color:#fcd34d; font-weight:bold; font-size:14px; cursor:pointer; padding:6px 0; text-transform:capitalize; }
+  .club-block .count { color:#94a3b8; font-weight:normal; margin-left:6px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; padding:8px 0 4px; }
+  .wide-grid { grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); }
   .card { background:#1e1e26; border:1px solid #3d3d4d; border-radius:8px; padding:10px; }
   .img-box { width:100%; aspect-ratio:1; background:linear-gradient(135deg,#243353,#0d1830); border-radius:6px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .img-box.wide { aspect-ratio:16/9; }
+  .img-box.logo-box { background:#2a2a35; padding:14px; }
   .img-box img { max-width:100%; max-height:100%; object-fit:contain; }
   .name { font-size:13px; font-weight:bold; color:#fff; margin-top:8px; line-height:1.3; }
   .meta { font-size:10px; color:#7a8a9a; margin-top:3px; font-family:monospace; }
 </style>
 </head>
 <body>
-<h1>⚽ クラブ公式 選手プロフィール写真</h1>
-<div class="summary">取得元: premierleague.com / 透明背景 PNG / 計 ${players.length}名 / 更新: ${esc(idx.updatedAt || 'unknown')}</div>
-${sections}
+<header>
+  <h1>⚽ images_stock プレビュー</h1>
+  <div class="nav">
+    <a href="#players">⚽ 選手 (${playerCount})</a>
+    <a href="#logos">📛 ロゴ (${logoCount})</a>
+    <a href="#legends">🏆 レジェンド (${legendCount})</a>
+  </div>
+  <div class="summary">取得元: premierleague.com (PL公式CDN) / 更新: ${esc(playerIdx.updatedAt || logoIdx.updatedAt || legendIdx.updatedAt || '?')}</div>
+</header>
+<main>
+  ${renderPlayerSection(playerIdx)}
+  ${renderLogoSection(logoIdx)}
+  ${renderLegendSection(legendIdx)}
+</main>
 </body>
 </html>`;
 
   if (!fs.existsSync(STOCK_DIR)) fs.mkdirSync(STOCK_DIR, { recursive: true });
   fs.writeFileSync(OUT_FILE, html);
   console.log(`Wrote: ${OUT_FILE}`);
-  console.log(`Players: ${players.length}, Clubs: ${clubKeys.length}`);
+  console.log(`  Players: ${playerCount}, Logos: ${logoCount}, Legends: ${legendCount}`);
   console.log(`URL: http://<vps>:3004/images_stock/_preview.html`);
 }
 
