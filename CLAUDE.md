@@ -74,9 +74,17 @@
 
 ---
 
-## 重要な記録
+## 重要な記録（必ず最初に読むこと）
 
-ローカル PC の auto-memory (`C:\Users\USER\.claude\projects\C--Users-USER-Documents-side-biz\memory\`) には過去のセッション履歴・知見・引き継ぎ情報が蓄積されている。VPS や claude.ai/code からは直接参照できないが、必要なら以下から把握:
+このリポの `memory/` ディレクトリにユーザーに関する重要な記録がある。**セッション開始時に必ず参照する**こと。
+
+- **`memory/user_profile.md`** — ユーザーの基本スタンス・強み・モチベーション。家族最優先、稼働2h/日、JST、過去YouTube実績（820人/4000h目前）など
+- **`memory/user_origin_story.md`** — 副業遍歴と Claude Code との出会い。Amazon輸入→ブログアフィリ→YouTube→現在 の **7年R&Dプログラム**。「ランチャー」概念の起源、Xシャドウバン時の感情、仕事との関係まで含む。**雑談・心情吐露の文脈で必須**
+
+これらは元々ローカル PC のグローバル auto-memory にだけ存在していたものを、VPS / claude.ai/code でも参照できるようリポにコピーしたもの。
+
+### ローカル PC 限定の情報
+ローカル PC には他にも auto-memory (`C:\Users\USER\.claude\projects\C--Users-USER-Documents-side-biz\memory\`) があり、技術的な知見・進捗・引き継ぎ情報が蓄積されている。VPS / claude.ai/code からは直接参照できない。必要なら:
 
 - リポ内の関連ドキュメント:
   - `02_reddit_global/WEB_CLAUDE_MIGRATION.md` — Web Claude 移行手順
