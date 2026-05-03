@@ -11,9 +11,11 @@ const ROOT = path.join(__dirname, '..');
 const STOCK_DIR = path.join(ROOT, 'images_stock');
 const OUT_FILE  = path.join(STOCK_DIR, '_preview.html');
 
-const PLAYER_IDX = path.join(ROOT, 'data', 'players_official_index.json');
-const LOGO_IDX   = path.join(ROOT, 'data', 'club_logos_index.json');
-const LEGEND_IDX = path.join(ROOT, 'data', 'legends_index.json');
+const PLAYER_IDX  = path.join(ROOT, 'data', 'players_official_index.json');
+const LOGO_IDX    = path.join(ROOT, 'data', 'club_logos_index.json');
+const LEGEND_IDX  = path.join(ROOT, 'data', 'legends_index.json');
+const MANAGER_IDX = path.join(ROOT, 'data', 'managers_index.json');
+const STADIUM_IDX = path.join(ROOT, 'data', 'stadiums_index.json');
 
 function loadJson(file, fallback) {
   if (!fs.existsSync(file)) return fallback;
@@ -101,14 +103,58 @@ function renderLegendSection(idx) {
   </section>`;
 }
 
-function main() {
-  const playerIdx = loadJson(PLAYER_IDX, {});
-  const logoIdx   = loadJson(LOGO_IDX, {});
-  const legendIdx = loadJson(LEGEND_IDX, {});
+function renderManagerSection(idx) {
+  const managers = Object.values(idx.managers || {});
+  if (!managers.length) return '';
 
-  const playerCount = Object.keys(playerIdx.players || {}).length;
-  const logoCount   = Object.keys(logoIdx.clubs || {}).length;
-  const legendCount = Object.keys(legendIdx.inductees || {}).length;
+  const cards = managers.sort((a, b) => (a.clubName || '').localeCompare(b.clubName || '')).map(m => `
+    <div class="card">
+      <div class="img-box"><img src="${esc(relPath(m.localPath))}" alt="${esc(m.name)}" loading="lazy"></div>
+      <div class="name">${esc(m.name)}</div>
+      <div class="meta">${esc(m.clubName || '?')} · ${Math.round((m.sizeBytes||0)/1024)}KB</div>
+    </div>`).join('');
+
+  return `<section id="managers" class="major-section">
+    <h2>👔 監督 <span class="count">${managers.length}人</span></h2>
+    <div class="grid">${cards}</div>
+  </section>`;
+}
+
+function renderStadiumSection(idx) {
+  const clubs = Object.values(idx.clubs || {}).filter(c => (c.photoCount || 0) > 0);
+  if (!clubs.length) return '';
+
+  const sections = clubs.sort((a, b) => (a.clubName || '').localeCompare(b.clubName || '')).map(c => {
+    const cards = (c.photos || []).map(p => `
+      <div class="card">
+        <div class="img-box wide"><img src="${esc(relPath(p))}" alt="${esc(c.stadium)}" loading="lazy"></div>
+        <div class="meta">${esc(c.stadium)}</div>
+      </div>`).join('');
+    return `<details class="club-block" open>
+      <summary>${esc(c.clubName)} <span class="count">${esc(c.stadium)} · ${c.photoCount}枚</span></summary>
+      <div class="grid wide-grid">${cards}</div>
+    </details>`;
+  }).join('');
+
+  const totalPhotos = clubs.reduce((s, c) => s + (c.photoCount || 0), 0);
+  return `<section id="stadiums" class="major-section">
+    <h2>🏟️ スタジアム <span class="count">${clubs.length}クラブ / ${totalPhotos}枚</span></h2>
+    ${sections}
+  </section>`;
+}
+
+function main() {
+  const playerIdx  = loadJson(PLAYER_IDX, {});
+  const logoIdx    = loadJson(LOGO_IDX, {});
+  const legendIdx  = loadJson(LEGEND_IDX, {});
+  const managerIdx = loadJson(MANAGER_IDX, {});
+  const stadiumIdx = loadJson(STADIUM_IDX, {});
+
+  const playerCount  = Object.keys(playerIdx.players || {}).length;
+  const logoCount    = Object.keys(logoIdx.clubs || {}).length;
+  const legendCount  = Object.keys(legendIdx.inductees || {}).length;
+  const managerCount = Object.keys(managerIdx.managers || {}).length;
+  const stadiumCount = Object.values(stadiumIdx.clubs || {}).filter(c => (c.photoCount || 0) > 0).length;
 
   const html = `<!DOCTYPE html>
 <html lang="ja">
@@ -148,14 +194,18 @@ function main() {
   <div class="nav">
     <a href="#players">⚽ 選手 (${playerCount})</a>
     <a href="#logos">📛 ロゴ (${logoCount})</a>
+    <a href="#managers">👔 監督 (${managerCount})</a>
     <a href="#legends">🏆 レジェンド (${legendCount})</a>
+    <a href="#stadiums">🏟️ スタジアム (${stadiumCount})</a>
   </div>
-  <div class="summary">取得元: premierleague.com (PL公式CDN) / 更新: ${esc(playerIdx.updatedAt || logoIdx.updatedAt || legendIdx.updatedAt || '?')}</div>
+  <div class="summary">取得元: PL公式CDN (選手/ロゴ/レジェンド) + SofaScore (監督) + Wikimedia (スタジアム)</div>
 </header>
 <main>
   ${renderPlayerSection(playerIdx)}
   ${renderLogoSection(logoIdx)}
+  ${renderManagerSection(managerIdx)}
   ${renderLegendSection(legendIdx)}
+  ${renderStadiumSection(stadiumIdx)}
 </main>
 </body>
 </html>`;
