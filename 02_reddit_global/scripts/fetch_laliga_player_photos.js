@@ -95,13 +95,16 @@ async function getSquadList(page, club) {
   });
 }
 
-// 選手ページから CDN URL を抽出 → 標準ヘッドショット (_0_004_000) のみ採用
+// 選手ページから CDN URL を抽出 → 真顔/笑顔ヘッドショット (*_003_000) のみ採用
 //
-// CDN URL の末尾コードの意味:
-//   _0_004_000.png = 標準ヘッドショット（採用）
-//   _1_*.png = FC26 ゲームカード調 / フルボディ宣材（不採用：スキップ）
+// CDN URL の末尾コードの意味（2026-05-04 検証済み）:
+//   _0_003_000.png = 真顔ヘッドショット（採用）
+//   _1_003_000.png = 笑顔ヘッドショット（採用）
+//   _0_004_000.png / _1_004_000.png = FC26 ゲームカード調（不採用：スキップ）
+//   _*_001_000.png = 小さいアイコン (404 多発)
+//   _*_002_000.png = 別アングル / jpg
 //
-// _0_004_000 が無い選手はスキップする（後で SofaScore フォールバック等で別途対応）
+// 戦略: _0_003_000 を優先、無ければ _1_003_000、両方無ければスキップ
 async function getPlayerPhoto(page, playerSlug) {
   const url = `https://www.laliga.com/en-GB/player/${playerSlug}`;
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -118,16 +121,18 @@ async function getPlayerPhoto(page, playerSlug) {
   });
   if (!info.sample) return { url: null, h1: info.h1 };
 
-  // sample URL から season/teamId/playerId を抽出して、headshot URL を構築
+  // sample URL から season/teamId/playerId を抽出
   const m = info.sample.match(/\/squad\/(\d+)\/t(\d+)\/p(\d+)\//);
   if (!m) return { url: null, h1: info.h1 };
   const [, season, teamId, playerId] = m;
 
-  const headshotUrl = `https://assets.laliga.com/squad/${season}/t${teamId}/p${playerId}/${PREFER_SIZE}/p${playerId}_t${teamId}_${season}_0_004_000.png`;
+  // 候補 URL を 2 つ用意（真顔 → 笑顔 の順で download 側がフォールバック）
+  const buildUrl = (variant) =>
+    `https://assets.laliga.com/squad/${season}/t${teamId}/p${playerId}/${PREFER_SIZE}/p${playerId}_t${teamId}_${season}_${variant}.png`;
 
   return {
-    url: headshotUrl,
-    origUrl: headshotUrl,
+    url: buildUrl('0_003_000'),       // 真顔（優先）
+    origUrl: buildUrl('1_003_000'),   // 笑顔（フォールバック）
     variant: 'headshot',
     season, teamId, playerId,
     h1: info.h1,
