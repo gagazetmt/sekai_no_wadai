@@ -17,6 +17,7 @@ const {
   fetchOfficialXImagesByTime,
 } = require('../scripts/fetch_x_images');
 const { fetchWikimediaImages } = require('../scripts/fetch_wikimedia_images');
+const { findStockMatches }     = require('../scripts/modules/stock_match');
 
 const router = express.Router();
 
@@ -329,7 +330,22 @@ router.post('/v35/fetch-images', async (req, res) => {
     for (const r of results) {
       images[r.source] = r.paths.map(pathToUrl);
     }
-    const total = Object.values(images).reduce((s, a) => s + a.length, 0);
+
+    // 🆕 ストック画像（images_stock の indices からラベル一致を引く）
+    try {
+      const stockMatches = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway });
+      // findStockMatches は { source, role, name, url, score, ... } のオブジェクト配列を返す
+      // 既存の images はソース別の URL 配列なので、stock も URL 配列で揃える
+      images.stock = stockMatches.map(m => m.url).filter(Boolean);
+      // 詳細メタ情報も別キーに添付（フロントが拡張表示できるように）
+      images.stock_meta = stockMatches.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, league: m.league || null }));
+    } catch (e) {
+      console.warn('[stock]', e.message);
+      images.stock = [];
+      images.stock_meta = [];
+    }
+
+    const total = Object.values(images).reduce((s, a) => Array.isArray(a) ? s + a.length : s, 0);
 
     res.json({
       ok: true,
@@ -475,7 +491,8 @@ function getUI() {
     let body = '';
     if (imgGroups) {
       body =
-          _renderGroup('X公式・名前ソート',          imgGroups.x_by_name,      L.key, sel)
+          _renderGroup('🎁 ストック (公式素材)',       imgGroups.stock,          L.key, sel)
+        + _renderGroup('X公式・名前ソート',          imgGroups.x_by_name,      L.key, sel)
         + _renderGroup('X公式・時間ソート',          imgGroups.x_by_time,      L.key, sel)
         + _renderGroup('X公式・時間ソート (Away)',   imgGroups.x_by_time_away, L.key, sel)
         + _renderGroup('Wikimedia Commons',          imgGroups.wikimedia,      L.key, sel);
