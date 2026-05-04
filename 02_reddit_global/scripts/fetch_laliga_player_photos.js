@@ -95,45 +95,43 @@ async function getSquadList(page, club) {
   });
 }
 
-// 選手ページから CDN URL を抽出 → teamId/playerId/size を組み替えて 512x512 を取得
+// 選手ページから CDN URL を抽出 → 標準ヘッドショット (_0_004_000) のみ採用
 //
 // CDN URL の末尾コードの意味:
-//   _0_004_000.png = 標準ヘッドショット（求めてるやつ） ← 優先
-//   _1_001_000.png = フルボディ FC26 ゲームカード調（チームキット着・宣材調）← 避ける
-//   _1_004_000.png 等 = その他バリエーション
+//   _0_004_000.png = 標準ヘッドショット（採用）
+//   _1_*.png = FC26 ゲームカード調 / フルボディ宣材（不採用：スキップ）
+//
+// _0_004_000 が無い選手はスキップする（後で SofaScore フォールバック等で別途対応）
 async function getPlayerPhoto(page, playerSlug) {
   const url = `https://www.laliga.com/en-GB/player/${playerSlug}`;
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-  return page.evaluate((preferSize) => {
+  const info = await page.evaluate(() => {
     const imgs = Array.from(document.querySelectorAll('img'));
-    // squad URL を全部集める
     const squadUrls = [];
     for (const i of imgs) {
       const src = i.getAttribute('src') || '';
       if (/assets\.laliga\.com\/squad\//.test(src)) squadUrls.push(src);
     }
-    if (!squadUrls.length) return { url: null, h1: (document.querySelector('h1') || {}).textContent || '' };
+    const sample = squadUrls[0] || null;
+    const h1 = ((document.querySelector('h1') || {}).textContent || '').trim();
+    return { sample, h1 };
+  });
+  if (!info.sample) return { url: null, h1: info.h1 };
 
-    // 標準ヘッドショット (_0_004_000) を最優先、次に _0_*、最後に _1_*（FC26カード調）
-    const headshot = squadUrls.find(u => /_0_004_000\.png$/i.test(u));
-    const otherZero = squadUrls.find(u => /_0_\d+_\d+\.png$/i.test(u));
-    const fallback = squadUrls[0];
-    const foundUrl = headshot || otherZero || fallback;
-    const variant = headshot ? 'headshot' : (otherZero ? 'other-0' : 'fc26-card');
+  // sample URL から season/teamId/playerId を抽出して、headshot URL を構築
+  const m = info.sample.match(/\/squad\/(\d+)\/t(\d+)\/p(\d+)\//);
+  if (!m) return { url: null, h1: info.h1 };
+  const [, season, teamId, playerId] = m;
 
-    // 高解像度に書き換え
-    const upgraded = foundUrl.replace(/\/(\d+x\d+|small|medium|large|xlarge)\//, `/${preferSize}/`);
-    const m = foundUrl.match(/\/squad\/(\d+)\/t(\d+)\/p(\d+)\//);
-    return {
-      url: upgraded,
-      origUrl: foundUrl,
-      variant,
-      season:   m?.[1],
-      teamId:   m?.[2],
-      playerId: m?.[3],
-      h1: ((document.querySelector('h1') || {}).textContent || '').trim(),
-    };
-  }, PREFER_SIZE);
+  const headshotUrl = `https://assets.laliga.com/squad/${season}/t${teamId}/p${playerId}/${PREFER_SIZE}/p${playerId}_t${teamId}_${season}_0_004_000.png`;
+
+  return {
+    url: headshotUrl,
+    origUrl: headshotUrl,
+    variant: 'headshot',
+    season, teamId, playerId,
+    h1: info.h1,
+  };
 }
 
 async function downloadImage(url, outPath) {
