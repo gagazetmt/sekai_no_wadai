@@ -95,38 +95,50 @@ async function getSquadList(page, club) {
   });
 }
 
-// 選手ページから CDN URL を抽出 → fit を 1024x1024 に書き換えて高解像度を取得
-async function getPlayerPhoto(page, playerSlug) {
-  const url = `https://www.bundesliga.com/en/bundesliga/player/${playerSlug}`;
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-  return page.evaluate((preferFit) => {
-    const imgs = Array.from(document.querySelectorAll('img'));
-    // assets.bundesliga.com/player/dfl-obj-{playerId}-dfl-clu-{clubId}-dfl-sea-{seasonId}-body.png?crop=...&fit=256,256
-    let foundUrl = null;
-    for (const i of imgs) {
-      const src = i.getAttribute('src') || '';
-      if (/assets\.bundesliga\.com\/player\//.test(src) && /-body\.png/.test(src)) {
-        foundUrl = src;
-        break;
-      }
-    }
-    if (!foundUrl) return { url: null, h1: (document.querySelector('h1') || {}).textContent || '' };
+function cleanPlayerName(raw) {
+  if (!raw) return '';
+  // h1 が "JoshuaKimmich6" 等で背番号連結 → 末尾の数字を剥がす
+  let s = raw.replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s*\d+$/, '').trim();
+  // CamelCase 連結ぎみ（例: "JoshuaKimmich"）→ 大文字前に空白挿入
+  s = s.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return s.trim();
+}
 
-    // fit を高解像度に書き換え（既存パラメータを置換 or 追加）
-    let upgraded = foundUrl.replace(/fit=\d+,\d+/, `fit=${preferFit}`);
-    if (!/fit=/.test(upgraded)) {
-      upgraded += (upgraded.includes('?') ? '&' : '?') + `fit=${preferFit}`;
-    }
-    const m = foundUrl.match(/dfl-obj-([a-z0-9]+)-dfl-clu-([a-z0-9]+)-dfl-sea-([a-z0-9]+)/i);
-    return {
-      url: upgraded,
-      origUrl: foundUrl,
-      playerId: m?.[1],
-      clubId:   m?.[2],
-      seasonId: m?.[3],
-      h1: ((document.querySelector('h1') || {}).textContent || '').trim(),
-    };
-  }, PREFER_FIT);
+// 選手ページから CDN URL を抽出 → fit を 1024x1024 に書き換えて高解像度を取得
+async function getPlayerPhoto(browser, playerSlug) {
+  const page = await setupPage(browser);
+  try {
+    const url = `https://www.bundesliga.com/en/bundesliga/player/${playerSlug}`;
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    return await page.evaluate((preferFit) => {
+      const imgs = Array.from(document.querySelectorAll('img'));
+      let foundUrl = null;
+      for (const i of imgs) {
+        const src = i.getAttribute('src') || '';
+        if (/assets\.bundesliga\.com\/player\//.test(src) && /-body\.png/.test(src)) {
+          foundUrl = src;
+          break;
+        }
+      }
+      if (!foundUrl) return { url: null, h1: (document.querySelector('h1') || {}).textContent || '' };
+      let upgraded = foundUrl.replace(/fit=\d+,\d+/, `fit=${preferFit}`);
+      if (!/fit=/.test(upgraded)) {
+        upgraded += (upgraded.includes('?') ? '&' : '?') + `fit=${preferFit}`;
+      }
+      const m = foundUrl.match(/dfl-obj-([a-z0-9]+)-dfl-clu-([a-z0-9]+)-dfl-sea-([a-z0-9]+)/i);
+      return {
+        url: upgraded,
+        origUrl: foundUrl,
+        playerId: m?.[1],
+        clubId:   m?.[2],
+        seasonId: m?.[3],
+        h1: ((document.querySelector('h1') || {}).textContent || '').trim(),
+      };
+    }, PREFER_FIT);
+  } finally {
+    try { await page.close(); } catch (_) {}
+  }
 }
 
 async function downloadImage(url, outPath) {
@@ -140,36 +152,52 @@ async function downloadImage(url, outPath) {
   return res.data.length;
 }
 
-async function fetchClub(browser, key, club) {
+async function fetchClub(browserRef, key, club) {
   console.log(`\n=== ${club.name} ===`);
   const outDir = path.join(STOCK_DIR, LEAGUE_SLUG, key);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-  const page = await setupPage(browser);
   const entries = [];
   let ok = 0, fail = 0;
 
+  // squad リスト取得（独立 page）
   let squad = [];
   try {
-    squad = await getSquadList(page, club);
+    const squadPage = await setupPage(browserRef.browser);
+    try {
+      squad = await getSquadList(squadPage, club);
+    } finally {
+      try { await squadPage.close(); } catch (_) {}
+    }
     console.log(`  スカッド: ${squad.length} 件`);
   } catch (e) {
     console.warn(`  ❌ squad 失敗: ${e.message}`);
-    await page.close();
     return { club: key, ok, fail: 1, squadCount: 0, error: e.message, entries };
   }
   if (!squad.length) {
-    await page.close();
     return { club: key, ok, fail: 0, squadCount: 0, error: 'no players found', entries };
   }
 
-  for (const p of squad) {
+  let consecutiveErrors = 0;
+
+  for (let idx = 0; idx < squad.length; idx++) {
+    const p = squad[idx];
     await sleep(SLEEP_MS);
+
+    // 連続エラー or 一定数毎にブラウザ再起動
+    if (consecutiveErrors >= 3 || (idx > 0 && idx % 15 === 0)) {
+      console.log(`  ↻ browser restart (idx=${idx}, consecutiveErrors=${consecutiveErrors})`);
+      try { await browserRef.browser.close(); } catch (_) {}
+      browserRef.browser = await newBrowser();
+      consecutiveErrors = 0;
+      await sleep(2000);
+    }
+
     try {
-      const info = await getPlayerPhoto(page, p.slug);
-      const playerName = info.h1 || p.slug.replace(/-/g, ' ');
+      const info = await getPlayerPhoto(browserRef.browser, p.slug);
+      const playerName = cleanPlayerName(info.h1) || p.slug.replace(/-/g, ' ');
       if (!info.url) {
-        console.warn(`  ⚠️ no img: ${playerName}`);
+        console.warn(`  ⚠️ no img: ${playerName} (${p.slug})`);
         fail++;
         continue;
       }
@@ -180,7 +208,6 @@ async function fetchClub(browser, key, club) {
         continue;
       }
       const outPath = path.join(outDir, `${slug}.png`);
-      // フォールバック付きダウンロード
       let dl;
       try {
         const size = await downloadImage(info.url, outPath);
@@ -208,13 +235,14 @@ async function fetchClub(browser, key, club) {
         sizeBytes: dl.size,
       });
       ok++;
+      consecutiveErrors = 0;
     } catch (e) {
       console.warn(`  ❌ ${(p.slug || '').slice(0, 40)} → ${e.message.slice(0, 80)}`);
       fail++;
+      consecutiveErrors++;
     }
   }
 
-  await page.close();
   return { club: key, ok, fail, squadCount: squad.length, entries };
 }
 
@@ -232,17 +260,20 @@ async function main() {
 
   if (!fs.existsSync(STOCK_DIR)) fs.mkdirSync(STOCK_DIR, { recursive: true });
 
-  const browser = await newBrowser();
+  const browserRef = { browser: await newBrowser() };
   const all = [];
   const allEntries = [];
   try {
     for (const [key, club] of Object.entries(targets)) {
-      const r = await fetchClub(browser, key, club);
+      // クラブ毎にブラウザ再起動（メモリリセット）
+      try { await browserRef.browser.close(); } catch (_) {}
+      browserRef.browser = await newBrowser();
+      const r = await fetchClub(browserRef, key, club);
       all.push(r);
       allEntries.push(...(r.entries || []));
     }
   } finally {
-    await browser.close();
+    try { await browserRef.browser.close(); } catch (_) {}
   }
 
   // 既存 index に追記
