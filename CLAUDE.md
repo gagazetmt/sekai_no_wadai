@@ -80,10 +80,22 @@
 - 開発フローは GitHub 経由（git push でデプロイ）
 - 詳細は `02_reddit_global/WEB_CLAUDE_MIGRATION.md`
 
-### VPS 上で `claude` 起動した場合
+### VPS 上で `claude` 起動した場合（VPS ミア編集ルール）
 - 本番ファイル直接編集できる強い環境。慎重に
 - pm2 操作可能 (`pm2 list`, `pm2 logs`, `pm2 restart`)
 - API キーは `02_reddit_global/.env` に集約済み
+
+**自分が VPS ミアの時は以下のルールを必ず守る（事故防止）:**
+
+1. **編集前**: `git status` で working tree が clean か確認。clean でなければ相棒に状況報告
+2. **編集 → 即テスト**: ファイル変更したら `pm2 restart soccer-yt-v2` で再起動 → `pm2 logs soccer-yt-v2 --lines 20` でエラー確認 → 必要なら相棒にブラウザ確認を依頼
+3. **テスト OK のみ commit + push**: 動作確認できた変更だけ `git add <該当ファイルだけ> && git commit -m "..." && git push origin main`（`git add -A` 禁止）
+4. **NG なら巻き戻し**: `git checkout -- <ファイル>` で破棄、または直前の commit に `git reset --hard HEAD` で戻す
+5. **1編集 = 1 commit**: 機能単位で細かくコミット。後で git log を辿りやすく
+6. **commit メッセージ**: 既存スタイル踏襲（`fix(...)`, `feat(...)`, `docs(...)` など）。Co-Authored-By 行は付ける
+7. **push 失敗時**: 相棒に即報告。勝手に force push しない
+
+これは「速度（直編集）」と「安全（git履歴）」を両立するためのルール。違反するとローカルミア・クラウドミアと不整合が起きる。
 
 ### ローカル PC（Windows）の場合
 - 開発・試行錯誤の場
