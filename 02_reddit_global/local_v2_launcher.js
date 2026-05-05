@@ -310,11 +310,11 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   </div>
   <div class="steps">
     <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
-    <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. SI情報取得</div>
+    <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. SI情報取得 + 画像選定</div>
     <div class="step-nav"        id="nav3"  onclick="goStep(3)">3. 構成提案</div>
-    <div class="step-nav"        id="nav35" onclick="goStep(35)">3.5 画像選定</div>
     <div class="step-nav"        id="nav4"  onclick="goStep(4)">4. シナリオ編集</div>
     <div class="step-nav"        id="nav5"  onclick="goStep(5)">5. サムネ作成</div>
+    <div class="step-nav"        id="nav35" onclick="goStep(35)" style="display:none;font-size:9px;opacity:.4;">[旧3.5(裏)]</div>
   </div>
   <div class="content-scroll">
     <!-- 各 Step の UI（routes/*.js から注入） -->

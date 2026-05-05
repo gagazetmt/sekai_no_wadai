@@ -602,14 +602,18 @@ function getUI() {
     return items.map(function(it) {
       const role = it.role || 'player';
       const status = _statusBadge(it);
-      return '<div class="s2-row" data-box="entity" data-label="' + _esc(it.label) + '"'
-        + ' style="display:grid;grid-template-columns:1fr auto 24px 24px;gap:4px;padding:5px 6px;border-bottom:1px solid #1a2540;align-items:center;cursor:pointer;font-size:11px;"'
-        + ' onclick="s2Preview(\\'entity\\',\\'' + _esc(it.label).replace(/'/g, "\\\\'") + '\\')">'
+      const escLabel = _esc(it.label).replace(/'/g, "\\\\'");
+      return '<div class="s2-row-wrap" data-box="entity" data-label="' + _esc(it.label) + '" style="border-bottom:1px solid #1a2540;">'
+        + '<div class="s2-row" style="display:grid;grid-template-columns:1fr auto 24px 24px 24px;gap:4px;padding:5px 6px;align-items:center;cursor:pointer;font-size:11px;"'
+        + ' onclick="s2Preview(\\'entity\\',\\'' + escLabel + '\\')">'
         + '<span><span style="color:' + ROLE_COLOR[role] + ';font-weight:bold;">' + _esc(it.label) + '</span>'
         + ' <span style="font-size:9px;color:#94a3b8;">[' + (ROLE_SUFFIX[role] || role) + ']</span></span>'
         + status
-        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Refetch(\\'entity\\',\\'' + _esc(it.label).replace(/'/g, "\\\\'") + '\\',\\'' + role + '\\')" title="再取得" style="padding:2px 4px;background:#3b82f6;color:#fff;font-size:9px;">↻</button>'
-        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Remove(\\'entity\\',\\'' + _esc(it.label).replace(/'/g, "\\\\'") + '\\')" style="padding:2px 4px;background:#ef4444;color:#fff;font-size:9px;">×</button>'
+        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2ToggleImages(this,\\'entity\\',\\'' + escLabel + '\\')" title="画像候補" style="padding:2px 4px;background:#a855f7;color:#fff;font-size:10px;">🖼</button>'
+        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Refetch(\\'entity\\',\\'' + escLabel + '\\',\\'' + role + '\\')" title="再取得" style="padding:2px 4px;background:#3b82f6;color:#fff;font-size:9px;">↻</button>'
+        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Remove(\\'entity\\',\\'' + escLabel + '\\')" style="padding:2px 4px;background:#ef4444;color:#fff;font-size:9px;">×</button>'
+        + '</div>'
+        + '<div class="s2-images" style="display:none;padding:6px;background:#0f1117;border-top:1px solid #1a2540;"></div>'
         + '</div>';
     }).join('');
   }
@@ -618,15 +622,143 @@ function getUI() {
     if (!items.length) return '<div style="font-size:11px;color:#3a4a6a;padding:8px;text-align:center;">なし</div>';
     return items.map(function(it) {
       const status = _statusBadge(it);
-      return '<div class="s2-row" data-box="' + box + '" data-label="' + _esc(it.label) + '"'
-        + ' style="display:grid;grid-template-columns:1fr auto 24px 24px;gap:4px;padding:5px 6px;border-bottom:1px solid #1a2540;align-items:center;cursor:pointer;font-size:11px;"'
-        + ' onclick="s2Preview(\\'' + box + '\\',\\'' + _esc(it.label).replace(/'/g, "\\\\'") + '\\')">'
+      const escLabel = _esc(it.label).replace(/'/g, "\\\\'");
+      const showImgBtn = (box === 'match'); // search は画像なし
+      return '<div class="s2-row-wrap" data-box="' + box + '" data-label="' + _esc(it.label) + '" style="border-bottom:1px solid #1a2540;">'
+        + '<div class="s2-row" style="display:grid;grid-template-columns:1fr auto ' + (showImgBtn ? '24px ' : '') + '24px 24px;gap:4px;padding:5px 6px;align-items:center;cursor:pointer;font-size:11px;"'
+        + ' onclick="s2Preview(\\'' + box + '\\',\\'' + escLabel + '\\')">'
         + '<span style="color:#e0e0e0;">' + _esc(it.label) + '</span>'
         + status
-        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Refetch(\\'' + box + '\\',\\'' + _esc(it.label).replace(/'/g, "\\\\'") + '\\')" title="再取得" style="padding:2px 4px;background:#3b82f6;color:#fff;font-size:9px;">↻</button>'
-        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Remove(\\'' + box + '\\',\\'' + _esc(it.label).replace(/'/g, "\\\\'") + '\\')" style="padding:2px 4px;background:#ef4444;color:#fff;font-size:9px;">×</button>'
+        + (showImgBtn
+            ? '<button class="btn btn-sm" onclick="event.stopPropagation();s2ToggleImages(this,\\'match\\',\\'' + escLabel + '\\')" title="画像候補" style="padding:2px 4px;background:#a855f7;color:#fff;font-size:10px;">🖼</button>'
+            : '')
+        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Refetch(\\'' + box + '\\',\\'' + escLabel + '\\')" title="再取得" style="padding:2px 4px;background:#3b82f6;color:#fff;font-size:9px;">↻</button>'
+        + '<button class="btn btn-sm" onclick="event.stopPropagation();s2Remove(\\'' + box + '\\',\\'' + escLabel + '\\')" style="padding:2px 4px;background:#ef4444;color:#fff;font-size:9px;">×</button>'
+        + '</div>'
+        + (showImgBtn ? '<div class="s2-images" style="display:none;padding:6px;background:#0f1117;border-top:1px solid #1a2540;"></div>' : '')
         + '</div>';
     }).join('');
+  }
+
+  /* ── 🖼 画像候補展開（lazy load + 選択状態保存） ── */
+  // s2.imageCache: { "<label>": { images, selection } }
+  window.APP.s2.imageCache = window.APP.s2.imageCache || {};
+
+  window.s2ToggleImages = async function(btn, box, rawLabel) {
+    const wrap = btn.closest('.s2-row-wrap');
+    if (!wrap) return;
+    const imgsDiv = wrap.querySelector('.s2-images');
+    if (!imgsDiv) return;
+    if (imgsDiv.style.display !== 'none') {
+      imgsDiv.style.display = 'none';
+      return;
+    }
+    imgsDiv.style.display = 'block';
+    const post = window.APP.selected;
+    if (!post?.id) { imgsDiv.innerHTML = '<div style="color:#94a3b8;font-size:10px;">案件未選択</div>'; return; }
+    const fullLabel = box + ':' + rawLabel;
+    imgsDiv.innerHTML = '<div style="color:#94a3b8;font-size:10px;">⏳ 画像読込...</div>';
+    try {
+      const cache = window.APP.s2.imageCache[fullLabel];
+      let payload;
+      if (cache) payload = cache;
+      else {
+        // 既に Step2 の fetch-all/fetch-label で発火済の可能性高いが、未取得なら今呼ぶ
+        const [imgRes, selRes] = await Promise.all([
+          fetchJson('/api/v35/fetch-images', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ postId: post.id, label: fullLabel }),
+          }),
+          fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(post.id))
+            .catch(() => ({ selections: {} })),
+        ]);
+        const selection = (selRes.selections || {})[fullLabel] || [];
+        payload = { images: imgRes.images || {}, selection };
+        window.APP.s2.imageCache[fullLabel] = payload;
+      }
+      _renderImageGrid(imgsDiv, fullLabel, payload);
+    } catch (e) {
+      imgsDiv.innerHTML = '<div style="color:#ef4444;font-size:10px;">❌ ' + _esc(e.message) + '</div>';
+    }
+  };
+
+  function _renderImageGrid(container, fullLabel, payload) {
+    const images = payload.images || {};
+    const selSet = new Set(payload.selection || []);
+    const groups = [
+      { key: 'stock',          title: '🎁 ストック (公式素材)', color: '#10b981' },
+      { key: 'x_by_name',      title: '📷 X 名前',           color: '#3b82f6' },
+      { key: 'x_by_time',      title: '📷 X 時間 (Home)',     color: '#3b82f6' },
+      { key: 'x_by_time_away', title: '📷 X 時間 (Away)',     color: '#3b82f6' },
+      { key: 'wikimedia',      title: '🌐 Wikimedia',          color: '#8b5cf6' },
+    ];
+    let html = '';
+    let totalCount = 0;
+    for (const g of groups) {
+      const arr = (images[g.key] || []).filter(Boolean);
+      if (!arr.length) continue;
+      totalCount += arr.length;
+      html += '<div style="margin-bottom:6px;">'
+        + '<div style="font-size:10px;font-weight:bold;color:' + g.color + ';margin-bottom:3px;">' + g.title + ' (' + arr.length + ')</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px;">'
+        + arr.map(function(url) {
+          const isSelected = selSet.has(url);
+          return '<div class="s2-img-cell' + (isSelected ? ' selected' : '') + '" data-url="' + _esc(url) + '" '
+            + 'style="aspect-ratio:1;background:#1a1a26;border:2px solid ' + (isSelected ? '#10b981' : '#3d3d4d') + ';border-radius:4px;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;">'
+            + '<img src="' + _esc(url) + '" loading="lazy" style="max-width:100%;max-height:100%;object-fit:contain;">'
+            + '</div>';
+        }).join('')
+        + '</div></div>';
+    }
+    if (!totalCount) {
+      html = '<div style="color:#94a3b8;font-size:10px;">画像候補なし（取得失敗 or 該当なし）</div>';
+    } else {
+      html = '<div style="font-size:10px;color:#94a3b8;margin-bottom:4px;">クリックで選択/解除（自動保存）/ 選択中: <span class="s2-sel-count" style="color:#10b981">' + selSet.size + '</span> 枚</div>' + html;
+    }
+    container.innerHTML = html;
+    // クリックハンドラ
+    container.querySelectorAll('.s2-img-cell').forEach(function(cell) {
+      cell.addEventListener('click', function() {
+        const url = cell.getAttribute('data-url');
+        const cache = window.APP.s2.imageCache[fullLabel] || { selection: [] };
+        const set = new Set(cache.selection || []);
+        if (set.has(url)) set.delete(url); else set.add(url);
+        cache.selection = Array.from(set);
+        window.APP.s2.imageCache[fullLabel] = cache;
+        // 視覚更新
+        cell.classList.toggle('selected');
+        cell.style.borderColor = set.has(url) ? '#10b981' : '#3d3d4d';
+        const cnt = container.querySelector('.s2-sel-count');
+        if (cnt) cnt.textContent = set.size;
+        // サーバ保存（fire-and-forget）
+        _saveImageSelection(fullLabel, cache.selection);
+      });
+    });
+  }
+
+  let _saveSelTimer = null;
+  let _saveSelPending = {};
+  async function _saveImageSelection(label, urls) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    _saveSelPending[label] = urls;
+    if (_saveSelTimer) clearTimeout(_saveSelTimer);
+    _saveSelTimer = setTimeout(async () => {
+      const toSave = _saveSelPending;
+      _saveSelPending = {};
+      try {
+        // 既存選択を読んでマージ（他ラベルを上書きしないため）
+        const cur = await fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(post.id))
+          .catch(() => ({ selections: {} }));
+        const merged = Object.assign({}, cur.selections || {}, toSave);
+        await fetchJson('/api/v35/save-selection', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postId: post.id, selections: merged }),
+        });
+      } catch (e) {
+        console.warn('[s2/save-selection]', e.message);
+      }
+    }, 500);
   }
 
   function _statusBadge(it) {
