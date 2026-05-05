@@ -1063,34 +1063,56 @@ router.get('/v2/sample-gallery', (req, res) => {
 <html lang="ja"><head><meta charset="utf-8"><title>スライドサンプル ギャラリー</title>
 <style>
   body { margin:0; background:#0f1117; color:#e0e0e0; font-family:sans-serif; }
-  header { padding:14px 20px; background:#1a1a26; border-bottom:3px solid #ff3b3b; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header { padding:14px 20px; background:#1a1a26; border-bottom:3px solid #ff3b3b; display:flex; align-items:center; gap:14px; flex-wrap:wrap; position:sticky; top:0; z-index:10; }
   h1 { color:#ff3b3b; font-size:18px; margin:0; }
   .types { display:flex; gap:6px; flex-wrap:wrap; }
   .type-btn { padding:6px 12px; background:#2a2a35; color:#fff; border:1px solid #3d3d4d; border-radius:6px; cursor:pointer; font-size:12px; }
   .type-btn.active { background:#ff3b3b; border-color:#ff3b3b; color:#fff; font-weight:bold; }
   .type-btn:hover:not(.active) { background:#3a3a45; }
   main { padding:20px; }
-  .info { font-size:12px; color:#94a3b8; margin-bottom:10px; }
-  .frame-wrap { background:#000; border:2px solid #2a2a35; border-radius:8px; overflow:hidden; max-width:1280px; margin:0 auto; }
-  iframe { display:block; width:100%; aspect-ratio:16/9; border:0; }
-  .reload-btn { padding:6px 14px; background:#3b82f6; color:#fff; border:0; border-radius:6px; cursor:pointer; font-size:12px; margin-left:auto; }
-  .reload-btn:hover { background:#2563eb; }
+  .info { font-size:12px; color:#94a3b8; margin-bottom:10px; text-align:center; }
+  /* 1920x1080 を等比縮小して表示。outer の width で自動 fit */
+  .frame-outer { background:#000; border:2px solid #2a2a35; border-radius:8px; overflow:hidden; max-width:1280px; margin:0 auto; position:relative; }
+  .frame-inner { width:1920px; height:1080px; transform-origin: top left; position:relative; }
+  iframe { display:block; width:1920px; height:1080px; border:0; background:#000; }
+  .controls { display:flex; gap:8px; align-items:center; margin-left:auto; }
+  .ctrl-btn { padding:6px 14px; background:#3b82f6; color:#fff; border:0; border-radius:6px; cursor:pointer; font-size:12px; }
+  .ctrl-btn:hover { background:#2563eb; }
+  .scale-ctrl { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
 </style></head><body>
 <header>
   <h1>🎬 スライドサンプル</h1>
   <div class="types" id="typeBtns"></div>
-  <button class="reload-btn" id="reloadBtn">🔄 再読込</button>
+  <div class="controls">
+    <div class="scale-ctrl">表示倍率: <span id="scaleVal">--</span></div>
+    <button class="ctrl-btn" id="reloadBtn">🔄 再読込</button>
+  </div>
 </header>
 <main>
-  <div class="info" id="info">スライド種類を選んでください（CSSアニメーションは1度だけ再生される。再見たい時は「再読込」）</div>
-  <div class="frame-wrap"><iframe id="frame" src="about:blank"></iframe></div>
+  <div class="info" id="info">1920x1080 → ブラウザ幅に合わせて等比縮小。<strong>動画レンダ時もこのHTMLそのもの</strong>を Puppeteer で1920x1080 で撮影するから、見た目=完成動画の見た目。</div>
+  <div class="frame-outer" id="frameOuter">
+    <div class="frame-inner" id="frameInner">
+      <iframe id="frame" src="about:blank"></iframe>
+    </div>
+  </div>
 </main>
 <script>
 const TYPES = ${JSON.stringify(types)};
 let currentType = TYPES[0];
 const frame = document.getElementById('frame');
+const frameInner = document.getElementById('frameInner');
+const frameOuter = document.getElementById('frameOuter');
 const info = document.getElementById('info');
 const typeBtns = document.getElementById('typeBtns');
+const scaleVal = document.getElementById('scaleVal');
+
+function fitFrame() {
+  const w = frameOuter.clientWidth;
+  const scale = w / 1920;
+  frameInner.style.transform = 'scale(' + scale + ')';
+  frameOuter.style.height = (1080 * scale) + 'px';
+  scaleVal.textContent = (scale * 100).toFixed(0) + '%';
+}
 
 function load(type) {
   currentType = type;
@@ -1098,7 +1120,7 @@ function load(type) {
     b.classList.toggle('active', b.dataset.type === type);
   });
   frame.src = '/api/v2/sample-slide?type=' + encodeURIComponent(type) + '&_t=' + Date.now();
-  info.textContent = '表示中: ' + type;
+  info.innerHTML = '表示中: <strong>' + type + '</strong> | 1920x1080 を ' + scaleVal.textContent + ' に縮小表示中（動画レンダ時の見た目と同じ）';
 }
 
 TYPES.forEach(t => {
@@ -1112,7 +1134,8 @@ TYPES.forEach(t => {
 
 document.getElementById('reloadBtn').onclick = () => load(currentType);
 
-// 初期表示
+window.addEventListener('resize', fitFrame);
+fitFrame();
 load(TYPES[0]);
 </script>
 </body></html>`;
