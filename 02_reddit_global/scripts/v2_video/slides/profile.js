@@ -256,6 +256,13 @@ function buildProfileHTML(mod) {
 
   const slideBody = `
 <div class="panel-left">
+  <div class="main-title">
+    ${esc(mainTitle)}
+    ${subtitle ? `<div class="main-subtitle">${esc(subtitle)}</div>` : ''}
+  </div>
+  <div class="main-img-frame">${mainImg ? `<div class="img-fill" style="background-image:url('${mainImg}')"></div>` : '<div class="img-fill"></div>'}</div>
+</div>
+<div class="panel-right">
   <div class="logo-row">
     <div class="logo-cell flag-cell"   title="${esc(mod.countryName || '国籍')}">
       ${flagImg ? `<div class="img-fill" style="background-image:url('${flagImg}')"></div>` : '<div class="logo-empty">国旗</div>'}
@@ -264,13 +271,6 @@ function buildProfileHTML(mod) {
       ${clubImg ? `<div class="img-fill" style="background-image:url('${clubImg}')"></div>` : '<div class="logo-empty">クラブ</div>'}
     </div>
   </div>
-  <div class="main-title">
-    ${esc(mainTitle)}
-    ${subtitle ? `<div class="main-subtitle">${esc(subtitle)}</div>` : ''}
-  </div>
-  <div class="main-img-frame">${mainImg ? `<div class="img-fill" style="background-image:url('${mainImg}')"></div>` : '<div class="img-fill"></div>'}</div>
-</div>
-<div class="panel-right">
   <div class="data-list">${dataRows}</div>
 </div>
 ${buildSubtitleBar(subtitleArgFromMod(mod), { height: 90, maxLineLen: 32 })}`;
