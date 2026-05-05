@@ -175,7 +175,7 @@ ${searchBlock}
 
 【視点の引き出し（多角的に組み合わせる）】
 動画の視聴維持率を上げるため、以下のような複数の視点を**バランスよく**織り交ぜる：
-1. 試合・ニュースそのものの解説 (insight / matchcard / matchcenter)
+1. 試合・ニュースそのものの解説 (insight / matchcard)
 2. 主役選手・チームの現状スタッツ (stats / profile)
 3. 2選手・2チーム・2監督の比較 (comparison)
 4. 戦術・監督観点・哲学 (insight / profile)
@@ -191,8 +191,7 @@ ${searchBlock}
 - comparison: 2項対比（dataSlots [{label,leftValue,rightValue}]）
 - history: 時系列・年表（dataSlots [{label:年, value:出来事}]）
 - reaction: コメント反応（comments[]）
-- matchcard: 試合プレビュー（match data 必須）
-- matchcenter: 試合詳細スコア（match data 必須）
+- matchcard: 試合プレビュー / 試合スコア詳細（match data 必須）
 - ending: 締め・問いかけ（必ず末尾に1枚）
 
 【構成ルール（厳守）】
@@ -247,7 +246,7 @@ ${searchBlock}
     }
 
     // バリデーション + 正規化
-    const validTypes = new Set(['opening','ending','insight','stats','profile','comparison','history','reaction','matchcard','matchcenter']);
+    const validTypes = new Set(['opening','ending','insight','stats','profile','comparison','history','reaction','matchcard']);
     const cleaned = parsed.modules
       .filter(m => m && validTypes.has(m.type))
       .map(m => ({
@@ -1115,7 +1114,7 @@ function getUI() {
   }
 
   function _buildTypeOptions(m) {
-    const TYPES = ['insight','stats','profile','comparison','history','reaction','matchcenter'];
+    const TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard'];
     const FIXED = { opening: 'opening', toc: 'toc', overview: 'insight', reaction: 'reaction', ending: 'ending' };
     let cur = m.type || '';
     if (FIXED[m.mainKey]) cur = FIXED[m.mainKey];

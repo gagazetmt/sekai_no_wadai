@@ -149,28 +149,6 @@ const SAMPLES = {
     audio: SAMPLE_AUDIO_3,
   },
 
-  matchcenter: {
-    type: 'matchcenter',
-    title: 'シティ 3-1 アーセナル',
-    matchData: {
-      league: 'プレミアリーグ',
-      kickoff: '2026年5月10日',
-      venue: 'エティハド・スタジアム',
-      status: '試合終了',
-      scoreTime: '90+3 終了',
-      home: { name: 'Man City', abbr: 'MCI', score: 3, goals: ['ハーランド 12分', 'デブライネ 45分', 'フォーデン 78分'], reds: [] },
-      away: { name: 'Arsenal',  abbr: 'ARS', score: 1, goals: ['サカ 64分'], reds: [] },
-      stats: [
-        { name: 'ボール支配率', home: 58, away: 42 },
-        { name: 'シュート',     home: 16, away: 12 },
-        { name: '枠内シュート', home: 8,  away: 4  },
-        { name: 'コーナー',     home: 7,  away: 5  },
-      ],
-    },
-    narration: 'スタンフォード・ブリッジで行われた一戦。シティがアーセナルを 3-1 で下しました。',
-    audio: SAMPLE_AUDIO_4,
-  },
-
   reaction: {
     type: 'reaction',
     title: 'ファンの本音',

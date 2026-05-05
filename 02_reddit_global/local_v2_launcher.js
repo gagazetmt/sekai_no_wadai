@@ -64,7 +64,7 @@ app.get('/bgm.mp3', (req, res) => {
 });
 
 // テンプレートプレビュー（各モジュール型のHTMLを直接確認する用）
-['insight', 'history', 'matchcard', 'matchcenter'].forEach(name => {
+['insight', 'history', 'matchcard'].forEach(name => {
   app.use('/template/' + name, require('express').static(path.join(__dirname, name)));
 });
 

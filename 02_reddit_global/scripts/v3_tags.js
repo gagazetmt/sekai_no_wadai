@@ -52,7 +52,7 @@ function parseMainKey(mainKey, siData) {
 
 // メイン+AI由来type から type を決定
 //   優先順位: ① fixed/matchcard 確定型 → ② AI 直接指定の type → ③ 'insight'
-const VALID_TYPES = new Set(['opening','ending','toc','insight','stats','profile','comparison','history','reaction','matchcard','matchcenter']);
+const VALID_TYPES = new Set(['opening','ending','toc','insight','stats','profile','comparison','history','reaction','matchcard']);
 function resolveType(mainKey, siData, aiType) {
   const p = parseMainKey(mainKey, siData);
   if (p.kind === 'fixed')     return p.def.type;
