@@ -349,13 +349,18 @@ async function main() {
       .filter(Boolean);
     if (chapters.length >= 2) {
       const insertIdx = (modules[0] && modules[0].type === 'opening') ? 1 : 0;
+      const tocChapters = chapters.slice(0, 8);
+      const intro = '今日のラインナップはこちらです';
+      // narrationChunks: [intro, ...items] → audio.length = items.length + 1
+      // toc.js は audio.length === items.length + 1 ならイントロ扱いで chunkStarts[i+1] を items[i] の登場時刻に使う
       modules.splice(insertIdx, 0, {
         type: 'toc',
         title: '今日のラインナップ',
-        tocItems: chapters.slice(0, 8),
-        narration: '',
+        tocItems: tocChapters,
+        narration: intro + '。' + tocChapters.join('。') + '。',
+        narrationChunks: [intro, ...tocChapters],
       });
-      console.log(`📑 TOC 自動挿入: ${chapters.length} 章 (slot ${insertIdx})`);
+      console.log(`📑 TOC 自動挿入: ${tocChapters.length} 章 (slot ${insertIdx}, イントロ+項目読み上げ ON)`);
     }
   }
 

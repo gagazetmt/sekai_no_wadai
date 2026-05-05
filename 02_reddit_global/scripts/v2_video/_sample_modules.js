@@ -38,7 +38,23 @@ const SAMPLES = {
       'CL 進出の鍵となる戦術比較',
       'ファンの本音',
     ],
-    narration: '',
+    narration: '今日のラインナップはこちらです。マンチェスター・シティ vs アーセナル。注目選手の今シーズン成績。直近10戦の対戦カード。CL 進出の鍵となる戦術比較。ファンの本音。',
+    narrationChunks: [
+      '今日のラインナップはこちらです',
+      'マンチェスター・シティ vs アーセナル',
+      '注目選手の今シーズン成績',
+      '直近10戦の対戦カード',
+      'CL 進出の鍵となる戦術比較',
+      'ファンの本音',
+    ],
+    audio: [
+      { chunkIdx: 0, text: '今日のラインナップはこちらです',          durationSec: 2.8 },
+      { chunkIdx: 1, text: 'マンチェスター・シティ vs アーセナル',     durationSec: 3.2 },
+      { chunkIdx: 2, text: '注目選手の今シーズン成績',                durationSec: 2.6 },
+      { chunkIdx: 3, text: '直近10戦の対戦カード',                   durationSec: 2.4 },
+      { chunkIdx: 4, text: 'CL 進出の鍵となる戦術比較',              durationSec: 2.8 },
+      { chunkIdx: 5, text: 'ファンの本音',                          durationSec: 1.8 },
+    ],
   },
 
   insight: {

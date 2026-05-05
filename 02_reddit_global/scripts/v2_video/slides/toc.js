@@ -59,28 +59,34 @@ function buildTocHTML(mod) {
   const layout = _layoutForCount(items.length);
 
   // ─── chunk連動アクティブハイライト計算 ───
-  //   audio chunks 数 == items 数 なら chunk 開始/終了に合わせて row をハイライト
+  //   ① audio.length == items.length        : 各 chunk が各 item を読む
+  //   ② audio.length == items.length + 1    : chunk[0]はイントロ ("今日のラインナップ"等)
+  //                                           chunk[i+1] が items[i] を読む
+  //   ③ それ以外                              : chunk連動 OFF、固定間隔で順次表示
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
-  // 先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
   const chunkStarts = audio.map((_, i) =>
     LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
   const totalSec = audio.length
     ? (audio.reduce((s, c) => s + (c.durationSec || 0), 0) + LEAD_PAD_SEC + TAIL_PAD_SEC)
     : Math.max(items.length * 1.5 + LEAD_PAD_SEC + TAIL_PAD_SEC, 5);
-  const canActive = audio.length === items.length && items.length > 0;
 
-  // 各行の登場 delay（音声無しもリードに続いて出る）
+  const hasIntro = audio.length === items.length + 1;
+  const canActive = hasIntro || (audio.length === items.length && items.length > 0);
+  const audioOffset = hasIntro ? 1 : 0;  // items[i] が参照する chunk index のオフセット
+
+  // 各行の登場 delay
   const startSec = LEAD_PAD_SEC + 0.4;
   const interval = 0.4;
   const enterDelays = items.map((_, i) =>
-    canActive ? chunkStarts[i] + 0.05 : startSec + interval * i
+    canActive ? chunkStarts[i + audioOffset] + 0.05 : startSec + interval * i
   );
 
   // chunk連動アクティブ用 keyframes
   const activeKeyframes = canActive
     ? items.map((_, i) => {
-        const start = chunkStarts[i];
-        const end = start + (audio[i].durationSec || 0);
+        const ai = i + audioOffset;
+        const start = chunkStarts[ai];
+        const end = start + ((audio[ai] && audio[ai].durationSec) || 0);
         const startPct = (start / totalSec * 100).toFixed(2);
         const fadeInPct = Math.min(((start + 0.15) / totalSec * 100), 100).toFixed(2);
         const fadeOutPct = Math.max(((end - 0.15) / totalSec * 100), 0).toFixed(2);
