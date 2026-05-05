@@ -85,15 +85,8 @@ router.get('/v3/modules', (req, res) => {
 // 出力: { ok, modules: [{type, mainKey, secondary?, scriptDir}, ...] }
 //   - V4-Flash で生成（5/1切替）
 //   - クライアントは返却 outline を Step3 のテーブルに流し込んで微調整 → save-modules
-router.post('/v3/propose-modules', express.json(), async (req, res) => {
-  const { postId } = req.body || {};
-  let count = parseInt(req.body?.count, 10);
-  if (!Number.isFinite(count) || count < 5) count = 7;
-  if (count > 10) count = 10;
-  if (!postId) return res.status(400).json({ error: 'postId required' });
-
-  try {
-    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
+async function _runProposeModules(postId, count) {
+  const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
 
     // 案件の文脈（saved_projects.json から）
     let titleJa = '(タイトル不明)';
@@ -274,15 +267,40 @@ ${searchBlock}
 
     console.log(`[Step3 v3] propose-modules: ${cleaned.length}枚構成を ${elapsed}秒で提案`);
 
-    res.json({
+    return {
       ok: true,
       elapsed,
       modules: cleaned,
-    });
-  } catch (e) {
-    console.error('[Step3 v3] propose-modules エラー:', e);
-    res.status(500).json({ error: e.message });
-  }
+    };
+}
+
+// 🆕 /v3/propose-modules: ジョブ作成 → jobId 即返却
+router.post('/v3/propose-modules', express.json(), (req, res) => {
+  const { postId } = req.body || {};
+  let count = parseInt(req.body?.count, 10);
+  if (!Number.isFinite(count) || count < 5) count = 7;
+  if (count > 10) count = 10;
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+  const jobId = 'pm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  writeJob(jobId, { jobId, postId, kind: 'propose-modules', status: 'queued', step: 'init', createdAt: new Date().toISOString() });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      writeJob(jobId, { jobId, postId, status: 'running', step: 'ai-generation', updatedAt: new Date().toISOString() });
+      const result = await _runProposeModules(postId, count);
+      writeJob(jobId, { jobId, postId, status: 'done', step: 'merged', result, updatedAt: new Date().toISOString() });
+    } catch (e) {
+      console.error(`[Step3/propose-modules:${jobId}]`, e);
+      writeJob(jobId, { jobId, postId, status: 'error', error: e.message, updatedAt: new Date().toISOString() });
+    }
+  });
+});
+
+// 🆕 /v3/propose-modules-status: ジョブ状態取得（フロントポーリング）
+router.get('/v3/propose-modules-status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 // ─── /api/v3/generate-scenario : 全カード一括生成（非同期ジョブ起動）──
@@ -1198,37 +1216,75 @@ function getUI() {
   });
 
   /* ── 構成おまかせ（V4-Flash で 5〜10 スライド多角構成を提案）── */
+  // 🆕 propose-modules ジョブ管理（タブ閉じても継続）
+  function _proposeJobKey(postId) { return 's3_propose_' + postId; }
+  function _saveProposeJob(postId, jobId) { try { localStorage.setItem(_proposeJobKey(postId), jobId); } catch (_) {} }
+  function _clearProposeJob(postId) { try { localStorage.removeItem(_proposeJobKey(postId)); } catch (_) {} }
+  function _readProposeJob(postId) { try { return localStorage.getItem(_proposeJobKey(postId)); } catch (_) { return null; } }
+
+  async function _pollProposeJob(jobId, post, btn, origLabel) {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 提案中...（タブ閉じてもOK）'; }
+    let tries = 0;
+    while (tries < 200) {
+      tries++;
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        const j = await fetchJson('/api/v3/propose-modules-status?jobId=' + encodeURIComponent(jobId));
+        if (!j || j.status === 'error') {
+          _clearProposeJob(post.id);
+          _msg('❌ ' + (j?.error || 'ジョブ失敗'));
+          break;
+        }
+        if (j.status === 'done') {
+          _clearProposeJob(post.id);
+          const r = j.result || {};
+          if (!Array.isArray(r.modules) || !r.modules.length) {
+            _msg('❌ 提案 API が空応答');
+            break;
+          }
+          window.APP.s3.modules = r.modules.map(m => ({
+            mainKey:   m.mainKey   || '',
+            secondary: m.secondary || null,
+            type:      m.type      || '',
+            scriptDir: m.scriptDir || '',
+          }));
+          _renderOutline();
+          _msg('✅ ' + r.modules.length + ' 枚構成を提案しました（' + r.elapsed + '秒）。各行を確認・編集してから「✨ 脚本生成」へ');
+          break;
+        }
+        _msg('⏳ V4-Flash が多角構成を提案中... (' + (tries * 3) + 's)');
+      } catch (e) {
+        if (String(e.message).includes('404')) {
+          _clearProposeJob(post.id);
+          _msg('❌ ジョブ消失');
+          break;
+        }
+      }
+    }
+    if (btn) { btn.disabled = false; btn.textContent = origLabel || '✨ 構成おまかせ'; }
+  }
+
   document.getElementById('s3BtnPropose')?.addEventListener('click', async function() {
     const post = window.APP.selected;
     if (!post?.id) { alert('案件が選択されていません'); return; }
-    // 既存 outline がある場合は確認
     const hasContent = (window.APP.s3.modules || []).some(m => m && m.mainKey && m.mainKey !== 'opening' && m.mainKey !== 'ending');
     if (hasContent) {
       if (!confirm('既存のアウトラインを AI 提案で上書きします。よろしいですか？')) return;
     }
     const btn = this;
     const orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = '⏳ 提案中... (15〜30秒)';
-    _msg('🤖 V4-Flash が多角構成を提案中... (15〜30秒)');
+    _msg('🤖 ジョブ起動中...');
     try {
       const r = await fetchJson('/api/v3/propose-modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ postId: post.id, count: 7 }),
       });
-      if (!r?.ok || !Array.isArray(r.modules) || !r.modules.length) {
-        throw new Error('提案 API が空応答を返しました');
-      }
-      // 受領 outline を s3 modules フォーマットに変換
-      window.APP.s3.modules = r.modules.map(m => ({
-        mainKey:   m.mainKey   || '',
-        secondary: m.secondary || null,
-        type:      m.type      || '',
-        scriptDir: m.scriptDir || '',
-      }));
-      _renderOutline();
-      _msg('✅ ' + r.modules.length + ' 枚構成を提案しました（' + r.elapsed + '秒）。各行を確認・編集してから「✨ 脚本生成」へ');
+      const jobId = r && r.jobId;
+      if (!jobId) throw new Error('jobId 受信失敗');
+      _saveProposeJob(post.id, jobId);
+      await _pollProposeJob(jobId, post, btn, orig);
+      return;
     } catch (e) {
       console.error('[Step3] propose 失敗:', e);
       _msg('❌ 提案失敗: ' + e.message);

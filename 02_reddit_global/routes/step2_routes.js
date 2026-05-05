@@ -22,6 +22,7 @@ const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofasc
 const { fetchSerper }              = require('../scripts/modules/fetchers/serper_module');
 const { suggestEntities }          = require('../scripts/modules/stock_match');
 const { fetchImagesForLabel }      = require('./step35_routes');
+const { createJob, readJob, updateJob } = require('./_job_helper');
 
 const router = express.Router();
 const SI_DIR = path.join(__dirname, '..', 'data', 'si_data');
@@ -113,10 +114,8 @@ function _dedupeEntities(...lists) {
   return out;
 }
 
-router.post('/v3/suggest-labels', async (req, res) => {
-  const { post } = req.body;
-  if (!post) return res.status(400).json({ error: 'post required' });
-
+// suggest-labels の実処理（ジョブ化のためバックグラウンド実行用）
+async function _runSuggestLabels(post, onProgress = () => {}) {
   const title    = post.titleOrig || post.title || '';
   const titleJa  = post.titleJa   || '';
   const selftext = (post.selftext || post.raw?.selftext || '').slice(0, 2000);
@@ -180,7 +179,7 @@ JSONのみ:
       if (!phase1) console.warn('[Step2 phase1] v4flash も JSON parse 失敗 / raw=' + (raw||'').slice(0, 200));
     } catch (e) { console.warn('[Step2 phase1] v4flash 例外:', e.message); }
   }
-  if (!phase1) return res.json({ entities: [], matches: [], searches: [] });
+  if (!phase1) return { entities: [], matches: [], searches: [] };
 
   const phase1Entities = Array.isArray(phase1.entities) ? phase1.entities : [];
   const matches  = Array.isArray(phase1.matches)  ? phase1.matches.filter(Boolean)  : [];
@@ -278,11 +277,36 @@ JSONのみ:
   const merged = _dedupeEntities(phase1Entities, phase2Entities);
   console.log(`  マージ後 entities: ${merged.length}件 (P1=${phase1Entities.length} + P2=${phase2Entities.length} - 重複)`);
 
-  res.json({
+  return {
     entities: merged,
     matches,
     searches,
+  };
+}
+
+// 🆕 /v3/suggest-labels: ジョブ作成 → jobId 即返却（バックグラウンド実行）
+router.post('/v3/suggest-labels', (req, res) => {
+  const { post } = req.body;
+  if (!post) return res.status(400).json({ error: 'post required' });
+  const jobId = createJob('sl', { postId: post.id, kind: 'suggest-labels', step: 'init' });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      updateJob(jobId, { status: 'running', step: 'phase1' });
+      const result = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch));
+      updateJob(jobId, { status: 'done', step: 'merged', result });
+    } catch (e) {
+      console.error(`[Step2/suggest-labels:${jobId}]`, e);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
   });
+});
+
+// 🆕 /v3/suggest-labels-status: ジョブ状態取得（フロントポーリング）
+router.get('/v3/suggest-labels-status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 // ─── 個別 fetcher（box種別 + label）─────────────────────
@@ -551,6 +575,13 @@ function getUI() {
       window.APP.s2.siData = _emptySi(post.id);
     }
     _renderBoxes();
+    // 🆕 進行中の AI 提案ジョブがあれば再開
+    const pendingJob = _readSuggestJob(post.id);
+    if (pendingJob) {
+      const btn = document.getElementById('s2BtnSuggest');
+      _msg('🔄 進行中の AI 提案ジョブを再開: ' + pendingJob);
+      _pollSuggestJob(pendingJob, post, btn);
+    }
   };
 
   function _emptySi(postId) {
@@ -692,40 +723,85 @@ function getUI() {
     }
   });
 
-  /* ── AI ラベル提案 ── */
+  /* ── AI ラベル提案（ジョブ化対応・タブ閉じても継続）── */
+  function _suggestJobKey(postId) { return 's2_suggest_' + postId; }
+  function _saveSuggestJob(postId, jobId) { try { localStorage.setItem(_suggestJobKey(postId), jobId); } catch (_) {} }
+  function _clearSuggestJob(postId)    { try { localStorage.removeItem(_suggestJobKey(postId)); } catch (_) {} }
+  function _readSuggestJob(postId)     { try { return localStorage.getItem(_suggestJobKey(postId)); } catch (_) { return null; } }
+
+  async function _applySuggestResult(post, result) {
+    const si = window.APP.s2.siData;
+    (result.entities || []).forEach(function(e) {
+      if (!si.boxes.entity.items.find(x => x.label === e.name)) {
+        si.boxes.entity.items.push({ label: e.name, role: e.role });
+      }
+    });
+    (result.matches || []).forEach(function(m) {
+      if (!si.boxes.match.items.find(x => x.label === m)) {
+        si.boxes.match.items.push({ label: m });
+      }
+    });
+    (result.searches || []).forEach(function(s) {
+      if (!si.boxes.search.items.find(x => x.label === s)) {
+        si.boxes.search.items.push({ label: s });
+      }
+    });
+    await fetchJson('/api/si-data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId: post.id, siData: si }),
+    });
+    _renderBoxes();
+    const total = (result.entities?.length || 0) + (result.matches?.length || 0) + (result.searches?.length || 0);
+    _msg('✅ ' + total + ' 件追加 (entities ' + (result.entities?.length||0) + ' / matches ' + (result.matches?.length||0) + ' / searches ' + (result.searches?.length||0) + ')');
+  }
+
+  async function _pollSuggestJob(jobId, post, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ AI 提案中...（タブ閉じても継続）'; }
+    const interval = 3000;
+    let tries = 0;
+    while (tries < 200) {
+      tries++;
+      await new Promise(r => setTimeout(r, interval));
+      try {
+        const j = await fetchJson('/api/v3/suggest-labels-status?jobId=' + encodeURIComponent(jobId));
+        if (!j || j.status === 'error') {
+          _clearSuggestJob(post.id);
+          _msg('❌ ' + (j?.error || 'ジョブ失敗'));
+          break;
+        }
+        if (j.status === 'done') {
+          _clearSuggestJob(post.id);
+          await _applySuggestResult(post, j.result || {});
+          break;
+        }
+        // running の場合は継続
+        _msg('⏳ AI ラベル提案中...(' + (tries * interval / 1000) + 's)');
+      } catch (e) {
+        if (String(e.message).includes('404')) {
+          _clearSuggestJob(post.id);
+          _msg('❌ ジョブ消失');
+          break;
+        }
+        // 一時的なネットワークエラーは継続
+      }
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 AIラベル提案'; }
+  }
+
   document.getElementById('s2BtnSuggest').addEventListener('click', async function() {
     const post = window.APP.selected;
     if (!post?.id) return;
-    _msg('⏳ AI ラベル提案中...');
+    const btn = this;
+    _msg('⏳ AI ラベル提案ジョブ起動中...');
     try {
       const j = await fetchJson('/api/v3/suggest-labels', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ post }),
       });
-      // 既存に追加マージ（重複は除外）
-      const si = window.APP.s2.siData;
-      (j.entities || []).forEach(function(e) {
-        if (!si.boxes.entity.items.find(x => x.label === e.name)) {
-          si.boxes.entity.items.push({ label: e.name, role: e.role });
-        }
-      });
-      (j.matches || []).forEach(function(m) {
-        if (!si.boxes.match.items.find(x => x.label === m)) {
-          si.boxes.match.items.push({ label: m });
-        }
-      });
-      (j.searches || []).forEach(function(s) {
-        if (!si.boxes.search.items.find(x => x.label === s)) {
-          si.boxes.search.items.push({ label: s });
-        }
-      });
-      // サーバに保存
-      await fetchJson('/api/si-data', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, siData: si }),
-      });
-      _renderBoxes();
-      _msg('✅ ' + (j.entities?.length || 0) + '+' + (j.matches?.length || 0) + '+' + (j.searches?.length || 0) + ' 件追加');
+      const jobId = j && j.jobId;
+      if (!jobId) throw new Error('jobId 受信失敗');
+      _saveSuggestJob(post.id, jobId);
+      await _pollSuggestJob(jobId, post, btn);
     } catch (e) {
       _msg('❌ ' + e.message);
     }

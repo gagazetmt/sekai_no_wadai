@@ -225,13 +225,8 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
 // ─── /v2/ai-fill-slide : スライド丸ごと AI 1発（type/title/dataSlots/narration）─
 // Input:  { postId, moduleIdx, userPrompt, incremental? }
 //   incremental=true: 既存内容を最大限保持し、ユーザー注文の差分のみ適用（微調整モード）
-// Output: { ok, type, title, dataSlots, narration, used, reviewed, reviewIssues }
-router.post('/v2/ai-fill-slide', express.json(), async (req, res) => {
-  const { postId, moduleIdx, userPrompt, incremental } = req.body || {};
-  if (!postId || moduleIdx == null || !userPrompt) {
-    return res.status(400).json({ error: 'postId + moduleIdx + userPrompt required' });
-  }
-  try {
+// Output: { ok, jobId } 即返却 → クライアントが /v2/ai-fill-slide-status?jobId= をポーリング
+async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental }) {
     const mp = modulesPath(postId);
     if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
     const modulesData = JSON.parse(fs.readFileSync(mp, 'utf8'));
@@ -698,7 +693,7 @@ ${parsed.narration || ''}
 
     fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
 
-    res.json({
+    return {
       ok:        true,
       type:      mod.type,
       title:     mod.title,
@@ -707,11 +702,36 @@ ${parsed.narration || ''}
       used,
       reviewed:    reviewUsed,
       reviewIssues,
-    });
-  } catch (e) {
-    console.error('[v2/ai-fill-slide]', e);
-    res.status(500).json({ error: e.message });
+    };
+}
+
+// 🆕 /v2/ai-fill-slide: ジョブ作成 → jobId 即返却
+router.post('/v2/ai-fill-slide', express.json(), (req, res) => {
+  const { postId, moduleIdx, userPrompt } = req.body || {};
+  if (!postId || moduleIdx == null || !userPrompt) {
+    return res.status(400).json({ error: 'postId + moduleIdx + userPrompt required' });
   }
+  const { createJob, readJob, updateJob } = require('./_job_helper');
+  const jobId = createJob('af', { postId, moduleIdx, kind: 'ai-fill-slide' });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      updateJob(jobId, { status: 'running', step: 'ai-generation' });
+      const result = await _runAiFillSlide(req.body);
+      updateJob(jobId, { status: 'done', result });
+    } catch (e) {
+      console.error(`[v2/ai-fill-slide:${jobId}]`, e);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
+});
+
+// 🆕 /v2/ai-fill-slide-status: ジョブ状態取得
+router.get('/v2/ai-fill-slide-status', (req, res) => {
+  const { readJob } = require('./_job_helper');
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 // ─── /v2/regen-narration : 1カードのナレーション再生成 ─
@@ -1653,12 +1673,38 @@ function getUI() {
       return;
     }
     try {
-      const r = await fetchJson('/api/v2/ai-fill-slide', {
+      // 🆕 ジョブ起動 → ポーリング（タブ閉じてもバックエンドで継続）
+      const initRes = await fetchJson('/api/v2/ai-fill-slide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental }),
       });
-      if (!r.ok) throw new Error(r.error || '生成失敗');
+      const jobId = initRes && initRes.jobId;
+      if (!jobId) throw new Error('jobId 受信失敗');
+      // localStorage に保存（タブ閉じ・リロード後も再開可能）
+      try { localStorage.setItem('s4_aifill_' + post.id + '_' + idx, jobId); } catch (_) {}
+      // ポーリング
+      let r = null;
+      for (let i = 0; i < 200; i++) {
+        await new Promise(rr => setTimeout(rr, 3000));
+        try {
+          const j = await fetchJson('/api/v2/ai-fill-slide-status?jobId=' + encodeURIComponent(jobId));
+          if (j.status === 'error') {
+            try { localStorage.removeItem('s4_aifill_' + post.id + '_' + idx); } catch(_) {}
+            throw new Error(j.error || 'ジョブ失敗');
+          }
+          if (j.status === 'done') {
+            try { localStorage.removeItem('s4_aifill_' + post.id + '_' + idx); } catch(_) {}
+            r = j.result || {};
+            break;
+          }
+          if (status) status.textContent = (incremental ? '⏳ 微調整中' : '⏳ 全体生成中') + '... (' + (i+1)*3 + 's)';
+        } catch (e) {
+          if (String(e.message).includes('404')) throw new Error('ジョブ消失');
+          // 一時的なネットワーク失敗は継続
+        }
+      }
+      if (!r || !r.ok) throw new Error(r?.error || 'ポーリングタイムアウト');
       const m = window.APP.s4.modules[idx];
       if (m) {
         if (r.type)      m.type      = r.type;
@@ -1675,7 +1721,6 @@ function getUI() {
       if (status) status.textContent = '✅ 生成完了 (' + (r.used || 'deepseek') + ')' + suffix;
       _renderEditor();
       _reloadPreview();
-      // 監修で修正があった場合、何が直されたか軽く通知
       if (r.reviewed && r.reviewIssues?.length) {
         const summary = r.reviewIssues.slice(0, 3).map(function(it) {
           return '• [' + (it.where || '?') + '] ' + (it.claim || '').slice(0, 60) + ' → ' + (it.fix || '').slice(0, 60);
