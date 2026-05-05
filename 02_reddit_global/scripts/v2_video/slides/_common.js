@@ -173,9 +173,9 @@ function splitSubtitle(text, maxLineLen = 20) {
 
   // 1行が長すぎたらフォント縮小（保険）
   let fontSize = null;
-  if (longest > 22) fontSize = 32;
-  if (longest > 26) fontSize = 28;
-  if (longest > 30) fontSize = 24;
+  if (longest > 22) fontSize = 42;
+  if (longest > 26) fontSize = 36;
+  if (longest > 30) fontSize = 32;
 
   return { lines: [line1, line2], fontSize };
 }
@@ -244,7 +244,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     return `<style>${keyframes}
       .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
       .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-top:8px;}
-      .v2-sub-text{color:#fff;font-size:38px;font-weight:800;text-align:center;padding:0 70px;line-height:1.32;}
+      .v2-sub-text{color:#fff;font-size:50px;font-weight:800;text-align:center;padding:0 70px;line-height:1.32;}
     </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
   }
 
@@ -258,7 +258,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
   return `<div class="v2-sub-bar" style="position:absolute;bottom:0;left:0;right:0;height:${height}px;`
     + `background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);`
     + `display:flex;align-items:center;justify-content:center;padding-top:8px;z-index:20">`
-    + `<div style="color:#fff;font-size:38px;font-weight:800;text-align:center;`
+    + `<div style="color:#fff;font-size:50px;font-weight:800;text-align:center;`
     + `padding:0 70px;line-height:1.32;${fontStyle}">${linesHtml}</div></div>`;
 }
 
