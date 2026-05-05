@@ -171,13 +171,9 @@ function splitSubtitle(text, maxLineLen = 20) {
   const line2 = t.slice(splitAt).trim();
   const longest = Math.max(line1.length, line2.length);
 
-  // 1行が長すぎたらフォント縮小（保険）
-  let fontSize = null;
-  if (longest > 22) fontSize = 42;
-  if (longest > 26) fontSize = 36;
-  if (longest > 30) fontSize = 32;
-
-  return { lines: [line1, line2], fontSize };
+  // フォントは固定 (50px)。可変だと見にくいため。
+  // 長文ではみ出す場合はバー高さを動的拡張する側で対応する。
+  return { lines: [line1, line2], fontSize: null };
 }
 
 // 字幕バー HTML を生成（共通）
@@ -189,8 +185,19 @@ function splitSubtitle(text, maxLineLen = 20) {
 //
 // 文字列が渡された場合（or items が1つだけ）は静的字幕。lead/tail パディングを跨いで常時表示。
 // チャンク配列が複数の場合は各チャンクのテキストを音声タイミングに合わせて切替表示。
+// フォント定数 (50px) / line-height 1.32 = 1行 ~66px
+//   1行: 約 66 + padding 24 = 90px
+//   2行: 約 132 + padding 24 = 156px
+//   3行: 約 198 + padding 24 = 222px
+const SUB_FONT_PX     = 50;
+const SUB_LINE_PX     = Math.ceil(SUB_FONT_PX * 1.32);  // 66
+const SUB_PADDING_PX  = 24;
+function _heightForLines(lineCount) {
+  return SUB_LINE_PX * Math.max(1, lineCount) + SUB_PADDING_PX;
+}
+
 function buildSubtitleBar(textOrChunks, options = {}) {
-  const height = options.height || 110;
+  const minHeight  = options.height || 110;
   const maxLineLen = options.maxLineLen || 20;
   const leadPadSec = (options.leadPadMs ?? LEAD_PAD_SEC * 1000) / 1000;
   const tailPadSec = (options.tailPadMs ?? TAIL_PAD_SEC * 1000) / 1000;
@@ -206,16 +213,20 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     if (items.length === 0) return '';
     if (items.length === 1) return buildSubtitleBar(items[0].text, options);
 
-    let cum = leadPadSec;  // 先頭の無音区間は字幕も非表示
+    let cum = leadPadSec;
     const segs = items.map((c, i) => {
       const start = cum;
       cum += c.durationSec;
       const end = cum;
-      const { lines, fontSize } = splitSubtitle(c.text, maxLineLen);
-      return { idx: i, start, end, lines, fontSize };
+      const { lines } = splitSubtitle(c.text, maxLineLen);
+      return { idx: i, start, end, lines };
     });
     const totalSec = cum + tailPadSec;
     if (totalSec <= 0) return buildSubtitleBar(items[0].text, options);
+
+    // 全 chunk の最大行数からバー高さを決定（はみ出し時は上に拡張）
+    const maxLines = segs.reduce((m, s) => Math.max(m, s.lines.length), 1);
+    const height   = Math.max(minHeight, _heightForLines(maxLines));
 
     const FADE_SEC = 0.08;
     const fadePct  = (FADE_SEC / totalSec * 100);
@@ -235,31 +246,30 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     }).join('\n');
 
     const chunkDivs = segs.map(s => {
-      const fontStyle = s.fontSize ? `font-size:${s.fontSize}px;` : '';
       const linesHtml = s.lines.map(l => `<div>${esc(l)}</div>`).join('');
       return `<div class="v2-sub-chunk" style="opacity:0;animation:v2subc_${s.idx} ${totalSec.toFixed(3)}s linear forwards;">`
-        + `<div class="v2-sub-text" style="${fontStyle}">${linesHtml}</div></div>`;
+        + `<div class="v2-sub-text">${linesHtml}</div></div>`;
     }).join('');
 
     return `<style>${keyframes}
       .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
       .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-top:8px;}
-      .v2-sub-text{color:#fff;font-size:50px;font-weight:800;text-align:center;padding:0 70px;line-height:1.32;}
+      .v2-sub-text{color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;padding:0 70px;line-height:1.32;}
     </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
   }
 
   // 従来パス（単一テキスト・静的字幕）
   const t = String(textOrChunks || '').trim();
   if (!t) return '';
-  const { lines, fontSize } = splitSubtitle(t, maxLineLen);
-  const fontStyle = fontSize ? `font-size: ${fontSize}px;` : '';
+  const { lines } = splitSubtitle(t, maxLineLen);
+  const height = Math.max(minHeight, _heightForLines(lines.length));
   const linesHtml = lines.map(l => `<div>${esc(l)}</div>`).join('');
 
   return `<div class="v2-sub-bar" style="position:absolute;bottom:0;left:0;right:0;height:${height}px;`
     + `background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);`
     + `display:flex;align-items:center;justify-content:center;padding-top:8px;z-index:20">`
-    + `<div style="color:#fff;font-size:50px;font-weight:800;text-align:center;`
-    + `padding:0 70px;line-height:1.32;${fontStyle}">${linesHtml}</div></div>`;
+    + `<div style="color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;`
+    + `padding:0 70px;line-height:1.32;">${linesHtml}</div></div>`;
 }
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。

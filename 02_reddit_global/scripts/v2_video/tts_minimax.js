@@ -212,16 +212,16 @@ async function sanitizeForTts(text) {
 }
 
 // ナレーション本文を chunk に分割（最大 ~80文字目安）
-//   1) narrationChunks[] が既にあれば優先（AI による意味整合分割）
+//   1) narration を必ず使う（接続フレーズや本文が音声から漏れないように）
+//      旧仕様: existingChunks (= chunkText 配列) があれば優先 → narration の大部分が
+//              発話されない不具合があったので廃止。
+//      chunkText は字幕表示／スライド内ハイライト用の視覚要素として slides/*.js で使う
 //   2) 「。！？!?」で1次分割
 //   3) 「。」が無い長文は「、,」で2次分割（読点で切る）
 //   4) それでも長い1チャンクは 60文字ずつ強制分割
 //   5) 短すぎる文は次と結合（最大 80文字）
 //   ※ 字幕バーの切替が動くよう、AI が句点を入れない長文でも必ず複数チャンクに割る
-function splitIntoChunks(text, existingChunks) {
-  if (Array.isArray(existingChunks) && existingChunks.length) {
-    return existingChunks.map(c => String(c || '').trim()).filter(Boolean);
-  }
+function splitIntoChunks(text, _existingChunks) {
   if (!text) return [];
   const raw = String(text).trim();
   if (raw.length <= 80) return [raw];
@@ -370,24 +370,32 @@ function probeDurationSec(filePath) {
 }
 
 // モジュールタイプを考慮してTTSチャンクを構築する。
-//   - 全タイプで narration を文末分割（字幕が遷移するように）
-//   - insight / history: AI が指定した narrationChunks があればそれを優先
-//   - reaction: 上記 + comments[] を順次音声化（コメントも読み上げる）
-//   - opening: ナレーション短いので1チャンクのまま（無分割）
+//   - opening: title のみ読み上げ
+//   - toc: narration(intro 短い予告) + 各 tocItem.chunkText を順次読み上げ
+//   - reaction: narration + comments[] を順次読み上げ
+//   - その他: narration を文末分割（chunkText は字幕／視覚ハイライト用なので発話に使わない）
 function buildChunksForModule(mod) {
   if (!mod) return [];
   const narr = String(mod.narration || '').trim();
+  const itemText = (it) => (typeof it === 'string') ? it : String(it?.chunkText || it?.text || '').trim();
 
-  // opening は **タイトルのみ読み上げ**（narration は無視）
-  //   タイトルがそのまま音声 → 視覚的にも「題目を読み上げる」体験
-  let baseChunks;
+  // opening は **タイトルのみ読み上げ**
   if (mod.type === 'opening') {
     const title = String(mod.title || '').trim();
-    baseChunks = title ? [title] : (narr ? [narr] : []);
-  } else {
-    // 全タイプで文末分割。narrationChunks があれば優先
-    baseChunks = splitIntoChunks(narr, mod.narrationChunks);
+    return title ? [title] : (narr ? [narr] : []);
   }
+
+  // toc は intro + 各 tocItem.chunkText を chunk として読み上げる
+  //   結果: audio.length === tocItems.length + 1 → toc.js の hasIntro 判定でハイライトが整列
+  if (mod.type === 'toc') {
+    const items = Array.isArray(mod.tocItems) ? mod.tocItems.map(itemText).filter(Boolean) : [];
+    const intro = narr ? splitIntoChunks(narr) : [];
+    if (items.length) return [...(intro.length ? [intro.join(' ')] : []), ...items];
+    return intro;
+  }
+
+  // 通常タイプ: narration を文末分割
+  let baseChunks = splitIntoChunks(narr);
 
   if (mod.type === 'reaction') {
     const commentChunks = (Array.isArray(mod.comments) ? mod.comments : [])
