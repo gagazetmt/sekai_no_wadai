@@ -20,6 +20,7 @@ const { fetchSofaScoreManager }    = require('../scripts/modules/fetchers/sofasc
 const { fetchSofaScoreMatch }      = require('../scripts/modules/fetchers/sofascore_match');
 const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
 const { fetchSerper }              = require('../scripts/modules/fetchers/serper_module');
+const { suggestEntities }          = require('../scripts/modules/stock_match');
 
 const router = express.Router();
 const SI_DIR = path.join(__dirname, '..', 'data', 'si_data');
@@ -403,6 +404,21 @@ router.post('/v3/fetch-all', async (req, res) => {
   res.json({ ok: true, count: results.length });
 });
 
+// ─── /v3/entity-suggest : 入力中ラベルのタイプアヘッド候補
+//   query string: q=<入力> & role=<player|manager|team|all>
+//   使い回し: stock_match.suggestEntities() で local indices からマッチ
+router.get('/v3/entity-suggest', (req, res) => {
+  try {
+    const q    = String(req.query.q    || '').trim();
+    const role = String(req.query.role || 'all');
+    if (!q) return res.json({ ok: true, suggestions: [] });
+    const suggestions = suggestEntities(q, { role, limit: 12, threshold: 30 });
+    res.json({ ok: true, query: q, role, suggestions });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v3/remove-label : 1件削除 ─────────────────────────
 router.post('/v3/remove-label', (req, res) => {
   const { postId, box, label } = req.body;
@@ -435,8 +451,8 @@ function getUI() {
     <div class="panel">
       <div style="font-size:12px;font-weight:bold;color:#10b981;margin-bottom:8px">&#x1F464; 固有名（選手・監督・チーム・大会）</div>
       <div id="s2BoxEntity"></div>
-      <div style="display:grid;grid-template-columns:1fr 80px 28px;gap:4px;margin-top:6px;">
-        <input class="inp" id="s2NewEntityName" placeholder="名前" style="font-size:11px;padding:4px 6px;">
+      <div style="position:relative;display:grid;grid-template-columns:1fr 80px 28px;gap:4px;margin-top:6px;">
+        <input class="inp" id="s2NewEntityName" placeholder="名前（入力すると候補表示）" style="font-size:11px;padding:4px 6px;" autocomplete="off">
         <select class="inp" id="s2NewEntityRole" style="font-size:11px;padding:4px 6px;">
           <option value="player">選手</option>
           <option value="manager">監督</option>
@@ -444,6 +460,7 @@ function getUI() {
           <option value="tournament">大会</option>
         </select>
         <button class="btn btn-sm" id="s2BtnAddEntity" style="background:#10b981;color:#fff;padding:4px 6px;">+</button>
+        <div id="s2EntitySuggest" style="display:none;position:absolute;top:30px;left:0;right:108px;z-index:50;background:#1a1a26;border:1px solid #3d3d4d;border-radius:6px;max-height:240px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.4);"></div>
       </div>
     </div>
 
@@ -696,8 +713,95 @@ function getUI() {
       si.boxes.entity.items.push({ label: name, role });
     }
     document.getElementById('s2NewEntityName').value = '';
+    document.getElementById('s2EntitySuggest').style.display = 'none';
     _persistAndRender();
   });
+
+  /* ── タイプアヘッド: stock indices から候補表示 ── */
+  (function setupEntityTypeahead() {
+    const input = document.getElementById('s2NewEntityName');
+    const roleSel = document.getElementById('s2NewEntityRole');
+    const dd = document.getElementById('s2EntitySuggest');
+    if (!input || !dd) return;
+
+    let timer = null;
+    let lastQuery = '';
+
+    function close() { dd.style.display = 'none'; dd.innerHTML = ''; }
+    function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function _roleColor(r) {
+      return r === 'player'  ? '#10b981'
+           : r === 'manager' ? '#a855f7'
+           : r === 'team'    ? '#f59e0b'
+                             : '#94a3b8';
+    }
+    function _roleJa(r) {
+      return r === 'player' ? '選手' : r === 'manager' ? '監督' : r === 'team' ? 'チーム' : r;
+    }
+
+    async function fetchSuggestions(q) {
+      const role = roleSel.value || 'all';
+      // role が tournament の場合は all で検索（DB に大会名は無いので空 OK）
+      const searchRole = (role === 'player' || role === 'manager' || role === 'team') ? role : 'all';
+      try {
+        const url = '/api/v3/entity-suggest?q=' + encodeURIComponent(q) + '&role=' + searchRole;
+        const r = await fetchJson(url);
+        return (r && r.suggestions) || [];
+      } catch (_) { return []; }
+    }
+
+    function render(suggestions) {
+      if (!suggestions.length) { close(); return; }
+      const html = suggestions.map((s, i) => {
+        const meta = [s.league, s.club].filter(Boolean).join(' · ');
+        return ''
+          + '<div class="s2-suggest-item" data-i="' + i + '" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #2a2a35;display:flex;align-items:center;gap:8px;">'
+          + '  <span style="display:inline-block;min-width:32px;font-size:9px;font-weight:bold;padding:1px 4px;border-radius:3px;background:' + _roleColor(s.role) + ';color:#fff;text-align:center">' + _esc(_roleJa(s.role)) + '</span>'
+          + '  <span style="font-size:12px;font-weight:bold;color:#e0e0e0">' + _esc(s.label) + '</span>'
+          + '  <span style="flex:1"></span>'
+          + '  <span style="font-size:10px;color:#7a8a9a">' + _esc(meta) + '</span>'
+          + '</div>';
+      }).join('');
+      dd.innerHTML = html;
+      dd.style.display = 'block';
+      // クリックハンドラ（イベント委任）
+      dd.querySelectorAll('.s2-suggest-item').forEach((el) => {
+        el.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const i = Number(el.getAttribute('data-i'));
+          const s = suggestions[i];
+          input.value = s.label;
+          if (s.role === 'player' || s.role === 'manager' || s.role === 'team') {
+            roleSel.value = s.role;
+          }
+          close();
+          input.focus();
+        });
+      });
+    }
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim();
+      if (q === lastQuery) return;
+      lastQuery = q;
+      if (timer) clearTimeout(timer);
+      if (q.length < 2) { close(); return; }
+      timer = setTimeout(async () => {
+        const sugs = await fetchSuggestions(q);
+        render(sugs);
+      }, 200);
+    });
+    input.addEventListener('blur', () => setTimeout(close, 150));
+    input.addEventListener('focus', () => {
+      if (input.value.trim().length >= 2 && dd.innerHTML) dd.style.display = 'block';
+    });
+    roleSel.addEventListener('change', () => {
+      // role 変更時に再検索
+      lastQuery = '';
+      input.dispatchEvent(new Event('input'));
+    });
+  })();
   document.getElementById('s2BtnAddMatch').addEventListener('click', function() {
     const lbl = document.getElementById('s2NewMatchLabel').value.trim();
     if (!lbl) return;

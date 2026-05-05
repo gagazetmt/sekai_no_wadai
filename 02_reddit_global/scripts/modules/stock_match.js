@@ -181,12 +181,77 @@ function findStockMatches({ type, entity, teamName, teamNameAway }) {
   });
 }
 
+// === タイプアヘッド用: 軽量サジェスト ===
+// query: ユーザー入力（一部一致 OK、最低 1 文字）
+// role:  'player' | 'manager' | 'team' | 'all'（フィルタ）
+// 返り値: [{ label, role, league, club, score }] 最大 limit 件
+function suggestEntities(query, opts = {}) {
+  const { role = 'all', limit = 10, threshold = 30 } = opts;
+  const q = String(query || '').trim();
+  if (!q) return [];
+
+  const out = [];
+  const wantAll  = role === 'all';
+  const wantPlay = wantAll || role === 'player';
+  const wantTeam = wantAll || role === 'team';
+  const wantMgr  = wantAll || role === 'manager';
+
+  if (wantPlay) {
+    const pIdx = loadIndex('players_official_index.json');
+    for (const p of Object.values(pIdx.players || {})) {
+      const score = matchScore(p.name, q);
+      if (score >= threshold) {
+        out.push({ label: p.name, role: 'player', league: p.league, club: p.club, score });
+      }
+    }
+    const lIdx = loadIndex('legends_index.json');
+    for (const l of Object.values(lIdx.legends || {})) {
+      const score = matchScore(l.name, q);
+      if (score >= threshold) {
+        out.push({ label: l.name, role: 'player', league: l.league || 'Legend', club: l.club || '', score });
+      }
+    }
+  }
+  if (wantTeam) {
+    const cIdx = loadIndex('club_logos_index.json');
+    for (const c of Object.values(cIdx.clubs || {})) {
+      const score = matchScore(c.clubName, q);
+      if (score >= threshold) {
+        out.push({ label: c.clubName, role: 'team', league: c.league, club: c.clubName, score });
+      }
+    }
+  }
+  if (wantMgr) {
+    const mIdx = loadIndex('managers_index.json');
+    for (const m of Object.values(mIdx.managers || {})) {
+      const score = matchScore(m.name, q);
+      if (score >= threshold) {
+        out.push({ label: m.name, role: 'manager', league: m.league, club: m.clubName, score });
+      }
+    }
+  }
+
+  // 重複除外（label + role）
+  const seen = new Set();
+  const dedup = [];
+  for (const item of out) {
+    const k = `${item.role}:${item.label}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    dedup.push(item);
+  }
+
+  dedup.sort((a, b) => b.score - a.score);
+  return dedup.slice(0, limit);
+}
+
 module.exports = {
   findStockMatches,
   matchPlayers,
   matchClubs,
   matchManagers,
   matchLegends,
+  suggestEntities,
   normalize,
   matchScore,
 };
