@@ -463,6 +463,7 @@ function _fmtDate(d) {
 
 module.exports = {
   W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
+  LEAD_PAD_SEC, TAIL_PAD_SEC,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,
 };
