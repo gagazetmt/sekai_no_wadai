@@ -128,7 +128,10 @@ function audioDirFor(postId) {
 function buildSlideTtsTasks(mod, idx, postId) {
   if (Array.isArray(mod.audio) && mod.audio.length) return []; // 既に生成済
   const narr = String(mod.narration || '').trim();
-  if (!narr && mod.type !== 'reaction') return [];
+  // narration 空でも opening (title 読み上げ) / reaction (comments) / toc (items) は対象
+  const titleAvailable = mod.type === 'opening' && String(mod.title || '').trim();
+  const tocItemsAvailable = mod.type === 'toc' && Array.isArray(mod.tocItems) && mod.tocItems.length;
+  if (!narr && mod.type !== 'reaction' && !titleAvailable && !tocItemsAvailable) return [];
   const chunks = tts.buildChunksForModule(mod);
   if (!chunks.length) return [];
 

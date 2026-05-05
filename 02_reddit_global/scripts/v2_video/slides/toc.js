@@ -61,10 +61,9 @@ function buildTocHTML(mod) {
   const layout = _layoutForCount(items.length);
 
   // ─── chunk連動アクティブハイライト計算 ───
-  //   ① audio.length == items.length        : 各 chunk が各 item を読む
-  //   ② audio.length == items.length + 1    : chunk[0]はイントロ ("今日のラインナップ"等)
-  //                                           chunk[i+1] が items[i] を読む
-  //   ③ それ以外                              : chunk連動 OFF、固定間隔で順次表示
+  //   audio の末尾 items.length 個が各 item の読み上げ chunk
+  //   先頭 (audio.length - items.length) 個はイントロ（複数チャンクの煽り narration）
+  //   audio.length < items.length なら chunk連動 OFF（固定間隔で順次表示）
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
   const chunkStarts = audio.map((_, i) =>
     LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
@@ -72,9 +71,8 @@ function buildTocHTML(mod) {
     ? (audio.reduce((s, c) => s + (c.durationSec || 0), 0) + LEAD_PAD_SEC + TAIL_PAD_SEC)
     : Math.max(items.length * 1.5 + LEAD_PAD_SEC + TAIL_PAD_SEC, 5);
 
-  const hasIntro = audio.length === items.length + 1;
-  const canActive = hasIntro || (audio.length === items.length && items.length > 0);
-  const audioOffset = hasIntro ? 1 : 0;  // items[i] が参照する chunk index のオフセット
+  const audioOffset = Math.max(0, audio.length - items.length);
+  const canActive = audio.length >= items.length && items.length > 0;
 
   // 各行の登場 delay
   const startSec = LEAD_PAD_SEC + 0.4;

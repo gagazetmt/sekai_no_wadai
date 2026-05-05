@@ -211,41 +211,45 @@ async function sanitizeForTts(text) {
   return s;
 }
 
-// ナレーション本文を chunk に分割（最大 ~80文字目安）
+// ナレーション本文を chunk に分割（最大 ~50文字目安）
+//   字幕バーは 1〜2 行 (1920px幅 / 50px font ≈ 25字/行) に収まる必要があるため
+//   1チャンク 50字を上限にする。長すぎると subtitle が3行はみ出し or 表示固定化する
+//
 //   1) narration を必ず使う（接続フレーズや本文が音声から漏れないように）
-//      旧仕様: existingChunks (= chunkText 配列) があれば優先 → narration の大部分が
-//              発話されない不具合があったので廃止。
 //      chunkText は字幕表示／スライド内ハイライト用の視覚要素として slides/*.js で使う
 //   2) 「。！？!?」で1次分割
-//   3) 「。」が無い長文は「、,」で2次分割（読点で切る）
-//   4) それでも長い1チャンクは 60文字ずつ強制分割
-//   5) 短すぎる文は次と結合（最大 80文字）
-//   ※ 字幕バーの切替が動くよう、AI が句点を入れない長文でも必ず複数チャンクに割る
+//   3) 50字超の文は「、,」で2次分割
+//   4) それでも 50字超 → 40字ずつ強制分割
+//   5) 短文を次と結合（最大 50文字目安）
+const CHUNK_TARGET_LEN = 50;
+const CHUNK_HARD_MAX   = 60;
 function splitIntoChunks(text, _existingChunks) {
   if (!text) return [];
   const raw = String(text).trim();
-  if (raw.length <= 80) return [raw];
+  if (raw.length <= CHUNK_TARGET_LEN) return [raw];
 
   // 1次: 文末 (。！？!?) で分割
   let parts = raw.split(/(?<=[。！？!?])/).map(s => s.trim()).filter(Boolean);
 
-  // 2次: 1個しか取れず & まだ長い → 読点で再分割
-  if (parts.length === 1 && parts[0].length > 80) {
-    parts = parts[0].split(/(?<=[、,])/).map(s => s.trim()).filter(Boolean);
-  }
+  // 2次: 各 part が 50字超なら 、で再分割
+  parts = parts.flatMap(p =>
+    p.length > CHUNK_HARD_MAX
+      ? p.split(/(?<=[、,])/).map(s => s.trim()).filter(Boolean)
+      : [p]);
 
-  // 3次: それでも 1個 & 長い → 60文字ずつ強制分割
-  if (parts.length === 1 && parts[0].length > 80) {
-    const t = parts[0];
-    parts = [];
-    for (let i = 0; i < t.length; i += 60) parts.push(t.slice(i, i + 60));
-  }
+  // 3次: それでも 50字超なら 40字ずつ強制分割
+  parts = parts.flatMap(p => {
+    if (p.length <= CHUNK_HARD_MAX) return [p];
+    const out = [];
+    for (let i = 0; i < p.length; i += 40) out.push(p.slice(i, i + 40));
+    return out;
+  });
 
-  // 短い文は次の文と結合（最大 80文字目安）
+  // 短文は次と結合（合計 50字以下に収める）
   const out = [];
   let buf = '';
   for (const p of parts) {
-    if ((buf + p).length <= 80) {
+    if ((buf + p).length <= CHUNK_TARGET_LEN) {
       buf += p;
     } else {
       if (buf) out.push(buf);
@@ -385,12 +389,12 @@ function buildChunksForModule(mod) {
     return title ? [title] : (narr ? [narr] : []);
   }
 
-  // toc は intro + 各 tocItem.chunkText を chunk として読み上げる
-  //   結果: audio.length === tocItems.length + 1 → toc.js の hasIntro 判定でハイライトが整列
+  // toc は intro (narration を文末分割) + 各 tocItem.chunkText を順次読み上げ
+  //   結果: audio.length === intro_chunks + items.length → toc.js は audioOffset を自動計算
   if (mod.type === 'toc') {
     const items = Array.isArray(mod.tocItems) ? mod.tocItems.map(itemText).filter(Boolean) : [];
     const intro = narr ? splitIntoChunks(narr) : [];
-    if (items.length) return [...(intro.length ? [intro.join(' ')] : []), ...items];
+    if (items.length) return [...intro, ...items];
     return intro;
   }
 
