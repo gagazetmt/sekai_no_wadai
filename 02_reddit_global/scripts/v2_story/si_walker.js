@@ -257,6 +257,48 @@ function walkTeam(d) {
     if (Array.isArray(tp.rated))   tp.rated.slice(0, 3).forEach((p, i)   => push(`topRated_${i+1}`,  `チーム評定${i+1}位`,    fmtTopPlayer(p, 'rating'),  '今季エース', 6 - i));
   }
 
+  // 🆕 European 大会別 (UCL / UEL / UECL) の standings + stats を別 slot として公開
+  //   d.tournaments[0] は domestic（既に上で push 済）→ skip、[1+] が European
+  if (Array.isArray(d.tournaments) && d.tournaments.length > 1) {
+    d.tournaments.slice(1).forEach((t) => {
+      const cat = t.kind === 'UCL' ? 'CL'
+                 : t.kind === 'UEL' ? 'EL'
+                 : t.kind === 'UECL' ? 'カンファレンス'
+                 : t.name;
+      const prefix = t.kind || 'eu';
+      // 順位
+      if (t.standing) {
+        const s = t.standing;
+        push(`${prefix}_position`, `${cat} 順位`,   s.position != null ? s.position + '位' : '-',                                  cat + '順位', 9);
+        push(`${prefix}_points`,   `${cat} 勝点`,   fmtNum(s.points),                                                              cat + '順位', 8);
+        push(`${prefix}_played`,   `${cat} 試合数`, fmtNum(s.played),                                                              cat + '順位', 6);
+        push(`${prefix}_wdl`,      `${cat} W-D-L`,  s.wins != null ? `${s.wins||0}-${s.draws||0}-${s.losses||0}` : '-',          cat + '順位', 7);
+        push(`${prefix}_gf`,       `${cat} 得点`,   fmtNum(s.goalsFor),                                                            cat + '順位', 7);
+        push(`${prefix}_ga`,       `${cat} 失点`,   fmtNum(s.goalsAgainst),                                                        cat + '順位', 6);
+        if (s.goalsFor != null && s.goalsAgainst != null) {
+          push(`${prefix}_gd`,     `${cat} 得失点差`, String(s.goalsFor - s.goalsAgainst),                                          cat + '順位', 6);
+        }
+      }
+      // チーム平均スタッツ
+      if (t.teamStats) {
+        const ts = t.teamStats;
+        push(`${prefix}_avgGoalsScored`,   `${cat} 平均得点`,         fmtFloat(ts.avgGoalsScored, 2),    cat + 'スタッツ', 6);
+        push(`${prefix}_avgGoalsConceded`, `${cat} 平均失点`,         fmtFloat(ts.avgGoalsConceded, 2),  cat + 'スタッツ', 6);
+        push(`${prefix}_avgPossession`,    `${cat} 平均ポゼッション`, fmtPct(ts.avgPossession),          cat + 'スタッツ', 5);
+        push(`${prefix}_avgShots`,         `${cat} 平均シュート`,     fmtFloat(ts.avgShots, 1),          cat + 'スタッツ', 5);
+        push(`${prefix}_avgxG`,            `${cat} 平均xG`,           fmtFloat(ts.avgxG, 2),             cat + 'スタッツ', 5);
+        push(`${prefix}_passAcc`,          `${cat} パス成功率`,       fmtPct(ts.passAccuracy),           cat + 'スタッツ', 4);
+      }
+      // トップ選手
+      if (t.topPlayers) {
+        const tp = t.topPlayers;
+        if (Array.isArray(tp.goals))   tp.goals.slice(0, 3).forEach((p, i)   => push(`${prefix}_topScorer_${i+1}`, `${cat} 得点${i+1}位`,     fmtTopPlayer(p, 'goals'),   cat + 'エース', 7 - i));
+        if (Array.isArray(tp.assists)) tp.assists.slice(0, 3).forEach((p, i) => push(`${prefix}_topAssist_${i+1}`, `${cat} アシスト${i+1}位`, fmtTopPlayer(p, 'assists'), cat + 'エース', 6 - i));
+        if (Array.isArray(tp.rating))  tp.rating.slice(0, 3).forEach((p, i)  => push(`${prefix}_topRated_${i+1}`,  `${cat} 評定${i+1}位`,     fmtTopPlayer(p, 'rating'),  cat + 'エース', 5 - i));
+      }
+    });
+  }
+
   const cm = d.currentManagerStats || {};
   if (cm.name) {
     push('curMgrName',    '現監督',         fmtNum(cm.name),                      '現監督', 8);

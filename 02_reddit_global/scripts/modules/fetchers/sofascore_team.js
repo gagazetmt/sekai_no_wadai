@@ -162,8 +162,47 @@ async function fetchSofaScoreTeam(teamName) {
       }
     }
 
+    // (d) CL / UEL / カンファレンス を検出（European tournament を別途取得用）
+    //   uniqueTournament name に "Champions League" / "Europa League" / "Conference League" を含むもの
+    const europeanTournaments = []; // [{ id, seasonId, name, kind }]
+    if (allEvents.length) {
+      const seen = new Set();
+      for (const e of allEvents) {
+        const ut = e.tournament?.uniqueTournament;
+        if (!ut || !ut.id || !ut.name) continue;
+        if (seen.has(ut.id)) continue;
+        const n = ut.name;
+        let kind = null;
+        if (/UEFA\s*Champions\s*League/i.test(n))       kind = 'UCL';
+        else if (/UEFA\s*Europa\s*League/i.test(n))     kind = 'UEL';
+        else if (/UEFA\s*(Europa\s*)?Conference\s*League/i.test(n)) kind = 'UECL';
+        if (!kind) continue;
+        seen.add(ut.id);
+        europeanTournaments.push({
+          id: ut.id,
+          seasonId: e.season?.id,
+          seasonYear: e.season?.year,
+          name: n,
+          kind,
+        });
+      }
+    }
+    // domestic と被ったら除外（普通は被らないが念の為）
+    const europeanFiltered = europeanTournaments.filter(t => t.id !== tournamentId);
+
     // ⑤⑥⑦⑧⑨ 並列取得（順位 + 試合平均 + wiki + トップ選手 + 監督経歴）
-    const [stRaw, statsRaw, wikiRaw, topRaw, mgrCareerRaw] = await Promise.all([
+    //   さらに European 大会（UCL/UEL/UECL）の standings + stats も並列取得
+    const _fetchTournamentTriple = async (utId, sId) => {
+      if (!utId || !sId) return null;
+      const [st, stats, top] = await Promise.all([
+        apiGet(`/unique-tournament/${utId}/season/${sId}/standings/total`).catch(e => ({ __err: e })),
+        apiGet(`/team/${teamId}/unique-tournament/${utId}/season/${sId}/statistics/overall`).catch(e => ({ __err: e })),
+        apiGet(`/team/${teamId}/unique-tournament/${utId}/season/${sId}/top-players/overall`).catch(e => ({ __err: e })),
+      ]);
+      return { st, stats, top };
+    };
+
+    const [stRaw, statsRaw, wikiRaw, topRaw, mgrCareerRaw, ...europeanRaws] = await Promise.all([
       tournamentId && seasonId
         ? apiGet(`/unique-tournament/${tournamentId}/season/${seasonId}/standings/total`).catch(e => ({ __err: e }))
         : Promise.resolve({ __err: 'no tournamentId' }),
@@ -176,10 +215,11 @@ async function fetchSofaScoreTeam(teamName) {
       tournamentId && seasonId
         ? apiGet(`/team/${teamId}/unique-tournament/${tournamentId}/season/${seasonId}/top-players/overall`).catch(e => ({ __err: e }))
         : Promise.resolve({ __err: 'no tournamentId' }),
-      // 現監督の career-history → このチームでの通算成績抽出に使う
       managerId
         ? apiGet(`/manager/${managerId}/career-history`).catch(e => ({ __err: e }))
         : Promise.resolve({ __err: 'no managerId' }),
+      // European tournaments を rest 引数で並列追加
+      ...europeanFiltered.slice(0, 2).map(t => _fetchTournamentTriple(t.id, t.seasonId)),
     ]);
 
     // ⑤ 順位
@@ -359,6 +399,100 @@ async function fetchSofaScoreTeam(teamName) {
       })(),
     };
 
+    // ⑩ European 大会（CL/UEL/UECL）の standings/stats/top 加工
+    //   teamId に対応する row を見つけて standing 化、teamStats と topPlayers を上記と同じ構造で
+    function _parseStanding(stRaw) {
+      if (!stRaw || stRaw.__err) return null;
+      const rows = stRaw.standings?.[0]?.rows || [];
+      // CL は groupStage 等で複数 standings ある場合あり → 自分が含まれる row を全 standings から探す
+      let row = null;
+      for (const stg of (stRaw.standings || [])) {
+        const r = (stg.rows || []).find(rr => rr.team?.id === teamId);
+        if (r) { row = r; break; }
+      }
+      if (!row && rows.length) row = rows.find(r => r.team?.id === teamId);
+      if (!row) return null;
+      return {
+        position:     row.position,
+        played:       row.matches,
+        wins:         row.wins,
+        draws:        row.draws,
+        losses:       row.losses,
+        goalsFor:     row.scoresFor,
+        goalsAgainst: row.scoresAgainst,
+        points:       row.points,
+      };
+    }
+    function _parseTeamStats(statsRaw, fallbackPlayed) {
+      if (!statsRaw || statsRaw.__err) return null;
+      const s = statsRaw.statistics || {};
+      const apps = s.matches || s.appearances || fallbackPlayed || 0;
+      const safeAvg = (total) => apps ? parseFloat((total / apps).toFixed(2)) : null;
+      return {
+        matches:           apps,
+        avgGoalsScored:    s.goalsScored != null ? safeAvg(s.goalsScored) : null,
+        avgGoalsConceded:  s.goalsConceded != null ? safeAvg(s.goalsConceded) : null,
+        avgShots:          s.shots != null ? safeAvg(s.shots) : null,
+        avgShotsOnTarget:  s.shotsOnTarget != null ? safeAvg(s.shotsOnTarget) : null,
+        avgPossession:     s.averageBallPossession != null ? parseFloat(Number(s.averageBallPossession).toFixed(1)) : null,
+        passAccuracy:      s.accuratePassesPercentage != null ? parseFloat(Number(s.accuratePassesPercentage).toFixed(1)) : null,
+        avgCorners:        s.corners != null ? safeAvg(s.corners) : null,
+        avgFouls:          s.fouls != null ? safeAvg(s.fouls) : null,
+        avgYellows:        s.yellowCards != null ? safeAvg(s.yellowCards) : null,
+        cleanSheets:       s.cleanSheets ?? null,
+        bigChancesCreated: s.bigChancesCreated ?? null,
+        bigChancesMissed:  s.bigChancesMissed ?? null,
+        expectedGoals:     s.expectedGoals != null ? parseFloat(Number(s.expectedGoals).toFixed(2)) : null,
+        avgxG:             s.expectedGoals != null && apps ? parseFloat((s.expectedGoals / apps).toFixed(2)) : null,
+      };
+    }
+    function _parseTopPlayers(topRaw) {
+      if (!topRaw || topRaw.__err) return null;
+      const tp = topRaw.topPlayers || {};
+      const _pick = (arr, statKey) => (arr || []).slice(0, 3).map(x => ({
+        name:       x.player?.name,
+        playerId:   x.player?.id,
+        position:   x.player?.position,
+        appearances: x.statistics?.appearances ?? null,
+        value:      x.statistics?.[statKey] ?? null,
+      }));
+      return {
+        goals:   _pick(tp.goals,   'goals'),
+        assists: _pick(tp.assists, 'assists'),
+        rating:  _pick(tp.rating,  'rating'),
+      };
+    }
+
+    // tournaments 配列を構築（[0]=domestic, [1+]=European）
+    const tournaments = [];
+    tournaments.push({
+      kind:        'domestic',
+      tournamentId,
+      seasonId,
+      name:        leagueName,
+      seasonYear,
+      standing,
+      teamStats,
+      topPlayers,
+    });
+    europeanFiltered.slice(0, 2).forEach((t, i) => {
+      const raw = europeanRaws[i];
+      if (!raw) return;
+      const stEU = _parseStanding(raw.st);
+      const statsEU = _parseTeamStats(raw.stats, stEU?.played);
+      const topEU = _parseTopPlayers(raw.top);
+      tournaments.push({
+        kind:        t.kind,
+        tournamentId: t.id,
+        seasonId:    t.seasonId,
+        name:        t.name,
+        seasonYear:  t.seasonYear,
+        standing:    stEU,
+        teamStats:   statsEU,
+        topPlayers:  topEU,
+      });
+    });
+
     return {
       ok:          true,
       teamId,
@@ -369,17 +503,18 @@ async function fetchSofaScoreTeam(teamName) {
       marketValue: marketValueStr,
       managerName,
       managerId,
-      leagueName,
-      seasonYear,
-      standing,
-      teamStats,         // 試合平均（avgGoals/avgPossession/passAcc 等）
-      honours,           // [{ category, items }] Wikipedia 由来
-      trophySummary,     // { total, leagueTitles, cupTitles, clTitles, ... }
-      topPlayers,        // { goals: [...3], assists: [...3], rating: [...3] }
+      leagueName,           // domestic league name（後方互換）
+      seasonYear,           // domestic
+      standing,             // domestic（後方互換）
+      teamStats,            // domestic（後方互換）
+      topPlayers,           // domestic（後方互換）
+      tournaments,          // 🆕 [{kind,name,standing,teamStats,topPlayers}] domestic + UCL/UEL/UECL
+      honours,
+      trophySummary,
       last5,
-      recentForm,        // "WWLDD" 直近5試合フォーム（新しい順）
-      currentManagerStats,  // { name, since, total, wins, draws, losses, points, winRate }
-      seasonAggregate,      // { thisYear, lastYear, worldCup, wcQual, byTournament }
+      recentForm,
+      currentManagerStats,
+      seasonAggregate,
     };
   } catch (e) {
     if (e.response?.status === 403) {
