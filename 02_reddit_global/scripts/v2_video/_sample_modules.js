@@ -1,0 +1,219 @@
+// scripts/v2_video/_sample_modules.js
+// 各スライドタイプのサンプルデータ（プレビュー用）
+//
+// 使い方:
+//   const { SAMPLES, getSample } = require('./_sample_modules');
+//   const mod = getSample('stats');
+//
+// 各サンプルは現実的な audio.durationSec を含み、
+// chunk連動アニメーション・字幕遷移が visual に確認できる。
+
+const SAMPLE_AUDIO_5 = [
+  { chunkIdx: 0, text: '最初のチャンクです。スライドが始まって最初に読まれます。', durationSec: 4.5 },
+  { chunkIdx: 1, text: '2つ目のチャンク。少し短めの文章。', durationSec: 3.2 },
+  { chunkIdx: 2, text: '3つ目のチャンクは少し長くなります。読み上げに時間がかかります。', durationSec: 5.0 },
+  { chunkIdx: 3, text: '4つ目。', durationSec: 1.5 },
+  { chunkIdx: 4, text: '最後のチャンクで締めくくります。', durationSec: 3.8 },
+];
+const SAMPLE_AUDIO_4 = SAMPLE_AUDIO_5.slice(0, 4);
+const SAMPLE_AUDIO_3 = SAMPLE_AUDIO_5.slice(0, 3);
+const SAMPLE_AUDIO_1 = [{ chunkIdx: 0, text: 'タイトル冒頭の煽りナレーション。短いです。', durationSec: 6.0 }];
+
+const SAMPLES = {
+  opening: {
+    type: 'opening',
+    title: '相棒、これがopening スライドだよ',
+    narration: 'タイトル冒頭の煽りナレーション。短いです。',
+    audio: SAMPLE_AUDIO_1,
+    badge: { text: '速報', color: 'red' },
+  },
+
+  toc: {
+    type: 'toc',
+    title: '今日のラインナップ',
+    tocItems: [
+      'マンチェスター・シティ vs アーセナル',
+      '注目選手の今シーズン成績',
+      '直近10戦の対戦カード',
+      'CL 進出の鍵となる戦術比較',
+      'ファンの本音',
+    ],
+    narration: '',
+  },
+
+  insight: {
+    type: 'insight',
+    title: '注目ポイント',
+    catchphrases: [
+      '勝点差わずか3、運命のシーズン終盤',
+      'シティの脅威の得点力 (87ゴール)',
+      'アーセナル、守護神サリバの存在',
+      'マッチアップ：ハーランド vs ガブリエル',
+      '直近対戦は熱狂的な打ち合い',
+    ],
+    narration: '今シーズンの戦況を5つのポイントで整理します。勝点差わずか3。シティの脅威的な得点力。アーセナルの守護神サリバ。注目のマッチアップ。そして直近対戦の熱狂。',
+    narrationChunks: [
+      '今シーズンの戦況を5つのポイントで整理します',
+      '勝点差わずか3、運命のシーズン終盤',
+      'シティの脅威の得点力',
+      'アーセナル、守護神サリバの存在',
+      '直近対戦は熱狂的な打ち合いでした',
+    ],
+    audio: [
+      { chunkIdx: 0, text: '今シーズンの戦況を5つのポイントで整理します', durationSec: 3.5 },
+      { chunkIdx: 1, text: '勝点差わずか3、運命のシーズン終盤', durationSec: 3.0 },
+      { chunkIdx: 2, text: 'シティの脅威の得点力', durationSec: 2.5 },
+      { chunkIdx: 3, text: 'アーセナル、守護神サリバの存在', durationSec: 3.2 },
+      { chunkIdx: 4, text: '直近対戦は熱狂的な打ち合いでした', durationSec: 3.5 },
+    ],
+  },
+
+  history: {
+    type: 'history',
+    title: '過去の対戦の歴史',
+    dataSlots: [
+      { label: '2018', value: 'シティ 3-1 勝利、絶頂期の象徴' },
+      { label: '2020', value: 'アーセナル 2-0 勝利、覚醒の予兆' },
+      { label: '2022', value: 'シティ 2-1 勝利、終盤の劇的勝負' },
+      { label: '2023', value: 'アーセナル 0-0 ドロー、防御の真価' },
+      { label: '2024', value: 'シティ 5-1 勝利、圧倒的な攻撃力' },
+    ],
+    narration: '両チームの過去5年間の対戦は劇的な歴史を刻んできました。',
+    audio: SAMPLE_AUDIO_5,
+  },
+
+  stats: {
+    type: 'stats',
+    title: 'マンチェスター・シティ 今季スタッツ',
+    dataSlots: [
+      { label: '出場',   value: '32' },
+      { label: 'ゴール', value: '87' },
+      { label: 'アシスト', value: '52' },
+      { label: '勝利',   value: '23' },
+      { label: 'クリーンシート', value: '15' },
+      { label: 'xG',     value: '78.4' },
+    ],
+    narration: 'マンチェスター・シティは今シーズン圧倒的なパフォーマンスを見せています。',
+    audio: SAMPLE_AUDIO_4,
+  },
+
+  profile: {
+    type: 'profile',
+    title: 'ジョアン・ペドロ',
+    subtitle: 'チェルシー / フォワード',
+    dataSlots: [
+      { label: '年齢', value: '23' },
+      { label: '身長', value: '180cm' },
+      { label: '出場', value: '28' },
+      { label: 'ゴール', value: '14' },
+      { label: 'アシスト', value: '6' },
+      { label: '評定', value: '7.42' },
+    ],
+    narration: 'ブラジル代表のジョアン・ペドロは今シーズン孤独な奮闘を続けています。',
+    audio: SAMPLE_AUDIO_4,
+  },
+
+  comparison: {
+    type: 'comparison',
+    title: 'シティ vs アーセナル スタッツ対決',
+    dataSlots: [
+      { label: '今季ゴール',   leftValue: '87', rightValue: '74' },
+      { label: '今季失点',     leftValue: '32', rightValue: '28' },
+      { label: 'ポゼッション', leftValue: '63%', rightValue: '60%' },
+      { label: 'シュート/試合', leftValue: '17.2', rightValue: '15.8' },
+      { label: '勝点',         leftValue: '76', rightValue: '73' },
+    ],
+    leftLabel: 'Manchester City',
+    rightLabel: 'Arsenal',
+    narration: 'シーズン終盤、両チームのスタッツを徹底比較します。',
+    audio: SAMPLE_AUDIO_5,
+  },
+
+  matchcard: {
+    type: 'matchcard',
+    title: 'プレビュー',
+    matchData: {
+      league: 'プレミアリーグ',
+      kickoff: '2026年5月10日 21:00',
+      venue: 'エティハド・スタジアム',
+      home: { name: 'Man City', abbr: 'MCI' },
+      away: { name: 'Arsenal',  abbr: 'ARS' },
+    },
+    dataSlots: [
+      { label: '直近対戦', value: 'シティ 5-1 アーセナル' },
+      { label: 'リーグ順位', value: '1位 vs 2位' },
+      { label: '注目選手', value: 'ハーランド / ガブリエル' },
+      { label: 'キックオフ', value: '21:00 (JST 翌5:00)' },
+    ],
+    narration: 'プレミアリーグ最終盤の天王山。両者譲れない一戦です。',
+    audio: SAMPLE_AUDIO_3,
+  },
+
+  matchcenter: {
+    type: 'matchcenter',
+    title: 'シティ 3-1 アーセナル',
+    matchData: {
+      league: 'プレミアリーグ',
+      kickoff: '2026年5月10日',
+      venue: 'エティハド・スタジアム',
+      status: '試合終了',
+      scoreTime: '90+3 終了',
+      home: { name: 'Man City', abbr: 'MCI', score: 3, goals: ['ハーランド 12分', 'デブライネ 45分', 'フォーデン 78分'], reds: [] },
+      away: { name: 'Arsenal',  abbr: 'ARS', score: 1, goals: ['サカ 64分'], reds: [] },
+      stats: [
+        { name: 'ボール支配率', home: 58, away: 42 },
+        { name: 'シュート',     home: 16, away: 12 },
+        { name: '枠内シュート', home: 8,  away: 4  },
+        { name: 'コーナー',     home: 7,  away: 5  },
+      ],
+    },
+    narration: 'スタンフォード・ブリッジで行われた一戦。シティがアーセナルを 3-1 で下しました。',
+    audio: SAMPLE_AUDIO_4,
+  },
+
+  reaction: {
+    type: 'reaction',
+    title: 'ファンの本音',
+    comments: [
+      { text: 'シティの強さがエグすぎる、PL 4連覇は確定だな',          score: 1245 },
+      { text: 'アーセナル、後半は良かったけど前半の失点が痛かった',     score: 832 },
+      { text: 'ハーランドの動き、もう人類じゃない',                   score: 691 },
+      { text: 'サカの個人技は世界トップクラス',                       score: 542 },
+      { text: 'グアルディオラの戦術、相変わらず読めない',             score: 411 },
+      { text: 'アルテタの修正力に期待してる',                         score: 312 },
+      { text: 'ノルウェー人の得点センスは異次元',                     score: 287 },
+    ],
+    narration: '勝負を観戦したファンたちの反応をまとめました。',
+    audio: [
+      { chunkIdx: 0, text: '勝負を観戦したファンたちの反応をまとめました', durationSec: 3.0 },
+      { chunkIdx: 1, text: 'シティの強さがエグすぎる、PL 4連覇は確定だな', durationSec: 3.5 },
+      { chunkIdx: 2, text: 'アーセナル、後半は良かったけど前半の失点が痛かった', durationSec: 4.0 },
+      { chunkIdx: 3, text: 'ハーランドの動き、もう人類じゃない', durationSec: 2.5 },
+      { chunkIdx: 4, text: 'サカの個人技は世界トップクラス', durationSec: 2.5 },
+      { chunkIdx: 5, text: 'グアルディオラの戦術、相変わらず読めない', durationSec: 3.0 },
+      { chunkIdx: 6, text: 'アルテタの修正力に期待してる', durationSec: 2.5 },
+      { chunkIdx: 7, text: 'ノルウェー人の得点センスは異次元', durationSec: 2.8 },
+    ],
+  },
+
+  ending: {
+    type: 'ending',
+    title: 'ご視聴ありがとうございました',
+    narration: 'チャンネル登録、いいね、コメントお待ちしてます。次回もお楽しみに。',
+    endingCta: { text: 'チャンネル登録お願いします' },
+    audio: [
+      { chunkIdx: 0, text: 'チャンネル登録、いいね、コメントお待ちしてます', durationSec: 4.0 },
+      { chunkIdx: 1, text: '次回もお楽しみに', durationSec: 2.5 },
+    ],
+  },
+};
+
+function getSample(type) {
+  return SAMPLES[type] || null;
+}
+
+function listTypes() {
+  return Object.keys(SAMPLES);
+}
+
+module.exports = { SAMPLES, getSample, listTypes };

@@ -1043,6 +1043,82 @@ router.post('/v2/preview-slide-inline', (req, res) => {
   } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
 });
 
+// ─── /v2/sample-slide?type=X : サンプルデータでスライド単体プレビュー ─
+//   _sample_modules.js のサンプル定義から指定 type の HTML を返す
+router.get('/v2/sample-slide', (req, res) => {
+  try {
+    const { getSample, listTypes } = require('../scripts/v2_video/_sample_modules');
+    const type = String(req.query.type || 'opening');
+    const mod = getSample(type);
+    if (!mod) return res.status(404).send('<!doctype html><title>err</title><body>unknown type: ' + type + '<br>available: ' + listTypes().join(', ') + '</body>');
+    res.set('Content-Type', 'text/html; charset=utf-8').send(_buildSlideForPreview(mod));
+  } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
+});
+
+// ─── /v2/sample-gallery : サンプル一覧 + iframe プレビュー ──
+router.get('/v2/sample-gallery', (req, res) => {
+  const { listTypes } = require('../scripts/v2_video/_sample_modules');
+  const types = listTypes();
+  const html = `<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>スライドサンプル ギャラリー</title>
+<style>
+  body { margin:0; background:#0f1117; color:#e0e0e0; font-family:sans-serif; }
+  header { padding:14px 20px; background:#1a1a26; border-bottom:3px solid #ff3b3b; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  h1 { color:#ff3b3b; font-size:18px; margin:0; }
+  .types { display:flex; gap:6px; flex-wrap:wrap; }
+  .type-btn { padding:6px 12px; background:#2a2a35; color:#fff; border:1px solid #3d3d4d; border-radius:6px; cursor:pointer; font-size:12px; }
+  .type-btn.active { background:#ff3b3b; border-color:#ff3b3b; color:#fff; font-weight:bold; }
+  .type-btn:hover:not(.active) { background:#3a3a45; }
+  main { padding:20px; }
+  .info { font-size:12px; color:#94a3b8; margin-bottom:10px; }
+  .frame-wrap { background:#000; border:2px solid #2a2a35; border-radius:8px; overflow:hidden; max-width:1280px; margin:0 auto; }
+  iframe { display:block; width:100%; aspect-ratio:16/9; border:0; }
+  .reload-btn { padding:6px 14px; background:#3b82f6; color:#fff; border:0; border-radius:6px; cursor:pointer; font-size:12px; margin-left:auto; }
+  .reload-btn:hover { background:#2563eb; }
+</style></head><body>
+<header>
+  <h1>🎬 スライドサンプル</h1>
+  <div class="types" id="typeBtns"></div>
+  <button class="reload-btn" id="reloadBtn">🔄 再読込</button>
+</header>
+<main>
+  <div class="info" id="info">スライド種類を選んでください（CSSアニメーションは1度だけ再生される。再見たい時は「再読込」）</div>
+  <div class="frame-wrap"><iframe id="frame" src="about:blank"></iframe></div>
+</main>
+<script>
+const TYPES = ${JSON.stringify(types)};
+let currentType = TYPES[0];
+const frame = document.getElementById('frame');
+const info = document.getElementById('info');
+const typeBtns = document.getElementById('typeBtns');
+
+function load(type) {
+  currentType = type;
+  document.querySelectorAll('.type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === type);
+  });
+  frame.src = '/api/v2/sample-slide?type=' + encodeURIComponent(type) + '&_t=' + Date.now();
+  info.textContent = '表示中: ' + type;
+}
+
+TYPES.forEach(t => {
+  const b = document.createElement('button');
+  b.className = 'type-btn';
+  b.textContent = t;
+  b.dataset.type = t;
+  b.onclick = () => load(t);
+  typeBtns.appendChild(b);
+});
+
+document.getElementById('reloadBtn').onclick = () => load(currentType);
+
+// 初期表示
+load(TYPES[0]);
+</script>
+</body></html>`;
+  res.set('Content-Type', 'text/html; charset=utf-8').send(html);
+});
+
 // ─── UI ─────────────────────────────────────────────────
 function getUI() {
   return `
