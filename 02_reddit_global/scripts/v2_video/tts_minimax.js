@@ -373,10 +373,12 @@ function buildChunksForModule(mod) {
   if (!mod) return [];
   const narr = String(mod.narration || '').trim();
 
-  // opening は短い煽り（〜80字）なので分割不要
+  // opening は **タイトルのみ読み上げ**（narration は無視）
+  //   タイトルがそのまま音声 → 視覚的にも「題目を読み上げる」体験
   let baseChunks;
   if (mod.type === 'opening') {
-    baseChunks = narr ? [narr] : [];
+    const title = String(mod.title || '').trim();
+    baseChunks = title ? [title] : (narr ? [narr] : []);
   } else {
     // 全タイプで文末分割。narrationChunks があれば優先
     baseChunks = splitIntoChunks(narr, mod.narrationChunks);

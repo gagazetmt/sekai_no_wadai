@@ -41,8 +41,8 @@ function buildOpeningHTML(mod) {
   if (longest > 22) titleFontSize = 64;
   if (longest > 28) titleFontSize = 56;
 
-  // 字幕（narration があるとき）
-  const subBarHtml = mod.narration ? buildSubtitleBar(subtitleArgFromMod(mod), { height: 110 }) : '';
+  // 字幕は出さない（タイトル読み上げのみ運用、字幕は冗長）
+  const subBarHtml = '';
 
   const extraStyles = `
 .bg-img {

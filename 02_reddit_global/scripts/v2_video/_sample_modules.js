@@ -23,8 +23,8 @@ const SAMPLES = {
   opening: {
     type: 'opening',
     title: '相棒、これがopening スライドだよ',
-    narration: 'タイトル冒頭の煽りナレーション。短いです。',
-    audio: SAMPLE_AUDIO_1,
+    narration: '',  // タイトル読み上げのみ（narration なし）
+    audio: [{ chunkIdx: 0, text: '相棒、これがopening スライドだよ', durationSec: 3.5 }],
     badge: { text: '速報', color: 'red' },
   },
 
