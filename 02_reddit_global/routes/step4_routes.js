@@ -1057,8 +1057,17 @@ router.get('/v2/sample-slide', (req, res) => {
 
 // ─── /v2/sample-gallery : サンプル一覧 + iframe プレビュー ──
 router.get('/v2/sample-gallery', (req, res) => {
-  const { listTypes } = require('../scripts/v2_video/_sample_modules');
+  const { listTypes, SAMPLES } = require('../scripts/v2_video/_sample_modules');
   const types = listTypes();
+  // 各 type のチャンクメタを script に埋め込む（音声タイミング再現用）
+  const chunkMap = {};
+  for (const [t, m] of Object.entries(SAMPLES)) {
+    chunkMap[t] = (m.audio || []).map(c => ({
+      idx: c.chunkIdx,
+      durationSec: c.durationSec,
+      text: c.text,
+    }));
+  }
   const html = `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><title>スライドサンプル ギャラリー</title>
 <style>
@@ -1079,13 +1088,21 @@ router.get('/v2/sample-gallery', (req, res) => {
   .ctrl-btn { padding:6px 14px; background:#3b82f6; color:#fff; border:0; border-radius:6px; cursor:pointer; font-size:12px; }
   .ctrl-btn:hover { background:#2563eb; }
   .scale-ctrl { display:flex; align-items:center; gap:6px; font-size:11px; color:#94a3b8; }
+  .audio-ctrl { display:flex; align-items:center; gap:8px; font-size:11px; color:#94a3b8; }
+  .audio-ctrl input[type=range] { width:100px; }
+  .now-playing { font-size:10px; color:#10b981; margin-left:8px; }
 </style></head><body>
 <header>
   <h1>🎬 スライドサンプル</h1>
   <div class="types" id="typeBtns"></div>
   <div class="controls">
+    <div class="audio-ctrl">
+      <label><input type="checkbox" id="bgmOn" checked> BGM</label>
+      <span>音量</span><input type="range" id="vol" min="0" max="100" value="80">
+      <span id="nowPlaying" class="now-playing"></span>
+    </div>
     <div class="scale-ctrl">表示倍率: <span id="scaleVal">--</span></div>
-    <button class="ctrl-btn" id="reloadBtn">🔄 再読込</button>
+    <button class="ctrl-btn" id="reloadBtn">🔄 再読込（音声同期）</button>
   </div>
 </header>
 <main>
@@ -1096,8 +1113,13 @@ router.get('/v2/sample-gallery', (req, res) => {
     </div>
   </div>
 </main>
+<audio id="bgm" src="/bgm.mp3" loop></audio>
+<audio id="ttsAudio"></audio>
 <script>
 const TYPES = ${JSON.stringify(types)};
+const CHUNK_MAP = ${JSON.stringify(chunkMap)};
+const LEAD_PAD_SEC = 1.5;
+
 let currentType = TYPES[0];
 const frame = document.getElementById('frame');
 const frameInner = document.getElementById('frameInner');
@@ -1105,6 +1127,28 @@ const frameOuter = document.getElementById('frameOuter');
 const info = document.getElementById('info');
 const typeBtns = document.getElementById('typeBtns');
 const scaleVal = document.getElementById('scaleVal');
+const bgm = document.getElementById('bgm');
+const ttsAudio = document.getElementById('ttsAudio');
+const bgmOn = document.getElementById('bgmOn');
+const volSlider = document.getElementById('vol');
+const nowPlaying = document.getElementById('nowPlaying');
+
+bgm.volume = 0.18;  // BGM は控えめ
+function applyVol() {
+  const v = volSlider.value / 100;
+  ttsAudio.volume = v;
+  bgm.volume = bgmOn.checked ? Math.min(0.22, v * 0.25) : 0;
+}
+volSlider.oninput = applyVol;
+bgmOn.onchange = applyVol;
+
+let ttsTimers = [];
+function clearTtsTimers() {
+  ttsTimers.forEach(t => clearTimeout(t));
+  ttsTimers = [];
+  ttsAudio.pause();
+  ttsAudio.src = '';
+}
 
 function fitFrame() {
   const w = frameOuter.clientWidth;
@@ -1114,13 +1158,53 @@ function fitFrame() {
   scaleVal.textContent = (scale * 100).toFixed(0) + '%';
 }
 
+function playSamplePlaylist(type) {
+  clearTtsTimers();
+  const chunks = CHUNK_MAP[type] || [];
+  if (!chunks.length) {
+    nowPlaying.textContent = '(音声なし)';
+    return;
+  }
+  // BGM 再生開始
+  if (bgmOn.checked) {
+    bgm.currentTime = 0;
+    bgm.play().catch(() => {});
+  } else {
+    bgm.pause();
+  }
+  // 各チャンク順次再生（LEAD_PAD_SEC + 累積 durationSec オフセット）
+  let cum = LEAD_PAD_SEC;
+  chunks.forEach((c, i) => {
+    const offsetMs = Math.round(cum * 1000);
+    const t = setTimeout(() => {
+      ttsAudio.src = '/images_stock/_sample_audio/' + type + '_c' + String(c.idx).padStart(2, '0') + '.mp3';
+      ttsAudio.play().catch(err => {
+        nowPlaying.textContent = '⚠️ chunk' + i + ' 音声なし（生成中の可能性）';
+      });
+      nowPlaying.textContent = '🔊 ch' + (i+1) + '/' + chunks.length + ': ' + c.text.slice(0, 28) + '...';
+    }, offsetMs);
+    ttsTimers.push(t);
+    cum += c.durationSec;
+  });
+  // 終了処理
+  const endMs = Math.round((cum + 0.5) * 1000);
+  const endT = setTimeout(() => {
+    nowPlaying.textContent = '✓ 再生終了';
+  }, endMs);
+  ttsTimers.push(endT);
+}
+
 function load(type) {
   currentType = type;
   document.querySelectorAll('.type-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.type === type);
   });
+  // iframe リロードで CSS アニメーション最初から
   frame.src = '/api/v2/sample-slide?type=' + encodeURIComponent(type) + '&_t=' + Date.now();
   info.innerHTML = '表示中: <strong>' + type + '</strong> | 1920x1080 を ' + scaleVal.textContent + ' に縮小表示中（動画レンダ時の見た目と同じ）';
+  // 音声 + BGM 再生
+  applyVol();
+  playSamplePlaylist(type);
 }
 
 TYPES.forEach(t => {
@@ -1135,8 +1219,15 @@ TYPES.forEach(t => {
 document.getElementById('reloadBtn').onclick = () => load(currentType);
 
 window.addEventListener('resize', fitFrame);
+window.addEventListener('beforeunload', clearTtsTimers);
 fitFrame();
-load(TYPES[0]);
+// 初期表示は音声無し（ユーザーがクリックするまで autoplay block 回避）
+currentType = TYPES[0];
+document.querySelectorAll('.type-btn').forEach(b => {
+  b.classList.toggle('active', b.dataset.type === currentType);
+});
+frame.src = '/api/v2/sample-slide?type=' + encodeURIComponent(currentType);
+info.innerHTML = 'タイプボタンをクリックすると音声+BGM 同期再生します';
 </script>
 </body></html>`;
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);

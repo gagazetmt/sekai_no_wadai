@@ -43,6 +43,26 @@ app.use('/v2_videos', require('express').static(path.join(__dirname, 'data', 'v2
 // 生成済みサムネを静的配信（Step5 で表示・ダウンロード）
 app.use('/v2_thumbs', require('express').static(path.join(__dirname, 'data', 'v2_thumbs')));
 
+// BGM 静的配信（サンプルギャラリーで使う、bgm/ ディレクトリ全体）
+app.use('/bgm', require('express').static(path.join(__dirname, 'bgm')));
+app.get('/bgm.mp3', (req, res) => {
+  // bgm/ にあるファイルから1つ返す（フォールバック付き）
+  const bgmDir = path.join(__dirname, 'bgm');
+  let pick = null;
+  try {
+    if (require('fs').existsSync(bgmDir)) {
+      const files = require('fs').readdirSync(bgmDir).filter(f => /\.(mp3|m4a)$/i.test(f));
+      if (files.length) pick = path.join(bgmDir, files[0]);
+    }
+  } catch (_) {}
+  if (!pick) {
+    const fallback = path.join(__dirname, 'bgm.mp3');
+    if (require('fs').existsSync(fallback)) pick = fallback;
+  }
+  if (!pick) return res.status(404).send('no bgm');
+  res.sendFile(pick);
+});
+
 // テンプレートプレビュー（各モジュール型のHTMLを直接確認する用）
 ['insight', 'history', 'matchcard', 'matchcenter'].forEach(name => {
   app.use('/template/' + name, require('express').static(path.join(__dirname, name)));
