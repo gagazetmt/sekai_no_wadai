@@ -185,13 +185,14 @@ function splitSubtitle(text, maxLineLen = 20) {
 //
 // 文字列が渡された場合（or items が1つだけ）は静的字幕。lead/tail パディングを跨いで常時表示。
 // チャンク配列が複数の場合は各チャンクのテキストを音声タイミングに合わせて切替表示。
-// フォント定数 (50px) / line-height 1.32 = 1行 ~66px
-//   1行: 約 66 + padding 24 = 90px
-//   2行: 約 132 + padding 24 = 156px
-//   3行: 約 198 + padding 24 = 222px
+// フォント定数 (50px) / line-height 1.2 = 1行 60px
+//   1行: 60 + padding 12 = 72px (実際は minHeight 110 で打ち切り)
+//   2行: 120 + padding 12 = 132px
+//   3行: 180 + padding 12 = 192px
 const SUB_FONT_PX     = 50;
-const SUB_LINE_PX     = Math.ceil(SUB_FONT_PX * 1.32);  // 66
-const SUB_PADDING_PX  = 24;
+const SUB_LINE_HEIGHT = 1.2;
+const SUB_LINE_PX     = Math.ceil(SUB_FONT_PX * SUB_LINE_HEIGHT);  // 60
+const SUB_PADDING_PX  = 12;
 function _heightForLines(lineCount) {
   return SUB_LINE_PX * Math.max(1, lineCount) + SUB_PADDING_PX;
 }
@@ -254,7 +255,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     return `<style>${keyframes}
       .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
       .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-top:8px;}
-      .v2-sub-text{color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;padding:0 70px;line-height:1.32;}
+      .v2-sub-text{color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;padding:0 70px;line-height:${SUB_LINE_HEIGHT};}
     </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
   }
 
@@ -269,7 +270,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     + `background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);`
     + `display:flex;align-items:center;justify-content:center;padding-top:8px;z-index:20">`
     + `<div style="color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;`
-    + `padding:0 70px;line-height:1.32;">${linesHtml}</div></div>`;
+    + `padding:0 70px;line-height:${SUB_LINE_HEIGHT};">${linesHtml}</div></div>`;
 }
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。
