@@ -1,6 +1,7 @@
 // scripts/v2_video/slides/profile.js
-// Profile スライド (旧 matchcard)：試合プレビュー（左=メイン画像+タイトル / 右=HOME/AWAYミニ+データ行4件）
-// テンプレート元: /matchcard/index.html（= 型1）
+// Profile スライド：選手プロフィール
+//   左カラム: [国旗][クラブロゴ] / タイトル(選手名) / メイン画像(選手写真)
+//   右カラム: データ行（出場・ゴール等のスタッツ）
 
 const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, _t } = require('./_common');
 
@@ -10,13 +11,12 @@ function buildProfileHTML(mod) {
   while (slots.length < 4) slots.push({ label: '', value: '' });
 
   const mainImg  = imgDataUri(mod.bgImage);
-  // ロゴが取れていればそれ、無ければ既存 imgDataUri 経由のローカル画像
-  const homeImg  = mod.homeLogo || imgDataUri(mod.homeImage);
-  const awayImg  = mod.awayLogo || imgDataUri(mod.awayImage);
-  const mainTitle = _t(mod.title) || 'MATCH PREVIEW';
+  // 国旗（leftImage / countryImage / flagImage いずれか）+ クラブロゴ（rightImage / clubLogo / homeImage いずれか）
+  const flagImg  = mod.countryImage || mod.flagImage || imgDataUri(mod.leftImage)  || imgDataUri(mod.homeImage);
+  const clubImg  = mod.clubLogo     || mod.homeLogo  || imgDataUri(mod.rightImage) || imgDataUri(mod.awayImage);
+  const mainTitle = _t(mod.title) || 'PROFILE';
   const subText   = mod.narration || '';
-  const homeLabel = _t(mod.homeTeam) || 'HOME';
-  const awayLabel = _t(mod.awayTeam) || 'AWAY';
+  const subtitle  = mod.subtitle || '';
 
   const extraStyles = `
 .slide { display: flex; background: ${PALETTE.bg}; }
@@ -38,24 +38,76 @@ function buildProfileHTML(mod) {
   gap: 30px;
   position: relative;
 }
-.main-title {
-  height: 180px;
-  font-size: 72px;
-  font-weight: 900;
-  border-left: 12px solid ${PALETTE.accent};
-  padding-left: 40px;
+/* 🆕 左カラム上部: 国旗 + クラブロゴ */
+.logo-row {
+  display: flex;
+  gap: 20px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.logo-cell {
+  flex: 1;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 12px;
+  overflow: hidden;
   display: flex;
   align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.logo-cell .img-fill {
+  width: 100%; height: 100%;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.logo-cell .logo-empty {
+  font-size: 18px;
+  color: rgba(255,255,255,0.3);
+  font-weight: 700;
+}
+.flag-cell { background: rgba(96,128,180,0.1); }
+.club-cell { background: rgba(252,211,77,0.1); }
+.main-title {
+  font-size: 60px;
+  font-weight: 900;
+  border-left: 12px solid ${PALETTE.accent};
+  padding-left: 30px;
+  padding-top: 20px;
+  padding-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: linear-gradient(to right, rgba(245,158,11,0.15), transparent);
   color: ${PALETTE.text};
-  /* 画像が消えたあと、下から浮上 + フェードイン */
+  flex-shrink: 0;
+}
+.main-subtitle {
+  font-size: 28px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  margin-top: 8px;
+}
+/* main-title アニメーション（タイトル浮上） */
+.main-title {
   opacity: 0;
-  transform: translateY(60px);
-  animation: titleRise 0.85s ease-out 1.5s forwards;
+  transform: translateY(40px);
+  animation: titleRise 0.7s ease-out 0.8s forwards;
 }
 @keyframes titleRise {
-  from { opacity: 0; transform: translateY(60px); }
+  from { opacity: 0; transform: translateY(40px); }
   to   { opacity: 1; transform: translateY(0);    }
+}
+/* logo-row アニメーション（最初に降下） */
+.logo-row {
+  opacity: 0;
+  transform: translateY(-30px);
+  animation: logoDrop 0.6s ease-out 0.3s forwards;
+}
+@keyframes logoDrop {
+  from { opacity: 0; transform: translateY(-30px); }
+  to   { opacity: 1; transform: translateY(0);     }
 }
 .main-img-frame {
   flex: 1;
@@ -204,20 +256,21 @@ function buildProfileHTML(mod) {
 
   const slideBody = `
 <div class="panel-left">
-  <div class="main-title">${esc(mainTitle)}</div>
-  <div class="main-img-frame"><div class="img-fill"></div></div>
-</div>
-<div class="panel-right">
-  <div class="mini-grid">
-    <div class="mini-card">
-      <div class="mini-label">${esc(homeLabel)}</div>
-      <div class="mini-img-frame"><div class="img-fill" ${homeImg ? `style="background-image:url('${homeImg}')"` : ''}></div></div>
+  <div class="logo-row">
+    <div class="logo-cell flag-cell"   title="${esc(mod.countryName || '国籍')}">
+      ${flagImg ? `<div class="img-fill" style="background-image:url('${flagImg}')"></div>` : '<div class="logo-empty">国旗</div>'}
     </div>
-    <div class="mini-card">
-      <div class="mini-label">${esc(awayLabel)}</div>
-      <div class="mini-img-frame"><div class="img-fill" ${awayImg ? `style="background-image:url('${awayImg}')"` : ''}></div></div>
+    <div class="logo-cell club-cell"   title="${esc(mod.clubName || 'クラブ')}">
+      ${clubImg ? `<div class="img-fill" style="background-image:url('${clubImg}')"></div>` : '<div class="logo-empty">クラブ</div>'}
     </div>
   </div>
+  <div class="main-title">
+    ${esc(mainTitle)}
+    ${subtitle ? `<div class="main-subtitle">${esc(subtitle)}</div>` : ''}
+  </div>
+  <div class="main-img-frame">${mainImg ? `<div class="img-fill" style="background-image:url('${mainImg}')"></div>` : '<div class="img-fill"></div>'}</div>
+</div>
+<div class="panel-right">
   <div class="data-list">${dataRows}</div>
 </div>
 ${buildSubtitleBar(subtitleArgFromMod(mod), { height: 90, maxLineLen: 32 })}`;
