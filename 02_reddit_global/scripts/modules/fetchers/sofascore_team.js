@@ -100,18 +100,65 @@ async function fetchSofaScoreTeam(teamName) {
       recentForm = last5.map(m => m.result).join('');
     }
 
-    // ④ 次試合（リーグ情報取得のため）
+    // ④ 主大会を決定（国内リーグ優先 / 比較スライドの整合性確保）
+    //   旧バグ: 「次試合の大会」を採用していたため、City がPL週・Arsenal がCL週だと
+    //          City=PL / Arsenal=CL の不一致比較になっていた
+    //   修正:  team.primaryUniqueTournament（=国内リーグ）を最優先 → 次に過去90試合
+    //          の出場頻度トップ（=domestic league）→ 最後に next event
     let leagueName = null;
     let seasonYear = null;
     let tournamentId = null;
     let seasonId     = null;
-    if (!nxRaw?.__err) {
+
+    // (a) team detail の primaryUniqueTournament（SofaScore が国内リーグを返す）
+    const primary = teamDetail.primaryUniqueTournament;
+    if (primary && primary.id) {
+      tournamentId = primary.id;
+      leagueName   = primary.name || null;
+    }
+
+    // (b) 出場頻度から domestic league を再判定（より確実）
+    const allEvents = [
+      ...(evRaw?.events || []),
+      ...(evRaw1?.events || []),
+      ...(evRaw2?.events || []),
+      ...(nxRaw?.events || []),
+    ];
+    if (allEvents.length) {
+      const freq = new Map(); // utId -> { count, name }
+      for (const e of allEvents) {
+        const utId = e.tournament?.uniqueTournament?.id;
+        if (!utId) continue;
+        if (!freq.has(utId)) {
+          freq.set(utId, { count: 0, name: e.tournament?.uniqueTournament?.name || e.tournament?.name, season: e.season });
+        }
+        freq.get(utId).count++;
+      }
+      const sorted = [...freq.entries()].sort((a, b) => b[1].count - a[1].count);
+      // primaryUniqueTournament が決まってない or 頻度1位と違う場合は頻度1位を採用
+      if (sorted.length) {
+        const [topId, top] = sorted[0];
+        if (!tournamentId || tournamentId !== topId) {
+          tournamentId = topId;
+          leagueName   = top.name;
+        }
+        // seasonId は同 tournament の最新イベントから
+        const seasonEv = allEvents.find(e => e.tournament?.uniqueTournament?.id === tournamentId && e.season?.id);
+        if (seasonEv) {
+          seasonId   = seasonEv.season.id;
+          seasonYear = seasonEv.season.year;
+        }
+      }
+    }
+
+    // (c) どうしても決まらない場合は next event の素朴採用
+    if ((!tournamentId || !seasonId) && !nxRaw?.__err) {
       const nextEvent = (nxRaw.events || []).find(e => e.tournament?.uniqueTournament);
       if (nextEvent) {
-        tournamentId = nextEvent.tournament?.uniqueTournament?.id;
-        seasonId     = nextEvent.season?.id;
-        leagueName   = nextEvent.tournament?.uniqueTournament?.name || nextEvent.tournament?.name;
-        seasonYear   = nextEvent.season?.year;
+        if (!tournamentId) tournamentId = nextEvent.tournament?.uniqueTournament?.id;
+        if (!seasonId)     seasonId     = nextEvent.season?.id;
+        if (!leagueName)   leagueName   = nextEvent.tournament?.uniqueTournament?.name || nextEvent.tournament?.name;
+        if (!seasonYear)   seasonYear   = nextEvent.season?.year;
       }
     }
 
