@@ -245,6 +245,107 @@ router.get('/v35/labels', (req, res) => {
   }
 });
 
+// ─── 画像取得コア関数 (postId, label) → { ok, images, ... }
+// Step 2 の fetch-label/fetch-all から並行発火するためにモジュール export
+async function fetchImagesForLabel(postId, label) {
+  if (!postId || !label) return { ok: false, error: 'postId + label required' };
+  const si = safeJson(siPath(postId), {});
+  const { type, entity } = parseMainKey(label);
+  const outDir = imageOutDirForLabel(postId, label);
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+  let effectiveType = type;
+  if (type === 'entity') {
+    const inferred = inferEntityRole(si, entity);
+    effectiveType = inferred || 'entity';
+  }
+
+  let teamName     = null;
+  let teamNameAway = null;
+  let matchKickoff = null;
+
+  if (effectiveType === 'team') {
+    teamName = entity;
+  } else if (effectiveType === 'player' || effectiveType === 'manager') {
+    teamName     = resolveTeamForEntity(si, entity);
+    matchKickoff = resolveMatchKickoff(si);
+  } else if (effectiveType === 'match' || effectiveType === 'matchcard') {
+    const teams  = resolveMatchTeams(si);
+    teamName     = teams[0] || null;
+    teamNameAway = teams[1] || null;
+    matchKickoff = resolveMatchKickoff(si);
+  }
+
+  const tasks = [];
+
+  if ((effectiveType === 'player' || effectiveType === 'manager') && teamName && entity) {
+    tasks.push(
+      fetchOfficialXImagesByName(teamName, entity, '', 10, { outDir })
+        .then(paths => ({ source: 'x_by_name', paths }))
+        .catch(e => { console.warn('[x_by_name]', e.message); return { source: 'x_by_name', paths: [] }; })
+    );
+  } else {
+    tasks.push(Promise.resolve({ source: 'x_by_name', paths: [] }));
+  }
+
+  if (teamName) {
+    tasks.push(
+      fetchOfficialXImagesByTime(teamName, '', 10, { outDir, matchKickoff })
+        .then(paths => ({ source: 'x_by_time', paths }))
+        .catch(e => { console.warn('[x_by_time]', e.message); return { source: 'x_by_time', paths: [] }; })
+    );
+  } else {
+    tasks.push(Promise.resolve({ source: 'x_by_time', paths: [] }));
+  }
+
+  if (teamNameAway) {
+    tasks.push(
+      fetchOfficialXImagesByTime(teamNameAway, 'away', 10, { outDir, matchKickoff })
+        .then(paths => ({ source: 'x_by_time_away', paths }))
+        .catch(e => { console.warn('[x_by_time_away]', e.message); return { source: 'x_by_time_away', paths: [] }; })
+    );
+  } else {
+    tasks.push(Promise.resolve({ source: 'x_by_time_away', paths: [] }));
+  }
+
+  if (entity) {
+    tasks.push(
+      fetchWikimediaImages(entity, '', 3, { outDir })
+        .then(paths => ({ source: 'wikimedia', paths }))
+        .catch(e => { console.warn('[wikimedia]', e.message); return { source: 'wikimedia', paths: [] }; })
+    );
+  } else {
+    tasks.push(Promise.resolve({ source: 'wikimedia', paths: [] }));
+  }
+
+  const results = await Promise.all(tasks);
+
+  const images = {};
+  for (const r of results) {
+    images[r.source] = r.paths.map(pathToUrl);
+  }
+
+  // ストック画像（images_stock の indices からラベル一致を引く）
+  try {
+    const stockMatches = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway });
+    images.stock = stockMatches.map(m => m.url).filter(Boolean);
+    images.stock_meta = stockMatches.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, league: m.league || null }));
+  } catch (e) {
+    console.warn('[stock]', e.message);
+    images.stock = [];
+    images.stock_meta = [];
+  }
+
+  const total = Object.values(images).reduce((s, a) => Array.isArray(a) ? s + a.length : s, 0);
+
+  return {
+    ok: true,
+    label, type, effectiveType, entity,
+    teamName, teamNameAway, matchKickoff,
+    images, total,
+  };
+}
+
 // ─── /api/v35/fetch-images : 画像取得（ラベル単位）──────────
 // Body: { postId, label }   ← label は "entity:Messi" / "team:Bayern" 等の mainKey 文字列
 // Response: { ok, label, teamName, matchKickoff, images: { x_by_name, x_by_time, wikimedia } }
@@ -253,112 +354,9 @@ router.post('/v35/fetch-images', async (req, res) => {
   if (!postId || !label) {
     return res.status(400).json({ error: 'postId + label required' });
   }
-
   try {
-    const si = safeJson(siPath(postId), {});
-    const { type, entity } = parseMainKey(label);
-    const outDir = imageOutDirForLabel(postId, label);
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
-    let effectiveType = type;
-    if (type === 'entity') {
-      const inferred = inferEntityRole(si, entity);
-      effectiveType = inferred || 'entity';
-    }
-
-    let teamName     = null;
-    let teamNameAway = null;
-    let matchKickoff = null;
-
-    if (effectiveType === 'team') {
-      teamName = entity;
-    } else if (effectiveType === 'player' || effectiveType === 'manager') {
-      teamName     = resolveTeamForEntity(si, entity);
-      matchKickoff = resolveMatchKickoff(si);
-    } else if (effectiveType === 'match' || effectiveType === 'matchcard') {
-      const teams  = resolveMatchTeams(si);
-      teamName     = teams[0] || null;
-      teamNameAway = teams[1] || null;
-      matchKickoff = resolveMatchKickoff(si);
-    }
-
-    const tasks = [];
-
-    if ((effectiveType === 'player' || effectiveType === 'manager') && teamName && entity) {
-      tasks.push(
-        fetchOfficialXImagesByName(teamName, entity, '', 10, { outDir })
-          .then(paths => ({ source: 'x_by_name', paths }))
-          .catch(e => { console.warn('[x_by_name]', e.message); return { source: 'x_by_name', paths: [] }; })
-      );
-    } else {
-      tasks.push(Promise.resolve({ source: 'x_by_name', paths: [] }));
-    }
-
-    if (teamName) {
-      tasks.push(
-        fetchOfficialXImagesByTime(teamName, '', 10, { outDir, matchKickoff })
-          .then(paths => ({ source: 'x_by_time', paths }))
-          .catch(e => { console.warn('[x_by_time]', e.message); return { source: 'x_by_time', paths: [] }; })
-      );
-    } else {
-      tasks.push(Promise.resolve({ source: 'x_by_time', paths: [] }));
-    }
-
-    if (teamNameAway) {
-      tasks.push(
-        fetchOfficialXImagesByTime(teamNameAway, 'away', 10, { outDir, matchKickoff })
-          .then(paths => ({ source: 'x_by_time_away', paths }))
-          .catch(e => { console.warn('[x_by_time_away]', e.message); return { source: 'x_by_time_away', paths: [] }; })
-      );
-    } else {
-      tasks.push(Promise.resolve({ source: 'x_by_time_away', paths: [] }));
-    }
-
-    if (entity) {
-      tasks.push(
-        fetchWikimediaImages(entity, '', 3, { outDir })
-          .then(paths => ({ source: 'wikimedia', paths }))
-          .catch(e => { console.warn('[wikimedia]', e.message); return { source: 'wikimedia', paths: [] }; })
-      );
-    } else {
-      tasks.push(Promise.resolve({ source: 'wikimedia', paths: [] }));
-    }
-
-    const results = await Promise.all(tasks);
-
-    const images = {};
-    for (const r of results) {
-      images[r.source] = r.paths.map(pathToUrl);
-    }
-
-    // 🆕 ストック画像（images_stock の indices からラベル一致を引く）
-    try {
-      const stockMatches = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway });
-      // findStockMatches は { source, role, name, url, score, ... } のオブジェクト配列を返す
-      // 既存の images はソース別の URL 配列なので、stock も URL 配列で揃える
-      images.stock = stockMatches.map(m => m.url).filter(Boolean);
-      // 詳細メタ情報も別キーに添付（フロントが拡張表示できるように）
-      images.stock_meta = stockMatches.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, league: m.league || null }));
-    } catch (e) {
-      console.warn('[stock]', e.message);
-      images.stock = [];
-      images.stock_meta = [];
-    }
-
-    const total = Object.values(images).reduce((s, a) => Array.isArray(a) ? s + a.length : s, 0);
-
-    res.json({
-      ok: true,
-      label,
-      type,
-      effectiveType,
-      entity,
-      teamName,
-      teamNameAway,
-      matchKickoff,
-      images,
-      total,
-    });
+    const result = await fetchImagesForLabel(postId, label);
+    res.json(result);
   } catch (e) {
     console.error('[step35/fetch-images]', e);
     res.status(500).json({ error: e.message });
@@ -642,4 +640,4 @@ function getUI() {
 })();</script>`;
 }
 
-module.exports = { router, getUI };
+module.exports = { router, getUI, fetchImagesForLabel };

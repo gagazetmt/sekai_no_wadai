@@ -21,6 +21,7 @@ const { fetchSofaScoreMatch }      = require('../scripts/modules/fetchers/sofasc
 const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
 const { fetchSerper }              = require('../scripts/modules/fetchers/serper_module');
 const { suggestEntities }          = require('../scripts/modules/stock_match');
+const { fetchImagesForLabel }      = require('./step35_routes');
 
 const router = express.Router();
 const SI_DIR = path.join(__dirname, '..', 'data', 'si_data');
@@ -347,6 +348,17 @@ router.post('/v3/fetch-label', async (req, res) => {
     }
 
     fs.writeFileSync(siPath(postId), JSON.stringify(si, null, 2));
+
+    // 🆕 画像取得を fire-and-forget でバックグラウンド発火（response は待たない）
+    if (box === 'entity' || box === 'match') {
+      const imgLabel = box === 'entity' ? `entity:${label}` : `match:${label}`;
+      setImmediate(() => {
+        fetchImagesForLabel(postId, imgLabel).catch(e =>
+          console.warn(`[fetch-label/img:${imgLabel}]`, e.message)
+        );
+      });
+    }
+
     res.json({ ok: true });
   } catch (e) {
     console.error(`[Step2 v3] fetch-label "${box}/${label}" エラー:`, e.message);
@@ -401,7 +413,23 @@ router.post('/v3/fetch-all', async (req, res) => {
   fs.writeFileSync(siPath(postId), JSON.stringify(si, null, 2));
 
   console.log(`[Step2 v3] fetch-all 完了: ${results.length}件処理`);
-  res.json({ ok: true, count: results.length });
+
+  // 🆕 ラベル毎に画像取得を fire-and-forget で並行発火（response は待たない）
+  let imgKicked = 0;
+  for (const r of results) {
+    if (r.error) continue;
+    if (r.box !== 'entity' && r.box !== 'match') continue;
+    const imgLabel = r.box === 'entity' ? `entity:${r.label}` : `match:${r.label}`;
+    imgKicked++;
+    setImmediate(() => {
+      fetchImagesForLabel(postId, imgLabel).catch(e =>
+        console.warn(`[fetch-all/img:${imgLabel}]`, e.message)
+      );
+    });
+  }
+  console.log(`[Step2 v3] 画像取得を ${imgKicked} ラベル分バックグラウンド発火`);
+
+  res.json({ ok: true, count: results.length, imageJobsKicked: imgKicked });
 });
 
 // ─── /v3/entity-suggest : 入力中ラベルのタイプアヘッド候補
