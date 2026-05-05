@@ -34,7 +34,7 @@ async function _getKuroshiro() {
 }
 
 const API_URL    = 'https://api-uw.minimax.io/v1/t2a_v2';
-const MODEL      = process.env.MINIMAX_TTS_MODEL || 'speech-02-turbo';
+const MODEL      = process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd';
 const DEFAULT_VOICE = process.env.MINIMAX_DEFAULT_VOICE
   || 'moss_audio_6e0620ed-3af8-11f1-beb2-9257c801a481';   // master-voice (clone)
 
@@ -168,6 +168,11 @@ const UNIT_KANA = {
 async function sanitizeForTts(text) {
   if (!text) return '';
   let s = String(text);
+
+  // 0) 全角数字 → 半角（後段の \d+ マッチを通すため）
+  //    AI 出力が "２度" の形になると単位処理を素通りして MiniMax が
+  //    全角数字を分離発音し「に・ど」のような読み崩れが出る対策
+  s = s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
 
   // 1) 英語序数 (1st, 2nd, 3rd ...)
   s = s.replace(/\b(1st|2nd|3rd|[4-9]th|10th)\b/gi, (m) => ORDINAL_MAP[m.toLowerCase()] || m);

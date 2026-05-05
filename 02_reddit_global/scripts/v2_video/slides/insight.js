@@ -52,9 +52,11 @@ function _matchPhraseToChunk(phrase, chunks) {
 
 function buildInsightHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
-  // catchphrases が優先。無ければ narrationChunks か title から
+  // catchphrases が優先。新スキーマ {text, chunkText} と旧スキーマ string[] 両対応
+  // 無ければ narrationChunks か title から
+  const _phraseText = (p) => (typeof p === 'string') ? p : String(p?.text || '');
   const phrasesRaw = (Array.isArray(mod.catchphrases) && mod.catchphrases.length)
-    ? mod.catchphrases.slice(0, MAX_PHRASES)
+    ? mod.catchphrases.slice(0, MAX_PHRASES).map(_phraseText).filter(Boolean)
     : (Array.isArray(mod.narrationChunks)
         ? mod.narrationChunks.slice(0, MAX_PHRASES)
         : (mod.title ? [mod.title] : []));

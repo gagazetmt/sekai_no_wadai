@@ -46,10 +46,12 @@ function _buildDust() {
 function buildTocHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
   let items = [];
+  // 新スキーマ {text, chunkText} と旧スキーマ string[] 両対応
+  const _itemText = (it) => (typeof it === 'string') ? it : String(it?.text || '');
   if (Array.isArray(mod.tocItems) && mod.tocItems.length) {
-    items = mod.tocItems.slice(0, MAX_ITEMS);
+    items = mod.tocItems.slice(0, MAX_ITEMS).map(_itemText);
   } else if (Array.isArray(mod.catchphrases) && mod.catchphrases.length) {
-    items = mod.catchphrases.slice(0, MAX_ITEMS);
+    items = mod.catchphrases.slice(0, MAX_ITEMS).map(_itemText);
   } else if (Array.isArray(mod.dataSlots) && mod.dataSlots.length) {
     items = mod.dataSlots.slice(0, MAX_ITEMS).map(s => s.label || s.value || '');
   }
