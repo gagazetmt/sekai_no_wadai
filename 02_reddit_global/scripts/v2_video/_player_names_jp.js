@@ -255,17 +255,37 @@ function _lastNameFallback(name) {
   return FULL_NAME[last] || null;
 }
 
+// Wikipedia langlinks キャッシュ (data/player_names_jp_cache.json) を参照
+//   prefetchPlayerNames() で事前 fetch しておくと render 時に同期で取れる
+let _wikiLookup = null;
+function _wikiCached(name) {
+  if (_wikiLookup === null) {
+    try { _wikiLookup = require('../utilities/fetch_player_jp').lookupCachedKatakana; }
+    catch (_) { _wikiLookup = () => null; }
+  }
+  return _wikiLookup(name);
+}
+
 function toKatakana(name) {
   if (!name) return name;
   const s = String(name).trim();
-  // 1. フル一致
+  // 1. 静的辞書フル一致
   if (FULL_NAME[s]) return FULL_NAME[s];
-  // 2. 苗字フォールバック ("Bukayo Saka" → "Saka")
+  // 2. Wikipedia キャッシュ (フル名)
+  const wikiFull = _wikiCached(s);
+  if (wikiFull) return wikiFull;
+  // 3. 苗字フォールバック (静的辞書)
   const last = _lastNameFallback(s);
   if (last) return last;
-  // 3. 既に日本語が含まれてれば原文（漢字 or カタカナ）
+  // 4. Wikipedia キャッシュ (苗字)
+  const parts = s.split(/\s+/);
+  if (parts.length >= 2) {
+    const wikiLast = _wikiCached(parts[parts.length - 1]);
+    if (wikiLast) return wikiLast;
+  }
+  // 5. 既に日本語が含まれてれば原文（漢字 or カタカナ）
   if (/[぀-ヿ一-鿿]/.test(s)) return s;
-  // 4. 未収録 → 原文 (英語) を返す（運用しながら辞書を広げる）
+  // 6. 未収録 → 原文 (英語) を返す
   return s;
 }
 

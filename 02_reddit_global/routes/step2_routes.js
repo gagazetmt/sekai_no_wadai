@@ -448,6 +448,30 @@ router.post('/v3/fetch-all', async (req, res) => {
 
   console.log(`[Step2 v3] fetch-all 完了: ${results.length}件処理`);
 
+  // 🆕 lineup の選手名 → Wikipedia 経由で日本語カタカナを fire-and-forget で先読み
+  //   matchcard render 時には cache hit するように事前準備
+  setImmediate(async () => {
+    try {
+      const { prefetchPlayerNames } = require('../scripts/utilities/fetch_player_jp');
+      const names = [];
+      for (const r of results) {
+        if (r.box !== 'match' || !r.data) continue;
+        const lu = r.data.lineup || {};
+        ['home', 'away'].forEach(side => {
+          (lu[side] || []).forEach(p => {
+            if (p?.name) names.push(p.name);
+          });
+        });
+      }
+      if (names.length) {
+        const stats = await prefetchPlayerNames(names);
+        console.log(`[Step2 v3] 選手名カタカナ先読み: hit=${stats.hit} fetched=${stats.fetched} missed=${stats.missed} / total ${stats.total}`);
+      }
+    } catch (e) {
+      console.warn('[Step2 v3] prefetchPlayerNames 失敗:', e.message);
+    }
+  });
+
   // 🆕 ラベル毎に画像取得を fire-and-forget で並行発火（response は待たない）
   let imgKicked = 0;
   for (const r of results) {

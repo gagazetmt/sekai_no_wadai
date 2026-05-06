@@ -1450,10 +1450,16 @@ function getUI() {
     const m = mods[i];
     if (!m) return;
 
+    // ── 各 type のスロット数上限（slide 側 cap と揃える）──
+    const SLOT_MAX = { stats: 8, profile: 7, history: 8, comparison: 7, insight: 6 }[m.type] || 8;
+
     let dataHtml = '';
     // matchcard は matchData (試合データ) を表示するテンプレで dataSlots は使わない
     if (Array.isArray(m.dataSlots) && m.dataSlots.length && m.type !== 'matchcard') {
       const isCmp = m.type === 'comparison';
+      const _addBtn = (m.dataSlots.length < SLOT_MAX)
+        ? '<button class="s4-slot-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.dataSlots.length + '/' + SLOT_MAX + ')</button>'
+        : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + SLOT_MAX + '/' + SLOT_MAX + ')</div>';
       dataHtml = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📊 dataSlots</div>'
         + m.dataSlots.map(function(s, idx) {
             const delBtn = '<button class="s4-slot-del" data-idx="' + idx + '" title="この行を削除" '
@@ -1472,15 +1478,19 @@ function getUI() {
                 + delBtn
                 + '</div>';
             }
-          }).join('');
+          }).join('') + _addBtn;
     }
 
     let extraHtml = '';
     if (Array.isArray(m.catchphrases) && m.catchphrases.length) {
+      const _addPh = (m.catchphrases.length < SLOT_MAX)
+        ? '<button class="s4-phrase-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.catchphrases.length + '/' + SLOT_MAX + ')</button>'
+        : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + SLOT_MAX + '/' + SLOT_MAX + ')</div>';
       extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🎯 catchphrases</div>'
         + m.catchphrases.map(function(p, idx) {
-            return '<input class="inp s4-phrase" data-idx="' + idx + '" value="' + _esc(p) + '" placeholder="キャッチコピー" style="display:block;width:100%;font-size:11px;padding:4px 6px;margin-bottom:4px;">';
-          }).join('');
+            const txt = (typeof p === 'string') ? p : (p && p.text) || '';
+            return '<input class="inp s4-phrase" data-idx="' + idx + '" value="' + _esc(txt) + '" placeholder="キャッチコピー" style="display:block;width:100%;font-size:11px;padding:4px 6px;margin-bottom:4px;">';
+          }).join('') + _addPh;
     }
     if (Array.isArray(m.comments) && m.comments.length) {
       extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">💬 comments</div>'
@@ -1691,6 +1701,12 @@ function getUI() {
       btn.addEventListener('click', function() {
         s4DeleteSlot(parseInt(btn.getAttribute('data-idx'), 10));
       });
+    });
+    el.querySelectorAll('.s4-slot-add').forEach(function(btn) {
+      btn.addEventListener('click', function() { s4AddSlot(); });
+    });
+    el.querySelectorAll('.s4-phrase-add').forEach(function(btn) {
+      btn.addEventListener('click', function() { s4AddPhrase(); });
     });
 
     /* 🪄 スライド全部おまかせ AI ボタン */
@@ -2262,6 +2278,37 @@ function getUI() {
     if (!m || !Array.isArray(m.dataSlots)) return;
     if (idx < 0 || idx >= m.dataSlots.length) return;
     m.dataSlots.splice(idx, 1);
+    _renderEditor();
+    _saveAndReload();
+  };
+
+  /* ── dataSlot 行を追加（上限 type 別） ── */
+  window.s4AddSlot = function() {
+    _collectInputs();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    const SLOT_MAX = ({ stats: 8, profile: 7, history: 8, comparison: 7, insight: 6 })[m.type] || 8;
+    if (!Array.isArray(m.dataSlots)) m.dataSlots = [];
+    if (m.dataSlots.length >= SLOT_MAX) return;
+    if (m.type === 'comparison') m.dataSlots.push({ label: '', leftValue: '', rightValue: '' });
+    else                          m.dataSlots.push({ label: '', value: '' });
+    _renderEditor();
+    _saveAndReload();
+  };
+
+  /* ── catchphrase 行を追加（insight 用） ── */
+  window.s4AddPhrase = function() {
+    _collectInputs();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    const SLOT_MAX = ({ insight: 6 })[m.type] || 6;
+    if (!Array.isArray(m.catchphrases)) m.catchphrases = [];
+    if (m.catchphrases.length >= SLOT_MAX) return;
+    // 新スキーマ {text, chunkText} に揃える（旧形式 string も AI 出力経由で混在しうる）
+    const usesObj = m.catchphrases.length === 0 || typeof m.catchphrases[0] === 'object';
+    m.catchphrases.push(usesObj ? { text: '', chunkText: '' } : '');
     _renderEditor();
     _saveAndReload();
   };

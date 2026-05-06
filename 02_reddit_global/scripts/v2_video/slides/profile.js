@@ -6,9 +6,20 @@
 const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t } = require('./_common');
 
 function buildProfileHTML(mod) {
-  // dataSlots 4〜7 件を data-row で使う（flex: 1 で N に応じて高さ自動調整）
+  // dataSlots 4〜7 件を data-row で使う
+  //   data-list の利用可能高 ≈ 810px (1080 - 60×2 padding - 120 logoRow - 30 gap)
+  //   N に応じて行間 gap / フォント / line-clamp / padding を縮小して overflow 回避
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 7);
   while (slots.length < 4) slots.push({ label: '', value: '' });
+  const N = slots.length;
+  // 行間 gap (px)：少ない時は広く、多い時は詰める
+  const dataGap     = N >= 7 ? 8  : N >= 6 ? 10 : N >= 5 ? 12 : 15;
+  // ラベル基準フォント (px)
+  const labelBase   = N >= 7 ? 26 : N >= 6 ? 30 : N >= 5 ? 34 : 38;
+  // 値基準フォント (px)：旧 _valFont の base
+  const valueBase   = N >= 7 ? 38 : N >= 6 ? 42 : N >= 5 ? 46 : 56;
+  // 行内 padding：上下 (高さ膨張を抑える)
+  const rowPad      = N >= 7 ? 6  : N >= 6 ? 8  : 10;
 
   const mainImg  = imgDataUri(mod.bgImage);
   // 国旗（leftImage / countryImage / flagImage いずれか）+ クラブロゴ（rightImage / clubLogo / homeImage いずれか）
@@ -175,12 +186,15 @@ function buildProfileHTML(mod) {
 }
 .data-list {
   flex: 1;
+  min-height: 0;            /* flex shrink を有効化（オーバーフロー防止） */
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: ${dataGap}px;
+  overflow: hidden;         /* 万一はみ出しても切る */
 }
 .data-row {
-  flex: 1;
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   gap: 20px;
 }
@@ -189,9 +203,9 @@ function buildProfileHTML(mod) {
   background: rgba(0,0,0,0.4);
   border-left: 6px solid ${PALETTE.accent};
   border-radius: 10px;
-  display: flex; align-items: center;
-  padding-left: 28px;
-  font-size: 38px;
+  align-items: center;
+  padding: ${rowPad}px 0 ${rowPad}px 28px;
+  font-size: ${labelBase}px;
   font-weight: 700;
   color: #ffffff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
@@ -201,6 +215,7 @@ function buildProfileHTML(mod) {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+  min-height: 0;
 }
 .row-value {
   flex: 1;
@@ -210,15 +225,15 @@ function buildProfileHTML(mod) {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  align-items: center;
-  padding: 8px 24px 8px 35px;
-  font-size: 46px;
+  padding: ${rowPad}px 24px ${rowPad}px 35px;
+  font-size: ${valueBase}px;
   font-weight: 900;
   color: #FFD700;  /* 黄金色 — データを目立たせる */
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 18px rgba(255, 215, 0, 0.22);
   line-height: 1.05;
   overflow: hidden;
   word-break: break-word;
+  min-height: 0;
 }
 .sub-bar {
   position: absolute;
@@ -240,23 +255,25 @@ function buildProfileHTML(mod) {
 }
 `;
 
-  // 値の長さに応じてフォント縮小（base 56px）
+  // 値の長さに応じてフォント縮小（base = N に応じた valueBase）
   function _valFont(text) {
     const len = String(text || '').length;
-    if (len <= 6)  return 56;
-    if (len <= 9)  return 46;
-    if (len <= 13) return 36;
-    if (len <= 18) return 28;
-    return 24;
+    const m = valueBase;
+    if (len <= 6)  return m;
+    if (len <= 9)  return Math.max(m - 10, 28);
+    if (len <= 13) return Math.max(m - 20, 24);
+    if (len <= 18) return Math.max(m - 28, 22);
+    return Math.max(m - 32, 20);
   }
-  // ラベルは何の項目か即座にわかる大きさ（base 36px）
+  // ラベル：base = N に応じた labelBase
   function _labelFont(text) {
     const len = String(text || '').length;
-    if (len <= 6)  return 49;
-    if (len <= 10) return 41;
-    if (len <= 14) return 35;
-    if (len <= 18) return 30;
-    return 27;
+    const m = labelBase + 11;  // 旧仕様 +11 (短い時はやや拡大)
+    if (len <= 6)  return Math.min(m, labelBase + 11);
+    if (len <= 10) return Math.max(labelBase + 3, 24);
+    if (len <= 14) return Math.max(labelBase - 3, 22);
+    if (len <= 18) return Math.max(labelBase - 8, 20);
+    return Math.max(labelBase - 11, 18);
   }
 
   const dataRows = slots.map(s => {
