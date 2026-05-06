@@ -896,7 +896,20 @@ function getUI() {
   function _readSuggestJob(postId)     { try { return localStorage.getItem(_suggestJobKey(postId)); } catch (_) { return null; } }
 
   async function _applySuggestResult(post, result) {
-    const si = window.APP.s2.siData;
+    // 🐛 race condition fix（2026-05-06）:
+    //   旧実装は window.APP.s2.siData（= 現在画面表示中の案件 siData）を使ってた。
+    //   ユーザーが Job 中に別案件に切り替えると、別案件の siData に suggest 結果を
+    //   merge して post.id（= 元案件）のファイルに書き込んでしまい、案件間でラベル
+    //   ＋データが混ざる事故が発生していた。
+    //   → 必ずサーバーから post.id 用の si-data を fresh fetch してマージする。
+    let si;
+    try {
+      si = await fetchJson('/api/si-data?postId=' + encodeURIComponent(post.id));
+    } catch (_) {
+      si = _emptySi(post.id);
+    }
+    if (!si.boxes) si.boxes = { entity: { items: [] }, match: { items: [] }, search: { items: [] } };
+
     (result.entities || []).forEach(function(e) {
       if (!si.boxes.entity.items.find(x => x.label === e.name)) {
         si.boxes.entity.items.push({ label: e.name, role: e.role });
@@ -916,7 +929,11 @@ function getUI() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ postId: post.id, siData: si }),
     });
-    _renderBoxes();
+    // ユーザーが今もこの案件を見てる時だけ画面更新。別案件に切替済なら触らない
+    if (window.APP.selected?.id === post.id) {
+      window.APP.s2.siData = si;
+      _renderBoxes();
+    }
     const total = (result.entities?.length || 0) + (result.matches?.length || 0) + (result.searches?.length || 0);
     _msg('✅ ' + total + ' 件追加 (entities ' + (result.entities?.length||0) + ' / matches ' + (result.matches?.length||0) + ' / searches ' + (result.searches?.length||0) + ')');
   }
