@@ -118,11 +118,15 @@ function buildHistoryHTML(mod) {
   //   オーファン回避のため splitSubtitle で 1〜2 行に整形
   const _heroSrc = _t(mod.title || '');
   const _heroLines = splitSubtitle(_heroSrc, 11).lines.filter(Boolean);
+  const _longestHero = Math.max(..._heroLines.map(l => l.length), 1);
   // 1行 12字以内なら font 大きめ、超えると 2行で表示
-  const heroTitleFontPx = _heroLines.length === 1 && _heroLines[0].length <= 8 ? 84
-                       : _heroLines.length === 1                              ? 72
-                       : _heroLines.some(l => l.length > 12)                  ? 56
-                       : 64;
+  let heroTitleFontPx = _heroLines.length === 1 && _heroLines[0].length <= 8 ? 84
+                     : _heroLines.length === 1                              ? 72
+                     : _longestHero > 12                                    ? 56
+                     : 64;
+  // 安全クランプ: panel-hero ≈ 720px 幅
+  const _heroSafeFont = Math.floor((720 / _longestHero) * 0.95);
+  if (heroTitleFontPx > _heroSafeFont) heroTitleFontPx = Math.max(_heroSafeFont, 36);
   const heroTitle = _heroLines.map(l => esc(l)).join('<br>');
   const heroSubject = (mod.historyHero            && String(mod.historyHero).trim())            || '軌跡';
   const tlHeader    = (mod.historyMilestoneLabel  && String(mod.historyMilestoneLabel).trim())  || '主な歩み';

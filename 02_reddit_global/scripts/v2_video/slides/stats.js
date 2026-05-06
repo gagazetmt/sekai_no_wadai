@@ -77,10 +77,14 @@ function buildStatsHTML(mod) {
   // オーファン回避: 長文 title を 1〜2 行に整形
   const _titleLines = splitSubtitle(title, 13).lines.filter(Boolean);
   const titleHtml = _titleLines.map(l => esc(l)).join('<br>');
-  const titleFontPx = _titleLines.length === 1 && title.length <= 9 ? 56
-                    : _titleLines.length === 1                       ? 48
-                    : _titleLines.some(l => l.length > 14)            ? 40
-                    : 44;
+  const _longestTitle = Math.max(..._titleLines.map(l => l.length), 1);
+  let titleFontPx = _titleLines.length === 1 && title.length <= 9 ? 56
+                  : _titleLines.length === 1                       ? 48
+                  : _longestTitle > 14                              ? 40
+                  : 44;
+  // 安全クランプ: 約 880px のコンテナ内に収める
+  const _statsSafeFont = Math.floor((880 / _longestTitle) * 0.95);
+  if (titleFontPx > _statsSafeFont) titleFontPx = Math.max(_statsSafeFont, 28);
   const subTitle = _entityName(mod.siBinding) || (mod.type === 'profile' ? 'PROFILE' : 'STATISTICS');
 
   // type バッジの色（profile=紫 / stats=緑）

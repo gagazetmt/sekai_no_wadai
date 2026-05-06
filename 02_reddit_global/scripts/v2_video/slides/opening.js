@@ -32,7 +32,8 @@ function buildOpeningHTML(mod) {
     : _inferBadge(title);
 
   // タイトルが長い場合は 2行に自然分割（読みやすさ重視）
-  const { lines: titleLines } = splitSubtitle(title, 18);
+  //   maxLineLen=14 で 15字以上は強制 2行化（CSS auto-wrap で 1字オーファン化を防ぐ）
+  const { lines: titleLines } = splitSubtitle(title, 14);
   // タイトル文字サイズは長さに応じて段階的に縮小
   let titleFontSize = 110;
   const longest = Math.max(...titleLines.map(l => l.length), 1);
@@ -40,6 +41,9 @@ function buildOpeningHTML(mod) {
   if (longest > 18) titleFontSize = 76;
   if (longest > 22) titleFontSize = 64;
   if (longest > 28) titleFontSize = 56;
+  // ── 安全クランプ ── max-width 1620px に確実に収めて CSS auto-wrap 防止
+  const safeFontMax = Math.floor((1620 / longest) * 0.95);
+  if (titleFontSize > safeFontMax) titleFontSize = Math.max(safeFontMax, 48);
 
   // 字幕は出さない（タイトル読み上げのみ運用、字幕は冗長）
   const subBarHtml = '';

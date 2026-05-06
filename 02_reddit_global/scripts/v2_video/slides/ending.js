@@ -21,13 +21,19 @@ function buildEndingHTML(mod) {
   const title = _t(mod.title) || '次回もお楽しみに！';
 
   // タイトルが長い場合は 2行に自然分割 + 文字サイズ自動縮小
-  const { lines: titleLines } = splitSubtitle(title, 18);
+  //   maxLineLen=14 で 15字以上は 2行に強制（CSS auto-wrap で 1字オーファン化を防ぐ）
+  const { lines: titleLines } = splitSubtitle(title, 14);
   let titleFontSize = 120;
   const longest = Math.max(...titleLines.map(l => l.length), 1);
   if (longest > 14) titleFontSize = 100;
   if (longest > 18) titleFontSize = 84;
   if (longest > 22) titleFontSize = 70;
   if (longest > 28) titleFontSize = 60;
+  // ── 安全クランプ ──
+  //   max-width 1620px 内に必ず収まるよう、日本語1字 ≈ font-size px と仮定して
+  //   font を動的に縮める。これで CSS auto-wrap (1字 trail) が発生しなくなる
+  const safeFontMax = Math.floor((1620 / longest) * 0.95);
+  if (titleFontSize > safeFontMax) titleFontSize = Math.max(safeFontMax, 48);
   const titleHtml = titleLines.length > 1
     ? `${esc(titleLines[0])}<br>${esc(titleLines[1])}`
     : esc(titleLines[0] || '');

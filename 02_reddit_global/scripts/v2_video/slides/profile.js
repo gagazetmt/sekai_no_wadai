@@ -18,11 +18,14 @@ function buildProfileHTML(mod) {
   // オーファン回避: 長文 title は splitSubtitle で 1〜2 行に整形
   const mainTitleLines = splitSubtitle(mainTitleSrc, 12).lines.filter(Boolean);
   const mainTitleHtml = mainTitleLines.map(l => esc(l)).join('<br>');
-  // 1行 8字以内なら大、12字以内なら中、それ以外は縮小
-  const mainTitleFontPx = mainTitleLines.length === 1 && mainTitleSrc.length <= 8 ? 60
-                        : mainTitleLines.length === 1                              ? 52
-                        : mainTitleLines.some(l => l.length > 13)                  ? 44
-                        : 48;
+  const _longestMain = Math.max(...mainTitleLines.map(l => l.length), 1);
+  let mainTitleFontPx = mainTitleLines.length === 1 && mainTitleSrc.length <= 8 ? 60
+                      : mainTitleLines.length === 1                              ? 52
+                      : _longestMain > 13                                         ? 44
+                      : 48;
+  // 安全クランプ: 約 820px の panel-left コンテナ内に収める
+  const _profSafeFont = Math.floor((820 / _longestMain) * 0.95);
+  if (mainTitleFontPx > _profSafeFont) mainTitleFontPx = Math.max(_profSafeFont, 28);
   const subText   = mod.narration || '';
   const subtitle  = mod.subtitle || '';
 
