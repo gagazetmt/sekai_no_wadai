@@ -60,19 +60,21 @@ function buildTocHTML(mod) {
   const tocTitle = mod.title || '今日のラインナップ';
   const layout = _layoutForCount(items.length);
 
-  // ─── 固定間隔リビール ───
-  //   audio はイントロ煽り narration のみ。アイテムは intro 内で全部列挙されるため、
-  //   個別の chunk連動ハイライトは入れず、intro 再生時間に均等配置してフェードイン
+  // ─── 固定リビール + 順次脈動 ───
+  //   ① スライド遷移直後から1秒刻みで上から item を fade-in（5秒以内に全表示）
+  //   ② 全 item 表示後、1秒おきに順次脈動（拡大+ハイライト）。intro 再生中ずっと続く
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
   const totalSec = audio.length
     ? (audio.reduce((s, c) => s + (c.durationSec || 0), 0) + LEAD_PAD_SEC + TAIL_PAD_SEC)
     : Math.max(items.length * 1.5 + LEAD_PAD_SEC + TAIL_PAD_SEC, 5);
 
-  // intro 開始 0.5s 後から、後半は余韻として残し全 item を出し切る
-  const startSec = LEAD_PAD_SEC + 0.5;
-  const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1.0, startSec + 1);
-  const interval = items.length > 1 ? (lastSec - startSec) / (items.length - 1) : 0;
-  const enterDelays = items.map((_, i) => startSec + interval * i);
+  const REVEAL_INTERVAL = 1.0;  // 各 item の登場間隔
+  const startSec = LEAD_PAD_SEC + 0.3;
+  const enterDelays = items.map((_, i) => startSec + i * REVEAL_INTERVAL);
+  // 全 item が表示し終わった時刻 + 0.3s から脈動開始
+  const pulseStartSec = startSec + items.length * REVEAL_INTERVAL + 0.3;
+  const pulseCycleSec = Math.max(items.length, 1);  // 1秒/item × items 個 = 1巡
+  const pulseDelays = items.map((_, i) => pulseStartSec + i);
 
   const extraStyles = `
 .bg-img {
@@ -173,14 +175,23 @@ function buildTocHTML(mod) {
   border-left: 0 solid transparent;
   transition: padding-left 0.2s;
   border-radius: 0 6px 6px 0;
-  /* 登場アニメ */
+  /* 登場アニメ + 脈動アニメを並走 */
   opacity: 0;
   transform: translateX(-40px);
-  animation: rowSlideIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  padding-left: 32px;
+  animation:
+    rowSlideIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards,
+    tocPulse ${pulseCycleSec.toFixed(2)}s linear infinite;
 }
 @keyframes rowSlideIn {
   from { opacity: 0; transform: translateX(-40px); }
-  to   { opacity: 1; transform: translateX(0); }
+  to   { opacity: 1; transform: translateX(0); padding-left: 32px; }
+}
+/* 順次脈動：全 item 表示後、1秒/item サイクルで自分のスロット時に拡大+ハイライト */
+@keyframes tocPulse {
+  0%, 100% { transform: translateX(0) scale(1); border-left: 0 solid transparent; padding-left: 32px; background: transparent; }
+  ${((1 / pulseCycleSec) * 50).toFixed(2)}% { transform: translateX(0) scale(1.04); border-left: 6px solid ${PALETTE.accent}; padding-left: 26px; background: rgba(245, 158, 11, 0.13); }
+  ${((1 / pulseCycleSec) * 100).toFixed(2)}% { transform: translateX(0) scale(1); border-left: 0 solid transparent; padding-left: 32px; background: transparent; }
 }
 .toc-row:last-child { border-bottom: none; }
 
@@ -242,8 +253,10 @@ function buildTocHTML(mod) {
   const itemsHtml = items.map((it, i) => {
     const fz = _itemFontSize(it, layout.titleFz);
     const enterDelay = enterDelays[i].toFixed(2);
+    const pulseDelay = pulseDelays[i].toFixed(2);
     const numStr = String(i + 1).padStart(2, '0');
-    const animStyle = `style="animation-delay:${enterDelay}s;"`;
+    // 2 アニメ並走: rowSlideIn (登場 1回) + tocPulse (脈動 無限ループ)
+    const animStyle = `style="animation-delay:${enterDelay}s, ${pulseDelay}s;"`;
     return `<div class="toc-row r${i}" ${animStyle}>`
       + `<div class="toc-num"><span class="toc-num-prefix">No.</span>${numStr}</div>`
       + `<div class="toc-title" style="font-size:${fz}px;">${esc(it)}</div>`
