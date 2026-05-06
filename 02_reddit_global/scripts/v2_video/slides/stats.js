@@ -8,7 +8,7 @@
 //   - 名前ボックス: 下から浮上ゴーストトレイル + 本体 fade in（insight の縦版）
 //   - データカード: 該当 chunk が再生中だけ active（金枠 + scale 1.04 + グロー）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 // チーム or 選手 → 日本語/カタカナ
 function _entityName(raw) {
@@ -22,10 +22,11 @@ function _entityName(raw) {
 //   profile: 4件 → 2x2（コンパクトで impact 大きい）
 //   stats:   6件 → 2x3（基本形）/ 7-8件 → 2x4
 function _gridLayout(count) {
-  if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 36, padTop: 80, padBottom: 130 };
-  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 34, padTop: 80, padBottom: 130 }; // profile 2x2
-  if (count <= 6) return { cols: 2, gap: 16, maxValFont: 76, maxLabelFont: 32, padTop: 70, padBottom: 120 }; // stats 2x3 ← 基本形
-  return            { cols: 2, gap: 14, maxValFont: 60, maxLabelFont: 26, padTop: 60, padBottom: 116 };       // stats 2x4 (7-8件)
+  // maxLabelFont は元値の +35% (白色化と合わせて見出しを目立たせる)
+  if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 49, padTop: 80, padBottom: 130 };
+  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 46, padTop: 80, padBottom: 130 }; // profile 2x2
+  if (count <= 6) return { cols: 2, gap: 16, maxValFont: 76, maxLabelFont: 43, padTop: 70, padBottom: 120 }; // stats 2x3 ← 基本形
+  return            { cols: 2, gap: 14, maxValFont: 60, maxLabelFont: 35, padTop: 60, padBottom: 116 };       // stats 2x4 (7-8件)
 }
 
 // 金粒パーティクル（左カラム背景の動き出し用・toc から流用、件数 8）
@@ -73,6 +74,13 @@ function buildStatsHTML(mod) {
   const layout = _gridLayout(slots.length);
 
   const title    = _t(mod.title) || _entityName(mod.siBinding) || 'STATS';
+  // オーファン回避: 長文 title を 1〜2 行に整形
+  const _titleLines = splitSubtitle(title, 13).lines.filter(Boolean);
+  const titleHtml = _titleLines.map(l => esc(l)).join('<br>');
+  const titleFontPx = _titleLines.length === 1 && title.length <= 9 ? 56
+                    : _titleLines.length === 1                       ? 48
+                    : _titleLines.some(l => l.length > 14)            ? 40
+                    : 44;
   const subTitle = _entityName(mod.siBinding) || (mod.type === 'profile' ? 'PROFILE' : 'STATISTICS');
 
   // type バッジの色（profile=紫 / stats=緑）
@@ -228,7 +236,7 @@ function buildStatsHTML(mod) {
   to   { opacity: 1; transform: translateY(0);    }
 }
 .player-name {
-  font-size: 56px;
+  font-size: ${titleFontPx}px;
   font-weight: 900;
   color: ${PALETTE.text};
   line-height: 1.15;
@@ -315,7 +323,8 @@ function buildStatsHTML(mod) {
 @keyframes barWave { from { transform: scaleY(0.30); } to { transform: scaleY(1); } }
 .card-label {
   font-weight: 800;
-  color: #8aa8d8;
+  color: #ffffff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
   letter-spacing: 0.5px;
   line-height: 1.18;
   display: -webkit-box;
@@ -356,10 +365,10 @@ ${cardActiveStyles}
     const len = String(text || '').length;
     const m = layout.maxLabelFont;
     if (len <= 6)  return m;
-    if (len <= 10) return Math.max(m - 4, 20);
-    if (len <= 14) return Math.max(m - 8, 18);
-    if (len <= 18) return Math.max(m - 12, 16);
-    return Math.max(m - 14, 14);
+    if (len <= 10) return Math.max(m - 5, 27);
+    if (len <= 14) return Math.max(m - 11, 24);
+    if (len <= 18) return Math.max(m - 16, 22);
+    return Math.max(m - 19, 19);
   }
 
   const cardsHtml = slots.map((s, i) => {
@@ -391,7 +400,7 @@ ${cardActiveStyles}
   <div class="dust-layer">${_buildDust()}</div>
   <div class="img-name-row">
     <div class="img-name-real">
-      <div class="player-name">${esc(title)}</div>
+      <div class="player-name">${titleHtml}</div>
       <div class="player-sub">${esc(subTitle)}</div>
     </div>
   </div>

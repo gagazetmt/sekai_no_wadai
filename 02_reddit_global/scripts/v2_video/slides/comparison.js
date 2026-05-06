@@ -283,6 +283,12 @@ function buildComparisonHTML(mod) {
   font-size: 56px;
   font-weight: 900;
   line-height: 1.05;
+  /* データ値は白+グロー演出で目立たせる */
+  color: #ffffff;
+  text-shadow:
+    0 0 12px rgba(255, 255, 255, 0.55),
+    0 0 28px rgba(252, 211, 77, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.85);
   /* 長文は2行まで折り返し可能 + はみ出しは省略 */
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -294,15 +300,19 @@ function buildComparisonHTML(mod) {
 .val-left {
   text-align: right;
   padding-right: 40px;
-  color: #93c5fd;
 }
 .val-right {
   text-align: left;
   padding-left: 40px;
-  color: #fca5a5;
 }
-/* 数値比較で勝ってる方を白くハイライト（色だけ。フォントサイズは長さで動的調整） */
-.val.win  { color: ${PALETTE.text}; }
+/* 数値比較で勝ってる方は更に金色グロー強化、負けは少し控えめ */
+.val.win {
+  color: #fff;
+  text-shadow:
+    0 0 16px rgba(255, 255, 255, 0.75),
+    0 0 36px rgba(252, 211, 77, 0.85),
+    0 4px 14px rgba(0, 0, 0, 0.9);
+}
 .val.lose { opacity: 0.55; }
 
 .label-col {
@@ -313,12 +323,14 @@ function buildComparisonHTML(mod) {
   padding: 0 8px;
 }
 .label-text {
-  color: #94a3b8;
-  font-size: 22px;
-  font-weight: 700;
+  /* +20% (22→26) / 金色 / 影付き */
+  color: ${PALETTE.accent};
+  font-size: 26px;
+  font-weight: 800;
   letter-spacing: 1.5px;
   text-align: center;
   line-height: 1.15;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 14px rgba(245, 158, 11, 0.4);
   /* 長文は2行まで */
   display: -webkit-box;
   -webkit-line-clamp: 2;

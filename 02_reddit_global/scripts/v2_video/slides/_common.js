@@ -40,7 +40,11 @@ function imgDataUri(imgPath) {
       : path.join(__dirname, '..', '..', '..', imgPath.replace(/^\//, ''));
     if (!fs.existsSync(abs)) return null;
     const ext  = path.extname(abs).toLowerCase();
-    const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+    const mime = ext === '.png'  ? 'image/png'
+               : ext === '.svg'  ? 'image/svg+xml'
+               : ext === '.webp' ? 'image/webp'
+               : ext === '.gif'  ? 'image/gif'
+               : 'image/jpeg';
     const b64  = fs.readFileSync(abs).toString('base64');
     return `data:${mime};base64,${b64}`;
   } catch (_) { return null; }
@@ -167,9 +171,28 @@ function splitSubtitle(text, maxLineLen = 20) {
   candidates.sort((a, b) => b.score - a.score);
   const splitAt = candidates.length ? candidates[0].pos : Math.floor(t.length / 2);
 
-  const line1 = t.slice(0, splitAt).trim();
-  const line2 = t.slice(splitAt).trim();
-  const longest = Math.max(line1.length, line2.length);
+  let line1 = t.slice(0, splitAt).trim();
+  let line2 = t.slice(splitAt).trim();
+
+  // ── オーファン (1〜3字 trail) 回避 ──
+  //   "ご視聴いただきありがとうございまし\nた" のような不自然な改行を防ぐ。
+  //   line2 が極端に短い場合は中央寄りに rebalance（natural break を犠牲にしてでも均衡優先）
+  if (line2.length > 0 && line2.length < 4 && (line1.length + line2.length) > 0) {
+    const total = line1 + line2;
+    // 中央付近で natural break を再探索 (40-60%)
+    const mid = Math.floor(total.length / 2);
+    const breaks = ['。', '！', '？', '!', '?', '、', ',', ' ', '・'];
+    let bestPos = mid;
+    let bestDist = Infinity;
+    for (let i = Math.floor(total.length * 0.4); i <= Math.floor(total.length * 0.6); i++) {
+      if (breaks.includes(total[i])) {
+        const d = Math.abs(mid - i);
+        if (d < bestDist) { bestDist = d; bestPos = i + 1; }
+      }
+    }
+    line1 = total.slice(0, bestPos).trim();
+    line2 = total.slice(bestPos).trim();
+  }
 
   // フォントは固定 (50px)。可変だと見にくいため。
   // 長文ではみ出す場合はバー高さを動的拡張する側で対応する。

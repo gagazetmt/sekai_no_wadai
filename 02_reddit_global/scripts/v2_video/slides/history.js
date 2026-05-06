@@ -7,7 +7,7 @@
 //   - 最新イベント dot は緑脈動を維持
 //   - hero-subject / tl-header は AI 動的生成 or 日本語既定
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, _t, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
 const MAX_EVENTS = 7;
 
@@ -115,7 +115,15 @@ function buildHistoryHTML(mod) {
   const delays = orderIdx.map(i => tempDelays[i]);
 
   // タイトル系 ─ AI 生成 or 既定（日本語）
-  const heroTitle   = _t(mod.title || '').replace(/ /g, '<br>');
+  //   オーファン回避のため splitSubtitle で 1〜2 行に整形
+  const _heroSrc = _t(mod.title || '');
+  const _heroLines = splitSubtitle(_heroSrc, 11).lines.filter(Boolean);
+  // 1行 12字以内なら font 大きめ、超えると 2行で表示
+  const heroTitleFontPx = _heroLines.length === 1 && _heroLines[0].length <= 8 ? 84
+                       : _heroLines.length === 1                              ? 72
+                       : _heroLines.some(l => l.length > 12)                  ? 56
+                       : 64;
+  const heroTitle = _heroLines.map(l => esc(l)).join('<br>');
   const heroSubject = (mod.historyHero            && String(mod.historyHero).trim())            || '軌跡';
   const tlHeader    = (mod.historyMilestoneLabel  && String(mod.historyMilestoneLabel).trim())  || '主な歩み';
 
@@ -157,7 +165,7 @@ function buildHistoryHTML(mod) {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
 }
 .panel-hero .hero-title {
-  font-size: 72px;
+  font-size: ${heroTitleFontPx}px;
   font-weight: 900;
   color: ${PALETTE.text};
   line-height: 1.15;

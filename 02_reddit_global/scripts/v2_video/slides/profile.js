@@ -3,7 +3,7 @@
 //   左カラム: [国旗][クラブロゴ] / タイトル(選手名) / メイン画像(選手写真)
 //   右カラム: データ行（出場・ゴール等のスタッツ）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, _t } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t } = require('./_common');
 
 function buildProfileHTML(mod) {
   // dataSlots 4件を data-row で使う
@@ -14,7 +14,15 @@ function buildProfileHTML(mod) {
   // 国旗（leftImage / countryImage / flagImage いずれか）+ クラブロゴ（rightImage / clubLogo / homeImage いずれか）
   const flagImg  = mod.countryImage || mod.flagImage || imgDataUri(mod.leftImage)  || imgDataUri(mod.homeImage);
   const clubImg  = mod.clubLogo     || mod.homeLogo  || imgDataUri(mod.rightImage) || imgDataUri(mod.awayImage);
-  const mainTitle = _t(mod.title) || 'PROFILE';
+  const mainTitleSrc = _t(mod.title) || 'PROFILE';
+  // オーファン回避: 長文 title は splitSubtitle で 1〜2 行に整形
+  const mainTitleLines = splitSubtitle(mainTitleSrc, 12).lines.filter(Boolean);
+  const mainTitleHtml = mainTitleLines.map(l => esc(l)).join('<br>');
+  // 1行 8字以内なら大、12字以内なら中、それ以外は縮小
+  const mainTitleFontPx = mainTitleLines.length === 1 && mainTitleSrc.length <= 8 ? 60
+                        : mainTitleLines.length === 1                              ? 52
+                        : mainTitleLines.some(l => l.length > 13)                  ? 44
+                        : 48;
   const subText   = mod.narration || '';
   const subtitle  = mod.subtitle || '';
 
@@ -70,7 +78,7 @@ function buildProfileHTML(mod) {
 .flag-cell { background: rgba(96,128,180,0.1); }
 .club-cell { background: rgba(252,211,77,0.1); }
 .main-title {
-  font-size: 60px;
+  font-size: ${mainTitleFontPx}px;
   font-weight: 900;
   border-left: 12px solid ${PALETTE.accent};
   padding-left: 30px;
@@ -178,9 +186,10 @@ function buildProfileHTML(mod) {
   border-radius: 10px;
   display: flex; align-items: center;
   padding-left: 28px;
-  font-size: 28px;
+  font-size: 38px;
   font-weight: 700;
-  color: #6080b0;
+  color: #ffffff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
   line-height: 1.15;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -238,11 +247,11 @@ function buildProfileHTML(mod) {
   // ラベルは何の項目か即座にわかる大きさ（base 36px）
   function _labelFont(text) {
     const len = String(text || '').length;
-    if (len <= 6)  return 36;
-    if (len <= 10) return 30;
-    if (len <= 14) return 26;
-    if (len <= 18) return 22;
-    return 20;
+    if (len <= 6)  return 49;
+    if (len <= 10) return 41;
+    if (len <= 14) return 35;
+    if (len <= 18) return 30;
+    return 27;
   }
 
   const dataRows = slots.map(s => {
@@ -257,7 +266,7 @@ function buildProfileHTML(mod) {
   const slideBody = `
 <div class="panel-left">
   <div class="main-title">
-    ${esc(mainTitle)}
+    ${mainTitleHtml}
     ${subtitle ? `<div class="main-subtitle">${esc(subtitle)}</div>` : ''}
   </div>
   <div class="main-img-frame">${mainImg ? `<div class="img-fill" style="background-image:url('${mainImg}')"></div>` : '<div class="img-fill"></div>'}</div>
