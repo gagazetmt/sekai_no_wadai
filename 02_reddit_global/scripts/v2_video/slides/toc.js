@@ -60,45 +60,19 @@ function buildTocHTML(mod) {
   const tocTitle = mod.title || '今日のラインナップ';
   const layout = _layoutForCount(items.length);
 
-  // ─── chunk連動アクティブハイライト計算 ───
-  //   audio の末尾 items.length 個が各 item の読み上げ chunk
-  //   先頭 (audio.length - items.length) 個はイントロ（複数チャンクの煽り narration）
-  //   audio.length < items.length なら chunk連動 OFF（固定間隔で順次表示）
+  // ─── 固定間隔リビール ───
+  //   audio はイントロ煽り narration のみ。アイテムは intro 内で全部列挙されるため、
+  //   個別の chunk連動ハイライトは入れず、intro 再生時間に均等配置してフェードイン
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
-  const chunkStarts = audio.map((_, i) =>
-    LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
   const totalSec = audio.length
     ? (audio.reduce((s, c) => s + (c.durationSec || 0), 0) + LEAD_PAD_SEC + TAIL_PAD_SEC)
     : Math.max(items.length * 1.5 + LEAD_PAD_SEC + TAIL_PAD_SEC, 5);
 
-  const audioOffset = Math.max(0, audio.length - items.length);
-  const canActive = audio.length >= items.length && items.length > 0;
-
-  // 各行の登場 delay
-  const startSec = LEAD_PAD_SEC + 0.4;
-  const interval = 0.4;
-  const enterDelays = items.map((_, i) =>
-    canActive ? chunkStarts[i + audioOffset] + 0.05 : startSec + interval * i
-  );
-
-  // chunk連動アクティブ用 keyframes
-  const activeKeyframes = canActive
-    ? items.map((_, i) => {
-        const ai = i + audioOffset;
-        const start = chunkStarts[ai];
-        const end = start + ((audio[ai] && audio[ai].durationSec) || 0);
-        const startPct = (start / totalSec * 100).toFixed(2);
-        const fadeInPct = Math.min(((start + 0.15) / totalSec * 100), 100).toFixed(2);
-        const fadeOutPct = Math.max(((end - 0.15) / totalSec * 100), 0).toFixed(2);
-        const endPct = (end / totalSec * 100).toFixed(2);
-        return `@keyframes rowActive${i} {
-          0%, ${startPct}% { background: transparent; transform: translateX(0) scale(1); border-left: 0 solid transparent; }
-          ${fadeInPct}% { background: rgba(245, 158, 11, 0.12); transform: translateX(0) scale(1.025); border-left: 6px solid ${PALETTE.accent}; padding-left: 14px; }
-          ${fadeOutPct}% { background: rgba(245, 158, 11, 0.12); transform: translateX(0) scale(1.025); border-left: 6px solid ${PALETTE.accent}; padding-left: 14px; }
-          ${endPct}%, 100% { background: transparent; transform: translateX(0) scale(1); border-left: 0 solid transparent; padding-left: 0; }
-        }`;
-      }).join('\n')
-    : '';
+  // intro 開始 0.5s 後から、後半は余韻として残し全 item を出し切る
+  const startSec = LEAD_PAD_SEC + 0.5;
+  const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1.0, startSec + 1);
+  const interval = items.length > 1 ? (lastSec - startSec) / (items.length - 1) : 0;
+  const enterDelays = items.map((_, i) => startSec + interval * i);
 
   const extraStyles = `
 .bg-img {
@@ -210,8 +184,6 @@ function buildTocHTML(mod) {
 }
 .toc-row:last-child { border-bottom: none; }
 
-${activeKeyframes}
-
 .toc-num {
   font-family: 'Georgia', 'Times New Roman', serif;
   font-size: ${layout.numFz}px;
@@ -265,21 +237,13 @@ ${activeKeyframes}
   border-left: 1px solid rgba(255, 255, 255, 0.15);
 }
 
-/* アクティブ時のラベル明色化 */
-${canActive ? items.map((_, i) => `
-.toc-row.r${i} { animation: rowSlideIn 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards, rowActive${i} ${totalSec.toFixed(2)}s linear forwards; }
-.toc-row.r${i}.active-target .toc-num { text-shadow: 0 0 28px rgba(245, 158, 11, 0.8); }
-`).join('') : ''}
 `;
 
   const itemsHtml = items.map((it, i) => {
     const fz = _itemFontSize(it, layout.titleFz);
     const enterDelay = enterDelays[i].toFixed(2);
     const numStr = String(i + 1).padStart(2, '0');
-    // 登場アニメだけのスタイル（chunk連動は keyframes 側）
-    const animStyle = canActive
-      ? `style="animation-delay:${enterDelay}s, 0s;"`
-      : `style="animation-delay:${enterDelay}s;"`;
+    const animStyle = `style="animation-delay:${enterDelay}s;"`;
     return `<div class="toc-row r${i}" ${animStyle}>`
       + `<div class="toc-num"><span class="toc-num-prefix">No.</span>${numStr}</div>`
       + `<div class="toc-title" style="font-size:${fz}px;">${esc(it)}</div>`

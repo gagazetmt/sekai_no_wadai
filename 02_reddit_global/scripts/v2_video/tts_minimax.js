@@ -389,13 +389,10 @@ function buildChunksForModule(mod) {
     return title ? [title] : (narr ? [narr] : []);
   }
 
-  // toc は intro (narration を文末分割) + 各 tocItem.chunkText を順次読み上げ
-  //   結果: audio.length === intro_chunks + items.length → toc.js は audioOffset を自動計算
+  // toc は intro narration のみ読み上げ（アイテム名は intro 内で既に列挙されているため
+  //   別途読むと重複してくどい）。アイテムは toc.js の固定間隔リビールで順次表示される
   if (mod.type === 'toc') {
-    const items = Array.isArray(mod.tocItems) ? mod.tocItems.map(itemText).filter(Boolean) : [];
-    const intro = narr ? splitIntoChunks(narr) : [];
-    if (items.length) return [...intro, ...items];
-    return intro;
+    return narr ? splitIntoChunks(narr) : [];
   }
 
   // 通常タイプ: narration を文末分割
