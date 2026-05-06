@@ -189,6 +189,9 @@ function walkPlayer(d) {
   if (d._wiki?.extract)     push('wikiBio',  '紹介文',    String(d._wiki.extract).slice(0, 120), 'Wikipedia', 4);
   if (d._wiki?.description) push('wikiDesc', '一行紹介',  d._wiki.description,                   'Wikipedia', 5);
 
+  // FotMob クラブごとキャリア（選手）
+  _pushFotmobPlayerCareer(push, d._fotmob);
+
   return slots;
 }
 
@@ -449,7 +452,59 @@ function walkManager(d) {
   if (d._wiki?.extract)     push('wikiBio',  '紹介文',   String(d._wiki.extract).slice(0, 120), 'Wikipedia', 4);
   if (d._wiki?.description) push('wikiDesc', '一行紹介', d._wiki.description,                   'Wikipedia', 5);
 
+  // FotMob クラブごとキャリア（監督）+ クラブ別大会タイトル
+  _pushFotmobCoachCareer(push, d._fotmob);
+
   return slots;
+}
+
+// ─── FotMob ヘルパー ────────────────────────────────────────
+//   選手・監督の per-club キャリア slots を追加。SofaScore career[] が
+//   null だった部分を補完する
+function _pushFotmobPlayerCareer(push, fm) {
+  if (!fm || !Array.isArray(fm.playerCareer)) return;
+  fm.playerCareer.slice(0, 8).forEach((c, i) => {
+    const yrs = (c.startDate || '????').slice(0, 4) + '-' + (c.endDate ? c.endDate.slice(0, 4) : '現在');
+    const stats = [
+      c.appearances != null ? c.appearances + '試合' : '',
+      c.goals       != null ? c.goals + 'G'         : '',
+      c.assists     != null ? c.assists + 'A'       : '',
+    ].filter(Boolean).join(' ');
+    push(`fmPlayerClub_${i+1}`, `経歴${i+1}`, `${yrs} ${c.team || '?'}${stats ? ' / ' + stats : ''}`, '所属クラブ歴', 7 - Math.min(i, 5));
+  });
+  const total = fm.playerCareer.reduce((acc, c) => ({
+    apps:    acc.apps    + (c.appearances || 0),
+    goals:   acc.goals   + (c.goals       || 0),
+    assists: acc.assists + (c.assists     || 0),
+  }), { apps: 0, goals: 0, assists: 0 });
+  if (total.apps > 0) {
+    push('fmCareerApps',    '通算出場',     total.apps + '試合', '通算成績', 8);
+    push('fmCareerGoals',   '通算ゴール',   total.goals + 'G',   '通算成績', 8);
+    push('fmCareerAssists', '通算アシスト', total.assists + 'A', '通算成績', 7);
+  }
+}
+
+function _pushFotmobCoachCareer(push, fm) {
+  if (!fm) return;
+  if (Array.isArray(fm.coachCareer) && fm.coachCareer.length) {
+    fm.coachCareer.slice(0, 8).forEach((c, i) => {
+      const yrs = (c.startDate || '????').slice(0, 4) + '-' + (c.endDate ? c.endDate.slice(0, 4) : '現在');
+      push(`fmCoachClub_${i+1}`, `指揮歴${i+1}`, `${yrs} ${c.team || '?'}`, '監督歴', 8 - Math.min(i, 6));
+    });
+    push('fmCoachClubCount', '指揮クラブ数', String(fm.coachCareer.length), '監督歴', 7);
+  }
+  if (Array.isArray(fm.coachTrophies) && fm.coachTrophies.length) {
+    let trophyIdx = 0;
+    fm.coachTrophies.slice(0, 4).forEach((teamBlock) => {
+      (teamBlock.tournaments || []).slice(0, 6).forEach((t) => {
+        const won = (t.seasonsWon || []).length;
+        if (won === 0) return;
+        const ru  = (t.seasonsRunnerUp || []).length;
+        push(`fmTrophy_${trophyIdx+1}`, `${teamBlock.teamName} ${t.leagueName}`, `${won}回優勝${ru ? ` / 準優勝${ru}` : ''}`, '大会別タイトル', 7 - Math.min(trophyIdx, 5));
+        trophyIdx++;
+      });
+    });
+  }
 }
 
 // ─── 大会 ────────────────────────────────────────────────────

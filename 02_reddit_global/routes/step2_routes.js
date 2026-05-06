@@ -325,8 +325,18 @@ async function _fetchEntity(label, role) {
   if (sofaFetcher) tasks.push(sofaFetcher(label).catch(e => ({ ok: false, error: e.message })));
   else             tasks.push(Promise.resolve(null));
 
-  const [wiki, sofa] = await Promise.all(tasks);
-  return { wiki, sofa };
+  // FotMob (player + manager のみ) — クラブごとキャリア & 大会別タイトル
+  //   SofaScore の career[] が null のところを補完。Pep の Bayern/Barca 時代等が取れる
+  if (role === 'player' || role === 'manager') {
+    const { fetchByName } = require('../scripts/modules/fetchers/fotmob_career');
+    tasks.push(fetchByName(label).catch(e => ({ ok: false, error: e.message })));
+  } else {
+    tasks.push(Promise.resolve(null));
+  }
+
+  const [wiki, sofa, fmRes] = await Promise.all(tasks);
+  const fotmob = fmRes && fmRes.data ? { ok: true, ...fmRes.data, _matched: fmRes.found } : (fmRes || null);
+  return { wiki, sofa, fotmob };
 }
 
 async function _fetchMatch(label) {
@@ -347,10 +357,10 @@ router.post('/v3/fetch-label', async (req, res) => {
   try {
     if (box === 'entity') {
       if (!role) return res.status(400).json({ error: 'role required for entity' });
-      const { wiki, sofa } = await _fetchEntity(label, role);
+      const { wiki, sofa, fotmob } = await _fetchEntity(label, role);
       const items = si.boxes.entity.items;
       const i = items.findIndex(x => x.label === label);
-      const next = { label, role, wiki, sofa, fetchedAt: now };
+      const next = { label, role, wiki, sofa, fotmob, fetchedAt: now };
       if (i >= 0) items[i] = next; else items.push(next);
     }
     else if (box === 'match') {
@@ -409,8 +419,8 @@ router.post('/v3/fetch-all', async (req, res) => {
       const it = queue.shift();
       try {
         if (it.box === 'entity') {
-          const { wiki, sofa } = await _fetchEntity(it.label, it.role);
-          results.push({ ...it, wiki, sofa, fetchedAt: now });
+          const { wiki, sofa, fotmob } = await _fetchEntity(it.label, it.role);
+          results.push({ ...it, wiki, sofa, fotmob, fetchedAt: now });
         } else if (it.box === 'match') {
           const data = await _fetchMatch(it.label);
           results.push({ ...it, data, fetchedAt: now });
@@ -430,7 +440,7 @@ router.post('/v3/fetch-all', async (req, res) => {
     const items = si.boxes[r.box].items;
     const i = items.findIndex(x => x.label === r.label);
     let next;
-    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fetchedAt: r.fetchedAt, error: r.error };
+    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, fetchedAt: r.fetchedAt, error: r.error };
     else                    next = { label: r.label, data: r.data,  fetchedAt: r.fetchedAt, error: r.error };
     if (i >= 0) items[i] = next; else items.push(next);
   }

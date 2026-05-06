@@ -38,10 +38,12 @@ function _findEntityData(siData, subject, label) {
   if (!it) return null;
   const sofaOk = !!it.sofa?.ok;
   const wikiOk = !!it.wiki?.ok;
-  if (!sofaOk && !wikiOk) return null;
+  const fmOk   = !!it.fotmob?.ok;
+  if (!sofaOk && !wikiOk && !fmOk) return null;
   return {
     ...(sofaOk ? it.sofa : {}),
-    _wiki: wikiOk ? it.wiki : null,
+    _wiki:   wikiOk ? it.wiki   : null,
+    _fotmob: fmOk   ? it.fotmob : null,
   };
 }
 
