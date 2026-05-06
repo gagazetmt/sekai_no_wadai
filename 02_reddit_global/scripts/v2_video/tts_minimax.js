@@ -33,6 +33,31 @@ async function _getKuroshiro() {
   return _kuroshiroPromise;
 }
 
+// ── kuromoji tokenizer（数字+助数詞ペア検出用）の遅延初期化 ──────
+//   2026-05-08 数字読み根本解決：形態素境界を尊重して数字と助数詞を確実に分離
+//   kuroshiro とは独立にトークン取得（kuroshiro は文字列→文字列 API しか公開してない）
+let _kuromojiTokenizerPromise = null;
+async function _getKuromojiTokenizer() {
+  if (_kuromojiTokenizerPromise) return _kuromojiTokenizerPromise;
+  _kuromojiTokenizerPromise = (async () => {
+    try {
+      const kuromoji = require('kuromoji');
+      const dicPath  = path.join(path.dirname(require.resolve('kuromoji')), '..', 'dict');
+      return await new Promise((resolve, reject) => {
+        kuromoji.builder({ dicPath }).build((err, tokenizer) => {
+          if (err) return reject(err);
+          console.log('  ✓ kuromoji tokenizer 初期化完了（数字+助数詞ペア検出 ON）');
+          resolve(tokenizer);
+        });
+      });
+    } catch (e) {
+      console.warn('  ⚠️ kuromoji tokenizer 初期化失敗、regex fallback:', e.message);
+      return null;
+    }
+  })();
+  return _kuromojiTokenizerPromise;
+}
+
 const API_URL    = 'https://api-uw.minimax.io/v1/t2a_v2';
 const MODEL      = process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd';
 // 2026-05-06 voice 最終決定: ⑦ Japanese_GenerousIzakayaOwner をデフォルトに採用
@@ -171,18 +196,83 @@ const UNIT_KANA = {
   'クリーンシート': 'クリーンシート',
 };
 
-// 日本語ナレ向けサニタイズ（読み崩れ防止 / ハイブリッド構成）
+// 接頭語: 数字との間に MiniMax 分節事故が起きやすい語
+//   形態素境界で「接頭語 → 数字」の遷移を検出したら間に「、」を挿入する
+const PREFIX_NUMBERS = new Set([
+  '通算','合計','総','累計','歴代','現在','今季','前季','今期','前期',
+  '今シーズン','前シーズン','約','およそ','過去','直近',
+]);
+
+// kuromoji ベースで数字+助数詞ペアを処理（2026-05-08 根本解決）
+//   形態素境界を尊重するため、regex 一括置換で起きていた以下の事故を全て解消：
+//     - "通算178試合" の "178" を ひらがな化した後 "試合" との連結で再分節
+//     - "2度" のような短い数+助数詞の不安定な読み
+//     - 単位無し裸数字での Chinese-style 読み混入
+//   注意: 小数点 / N分音便 / スコア "3-1" は呼び出し前段で regex 処理済み前提
+async function processNumbersWithKuromoji(text) {
+  const tokenizer = await _getKuromojiTokenizer();
+  if (!tokenizer) {
+    // フォールバック: 旧 regex で数字+単位 + 裸数字を最低限処理
+    let s = text;
+    s = s.replace(/(通算|合計|総|累計|歴代|現在|今季|前季|今期|前期|今シーズン|前シーズン)\s*(\d)/g, '$1、$2');
+    s = s.replace(/(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|秒|億|万|千|度目|度|個|点|ポイント|%|パーセント|km|kg|時間|クリーンシート)/g,
+      (_m, num, unit) => numToFullJa(num) + (UNIT_KANA[unit] || unit));
+    return s.replace(/\d+/g, (m) => numToFullJa(m));
+  }
+
+  const tokens = tokenizer.tokenize(text);
+  const out = [];
+
+  for (let i = 0; i < tokens.length; i++) {
+    const cur     = tokens[i];
+    const surface = cur.surface_form;
+    const posD    = cur.pos_detail_1;
+
+    // 数字トークン判定（純粋な \d+ のみ。kuromoji の pos_detail_1 が "数"）
+    const isNumberToken = posD === '数' && /^\d+$/.test(surface);
+
+    if (isNumberToken) {
+      const numKana = numToFullJa(surface);
+
+      // 直前が接頭語？ → 既出力末尾に「、」挿入で MiniMax 再分節事故を防ぐ
+      const prev = i > 0 ? tokens[i - 1] : null;
+      if (prev && PREFIX_NUMBERS.has(prev.surface_form)) {
+        if (out.length > 0 && !out[out.length - 1].endsWith('、')) {
+          out[out.length - 1] = out[out.length - 1] + '、';
+        }
+      }
+
+      // 直後が助数詞 (UNIT_KANA に登録された語) なら確定読みでまとめ出力
+      //   "2度" → "にど" のように分節境界を作らず連続音として MiniMax に渡す
+      const next = i + 1 < tokens.length ? tokens[i + 1] : null;
+      if (next && UNIT_KANA[next.surface_form]) {
+        out.push(numKana + UNIT_KANA[next.surface_form]);
+        i++;  // 助数詞トークンを消費
+      } else {
+        out.push(numKana);
+      }
+    } else if (UNIT_KANA[surface]) {
+      // 数字を伴わない助数詞単独 → 確定読みで kuroshiro 誤読を回避
+      out.push(UNIT_KANA[surface]);
+    } else {
+      // 漢字含むその他のトークンはパススルー → 後段の kuroshiro が hiragana 化
+      out.push(surface);
+    }
+  }
+
+  return out.join('');
+}
+
+// 日本語ナレ向けサニタイズ（読み崩れ防止 / kuromoji 形態素ベース）
 //   0. 全角数字 → 半角
 //   1. 英語序数(1st/2nd/3rd等) → カタカナ
 //   2. 既存辞書 (jp_dict) を優先適用 — 固有名詞・サッカー専門語
-//   3. 接頭語+数字に読点挿入（通算/合計 等で MiniMax 分節事故防止）
-//   4. スコア "3-1" → 「さんたいいち」
-//   5. 「N分」音便（ぷん/ふん）
-//   6. 小数 "61.5%" → 「ろくじゅういちてんごパーセント」
-//   7. 数字+一般単位（試合・ゴール・点 等）
-//   8. 残った裸数字 → ひらがな読み（fallback、最終 kuroshiro 前）
-//   9. kuroshiro で残った漢字を自動でひらがな化
-//   10. 括弧・中点・改行を整形
+//   3. スコア "3-1" → 「さんたいいち」（kuromoji 前 / "-" が分離されるため）
+//   4. 「N分」音便（ぷん/ふん）— kuromoji 前（連結音便が形態素分離で崩れるため）
+//   5. 小数 "61.5%" — kuromoji 前（"." が独立トークン化されるため）
+//   6. 🆕 kuromoji 形態素ベースで数字+助数詞ペア処理（接頭語読点 / 単独数字 / 助数詞単独 を一気に解決）
+//   7. kuroshiro で残った漢字を自動でひらがな化
+//   8. 括弧・中点・改行を整形
 async function sanitizeForTts(text) {
   if (!text) return '';
   let s = String(text);
@@ -196,21 +286,14 @@ async function sanitizeForTts(text) {
   // 2) 既存辞書を優先適用（固有名詞 / サッカー語彙）
   s = applyJpDict(s);
 
-  // 3) 🆕 接頭語+数字に読点挿入（2026-05-07）
-  //    「通算178試合」のような流れで「つうさん」+「ひゃく」が連続して
-  //    MiniMax 側で「つうさん・さんびゃく」と再分節される事故対策。
-  //    間に短いポーズ（読点）を挟むことで分節を強制する
-  s = s.replace(/(通算|合計|総|累計|歴代|現在|今季|前季|今期|前期|今シーズン|前シーズン)\s*(\d)/g, '$1、$2');
-
-  // 4) スコア "3-1" → 「さんたいいち」
+  // 3) スコア "3-1" → 「さんたいいち」（kuromoji 前 / "-" が分離されるため）
   s = s.replace(/(\d+)\s*[-－ー−–—]\s*(\d+)/g, (_m, a, b) =>
     `${numToJa1(a)}たい${numToJa1(b)}`);
 
-  // 5) 「N分」音便（ぷん/ふん）— 一般単位処理より先にやる
+  // 4) 「N分」音便（ぷん/ふん）— kuromoji 前（連結音便が形態素分離で崩れるため）
   s = s.replace(/(\d+)\s*分/g, (_m, n) => numToMinuteJa(n));
 
-  // 6) 🆕 小数 "61.5%" → 「ろくじゅういちてんごパーセント」（2026-05-07）
-  //    数字+小数点+数字+単位 のパターンを先に処理（整数+単位 regex より前）
+  // 5) 小数 "61.5%" — kuromoji が "." を独立トークン化するので前段で纏めて処理
   s = s.replace(/(\d+)\.(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|秒|億|万|千|度目|度|個|点|ポイント|%|パーセント|km|kg|時間|クリーンシート)?/g,
     (_m, intPart, decPart, unit) => {
       const dec = decPart.split('').map(d => numToFullJa(d)).join('');
@@ -218,16 +301,11 @@ async function sanitizeForTts(text) {
       return numToFullJa(intPart) + 'てん' + dec + unitKana;
     });
 
-  // 7) 数字+一般単位（単位もひらがな読みに置換、kuroshiro での誤読防止）
-  s = s.replace(/(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|秒|億|万|千|度目|度|個|点|ポイント|%|パーセント|km|kg|時間|クリーンシート)/g,
-    (_m, num, unit) => numToFullJa(num) + (UNIT_KANA[unit] || unit));
+  // 6) 🆕 kuromoji 形態素ベースで数字+助数詞ペア処理（核心 / 2026-05-08）
+  //    旧 regex 3本（接頭語読点 / 数字+一般単位 / 裸数字 fallback）を統合
+  s = await processNumbersWithKuromoji(s);
 
-  // 8) 🆕 残った裸数字 → ひらがな読み（2026-05-07）
-  //    単位なし数字（例: "48", "2026年"等で年含む）も MiniMax の Chinese-style 読み（し/や）を回避
-  //    ※ 注意: 既に上記で処理済みの数字は消費されてるのでここに残らない
-  s = s.replace(/\d+/g, (m) => numToFullJa(m));
-
-  // 9) kuroshiro で残った漢字を ひらがな化（初期化失敗時はスキップ）
+  // 7) kuroshiro で残った漢字を ひらがな化（初期化失敗時はスキップ）
   try {
     const k = await _getKuroshiro();
     if (k) {
@@ -237,7 +315,7 @@ async function sanitizeForTts(text) {
     console.warn('  ⚠️ kuroshiro convert 失敗:', e.message);
   }
 
-  // 10) 括弧・中点・改行整形
+  // 8) 括弧・中点・改行整形
   s = s.replace(/【([^】]+)】/g, '$1')
        .replace(/〝([^〟]+)〟/g, '$1')
        .replace(/[・·]/g, '')
