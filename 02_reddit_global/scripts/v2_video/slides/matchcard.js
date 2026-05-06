@@ -72,8 +72,13 @@ function buildMatchcardHTML(mod) {
   const homeSubs  = (md.subs || []).filter(s => s.isHome).map(_sub);
   const awaySubs  = (md.subs || []).filter(s => !s.isHome).map(_sub);
 
-  // ── lineup（先発11人）──選手名をカタカナ短縮
-  const _mapLineup = arr => arr.map(p => ({ ...p, name: _player(p.name) }));
+  // ── lineup（先発11人）── 苗字抽出 → カタカナ辞書ルックアップ
+  //   原則すべてカタカナ表示。辞書未収録は英語苗字のまま（順次拡張）
+  const { toKatakana } = require('../_player_names_jp');
+  const _mapLineup = arr => arr.map(p => {
+    const last = _player(p.name) || p.name;   // "Bukayo Saka" → "Saka"
+    return { ...p, name: toKatakana(last) };  // "Saka" → "サカ"
+  });
   const homeLineup = (md.lineup?.home && md.lineup.home.length) ? _mapLineup(md.lineup.home) : DEFAULT_LINEUP;
   const awayLineup = (md.lineup?.away && md.lineup.away.length) ? _mapLineup(md.lineup.away) : DEFAULT_LINEUP;
 
@@ -261,17 +266,20 @@ function buildMatchcardHTML(mod) {
 }
 .pitch-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .player {
+  /* 中心が (x, y) に来るよう -50%/-50% で位置調整。サイズはアイコン基準 */
   position: absolute; transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  width: 45px; height: 45px;
+  pointer-events: none;
 }
 .p-dot {
-  width: 45px; height: 45px; border-radius: 50%;
+  width: 100%; height: 100%; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: 'Barlow Condensed', sans-serif; font-size: 11px; font-weight: 800;
   letter-spacing: 0.3px; border: 2px solid rgba(255,255,255,0.85);
   box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   background-size: cover; background-position: center top; background-repeat: no-repeat;
   overflow: hidden;
+  position: relative;
 }
 .p-home .p-dot { background-color: #4fc3f7; color: #0d1117; }
 .p-away .p-dot { background-color: #ef5350; color: #fff; }
@@ -281,10 +289,19 @@ function buildMatchcardHTML(mod) {
 .p-away.p-photo .p-dot { border-color: #ef5350; }
 .p-gk.p-photo .p-dot   { border-color: #e6a800 !important; }
 .p-name {
-  margin-top: 2px; font-size: 13px; font-weight: 600;
-  font-family: 'Barlow Condensed', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif; letter-spacing: 0;
-  color: #fff; background: rgba(0,0,0,0.65); padding: 1px 4px; border-radius: 2px;
-  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+  /* アイコン下 10% に重ねて前面表示 (top:90% でアイコン下端から 10% 上に位置) */
+  position: absolute;
+  top: 90%; left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  font-size: 13px; font-weight: 700;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Barlow Condensed', sans-serif; letter-spacing: 0;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 2px 6px; border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis;
 }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .score-block  { animation: fadeUp 0.5s ease both; }
@@ -433,6 +450,12 @@ function buildMatchcardHTML(mod) {
     // x 範囲は 15〜85（両端の選手が画面端で見切れないよう内側に寄せる）
     const _xPos = (i, count) => {
       if (count === 1) return 50;
+      // 2人ライン (ツーボランチ/ツートップ等) は 4バック CB 位置 (38, 62) に寄せる
+      //   → 旧仕様の 15/85 はサイドバック扱いになり実態と合わなかった
+      if (count === 2) {
+        const raw = i === 0 ? 38 : 62;
+        return isHome ? (100 - raw) : raw;
+      }
       const raw = 15 + (70 / (count - 1)) * i;
       return isHome ? (100 - raw) : raw;
     };
