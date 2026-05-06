@@ -35,11 +35,20 @@ async function _getKuroshiro() {
 
 const API_URL    = 'https://api-uw.minimax.io/v1/t2a_v2';
 const MODEL      = process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd';
+// 2026-05-06 voice 最終決定: ⑦ Japanese_GenerousIzakayaOwner をデフォルトに採用
+//   視聴者主層 45-54（Jリーグ黎明期世代）と親和性◎、深掘り解説系がメイン用途のため
+//   速報系→②、若手特集→⑨ は Step4 UI で動画ごとにオーバーライド可能
 const DEFAULT_VOICE = process.env.MINIMAX_DEFAULT_VOICE
-  || 'moss_audio_6e0620ed-3af8-11f1-beb2-9257c801a481';   // master-voice (clone)
+  || 'Japanese_GenerousIzakayaOwner';
 
 const PRESET_VOICES = [
-  { id: 'moss_audio_6e0620ed-3af8-11f1-beb2-9257c801a481', label: '🎤 自前クローン (デフォルト)' },
+  // 採用3候補（2026-04-30 選別 → 2026-05-06 デフォルト確定）
+  { id: 'Japanese_GenerousIzakayaOwner', label: '⑦ ベテラン店主・深掘り解説 (デフォルト)' },
+  { id: 'Japanese_DominantMan',          label: '② 覇王・速報煽り系' },
+  { id: 'Japanese_InnocentBoy',          label: '⑨ 若い少年・若手選手紹介系' },
+  // 旧マスタークローン（バックアップ用に保持）
+  { id: 'moss_audio_6e0620ed-3af8-11f1-beb2-9257c801a481', label: '🎤 自前クローン (旧デフォルト)' },
+  // 中華プリセット（参考用）
   { id: 'male-qn-qingse',          label: '男性・青涩' },
   { id: 'male-qn-jingying',        label: '男性・精英' },
   { id: 'male-qn-badao',           label: '男性・霸道' },
