@@ -72,12 +72,16 @@ function buildMatchcardHTML(mod) {
   const homeSubs  = (md.subs || []).filter(s => s.isHome).map(_sub);
   const awaySubs  = (md.subs || []).filter(s => !s.isHome).map(_sub);
 
-  // ── lineup（先発11人）── 苗字抽出 → カタカナ辞書ルックアップ
-  //   原則すべてカタカナ表示。辞書未収録は英語苗字のまま（順次拡張）
+  // ── lineup（先発11人）──
+  //   優先順: mod.lineupOverrides[原文] → 苗字 → カタカナ辞書ルックアップ
+  //   辞書未収録は英語苗字のまま（順次拡張 / Step4 UI で手動編集可能）
   const { toKatakana } = require('../_player_names_jp');
+  const overrides = mod.lineupOverrides || {};
   const _mapLineup = arr => arr.map(p => {
-    const last = _player(p.name) || p.name;   // "Bukayo Saka" → "Saka"
-    return { ...p, name: toKatakana(last) };  // "Saka" → "サカ"
+    const orig = p.name || '';
+    if (overrides[orig]) return { ...p, name: overrides[orig] };
+    const last = _player(orig) || orig;
+    return { ...p, name: toKatakana(last) };
   });
   const homeLineup = (md.lineup?.home && md.lineup.home.length) ? _mapLineup(md.lineup.home) : DEFAULT_LINEUP;
   const awayLineup = (md.lineup?.away && md.lineup.away.length) ? _mapLineup(md.lineup.away) : DEFAULT_LINEUP;

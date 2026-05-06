@@ -222,6 +222,79 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
   }
 });
 
+// ─── /v2/matchcard-lineup : matchcard モジュールの lineup と現状表示名を返す ─
+// Input:  ?postId=X&moduleIdx=N
+// Output: { ok, home: [{ name, displayName }], away: [...], overrides }
+router.get('/v2/matchcard-lineup', (req, res) => {
+  try {
+    const { postId, moduleIdx } = req.query || {};
+    if (!postId || moduleIdx == null) return res.status(400).json({ error: 'postId + moduleIdx required' });
+
+    const modulesData = safeJson(modulesPath(postId), { modules: [] });
+    const mod = (modulesData.modules || [])[parseInt(moduleIdx, 10)];
+    if (!mod) return res.status(404).json({ error: 'module not found' });
+    if (mod.type !== 'matchcard') return res.status(400).json({ error: 'not a matchcard' });
+
+    // mainKey "match:HomeTeam vs AwayTeam" から match data を取得
+    const mainKey = String(mod.mainKey || '');
+    const matchLabel = mainKey.startsWith('match:')     ? mainKey.slice(6)
+                     : mainKey.startsWith('matchcard:') ? mainKey.slice(10)
+                     : null;
+    if (!matchLabel) return res.status(400).json({ error: 'mainKey not match: format' });
+
+    const si = safeJson(siPath(postId), { boxes: { match: { items: [] } } });
+    const matchItem = (si.boxes?.match?.items || []).find(x => x.label === matchLabel);
+    if (!matchItem || !matchItem.data) return res.json({ ok: true, home: [], away: [], overrides: mod.lineupOverrides || {} });
+
+    const lu = matchItem.data.lineup || {};
+    const { toKatakana } = require('../scripts/v2_video/_player_names_jp');
+    const { _player } = require('../scripts/v2_video/slides/_common');
+    const overrides = mod.lineupOverrides || {};
+
+    function _displayName(p) {
+      if (!p?.name) return '';
+      if (overrides[p.name]) return overrides[p.name];
+      const last = (typeof _player === 'function' ? _player(p.name) : null) || p.name;
+      return toKatakana(last);
+    }
+
+    const home = (lu.home || []).map(p => ({ name: p.name || '', displayName: _displayName(p), pos: p.pos || '' }));
+    const away = (lu.away || []).map(p => ({ name: p.name || '', displayName: _displayName(p), pos: p.pos || '' }));
+    res.json({ ok: true, home, away, overrides });
+  } catch (e) {
+    console.error('[v2/matchcard-lineup]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── /v2/matchcard-lineup-overrides : 編集を保存 ─
+// Input:  { postId, moduleIdx, overrides: { "Bukayo Saka": "サカ", ... } }
+router.post('/v2/matchcard-lineup-overrides', express.json(), (req, res) => {
+  try {
+    const { postId, moduleIdx, overrides } = req.body || {};
+    if (!postId || moduleIdx == null) return res.status(400).json({ error: 'postId + moduleIdx required' });
+
+    const mp = modulesPath(postId);
+    const modulesData = safeJson(mp, { modules: [] });
+    const mod = (modulesData.modules || [])[parseInt(moduleIdx, 10)];
+    if (!mod) return res.status(404).json({ error: 'module not found' });
+    if (mod.type !== 'matchcard') return res.status(400).json({ error: 'not a matchcard' });
+
+    // 空文字 / null は削除扱い
+    const cleaned = {};
+    for (const [k, v] of Object.entries(overrides || {})) {
+      const t = String(v || '').trim();
+      if (t) cleaned[k] = t;
+    }
+    mod.lineupOverrides = cleaned;
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+    res.json({ ok: true, overrides: cleaned });
+  } catch (e) {
+    console.error('[v2/matchcard-lineup-overrides]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v2/ai-fill-slide : スライド丸ごと AI 1発（type/title/dataSlots/narration）─
 // Input:  { postId, moduleIdx, userPrompt, incremental? }
 //   incremental=true: 既存内容を最大限保持し、ユーザー注文の差分のみ適用（微調整モード）
@@ -1501,6 +1574,19 @@ function getUI() {
               + '</div>';
           }).join('');
     }
+    // ── matchcard: lineup 編集（HOME / AWAY をアコーディオンで折りたたみ）──
+    //   遅延ロード placeholder のみ出力。クリック展開時に /v2/matchcard-lineup を fetch
+    if (m.type === 'matchcard') {
+      extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">⚽ ラインナップ手動編集 (カタカナ上書き)</div>'
+        + '<details class="s4-mc-team" data-side="home" data-idx="' + i + '">'
+        + '  <summary style="cursor:pointer;padding:8px 12px;background:#1a3a5a;color:#93c5fd;border-radius:5px;font-size:12px;font-weight:bold;margin-bottom:4px;">🔵 HOME (クリックで展開)</summary>'
+        + '  <div class="s4-mc-body" data-side="home" style="padding:6px 0;font-size:11px;color:#888;">読み込み中...</div>'
+        + '</details>'
+        + '<details class="s4-mc-team" data-side="away" data-idx="' + i + '" style="margin-top:6px;">'
+        + '  <summary style="cursor:pointer;padding:8px 12px;background:#5a1a3a;color:#fca5a5;border-radius:5px;font-size:12px;font-weight:bold;margin-bottom:4px;">🔴 AWAY (クリックで展開)</summary>'
+        + '  <div class="s4-mc-body" data-side="away" style="padding:6px 0;font-size:11px;color:#888;">読み込み中...</div>'
+        + '</details>';
+    }
 
     const ALL_TYPES = ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ending'];
     const typeOpts = ALL_TYPES.map(function(t) {
@@ -1707,6 +1793,12 @@ function getUI() {
     });
     el.querySelectorAll('.s4-phrase-add').forEach(function(btn) {
       btn.addEventListener('click', function() { s4AddPhrase(); });
+    });
+    /* matchcard lineup アコーディオン: open 時に lineup fetch して編集 UI を描画 */
+    el.querySelectorAll('details.s4-mc-team').forEach(function(det) {
+      det.addEventListener('toggle', function() {
+        if (det.open) s4LoadMatchcardLineup(det);
+      });
     });
 
     /* 🪄 スライド全部おまかせ AI ボタン */
@@ -2295,6 +2387,68 @@ function getUI() {
     else                          m.dataSlots.push({ label: '', value: '' });
     _renderEditor();
     _saveAndReload();
+  };
+
+  /* ── matchcard lineup を fetch して編集 UI を描画 ── */
+  //   det = <details> 要素。data-side ('home'|'away') / data-idx (moduleIdx) を持つ
+  window.s4LoadMatchcardLineup = async function(det) {
+    const side = det.getAttribute('data-side');
+    const idx  = parseInt(det.getAttribute('data-idx'), 10);
+    const body = det.querySelector('.s4-mc-body');
+    if (!body) return;
+    if (body.dataset.loaded === '1') return;  // 一度ロードしたら再利用
+    const post = window.APP.selected;
+    if (!post?.id) { body.textContent = '案件未選択'; return; }
+
+    body.textContent = '⏳ 読み込み中...';
+    try {
+      const r = await fetchJson('/api/v2/matchcard-lineup?postId=' + encodeURIComponent(post.id) + '&moduleIdx=' + idx);
+      if (!r.ok) { body.textContent = 'エラー: ' + (r.error || 'unknown'); return; }
+      const list = side === 'home' ? r.home : r.away;
+      if (!list.length) { body.textContent = '(lineup データ未取得 — Step2 で fetch-all を実行)'; return; }
+      // 各行: 元名 (灰色 readonly) + 表示名 input
+      const rows = list.map(function(p, i) {
+        return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:3px;align-items:center;">'
+          +  '<input class="inp" value="' + _esc(p.name) + '" readonly style="font-size:11px;padding:3px 6px;color:#666;background:#1a1a26;">'
+          +  '<input class="inp s4-mc-edit" data-idx="' + idx + '" data-orig="' + _esc(p.name) + '" value="' + _esc(p.displayName) + '" placeholder="編集して保存" style="font-size:11px;padding:3px 6px;color:#fff;">'
+          +  '</div>';
+      }).join('');
+      body.innerHTML = rows;
+      body.dataset.loaded = '1';
+      // 入力変更で 800ms debounce で保存
+      let t;
+      body.querySelectorAll('.s4-mc-edit').forEach(function(input) {
+        input.addEventListener('input', function() {
+          clearTimeout(t);
+          t = setTimeout(function() { s4SaveMatchcardOverrides(idx); }, 800);
+        });
+      });
+    } catch (e) {
+      body.textContent = 'エラー: ' + e.message;
+    }
+  };
+
+  /* ── matchcard lineup overrides を全 details から集めて保存 ── */
+  window.s4SaveMatchcardOverrides = async function(idx) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const overrides = {};
+    // 該当 moduleIdx の全 .s4-mc-edit を集める
+    document.querySelectorAll('.s4-mc-edit[data-idx="' + idx + '"]').forEach(function(input) {
+      const orig = input.getAttribute('data-orig');
+      const val  = String(input.value || '').trim();
+      if (orig && val) overrides[orig] = val;
+    });
+    try {
+      await fetchJson('/api/v2/matchcard-lineup-overrides', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, overrides }),
+      });
+      // 既存メモリ上にも保存（再 render 時に維持）
+      if (window.APP.s4.modules[idx]) window.APP.s4.modules[idx].lineupOverrides = overrides;
+    } catch (e) {
+      console.warn('lineup overrides 保存失敗:', e.message);
+    }
   };
 
   /* ── catchphrase 行を追加（insight 用） ── */
