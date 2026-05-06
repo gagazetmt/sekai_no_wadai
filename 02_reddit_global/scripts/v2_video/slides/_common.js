@@ -174,16 +174,20 @@ function splitSubtitle(text, maxLineLen = 20) {
   let line1 = t.slice(0, splitAt).trim();
   let line2 = t.slice(splitAt).trim();
 
-  // ── オーファン (1〜3字 trail) 回避 ──
-  //   "ご視聴いただきありがとうございまし\nた" のような不自然な改行を防ぐ。
-  //   line2 が極端に短い場合は中央寄りに rebalance（natural break を犠牲にしてでも均衡優先）
-  if (line2.length > 0 && line2.length < 4 && (line1.length + line2.length) > 0) {
+  // ── オーファン回避 ＆ 偏り是正 ──
+  //   1) line2 が 1〜3字 (極端に短い): "...まし\nた" のような 1字 trail
+  //   2) 偏り比率 > 1.7倍: "ご視聴いただ(6)\nきありがとうございました(11)" のような verbEnd 過剰反応
+  //   どちらの場合も中央寄りに rebalance する
+  const balanceRatio = Math.max(line1.length, line2.length) /
+                        Math.max(Math.min(line1.length, line2.length), 1);
+  const tooShortTail = line2.length > 0 && line2.length < 4;
+  if (tooShortTail || balanceRatio > 1.7) {
     const total = line1 + line2;
-    // 中央付近で natural break を再探索 (40-60%)
     const mid = Math.floor(total.length / 2);
     const breaks = ['。', '！', '？', '!', '?', '、', ',', ' ', '・'];
     let bestPos = mid;
     let bestDist = Infinity;
+    // 中央 40-60% で natural break を再探索（見つからなければ midpoint）
     for (let i = Math.floor(total.length * 0.4); i <= Math.floor(total.length * 0.6); i++) {
       if (breaks.includes(total[i])) {
         const d = Math.abs(mid - i);
@@ -194,8 +198,6 @@ function splitSubtitle(text, maxLineLen = 20) {
     line2 = total.slice(bestPos).trim();
   }
 
-  // フォントは固定 (50px)。可変だと見にくいため。
-  // 長文ではみ出す場合はバー高さを動的拡張する側で対応する。
   return { lines: [line1, line2], fontSize: null };
 }
 
