@@ -296,10 +296,12 @@ router.post('/v2/matchcard-lineup-overrides', express.json(), (req, res) => {
 });
 
 // ─── /v2/ai-fill-slide : スライド丸ごと AI 1発（type/title/dataSlots/narration）─
-// Input:  { postId, moduleIdx, userPrompt, incremental? }
+// Input:  { postId, moduleIdx, userPrompt, incremental?, useWebResearch?, researchPrompt? }
 //   incremental=true: 既存内容を最大限保持し、ユーザー注文の差分のみ適用（微調整モード）
+//   useWebResearch=true: ウェブリサーチ → 検索結果をプロンプト文脈に注入してから生成
+//   researchPrompt: リサーチの観点（省略時は userPrompt を流用）
 // Output: { ok, jobId } 即返却 → クライアントが /v2/ai-fill-slide-status?jobId= をポーリング
-async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental }) {
+async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, useWebResearch, researchPrompt }) {
     const mp = modulesPath(postId);
     if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
     const modulesData = JSON.parse(fs.readFileSync(mp, 'utf8'));
@@ -418,6 +420,55 @@ JSON 出力で **"recipeKey": "<上記レシピキー>"** を返せば dataSlots
       }
     } catch (_) {}
 
+    // 🆕 ウェブリサーチ（2026-05-07）
+    //   useWebResearch=true なら、AIに 1〜3個の検索クエリを生成させ、Serper で並列検索 →
+    //   結果を文脈ブロックとしてプロンプトに注入する。Chelsea迷走の真相 のような外部情報が
+    //   必須な案件で、足りないデータを補う目的。
+    let webResearchBlock = '';
+    if (useWebResearch) {
+      const researchSeed = (researchPrompt && researchPrompt.trim()) || userPrompt;
+      try {
+        const queryGenPrompt = `次のサッカー動画スライド向け指示について、ウェブ検索で深堀するための英語クエリを最大3つ提案してください。
+事実関係・歴史的経緯・経済的背景・人物の動機など、内部データ（Wikipedia/SofaScore）に無い情報を埋めるクエリ。
+JSONのみで {"queries":["q1","q2","q3"]} 形式（マークダウン不要）。
+
+【動画タイトル】${(safeJson(path.join(DATA_DIR,'saved_projects.json'),[]).find(p=>p.id===postId)?.title) || '(不明)'}
+【スライド主題】${primary || '(なし)'} ${secondary ? '/ '+secondary : ''}
+【ユーザー指示】${researchSeed}`;
+        const qRaw = await callAI({
+          forceProvider: 'deepseek',
+          model: 'deepseek-v4-flash',
+          max_tokens: 400,
+          messages: [{ role: 'user', content: queryGenPrompt }],
+        });
+        const qm = qRaw && qRaw.match(/\{[\s\S]*\}/);
+        const queries = qm ? (JSON.parse(qm[0]).queries || []).slice(0, 3) : [];
+        if (queries.length) {
+          const { fetchSerper } = require('../scripts/modules/fetchers/serper_module');
+          const results = await Promise.all(queries.map(q =>
+            fetchSerper(q, 'webresearch', 'en').catch(e => ({ ok: false, error: e.message }))
+          ));
+          const blocks = results.map((r, i) => {
+            if (!r.ok || !r.organic?.length) return null;
+            const top = r.organic.slice(0, 5).map(o =>
+              `- [${(o.title||'').slice(0,80)}] ${(o.snippet||'').slice(0,250)}`
+            ).join('\n');
+            return `【検索クエリ${i+1}: "${queries[i]}"】\n${top}`;
+          }).filter(Boolean).join('\n\n');
+          if (blocks) {
+            webResearchBlock = `\n━━━ 🌐 ウェブリサーチ結果 ━━━\n${blocks}\n━━━━━━━━━━━━━━━━\n`;
+            console.log(`[ai-fill-slide] webリサーチ ${queries.length}クエリ → ${results.filter(r=>r.ok).length}成功`);
+          } else {
+            console.warn('[ai-fill-slide] webリサーチ: 全クエリで結果なし');
+          }
+        } else {
+          console.warn('[ai-fill-slide] webリサーチ: クエリ生成失敗');
+        }
+      } catch (e) {
+        console.warn('[ai-fill-slide] webリサーチ例外（スキップして続行）:', e.message);
+      }
+    }
+
     // ── 案件全体の文脈（saved_projects.json から）──
     let projectCtx = '';
     try {
@@ -510,7 +561,7 @@ ${nextSlides ? '【後のスライド（流れの下流）】\n' + nextSlides : 
 ${ctxPrimary}
 ${ctxSecondary}
 ${ctxH2H}
-${recipesSection}
+${webResearchBlock}${recipesSection}
 
 【ユーザー注文】
 ${userPrompt}
@@ -779,6 +830,7 @@ ${parsed.narration || ''}
 }
 
 // 🆕 /v2/ai-fill-slide: ジョブ作成 → jobId 即返却
+//   body: { postId, moduleIdx, userPrompt, incremental?, useWebResearch?, researchPrompt? }
 router.post('/v2/ai-fill-slide', express.json(), (req, res) => {
   const { postId, moduleIdx, userPrompt } = req.body || {};
   if (!postId || moduleIdx == null || !userPrompt) {
@@ -789,7 +841,8 @@ router.post('/v2/ai-fill-slide', express.json(), (req, res) => {
   res.json({ ok: true, jobId });
   setImmediate(async () => {
     try {
-      updateJob(jobId, { status: 'running', step: 'ai-generation' });
+      const stepMsg = req.body.useWebResearch ? 'web-research+ai-generation' : 'ai-generation';
+      updateJob(jobId, { status: 'running', step: stepMsg });
       const result = await _runAiFillSlide(req.body);
       updateJob(jobId, { status: 'done', result });
     } catch (e) {
@@ -1758,10 +1811,16 @@ function getUI() {
       +       '<input type="checkbox" class="s4-fill-incremental" data-idx="' + i + '" style="margin:0;">'
       +       '微調整モード（既存内容を保持して差分のみ適用）'
       +     '</label>'
+      +     '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#34d399;cursor:pointer;user-select:none;">'
+      +       '<input type="checkbox" class="s4-fill-webresearch" data-idx="' + i + '" style="margin:0;" onchange="document.querySelector(\'.s4-fill-research-prompt[data-idx=&quot;' + i + '&quot;]\').style.display=this.checked?\'block\':\'none\';">'
+      +       '🌐 ウェブリサーチを使う'
+      +     '</label>'
       +     '<span style="flex:1"></span>'
       +     '<button class="btn btn-sm s4-fill-go" data-idx="' + i + '" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 14px;font-weight:bold;">🪄 生成</button>'
       +   '</div>'
-      +   '<div style="font-size:9px;color:#5a6a8a;margin-top:4px;">Sonnet 既定 → 失敗時 DeepSeek フォールバック</div>'
+      +   '<textarea class="inp s4-fill-research-prompt" data-idx="' + i + '" placeholder="リサーチの観点（例: BlueCo の経済モデル / Boehly の介入履歴 / 失敗トランスファー詳細）。空ならユーザー注文を流用。" '
+      +     'style="display:none;width:100%;font-size:11px;padding:5px 8px;min-height:50px;resize:vertical;background:#0a0d18;color:#34d399;border:1px solid #34d39955;margin-top:6px;"></textarea>'
+      +   '<div style="font-size:9px;color:#5a6a8a;margin-top:4px;">Sonnet 既定 → 失敗時 DeepSeek フォールバック / 🌐 ON で Serper最大3クエリ検索→文脈注入</div>'
       + '</div>'
       + galleryHtml
       + bindHtml
@@ -1952,7 +2011,7 @@ function getUI() {
     }
   }
 
-  /* 🪄 スライド全部おまかせ AI: type/title/dataSlots/narration を一気通貫生成（or 微調整） */
+  /* 🪄 スライド全部おまかせ AI: type/title/dataSlots/narration を一気通貫生成（or 微調整 / Web リサーチ付き） */
   window.s4FillSlideAI = async function(idx) {
     const post = window.APP.selected;
     if (!post?.id) return;
@@ -1961,11 +2020,21 @@ function getUI() {
     if (!userPrompt) { _msg('注文内容を書いてね'); return; }
     const incCb = document.querySelector('.s4-fill-incremental[data-idx="' + idx + '"]');
     const incremental = !!(incCb && incCb.checked);
+    // 🆕 Web リサーチ用 UI（2026-05-07）
+    const webCb = document.querySelector('.s4-fill-webresearch[data-idx="' + idx + '"]');
+    const useWebResearch = !!(webCb && webCb.checked);
+    const researchTa = document.querySelector('.s4-fill-research-prompt[data-idx="' + idx + '"]');
+    const researchPrompt = (researchTa?.value || '').trim();
     const status = document.querySelector('.s4-fill-status[data-idx="' + idx + '"]');
-    if (status) status.textContent = incremental ? '⏳ 微調整中...' : '⏳ 全体生成中...';
-    const confirmMsg = incremental
-      ? '微調整モード: 既存内容を保持しつつ、注文の差分のみ適用します。OK?'
-      : '現在のスライドの type / title / dataSlots / narration を AI 生成で上書きします。OK?';
+    const initialMsg = useWebResearch
+      ? '⏳ ウェブリサーチ + ' + (incremental ? '微調整' : '全体生成') + '中...'
+      : (incremental ? '⏳ 微調整中...' : '⏳ 全体生成中...');
+    if (status) status.textContent = initialMsg;
+    const confirmMsg = useWebResearch
+      ? 'ウェブリサーチ付きで生成します（Serper × 最大3クエリ）。OK?'
+      : (incremental
+          ? '微調整モード: 既存内容を保持しつつ、注文の差分のみ適用します。OK?'
+          : '現在のスライドの type / title / dataSlots / narration を AI 生成で上書きします。OK?');
     if (!confirm(confirmMsg)) {
       if (status) status.textContent = '';
       return;
@@ -1975,7 +2044,7 @@ function getUI() {
       const initRes = await fetchJson('/api/v2/ai-fill-slide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental }),
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt }),
       });
       const jobId = initRes && initRes.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');
