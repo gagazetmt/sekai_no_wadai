@@ -4,7 +4,7 @@
 
 const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
-const MAX_PHRASES = 7;
+const MAX_PHRASES = 6;
 
 // 数字+単位を黄色ハイライトで強調（"24ゴール" "5冠" "100億" 等）
 function _highlightNumbers(escapedText) {
@@ -19,8 +19,7 @@ function _highlightNumbers(escapedText) {
 function _layoutForCount(n) {
   if (n <= 3) return { minHeight: 110, gap: 32, maxFont: 60 };
   if (n <= 5) return { minHeight: 96,  gap: 24, maxFont: 56 };
-  if (n === 6) return { minHeight: 86, gap: 20, maxFont: 50 };
-  return        { minHeight: 76,  gap: 16, maxFont: 44 };  // 7件
+  return        { minHeight: 86, gap: 20, maxFont: 50 };  // 6件
 }
 
 // phrase 文字長 + 件数から個別フォントサイズを決定

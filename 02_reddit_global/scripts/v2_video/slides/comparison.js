@@ -49,7 +49,7 @@ function buildComparisonHTML(mod) {
   const title     = _t(mod.title) || 'COMPARISON';
 
   // dataSlots: [{label, leftValue, rightValue}, ...]
-  const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 5);
+  const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 7);
 
   // ── 音声 chunk 解析（行 active 制御用） ─────────────────
   //   先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
@@ -280,7 +280,7 @@ function buildComparisonHTML(mod) {
 
 .val {
   width: 35%;
-  font-size: 56px;
+  font-size: 50px;
   font-weight: 900;
   line-height: 1.05;
   /* データ値は白+グロー演出で目立たせる */
@@ -323,14 +323,20 @@ function buildComparisonHTML(mod) {
   padding: 0 8px;
 }
 .label-text {
-  /* +20% (22→26) / 金色 / 影付き */
+  /* +30% (22→29) / 金色 / 浮かび上がり (embossed) 効果 */
   color: ${PALETTE.accent};
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 29px;
+  font-weight: 900;
   letter-spacing: 1.5px;
   text-align: center;
   line-height: 1.15;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75), 0 0 14px rgba(245, 158, 11, 0.4);
+  /* 上に細いハイライト + 下に影 + 金色グロー で「彫り込まれた」立体感 */
+  text-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.22),
+    0  1px 0 rgba(0, 0, 0, 0.85),
+    0  2px 0 rgba(0, 0, 0, 0.7),
+    0  3px 8px rgba(0, 0, 0, 0.7),
+    0  0   16px rgba(245, 158, 11, 0.55);
   /* 長文は2行まで */
   display: -webkit-box;
   -webkit-line-clamp: 2;

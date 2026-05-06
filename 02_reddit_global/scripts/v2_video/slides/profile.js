@@ -6,8 +6,8 @@
 const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t } = require('./_common');
 
 function buildProfileHTML(mod) {
-  // dataSlots 4件を data-row で使う
-  const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 4);
+  // dataSlots 4〜7 件を data-row で使う（flex: 1 で N に応じて高さ自動調整）
+  const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 7);
   while (slots.length < 4) slots.push({ label: '', value: '' });
 
   const mainImg  = imgDataUri(mod.bgImage);

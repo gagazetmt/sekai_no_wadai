@@ -9,7 +9,7 @@
 
 const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
 
-const MAX_EVENTS = 7;
+const MAX_EVENTS = 8;
 
 // 数字+単位を金色ハイライト（insight と共通の語彙＋年代対応）
 function _highlightNumbers(escapedText) {
@@ -40,7 +40,8 @@ function _layoutForCount(n) {
   if (n <= 3) return { gap: 32, padTop: 80, padBottom: 100, maxTitle: 36, maxSub: 24 };
   if (n <= 5) return { gap: 22, padTop: 70, padBottom: 96,  maxTitle: 32, maxSub: 22 };
   if (n === 6) return { gap: 16, padTop: 60, padBottom: 92, maxTitle: 28, maxSub: 19 };
-  return        { gap: 12, padTop: 56, padBottom: 90,  maxTitle: 25, maxSub: 17 }; // 7件
+  if (n === 7) return { gap: 12, padTop: 56, padBottom: 90, maxTitle: 25, maxSub: 17 };
+  return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 23, maxSub: 16 }; // 8件
 }
 
 function _titleFont(text, layout) {
