@@ -69,12 +69,13 @@ function buildTocHTML(mod) {
     : Math.max(items.length * 1.5 + LEAD_PAD_SEC + TAIL_PAD_SEC, 5);
 
   const REVEAL_INTERVAL = 1.0;  // 各 item の登場間隔
+  const PULSE_INTERVAL  = 2.0;  // 脈動の隣接 item 間オフセット
   const startSec = LEAD_PAD_SEC + 0.3;
   const enterDelays = items.map((_, i) => startSec + i * REVEAL_INTERVAL);
-  // 全 item が表示し終わった時刻 + 0.3s から脈動開始
-  const pulseStartSec = startSec + items.length * REVEAL_INTERVAL + 0.3;
-  const pulseCycleSec = Math.max(items.length, 1);  // 1秒/item × items 個 = 1巡
-  const pulseDelays = items.map((_, i) => pulseStartSec + i);
+  // 全 item が表示し終わった時刻 + 0.5s から脈動開始
+  const pulseStartSec = startSec + items.length * REVEAL_INTERVAL + 0.5;
+  const pulseCycleSec = Math.max(items.length * PULSE_INTERVAL, 2);  // 2秒/item × items 個 = 1巡
+  const pulseDelays = items.map((_, i) => pulseStartSec + i * PULSE_INTERVAL);
 
   const extraStyles = `
 .bg-img {
@@ -187,11 +188,17 @@ function buildTocHTML(mod) {
   from { opacity: 0; transform: translateX(-40px); }
   to   { opacity: 1; transform: translateX(0); padding-left: 32px; }
 }
-/* 順次脈動：全 item 表示後、1秒/item サイクルで自分のスロット時に拡大+ハイライト */
+/* 順次バイブレーション：2秒/item サイクル。
+   active スロット (0.5s) のみ細かく横揺れ + 薄いアクセント。
+   scale 変化なし、振幅 ±3px の控えめ振動。 */
 @keyframes tocPulse {
-  0%, 100% { transform: translateX(0) scale(1); border-left: 0 solid transparent; padding-left: 32px; background: transparent; }
-  ${((1 / pulseCycleSec) * 50).toFixed(2)}% { transform: translateX(0) scale(1.04); border-left: 6px solid ${PALETTE.accent}; padding-left: 26px; background: rgba(245, 158, 11, 0.13); }
-  ${((1 / pulseCycleSec) * 100).toFixed(2)}% { transform: translateX(0) scale(1); border-left: 0 solid transparent; padding-left: 32px; background: transparent; }
+  0%, 100%                                              { transform: translateX(0); border-left: 0 solid transparent; background: transparent; }
+  ${((0.05 / pulseCycleSec) * 100).toFixed(2)}%         { transform: translateX(-3px); border-left: 2px solid ${PALETTE.accent}; background: rgba(245, 158, 11, 0.05); }
+  ${((0.12 / pulseCycleSec) * 100).toFixed(2)}%         { transform: translateX(2px); }
+  ${((0.20 / pulseCycleSec) * 100).toFixed(2)}%         { transform: translateX(-2px); border-left: 2px solid ${PALETTE.accent}; background: rgba(245, 158, 11, 0.06); }
+  ${((0.28 / pulseCycleSec) * 100).toFixed(2)}%         { transform: translateX(1px); }
+  ${((0.40 / pulseCycleSec) * 100).toFixed(2)}%         { transform: translateX(0); border-left: 1px solid rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.03); }
+  ${((0.55 / pulseCycleSec) * 100).toFixed(2)}%         { transform: translateX(0); border-left: 0 solid transparent; background: transparent; }
 }
 .toc-row:last-child { border-bottom: none; }
 
