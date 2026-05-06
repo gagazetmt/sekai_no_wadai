@@ -12,8 +12,10 @@ function buildProfileHTML(mod) {
 
   const mainImg  = imgDataUri(mod.bgImage);
   // 国旗（leftImage / countryImage / flagImage いずれか）+ クラブロゴ（rightImage / clubLogo / homeImage いずれか）
-  const flagImg  = mod.countryImage || mod.flagImage || imgDataUri(mod.leftImage)  || imgDataUri(mod.homeImage);
-  const clubImg  = mod.clubLogo     || mod.homeLogo  || imgDataUri(mod.rightImage) || imgDataUri(mod.awayImage);
+  //   各フィールドは "data:..." 直接 or プロジェクトルート相対パスのどちらでも受ける
+  const _resolve = (v) => !v ? null : (typeof v === 'string' && v.startsWith('data:')) ? v : imgDataUri(v);
+  const flagImg  = _resolve(mod.countryImage) || _resolve(mod.flagImage) || imgDataUri(mod.leftImage)  || imgDataUri(mod.homeImage);
+  const clubImg  = _resolve(mod.clubLogo)     || _resolve(mod.homeLogo)  || imgDataUri(mod.rightImage) || imgDataUri(mod.awayImage);
   const mainTitleSrc = _t(mod.title) || 'PROFILE';
   // オーファン回避: 長文 title は splitSubtitle で 1〜2 行に整形
   const mainTitleLines = splitSubtitle(mainTitleSrc, 12).lines.filter(Boolean);

@@ -29,6 +29,12 @@ const IMG = {
   haaland:   'images_stock/players_official/premier-league/man-city/erling-haaland.png',
   cityLogo:  'images_stock/club_logos/premier-league/man-city.svg',
   arsLogo:   'images_stock/club_logos/premier-league/arsenal.svg',
+  // 国旗（306カ国 / images_stock/flags/{iso2}.svg）
+  flagENG:   'images_stock/flags/gb-eng.svg',
+  flagARG:   'images_stock/flags/ar.svg',
+  flagBRA:   'images_stock/flags/br.svg',
+  flagESP:   'images_stock/flags/es.svg',
+  flagJPN:   'images_stock/flags/jp.svg',
 };
 
 const SAMPLES = {
@@ -129,9 +135,10 @@ const SAMPLES = {
       { label: 'アシスト', value: '11' },
       { label: '評定', value: '7.84' },
     ],
-    bgImage:   IMG.saka,
-    homeImage: IMG.arsLogo,
-    awayImage: IMG.arsLogo,
+    bgImage:    IMG.saka,
+    flagImage:  IMG.flagENG,    // 国旗（イングランド）
+    countryName: 'イングランド',
+    clubLogo:   IMG.arsLogo,    // クラブロゴ
     narration: 'イングランド代表ブカヨ・サカは今シーズン安定した活躍を見せています。',
     audio: SAMPLE_AUDIO_4,
   },
