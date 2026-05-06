@@ -321,6 +321,49 @@ function walkTeam(d) {
   return slots;
 }
 
+// ─── 監督タイトル数を honours[Manager] から自前集計 ─────────────
+//   SofaScore の trophySummary は player+manager 混在 + League/Cup の誤分類があり
+//   Arteta=leagueTitles 5 (実際 0)、Simeone=clTitles 1 (実際 0) 等のハルシネーション源
+//   honours.items の文字列から競技名+年度を解析して自前カウント
+function _computeManagerTrophies(honours) {
+  const mgr = (honours || []).find(h => h.category === 'Manager');
+  if (!mgr || !Array.isArray(mgr.items)) return null;
+  const counts = { total: 0, leagueTitles: 0, cupTitles: 0, clTitles: 0, elTitles: 0, uefaSuper: 0, worldClub: 0 };
+
+  for (const raw of mgr.items) {
+    const s = String(raw || '').trim();
+    if (!s) continue;
+    const colonIdx = s.indexOf(':');
+    if (colonIdx < 0) continue;
+    const compName = s.slice(0, colonIdx).trim();
+    let yearsRaw = s.slice(colonIdx + 1).trim();
+
+    // 個人賞・Awards 系は除外（タイトルではない）
+    if (/Manager of (the )?(Month|Year|Decade|Season)|Best (Manager|Coach|Premier League Coach)|Coach of the (Year|Decade)|\bAward(s)?\b|Trofeo|Trophy|MARCA|IFFHS|Globe Soccer|Konex|Special Award|Footballer of/i.test(compName)) continue;
+    if (/(Manager|Coach) of the (Month|Year|Decade|Season)/i.test(compName)) continue;
+    if (/^(La Liga|Premier League|Serie A|Ligue 1|Bundesliga|Eredivisie) Manager/i.test(compName)) continue;
+
+    // runner-up は除外
+    yearsRaw = yearsRaw.replace(/;\s*runner-up[^;]*/gi, '').replace(/runner-?up:?[^;,]*/gi, '');
+    if (!yearsRaw.trim()) continue;
+
+    // 年度トークン (4桁数字を含む) を数える: "2013–14, 2020–21" → 2
+    const yearTokens = yearsRaw.split(/,|;/).map(t => t.trim()).filter(t => /\d{4}/.test(t));
+    const n = yearTokens.length;
+    if (n <= 0) continue;
+
+    counts.total += n;
+    const c = compName.toLowerCase();
+    if (/champions league|european cup\b/.test(c))                    counts.clTitles  += n;
+    else if (/europa league|uefa cup\b/.test(c))                      counts.elTitles  += n;
+    else if (/super ?cup|supercoppa|supercopa|community shield/.test(c)) counts.uefaSuper += n;
+    else if (/club world cup|fifa club world|intercontinental/.test(c)) counts.worldClub += n;
+    else if (/league|liga|premier|bundesliga|serie a|ligue 1|primera divisi|primera división|eredivisie|premiership|championship|j1|j-league|mls/.test(c)) counts.leagueTitles += n;
+    else if (/cup|copa|coupe|coppa|pokal|emperor|knvb/.test(c))       counts.cupTitles += n;
+  }
+  return counts;
+}
+
 // ─── 監督 ────────────────────────────────────────────────────
 function walkManager(d) {
   if (!d) return [];
@@ -357,13 +400,16 @@ function walkManager(d) {
     push('curTeamWdl',     ct.club + ' W-D-L',    ct.sample ? `${ct.wins||0}-${ct.draws||0}-${ct.losses||0}` : '-', '現所属成績', 7);
   }
 
-  const ts = d.trophySummary || {};
-  push('totalTrophies', '獲得タイトル数', fmtNum(ts.total),         'タイトル', 9);
-  push('leagueTitles',  'リーグ優勝',     fmtNum(ts.leagueTitles),  'タイトル', 8);
-  push('cupTitles',     'カップ優勝',     fmtNum(ts.cupTitles),     'タイトル', 7);
-  push('clTitles',      'CL優勝',         fmtNum(ts.clTitles),      'タイトル', 8);
-  push('uefaSuper',     'UEFAスーパー杯', fmtNum(ts.uefaSuper),     'タイトル', 6);
-  push('worldClub',     'クラブW杯',      fmtNum(ts.worldClub),     'タイトル', 6);
+  // SofaScore の d.trophySummary は player+manager 混在で誤集計がある
+  //   honours[Manager] から自前計算した値を優先（無ければ SofaScore 値にフォールバック）
+  const ts = _computeManagerTrophies(d.honours) || d.trophySummary || {};
+  push('totalTrophies', '監督獲得タイトル数', fmtNum(ts.total),         'タイトル', 9);
+  push('leagueTitles',  'リーグ優勝',         fmtNum(ts.leagueTitles),  'タイトル', 8);
+  push('cupTitles',     'カップ優勝',         fmtNum(ts.cupTitles),     'タイトル', 7);
+  push('clTitles',      'CL優勝',             fmtNum(ts.clTitles),      'タイトル', 8);
+  push('elTitles',      'EL/UEFAカップ優勝',  fmtNum(ts.elTitles),      'タイトル', 7);
+  push('uefaSuper',     'UEFAスーパー杯',     fmtNum(ts.uefaSuper),     'タイトル', 6);
+  push('worldClub',     'クラブW杯',          fmtNum(ts.worldClub),     'タイトル', 6);
 
   if (Array.isArray(d.honours)) {
     const mgrCat = d.honours.find(h => h.category === 'Manager');
