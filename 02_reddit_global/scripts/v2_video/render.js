@@ -576,18 +576,63 @@ async function main() {
   }
 
   // BGM を 18% で重ねる（ナレーションを邪魔しない）
+  //   opening + toc 区間は zinga.mp3 固定で連続再生、TOC 終端で他3曲ランダムに切替
   updateJob(jobId, { status: 'mixing-audio' });
   console.log('🎵 BGM ミックス中...');
   const totalSec = (totalMs / 1000).toFixed(3);
-  const bgmPath = pickBgm();
-  if (bgmPath) {
-    const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${bgmPath}" ` +
-                `-filter_complex "[1:a]volume=0.18,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
+
+  const ZINGA_PATH = path.join(BGM_DIR, 'zinga.mp3');
+  const REST_CANDIDATES = [
+    'eve of battle.mp3',
+    'strategy meeting.mp3',
+    'Walking in downtown.mp3',
+    'dribbler.mp3',
+    'tikitaka.mp3',
+    'No. 6.mp3',
+  ]
+    .map(f => path.join(BGM_DIR, f))
+    .filter(p => fs.existsSync(p));
+
+  // op+toc の合計尺を算出（クロスフェード分を差し引く）
+  //   compact index で最後の op/toc の累積終了時刻を取る
+  const opIdx  = modules.findIndex(m => m && m.type === 'opening');
+  const tocIdx = modules.findIndex(m => m && m.type === 'toc');
+  const lastHeaderOrigIdx    = Math.max(opIdx, tocIdx);
+  const lastHeaderCompactIdx = lastHeaderOrigIdx >= 0 ? successIdxs.indexOf(lastHeaderOrigIdx) : -1;
+  let switchSec = 0;
+  if (lastHeaderCompactIdx >= 0) {
+    const sumMs = compactDursMs.slice(0, lastHeaderCompactIdx + 1).reduce((a, b) => a + b, 0);
+    switchSec = sumMs / 1000 - TRANSITION_SEC * lastHeaderCompactIdx;
+  }
+
+  const canDualBgm = fs.existsSync(ZINGA_PATH) && REST_CANDIDATES.length > 0
+    && switchSec > 0 && switchSec < (totalMs / 1000);
+
+  if (canDualBgm) {
+    const restPath = REST_CANDIDATES[Math.floor(Math.random() * REST_CANDIDATES.length)];
+    const switchSecStr = switchSec.toFixed(3);
+    const restSecStr   = (totalMs / 1000 - switchSec).toFixed(3);
+    console.log(`🎵 BGM 2セクション: zinga (0〜${switchSecStr}s, op+toc) → ${path.basename(restPath)} (〜${totalSec}s)`);
+    const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${ZINGA_PATH}" -stream_loop -1 -i "${restPath}" ` +
+                `-filter_complex "[1:a]atrim=0:${switchSecStr},asetpts=PTS-STARTPTS,volume=0.18[bgm_a];` +
+                `[2:a]atrim=0:${restSecStr},asetpts=PTS-STARTPTS,volume=0.18[bgm_b];` +
+                `[bgm_a][bgm_b]concat=n=2:v=0:a=1[bgm];` +
+                `[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
                 `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
     execSync(cmd, { stdio: 'pipe' });
   } else {
-    console.warn('⚠️ BGM ファイルが無いのでミックススキップ');
-    fs.copyFileSync(concatMp4, outVideo);
+    // フォールバック: 旧来の単一ランダム BGM
+    const bgmPath = pickBgm();
+    if (bgmPath) {
+      console.log(`🎵 BGM 単一: ${path.basename(bgmPath)} (op/toc 検出失敗 or 候補不足)`);
+      const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${bgmPath}" ` +
+                  `-filter_complex "[1:a]volume=0.18,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
+                  `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
+      execSync(cmd, { stdio: 'pipe' });
+    } else {
+      console.warn('⚠️ BGM ファイルが無いのでミックススキップ');
+      fs.copyFileSync(concatMp4, outVideo);
+    }
   }
 
   updateJob(jobId, {
