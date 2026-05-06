@@ -343,9 +343,11 @@ function _computeManagerTrophies(honours) {
     if (/(Manager|Coach) of the (Month|Year|Decade|Season)/i.test(compName)) continue;
     if (/^(La Liga|Premier League|Serie A|Ligue 1|Bundesliga|Eredivisie) Manager/i.test(compName)) continue;
 
-    // runner-up は除外
-    yearsRaw = yearsRaw.replace(/;\s*runner-up[^;]*/gi, '').replace(/runner-?up:?[^;,]*/gi, '');
-    if (!yearsRaw.trim()) continue;
+    // runner-up 部分を切り捨てる（winner 部分のみ残す）
+    //   "2012–13; runner-up: 2025–26" → "2012–13"
+    //   "runner-up 2013–14, 2015–16"  → ""（winner なし）
+    yearsRaw = yearsRaw.split(/;?\s*runner-?up/i)[0].trim();
+    if (!yearsRaw) continue;
 
     // 年度トークン (4桁数字を含む) を数える: "2013–14, 2020–21" → 2
     const yearTokens = yearsRaw.split(/,|;/).map(t => t.trim()).filter(t => /\d{4}/.test(t));
