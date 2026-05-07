@@ -234,6 +234,19 @@ function buildProfileHTML(mod) {
   overflow: hidden;
   word-break: break-word;
   min-height: 0;
+  position: relative;
+}
+/* 値テキスト（.row-value 内のテキスト直下子）を最初は非表示にして、左カラム効果完了後（1.7s〜）に順次フェードイン
+   N に応じて stagger delay を細かく刻む */
+.row-value > .val-text {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: valueRise 0.55s ease-out forwards;
+}
+${slots.map((_, i) => `.data-row:nth-of-type(${i + 1}) .val-text { animation-delay: ${(1.7 + i * 0.18).toFixed(2)}s; }`).join('\n')}
+@keyframes valueRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .sub-bar {
   position: absolute;
@@ -281,7 +294,7 @@ function buildProfileHTML(mod) {
     const val = s.value || '-';
     return `<div class="data-row">
       <div class="row-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
-      <div class="row-value" style="font-size:${_valFont(val)}px">${esc(val)}</div>
+      <div class="row-value" style="font-size:${_valFont(val)}px"><span class="val-text">${esc(val)}</span></div>
     </div>`;
   }).join('');
 

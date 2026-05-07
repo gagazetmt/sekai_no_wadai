@@ -52,21 +52,29 @@ function _matchPhraseToChunk(phrase, chunks) {
 function buildInsightHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
   // catchphrases が優先。新スキーマ {text, chunkText} と旧スキーマ string[] 両対応
+  //   text     : 画面に表示する短い見出し
+  //   chunkText: narration の対応文1文（音声 chunk との照合に使う・あれば優先）
   // 無ければ narrationChunks か title から
-  const _phraseText = (p) => (typeof p === 'string') ? p : String(p?.text || '');
-  const phrasesRaw = (Array.isArray(mod.catchphrases) && mod.catchphrases.length)
-    ? mod.catchphrases.slice(0, MAX_PHRASES).map(_phraseText).filter(Boolean)
+  const phrasesRich = (Array.isArray(mod.catchphrases) && mod.catchphrases.length)
+    ? mod.catchphrases.slice(0, MAX_PHRASES).map(p => ({
+        text: (typeof p === 'string') ? p : String(p?.text || ''),
+        chunkText: (typeof p === 'object' && p) ? String(p?.chunkText || '') : '',
+      })).filter(p => p.text)
     : (Array.isArray(mod.narrationChunks)
-        ? mod.narrationChunks.slice(0, MAX_PHRASES)
-        : (mod.title ? [mod.title] : []));
+        ? mod.narrationChunks.slice(0, MAX_PHRASES).map(t => ({ text: t, chunkText: t }))
+        : (mod.title ? [{ text: mod.title, chunkText: '' }] : []));
+  const phrasesRaw = phrasesRich.map(p => p.text);
   const insightTitle = mod.title || '注目ポイント';
   const layout = _layoutForCount(phrasesRaw.length);
 
   // ── 登場タイミング決定 ───────────────────────────────────
-  //   1. 各 phrase に対応する音声 chunk を substring match で探索
+  //   1. 各 phrase の chunkText (or text) で音声 chunk を substring match
   //   2. マッチした phrase は chunk 開始時刻 + 0.3s で登場
   //   3. マッチ無しは均等分散値にフォールバック
   //   4. 検出された delay 順に画面上下を並べ替え（早く出る phrase が画面上）
+  //   ※ 旧 directMapping (chunks数==phrases数で index 一致と仮定) は廃止。
+  //      AI が narration に「前置き」や「繋ぎ」を含めると 1 段ずれる事故が発生したため、
+  //      常に substring match を使う。
   const audio = Array.isArray(mod.audio) ? mod.audio : [];
   // 先頭 LEAD_PAD_SEC を chunkStarts に加算、totalSec も LEAD+TAIL 含む全体時間に揃える
   const audioSec = audio.length ? audio.reduce((s, c) => s + (c.durationSec || 0), 0) : 0;
@@ -78,12 +86,11 @@ function buildInsightHTML(mod) {
   const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1, startSec + 1);
   const evenStep = phrasesRaw.length > 1 ? (lastSec - startSec) / (phrasesRaw.length - 1) : 0;
 
-  // 1:1 対応を優先：chunks 数 == phrases 数なら index ベースで直接マッピング
-  //   （AI が narrationChunks を catchphrases と同数で返した場合）
-  const directMapping = audio.length === phrasesRaw.length;
-  const tempDelays = phrasesRaw.map((p, i) => {
-    if (directMapping) return chunkStarts[i] + 0.3;
-    const cIdx = audio.length ? _matchPhraseToChunk(p, audio) : -1;
+  const tempDelays = phrasesRich.map((p, i) => {
+    if (!audio.length) return startSec + evenStep * i;
+    // chunkText があればそっちで照合（長文なので精度高い）、無ければ短い text
+    const matchTarget = p.chunkText || p.text;
+    const cIdx = _matchPhraseToChunk(matchTarget, audio);
     return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
   });
 

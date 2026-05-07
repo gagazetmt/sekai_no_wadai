@@ -66,18 +66,21 @@ function buildHistoryHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
 
   // dataSlots から events を組み立てる（label = 日付, value = タイトル）
+  //   chunkText（narration の対応文1文）も保持して、音声 chunk との照合に使う
   let eventsRaw = [];
   if (Array.isArray(mod.dataSlots) && mod.dataSlots.length) {
     eventsRaw = mod.dataSlots.map((s, i) => ({
       date:  s.label || `${i+1}`,
       title: s.value || (mod.catchphrases?.[i] || ''),
       sub:   mod.narrationChunks?.[i] || '',
+      chunkText: s.chunkText || mod.narrationChunks?.[i] || '',
     }));
   } else if (Array.isArray(mod.catchphrases) && mod.catchphrases.length) {
     eventsRaw = mod.catchphrases.map((p, i) => ({
       date:  `${i+1}`,
-      title: p,
+      title: (typeof p === 'string') ? p : String(p?.text || ''),
       sub:   mod.narrationChunks?.[i] || '',
+      chunkText: (typeof p === 'object' && p) ? String(p?.chunkText || '') : (mod.narrationChunks?.[i] || ''),
     }));
   }
   eventsRaw = eventsRaw.slice(0, MAX_EVENTS);
@@ -95,12 +98,14 @@ function buildHistoryHTML(mod) {
   const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1, startSec + 1);
   const evenStep = eventsRaw.length > 1 ? (lastSec - startSec) / (eventsRaw.length - 1) : 0;
 
-  // 1:1 対応を優先：chunks 数 == events 数なら index ベースで直接マッピング
-  //   （AI が narrationChunks を dataSlots と同数で返した場合）
-  const directMapping = audio.length === eventsRaw.length;
+  // 各 event の登場タイミングは chunkText (narration の対応文) で chunk と照合して決定。
+  //   chunkText が無ければ title + date で照合、それでも無マッチは均等分配 fallback。
+  //   旧 directMapping (chunks 数 == events 数で index 一致と仮定) は廃止。
+  //   AI が narration に「前置き」や「繋ぎ」を含めると 1 段ずれる事故が発生したため。
   const tempDelays = eventsRaw.map((e, i) => {
-    if (directMapping) return chunkStarts[i] + 0.3;
-    const cIdx = audio.length ? _matchToChunk(`${e.title} ${e.date}`, audio) : -1;
+    if (!audio.length) return startSec + evenStep * i;
+    const matchTarget = e.chunkText || `${e.title} ${e.date}`;
+    const cIdx = _matchToChunk(matchTarget, audio);
     return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
   });
 

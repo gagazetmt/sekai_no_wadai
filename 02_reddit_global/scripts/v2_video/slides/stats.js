@@ -349,6 +349,19 @@ function buildStatsHTML(mod) {
   overflow: hidden;
   word-break: break-word;
 }
+/* 値テキスト（val-text）を最初は非表示。左カラム効果（画像1.5s + nameRise 完了 ~2.35s）後にフェードイン
+   stagger delay でカード値を順次浮き上がらせる */
+.card-value > .val-text {
+  opacity: 0;
+  transform: translateY(8px);
+  display: inline-block;
+  animation: cardValueRise 0.55s ease-out forwards;
+}
+${slots.map((_, i) => `.data-card:nth-of-type(${i + 1}) .val-text { animation-delay: ${(2.5 + i * 0.15).toFixed(2)}s; }`).join('\n')}
+@keyframes cardValueRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* カード active 用 keyframes（chunk マッチした card だけ生成） */
 ${cardActiveStyles}
@@ -391,7 +404,7 @@ ${cardActiveStyles}
       : '';
     return `<div class="data-card${activeClass}">
       <div class="card-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
-      <div class="card-value" style="font-size:${_valFont(val)}px">${esc(val)}</div>
+      <div class="card-value" style="font-size:${_valFont(val)}px"><span class="val-text">${esc(val)}</span></div>
       ${wave}
     </div>`;
   }).join('');
