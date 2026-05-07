@@ -165,8 +165,27 @@ async function main() {
   let ok = 0, fail = 0;
 
   try {
-    console.log('━━━ PSG squad ページ取得' + (proxyUrl ? ' (via Webshare proxy)' : ''));
-    const squad = await _fetchSquadData(browser, proxyUrl);
+    // proxy リトライ機構：TUNNEL/timeout エラー時に最大 5 回別 IP でリトライ
+    //   ハズレ IP を引くと ERR_TUNNEL_CONNECTION_FAILED が出るので別 proxy で再試行
+    let squad = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      const px = (attempt === 1) ? proxyUrl : _pickProxy();
+      console.log(`━━━ PSG squad ページ取得 (attempt ${attempt}/5${px ? ' via Webshare' : ' direct'})`);
+      try {
+        squad = await _fetchSquadData(browser, px);
+        if (squad?.cards?.length) break;
+      } catch (e) {
+        lastErr = e;
+        if (/TUNNEL|net::ERR|timeout/.test(e.message)) {
+          console.warn(`  ⚠️ proxy 失敗、別 IP で再試行: ${e.message.slice(0, 80)}`);
+          await sleep(2000);
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!squad || !squad.cards?.length) throw lastErr || new Error('全 5 回 proxy 取得失敗');
 
     // dedup: src 単位
     const seenSrc = new Set();
