@@ -63,8 +63,23 @@ function _convertToPng(avifUrl) {
     .replace(/f_avif/, 'f_png');
 }
 
-async function _fetchSquadData(browser) {
+function _pickProxy() {
+  if (!process.env.WEBSHARE_PROXY_URL) return null;
+  const n = Math.floor(Math.random() * 4000) + 1;
+  return process.env.WEBSHARE_PROXY_URL.replace('{N}', String(n));
+}
+
+async function _fetchSquadData(browser, proxyUrl) {
   const page = await browser.newPage();
+  if (proxyUrl) {
+    const u = new URL(proxyUrl);
+    if (u.username) {
+      await page.authenticate({
+        username: decodeURIComponent(u.username),
+        password: decodeURIComponent(u.password),
+      });
+    }
+  }
   await page.setUserAgent(UA);
   await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
   try {
@@ -130,7 +145,10 @@ function _downloadImage(_browser, url, outPath) {
 
 async function main() {
   fs.mkdirSync(STOCK_DIR, { recursive: true });
-  const browser = await puppeteerExtra.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const proxyUrl = _pickProxy();
+  const args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'];
+  if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
+  const browser = await puppeteerExtra.launch({ headless: 'new', args });
 
   // 既存 index 読み込み
   let index = { updatedAt: null, total: 0, entries: [] };
@@ -147,8 +165,8 @@ async function main() {
   let ok = 0, fail = 0;
 
   try {
-    console.log('━━━ PSG squad ページ取得');
-    const squad = await _fetchSquadData(browser);
+    console.log('━━━ PSG squad ページ取得' + (proxyUrl ? ' (via Webshare proxy)' : ''));
+    const squad = await _fetchSquadData(browser, proxyUrl);
 
     // dedup: src 単位
     const seenSrc = new Set();
