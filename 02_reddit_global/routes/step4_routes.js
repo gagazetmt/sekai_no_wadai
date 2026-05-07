@@ -424,7 +424,7 @@ ${tro ? '\n[獲得タイトル]\n' + tro : ''}`;
 ${rows}${tot}`;
       }
 
-      // 🆕 選手限定: Transfermarkt 試合単位データ（直近3シーズン × 大会別 + 直近シーズン監督別）
+      // 🆕 選手限定: Transfermarkt 試合単位データ（直近3シーズン × 大会別 + 直近シーズン監督別 + 直近 N 試合生データ）
       let tmGamesStr = '';
       if (it.role === 'player' && it.tmGames?.ok) {
         const career = it.tmGames.career;
@@ -434,6 +434,13 @@ ${rows}${tot}`;
         const byCoach = (it.tmGames.byCoachLatest || []).slice(0, 3).map(c =>
           `  coach ${c.coachId}: ${c.appearances}試合 ${c.goals}G ${c.assists}A | チーム ${c.teamRecord?.w}W${c.teamRecord?.d}D${c.teamRecord?.l}L`
         ).join('\n');
+        // 🆕 直近 25 試合の生データ（日付・大会・対戦相手・スコア・G/A・出場分）
+        //    history / insight / stats スライドで個別試合を引用できる
+        const games = (it.tmGames.recentGames || []).slice(0, 25).map(g => {
+          const ga = (g.G || 0) + 'G' + (g.A || 0) + 'A';
+          const vs = g.venue === 'home' ? 'vs' : '@';
+          return `  ${g.date} ${g.season}/${g.competition}${g.gameDay ? ' day'+g.gameDay : ''} | ${vs} ${g.opponent || 'club#'+g.opponentClubId} ${g.score} | ${ga} ${g.minutes||0}分${g.isCaptain ? ' [C]' : ''}`;
+        }).join('\n');
         tmGamesStr = `
 [Transfermarkt 試合単位の選手成績]
 通算 (全試合): ${career?.appearances}試合 ${career?.goals}G ${career?.assists}A (${career?.minutes}分)
@@ -442,7 +449,10 @@ ${rows}${tot}`;
 ${recent || '(なし)'}
 
 [直近シーズン 監督別 (top3 / coachId は Transfermarkt の監督ID)]
-${byCoach || '(なし)'}`;
+${byCoach || '(なし)'}
+
+[直近 25 試合 (日付降順 / 個別試合のスコア+対戦相手+G/A)]
+${games || '(なし)'}`;
       }
 
       return `=== 主体: ${label} (${it.role || '?'}) ===

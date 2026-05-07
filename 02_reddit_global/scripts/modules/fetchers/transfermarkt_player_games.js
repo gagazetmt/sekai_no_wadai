@@ -125,6 +125,36 @@ async function fetchPlayerPerformanceGames(playerId) {
   }
 }
 
+// クラブ ID → 名前を tmapi-alpha 経由で解決（一括取得）
+//   返却: { '27': 'Bayern Munich', '31': 'Liverpool', ... }
+async function resolveClubNames(clubIds) {
+  if (!Array.isArray(clubIds) || !clubIds.length) return {};
+  const ids = [...new Set(clubIds.map(String).filter(Boolean))];
+  const { browser, proxyUrl } = await _newBrowser();
+  try {
+    const page = await _newPage(browser, proxyUrl);
+    await page.goto('https://www.transfermarkt.com/', { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+    await new Promise(r => setTimeout(r, 1200));
+    const url = 'https://tmapi-alpha.transfermarkt.technology/clubs?' + ids.map(id => 'ids[]=' + id).join('&');
+    const result = await page.evaluate(async (u) => {
+      const r = await fetch(u);
+      const t = await r.text();
+      let p; try { p = JSON.parse(t); } catch (_) {}
+      return { status: r.status, body: p };
+    }, url);
+    if (!result.body?.success) return {};
+    const map = {};
+    (result.body.data || []).forEach(c => {
+      if (c.id) map[String(c.id)] = c.baseDetails?.shortName || c.name || '';
+    });
+    return map;
+  } catch (_) {
+    return {};
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
 // 試合配列を集計（フィルタ条件で絞り込んでから合算）
 //   options: {
 //     coachId?:        '63052' or [...]    (自チームのコーチIDで絞る)
@@ -227,9 +257,9 @@ async function fetchPlayerStatsUnderCoaches(playerId, coachIds, options = {}) {
   return result;
 }
 
-// step2 から呼ぶ用の "default" サマリー: 直近3シーズン × クラブ × 大会別 + 通算 + 監督別 top3
+// step2 から呼ぶ用の "default" サマリー: 直近3シーズン × クラブ × 大会別 + 通算 + 監督別 top3 + 直近 N 試合
 //   AI プロンプトに渡すには JSON 全部は大きすぎるので、要点だけ集計して保存
-async function fetchPlayerSummary(playerId) {
+async function fetchPlayerSummary(playerId, opts = {}) {
   const data = await fetchPlayerPerformanceGames(playerId);
   if (!data.ok) return data;
   const perf = data.performance || [];
@@ -274,6 +304,51 @@ async function fetchPlayerSummary(playerId) {
   // 通算（全試合）
   const career = aggregateGames(perf);
 
+  // 🆕 直近 N 試合の生データ（試合スコア・対戦相手・ゴール・アシスト・出場分）
+  //   history スライドで「直近 N 試合の対戦相手+スコア+G+A」を時系列で見せる用途
+  //   日付降順で N 件、対戦相手 club ID は全件解決して name にマッピング
+  const recentLimit = opts.recentLimit || 30;
+  const sortedByDate = perf
+    .filter(g => g.gameInformation?.date?.dateTimeUTC)
+    .sort((a, b) => new Date(b.gameInformation.date.dateTimeUTC) - new Date(a.gameInformation.date.dateTimeUTC));
+  const recentSlice = sortedByDate.slice(0, recentLimit);
+
+  // 対戦相手と自チームの club ID を集めて一括解決
+  const allClubIds = new Set();
+  recentSlice.forEach(g => {
+    const ci = g.clubsInformation || {};
+    if (ci.opponent?.clubId) allClubIds.add(String(ci.opponent.clubId));
+    if (ci.club?.clubId) allClubIds.add(String(ci.club.clubId));
+  });
+  const clubNameMap = await resolveClubNames([...allClubIds]);
+
+  const recentGames = recentSlice.map(g => {
+    const gi = g.gameInformation || {};
+    const ci = g.clubsInformation || {};
+    const st = g.statistics || {};
+    return {
+      date: (gi.date?.dateTimeUTC || '').slice(0, 10),
+      season: gi.seasonId,
+      competition: gi.competitionId,
+      gameDay: gi.gameDay,
+      venue: ci.club?.venue,                                           // home / away
+      myClubId: String(ci.club?.clubId || ''),
+      myClub: clubNameMap[String(ci.club?.clubId)] || '',
+      coachId: String(ci.club?.coachId || ''),
+      opponentClubId: String(ci.opponent?.clubId || ''),
+      opponent: clubNameMap[String(ci.opponent?.clubId)] || '',
+      opponentCoachId: String(ci.opponent?.coachId || ''),
+      goalsFor: ci.club?.goalsTotal,
+      goalsAgainst: ci.club?.opponentGoalsTotal,
+      score: `${ci.club?.goalsTotal ?? '?'}-${ci.club?.opponentGoalsTotal ?? '?'}`,
+      G: st.goalStatistics?.goalsScoredTotal,
+      A: st.goalStatistics?.assists,
+      minutes: st.playingTimeStatistics?.playedMinutes,
+      isCaptain: st.generalStatistics?.isCaptain || false,
+      yellowCard: st.cardStatistics?.yellowCardNet || 0,
+    };
+  });
+
   return {
     ok: true,
     playerId: String(playerId),
@@ -282,6 +357,7 @@ async function fetchPlayerSummary(playerId) {
     career,
     recentByCompetition,    // 直近3シーズン x 大会別
     byCoachLatest,          // 直近シーズンの監督別 top3
+    recentGames,            // 🆕 直近 N 試合の生データ（スコア+対戦相手+G+A、対戦相手名解決済）
   };
 }
 
@@ -291,4 +367,5 @@ module.exports = {
   aggregateGames,
   fetchPlayerStatsUnderCoaches,
   fetchPlayerSummary,
+  resolveClubNames,
 };
