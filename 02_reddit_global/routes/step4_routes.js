@@ -2184,8 +2184,11 @@ function getUI() {
     const sel = new Set(cached.selected || []);
     if (sel.has(key)) sel.delete(key);
     else {
-      if (sel.size >= 5) {
-        _msg('5メトリック選択済 — どれかを外してから追加してください');
+      // 上限は type 別: comparison=5固定 / stats/history=8 / profile=7 / insight=6
+      const m = window.APP.s4.modules[idx];
+      const limit = ({ comparison: 5, stats: 8, profile: 7, history: 8, insight: 6 })[m?.type] || 8;
+      if (sel.size >= limit) {
+        _msg(limit + 'メトリック選択済 — どれかを外してから追加してください');
         return;
       }
       sel.add(key);
