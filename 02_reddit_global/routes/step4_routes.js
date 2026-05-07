@@ -1877,7 +1877,7 @@ function getUI() {
       +       '微調整モード（既存内容を保持して差分のみ適用）'
       +     '</label>'
       +     '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#34d399;cursor:pointer;user-select:none;">'
-      +       '<input type="checkbox" class="s4-fill-webresearch" data-idx="' + i + '" style="margin:0;" onchange="document.querySelector(\'.s4-fill-research-prompt[data-idx=&quot;' + i + '&quot;]\').style.display=this.checked?\'block\':\'none\';">'
+      +       '<input type="checkbox" class="s4-fill-webresearch" data-idx="' + i + '" style="margin:0;" onchange="s4ToggleResearchPrompt(' + i + ', this.checked)">'
       +       '🌐 ウェブリサーチを使う'
       +     '</label>'
       +     '<span style="flex:1"></span>'
@@ -2293,6 +2293,12 @@ function getUI() {
       });
     }
   }
+
+  /* ── 🌐 ウェブリサーチチェックボックス onChange（escape 衝突回避のため別関数化）── */
+  window.s4ToggleResearchPrompt = function(idx, checked) {
+    const ta = document.querySelector('.s4-fill-research-prompt[data-idx="' + idx + '"]');
+    if (ta) ta.style.display = checked ? 'block' : 'none';
+  };
 
   /* ── タブ切替 ── */
   window.s4Switch = function(i) {
