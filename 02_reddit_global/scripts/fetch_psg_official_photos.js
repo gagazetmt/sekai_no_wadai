@@ -145,10 +145,11 @@ function _downloadImage(_browser, url, outPath) {
 
 async function main() {
   fs.mkdirSync(STOCK_DIR, { recursive: true });
-  const proxyUrl = _pickProxy();
+  // proxy 無しの browser をまず起動（PSG の Webshare proxy IP は弾かれるため）
+  //   503/403 出たら proxy 付きの browser で再試行（main 内で 2nd フェーズ）
   const args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled'];
-  if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
   const browser = await puppeteerExtra.launch({ headless: 'new', args });
+  const proxyUrl = null;
 
   // 既存 index 読み込み
   let index = { updatedAt: null, total: 0, entries: [] };
@@ -165,27 +166,37 @@ async function main() {
   let ok = 0, fail = 0;
 
   try {
-    // proxy リトライ機構：TUNNEL/timeout エラー時に最大 5 回別 IP でリトライ
-    //   ハズレ IP を引くと ERR_TUNNEL_CONNECTION_FAILED が出るので別 proxy で再試行
+    // 1st phase: proxy 無し（直接）で 1 回試行
+    //   PSG 公式は Webshare proxy IP を弾く傾向 → まず direct を試す
     let squad = null;
     let lastErr = null;
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      const px = (attempt === 1) ? proxyUrl : _pickProxy();
-      console.log(`━━━ PSG squad ページ取得 (attempt ${attempt}/5${px ? ' via Webshare' : ' direct'})`);
-      try {
-        squad = await _fetchSquadData(browser, px);
-        if (squad?.cards?.length) break;
-      } catch (e) {
-        lastErr = e;
-        if (/TUNNEL|net::ERR|timeout/.test(e.message)) {
-          console.warn(`  ⚠️ proxy 失敗、別 IP で再試行: ${e.message.slice(0, 80)}`);
-          await sleep(2000);
-          continue;
+    console.log('━━━ PSG squad ページ取得 (direct, no proxy)');
+    try {
+      squad = await _fetchSquadData(browser, null);
+    } catch (e) {
+      lastErr = e;
+      console.warn('  ⚠️ direct 失敗、proxy 付きで再試行へ:', e.message.slice(0, 100));
+    }
+    // 2nd phase: 直接ダメなら proxy 経由で 5 回リトライ
+    if (!squad || !squad.cards?.length) {
+      for (let attempt = 1; attempt <= 5; attempt++) {
+        const px = _pickProxy();
+        console.log(`━━━ PSG squad ページ取得 (proxy attempt ${attempt}/5)`);
+        try {
+          squad = await _fetchSquadData(browser, px);
+          if (squad?.cards?.length) break;
+        } catch (e) {
+          lastErr = e;
+          if (/TUNNEL|net::ERR|timeout/.test(e.message)) {
+            console.warn(`  ⚠️ proxy 失敗、別 IP で再試行: ${e.message.slice(0, 80)}`);
+            await sleep(2000);
+            continue;
+          }
+          throw e;
         }
-        throw e;
       }
     }
-    if (!squad || !squad.cards?.length) throw lastErr || new Error('全 5 回 proxy 取得失敗');
+    if (!squad || !squad.cards?.length) throw lastErr || new Error('全 6 回 (direct+proxy x5) 取得失敗');
 
     // dedup: src 単位
     const seenSrc = new Set();
