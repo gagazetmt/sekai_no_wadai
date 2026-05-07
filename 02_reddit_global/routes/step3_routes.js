@@ -407,7 +407,43 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
         const cap = role === 'tournament' ? 1500 : role === 'team' ? 1200 : 700;
         sofaSum = `sofa:${JSON.stringify(payload).slice(0, cap)}`;
       }
-      return `- "${it.label}" [${role}]\n  ${wikiSum}\n  ${sofaSum}`;
+
+      // 🆕 監督限定: Transfermarkt + Wikipedia 戦績データを追加（2026-05-08）
+      //   sofa/fotmob で取れない「クラブ別 P/W/D/L/Win% 内訳」「今季大会別 W/D/L」「獲得タイトル」を補完
+      let tmSum = '', wstatsSum = '';
+      if (role === 'manager') {
+        if (it.tm?.ok) {
+          const tmPayload = {
+            coachClubs: (it.tm.coachClubs || []).map(c => ({
+              club: c.club, role: c.role,
+              from: c.fromDate || c.fromSeason, to: c.toExpected ? 'present' : (c.toDate || c.toSeason),
+              matches: c.matches, ppm: c.ppm,
+            })),
+            currentSeason: (it.tm.currentSeasonByCompetition || []).map(c => ({
+              comp: c.competition, m: c.matches, w: c.w, d: c.d, l: c.l, ppm: c.ppm,
+            })),
+            currentTotal: it.tm.currentSeasonTotal
+              ? { m: it.tm.currentSeasonTotal.matches, w: it.tm.currentSeasonTotal.w, d: it.tm.currentSeasonTotal.d, l: it.tm.currentSeasonTotal.l, ppm: it.tm.currentSeasonTotal.ppm }
+              : null,
+            trophies: (it.tm.trophies || []).slice(0, 12).map(t => ({
+              title: t.title, count: t.count,
+              seasons: (t.seasons || []).map(s => `${s.season}@${s.club}`).slice(0, 6),
+            })),
+          };
+          tmSum = `\n  tm:${JSON.stringify(tmPayload).slice(0, 1400)}`;
+        }
+        if (it.wikiMgrStats?.ok) {
+          const wstats = {
+            rows: (it.wikiMgrStats.rows || []).map(r => ({
+              team: r.team, from: r.from, to: r.to, p: r.p, w: r.w, d: r.d, l: r.l, winPct: r.winPct,
+            })),
+            total: it.wikiMgrStats.total || null,
+          };
+          wstatsSum = `\n  wstats:${JSON.stringify(wstats).slice(0, 800)}`;
+        }
+      }
+
+      return `- "${it.label}" [${role}]\n  ${wikiSum}\n  ${sofaSum}${tmSum}${wstatsSum}`;
     }
     function _matchBlock(it) {
       if (!it.data?.ok) return `- "${it.label}" : 取得失敗`;

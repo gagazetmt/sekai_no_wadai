@@ -334,9 +334,29 @@ async function _fetchEntity(label, role) {
     tasks.push(Promise.resolve(null));
   }
 
-  const [wiki, sofa, fmRes] = await Promise.all(tasks);
+  // 🆕 Transfermarkt + Wikipedia 監督戦績（manager のみ・2026-05-08）
+  //   FotMob/SofaScore で取れない監督のクラブ別 試合数/PPM/W/D/L 内訳を補完
+  //   Transfermarkt: 公式風プロフィール / 今季大会別 W/D/L / 獲得タイトル
+  //   Wikipedia:     クラブ別 P/W/D/L/Win% 内訳
+  if (role === 'manager') {
+    const { searchTransfermarktManager, fetchTransfermarktManager } = require('../scripts/modules/fetchers/transfermarkt_manager');
+    const { fetchWikipediaManagerialStats } = require('../scripts/modules/fetchers/wiki_managerial_stats');
+    tasks.push(
+      (async () => {
+        const hit = await searchTransfermarktManager(label).catch(() => null);
+        if (!hit) return { ok: false, error: 'tm search miss' };
+        return await fetchTransfermarktManager(hit.id, hit.slug).catch(e => ({ ok: false, error: e.message }));
+      })()
+    );
+    tasks.push(fetchWikipediaManagerialStats(label).catch(e => ({ ok: false, error: e.message })));
+  } else {
+    tasks.push(Promise.resolve(null));
+    tasks.push(Promise.resolve(null));
+  }
+
+  const [wiki, sofa, fmRes, tm, wikiMgrStats] = await Promise.all(tasks);
   const fotmob = fmRes && fmRes.data ? { ok: true, ...fmRes.data, _matched: fmRes.found } : (fmRes || null);
-  return { wiki, sofa, fotmob };
+  return { wiki, sofa, fotmob, tm, wikiMgrStats };
 }
 
 async function _fetchMatch(label) {
@@ -357,10 +377,10 @@ router.post('/v3/fetch-label', async (req, res) => {
   try {
     if (box === 'entity') {
       if (!role) return res.status(400).json({ error: 'role required for entity' });
-      const { wiki, sofa, fotmob } = await _fetchEntity(label, role);
+      const { wiki, sofa, fotmob, tm, wikiMgrStats } = await _fetchEntity(label, role);
       const items = si.boxes.entity.items;
       const i = items.findIndex(x => x.label === label);
-      const next = { label, role, wiki, sofa, fotmob, fetchedAt: now };
+      const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, fetchedAt: now };
       if (i >= 0) items[i] = next; else items.push(next);
     }
     else if (box === 'match') {
@@ -419,8 +439,8 @@ router.post('/v3/fetch-all', async (req, res) => {
       const it = queue.shift();
       try {
         if (it.box === 'entity') {
-          const { wiki, sofa, fotmob } = await _fetchEntity(it.label, it.role);
-          results.push({ ...it, wiki, sofa, fotmob, fetchedAt: now });
+          const { wiki, sofa, fotmob, tm, wikiMgrStats } = await _fetchEntity(it.label, it.role);
+          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, fetchedAt: now });
         } else if (it.box === 'match') {
           const data = await _fetchMatch(it.label);
           results.push({ ...it, data, fetchedAt: now });
@@ -440,7 +460,7 @@ router.post('/v3/fetch-all', async (req, res) => {
     const items = si.boxes[r.box].items;
     const i = items.findIndex(x => x.label === r.label);
     let next;
-    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, fetchedAt: r.fetchedAt, error: r.error };
+    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, fetchedAt: r.fetchedAt, error: r.error };
     else                    next = { label: r.label, data: r.data,  fetchedAt: r.fetchedAt, error: r.error };
     if (i >= 0) items[i] = next; else items.push(next);
   }

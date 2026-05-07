@@ -381,6 +381,43 @@ async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, use
         contractUntil: sofa.contractUntil,
       }).slice(0, 2200) : 'sofa:取得失敗';
 
+      // 🆕 監督の場合 Transfermarkt + Wikipedia 戦績テーブルもブロック化（2026-05-08）
+      let tmStr = '', wstatsStr = '';
+      if (it.role === 'manager' && it.tm?.ok) {
+        const c = (it.tm.coachClubs || []).map(c => {
+          const period = `${c.fromDate || c.fromSeason || '?'} 〜 ${c.toExpected ? '現在' : (c.toDate || c.toSeason || '?')}`;
+          const m = c.matches != null ? `${c.matches}試合` : '';
+          const ppm = c.ppm != null ? ` PPM ${c.ppm}` : '';
+          return `${period}: ${c.club} (${c.role || '監督'}) ${m}${ppm}`;
+        }).join('\n');
+        const cs = (it.tm.currentSeasonByCompetition || []).map(s =>
+          `  ${s.competition}: ${s.matches}試合 ${s.w}勝${s.d}分${s.l}敗 PPM ${s.ppm}`
+        ).join('\n');
+        const tot = it.tm.currentSeasonTotal
+          ? `  Total: ${it.tm.currentSeasonTotal.matches}試合 ${it.tm.currentSeasonTotal.w}勝${it.tm.currentSeasonTotal.d}分${it.tm.currentSeasonTotal.l}敗 PPM ${it.tm.currentSeasonTotal.ppm}`
+          : '';
+        const tro = (it.tm.trophies || []).slice(0, 12).map(t => {
+          const ss = (t.seasons || []).map(s => `${s.season} (${s.club})`).join(', ');
+          return `${t.title} x${t.count}: ${ss}`;
+        }).join('\n');
+        tmStr = `
+[Transfermarkt 監督経歴 (クラブ別通算)]
+${c || '(なし)'}
+${cs ? '\n[今季大会別 W/D/L]\n' + cs + (tot ? '\n' + tot : '') : ''}
+${tro ? '\n[獲得タイトル]\n' + tro : ''}`;
+      }
+      if (it.role === 'manager' && it.wikiMgrStats?.ok) {
+        const rows = (it.wikiMgrStats.rows || []).map(r =>
+          `  ${r.team}: ${r.from} 〜 ${r.to} | ${r.p}試合 ${r.w}勝${r.d}分${r.l}敗 (Win% ${r.winPct})`
+        ).join('\n');
+        const tot = it.wikiMgrStats.total
+          ? `\n  通算: ${it.wikiMgrStats.total.p}試合 ${it.wikiMgrStats.total.w}勝${it.wikiMgrStats.total.d}分${it.wikiMgrStats.total.l}敗 (Win% ${it.wikiMgrStats.total.winPct})`
+          : '';
+        wstatsStr = `
+[Wikipedia 監督戦績 (クラブ別 W/D/L 内訳)]
+${rows}${tot}`;
+      }
+
       return `=== 主体: ${label} (${it.role || '?'}) ===
 [Wikipedia 要約]
 ${wikiExtract.slice(0, 1500)}
@@ -396,6 +433,7 @@ ${wikitext.slice(0, 3000)}
 
 [SofaScore]
 ${sofaStr}
+${tmStr}${wstatsStr}
 `;
     }
 
