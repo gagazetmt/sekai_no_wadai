@@ -100,27 +100,32 @@ async function _fetchSquadData(browser) {
   }
 }
 
-async function _downloadImage(browser, url, outPath) {
-  const page = await browser.newPage();
-  await page.setUserAgent(UA);
-  await page.goto('https://www.psg.fr/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await sleep(500);
-  try {
-    const result = await page.evaluate(async (u) => {
-      const r = await fetch(u);
-      if (!r.ok) return { ok: false, status: r.status };
-      const buf = await r.arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = '';
-      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-      return { ok: true, b64: btoa(bin), size: bytes.length };
-    }, url);
-    if (!result.ok) return { ok: false, reason: 'fetch ' + result.status };
-    fs.writeFileSync(outPath, Buffer.from(result.b64, 'base64'));
-    return { ok: true, sizeBytes: result.size };
-  } finally {
-    await page.close().catch(() => {});
-  }
+// Cloudinary CDN は cookie 不要なので Node.js https で直接ダウンロード（puppeteer 競合回避）
+const https = require('https');
+function _downloadImage(_browser, url, outPath) {
+  return new Promise((resolve) => {
+    const opts = { headers: { 'User-Agent': UA, 'Accept': 'image/png,image/avif,image/webp,*/*' } };
+    https.get(url, opts, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        // redirect 追従
+        return _downloadImage(null, res.headers.location, outPath).then(resolve);
+      }
+      if (res.statusCode !== 200) {
+        res.resume();
+        return resolve({ ok: false, reason: 'status ' + res.statusCode });
+      }
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const buf = Buffer.concat(chunks);
+          fs.writeFileSync(outPath, buf);
+          resolve({ ok: true, sizeBytes: buf.length });
+        } catch (e) { resolve({ ok: false, reason: 'write ' + e.message }); }
+      });
+      res.on('error', e => resolve({ ok: false, reason: 'recv ' + e.message }));
+    }).on('error', e => resolve({ ok: false, reason: 'req ' + e.message }));
+  });
 }
 
 async function main() {
