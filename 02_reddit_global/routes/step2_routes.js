@@ -335,9 +335,8 @@ async function _fetchEntity(label, role) {
   }
 
   // 🆕 Transfermarkt + Wikipedia 監督戦績（manager のみ・2026-05-08）
-  //   FotMob/SofaScore で取れない監督のクラブ別 試合数/PPM/W/D/L 内訳を補完
-  //   Transfermarkt: 公式風プロフィール / 今季大会別 W/D/L / 獲得タイトル
-  //   Wikipedia:     クラブ別 P/W/D/L/Win% 内訳
+  //   TM /stationen/plus/1: クラブ別通算 W/D/L + 推定GF/GA + Days + Players + 今季大会別 W/D/L + タイトル
+  //   Wikipedia:           クラブ別 P/W/D/L/Win% 内訳（補助・Win% 検証用）
   if (role === 'manager') {
     const { searchTransfermarktManager, fetchTransfermarktManager } = require('../scripts/modules/fetchers/transfermarkt_manager');
     const { fetchWikipediaManagerialStats } = require('../scripts/modules/fetchers/wiki_managerial_stats');
@@ -354,9 +353,26 @@ async function _fetchEntity(label, role) {
     tasks.push(Promise.resolve(null));
   }
 
-  const [wiki, sofa, fmRes, tm, wikiMgrStats] = await Promise.all(tasks);
+  // 🆕 Transfermarkt 試合単位の選手成績（player のみ・2026-05-08）
+  //   ceapi/performance-game/{id} を叩いて全試合データ取得 → 直近3シーズン × 大会別集計
+  //   + 直近シーズン監督別 top3（「アロンソ下のヴィニ」のような複合データ用）
+  if (role === 'player') {
+    const { searchTransfermarktPlayer, fetchPlayerSummary } = require('../scripts/modules/fetchers/transfermarkt_player_games');
+    tasks.push(
+      (async () => {
+        const hit = await searchTransfermarktPlayer(label).catch(() => null);
+        if (!hit) return { ok: false, error: 'tm player search miss' };
+        const summary = await fetchPlayerSummary(hit.id).catch(e => ({ ok: false, error: e.message }));
+        return summary?.ok ? { ...summary, _slug: hit.slug, _name: hit.name } : summary;
+      })()
+    );
+  } else {
+    tasks.push(Promise.resolve(null));
+  }
+
+  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames] = await Promise.all(tasks);
   const fotmob = fmRes && fmRes.data ? { ok: true, ...fmRes.data, _matched: fmRes.found } : (fmRes || null);
-  return { wiki, sofa, fotmob, tm, wikiMgrStats };
+  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames };
 }
 
 async function _fetchMatch(label) {
@@ -377,10 +393,10 @@ router.post('/v3/fetch-label', async (req, res) => {
   try {
     if (box === 'entity') {
       if (!role) return res.status(400).json({ error: 'role required for entity' });
-      const { wiki, sofa, fotmob, tm, wikiMgrStats } = await _fetchEntity(label, role);
+      const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames } = await _fetchEntity(label, role);
       const items = si.boxes.entity.items;
       const i = items.findIndex(x => x.label === label);
-      const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, fetchedAt: now };
+      const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, fetchedAt: now };
       if (i >= 0) items[i] = next; else items.push(next);
     }
     else if (box === 'match') {
@@ -439,8 +455,8 @@ router.post('/v3/fetch-all', async (req, res) => {
       const it = queue.shift();
       try {
         if (it.box === 'entity') {
-          const { wiki, sofa, fotmob, tm, wikiMgrStats } = await _fetchEntity(it.label, it.role);
-          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, fetchedAt: now });
+          const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames } = await _fetchEntity(it.label, it.role);
+          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, fetchedAt: now });
         } else if (it.box === 'match') {
           const data = await _fetchMatch(it.label);
           results.push({ ...it, data, fetchedAt: now });
@@ -460,7 +476,7 @@ router.post('/v3/fetch-all', async (req, res) => {
     const items = si.boxes[r.box].items;
     const i = items.findIndex(x => x.label === r.label);
     let next;
-    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, fetchedAt: r.fetchedAt, error: r.error };
+    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, tmGames: r.tmGames, fetchedAt: r.fetchedAt, error: r.error };
     else                    next = { label: r.label, data: r.data,  fetchedAt: r.fetchedAt, error: r.error };
     if (i >= 0) items[i] = next; else items.push(next);
   }

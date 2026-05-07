@@ -122,7 +122,9 @@ async function searchTransfermarktManager(name) {
   }
 }
 
-// profil ページから 3 種類のテーブル + auflistung を抽出
+// profil ページから 監督プロフィール + 今季大会別 W/D/L を抽出
+//   coachClubs（クラブ別通算）は profil テーブルに W/D/L 列が無いので
+//   別途 _fetchStationenPlus で /stationen/plus/1 から詳細データを取る
 async function _fetchProfil(page, slug, id) {
   const url = `https://www.transfermarkt.com/${slug}/profil/trainer/${id}`;
   const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
@@ -130,9 +132,9 @@ async function _fetchProfil(page, slug, id) {
   await new Promise(r => setTimeout(r, 2000));
 
   return await page.evaluate(() => {
-    const out = { profile: {}, currentSeasonByCompetition: [], coachClubs: [] };
+    const out = { profile: {}, currentSeasonByCompetition: [] };
 
-    // ── テーブル[0]: 監督プロフィール（class="auflistung"）
+    // 監督プロフィール（class="auflistung"）
     const auf = document.querySelector('table.auflistung');
     if (auf) {
       for (const row of auf.rows) {
@@ -142,51 +144,82 @@ async function _fetchProfil(page, slug, id) {
       }
     }
 
-    // ── テーブル群: class="items" のうち見出しに W/D/L があるのが今季大会別、Matches+PPM がクラブ別
+    // 今季大会別 W/D/L テーブル（class="items"、ヘッダに W/D/L を含む）
     const itemsTables = document.querySelectorAll('table.items');
     for (const tbl of itemsTables) {
       const headerRow = tbl.rows[0];
       if (!headerRow) continue;
       const headers = Array.from(headerRow.cells).map(c => (c.innerText || '').trim().toLowerCase());
-
-      // 今季大会別: Competition | Matches | W | D | L | Points | PPM
-      if (headers.includes('w') && headers.includes('d') && headers.includes('l')) {
-        for (let i = 1; i < tbl.rows.length; i++) {
-          const r = tbl.rows[i];
-          const cells = Array.from(r.cells).map(c => (c.innerText || '').trim());
-          if (cells.length < headers.length) continue;
-          const obj = {};
-          headers.forEach((h, k) => { obj[h] = cells[k]; });
-          out.currentSeasonByCompetition.push(obj);
-        }
-        continue;
-      }
-
-      // クラブ別通算: 紋章 | Club & role | Appointed | In charge until | Matches | PPM
-      if (headers.some(h => h.includes('club & role') || h.includes('appointed') || h.includes('in charge'))) {
-        for (let i = 1; i < tbl.rows.length; i++) {
-          const r = tbl.rows[i];
-          // assistant manager の "Assistant Manager of: Pep Guardiola (..." は単一セル行で来る場合あり
-          const cells = Array.from(r.cells).map(c => (c.innerText || '').trim());
-          if (cells.length < 4) {
-            // 補足行 — 直前の coachClubs エントリに mentor として連結
-            const last = out.coachClubs[out.coachClubs.length - 1];
-            const txt = cells.join(' ').trim();
-            if (last && /assistant manager of:/i.test(txt)) {
-              const m = txt.match(/Assistant Manager of:\s*([^()]+)/i);
-              if (m) last.mentor = m[1].trim();
-            }
-            continue;
-          }
-          const obj = {};
-          headers.forEach((h, k) => { obj[h] = cells[k]; });
-          out.coachClubs.push(obj);
-        }
+      if (!(headers.includes('w') && headers.includes('d') && headers.includes('l'))) continue;
+      // 今季大会別と判別できる列構成
+      for (let i = 1; i < tbl.rows.length; i++) {
+        const r = tbl.rows[i];
+        const cells = Array.from(r.cells).map(c => (c.innerText || '').trim());
+        if (cells.length < headers.length) continue;
+        const obj = {};
+        headers.forEach((h, k) => { obj[h] = cells[k]; });
+        out.currentSeasonByCompetition.push(obj);
       }
     }
 
     return out;
   });
+}
+
+// 🆕 /stationen/plus/1 の詳細表示モードからクラブ別通算を抽出（2026-05-08）
+//   普通の /profil ページよりも遥かに詳細：
+//     wappen | Club & role | Appointed | In charge until | from / until | Days in charge
+//     | Matches | W | D | L | Players used | ø-Goals | PPM | Games / PPG
+//   ø-Goals は "2.47 : 0.94" 形式（左=平均得点、右=平均失点）
+//   GF/GA は ø-Goals × Matches で四捨五入計算
+async function _fetchStationenPlus(page, slug, id) {
+  const url = `https://www.transfermarkt.com/${slug}/stationen/trainer/${id}/plus/1`;
+  const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+  if (!res || res.status() >= 400) return [];
+  await new Promise(r => setTimeout(r, 2000));
+
+  return await page.evaluate(() => {
+    const tbl = document.querySelector('table.items');
+    if (!tbl) return [];
+    const headerRow = tbl.rows[0];
+    if (!headerRow) return [];
+    const headers = Array.from(headerRow.cells).map(c => (c.innerText || '').trim().toLowerCase());
+
+    const rows = [];
+    for (let i = 1; i < tbl.rows.length; i++) {
+      const r = tbl.rows[i];
+      const cells = Array.from(r.cells).map(c => (c.innerText || '').trim());
+      if (cells.length < 5) {
+        // 補足行（Assistant Manager of: ...）
+        const last = rows[rows.length - 1];
+        const txt = cells.join(' ').trim();
+        if (last && /assistant manager of:/i.test(txt)) {
+          const m = txt.match(/Assistant Manager of:\s*([^()]+)/i);
+          if (m) last.mentor = m[1].trim();
+        }
+        continue;
+      }
+      const obj = {};
+      headers.forEach((h, k) => { obj[h] = cells[k]; });
+      rows.push(obj);
+    }
+    return rows;
+  });
+}
+
+// "2.47 : 0.94" → { avgFor: 2.47, avgAgainst: 0.94 }
+function _parseAvgGoals(s) {
+  if (!s) return { avgFor: null, avgAgainst: null };
+  const m = String(s).match(/([\d.]+)\s*:\s*([\d.]+)/);
+  if (!m) return { avgFor: null, avgAgainst: null };
+  return { avgFor: parseFloat(m[1]), avgAgainst: parseFloat(m[2]) };
+}
+
+// "3597 Days" / "1095 Days" → 3597
+function _parseDays(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+)\s*Days?/i);
+  return m ? parseInt(m[1], 10) : null;
 }
 
 // erfolge ページから獲得タイトル一覧を抽出
@@ -316,8 +349,9 @@ async function fetchTransfermarktManager(id, slug) {
   try {
     const page = await _newPage(browser, proxyUrl);
 
-    const profil = await _fetchProfil(page, slug, id);
-    const trophies = await _fetchErfolge(page, slug, id);
+    const profil          = await _fetchProfil(page, slug, id);
+    const stationenRows   = await _fetchStationenPlus(page, slug, id);
+    const trophies        = await _fetchErfolge(page, slug, id);
 
     // ── プロフィールを構造化 ──
     const profKeys = profil.profile || {};
@@ -340,22 +374,43 @@ async function fetchTransfermarktManager(id, slug) {
       if (aMatch) age = parseInt(aMatch[1], 10);
     }
 
-    // ── coachClubs: テーブル行を構造化 ──
-    //   ヘッドコーチ役（Manager/Head Coach/Caretaker/Interim）と非ヘッドコーチ役を分離して保持
-    const coachClubsAll = (profil.coachClubs || []).map(row => {
+    // ── coachClubs: /stationen/plus/1 の詳細テーブル行を構造化 ──
+    //   profil ページよりも詳細列が多いので /plus/1 を主データソースとする
+    //   ヘッドコーチ役（Manager/Head Coach/Caretaker/Interim）と非ヘッドコーチ役を分離
+    const coachClubsAll = stationenRows.map(row => {
       const clubRole = row['club & role'] || row['club']  || '';
       const appoint  = row['appointed'] || '';
       const until    = row['in charge until'] || '';
+      const days     = row['days in charge'] || row['days'] || '';
       const matches  = row['matches'] || row['m'] || '';
+      const w        = row['w'] || '';
+      const d        = row['d'] || '';
+      const l        = row['l'] || '';
+      const players  = row['players used'] || row['players'] || '';
+      const avgGoals = row['ø-goals'] || row['ø goals'] || row['o-goals'] || row['avg-goals'] || '';
       const ppm      = row['ppm'] || '';
       const { club, role } = _parseClubRole(clubRole);
       const a = _parseAppointed(appoint);
       const u = _parseInChargeUntil(until);
+      const m = _toIntOrNull(matches);
+      const ag = _parseAvgGoals(avgGoals);
+      // GF/GA を ø-Goals × Matches で四捨五入計算（試合データに直接 GF/GA は無い）
+      const gf = (m != null && ag.avgFor != null) ? Math.round(m * ag.avgFor) : null;
+      const ga = (m != null && ag.avgAgainst != null) ? Math.round(m * ag.avgAgainst) : null;
       return {
         club, role,
         fromSeason: a.season, fromDate: a.date,
         toSeason: u.season,  toDate: u.date, toExpected: u.expected,
-        matches: _toIntOrNull(matches),
+        daysInCharge: _parseDays(days),       // 🆕 在任日数
+        matches: m,
+        w: _toIntOrNull(w),                   // 🆕 勝
+        d: _toIntOrNull(d),                   // 🆕 分
+        l: _toIntOrNull(l),                   // 🆕 敗
+        playersUsed: _toIntOrNull(players),   // 🆕 使用選手数
+        avgGoalsFor:     ag.avgFor,           // 🆕 1試合平均得点
+        avgGoalsAgainst: ag.avgAgainst,       // 🆕 1試合平均失点
+        gf,                                    // 🆕 通算得点（推定）
+        ga,                                    // 🆕 通算失点（推定）
         ppm:     _toFloatOrNull(ppm),
         mentor:  row.mentor || null,
         isHeadCoach: _isHeadCoachRole(role),

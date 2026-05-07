@@ -382,13 +382,19 @@ async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, use
       }).slice(0, 2200) : 'sofa:取得失敗';
 
       // 🆕 監督の場合 Transfermarkt + Wikipedia 戦績テーブルもブロック化（2026-05-08）
+      //   TM /stationen/plus/1 が主ソース：W/D/L + 推定GF/GA + Days + Players 全部入り
+      //   Wikipedia は補助（Win% 検証用 / TM が取れない場合のフォールバック）
       let tmStr = '', wstatsStr = '';
       if (it.role === 'manager' && it.tm?.ok) {
         const c = (it.tm.coachClubs || []).map(c => {
           const period = `${c.fromDate || c.fromSeason || '?'} 〜 ${c.toExpected ? '現在' : (c.toDate || c.toSeason || '?')}`;
-          const m = c.matches != null ? `${c.matches}試合` : '';
-          const ppm = c.ppm != null ? ` PPM ${c.ppm}` : '';
-          return `${period}: ${c.club} (${c.role || '監督'}) ${m}${ppm}`;
+          const m   = c.matches != null ? `${c.matches}試合` : '-';
+          const wdl = c.w != null ? ` ${c.w}勝${c.d}分${c.l}敗` : '';
+          const gfga = (c.gf != null && c.ga != null) ? ` 得${c.gf}失${c.ga}(平均${c.avgGoalsFor}:${c.avgGoalsAgainst})` : '';
+          const days = c.daysInCharge ? ` ${c.daysInCharge}日` : '';
+          const players = c.playersUsed ? ` 起用${c.playersUsed}人` : '';
+          const ppm = c.ppm != null ? ` PPM${c.ppm}` : '';
+          return `${period}: ${c.club} (${c.role || '監督'}) ${m}${wdl}${gfga}${days}${players}${ppm}`;
         }).join('\n');
         const cs = (it.tm.currentSeasonByCompetition || []).map(s =>
           `  ${s.competition}: ${s.matches}試合 ${s.w}勝${s.d}分${s.l}敗 PPM ${s.ppm}`
@@ -401,7 +407,7 @@ async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, use
           return `${t.title} x${t.count}: ${ss}`;
         }).join('\n');
         tmStr = `
-[Transfermarkt 監督経歴 (クラブ別通算)]
+[Transfermarkt 監督経歴 (クラブ別通算 + 推定GF/GA + 在任日数)]
 ${c || '(なし)'}
 ${cs ? '\n[今季大会別 W/D/L]\n' + cs + (tot ? '\n' + tot : '') : ''}
 ${tro ? '\n[獲得タイトル]\n' + tro : ''}`;
@@ -414,8 +420,29 @@ ${tro ? '\n[獲得タイトル]\n' + tro : ''}`;
           ? `\n  通算: ${it.wikiMgrStats.total.p}試合 ${it.wikiMgrStats.total.w}勝${it.wikiMgrStats.total.d}分${it.wikiMgrStats.total.l}敗 (Win% ${it.wikiMgrStats.total.winPct})`
           : '';
         wstatsStr = `
-[Wikipedia 監督戦績 (クラブ別 W/D/L 内訳)]
+[Wikipedia 監督戦績 (補助 / Win% 検証)]
 ${rows}${tot}`;
+      }
+
+      // 🆕 選手限定: Transfermarkt 試合単位データ（直近3シーズン × 大会別 + 直近シーズン監督別）
+      let tmGamesStr = '';
+      if (it.role === 'player' && it.tmGames?.ok) {
+        const career = it.tmGames.career;
+        const recent = (it.tmGames.recentByCompetition || []).slice(0, 10).map(r =>
+          `  ${r.season}/${r.competition}: ${r.appearances}試合 ${r.goals}G ${r.assists}A (${r.minutes}分) | チーム ${r.teamRecord?.w}W${r.teamRecord?.d}D${r.teamRecord?.l}L`
+        ).join('\n');
+        const byCoach = (it.tmGames.byCoachLatest || []).slice(0, 3).map(c =>
+          `  coach ${c.coachId}: ${c.appearances}試合 ${c.goals}G ${c.assists}A | チーム ${c.teamRecord?.w}W${c.teamRecord?.d}D${c.teamRecord?.l}L`
+        ).join('\n');
+        tmGamesStr = `
+[Transfermarkt 試合単位の選手成績]
+通算 (全試合): ${career?.appearances}試合 ${career?.goals}G ${career?.assists}A (${career?.minutes}分)
+
+[直近3シーズン × 大会別]
+${recent || '(なし)'}
+
+[直近シーズン 監督別 (top3 / coachId は Transfermarkt の監督ID)]
+${byCoach || '(なし)'}`;
       }
 
       return `=== 主体: ${label} (${it.role || '?'}) ===
@@ -433,7 +460,7 @@ ${wikitext.slice(0, 3000)}
 
 [SofaScore]
 ${sofaStr}
-${tmStr}${wstatsStr}
+${tmStr}${wstatsStr}${tmGamesStr}
 `;
     }
 

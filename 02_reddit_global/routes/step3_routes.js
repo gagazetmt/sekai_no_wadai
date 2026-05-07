@@ -409,15 +409,22 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
       }
 
       // 🆕 監督限定: Transfermarkt + Wikipedia 戦績データを追加（2026-05-08）
-      //   sofa/fotmob で取れない「クラブ別 P/W/D/L/Win% 内訳」「今季大会別 W/D/L」「獲得タイトル」を補完
-      let tmSum = '', wstatsSum = '';
+      //   主データ = Transfermarkt /stationen/plus/1 (W/D/L/GF/GA/Days/Players 全部入り)
+      //   補助 = Wikipedia (タイトル詳細補完用、W/D/L は TM 優先)
+      let tmSum = '', wstatsSum = '', tmGamesSum = '';
       if (role === 'manager') {
         if (it.tm?.ok) {
           const tmPayload = {
             coachClubs: (it.tm.coachClubs || []).map(c => ({
               club: c.club, role: c.role,
-              from: c.fromDate || c.fromSeason, to: c.toExpected ? 'present' : (c.toDate || c.toSeason),
-              matches: c.matches, ppm: c.ppm,
+              from: c.fromDate || c.fromSeason,
+              to: c.toExpected ? 'present' : (c.toDate || c.toSeason),
+              days: c.daysInCharge,           // 在任日数
+              m: c.matches, w: c.w, d: c.d, l: c.l,  // W/D/L 内訳
+              gf: c.gf, ga: c.ga,             // 通算得点・失点（推定）
+              avgGF: c.avgGoalsFor, avgGA: c.avgGoalsAgainst,  // 1試合平均
+              players: c.playersUsed,          // 使用選手数
+              ppm: c.ppm,
             })),
             currentSeason: (it.tm.currentSeasonByCompetition || []).map(c => ({
               comp: c.competition, m: c.matches, w: c.w, d: c.d, l: c.l, ppm: c.ppm,
@@ -430,8 +437,9 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
               seasons: (t.seasons || []).map(s => `${s.season}@${s.club}`).slice(0, 6),
             })),
           };
-          tmSum = `\n  tm:${JSON.stringify(tmPayload).slice(0, 1400)}`;
+          tmSum = `\n  tm:${JSON.stringify(tmPayload).slice(0, 1700)}`;
         }
+        // Wikipedia は TM が取れない部分の補助。タイトル詳細や Win% 検証用
         if (it.wikiMgrStats?.ok) {
           const wstats = {
             rows: (it.wikiMgrStats.rows || []).map(r => ({
@@ -439,11 +447,34 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
             })),
             total: it.wikiMgrStats.total || null,
           };
-          wstatsSum = `\n  wstats:${JSON.stringify(wstats).slice(0, 800)}`;
+          wstatsSum = `\n  wstats:${JSON.stringify(wstats).slice(0, 600)}`;
         }
       }
 
-      return `- "${it.label}" [${role}]\n  ${wikiSum}\n  ${sofaSum}${tmSum}${wstatsSum}`;
+      // 🆕 選手限定: Transfermarkt 試合単位の集計データ（2026-05-08）
+      //   直近3シーズン × 大会別の出場/G/A + 直近シーズン監督別 top3
+      if (role === 'player' && it.tmGames?.ok) {
+        const tmgPayload = {
+          career: {
+            apps: it.tmGames.career?.appearances,
+            g: it.tmGames.career?.goals,
+            a: it.tmGames.career?.assists,
+          },
+          recentByComp: (it.tmGames.recentByCompetition || []).slice(0, 10).map(r => ({
+            s: r.season, c: r.competition,
+            apps: r.appearances, g: r.goals, a: r.assists,
+            tw: r.teamRecord?.w, td: r.teamRecord?.d, tl: r.teamRecord?.l,
+          })),
+          byCoachLatest: (it.tmGames.byCoachLatest || []).slice(0, 3).map(c => ({
+            coachId: c.coachId, season: c.season,
+            apps: c.appearances, g: c.goals, a: c.assists,
+            tw: c.teamRecord?.w, td: c.teamRecord?.d, tl: c.teamRecord?.l,
+          })),
+        };
+        tmGamesSum = `\n  tmGames:${JSON.stringify(tmgPayload).slice(0, 1000)}`;
+      }
+
+      return `- "${it.label}" [${role}]\n  ${wikiSum}\n  ${sofaSum}${tmSum}${wstatsSum}${tmGamesSum}`;
     }
     function _matchBlock(it) {
       if (!it.data?.ok) return `- "${it.label}" : 取得失敗`;
