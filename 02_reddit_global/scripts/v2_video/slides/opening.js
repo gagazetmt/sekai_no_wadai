@@ -5,7 +5,7 @@
 
 const {
   PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle,
-  buildSubtitleBar, subtitleArgFromMod, _t,
+  buildSubtitleBar, subtitleArgFromMod, _t, imageAdjustCss,
 } = require('./_common');
 
 // タイトルから煽りバッジ（テキスト + 色）を自動推論
@@ -47,13 +47,15 @@ function buildOpeningHTML(mod) {
 
   // 字幕は出さない（タイトル読み上げのみ運用、字幕は冗長）
   const subBarHtml = '';
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
 
   const extraStyles = `
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : 'background: radial-gradient(ellipse at center, #1a2540 0%, #060e1c 100%);'}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}% auto`};
+  background-position: ${imgAdj.bgPosition};
+  background-repeat: no-repeat;
   filter: brightness(0.62);
   ${bg ? 'animation: bgZoom 8s ease-out forwards;' : ''}
 }

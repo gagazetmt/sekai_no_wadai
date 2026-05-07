@@ -2,7 +2,7 @@
 // Insight スライド：キャッチコピーが上から順に登場（左からゴーストトレイル + 本体fadeIn）
 // テンプレート元: /insight/index.html（プレビュー版から editor を除外して1920x1080 に最適化）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
 const MAX_PHRASES = 6;
 
@@ -51,6 +51,7 @@ function _matchPhraseToChunk(phrase, chunks) {
 
 function buildInsightHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
   // catchphrases が優先。新スキーマ {text, chunkText} と旧スキーマ string[] 両対応
   //   text     : 画面に表示する短い見出し
   //   chunkText: narration の対応文1文（音声 chunk との照合に使う・あれば優先）
@@ -104,8 +105,9 @@ function buildInsightHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: ${PALETTE.bg};`}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}% auto`};
+  background-position: ${imgAdj.bgPosition};
+  background-repeat: no-repeat;
   ${bg ? 'animation: bgZoom 14s ease-out forwards;' : ''}
 }
 @keyframes bgZoom { from { transform: scale(1); } to { transform: scale(1.05); } }

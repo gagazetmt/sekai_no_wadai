@@ -7,7 +7,7 @@
 //   - 最新イベント dot は緑脈動を維持
 //   - hero-subject / tl-header は AI 動的生成 or 日本語既定
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
 const MAX_EVENTS = 8;
 
@@ -35,13 +35,16 @@ function _matchToChunk(text, chunks) {
   return bestScore > 0 ? bestIdx : -1;
 }
 
-// 件数で min-height / フォントサイズ／余白を動的調整
+// 件数で gap / 余白 / フォントサイズを動的調整
+//   横幅は count に関係なく一定 (panel-timeline 幅は固定) なので、フォントは過剰に縮小しない。
+//   件数が増えると 1 イベントあたりの縦幅だけ圧縮されるため、line-clamp と padding で吸収。
+//   tl-card は通常 line-clamp 2 だが 7-8 件なら 1 にして縦幅を稼ぐ（slides 側で適用）
 function _layoutForCount(n) {
-  if (n <= 3) return { gap: 32, padTop: 80, padBottom: 100, maxTitle: 36, maxSub: 24 };
-  if (n <= 5) return { gap: 22, padTop: 70, padBottom: 96,  maxTitle: 32, maxSub: 22 };
-  if (n === 6) return { gap: 16, padTop: 60, padBottom: 92, maxTitle: 28, maxSub: 19 };
-  if (n === 7) return { gap: 12, padTop: 56, padBottom: 90, maxTitle: 25, maxSub: 17 };
-  return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 23, maxSub: 16 }; // 8件
+  if (n <= 3) return { gap: 32, padTop: 80, padBottom: 100, maxTitle: 36, maxSub: 24, lineClamp: 2 };
+  if (n <= 5) return { gap: 22, padTop: 70, padBottom: 96,  maxTitle: 32, maxSub: 22, lineClamp: 2 };
+  if (n === 6) return { gap: 16, padTop: 60, padBottom: 92, maxTitle: 30, maxSub: 21, lineClamp: 2 };
+  if (n === 7) return { gap: 12, padTop: 56, padBottom: 90, maxTitle: 30, maxSub: 21, lineClamp: 1 };
+  return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 28, maxSub: 19, lineClamp: 1 }; // 8件
 }
 
 function _titleFont(text, layout) {
@@ -64,6 +67,7 @@ function _subFont(text, layout) {
 
 function buildHistoryHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
 
   // dataSlots から events を組み立てる（label = 日付, value = タイトル）
   //   chunkText（narration の対応文1文）も保持して、音声 chunk との照合に使う
@@ -149,8 +153,9 @@ function buildHistoryHTML(mod) {
 .panel-hero .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: ${PALETTE.surface};`}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}% auto`};
+  background-position: ${imgAdj.bgPosition};
+  background-repeat: no-repeat;
   ${bg ? 'animation: bgZoom 14s ease-out forwards;' : ''}
 }
 @keyframes bgZoom { from { transform: scale(1); } to { transform: scale(1.05); } }

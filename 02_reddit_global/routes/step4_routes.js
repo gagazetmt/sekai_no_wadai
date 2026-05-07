@@ -1762,6 +1762,26 @@ function getUI() {
         + '</div>';
     }
 
+    /* 🔍 画像調整スライダー（ズーム + X/Y 位置）— 全 type で表示 */
+    const _imgAdj = m.imageAdjust || {};
+    const _zoom = (_imgAdj.zoom != null) ? Number(_imgAdj.zoom) : 1;
+    const _ox   = (_imgAdj.offsetX != null) ? Number(_imgAdj.offsetX) : 0;
+    const _oy   = (_imgAdj.offsetY != null) ? Number(_imgAdj.offsetY) : 0;
+    const imgAdjustHtml = ''
+      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🔍 画像調整 <span style="font-size:10px;color:#5a6a8a;font-weight:normal;">ズーム + 位置</span></div>'
+      + '<div style="display:grid;grid-template-columns:60px 1fr 56px;gap:8px;padding:10px 12px;background:#0d1220;border-radius:6px;align-items:center;">'
+      +   '<span style="font-size:10px;color:#94a3b8;">ズーム</span>'
+      +   '<input type="range" class="s4-img-zoom" min="0.5" max="2.0" step="0.05" value="' + _zoom.toFixed(2) + '" style="width:100%;">'
+      +   '<span class="s4-img-zoom-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _zoom.toFixed(2) + 'x</span>'
+      +   '<span style="font-size:10px;color:#94a3b8;">X位置</span>'
+      +   '<input type="range" class="s4-img-ox" min="-50" max="50" step="1" value="' + _ox + '" style="width:100%;">'
+      +   '<span class="s4-img-ox-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _ox + '%</span>'
+      +   '<span style="font-size:10px;color:#94a3b8;">Y位置</span>'
+      +   '<input type="range" class="s4-img-oy" min="-50" max="50" step="1" value="' + _oy + '" style="width:100%;">'
+      +   '<span class="s4-img-oy-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _oy + '%</span>'
+      + '</div>'
+      + '<button class="s4-img-reset" style="background:#1a2540;color:#94a3b8;border:1px solid #2a3050;border-radius:4px;cursor:pointer;font-size:10px;padding:4px 12px;margin-top:6px;">画像調整をリセット</button>';
+
     /* バインドデータ・プルダウン (stats/profile/comparison/history カード用) */
     let bindHtml = '';
     const showBind = ['stats', 'profile', 'comparison', 'history'].includes(m.type);
@@ -1898,6 +1918,7 @@ function getUI() {
       +   '<div style="font-size:9px;color:#5a6a8a;margin-top:4px;">Sonnet 既定 → 失敗時 DeepSeek フォールバック / 🌐 ON で Serper最大3クエリ検索→文脈注入</div>'
       + '</div>'
       + galleryHtml
+      + imgAdjustHtml
       + bindHtml
       + dataHtml
       + extraHtml;
@@ -1928,6 +1949,15 @@ function getUI() {
     el.querySelectorAll('.s4-phrase-add').forEach(function(btn) {
       btn.addEventListener('click', function() { s4AddPhrase(); });
     });
+    /* 🔍 画像調整スライダー bind */
+    const _zoomEl = el.querySelector('.s4-img-zoom');
+    if (_zoomEl) _zoomEl.addEventListener('input', function(e) { s4OnImageAdjust('zoom', e.target.value); });
+    const _oxEl = el.querySelector('.s4-img-ox');
+    if (_oxEl) _oxEl.addEventListener('input', function(e) { s4OnImageAdjust('offsetX', e.target.value); });
+    const _oyEl = el.querySelector('.s4-img-oy');
+    if (_oyEl) _oyEl.addEventListener('input', function(e) { s4OnImageAdjust('offsetY', e.target.value); });
+    const _resetEl = el.querySelector('.s4-img-reset');
+    if (_resetEl) _resetEl.addEventListener('click', function() { s4ResetImageAdjust(); });
     /* matchcard lineup アコーディオン: open 時に lineup fetch して編集 UI を描画 */
     el.querySelectorAll('details.s4-mc-team').forEach(function(det) {
       det.addEventListener('toggle', function() {
@@ -2311,6 +2341,41 @@ function getUI() {
   window.s4ToggleResearchPrompt = function(idx, checked) {
     const ta = document.querySelector('.s4-fill-research-prompt[data-idx="' + idx + '"]');
     if (ta) ta.style.display = checked ? 'block' : 'none';
+  };
+
+  /* ── 🔍 画像調整スライダー（zoom / X / Y）── */
+  //   debounced で _saveAndReload して即時プレビュー反映
+  let _imgAdjTimer = null;
+  window.s4OnImageAdjust = function(field, val) {
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    const adj = Object.assign({ zoom: 1, offsetX: 0, offsetY: 0 }, m.imageAdjust || {});
+    if (field === 'zoom')    adj.zoom    = parseFloat(val);
+    if (field === 'offsetX') adj.offsetX = parseInt(val, 10);
+    if (field === 'offsetY') adj.offsetY = parseInt(val, 10);
+    m.imageAdjust = adj;
+    // ラベル即時更新（操作中の数字表示）
+    const card = document.getElementById('s4Editor');
+    if (card) {
+      const z = card.querySelector('.s4-img-zoom-val');
+      const x = card.querySelector('.s4-img-ox-val');
+      const y = card.querySelector('.s4-img-oy-val');
+      if (z) z.textContent = (adj.zoom || 1).toFixed(2) + 'x';
+      if (x) x.textContent = (adj.offsetX || 0) + '%';
+      if (y) y.textContent = (adj.offsetY || 0) + '%';
+    }
+    clearTimeout(_imgAdjTimer);
+    _imgAdjTimer = setTimeout(_saveAndReload, 300);  // スライダー操作中の連発を debounce
+  };
+
+  window.s4ResetImageAdjust = function() {
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    m.imageAdjust = { zoom: 1, offsetX: 0, offsetY: 0 };
+    _renderEditor();
+    _saveAndReload();
   };
 
   /* ── タブ切替 ── */

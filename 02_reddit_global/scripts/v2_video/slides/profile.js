@@ -3,7 +3,7 @@
 //   左カラム: [国旗][クラブロゴ] / タイトル(選手名) / メイン画像(選手写真)
 //   右カラム: データ行（出場・ゴール等のスタッツ）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, imageAdjustCss } = require('./_common');
 
 function buildProfileHTML(mod) {
   // dataSlots 4〜7 件を data-row で使う
@@ -25,6 +25,7 @@ function buildProfileHTML(mod) {
   const rowLineClamp = N >= 6 ? 1 : 2;
 
   const mainImg  = imgDataUri(mod.bgImage);
+  const imgAdj   = imageAdjustCss(mod.imageAdjust);
   // 国旗（leftImage / countryImage / flagImage いずれか）+ クラブロゴ（rightImage / clubLogo / homeImage いずれか）
   //   各フィールドは "data:..." 直接 or プロジェクトルート相対パスのどちらでも受ける
   const _resolve = (v) => !v ? null : (typeof v === 'string' && v.startsWith('data:')) ? v : imgDataUri(v);
@@ -151,8 +152,9 @@ function buildProfileHTML(mod) {
 .main-img-frame .img-fill {
   width: 100%; height: 100%;
   ${mainImg ? `background-image: url('${mainImg}');` : ''}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
+  background-repeat: no-repeat;
 }
 .mini-grid {
   height: 35%;

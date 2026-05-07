@@ -497,9 +497,39 @@ function _fmtDate(d) {
   return `${m[1]}年${parseInt(m[2], 10)}月${parseInt(m[3], 10)}日`;
 }
 
+// 🆕 mod.imageAdjust から CSS（transform / background-position）を生成（2026-05-08）
+//   Step4 UI のスライダーで設定された画像のズーム + 位置オフセットを slide テンプレに適用
+//   imageAdjust = { zoom: 0.5〜2.0, offsetX: -50〜50 (%), offsetY: -50〜50 (%) }
+//   - background-image を使うコンテナ用: background-size + background-position
+//   - object-fit / transform を使うコンテナ用: transform: scale + translate
+function imageAdjustCss(adj, opts = {}) {
+  const a = adj || {};
+  const zoom = Math.max(0.5, Math.min(2.0, parseFloat(a.zoom) || 1));
+  const ox   = Math.max(-50, Math.min(50, parseFloat(a.offsetX) || 0));   // 横方向 (%)
+  const oy   = Math.max(-50, Math.min(50, parseFloat(a.offsetY) || 0));   // 縦方向 (%)
+  const isDefault = (zoom === 1 && ox === 0 && oy === 0);
+  // background-image 用：cover を維持しつつ scale/位置調整
+  const bgPos  = `${50 + ox}% ${50 + oy}%`;
+  const bgSize = `${100 * zoom}%`;   // 100%未満で「引き」、100%超えで「寄り」
+  // transform 用（cover が必要な領域内で scale + translate）
+  const tx     = ox * zoom * 0.4;   // 過剰移動防止
+  const ty     = oy * zoom * 0.4;
+  const transform = `scale(${zoom.toFixed(3)}) translate(${tx.toFixed(2)}%, ${ty.toFixed(2)}%)`;
+  return {
+    isDefault,
+    zoom, offsetX: ox, offsetY: oy,
+    bgPosition: bgPos,
+    bgSize,
+    transform,
+    // background-image スタイル（コンテナの中身に流し込む既存 background-size: cover を上書き）
+    bgStyle: isDefault ? '' : `background-size: ${bgSize} auto; background-position: ${bgPos};`,
+  };
+}
+
 module.exports = {
   W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
   LEAD_PAD_SEC, TAIL_PAD_SEC,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,
+  imageAdjustCss,
 };

@@ -8,7 +8,7 @@
 //   - 名前ボックス: 下から浮上ゴーストトレイル + 本体 fade in（insight の縦版）
 //   - データカード: 該当 chunk が再生中だけ active（金枠 + scale 1.04 + グロー）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
 // チーム or 選手 → 日本語/カタカナ
 function _entityName(raw) {
@@ -22,14 +22,14 @@ function _entityName(raw) {
 //   profile: 4件 → 2x2（コンパクトで impact 大きい）
 //   stats:   6件 → 2x3（基本形）/ 7-8件 → 2x4
 //   panel-data 縦幅 = 1080 - padTop - padBottom（padBottom は字幕バー 90 + 余白）
-//   N が多い時は cardPad / line-clamp / フォント もしっかり縮める
+//   7-8件は line-clamp 1（1行表示）にすることで card 内縦幅に余裕ができる →
+//   その分フォントを大きく確保して可読性を保つ（横幅は変わらないため過剰縮小不要）
 function _gridLayout(count) {
-  // maxLabelFont は元値の +35% (白色化と合わせて見出しを目立たせる)
   if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 49, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 };
   if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 46, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 }; // profile 2x2
-  if (count <= 6) return { cols: 2, gap: 14, maxValFont: 70, maxLabelFont: 40, padTop: 60, padBottom: 130, cardPad: 14, valLine: 2, lblLine: 2 }; // stats 2x3 基本形
-  if (count <= 7) return { cols: 2, gap: 12, maxValFont: 56, maxLabelFont: 32, padTop: 50, padBottom: 124, cardPad: 12, valLine: 1, lblLine: 1 }; // stats 2x4 (7件)
-  return            { cols: 2, gap: 10, maxValFont: 48, maxLabelFont: 28, padTop: 44, padBottom: 120, cardPad: 10, valLine: 1, lblLine: 1 };       // stats 2x4 (8件)
+  if (count <= 6) return { cols: 2, gap: 14, maxValFont: 72, maxLabelFont: 42, padTop: 60, padBottom: 130, cardPad: 14, valLine: 2, lblLine: 2 }; // stats 2x3 基本形
+  if (count <= 7) return { cols: 2, gap: 12, maxValFont: 70, maxLabelFont: 40, padTop: 50, padBottom: 124, cardPad: 14, valLine: 1, lblLine: 1 }; // stats 2x4 (7件)
+  return            { cols: 2, gap: 10, maxValFont: 64, maxLabelFont: 36, padTop: 44, padBottom: 120, cardPad: 12, valLine: 1, lblLine: 1 };       // stats 2x4 (8件)
 }
 
 // 金粒パーティクル（左カラム背景の動き出し用・toc から流用、件数 8）
@@ -69,6 +69,7 @@ function _matchLabelToChunk(label, chunks) {
 
 function buildStatsHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
 
   // dataSlots: stats / profile ともに 6-8 件を想定（基本 2x3 grid）
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 8);
@@ -168,8 +169,9 @@ function buildStatsHTML(mod) {
 .panel-img .img-bg {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
-  background-size: cover;
-  background-position: center top;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}% auto`};
+  background-position: ${imgAdj.bgPosition};
+  background-repeat: no-repeat;
   /* 透明から 1.5秒かけて実像に → そのままゆっくり Ken Burns ズーム（写真が「生きてる」感） */
   opacity: 0;
   transform: scale(1);
