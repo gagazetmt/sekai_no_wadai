@@ -70,6 +70,10 @@ function _matchLabelToChunk(label, chunks) {
 function buildStatsHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
   const imgAdj = imageAdjustCss(mod.imageAdjust);
+  // 🆕 国旗 + クラブロゴ（profile タイプ用、auto_image_inject 経由で mod に注入される）
+  const _resolve = (v) => !v ? null : (typeof v === 'string' && v.startsWith('data:')) ? v : imgDataUri(v);
+  const flagImg = _resolve(mod.countryImage) || _resolve(mod.flagImage);
+  const clubImg = _resolve(mod.clubLogo)     || _resolve(mod.homeLogo);
 
   // dataSlots: stats / profile ともに 6-8 件を想定（基本 2x3 grid）
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 8);
@@ -223,6 +227,34 @@ function buildStatsHTML(mod) {
     rgba(6,14,28,0.95) 100%);
   opacity: 0;
   animation: imgFadeIn 1.5s ease-in-out forwards;
+}
+
+/* 🆕 国旗 + クラブロゴ オーバーレイ（左カラム画像の右上） */
+.flag-club-overlay {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 6;
+  /* 主画像が現れた直後にフェードイン (1.0s delay) */
+  opacity: 0;
+  animation: flagClubFade 0.7s ease-out 1.0s forwards;
+}
+@keyframes flagClubFade { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.flag-icon {
+  width: 80px; height: 56px;
+  background-size: cover; background-repeat: no-repeat; background-position: center;
+  border-radius: 6px;
+  border: 2px solid rgba(255,255,255,0.35);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+  background-color: rgba(0,0,0,0.4);
+}
+.club-icon {
+  width: 80px; height: 80px;
+  background-size: contain; background-repeat: no-repeat; background-position: center;
+  filter: drop-shadow(0 4px 14px rgba(0,0,0,0.85));
 }
 
 /* 名前タグ：画像が実像化したあと、下から浮上 + フェードイン（dust の前面に） */
@@ -420,6 +452,10 @@ ${cardActiveStyles}
   <div class="img-fade"></div>
   <div class="img-vfade"></div>
   <div class="dust-layer">${_buildDust()}</div>
+  ${(flagImg || clubImg) ? `<div class="flag-club-overlay">
+    ${flagImg ? `<div class="flag-icon" style="background-image:url('${flagImg}')"></div>` : ''}
+    ${clubImg ? `<div class="club-icon" style="background-image:url('${clubImg}')"></div>` : ''}
+  </div>` : ''}
   <div class="img-name-row">
     <div class="img-name-real">
       <div class="player-name">${titleHtml}</div>

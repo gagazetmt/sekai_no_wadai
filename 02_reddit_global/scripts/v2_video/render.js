@@ -378,6 +378,27 @@ async function main() {
   const outVideo  = path.join(VIDEO_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20)}_${ts}.mp4`);
   if (!fs.existsSync(workDir)) fs.mkdirSync(workDir, { recursive: true });
 
+  // ── 🆕 profile スライドに国旗+クラブロゴを自動注入（auto_image_inject）──
+  //   stats.js (= profile も同じ) が mod.flagImage / mod.clubLogo を読んで左カラム右上にオーバーレイ表示
+  try {
+    const { injectAutoImages } = require('./utils/auto_image_inject');
+    // step2_routes.siPath() と同じ形式: replace のみ（slice 無し）
+    const siPath = path.join(DATA_DIR, 'si_data', (postId || 'unknown').replace(/[/\?%*:|"<>.]/g, '_') + '.json');
+    let si = null;
+    try { si = JSON.parse(fs.readFileSync(siPath, 'utf8')); } catch (_) {}
+    if (si) {
+      let injected = 0;
+      modules.forEach(m => {
+        const before = m.flagImage || m.clubLogo;
+        injectAutoImages(m, si);
+        if (!before && (m.flagImage || m.clubLogo)) injected++;
+      });
+      if (injected) console.log(`🚩 auto_image_inject: ${injected} スライドに国旗/ロゴ注入`);
+    }
+  } catch (e) {
+    console.warn('  ⚠️ auto_image_inject 失敗（非致命）:', e.message);
+  }
+
   // ── 🆕 ja.wikipedia 公式カタカナ化キャッシュを温める（matchcard 等の選手名対応）──
   //   matchcard / profile / stats などで英字選手名が混じってる場合、ja.wiki 検索で公式表記取得
   //   キャッシュは data/player_kana_cache.json に永続化されるので、次回ビルドは即返し
