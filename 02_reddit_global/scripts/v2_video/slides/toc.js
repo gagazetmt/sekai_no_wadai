@@ -282,8 +282,9 @@ function buildTocHTML(mod) {
 </div>
 <div class="toc-list">
   ${itemsHtml}
-</div>
-${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
+</div>`;
+  /* 2026-05-08 相棒指示: TOC スライドは目次レイアウト自体が見出しと同等の役割を果たすため、
+     字幕バーで二重表示にせず削除（"見出し→字幕"の冗長感を排除）*/
 
   return wrapHTML({ slideBody, extraStyles });
 }

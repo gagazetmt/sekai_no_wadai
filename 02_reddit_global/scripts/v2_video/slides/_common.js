@@ -10,8 +10,9 @@ const W = 1920, H = 1080;
 //   - 各スライド開始時、音声 / 字幕 / chunk 連動アニメは LEAD_PAD_SEC だけ遅らせて始まる
 //   - 末尾も TAIL_PAD_SEC の余韻を取る（次スライド遷移までの呼吸）
 //   - render.js の buildSlideAudio が先頭に silence pad、slideDurationMs が前後 pad を含めた長さを返す
-const LEAD_PAD_SEC = 1.5;
-const TAIL_PAD_SEC = 1.5;
+//   2026-05-08: 1.5s → 1.43s に 5% 短縮（テンポ感UP）
+const LEAD_PAD_SEC = 1.43;
+const TAIL_PAD_SEC = 1.43;
 
 // 型3 ダークネイビー基調（全スライド共通）
 const PALETTE = {

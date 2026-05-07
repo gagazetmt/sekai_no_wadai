@@ -286,6 +286,10 @@ async function sanitizeForTts(text) {
   // 2) 既存辞書を優先適用（固有名詞 / サッカー語彙）
   s = applyJpDict(s);
 
+  // 2.5) 接続語＋カタカナ/英字略語の区切り強化（"その後PSG" → "その後、PSG"）
+  //   MiniMax は接続語の直後に読みのない語が来ると連結読みしがち → 読点で分節
+  s = s.replace(/(その後|そのあと|だが|しかし|しかも|ただし|そして|やがて)\s*([A-Za-z]|[ァ-ヶー]{2,})/g, '$1、$2');
+
   // 3) スコア "3-1" → 「さんたいいち」（kuromoji 前 / "-" が分離されるため）
   s = s.replace(/(\d+)\s*[-－ー−–—]\s*(\d+)/g, (_m, a, b) =>
     `${numToJa1(a)}たい${numToJa1(b)}`);
@@ -293,12 +297,15 @@ async function sanitizeForTts(text) {
   // 4) 「N分」音便（ぷん/ふん）— kuromoji 前（連結音便が形態素分離で崩れるため）
   s = s.replace(/(\d+)\s*分/g, (_m, n) => numToMinuteJa(n));
 
-  // 5) 小数 "61.5%" — kuromoji が "." を独立トークン化するので前段で纏めて処理
+  // 5) 小数 "61.5%" / "2.26得点" — kuromoji が "." を独立トークン化するので前段で纏めて処理
+  //   単位がある場合は間に読点を入れて MiniMax の連結読み事故を防ぐ
+  //   例: "2.26得点" → "にてんにろく、とくてん"（単位前にポーズ入る → 自然な分節）
   s = s.replace(/(\d+)\.(\d+)(試合|ゴール|得点|失点|アシスト|キャップ|歳|回|位|連勝|連敗|連覇|周年|シーズン|チーム|本|人|秒|億|万|千|度目|度|個|点|ポイント|%|パーセント|km|kg|時間|クリーンシート)?/g,
     (_m, intPart, decPart, unit) => {
       const dec = decPart.split('').map(d => numToFullJa(d)).join('');
       const unitKana = unit ? (UNIT_KANA[unit] || unit) : '';
-      return numToFullJa(intPart) + 'てん' + dec + unitKana;
+      // 単位有り → "に てん にろく、とくてん" のように単位前にポーズ
+      return numToFullJa(intPart) + 'てん' + dec + (unit ? '、' + unitKana : '');
     });
 
   // 6) 🆕 kuromoji 形態素ベースで数字+助数詞ペア処理（核心 / 2026-05-08）
@@ -375,6 +382,9 @@ function splitIntoChunks(text, _existingChunks) {
 
 // MiniMax 呼び出し本体
 //  opts: { text, outputPath, voiceId?, emotion?, speed?, vol?, pitch? }
+// デフォルト読み上げ速度（2026-05-08: 1.0 → 1.03 で 3% アップ、テンポ感UP）
+const DEFAULT_SPEED = 1.03;
+
 async function generateMiniMaxTTS(opts = {}) {
   const {
     text,
@@ -382,7 +392,7 @@ async function generateMiniMaxTTS(opts = {}) {
     voiceId = DEFAULT_VOICE,
     model   = MODEL,
     emotion,
-    speed   = 1.0,
+    speed   = DEFAULT_SPEED,
     vol     = 1.0,
     pitch   = 0,
   } = opts;

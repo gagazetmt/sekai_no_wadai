@@ -143,7 +143,13 @@ function buildSlideTtsTasks(mod, idx, postId) {
       .forEach(f => { try { fs.unlinkSync(path.join(dir, f)); } catch (_) {} });
   } catch (_) {}
 
-  const ttsCfg = mod.tts || {};
+  // ttsCfg は読み取り専用扱いで、reaction の場合 speed を +10% override（コメント読み上げ高速化）
+  //   2026-05-08: 相棒指示で reaction 全体に適用（前置きナレも含む）
+  const ttsCfg = { ...(mod.tts || {}) };
+  if (mod.type === 'reaction' && ttsCfg.speed == null) {
+    // 通常 default 1.03 → reaction では 1.13 で 10% 早め
+    ttsCfg.speed = 1.13;
+  }
   return chunks.map((text, c) => {
     const fname = `m${String(idx).padStart(2, '0')}_c${String(c).padStart(2, '0')}.mp3`;
     const out   = path.join(dir, fname);
