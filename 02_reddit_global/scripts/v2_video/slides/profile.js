@@ -7,19 +7,22 @@ const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMo
 
 function buildProfileHTML(mod) {
   // dataSlots 4〜7 件を data-row で使う
-  //   data-list の利用可能高 ≈ 810px (1080 - 60×2 padding - 120 logoRow - 30 gap)
-  //   N に応じて行間 gap / フォント / line-clamp / padding を縮小して overflow 回避
+  //   panel-right 利用可能高 = 1080 - 60(top) - 130(bottom: subtitle bar 90 + 余白) = 890
+  //   logo-row 120 + gap 30 を引いて data-list 残 ≈ 740px
+  //   N に応じて 行高/フォント/line-clamp/padding を縮小して overflow 回避
   const slots = (Array.isArray(mod.dataSlots) ? mod.dataSlots : []).slice(0, 7);
   while (slots.length < 4) slots.push({ label: '', value: '' });
   const N = slots.length;
   // 行間 gap (px)：少ない時は広く、多い時は詰める
-  const dataGap     = N >= 7 ? 8  : N >= 6 ? 10 : N >= 5 ? 12 : 15;
+  const dataGap     = N >= 7 ? 6  : N >= 6 ? 8  : N >= 5 ? 12 : 15;
   // ラベル基準フォント (px)
-  const labelBase   = N >= 7 ? 26 : N >= 6 ? 30 : N >= 5 ? 34 : 38;
-  // 値基準フォント (px)：旧 _valFont の base
-  const valueBase   = N >= 7 ? 38 : N >= 6 ? 42 : N >= 5 ? 46 : 56;
+  const labelBase   = N >= 7 ? 22 : N >= 6 ? 26 : N >= 5 ? 32 : 38;
+  // 値基準フォント (px)
+  const valueBase   = N >= 7 ? 32 : N >= 6 ? 38 : N >= 5 ? 44 : 56;
   // 行内 padding：上下 (高さ膨張を抑える)
-  const rowPad      = N >= 7 ? 6  : N >= 6 ? 8  : 10;
+  const rowPad      = N >= 7 ? 4  : N >= 6 ? 6  : 10;
+  // line-clamp：N が多い時は 1 行に絞って overflow 回避
+  const rowLineClamp = N >= 6 ? 1 : 2;
 
   const mainImg  = imgDataUri(mod.bgImage);
   // 国旗（leftImage / countryImage / flagImage いずれか）+ クラブロゴ（rightImage / clubLogo / homeImage いずれか）
@@ -58,7 +61,8 @@ function buildProfileHTML(mod) {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 60px 60px 60px 20px;
+  /* padding-bottom 130: 字幕バー 90px + 余白 40px ぶん下げて data-list と重ねない */
+  padding: 60px 60px 130px 20px;
   gap: 30px;
   position: relative;
 }
@@ -211,7 +215,7 @@ function buildProfileHTML(mod) {
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
   line-height: 1.15;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: ${rowLineClamp};
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -223,7 +227,7 @@ function buildProfileHTML(mod) {
   border: 1px solid rgba(255,215,0,0.25);
   border-radius: 14px;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: ${rowLineClamp};
   -webkit-box-orient: vertical;
   padding: ${rowPad}px 24px ${rowPad}px 35px;
   font-size: ${valueBase}px;

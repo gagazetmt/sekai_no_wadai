@@ -21,12 +21,15 @@ function _entityName(raw) {
 // 件数別 grid layout（横2 列を基本に、縦の行数で件数をさばく）
 //   profile: 4件 → 2x2（コンパクトで impact 大きい）
 //   stats:   6件 → 2x3（基本形）/ 7-8件 → 2x4
+//   panel-data 縦幅 = 1080 - padTop - padBottom（padBottom は字幕バー 90 + 余白）
+//   N が多い時は cardPad / line-clamp / フォント もしっかり縮める
 function _gridLayout(count) {
   // maxLabelFont は元値の +35% (白色化と合わせて見出しを目立たせる)
-  if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 49, padTop: 80, padBottom: 130 };
-  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 46, padTop: 80, padBottom: 130 }; // profile 2x2
-  if (count <= 6) return { cols: 2, gap: 16, maxValFont: 76, maxLabelFont: 43, padTop: 70, padBottom: 120 }; // stats 2x3 ← 基本形
-  return            { cols: 2, gap: 14, maxValFont: 60, maxLabelFont: 35, padTop: 60, padBottom: 116 };       // stats 2x4 (7-8件)
+  if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 49, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 };
+  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 46, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 }; // profile 2x2
+  if (count <= 6) return { cols: 2, gap: 14, maxValFont: 70, maxLabelFont: 40, padTop: 60, padBottom: 130, cardPad: 14, valLine: 2, lblLine: 2 }; // stats 2x3 基本形
+  if (count <= 7) return { cols: 2, gap: 12, maxValFont: 56, maxLabelFont: 32, padTop: 50, padBottom: 124, cardPad: 12, valLine: 1, lblLine: 1 }; // stats 2x4 (7件)
+  return            { cols: 2, gap: 10, maxValFont: 48, maxLabelFont: 28, padTop: 44, padBottom: 120, cardPad: 10, valLine: 1, lblLine: 1 };       // stats 2x4 (8件)
 }
 
 // 金粒パーティクル（左カラム背景の動き出し用・toc から流用、件数 8）
@@ -286,11 +289,11 @@ function buildStatsHTML(mod) {
   background: linear-gradient(135deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
   border: 1px solid rgba(255,255,255,0.10);
   border-radius: 16px;
-  padding: 18px 24px;
+  padding: ${layout.cardPad}px ${Math.max(16, layout.cardPad + 8)}px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   position: relative;
   overflow: hidden;
   transform-origin: center;
@@ -332,7 +335,7 @@ function buildStatsHTML(mod) {
   letter-spacing: 0.5px;
   line-height: 1.18;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: ${layout.lblLine};
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -344,7 +347,7 @@ function buildStatsHTML(mod) {
   line-height: 1.05;
   letter-spacing: -1px;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: ${layout.valLine};
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
