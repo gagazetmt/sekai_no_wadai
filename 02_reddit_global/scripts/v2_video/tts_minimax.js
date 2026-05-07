@@ -385,6 +385,30 @@ function splitIntoChunks(text, _existingChunks) {
 // デフォルト読み上げ速度（2026-05-08: 1.0 → 1.03 で 3% アップ、テンポ感UP）
 const DEFAULT_SPEED = 1.03;
 
+// 🆕 MiniMax pronunciation_dict（API 側辞書）の構築 / 2026-05-08
+//   sanitizeForTts (jp_dict 適用) を通った後の text に対して、追加で API 側で発音矯正したい単語を登録。
+//   sanitize で対応しきれない MiniMax 固有の音韻バグを補完する用途。
+//   形式: ['元単語/読み', ...] （slash 区切り、検証済）
+const PRONUNCIATION_DICT_TONE = [
+  // ── MiniMax 固有の音韻バグ対策 ──
+  // 「ヴ」音韻同化（"ヴ" → "ブ" になる事故の補強）
+  'クヴァラツヘリア/クバラツヘリヤ',
+  // 数字+単位の連結読み破綻パターン
+  '勝点/かちてん',
+  '勝ち点/かちてん',
+  // クラブ略称（jp_dict と二重で押さえ）
+  'PSG/ピーエスジー',
+  // ジョージア人名
+  'ハキミ/ハキミ',
+  // 助数詞
+  '失点/しってん',
+  '無失点/むしってん',
+];
+function _buildPronunciationDict() {
+  // 単純に PRONUNCIATION_DICT_TONE を返す。将来的に動的拡張する場合はここで処理
+  return PRONUNCIATION_DICT_TONE.slice();
+}
+
 async function generateMiniMaxTTS(opts = {}) {
   const {
     text,
@@ -420,6 +444,11 @@ async function generateMiniMaxTTS(opts = {}) {
     voiceSetting.emotion = eKey;
   }
 
+  // 🆕 MiniMax pronunciation_dict（API 側で発音辞書を適用 / 2026-05-08）
+  //   text 内に登録単語が含まれていれば、API 側で発音を置換してから生成する。
+  //   jp_dict のテキスト変換と二重適用にならないよう、特に「数字+単位」「固有名詞の難読」だけを登録。
+  //   形式: { tone: ['元単語/読み', ...] }（slash 区切り、PoC で動作確認済）
+  const pronDict = _buildPronunciationDict();
   const reqBody = {
     model,
     text: safeText,
@@ -432,6 +461,7 @@ async function generateMiniMaxTTS(opts = {}) {
     },
     output_format: 'hex',
   };
+  if (pronDict.length) reqBody.pronunciation_dict = { tone: pronDict };
 
   // ── rate limit 対策: 失敗時に backoff リトライ（最大3回）──
   //   MiniMax の RPM 制限（1分あたり呼出数）に瞬間的に引っかかった時用

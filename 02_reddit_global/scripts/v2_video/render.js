@@ -378,6 +378,40 @@ async function main() {
   const outVideo  = path.join(VIDEO_DIR, `${postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20)}_${ts}.mp4`);
   if (!fs.existsSync(workDir)) fs.mkdirSync(workDir, { recursive: true });
 
+  // ── 🆕 ja.wikipedia 公式カタカナ化キャッシュを温める（matchcard 等の選手名対応）──
+  //   matchcard / profile / stats などで英字選手名が混じってる場合、ja.wiki 検索で公式表記取得
+  //   キャッシュは data/player_kana_cache.json に永続化されるので、次回ビルドは即返し
+  try {
+    const { prefetchKanaBatch, isAllAscii } = require('./utils/wiki_ja_kana');
+    const namesToKana = new Set();
+    modules.forEach(m => {
+      // matchcard の lineup
+      const md = m?.matchData || {};
+      ['home', 'away'].forEach(side => {
+        (md.lineup?.[side] || []).forEach(p => {
+          if (p?.name && isAllAscii(p.name)) namesToKana.add(p.name);
+        });
+        (md.subs?.[side] || []).forEach(p => {
+          if (p?.name && isAllAscii(p.name)) namesToKana.add(p.name);
+        });
+      });
+      // 得点者・退場者・トップパフォーマー
+      (md.goals || []).forEach(g => { if (g?.player && isAllAscii(g.player)) namesToKana.add(g.player); });
+      (md.cards || []).forEach(c => { if (c?.player && isAllAscii(c.player)) namesToKana.add(c.player); });
+      (md.topPlayers || []).forEach(p => { if (p?.name && isAllAscii(p.name)) namesToKana.add(p.name); });
+      // mod.title / mainKey の中の英字名
+      const txt = (m?.title || '') + ' ' + (m?.mainKey || '');
+      const m2 = txt.match(/[A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+){1,3}/g);
+      if (m2) m2.forEach(n => namesToKana.add(n));
+    });
+    if (namesToKana.size) {
+      console.log(`🔤 ja.wiki カタカナ化 prefetch: ${namesToKana.size} 名`);
+      await prefetchKanaBatch([...namesToKana]);
+    }
+  } catch (e) {
+    console.warn('  ⚠️ wiki_ja_kana prefetch 失敗（非致命）:', e.message);
+  }
+
   // ── TTS 自動生成フェーズ（並列）──
   //   narration ありか reaction の comments あり / audio 未生成のスライドのみ
   //   TTS_CONCURRENCY 並列で MiniMax 呼出（chunk 単位の global プール）

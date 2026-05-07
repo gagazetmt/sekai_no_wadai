@@ -73,13 +73,18 @@ function buildMatchcardHTML(mod) {
   const awaySubs  = (md.subs || []).filter(s => !s.isHome).map(_sub);
 
   // ── lineup（先発11人）──
-  //   優先順: mod.lineupOverrides[原文] → 苗字 → カタカナ辞書ルックアップ
+  //   優先順: mod.lineupOverrides[原文] → ja.wiki カタカナキャッシュ（フルネーム公式）
+  //         → _player() (日本人) → toKatakana() (機械変換) → 英語苗字
   //   辞書未収録は英語苗字のまま（順次拡張 / Step4 UI で手動編集可能）
   const { toKatakana } = require('../_player_names_jp');
+  const { nameToKanaSync } = require('../utils/wiki_ja_kana');
   const overrides = mod.lineupOverrides || {};
   const _mapLineup = arr => arr.map(p => {
     const orig = p.name || '';
     if (overrides[orig]) return { ...p, name: overrides[orig] };
+    // ja.wiki 公式表記キャッシュを最優先（事前 prefetch されている前提）
+    const wikiKana = nameToKanaSync(orig);
+    if (wikiKana) return { ...p, name: wikiKana };
     const last = _player(orig) || orig;
     return { ...p, name: toKatakana(last) };
   });
