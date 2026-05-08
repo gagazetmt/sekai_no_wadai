@@ -26,10 +26,10 @@ function buildRegalGreenThumb(data = {}) {
 
   const titleLines = String(title).split('\n');
   const longestLine = Math.max(...titleLines.map(l => [...l].length), 0);
-  const titleSize = longestLine <= 4 ? 130
-                  : longestLine <= 6 ? 112
-                  : longestLine <= 8 ? 92
-                  :                    78;
+  const titleSize = longestLine <= 4 ? 165
+                  : longestLine <= 6 ? 142
+                  : longestLine <= 8 ? 116
+                  :                    96;
 
   const extraStyles = `
 /* ── 全面背景：暗チャコール（夜のスタジアム）── */
@@ -74,7 +74,7 @@ function buildRegalGreenThumb(data = {}) {
 }
 .hero-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 220px;
+  font-size: 250px;
   font-weight: 900;
   font-style: italic;
   letter-spacing: -10px;
@@ -89,7 +89,7 @@ function buildRegalGreenThumb(data = {}) {
 }
 .hero-label {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 32px;
+  font-size: 40px;
   font-weight: 700;
   color: #f3e8c7;
   letter-spacing: 4px;
@@ -131,7 +131,7 @@ function buildRegalGreenThumb(data = {}) {
 }
 .sub-text {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 38px;
+  font-size: 56px;
   font-weight: 700;
   color: #f3e8c7;
   letter-spacing: 5px;

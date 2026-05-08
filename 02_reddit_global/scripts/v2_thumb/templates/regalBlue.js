@@ -25,11 +25,13 @@ function buildRegalBlueThumb(data = {}) {
   const channelName = data.channelName || CHANNEL_NAME;
 
   const titleLen = [...String(title).replace('\n', '')].length;
-  const titleSize = titleLen <=  6 ? 110
-                  : titleLen <=  9 ? 92
-                  : titleLen <= 12 ? 76
-                  : titleLen <= 15 ? 64
-                  :                  54;
+  // AI画像で1文字 ≒ 縦14-16% (720px換算で 100-115px)
+  const titleLen_safe = Math.max(titleLen, 1);
+  const titleSize = titleLen_safe <=  6 ? 140
+                  : titleLen_safe <=  9 ? 120
+                  : titleLen_safe <= 12 ? 100
+                  : titleLen_safe <= 15 ? 84
+                  :                       72;
 
   const extraStyles = `
 /* ── 全面背景：ロイヤルブルー radial + ドット（左右カラム分割なし）── */
@@ -76,7 +78,7 @@ function buildRegalBlueThumb(data = {}) {
 }
 .hero-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 200px;
+  font-size: 250px;
   font-weight: 900;
   font-style: italic;
   letter-spacing: -6px;
@@ -91,7 +93,7 @@ function buildRegalBlueThumb(data = {}) {
 }
 .hero-label {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 32px;
+  font-size: 40px;
   font-weight: 700;
   color: #f3e8c7;
   letter-spacing: 4px;
@@ -137,7 +139,7 @@ function buildRegalBlueThumb(data = {}) {
 }
 .sub-text {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 38px;
+  font-size: 56px;
   font-weight: 700;
   color: #f3e8c7;
   letter-spacing: 4px;

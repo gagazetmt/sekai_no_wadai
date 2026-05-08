@@ -827,6 +827,7 @@ h2 { color: #7dc8ff; margin: 28px 0 14px; font-size: 18px; padding-bottom: 8px; 
   width: 1280px; height: 720px;
   transform-origin: top left;
   border: 0;
+  pointer-events: none;
 }
 .cell-media img {
   width: 100%;
@@ -886,9 +887,10 @@ function fitIframes() {
     const iframe = wrap.querySelector('iframe');
     if (!iframe) return;
     const scale = wrap.clientWidth / 1280;
+    iframe.style.width  = '1280px';
+    iframe.style.height = '720px';
     iframe.style.transform = 'scale(' + scale + ')';
-    iframe.style.height = (720 * scale / scale) + 'px';
-    wrap.style.height = (720 * scale) + 'px';
+    // wrap の高さは aspect-ratio 16/9 が CSS で確保するので変更しない
   });
 }
 window.addEventListener('load', fitIframes);

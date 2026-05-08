@@ -26,10 +26,11 @@ function buildRegalRedThumb(data = {}) {
 
   const titleLines = String(title).split('\n');
   const longestLine = Math.max(...titleLines.map(l => [...l].length), 0);
-  const titleSize = longestLine <= 4 ? 130
-                  : longestLine <= 6 ? 112
-                  : longestLine <= 8 ? 92
-                  :                    78;
+  // AI画像の文字 1字 ≒ 縦18-20% (720px換算で 130-145px)
+  const titleSize = longestLine <= 4 ? 165
+                  : longestLine <= 6 ? 142
+                  : longestLine <= 8 ? 116
+                  :                    96;
 
   const extraStyles = `
 /* ── 全面背景：暗赤スタジアム radial（左右カラム分割なし）── */
@@ -74,7 +75,7 @@ function buildRegalRedThumb(data = {}) {
 }
 .hero-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 220px;
+  font-size: 260px;
   font-weight: 900;
   font-style: italic;
   letter-spacing: -10px;
@@ -89,7 +90,7 @@ function buildRegalRedThumb(data = {}) {
 }
 .hero-label {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 32px;
+  font-size: 40px;
   font-weight: 700;
   color: #f3e8c7;
   letter-spacing: 4px;
@@ -100,7 +101,7 @@ function buildRegalRedThumb(data = {}) {
 /* ── メインタイトル：写真と重なる位置で右寄せ・縦割り ── */
 .title-zone {
   position: absolute;
-  right: 4%; top: 28%;
+  right: 4%; top: 32%;
   max-width: 80%;
   text-align: right;
   z-index: 6;
@@ -137,7 +138,7 @@ function buildRegalRedThumb(data = {}) {
 }
 .sub-text {
   font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
-  font-size: 44px;
+  font-size: 64px;
   font-weight: 900;
   color: #ffffff;
   letter-spacing: 2px;
