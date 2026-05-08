@@ -153,12 +153,22 @@ function resolveTeamHandle(teamName) {
   try {
     const map  = JSON.parse(fs.readFileSync(TEAM_X_MAP_PATH, "utf8"));
     const teams = map.teams || {};
+    if (!teamName) return null;
     // 完全一致
     if (teams[teamName]) return teams[teamName].handle;
-    // 大文字小文字無視の部分一致
-    const lower = (teamName || "").toLowerCase();
-    const found = Object.keys(teams).find(k => k.toLowerCase() === lower);
-    if (found) return teams[found].handle;
+    // 大文字小文字無視の完全一致
+    const lower = teamName.toLowerCase();
+    const exact = Object.keys(teams).find(k => k.toLowerCase() === lower);
+    if (exact) return teams[exact].handle;
+    // 部分一致（SofaScore の "Real Madrid CF" → map の "Real Madrid" に解決）
+    //   "CF" "FC" "AC" "SC" "BK" "OGC" "RC" などのサフィックスや、
+    //   "AS Roma" → "Roma" のようなプレフィックス揺れを吸収
+    //   長いキーから順に試して、最も specific なマッチを採用
+    const keysByLen = Object.keys(teams).sort((a, b) => b.length - a.length);
+    for (const k of keysByLen) {
+      const kl = k.toLowerCase();
+      if (lower.includes(kl) || kl.includes(lower)) return teams[k].handle;
+    }
     return null;
   } catch { return null; }
 }

@@ -101,9 +101,15 @@ function resolveTeamForEntity(si, entityName) {
   const target = findEntityItem(items, entityName);
 
   if (target?.sofa?.ok) {
+    // SofaScore の sofa パスは構造ばらつき多い：
+    //   - team entity → 直下に teamName
+    //   - player entity → sofa.team または sofa.player.team
+    //   - 旧構造 → sofa.data.team / sofa.club
     const t = target.sofa.team?.name
            || target.sofa.player?.team?.name
            || target.sofa.data?.team?.name
+           || target.sofa.teamName
+           || target.sofa.player?.teamName
            || target.sofa.club
            || null;
     if (t) return t;
