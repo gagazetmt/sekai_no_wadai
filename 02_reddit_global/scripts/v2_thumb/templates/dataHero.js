@@ -73,13 +73,16 @@ function buildDataHeroThumb(data = {}) {
   align-self: flex-start;
   background: ${badgeColor};
   color: #fff;
-  padding: 8px 22px;
-  font-size: 22px;
+  padding: 14px 36px;
+  font-size: 38px;
   font-weight: 900;
-  letter-spacing: 4px;
+  font-family: 'Impact', 'Bebas Neue', 'Arial Black', 'Hiragino Kaku Gothic ProN', sans-serif;
+  letter-spacing: 8px;
   border-radius: 4px;
-  box-shadow: 0 4px 18px ${badgeColor}80;
-  margin-bottom: 14px;
+  box-shadow: 0 6px 24px ${badgeColor}99, 0 0 0 3px ${isLight ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.18)'} inset;
+  margin-bottom: 18px;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  -webkit-text-stroke: 0.5px rgba(0,0,0,0.25);
 }
 
 /* 数字ゾーン: 上寄り配置 */

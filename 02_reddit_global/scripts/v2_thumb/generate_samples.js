@@ -619,6 +619,16 @@ ${thumbSamples.filter(s => /thumb_D\d+_/.test(s.name)).map(s => `
 </div>`).join('')}
 </div>
 
+<h3>テンプレC: 対比型（VS）</h3>
+<p class="section-note">2エンティティの直接対決。クラシコ/キーマン対決/今季の MVP 候補比較などに最適。</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_C\d+_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
+
 <h3>🔥 テンプレL: BREAKING JUMBOTRON（5ch風 × データ）</h3>
 <p class="section-note">
 赤い斜めリボン + 円形プレミアムバッジ + 斜め黄色帯。フォント大幅増強。

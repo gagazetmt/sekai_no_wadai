@@ -49,30 +49,29 @@ function buildViralDataThumb(data = {}) {
   pointer-events: none;
 }
 
-/* ── 上部 赤リボン（BREAKING）水平 ── */
+/* ── 上部 リボン（DATA REPORT 風）水平 ── 2026-05-08 トーンダウン */
 .breaking-ribbon {
   position: absolute;
   top: 24px; left: 24px;
-  height: 68px;
-  padding: 0 28px;
-  background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
+  height: 64px;
+  padding: 0 26px;
+  /* 派手な真赤→深いブルゴーニュ寄り。「分析」感を出す */
+  background: linear-gradient(90deg, #1e293b 0%, #0f172a 100%);
   display: flex; align-items: center; justify-content: center;
-  gap: 16px;
-  box-shadow: 0 8px 22px rgba(220,38,38,0.5), 0 0 0 3px #000 inset, 0 0 0 6px rgba(252,211,77,0.6);
-  border-radius: 6px;
+  gap: 14px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.45), 0 0 0 2px rgba(252,211,77,0.55) inset;
+  border-radius: 4px;
+  border-left: 6px solid #dc2626;
   z-index: 8;
 }
 .breaking-en {
-  font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-style: italic;
-  font-size: 18px;
+  font-family: 'Bebas Neue', 'Impact', 'Arial Black', sans-serif;
+  font-style: normal;
+  font-size: 22px;
   font-weight: 900;
   color: #fcd34d;
-  letter-spacing: 10px;
+  letter-spacing: 6px;
   text-transform: uppercase;
-  text-shadow:
-    -1px 0 0 #fcd34d, 1px 0 0 #fcd34d,
-    0 -1px 0 #fcd34d, 0 1px 0 #fcd34d;
 }
 .breaking-jp {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho Demibold', 'Yu Mincho', 'MS PMincho', serif;
