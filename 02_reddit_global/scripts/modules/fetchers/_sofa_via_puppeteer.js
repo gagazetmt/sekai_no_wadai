@@ -89,54 +89,61 @@ function _serialize(taskFn) {
 }
 
 // 通常の API GET（JSON 返却）
-//   sofascore.com の page から fetch で api.sofascore.com を叩く
-//   --disable-web-security で CORS バイパス済 → cross-origin fetch が成立
+//   page.goto(api_url) でページ遷移として取得 → CORS / cross-origin 問題を完全回避
+//   Chrome はレスポンスを直接受信するので、Cloudflare 通過後に JSON が body として表示される
+//   page.evaluate(fetch) は --disable-web-security でも一部環境で TypeError: Failed to fetch
+//   が出るため、より堅牢な page.goto 方式に変更（2026-05-08）
 async function apiGet(urlPath) {
   await init();
   return _serialize(async () => {
     const url = BASE + urlPath;
-    const result = await _page.evaluate(async (u) => {
-      try {
-        const r = await fetch(u, { headers: { 'Accept': 'application/json' } });
-        const text = await r.text();
-        let parsed = null;
-        try { parsed = JSON.parse(text); } catch (_) {}
-        return { status: r.status, isJson: !!parsed, body: parsed || text.slice(0, 500) };
-      } catch (e) { return { status: 0, error: e.message || String(e), errName: e.name }; }
-    }, url);
-    if (!result.isJson) {
-      const detail = result.error
-        ? `${result.errName || 'Error'}: ${result.error}`
-        : (typeof result.body === 'string' ? result.body.slice(0, 120) : '');
-      const err = new Error(`HTTP ${result.status}: ${detail}`);
-      err.status = result.status;
+    let response;
+    try {
+      response = await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+    } catch (e) {
+      const err = new Error(`HTTP 0: goto fail: ${e.message}`);
+      err.status = 0;
       throw err;
     }
-    return result.body;
+    const status = response ? response.status() : 0;
+    // body 取得（JSON.parse できなければエラー扱い）
+    const text = await _page.evaluate(() => document.body && document.body.innerText || '');
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (_) {}
+    if (!parsed) {
+      const err = new Error(`HTTP ${status}: not JSON: ${text.slice(0, 120)}`);
+      err.status = status;
+      throw err;
+    }
+    return parsed;
   });
 }
 
 // 画像 GET（data:image base64 として返す / 旧 _sofa_common と同形式）
+//   page.goto + response.buffer() でバイナリ直接取得 → CORS 完全回避（2026-05-08）
 async function apiGetImage(urlPath) {
   await init();
   return _serialize(async () => {
     const url = BASE + urlPath;
-    const result = await _page.evaluate(async (u) => {
-      try {
-        const r = await fetch(u);
-        if (!r.ok) return { status: r.status, error: 'HTTP ' + r.status };
-        const blob = await r.blob();
-        const buf = await blob.arrayBuffer();
-        const bytes = new Uint8Array(buf);
-        let bin = '';
-        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-        const b64 = btoa(bin);
-        const type = blob.type || 'image/png';
-        return { status: r.status, dataUri: `data:${type};base64,${b64}` };
-      } catch (e) { return { status: 0, error: e.message }; }
-    }, url);
-    if (result.error || !result.dataUri) return null;
-    return result.dataUri;
+    let response;
+    try {
+      response = await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+    } catch (e) {
+      return null;
+    }
+    if (!response || response.status() !== 200) return null;
+    let buf;
+    try {
+      buf = await response.buffer();
+    } catch (e) { return null; }
+    if (!buf || !buf.length) return null;
+    // magic で MIME 判定（旧 _sofa_common と同形式）
+    const sniff = buf.slice(0, 8).toString('hex');
+    const mime  = sniff.startsWith('89504e47') ? 'image/png'
+                : sniff.startsWith('ffd8ff')   ? 'image/jpeg'
+                : sniff.startsWith('47494638') ? 'image/gif'
+                : (response.headers()['content-type'] || 'image/png').split(';')[0];
+    return `data:${mime};base64,${buf.toString('base64')}`;
   });
 }
 
