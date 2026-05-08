@@ -1,22 +1,16 @@
 // scripts/v2_thumb/templates/regalBlue.js
 // サムネ テンプレ R-Blue: REGAL ANALYSIS（青×ゴールド・知的分析系）
-//   gpt-image-1 が生成した「②オリーセ覚醒の真相」のレイアウトを忠実に HTML/CSS 化
 //
-// 真の特徴:
-//   - 背景: 全面ロイヤルブルーの中央 radial（深 #0c1e4a → #1e3a8a）+ 微細ドット
-//   - 選手写真: 左 0-55% にドリブル全身、右側へ青背景に溶け込むフェード
-//   - 数字「+5.2」: 右上、極大ゴールド serif italic
-//   - メインタイトル: 画面の縦中央を横切る 1行 白太ゴシック（中央配置）
-//   - サブタイトル: タイトル直下、薄ベージュ／ゴールドの細字（帯なし）
+// gpt-image-1 が生成した「オリーセ覚醒の真相」を A 構造に頼らず忠実再現:
+//   - 背景は全面ロイヤルブルー radial（左右カラム分割なし）+ 微細ドット
+//   - 写真は left 5%, bottom 0%, height 92% の単体フォトオブジェクト
+//     （オリーセはドリブル全身で下端まで伸びる）
+//     四方ぼかしで青背景に溶ける
+//   - 数字「+5.2」: 画面右上、極大ゴールド serif italic
+//   - メインタイトル: 画面の縦中央 (top 56%) を横切る 1行 中央配置
+//   - サブタイトル: タイトル直下、薄ベージュ細字
 //
-//   入力:
-//     {
-//       heroImage:  '選手写真パス',
-//       heroNumber: '+5.2',
-//       heroLabel:  'xG超過',
-//       title:      'オリーセ覚醒の真相',
-//       subtitle:   'バイエルンが200億で奪う理由',
-//     }
+//   入力: { heroImage, heroNumber, heroLabel, title, subtitle }
 
 const {
   esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyleFor, CHANNEL_NAME,
@@ -30,7 +24,6 @@ function buildRegalBlueThumb(data = {}) {
   const subtitle   = data.subtitle   || '';
   const channelName = data.channelName || CHANNEL_NAME;
 
-  // R-Blue は中央配置 1行想定（折り返し起きないようサイズ調整）
   const titleLen = [...String(title).replace('\n', '')].length;
   const titleSize = titleLen <=  6 ? 110
                   : titleLen <=  9 ? 92
@@ -39,8 +32,8 @@ function buildRegalBlueThumb(data = {}) {
                   :                  54;
 
   const extraStyles = `
-/* ── ベース背景：ロイヤルブルー中央 radial + ドット ── */
-.bg-base {
+/* ── 全面背景：ロイヤルブルー radial + ドット（左右カラム分割なし）── */
+.bg-stadium {
   position: absolute; inset: 0;
   background:
     radial-gradient(ellipse 110% 90% at 55% 50%, rgba(30,58,138,0.85) 0%, rgba(15,30,80,0.65) 35%, rgba(8,16,40,0.95) 75%, #050a1a 100%),
@@ -56,40 +49,28 @@ function buildRegalBlueThumb(data = {}) {
   pointer-events: none;
 }
 
-/* ── 選手写真：左 0-55%、右側へ青背景にフェード ── */
-.hero-photo {
+/* ── 選手写真：単体フォトオブジェクト・四方ぼかし ── */
+/*   オリーセはドリブル全身で下端まで伸びる構図 */
+.photo-obj {
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 56%;
-  ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #1e3a8a, #0a0e1a);'}
+  left: 4%; bottom: 0;
+  width: 52%; height: 96%;
+  ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #1e3a8a, transparent);'}
   background-size: cover;
   background-position: center 30%;
   filter: contrast(1.10) saturate(1.15);
-}
-.hero-photo::after {
-  /* 写真右端は青背景に溶ける（フェード幅広め）*/
-  content: '';
-  position: absolute;
-  right: -1px; top: 0; bottom: 0;
-  width: 35%;
-  background: linear-gradient(to right,
-    transparent 0%,
-    rgba(15,30,80,0.45) 45%,
-    rgba(8,16,40,0.85) 85%,
-    rgba(8,16,40,1) 100%);
-}
-.hero-photo::before {
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(to bottom, rgba(0,0,0,0.28) 0%, transparent 18%, transparent 75%, rgba(0,0,0,0.45) 100%);
-  pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 95% 95% at 50% 55%, #000 55%, transparent 96%);
+          mask-image: radial-gradient(ellipse 95% 95% at 50% 55%, #000 55%, transparent 96%);
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
 }
 
 /* ── 右上：巨大数字 + 直下ラベル ── */
 .num-zone {
   position: absolute;
-  right: 56px; top: 28px;
+  right: 5%; top: 4%;
   text-align: center;
   z-index: 5;
 }
@@ -118,10 +99,10 @@ function buildRegalBlueThumb(data = {}) {
   text-shadow: 0 2px 10px rgba(0,0,0,0.85);
 }
 
-/* ── メインタイトル：画面の縦中央を横切る・中央配置 1行 ── */
+/* ── メインタイトル：画面縦中央 56% を横切る 1行 中央配置 ── */
 .title-zone {
   position: absolute;
-  left: 24px; right: 24px;
+  left: 0; right: 0;
   top: 56%;
   transform: translateY(-50%);
   text-align: center;
@@ -144,11 +125,11 @@ function buildRegalBlueThumb(data = {}) {
   white-space: nowrap;
 }
 
-/* ── サブタイトル：タイトル直下、薄ゴールド細字（帯なし）── */
+/* ── サブタイトル：タイトル直下、細字 ── */
 .sub-zone {
   display: ${subtitle ? 'block' : 'none'};
   position: absolute;
-  left: 24px; right: 24px;
+  left: 0; right: 0;
   top: 56%;
   transform: translateY(calc(-50% + ${titleSize * 0.7}px));
   text-align: center;
@@ -171,9 +152,9 @@ ${channelLogoStyleFor('dark')}
   const titleSingle = String(title).replace(/\n/g, '');
 
   const thumbBody = `
-<div class="bg-base"></div>
+<div class="bg-stadium"></div>
 <div class="bg-dots"></div>
-<div class="hero-photo"></div>
+<div class="photo-obj"></div>
 <div class="num-zone">
   <div class="hero-num">${esc(heroNumber)}</div>
   ${heroLabel ? `<div class="hero-label">${esc(heroLabel)}</div>` : ''}

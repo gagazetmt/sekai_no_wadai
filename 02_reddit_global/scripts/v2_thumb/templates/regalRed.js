@@ -1,23 +1,16 @@
 // scripts/v2_thumb/templates/regalRed.js
 // サムネ テンプレ R-Red: REGAL IMPACT（赤×ゴールド・衝撃系）
-//   gpt-image-1 が生成した「①ハキミ離脱の衝撃」のレイアウトを忠実に HTML/CSS 化
 //
-// 真の特徴:
-//   - 背景: 全面暗赤のスタジアム radial グロー（深紅 #7f1d1d 系）
-//   - 選手写真: 左 30-50% に胸像、右側へは緩やかにフェード（赤背景に溶ける）
-//   - 数字「161」: 右上、極大ゴールド serif italic
-//   - メインタイトル: 写真の右〜画面中央右に重なる白太ゴシック + 赤縁
-//                  改行可（"ハキミ" / "離敗の衝撃" のような縦割り）
-//   - サブタイトル: 左下に「赤い四角ボックス」（横長帯ではない）
+// gpt-image-1 が生成した「ハキミ離脱の衝撃」を A 構造に頼らず忠実再現:
+//   - 背景は全面暗赤のスタジアム radial グロー（左カラム/右カラム分割なし）
+//   - 写真は left 4%, top 4%, height 78% の単体フォトオブジェクト
+//     四方すべてに mask radial gradient で自然にフェード（背景に溶ける）
+//   - 数字「161」: 画面右上 (top 4%, right 5%)、極大ゴールド serif italic
+//   - 「PSG在籍試合」: 数字直下
+//   - メインタイトル: 写真の右側に重ねて配置 (top 28%, right 4%) 改行縦割り
+//   - 左下: 「PSG崩壊の予兆」赤い四角ボックス
 //
-//   入力:
-//     {
-//       heroImage:  '選手写真パス',
-//       heroNumber: '161',
-//       heroLabel:  'PSG在籍試合',
-//       title:      'ハキミ\n離脱の衝撃',
-//       subtitle:   'PSG崩壊の予兆',
-//     }
+//   入力: { heroImage, heroNumber, heroLabel, title, subtitle }
 
 const {
   esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyleFor, CHANNEL_NAME,
@@ -39,58 +32,43 @@ function buildRegalRedThumb(data = {}) {
                   :                    78;
 
   const extraStyles = `
-/* ── ベース背景：全面に暗赤のスタジアムグロー ── */
-.bg-base {
+/* ── 全面背景：暗赤スタジアム radial（左右カラム分割なし）── */
+.bg-stadium {
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 130% 100% at 60% 50%, rgba(127,29,29,0.85) 0%, rgba(80,15,15,0.65) 35%, rgba(20,6,8,0.95) 75%, #0a0506 100%),
+    radial-gradient(ellipse 130% 100% at 55% 50%, rgba(127,29,29,0.85) 0%, rgba(80,15,15,0.65) 35%, rgba(20,6,8,0.95) 75%, #0a0506 100%),
     linear-gradient(180deg, #1a0608 0%, #0a0304 100%);
 }
-.bg-haze {
-  /* 微細な赤いノイズグレイン感（高級グラデの息継ぎ）*/
+.bg-grain {
   position: absolute; inset: 0;
-  background-image:
-    radial-gradient(rgba(220,40,40,0.05) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(220,40,40,0.05) 1px, transparent 1px);
   background-size: 5px 5px;
   pointer-events: none;
   mix-blend-mode: screen;
 }
 
-/* ── 選手写真：左 35-50%、右側へ自然にフェード ── */
-.hero-photo {
+/* ── 選手写真：単体フォトオブジェクト・四方ぼかし ── */
+.photo-obj {
   position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 52%;
-  ${heroImg ? `background-image: url('${heroImg}');` : `background: radial-gradient(circle at 50% 60%, #2a0d10, #0a0306);`}
+  left: 4%; top: 4%;
+  width: 44%; height: 80%;
+  ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 50%, #2a0d10, transparent);'}
   background-size: cover;
   background-position: center 22%;
-  filter: contrast(1.10) saturate(1.10) brightness(1.02);
-}
-.hero-photo::after {
-  /* 写真右端は赤い背景に溶け込む（フェード幅は控えめ）*/
-  content: '';
-  position: absolute;
-  right: -1px; top: 0; bottom: 0;
-  width: 30%;
-  background: linear-gradient(to right,
-    transparent 0%,
-    rgba(80,15,15,0.45) 50%,
-    rgba(40,8,10,0.85) 90%,
-    rgba(20,6,8,1) 100%);
-}
-.hero-photo::before {
-  /* 上下にも subtle な暗フェード（被写体を引き立てる）*/
-  content: '';
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(to bottom, rgba(0,0,0,0.30) 0%, transparent 18%, transparent 75%, rgba(0,0,0,0.50) 100%);
-  pointer-events: none;
+  filter: contrast(1.10) saturate(1.10);
+  /* mask で四方すべてに soft フェード → 背景の暗赤に溶け込む */
+  -webkit-mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);
+          mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);
+  -webkit-mask-size: 100% 100%;
+          mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
 }
 
-/* ── 右上：巨大数字 + 直下ラベル ── */
+/* ── 右上：巨大数字 + 直下ラベル（中央寄せ）── */
 .num-zone {
   position: absolute;
-  right: 56px; top: 26px;
+  right: 5%; top: 4%;
   text-align: center;
   z-index: 5;
 }
@@ -119,12 +97,11 @@ function buildRegalRedThumb(data = {}) {
   text-shadow: 0 2px 10px rgba(0,0,0,0.85);
 }
 
-/* ── メインタイトル：写真の右〜画面中央寄り、複数行 ── */
+/* ── メインタイトル：写真と重なる位置で右寄せ・縦割り ── */
 .title-zone {
   position: absolute;
-  right: 36px; top: 40%;
-  transform: translateY(-25%);
-  max-width: 78%;
+  right: 4%; top: 28%;
+  max-width: 80%;
   text-align: right;
   z-index: 6;
 }
@@ -144,11 +121,11 @@ function buildRegalRedThumb(data = {}) {
   -webkit-text-stroke: 1.5px rgba(127,29,29,0.5);
 }
 
-/* ── サブタイトル：左下の「赤い四角ボックス」 ── */
+/* ── 左下：「赤い四角ボックス」サブタイトル ── */
 .sub-box {
   display: ${subtitle ? 'inline-block' : 'none'};
   position: absolute;
-  left: 28px; bottom: 32px;
+  left: 3%; bottom: 5%;
   padding: 16px 28px;
   background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
   border: 2px solid rgba(212,164,55,0.65);
@@ -173,9 +150,9 @@ ${channelLogoStyleFor('dark')}
   const titleHtml = titleLines.map(l => esc(l)).join('<br>');
 
   const thumbBody = `
-<div class="bg-base"></div>
-<div class="bg-haze"></div>
-<div class="hero-photo"></div>
+<div class="bg-stadium"></div>
+<div class="bg-grain"></div>
+<div class="photo-obj"></div>
 <div class="num-zone">
   <div class="hero-num">${esc(heroNumber)}</div>
   ${heroLabel ? `<div class="hero-label">${esc(heroLabel)}</div>` : ''}
