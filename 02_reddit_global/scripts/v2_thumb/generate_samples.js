@@ -14,6 +14,9 @@ const { buildViralDataThumb } = require('./templates/viralData');
 const { buildStadiumBoardThumb } = require('./templates/stadiumBoard');
 const { buildMagazineCoverThumb } = require('./templates/magazineCover');
 const { buildTradingCardThumb }  = require('./templates/tradingCard');
+const { buildRegalRedThumb }     = require('./templates/regalRed');
+const { buildRegalBlueThumb }    = require('./templates/regalBlue');
+const { buildRegalGreenThumb }   = require('./templates/regalGreen');
 
 // OP/ED スライドビルダー
 const { buildOpeningHTML: buildOpV1 } = require('../v2_video/slides/opening');
@@ -360,6 +363,50 @@ const thumbSamples = [];
   thumbSamples.push({ ...s, html: buildTradingCardThumb(s.data) });
 });
 
+// ─── テンプレ R: REGAL シリーズ（gpt-image-1 提案を HTML/CSS 化）──
+//   赤×ネイビー / 青×ゴールド / 緑×ゴールド の3案。
+//   重厚な edit. design + 巨大ゴールド数字 + 白太ゴシックタイトル + 下端帯。
+[
+  {
+    name: 'thumb_R_red_hakimi',
+    label: 'R-Red: ハキミ離脱（衝撃系）',
+    builder: buildRegalRedThumb,
+    data: {
+      heroImage:  IMG.hakimi,
+      heroNumber: '161',
+      heroLabel:  'PSG在籍試合',
+      title:      'ハキミ\n離脱の衝撃',
+      subtitle:   'PSG崩壊の予兆',
+    },
+  },
+  {
+    name: 'thumb_R_blue_olise',
+    label: 'R-Blue: オリーセ覚醒（知的分析）',
+    builder: buildRegalBlueThumb,
+    data: {
+      heroImage:  IMG.olise,
+      heroNumber: '+5.2',
+      heroLabel:  'xG超過',
+      title:      'オリーセ覚醒の真相',
+      subtitle:   'バイエルンが200億で奪う理由',
+    },
+  },
+  {
+    name: 'thumb_R_green_casemiro',
+    label: 'R-Green: カゼミーロ復活（朗報系）',
+    builder: buildRegalGreenThumb,
+    data: {
+      heroImage:  IMG.casemiro,
+      heroNumber: '8.4',
+      heroLabel:  '直近試合 評定',
+      title:      'カゼミーロ\n完全復活',
+      subtitle:   'マンU救世主の証明',
+    },
+  },
+].forEach(s => {
+  thumbSamples.push({ name: s.name, label: s.label, html: s.builder(s.data) });
+});
+
 // ─── Light tone サンプル（4テンプレ × 1サンプル）──
 const lightThumbs = [
   {
@@ -603,7 +650,20 @@ h3 { color: var(--accent); margin-top: 18px; font-size: 14px; letter-spacing: 1p
 </p>
 
 <h2>🎨 サムネイル候補（1280×720）</h2>
-<p class="section-note">採用候補を3テンプレに絞込み: A=データ強調 / D=問いかけ / L=5ch風データ</p>
+<p class="section-note">採用候補: A=データ強調 / D=問いかけ / C=対比(VS) / L=BREAKING / N=雑誌 / O=トレカ / R=REGAL（AI提案系）</p>
+
+<h3>👑 テンプレR: REGAL シリーズ（gpt-image-1 提案 → HTML/CSS 化）</h3>
+<p class="section-note">
+赤×ネイビー / 青×ゴールド / 緑×ゴールド の3案。AI が描いたサムネ完成画像のレイアウト・配色を
+HTML/CSS で再現したテンプレ。本番では選手写真・数字・タイトルを差し替えるだけで量産可能。
+</p>
+<div class="thumbs-grid">
+${thumbSamples.filter(s => /thumb_R_/.test(s.name)).map(s => `
+<div class="thumb-card">
+  <div class="iframe-wrap thumb"><iframe src="${s.name}.html" id="if-${s.name}"></iframe></div>
+  <div class="label">${s.label}<small><a href="${s.name}.html" target="_blank">原寸</a></small></div>
+</div>`).join('')}
+</div>
 
 <h3>テンプレA: データ強調型</h3>
 <div class="thumbs-grid">
