@@ -375,7 +375,7 @@ const thumbSamples = [];
       heroImage:  IMG.hakimi,
       heroNumber: '161',
       heroLabel:  'PSG在籍試合',
-      title:      'ハキミ\n離脱の衝撃',
+      title:      'ハキミ\n離脱の\n衝撃',
       subtitle:   'PSG崩壊の予兆',
     },
   },

@@ -1,47 +1,36 @@
 // scripts/v2_thumb/templates/regalBlue.js
-// サムネ テンプレ R-Blue: REGAL ANALYSIS（青×ゴールド・知的分析系）
-//
-// gpt-image-1 が生成した「オリーセ覚醒の真相」を A 構造に頼らず忠実再現:
-//   - 背景は全面ロイヤルブルー radial（左右カラム分割なし）+ 微細ドット
-//   - 写真は left 5%, bottom 0%, height 92% の単体フォトオブジェクト
-//     （オリーセはドリブル全身で下端まで伸びる）
-//     四方ぼかしで青背景に溶ける
-//   - 数字「+5.2」: 画面右上、極大ゴールド serif italic
-//   - メインタイトル: 画面の縦中央 (top 56%) を横切る 1行 中央配置
-//   - サブタイトル: タイトル直下、薄ベージュ細字
-//
-//   入力: { heroImage, heroNumber, heroLabel, title, subtitle }
+// サムネ テンプレ R-Blue: REGAL ANALYSIS
+// gpt-image-1 が生成した「オリーセ覚醒の真相」画像を一から再現。
+// A タイプの構造・命名は一切踏襲せず、画像の座標を直接設計。
 
 const {
   esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyleFor, CHANNEL_NAME,
 } = require('../_common');
 
 function buildRegalBlueThumb(data = {}) {
-  const heroImg    = imgDataUri(data.heroImage);
-  const heroNumber = data.heroNumber || '?';
-  const heroLabel  = data.heroLabel  || '';
-  const title      = data.title      || '';
-  const subtitle   = data.subtitle   || '';
+  const heroImg     = imgDataUri(data.heroImage);
+  const metricValue = data.heroNumber || '?';
+  const metricTag   = data.heroLabel  || '';
+  const headline    = String(data.title || '').replace(/\n/g, '');
+  const kicker      = data.subtitle || '';
   const channelName = data.channelName || CHANNEL_NAME;
 
-  const titleLen = [...String(title).replace('\n', '')].length;
-  // AI画像で1文字 ≒ 縦14-16% (720px換算で 100-115px)
-  const titleLen_safe = Math.max(titleLen, 1);
-  const titleSize = titleLen_safe <=  6 ? 140
-                  : titleLen_safe <=  9 ? 120
-                  : titleLen_safe <= 12 ? 100
-                  : titleLen_safe <= 15 ? 84
-                  :                       72;
+  // ヘッドラインは 1 行で画面を横切るので文字数で動的スケール
+  const hLen = [...headline].length;
+  const headlineSize = hLen <=  6 ? 150
+                     : hLen <=  9 ? 128
+                     : hLen <= 12 ? 108
+                     : hLen <= 15 ?  92
+                     :               78;
 
-  const extraStyles = `
-/* ── 全面背景：ロイヤルブルー radial + ドット（左右カラム分割なし）── */
-.bg-stadium {
+  const styles = `
+/* === 全面キャンバス：ロイヤルブルー radial === */
+.canvas {
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 110% 90% at 55% 50%, rgba(30,58,138,0.85) 0%, rgba(15,30,80,0.65) 35%, rgba(8,16,40,0.95) 75%, #050a1a 100%),
-    linear-gradient(180deg, #060b1f 0%, #03060f 100%);
+    radial-gradient(ellipse 110% 90% at 55% 50%, rgba(30,58,138,0.88) 0%, rgba(15,30,80,0.62) 35%, rgba(8,16,40,0.95) 75%, #050a1a 100%);
 }
-.bg-dots {
+.canvas-dots {
   position: absolute; inset: 0;
   background-image:
     radial-gradient(rgba(212,164,55,0.10) 1px, transparent 1px),
@@ -51,12 +40,11 @@ function buildRegalBlueThumb(data = {}) {
   pointer-events: none;
 }
 
-/* ── 選手写真：単体フォトオブジェクト・四方ぼかし ── */
-/*   オリーセはドリブル全身で下端まで伸びる構図 */
-.photo-obj {
+/* === 被写体（ドリブル全身）：下端まで伸びる === */
+.subject {
   position: absolute;
-  left: 4%; bottom: 0;
-  width: 52%; height: 96%;
+  left: 3%; bottom: 0;
+  width: 52%; height: 98%;
   ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #1e3a8a, transparent);'}
   background-size: cover;
   background-position: center 30%;
@@ -69,19 +57,15 @@ function buildRegalBlueThumb(data = {}) {
           mask-repeat: no-repeat;
 }
 
-/* ── 右上：巨大数字 + 直下ラベル ── */
-.num-zone {
+/* === 大数字（+5.2）右上 === */
+.metric-value {
   position: absolute;
-  right: 5%; top: 4%;
-  text-align: center;
-  z-index: 5;
-}
-.hero-num {
+  right: 5%; top: 1%;
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 250px;
+  font-size: 280px;
   font-weight: 900;
   font-style: italic;
-  letter-spacing: -6px;
+  letter-spacing: -8px;
   line-height: 0.92;
   background: linear-gradient(180deg, #f5d27a 0%, #d4a437 50%, #a37516 100%);
   -webkit-background-clip: text;
@@ -91,55 +75,51 @@ function buildRegalBlueThumb(data = {}) {
     drop-shadow(0 0 36px rgba(212,164,55,0.55))
     drop-shadow(0 8px 18px rgba(0,0,0,0.95));
 }
-.hero-label {
+
+/* === 数字直下のラベル === */
+.metric-tag {
+  position: absolute;
+  right: 5%; top: 39%;
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 40px;
+  font-size: 44px;
   font-weight: 700;
   color: #f3e8c7;
-  letter-spacing: 4px;
-  margin-top: -10px;
+  letter-spacing: 6px;
   text-shadow: 0 2px 10px rgba(0,0,0,0.85);
 }
 
-/* ── メインタイトル：画面縦中央 56% を横切る 1行 中央配置 ── */
-.title-zone {
+/* === ヘッドライン横切り：画面の縦中央を 1行で貫く === */
+.headline-strip {
   position: absolute;
-  left: 0; right: 0;
+  left: 2%; right: 2%;
   top: 56%;
   transform: translateY(-50%);
   text-align: center;
-  z-index: 6;
-}
-.title-text {
   font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
-  font-size: ${titleSize}px;
+  font-size: ${headlineSize}px;
   font-weight: 900;
   color: #ffffff;
-  line-height: 1.06;
   letter-spacing: 4px;
+  line-height: 1.05;
   text-shadow:
-    0 0 14px rgba(30,58,138,0.75),
+    0 0 14px rgba(30,58,138,0.80),
     0 0 28px rgba(212,164,55,0.30),
-    -2px 2px 0 #0c1e4a,
-    2px 2px 0 #0c1e4a,
-    0 6px 22px rgba(0,0,0,0.95);
-  -webkit-text-stroke: 1.2px rgba(212,164,55,0.45);
+    -3px 3px 0 #0c1e4a,
+     3px 3px 0 #0c1e4a,
+     0 6px 22px rgba(0,0,0,0.95);
+  -webkit-text-stroke: 1.5px rgba(212,164,55,0.45);
   white-space: nowrap;
 }
 
-/* ── サブタイトル：タイトル直下、細字 ── */
-.sub-zone {
-  display: ${subtitle ? 'block' : 'none'};
+/* === ヘッドライン直下のキッカー（細字明朝） === */
+.kicker-line {
+  display: ${kicker ? 'block' : 'none'};
   position: absolute;
-  left: 0; right: 0;
-  top: 56%;
-  transform: translateY(calc(-50% + ${titleSize * 0.7}px));
+  left: 2%; right: 2%;
+  top: calc(56% + ${headlineSize * 0.65}px);
   text-align: center;
-  z-index: 6;
-}
-.sub-text {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 56px;
+  font-size: 60px;
   font-weight: 700;
   color: #f3e8c7;
   letter-spacing: 4px;
@@ -151,24 +131,18 @@ function buildRegalBlueThumb(data = {}) {
 ${channelLogoStyleFor('dark')}
 `;
 
-  const titleSingle = String(title).replace(/\n/g, '');
-
-  const thumbBody = `
-<div class="bg-stadium"></div>
-<div class="bg-dots"></div>
-<div class="photo-obj"></div>
-<div class="num-zone">
-  <div class="hero-num">${esc(heroNumber)}</div>
-  ${heroLabel ? `<div class="hero-label">${esc(heroLabel)}</div>` : ''}
-</div>
-<div class="title-zone">
-  <div class="title-text">${esc(titleSingle)}</div>
-</div>
-${subtitle ? `<div class="sub-zone"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
+  const body = `
+<div class="canvas"></div>
+<div class="canvas-dots"></div>
+<div class="subject"></div>
+<div class="metric-value">${esc(metricValue)}</div>
+${metricTag ? `<div class="metric-tag">${esc(metricTag)}</div>` : ''}
+<div class="headline-strip">${esc(headline)}</div>
+${kicker ? `<div class="kicker-line">${esc(kicker)}</div>` : ''}
 ${channelLogoHtml(channelName)}
 `;
 
-  return wrapThumb({ thumbBody, extraStyles, title: 'Thumbnail R-Blue: Regal Analysis', tone: 'dark' });
+  return wrapThumb({ thumbBody: body, extraStyles: styles, title: 'R-Blue Regal Analysis', tone: 'dark' });
 }
 
 module.exports = { buildRegalBlueThumb };
