@@ -17,7 +17,11 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { apiGet, apiGetImage } = require('./modules/fetchers/_sofa_common');
+// 🆕 Cloudflare 突破のため Puppeteer 経由で SofaScore API 呼出
+//   旧 _sofa_common (curl-cffi) は Webshare 出口 IP プールが繰り返しブロックされ実用不可
+const sofa = require('./modules/fetchers/_sofa_via_puppeteer');
+const apiGet      = (p) => sofa.apiGet(p);
+const apiGetImage = (p) => sofa.apiGetImage(p);
 
 const ROOT       = path.join(__dirname, '..');
 const STOCK_BASE = path.join(ROOT, 'images_stock', 'club_logos');
@@ -190,9 +194,17 @@ async function main() {
     process.exit(1);
   }
   const targets = arg === 'all' ? Object.keys(LEAGUES) : [arg];
-  for (const lg of targets) {
-    if (!LEAGUES[lg]) { console.warn('skip 未知:', lg); continue; }
-    await _fetchLeague(lg);
+  // Puppeteer 起動（Cloudflare 突破用 / sofascore.com にアクセスして cookie/CF challenge 済ませる）
+  console.log('🚀 Puppeteer 起動中...');
+  await sofa.init();
+  console.log('   ✓ Puppeteer ready');
+  try {
+    for (const lg of targets) {
+      if (!LEAGUES[lg]) { console.warn('skip 未知:', lg); continue; }
+      await _fetchLeague(lg);
+    }
+  } finally {
+    await sofa.close();
   }
   console.log('\n🎉 全リーグ処理完了');
 }
