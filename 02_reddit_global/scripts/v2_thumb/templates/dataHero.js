@@ -18,10 +18,21 @@ function buildDataHeroThumb(data = {}) {
   const heroImg = imgDataUri(data.heroImage);
   const heroNumber = data.heroNumber || '?';
   const heroLabel = data.heroLabel || '';
-  const catchText = data.catch || '';
+  // 2026-05-08 三層構造化:
+  //   - badge      : 上部の象徴ラベル (5-8字 推奨, 旧2字決まり文句から拡張)
+  //   - catchLeft  : 左下の赤太文字 (物語のサブテーマ)
+  //   - catchRight : 右下の白太文字 (メインキャッチ・旧 catch)
+  const catchRight = data.catchRight || data.catch || '';  // 後方互換
+  const catchLeft  = data.catchLeft  || '';
   const badge = data.badge || '';
   const badgeColor = data.badgeColor || p.red;
   const channelName = data.channelName || CHANNEL_NAME;
+  // badge の文字数で自動スケール
+  const badgeLen = [...badge].length;
+  const badgeSize = badgeLen <= 4 ? 42
+                  : badgeLen <= 6 ? 36
+                  : badgeLen <= 8 ? 30
+                  :                 26;
 
   // light tone 時はテキストシャドウ控えめ
   const heroNumShadow = isLight
@@ -73,16 +84,51 @@ function buildDataHeroThumb(data = {}) {
   align-self: flex-start;
   background: ${badgeColor};
   color: #fff;
-  padding: 14px 36px;
-  font-size: 38px;
+  padding: 14px 32px;
+  font-size: ${badgeSize}px;
   font-weight: 900;
-  font-family: 'Impact', 'Bebas Neue', 'Arial Black', 'Hiragino Kaku Gothic ProN', sans-serif;
-  letter-spacing: 8px;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Impact', 'Bebas Neue', sans-serif;
+  letter-spacing: ${badgeLen <= 4 ? 8 : badgeLen <= 6 ? 5 : 3}px;
   border-radius: 4px;
   box-shadow: 0 6px 24px ${badgeColor}99, 0 0 0 3px ${isLight ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.18)'} inset;
   margin-bottom: 18px;
   text-shadow: 0 2px 6px rgba(0,0,0,0.35);
   -webkit-text-stroke: 0.5px rgba(0,0,0,0.25);
+  white-space: nowrap;
+}
+
+/* ── 左下: catchLeft（赤太文字 + 黒モヤ） 2026-05-08 三層化 ── */
+.catch-left {
+  display: ${catchLeft ? 'flex' : 'none'};
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 56%;
+  min-height: 130px;
+  padding: 22px 38px 28px 36px;
+  align-items: flex-end;
+  z-index: 6;
+  /* 黒モヤ：写真の左下から立ち上る暗いグラデーション */
+  background: linear-gradient(to top,
+    rgba(0,0,0,0.92) 0%,
+    rgba(0,0,0,0.78) 35%,
+    rgba(0,0,0,0.45) 70%,
+    rgba(0,0,0,0) 100%);
+}
+.catch-left-text {
+  font-size: 42px;
+  font-weight: 900;
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Impact', sans-serif;
+  color: #ef4444;
+  line-height: 1.18;
+  letter-spacing: 1px;
+  -webkit-text-stroke: 1.5px rgba(255,255,255,0.12);
+  text-shadow:
+    0 0 12px rgba(239,68,68,0.55),
+    0 0 22px rgba(239,68,68,0.32),
+    0 4px 18px rgba(0,0,0,0.95);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
 }
 
 /* 数字ゾーン: 上寄り配置 */
@@ -142,13 +188,14 @@ ${channelLogoStyleFor(tone)}
   const thumbBody = `
 <div class="bg-gradient"></div>
 <div class="hero-photo"></div>
+${catchLeft ? `<div class="catch-left"><div class="catch-left-text">${esc(catchLeft)}</div></div>` : ''}
 <div class="data-zone">
   ${badge ? `<div class="top-badge">${esc(badge)}</div>` : '<div></div>'}
   <div class="hero-num-zone">
     <div class="hero-num">${esc(heroNumber)}</div>
     ${heroLabel ? `<div class="hero-label">${esc(heroLabel)}</div>` : ''}
   </div>
-  <div class="catch-zone"><span class="catch-bar"></span>${esc(catchText)}</div>
+  <div class="catch-zone"><span class="catch-bar"></span>${esc(catchRight)}</div>
 </div>
 ${channelLogoHtml(channelName)}
 `;

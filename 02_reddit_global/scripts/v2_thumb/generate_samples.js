@@ -46,7 +46,7 @@ const IMG = {
 // ─── サムネ サンプルデータ ──────────────────────────────────
 const thumbSamples = [];
 
-// テンプレA: データ強調型 × 3
+// テンプレA: データ強調型 × 3 （三層構造: badge / 数字 / 左赤+右白 catch）
 [
   {
     name: 'thumb_A1_hakimi',
@@ -55,9 +55,10 @@ const thumbSamples = [];
       heroImage: IMG.hakimi,
       heroNumber: '161',
       heroLabel: 'PSGでの試合数',
-      catch: 'ハキミ離脱の衝撃',
-      badge: '緊急',
-      badgeColor: '#ef4444',
+      badge: 'PSG崩壊の予兆',
+      badgeColor: '#dc2626',
+      catchLeft: '161試合の経験',
+      catchRight: 'ハキミ離脱の衝撃',
     },
   },
   {
@@ -67,9 +68,10 @@ const thumbSamples = [];
       heroImage: IMG.olise,
       heroNumber: '+5.2',
       heroLabel: 'xG超過',
-      catch: 'オリーセ 異次元の決定力',
-      badge: '衝撃',
-      badgeColor: '#ef4444',
+      badge: '異次元の決定力',
+      badgeColor: '#dc2626',
+      catchLeft: 'バイエルン200億',
+      catchRight: 'オリーセ覚醒の真相',
     },
   },
   {
@@ -79,9 +81,10 @@ const thumbSamples = [];
       heroImage: IMG.casemiro,
       heroNumber: '8.4',
       heroLabel: '直近試合 評定',
-      catch: 'カゼミーロ 完全復活',
-      badge: '朗報',
-      badgeColor: '#10b981',
+      badge: 'マンU救世主',
+      badgeColor: '#059669',
+      catchLeft: '5勝1分の好調',
+      catchRight: 'カゼミーロ完全復活',
     },
   },
 ].forEach(s => {
@@ -368,9 +371,10 @@ const lightThumbs = [
       heroImage: IMG.olise,
       heroNumber: '+5.2',
       heroLabel: 'xG超過',
-      catch: 'オリーセ 異次元の決定力',
-      badge: '衝撃',
+      badge: '異次元の決定力',
       badgeColor: '#dc2626',
+      catchLeft: 'バイエルン200億',
+      catchRight: 'オリーセ覚醒の真相',
     },
   },
   {
