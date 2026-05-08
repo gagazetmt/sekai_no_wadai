@@ -776,5 +776,127 @@ window.addEventListener('resize', fitIframes);
 
 saveHtml('showcase.html', indexHtml);
 
-console.log(`✅ サムネ ${thumbSamples.length}件 + OP/ED ${opEdSamples.length}件 + showcase.html 出力完了`);
+// ─── REGAL シリーズ 比較ページ（AI画像 vs HTML テンプレ）──
+const regalCompareHtml = `<!doctype html><meta charset=utf-8>
+<title>REGAL シリーズ 比較: AI画像 vs HTML テンプレ</title>
+<style>
+:root { --bg:#0a0e1a; --panel:#161b2e; --border:#2a3050; --text:#f1f5ff; --muted:#8a9aba; --accent:#f59e0b; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Hiragino Kaku Gothic ProN', sans-serif; background: var(--bg); color: var(--text); padding: 24px; max-width: 1700px; margin: 0 auto; }
+h1 { color: var(--accent); margin-bottom: 8px; font-size: 24px; }
+h2 { color: #7dc8ff; margin: 28px 0 14px; font-size: 18px; padding-bottom: 8px; border-bottom: 2px solid var(--border); }
+.intro { color: var(--muted); margin-bottom: 18px; line-height: 1.6; }
+.intro b { color: var(--text); }
+
+.compare-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+.compare-cell {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.compare-cell .cell-label {
+  padding: 10px 16px;
+  background: rgba(245,158,11,0.08);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.compare-cell .cell-label.ai    { color: #fbbf24; }
+.compare-cell .cell-label.html  { color: #7dc8ff; }
+
+/* iframe (HTML 1280x720) と img (AI 1536x1024) でアスペクト比違うが
+   width 100% で揃える。aspect-ratio で見た目の高さを揃える */
+.cell-media {
+  width: 100%;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: #000;
+  position: relative;
+}
+.cell-media iframe {
+  position: absolute;
+  top: 0; left: 0;
+  width: 1280px; height: 720px;
+  transform-origin: top left;
+  border: 0;
+}
+.cell-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+}
+</style>
+
+<h1>👑 REGAL シリーズ 実装 vs AI 画像 比較</h1>
+<p class="intro">
+左: gpt-image-1 が生成した <b>AI 完成画像</b>（参考デザイン）<br>
+右: それを基に書き起こした <b>HTML/CSS テンプレ</b>（差替可能・量産可能）<br>
+※ AI 画像は 1536×1024（3:2）、HTML テンプレは 1280×720（16:9）。表示時は 16:9 にトリミング表示。
+</p>
+
+<h2>R-Red: ハキミ離脱（衝撃系）</h2>
+<div class="compare-row">
+  <div class="compare-cell">
+    <div class="cell-label ai">🎨 AI画像（参考）</div>
+    <div class="cell-media"><img src="/v2_thumbs/_ai_proposals_v3/finished_01_hakimi.png" alt="AI"></div>
+  </div>
+  <div class="compare-cell">
+    <div class="cell-label html">⚙️ HTML テンプレ実装</div>
+    <div class="cell-media"><iframe src="thumb_R_red_hakimi.html"></iframe></div>
+  </div>
+</div>
+
+<h2>R-Blue: オリーセ覚醒（知的分析）</h2>
+<div class="compare-row">
+  <div class="compare-cell">
+    <div class="cell-label ai">🎨 AI画像（参考）</div>
+    <div class="cell-media"><img src="/v2_thumbs/_ai_proposals_v3/finished_02_olise.png" alt="AI"></div>
+  </div>
+  <div class="compare-cell">
+    <div class="cell-label html">⚙️ HTML テンプレ実装</div>
+    <div class="cell-media"><iframe src="thumb_R_blue_olise.html"></iframe></div>
+  </div>
+</div>
+
+<h2>R-Green: カゼミーロ復活（朗報系）</h2>
+<div class="compare-row">
+  <div class="compare-cell">
+    <div class="cell-label ai">🎨 AI画像（参考）</div>
+    <div class="cell-media"><img src="/v2_thumbs/_ai_proposals_v3/finished_03_casemiro.png" alt="AI"></div>
+  </div>
+  <div class="compare-cell">
+    <div class="cell-label html">⚙️ HTML テンプレ実装</div>
+    <div class="cell-media"><iframe src="thumb_R_green_casemiro.html"></iframe></div>
+  </div>
+</div>
+
+<script>
+function fitIframes() {
+  document.querySelectorAll('.cell-media').forEach(wrap => {
+    const iframe = wrap.querySelector('iframe');
+    if (!iframe) return;
+    const scale = wrap.clientWidth / 1280;
+    iframe.style.transform = 'scale(' + scale + ')';
+    iframe.style.height = (720 * scale / scale) + 'px';
+    wrap.style.height = (720 * scale) + 'px';
+  });
+}
+window.addEventListener('load', fitIframes);
+window.addEventListener('resize', fitIframes);
+</script>
+`;
+saveHtml('regal_compare.html', regalCompareHtml);
+
+console.log(`✅ サムネ ${thumbSamples.length}件 + OP/ED ${opEdSamples.length}件 + showcase.html + regal_compare.html 出力完了`);
 console.log(`📋 URL: http://37.60.224.54:3004/v2_videos/voice_test/showcase.html`);
+console.log(`👑 比較: http://37.60.224.54:3004/v2_videos/voice_test/regal_compare.html`);
