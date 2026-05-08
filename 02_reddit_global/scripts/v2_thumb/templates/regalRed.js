@@ -1,22 +1,22 @@
 // scripts/v2_thumb/templates/regalRed.js
-// サムネ テンプレ R-Red: REGAL IMPACT（赤×ネイビー×ゴールド・衝撃系）
-//   gpt-image-1 が生成した「①ハキミ離脱の衝撃」のレイアウトを HTML/CSS 化
+// サムネ テンプレ R-Red: REGAL IMPACT（赤×ゴールド・衝撃系）
+//   gpt-image-1 が生成した「①ハキミ離脱の衝撃」のレイアウトを忠実に HTML/CSS 化
 //
-//   レイアウト:
-//     - 左 56% に選手写真（バストアップ、右にフェード）
-//     - 右上に巨大数字（serif italic ゴールド 200px）+ 直下に小ラベル
-//     - 中央〜下中央に大きなメインタイトル（白太ゴシック、複数行 OK）
-//     - 下端にサブタイトル帯（深紅×ネイビー gradient、ベージュ細字）
-//   トーン:
-//     深紅(#7f1d1d) × ネイビー(#0f172a) × ゴールド(#d4a437) × オフホワイト
+// 真の特徴:
+//   - 背景: 全面暗赤のスタジアム radial グロー（深紅 #7f1d1d 系）
+//   - 選手写真: 左 30-50% に胸像、右側へは緩やかにフェード（赤背景に溶ける）
+//   - 数字「161」: 右上、極大ゴールド serif italic
+//   - メインタイトル: 写真の右〜画面中央右に重なる白太ゴシック + 赤縁
+//                  改行可（"ハキミ" / "離敗の衝撃" のような縦割り）
+//   - サブタイトル: 左下に「赤い四角ボックス」（横長帯ではない）
 //
 //   入力:
 //     {
-//       heroImage:   '選手写真パス',
-//       heroNumber:  '161',
-//       heroLabel:   'PSG在籍試合',
-//       title:       'ハキミ離脱の衝撃',  // 改行 \n で複数行可
-//       subtitle:    'PSG崩壊の予兆',
+//       heroImage:  '選手写真パス',
+//       heroNumber: '161',
+//       heroLabel:  'PSG在籍試合',
+//       title:      'ハキミ\n離脱の衝撃',
+//       subtitle:   'PSG崩壊の予兆',
 //     }
 
 const {
@@ -31,101 +31,99 @@ function buildRegalRedThumb(data = {}) {
   const subtitle   = data.subtitle   || '';
   const channelName = data.channelName || CHANNEL_NAME;
 
-  // タイトル文字数で自動スケール（複数行想定）
   const titleLines = String(title).split('\n');
   const longestLine = Math.max(...titleLines.map(l => [...l].length), 0);
-  const titleSize = longestLine <= 5 ? 124
-                  : longestLine <= 7 ? 110
-                  : longestLine <= 9 ? 96
-                  :                    82;
+  const titleSize = longestLine <= 4 ? 130
+                  : longestLine <= 6 ? 112
+                  : longestLine <= 8 ? 92
+                  :                    78;
 
   const extraStyles = `
-/* ── ベース背景：深紅×ネイビーのドラマチックグラデーション ── */
+/* ── ベース背景：全面に暗赤のスタジアムグロー ── */
 .bg-base {
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 120% 90% at 78% 40%, rgba(127,29,29,0.65) 0%, transparent 60%),
-    radial-gradient(ellipse 80% 100% at 20% 50%, rgba(15,23,42,0.85) 0%, transparent 70%),
-    linear-gradient(135deg, #1a0809 0%, #2a0d10 30%, #0f172a 75%, #060a14 100%);
+    radial-gradient(ellipse 130% 100% at 60% 50%, rgba(127,29,29,0.85) 0%, rgba(80,15,15,0.65) 35%, rgba(20,6,8,0.95) 75%, #0a0506 100%),
+    linear-gradient(180deg, #1a0608 0%, #0a0304 100%);
 }
-/* 微細な暗いノイズ感（高級感） */
-.bg-noise {
+.bg-haze {
+  /* 微細な赤いノイズグレイン感（高級グラデの息継ぎ）*/
   position: absolute; inset: 0;
   background-image:
-    radial-gradient(rgba(127,29,29,0.06) 1px, transparent 1px);
-  background-size: 4px 4px;
+    radial-gradient(rgba(220,40,40,0.05) 1px, transparent 1px);
+  background-size: 5px 5px;
   pointer-events: none;
+  mix-blend-mode: screen;
 }
 
-/* ── 左側：選手写真（フルブリード+右フェード）── */
+/* ── 選手写真：左 35-50%、右側へ自然にフェード ── */
 .hero-photo {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 60%;
-  ${heroImg ? `background-image: url('${heroImg}');` : `background: radial-gradient(circle at 50% 60%, #2a0d10, #0a0a14);`}
+  width: 52%;
+  ${heroImg ? `background-image: url('${heroImg}');` : `background: radial-gradient(circle at 50% 60%, #2a0d10, #0a0306);`}
   background-size: cover;
   background-position: center 22%;
-  filter: contrast(1.12) saturate(1.15);
+  filter: contrast(1.10) saturate(1.10) brightness(1.02);
 }
 .hero-photo::after {
-  /* 写真右端から背景色へ滑らかなフェード */
+  /* 写真右端は赤い背景に溶け込む（フェード幅は控えめ）*/
   content: '';
   position: absolute;
-  right: -2px; top: 0; bottom: 0;
-  width: 26%;
+  right: -1px; top: 0; bottom: 0;
+  width: 30%;
   background: linear-gradient(to right,
     transparent 0%,
-    rgba(15,23,42,0.45) 35%,
-    rgba(15,23,42,0.85) 70%,
-    #0f172a 100%);
+    rgba(80,15,15,0.45) 50%,
+    rgba(40,8,10,0.85) 90%,
+    rgba(20,6,8,1) 100%);
 }
 .hero-photo::before {
-  /* 写真上下にも subtle な暗フェード（被写体へ視線誘導）*/
+  /* 上下にも subtle な暗フェード（被写体を引き立てる）*/
   content: '';
   position: absolute; inset: 0;
   background:
-    linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 20%, transparent 70%, rgba(0,0,0,0.55) 100%);
+    linear-gradient(to bottom, rgba(0,0,0,0.30) 0%, transparent 18%, transparent 75%, rgba(0,0,0,0.50) 100%);
   pointer-events: none;
 }
 
-/* ── 右上：巨大数字 + 小ラベル ── */
+/* ── 右上：巨大数字 + 直下ラベル ── */
 .num-zone {
   position: absolute;
-  right: 56px; top: 28px;
+  right: 56px; top: 26px;
   text-align: center;
   z-index: 5;
 }
 .hero-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 200px;
+  font-size: 220px;
   font-weight: 900;
   font-style: italic;
-  color: #d4a437;
-  letter-spacing: -6px;
+  letter-spacing: -10px;
   line-height: 0.92;
-  text-shadow:
-    0 0 40px rgba(212,164,55,0.45),
-    0 0 80px rgba(127,29,29,0.35),
-    0 8px 22px rgba(0,0,0,0.95);
-  background: linear-gradient(180deg, #f3d172 0%, #d4a437 50%, #a37516 100%);
+  background: linear-gradient(180deg, #f5d27a 0%, #d4a437 50%, #a37516 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  filter:
+    drop-shadow(0 0 36px rgba(212,164,55,0.55))
+    drop-shadow(0 8px 18px rgba(0,0,0,0.95));
 }
 .hero-label {
-  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
-  font-size: 26px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  font-size: 32px;
   font-weight: 700;
-  color: #e7d9c2;
+  color: #f3e8c7;
   letter-spacing: 4px;
-  margin-top: -8px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.85);
+  margin-top: -10px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
 }
 
-/* ── メインタイトル（中央〜下中央）── */
+/* ── メインタイトル：写真の右〜画面中央寄り、複数行 ── */
 .title-zone {
   position: absolute;
-  right: 36px; bottom: 130px;
+  right: 36px; top: 40%;
+  transform: translateY(-25%);
   max-width: 78%;
   text-align: right;
   z-index: 6;
@@ -135,49 +133,48 @@ function buildRegalRedThumb(data = {}) {
   font-size: ${titleSize}px;
   font-weight: 900;
   color: #ffffff;
-  line-height: 1.08;
+  line-height: 1.05;
   letter-spacing: 2px;
   text-shadow:
-    0 0 14px rgba(127,29,29,0.55),
-    0 0 28px rgba(127,29,29,0.35),
-    -2px 2px 0 #7f1d1d,
-    2px 2px 0 #7f1d1d,
+    0 0 14px rgba(127,29,29,0.65),
+    0 0 28px rgba(127,29,29,0.40),
+    -3px 3px 0 #7f1d1d,
+    3px 3px 0 #7f1d1d,
     0 6px 22px rgba(0,0,0,0.95);
   -webkit-text-stroke: 1.5px rgba(127,29,29,0.5);
 }
 
-/* ── 下端：サブタイトル帯 ── */
-.sub-bar {
-  display: ${subtitle ? 'flex' : 'none'};
+/* ── サブタイトル：左下の「赤い四角ボックス」 ── */
+.sub-box {
+  display: ${subtitle ? 'inline-block' : 'none'};
   position: absolute;
-  left: 0; right: 0; bottom: 0;
-  padding: 22px 56px;
-  align-items: center;
-  background: linear-gradient(90deg,
-    rgba(127,29,29,0.92) 0%,
-    rgba(15,23,42,0.96) 60%,
-    rgba(15,23,42,0.98) 100%);
-  border-top: 2px solid rgba(212,164,55,0.55);
+  left: 28px; bottom: 32px;
+  padding: 16px 28px;
+  background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%);
+  border: 2px solid rgba(212,164,55,0.65);
+  box-shadow:
+    0 0 0 3px rgba(0,0,0,0.40) inset,
+    0 6px 22px rgba(0,0,0,0.65),
+    0 0 18px rgba(127,29,29,0.45);
   z-index: 7;
 }
 .sub-text {
-  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 36px;
-  font-weight: 700;
-  color: #f3e8c7;
-  letter-spacing: 3px;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+  font-family: 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  font-size: 44px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.85);
 }
 
 ${channelLogoStyleFor('dark')}
 `;
 
-  // タイトル本文（改行 \n を <br> に）
   const titleHtml = titleLines.map(l => esc(l)).join('<br>');
 
   const thumbBody = `
 <div class="bg-base"></div>
-<div class="bg-noise"></div>
+<div class="bg-haze"></div>
 <div class="hero-photo"></div>
 <div class="num-zone">
   <div class="hero-num">${esc(heroNumber)}</div>
@@ -186,7 +183,7 @@ ${channelLogoStyleFor('dark')}
 <div class="title-zone">
   <div class="title-text">${titleHtml}</div>
 </div>
-${subtitle ? `<div class="sub-bar"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
+${subtitle ? `<div class="sub-box"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
 ${channelLogoHtml(channelName)}
 `;
 

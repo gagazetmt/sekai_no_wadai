@@ -1,16 +1,23 @@
 // scripts/v2_thumb/templates/regalGreen.js
-// サムネ テンプレ R-Green: REGAL REVIVAL（緑×ゴールド・復活/朗報系）
-//   gpt-image-1 が生成した「③カゼミーロ完全復活」のレイアウトを HTML/CSS 化
+// サムネ テンプレ R-Green: REGAL REVIVAL（チャコール×ゴールド・朗報/復活系）
+//   gpt-image-1 が生成した「③カゼミーロ完全復活」のレイアウトを忠実に HTML/CSS 化
 //
-//   レイアウト:
-//     - 左 56% に選手の歓喜写真（ガッツポーズ等の感情的アクション）
-//     - 右上に巨大数字（serif italic ゴールド）+ 直下にラベル
-//     - 中央〜下中央に大きなメインタイトル（白太ゴシック、複数行）
-//     - 下端にサブタイトル帯（深緑×チャコール gradient、ベージュ細字）
-//   トーン:
-//     エメラルドグリーン(#064e3b) × チャコール(#0a1612) × ゴールド(#d4a437) × オフホワイト
-//   特徴:
-//     スタジアム夜の暗緑ボケ → 「劇的な復活」感
+// 真の特徴:
+//   - 背景: 暗チャコール+黒（緑というより「夜のスタジアム」の暗さが主）
+//           上方からだけ subtle に緑/ゴールドのスタジアム光線
+//   - 選手写真: 左 30-45% に歓喜の表情（半身）、右側へチャコールに溶け込む
+//   - 数字「8.4」: 右上、極大ゴールド serif italic
+//   - メインタイトル: 中央右〜右下、白太ゴシック、改行で縦並び
+//   - サブタイトル: 下端の単純な細字（帯なし、cinematic）
+//
+//   入力:
+//     {
+//       heroImage:  '選手写真パス',
+//       heroNumber: '8.4',
+//       heroLabel:  '直近試合 評定',
+//       title:      'カゼミーロ\n完全復活',
+//       subtitle:   'マンU救世主の証明',
+//     }
 
 const {
   esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyleFor, CHANNEL_NAME,
@@ -26,93 +33,94 @@ function buildRegalGreenThumb(data = {}) {
 
   const titleLines = String(title).split('\n');
   const longestLine = Math.max(...titleLines.map(l => [...l].length), 0);
-  const titleSize = longestLine <= 5 ? 124
-                  : longestLine <= 7 ? 110
-                  : longestLine <= 9 ? 96
-                  :                    82;
+  const titleSize = longestLine <= 4 ? 130
+                  : longestLine <= 6 ? 112
+                  : longestLine <= 8 ? 92
+                  :                    78;
 
   const extraStyles = `
-/* ── ベース背景：エメラルド × チャコールのスタジアム夜 ── */
+/* ── ベース背景：暗チャコール+黒、上方から subtle な緑光線 ── */
 .bg-base {
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 110% 80% at 70% 50%, rgba(6,78,59,0.55) 0%, transparent 65%),
-    radial-gradient(ellipse 70% 90% at 25% 60%, rgba(10,22,18,0.85) 0%, transparent 75%),
-    linear-gradient(135deg, #0a1612 0%, #061c14 35%, #04140e 75%, #020a08 100%);
+    radial-gradient(ellipse 80% 50% at 65% 10%, rgba(6,78,59,0.45) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 80% at 50% 50%, rgba(20,30,28,0.65) 0%, transparent 75%),
+    linear-gradient(180deg, #0a1612 0%, #060c0a 60%, #020604 100%);
 }
-.bg-rays {
-  /* 上から下への subtle なスタジアム照明感 */
+.bg-aura {
+  /* 上方からのゴールド光線 subtle（スタジアム照明感）*/
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 60% 40% at 70% 0%, rgba(212,164,55,0.10) 0%, transparent 60%);
+    radial-gradient(ellipse 50% 35% at 75% 5%, rgba(212,164,55,0.12) 0%, transparent 70%);
   pointer-events: none;
 }
 
-/* ── 左側：選手写真 ── */
+/* ── 選手写真：左 0-50%、右側へチャコールに溶ける ── */
 .hero-photo {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 60%;
+  width: 52%;
   ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #064e3b, #0a1612);'}
   background-size: cover;
   background-position: center 25%;
-  filter: contrast(1.15) saturate(1.12);
+  filter: contrast(1.12) saturate(1.10);
 }
 .hero-photo::after {
   content: '';
   position: absolute;
-  right: -2px; top: 0; bottom: 0;
-  width: 28%;
+  right: -1px; top: 0; bottom: 0;
+  width: 32%;
   background: linear-gradient(to right,
     transparent 0%,
-    rgba(10,22,18,0.40) 30%,
-    rgba(10,22,18,0.85) 70%,
-    #0a1612 100%);
+    rgba(20,30,28,0.45) 45%,
+    rgba(10,18,16,0.85) 85%,
+    rgba(6,12,10,1) 100%);
 }
 .hero-photo::before {
   content: '';
   position: absolute; inset: 0;
   background:
-    linear-gradient(to bottom, rgba(0,0,0,0.32) 0%, transparent 20%, transparent 70%, rgba(0,0,0,0.55) 100%);
+    linear-gradient(to bottom, rgba(0,0,0,0.32) 0%, transparent 18%, transparent 78%, rgba(0,0,0,0.55) 100%);
   pointer-events: none;
 }
 
-/* ── 右上：巨大数字 + 小ラベル ── */
+/* ── 右上：巨大数字 + 直下ラベル ── */
 .num-zone {
   position: absolute;
-  right: 56px; top: 28px;
+  right: 56px; top: 26px;
   text-align: center;
   z-index: 5;
 }
 .hero-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 200px;
+  font-size: 220px;
   font-weight: 900;
   font-style: italic;
-  letter-spacing: -6px;
+  letter-spacing: -10px;
   line-height: 0.92;
-  background: linear-gradient(180deg, #f3d172 0%, #d4a437 50%, #a37516 100%);
+  background: linear-gradient(180deg, #f5d27a 0%, #d4a437 50%, #a37516 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   filter:
-    drop-shadow(0 0 38px rgba(212,164,55,0.45))
-    drop-shadow(0 8px 22px rgba(0,0,0,0.95));
+    drop-shadow(0 0 36px rgba(212,164,55,0.55))
+    drop-shadow(0 8px 18px rgba(0,0,0,0.95));
 }
 .hero-label {
-  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
-  font-size: 26px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  font-size: 32px;
   font-weight: 700;
-  color: #e7d9c2;
+  color: #f3e8c7;
   letter-spacing: 4px;
-  margin-top: -4px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.85);
+  margin-top: -10px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
 }
 
-/* ── メインタイトル（中央〜下中央）── */
+/* ── メインタイトル：中央右〜右下に縦並び ── */
 .title-zone {
   position: absolute;
-  right: 36px; bottom: 130px;
+  right: 36px; top: 42%;
+  transform: translateY(-25%);
   max-width: 78%;
   text-align: right;
   z-index: 6;
@@ -122,38 +130,35 @@ function buildRegalGreenThumb(data = {}) {
   font-size: ${titleSize}px;
   font-weight: 900;
   color: #ffffff;
-  line-height: 1.08;
+  line-height: 1.05;
   letter-spacing: 2px;
   text-shadow:
     0 0 14px rgba(6,78,59,0.65),
-    0 0 32px rgba(16,185,129,0.30),
-    -2px 2px 0 #064e3b,
-    2px 2px 0 #064e3b,
+    0 0 28px rgba(16,185,129,0.30),
+    -3px 3px 0 #064e3b,
+    3px 3px 0 #064e3b,
     0 6px 22px rgba(0,0,0,0.95);
   -webkit-text-stroke: 1.5px rgba(6,78,59,0.5);
 }
 
-/* ── 下端：サブタイトル帯 ── */
-.sub-bar {
-  display: ${subtitle ? 'flex' : 'none'};
+/* ── サブタイトル：下端の単純な細字（帯なし、cinematic）── */
+.sub-zone {
+  display: ${subtitle ? 'block' : 'none'};
   position: absolute;
-  left: 0; right: 0; bottom: 0;
-  padding: 22px 56px;
-  align-items: center;
-  background: linear-gradient(90deg,
-    rgba(6,78,59,0.92) 0%,
-    rgba(10,22,18,0.96) 60%,
-    rgba(2,10,8,0.98) 100%);
-  border-top: 2px solid rgba(212,164,55,0.55);
+  left: 0; right: 0; bottom: 36px;
+  text-align: center;
   z-index: 7;
 }
 .sub-text {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 36px;
+  font-size: 38px;
   font-weight: 700;
   color: #f3e8c7;
-  letter-spacing: 3px;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+  letter-spacing: 5px;
+  text-shadow:
+    0 0 14px rgba(0,0,0,0.95),
+    0 0 28px rgba(6,78,59,0.55),
+    0 4px 18px rgba(0,0,0,0.95);
 }
 
 ${channelLogoStyleFor('dark')}
@@ -163,7 +168,7 @@ ${channelLogoStyleFor('dark')}
 
   const thumbBody = `
 <div class="bg-base"></div>
-<div class="bg-rays"></div>
+<div class="bg-aura"></div>
 <div class="hero-photo"></div>
 <div class="num-zone">
   <div class="hero-num">${esc(heroNumber)}</div>
@@ -172,7 +177,7 @@ ${channelLogoStyleFor('dark')}
 <div class="title-zone">
   <div class="title-text">${titleHtml}</div>
 </div>
-${subtitle ? `<div class="sub-bar"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
+${subtitle ? `<div class="sub-zone"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
 ${channelLogoHtml(channelName)}
 `;
 

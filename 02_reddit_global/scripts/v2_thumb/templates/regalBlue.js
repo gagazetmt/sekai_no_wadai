@@ -1,16 +1,22 @@
 // scripts/v2_thumb/templates/regalBlue.js
 // サムネ テンプレ R-Blue: REGAL ANALYSIS（青×ゴールド・知的分析系）
-//   gpt-image-1 が生成した「②オリーセ覚醒の真相」のレイアウトを HTML/CSS 化
+//   gpt-image-1 が生成した「②オリーセ覚醒の真相」のレイアウトを忠実に HTML/CSS 化
 //
-//   レイアウト:
-//     - 左 55% に選手の躍動的写真（ドリブル等の全身〜半身）
-//     - 右上に巨大数字（serif italic ゴールド）+ 直下にラベル
-//     - 中央〜下中央に大きなメインタイトル（白太ゴシック、1-2行）
-//     - 下端にサブタイトル帯（白い水平線アクセント、ベージュ細字）
-//   トーン:
-//     ロイヤルブルー(#1e3a8a) × ネイビー(#0c1e4a) × ゴールド(#d4a437) × オフホワイト
-//   特徴:
-//     背景に微細なドットパターン → 「データ・分析感」の格調
+// 真の特徴:
+//   - 背景: 全面ロイヤルブルーの中央 radial（深 #0c1e4a → #1e3a8a）+ 微細ドット
+//   - 選手写真: 左 0-55% にドリブル全身、右側へ青背景に溶け込むフェード
+//   - 数字「+5.2」: 右上、極大ゴールド serif italic
+//   - メインタイトル: 画面の縦中央を横切る 1行 白太ゴシック（中央配置）
+//   - サブタイトル: タイトル直下、薄ベージュ／ゴールドの細字（帯なし）
+//
+//   入力:
+//     {
+//       heroImage:  '選手写真パス',
+//       heroNumber: '+5.2',
+//       heroLabel:  'xG超過',
+//       title:      'オリーセ覚醒の真相',
+//       subtitle:   'バイエルンが200億で奪う理由',
+//     }
 
 const {
   esc, imgDataUri, wrapThumb, channelLogoHtml, channelLogoStyleFor, CHANNEL_NAME,
@@ -24,98 +30,100 @@ function buildRegalBlueThumb(data = {}) {
   const subtitle   = data.subtitle   || '';
   const channelName = data.channelName || CHANNEL_NAME;
 
-  const titleLines = String(title).split('\n');
-  const longestLine = Math.max(...titleLines.map(l => [...l].length), 0);
-  const titleSize = longestLine <= 5 ? 124
-                  : longestLine <= 7 ? 110
-                  : longestLine <= 9 ? 96
-                  :                    82;
+  // R-Blue は中央配置 1行想定（折り返し起きないようサイズ調整）
+  const titleLen = [...String(title).replace('\n', '')].length;
+  const titleSize = titleLen <=  6 ? 110
+                  : titleLen <=  9 ? 92
+                  : titleLen <= 12 ? 76
+                  : titleLen <= 15 ? 64
+                  :                  54;
 
   const extraStyles = `
-/* ── ベース背景：ロイヤルブルー × ドットパターン ── */
+/* ── ベース背景：ロイヤルブルー中央 radial + ドット ── */
 .bg-base {
   position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse 90% 70% at 50% 50%, rgba(30,58,138,0.55) 0%, transparent 70%),
-    linear-gradient(135deg, #0c1e4a 0%, #0a1838 40%, #060a1f 100%);
+    radial-gradient(ellipse 110% 90% at 55% 50%, rgba(30,58,138,0.85) 0%, rgba(15,30,80,0.65) 35%, rgba(8,16,40,0.95) 75%, #050a1a 100%),
+    linear-gradient(180deg, #060b1f 0%, #03060f 100%);
 }
 .bg-dots {
   position: absolute; inset: 0;
   background-image:
     radial-gradient(rgba(212,164,55,0.10) 1px, transparent 1px),
     radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
-  background-size: 18px 18px, 6px 6px;
-  background-position: 0 0, 9px 9px;
+  background-size: 22px 22px, 7px 7px;
+  background-position: 0 0, 11px 11px;
   pointer-events: none;
 }
 
-/* ── 左側：選手写真（フルブリード+右フェード）── */
+/* ── 選手写真：左 0-55%、右側へ青背景にフェード ── */
 .hero-photo {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  width: 62%;
+  width: 56%;
   ${heroImg ? `background-image: url('${heroImg}');` : 'background: radial-gradient(circle at 50% 60%, #1e3a8a, #0a0e1a);'}
   background-size: cover;
   background-position: center 30%;
-  filter: contrast(1.10) saturate(1.18);
+  filter: contrast(1.10) saturate(1.15);
 }
 .hero-photo::after {
+  /* 写真右端は青背景に溶ける（フェード幅広め）*/
   content: '';
   position: absolute;
-  right: -2px; top: 0; bottom: 0;
-  width: 28%;
+  right: -1px; top: 0; bottom: 0;
+  width: 35%;
   background: linear-gradient(to right,
     transparent 0%,
-    rgba(12,30,74,0.35) 30%,
-    rgba(12,30,74,0.82) 70%,
-    #0c1e4a 100%);
+    rgba(15,30,80,0.45) 45%,
+    rgba(8,16,40,0.85) 85%,
+    rgba(8,16,40,1) 100%);
 }
 .hero-photo::before {
   content: '';
   position: absolute; inset: 0;
   background:
-    linear-gradient(to bottom, rgba(0,0,0,0.30) 0%, transparent 22%, transparent 75%, rgba(0,0,0,0.55) 100%);
+    linear-gradient(to bottom, rgba(0,0,0,0.28) 0%, transparent 18%, transparent 75%, rgba(0,0,0,0.45) 100%);
   pointer-events: none;
 }
 
-/* ── 右上：巨大数字 + 小ラベル ── */
+/* ── 右上：巨大数字 + 直下ラベル ── */
 .num-zone {
   position: absolute;
-  right: 50px; top: 32px;
+  right: 56px; top: 28px;
   text-align: center;
   z-index: 5;
 }
 .hero-num {
   font-family: 'Bodoni 72', 'Didot', 'Times New Roman', serif;
-  font-size: 180px;
+  font-size: 200px;
   font-weight: 900;
   font-style: italic;
-  letter-spacing: -4px;
+  letter-spacing: -6px;
   line-height: 0.92;
-  background: linear-gradient(180deg, #f3d172 0%, #d4a437 50%, #a37516 100%);
+  background: linear-gradient(180deg, #f5d27a 0%, #d4a437 50%, #a37516 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow:
-    0 0 38px rgba(212,164,55,0.45),
-    0 8px 24px rgba(0,0,0,0.95);
-  /* シャドウは要素全体にかけるため filter で */
-  filter: drop-shadow(0 4px 16px rgba(212,164,55,0.4));
+  filter:
+    drop-shadow(0 0 36px rgba(212,164,55,0.55))
+    drop-shadow(0 8px 18px rgba(0,0,0,0.95));
 }
 .hero-label {
-  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
-  font-size: 28px;
+  font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
+  font-size: 32px;
   font-weight: 700;
-  color: #e7d9c2;
-  letter-spacing: 5px;
-  margin-top: -4px;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.85);
+  color: #f3e8c7;
+  letter-spacing: 4px;
+  margin-top: -10px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
 }
 
-/* ── 中央メインタイトル（横ストリップ風） ── */
+/* ── メインタイトル：画面の縦中央を横切る・中央配置 1行 ── */
 .title-zone {
   position: absolute;
-  left: 24px; right: 24px; bottom: 168px;
+  left: 24px; right: 24px;
+  top: 56%;
+  transform: translateY(-50%);
   text-align: center;
   z-index: 6;
 }
@@ -124,50 +132,43 @@ function buildRegalBlueThumb(data = {}) {
   font-size: ${titleSize}px;
   font-weight: 900;
   color: #ffffff;
-  line-height: 1.08;
+  line-height: 1.06;
   letter-spacing: 4px;
   text-shadow:
-    0 0 14px rgba(30,58,138,0.65),
-    0 0 32px rgba(212,164,55,0.25),
+    0 0 14px rgba(30,58,138,0.75),
+    0 0 28px rgba(212,164,55,0.30),
     -2px 2px 0 #0c1e4a,
     2px 2px 0 #0c1e4a,
     0 6px 22px rgba(0,0,0,0.95);
-  -webkit-text-stroke: 1px rgba(212,164,55,0.35);
+  -webkit-text-stroke: 1.2px rgba(212,164,55,0.45);
+  white-space: nowrap;
 }
 
-/* ── 下端：サブタイトル帯（白い水平線アクセント）── */
-.sub-bar {
+/* ── サブタイトル：タイトル直下、薄ゴールド細字（帯なし）── */
+.sub-zone {
   display: ${subtitle ? 'block' : 'none'};
   position: absolute;
-  left: 0; right: 0; bottom: 0;
-  padding: 28px 56px 32px;
-  background: linear-gradient(180deg, rgba(12,30,74,0) 0%, rgba(12,30,74,0.92) 50%, rgba(6,10,31,0.98) 100%);
+  left: 24px; right: 24px;
+  top: 56%;
+  transform: translateY(calc(-50% + ${titleSize * 0.7}px));
   text-align: center;
-  z-index: 7;
-}
-.sub-bar::before {
-  /* 上端の白い水平線 */
-  content: '';
-  position: absolute;
-  left: 50%; top: 12px;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 0%, #d4a437 30%, #d4a437 70%, transparent 100%);
+  z-index: 6;
 }
 .sub-text {
   font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif;
-  font-size: 36px;
+  font-size: 38px;
   font-weight: 700;
   color: #f3e8c7;
-  letter-spacing: 3px;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.85);
+  letter-spacing: 4px;
+  text-shadow:
+    0 0 12px rgba(8,16,40,0.85),
+    0 4px 16px rgba(0,0,0,0.95);
 }
 
 ${channelLogoStyleFor('dark')}
 `;
 
-  const titleHtml = titleLines.map(l => esc(l)).join('<br>');
+  const titleSingle = String(title).replace(/\n/g, '');
 
   const thumbBody = `
 <div class="bg-base"></div>
@@ -178,9 +179,9 @@ ${channelLogoStyleFor('dark')}
   ${heroLabel ? `<div class="hero-label">${esc(heroLabel)}</div>` : ''}
 </div>
 <div class="title-zone">
-  <div class="title-text">${titleHtml}</div>
+  <div class="title-text">${esc(titleSingle)}</div>
 </div>
-${subtitle ? `<div class="sub-bar"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
+${subtitle ? `<div class="sub-zone"><div class="sub-text">${esc(subtitle)}</div></div>` : ''}
 ${channelLogoHtml(channelName)}
 `;
 
