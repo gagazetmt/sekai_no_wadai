@@ -1205,6 +1205,37 @@ ${JSON.stringify(modSummaries, null, 2).slice(0, 8000)}
 // ─── UI ─────────────────────────────────────────────────
 function getUI() {
   return `
+<style>
+/* Step3 outline 行のレイアウト（PC + スマホ対応）*/
+#s3OutlineList .s3-row {
+  display: grid;
+  grid-template-columns: 30px 200px 160px 180px 1fr 28px 28px 28px;
+  gap: 6px;
+  align-items: start;
+  margin-bottom: 6px;
+  padding: 8px;
+  background: #0d1220;
+  border-radius: 6px;
+}
+/* タブレット〜スマホ: 主タグ・タイプ・従タグを 1段目、脚本指示を 2段目（全幅）に */
+@media (max-width: 900px) {
+  #s3OutlineList .s3-row {
+    grid-template-columns: 28px 1fr 1fr 28px 28px 28px;
+    grid-template-rows: auto auto auto;
+    row-gap: 4px;
+  }
+  #s3OutlineList .s3-row > span:first-child { grid-row: 1; grid-column: 1; }
+  #s3OutlineList .s3-row .s3-main { grid-row: 1; grid-column: 2 / 4; }
+  #s3OutlineList .s3-row .s3-type { grid-row: 2; grid-column: 2 / 3; }
+  #s3OutlineList .s3-row .s3-secondary,
+  #s3OutlineList .s3-row > span:nth-child(4) { grid-row: 2; grid-column: 3 / 4; }
+  #s3OutlineList .s3-row .s3-script { grid-row: 3; grid-column: 1 / -1; min-height: 80px; }
+  #s3OutlineList .s3-row > button { grid-row: 1; }
+  #s3OutlineList .s3-row > button:nth-of-type(1) { grid-column: 4; }
+  #s3OutlineList .s3-row > button:nth-of-type(2) { grid-column: 5; }
+  #s3OutlineList .s3-row > button:nth-of-type(3) { grid-column: 6; }
+}
+</style>
 <div id="step3" class="step-container" style="display:none">
 <div style="padding:0 20px 20px;">
 
@@ -1305,7 +1336,7 @@ function getUI() {
         ? '<select class="inp s3-secondary" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnSecondaryChange(' + idx + ')">' + _buildSecondaryOptions(m.mainKey, m.secondary || '') + '</select>'
         : '<span style="font-size:10px;color:#3a4560;align-self:center;text-align:center;">—</span>';
       return ''
-        + '<div class="s3-row" data-idx="' + idx + '" style="display:grid;grid-template-columns:30px 200px 160px 180px 1fr 28px 28px 28px;gap:6px;align-items:start;margin-bottom:6px;padding:8px;background:#0d1220;border-radius:6px;">'
+        + '<div class="s3-row" data-idx="' + idx + '">'
         + '<span style="font-size:10px;color:#8a9aba;text-align:center;padding-top:8px;">#' + (idx+1) + '</span>'
         + '<select class="inp s3-main" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnMainChange(' + idx + ')">' + mainOpts + '</select>'
         + '<select class="inp s3-type" data-idx="' + idx + '"' + (typeLocked ? ' disabled' : '')
