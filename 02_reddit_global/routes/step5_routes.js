@@ -235,11 +235,13 @@ router.get('/v5/list-videos', (req, res) => {
   const { postId } = req.query;
   if (!postId) return res.json({ videos: [] });
   if (!fs.existsSync(VIDEOS_BASE)) return res.json({ videos: [] });
+  // render.js と同じ正規化で postId 末尾20文字 prefix を作り、startsWith で厳密マッチ
+  //   命名規則: `{postId.replace(記号→_).slice(-20)}_{YYYYMMDDHHmm}.mp4`
+  const prefix = String(postId).replace(/[\/\?%*:|"<>\.]/g, '_').slice(-20) + '_';
   const out = [];
   for (const f of fs.readdirSync(VIDEOS_BASE)) {
     if (!/\.mp4$/i.test(f)) continue;
-    // ファイル名に postId 関連のキーワードが含まれてるか緩くマッチ
-    // V2 では `{postId(短)}_{timestamp}.mp4` 形式想定だが、表記揺れがあるので全mp4返す
+    if (!f.startsWith(prefix)) continue;
     const full = path.join(VIDEOS_BASE, f);
     const stat = fs.statSync(full);
     out.push({
