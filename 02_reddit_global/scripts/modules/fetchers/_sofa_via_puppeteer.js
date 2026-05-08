@@ -43,6 +43,10 @@ async function init() {
       '--no-sandbox', '--disable-setuid-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
+      // CORS バイパス: page から api.sofascore.com への fetch を直接許可
+      //   sofascore.com → api.sofascore.com の cross-origin fetch でブラウザが TypeError 投げるのを防ぐ
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
     ];
     if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
     _browser = await puppeteerExtra.launch({ headless: 'new', args });
@@ -58,9 +62,9 @@ async function init() {
     }
     await _page.setUserAgent(UA);
     await _page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-    // sofascore.com で cf cookie 済ませる
-    await _page.goto('https://www.sofascore.com/', { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    await new Promise(r => setTimeout(r, 2500));
+    // sofascore.com で cf cookie/challenge を確実に済ませる（networkidle2 で完全ロード待ち）
+    await _page.goto('https://www.sofascore.com/', { waitUntil: 'networkidle2', timeout: PAGE_TIMEOUT });
+    await new Promise(r => setTimeout(r, 1500));
     // プロセス終了時に自動 close
     process.once('exit',   () => { try { _browser?.close(); } catch (_) {} });
     process.once('SIGINT', () => { try { _browser?.close(); } catch (_) {} process.exit(); });
@@ -75,14 +79,18 @@ async function close() {
 }
 
 // ── mutex: 全 API 呼出をシリアル化（page 競合回避）──
+//   前 task の reject が後続に影響しないよう、queue は catch して swallow
+//   呼出側には現在 task の reject/resolve をそのまま伝搬
 let _queue = Promise.resolve();
 function _serialize(taskFn) {
-  const p = _queue.then(taskFn, taskFn);  // 失敗しても後続を進める
+  const p = _queue.then(() => taskFn());
   _queue = p.catch(() => {});
   return p;
 }
 
 // 通常の API GET（JSON 返却）
+//   sofascore.com の page から fetch で api.sofascore.com を叩く
+//   --disable-web-security で CORS バイパス済 → cross-origin fetch が成立
 async function apiGet(urlPath) {
   await init();
   return _serialize(async () => {
@@ -94,10 +102,13 @@ async function apiGet(urlPath) {
         let parsed = null;
         try { parsed = JSON.parse(text); } catch (_) {}
         return { status: r.status, isJson: !!parsed, body: parsed || text.slice(0, 500) };
-      } catch (e) { return { status: 0, error: e.message }; }
+      } catch (e) { return { status: 0, error: e.message || String(e), errName: e.name }; }
     }, url);
     if (!result.isJson) {
-      const err = new Error(`HTTP ${result.status}: ${typeof result.body === 'string' ? result.body.slice(0, 100) : ''}`);
+      const detail = result.error
+        ? `${result.errName || 'Error'}: ${result.error}`
+        : (typeof result.body === 'string' ? result.body.slice(0, 120) : '');
+      const err = new Error(`HTTP ${result.status}: ${detail}`);
       err.status = result.status;
       throw err;
     }
@@ -124,11 +135,7 @@ async function apiGetImage(urlPath) {
         return { status: r.status, dataUri: `data:${type};base64,${b64}` };
       } catch (e) { return { status: 0, error: e.message }; }
     }, url);
-    if (result.error || !result.dataUri) {
-      const err = new Error(`Image fetch fail: ${result.error || 'no data'}`);
-      err.status = result.status;
-      throw err;
-    }
+    if (result.error || !result.dataUri) return null;
     return result.dataUri;
   });
 }
