@@ -83,7 +83,7 @@ router.get('/v3/modules', (req, res) => {
 // ─── /api/v3/propose-modules : 案件 + コメント + ニュース から 5〜10 スライド構成を多角視点で提案 ──
 // 入力: { postId, count?: 5-10 (default 7) }
 // 出力: { ok, modules: [{type, mainKey, secondary?, scriptDir}, ...] }
-//   - V4-Flash で生成（5/1切替）
+//   - Sonnet 既定で生成、JSON崩れ時のみ V4-Flash 保険（5/1切替後）
 //   - クライアントは返却 outline を Step3 のテーブルに流し込んで微調整 → save-modules
 async function _runProposeModules(postId, count) {
   const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
@@ -1430,7 +1430,7 @@ function getUI() {
     _renderOutline();
   });
 
-  /* ── 構成おまかせ（V4-Flash で 5〜10 スライド多角構成を提案）── */
+  /* ── 構成おまかせ（Sonnet 既定 + v4flash 保険で 5〜10 スライド多角構成を提案）── */
   // 🆕 propose-modules ジョブ管理（タブ閉じても継続）
   function _proposeJobKey(postId) { return 's3_propose_' + postId; }
   function _saveProposeJob(postId, jobId) { try { localStorage.setItem(_proposeJobKey(postId), jobId); } catch (_) {} }
@@ -1467,7 +1467,7 @@ function getUI() {
           _msg('✅ ' + r.modules.length + ' 枚構成を提案しました（' + r.elapsed + '秒）。各行を確認・編集してから「✨ 脚本生成」へ');
           break;
         }
-        _msg('⏳ V4-Flash が多角構成を提案中... (' + (tries * 3) + 's)');
+        _msg('⏳ Sonnet が多角構成を提案中... (' + (tries * 3) + 's)');
       } catch (e) {
         if (String(e.message).includes('404')) {
           _clearProposeJob(post.id);
