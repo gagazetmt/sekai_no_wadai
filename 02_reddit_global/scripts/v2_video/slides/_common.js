@@ -482,11 +482,30 @@ const PLAYER_NAMES = {
   'Thibaut Courtois': 'クルトワ',
   'Marc-André ter Stegen': 'テア・シュテーゲン', 'Marc-Andre ter Stegen': 'テア・シュテーゲン',
 };
+// 大文字/小文字・空白・アクセントを正規化（部分一致用）
+function _normalizeNameForMatch(s) {
+  return String(s || '')
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')  // 結合発音記号除去
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+const _PLAYER_KEYS_NORM = Object.keys(PLAYER_NAMES).map(k => ({
+  key: k, norm: _normalizeNameForMatch(k),
+}));
 function _player(raw) {
   if (!raw) return '';
   const t = String(raw).trim();
   if (PLAYER_NAMES[t]) return PLAYER_NAMES[t];
-  // フォールバック: スペース区切りの最後の単語のみ
+  // 部分一致フォールバック: PLAYER_NAMES の登録名が raw に含まれる、または raw が含まれる
+  //   例: raw="LAMINE YAMAL NASRAOUI EBANA" → "Lamine Yamal" を見つけて "ヤマル"
+  //   登録名が長いほうから優先（"Marc-André ter Stegen" を "Stegen" より先に）
+  const tn = _normalizeNameForMatch(t);
+  if (tn) {
+    const matches = _PLAYER_KEYS_NORM
+      .filter(p => p.norm && (tn.includes(p.norm) || p.norm.includes(tn)))
+      .sort((a, b) => b.norm.length - a.norm.length);
+    if (matches.length) return PLAYER_NAMES[matches[0].key];
+  }
+  // 最終フォールバック: スペース区切りの最後の単語
   const parts = t.split(/\s+/);
   return parts[parts.length - 1] || t;
 }
