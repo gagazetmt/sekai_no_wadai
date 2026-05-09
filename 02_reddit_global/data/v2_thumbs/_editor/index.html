@@ -505,7 +505,14 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
 
   <!-- 🆕 split モード（左右2カラム）-->
   <div class="row" id="gradSplitRow" style="display:none;">
-    <details open class="prop-section">
+    <label>分割位置 (%) — 左カラムの右端 / 右カラムの左端</label>
+    <div class="inline">
+      <input type="range" id="bgSplitPos" min="0" max="100" step="1" value="50" oninput="updateBgSplitPos(this.value)">
+      <input type="number" id="bgSplitPosVal" min="0" max="100" step="1" value="50" oninput="updateBgSplitPos(this.value)" style="width:55px;">
+    </div>
+    <small class="hint">50 = 半分ずつ / 30 = 左30%・右70% など。VS型で人物に合わせて調整</small>
+
+    <details open class="prop-section" style="margin-top:10px;">
       <summary>🟦 左カラム グラデ</summary>
       <div class="prop-body">
         <div id="gradStopsLeft"><!-- mountGradEditor --></div>
@@ -1062,6 +1069,7 @@ const state = {
     ],
     overlayOpacity: 0.5,
     // 🆕 split モード: 左右独立のグラデ設定
+    splitPos: 50,   // 左カラムの右端 / 右カラムの左端（0〜100%）
     left: {
       gradType: 'linear-vertical',
       gradStops: [
@@ -1886,6 +1894,12 @@ function renderGradStops() {
   if (mode === 'split') {
     if (!state.bg.left)  state.bg.left  = { gradType: 'linear-vertical', gradStops: [{color:'#1e3a8a',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
     if (!state.bg.right) state.bg.right = { gradType: 'linear-vertical', gradStops: [{color:'#7f1d1d',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
+    if (state.bg.splitPos == null) state.bg.splitPos = 50;
+    // 分割位置スライダ復元
+    const r = document.getElementById('bgSplitPos');
+    const v = document.getElementById('bgSplitPosVal');
+    if (r) r.value = state.bg.splitPos;
+    if (v) v.value = state.bg.splitPos;
     ['Left','Right'].forEach(side => {
       const key = side.toLowerCase();
       const el = document.getElementById('gradStops' + side);
@@ -1909,6 +1923,16 @@ function renderGradStops() {
 function updateBgMode(val) {
   state.bg.mode = (val === 'split') ? 'split' : 'single';
   renderGradStops();
+  updateBgOverlay();
+}
+
+// 🆕 split モードの分割位置を更新（0〜100%）
+function updateBgSplitPos(val) {
+  state.bg.splitPos = Math.max(0, Math.min(100, parseFloat(val) || 50));
+  const r = document.getElementById('bgSplitPos');
+  const v = document.getElementById('bgSplitPosVal');
+  if (r) r.value = state.bg.splitPos;
+  if (v) v.value = state.bg.splitPos;
   updateBgOverlay();
 }
 
@@ -1970,11 +1994,12 @@ function updateBgOverlay() {
       state.bg.left?.gradType,  state.bg.left?.gradStops || [],  state.bg.left?.opacity);
     const rImg = gradTypeToCssWithOpacity(
       state.bg.right?.gradType, state.bg.right?.gradStops || [], state.bg.right?.opacity);
+    const sp = state.bg.splitPos != null ? state.bg.splitPos : 50;
     const imgs = [];
     const positions = [];
     const sizes = [];
-    if (lImg) { imgs.push(lImg); positions.push('0 0');    sizes.push('50% 100%'); }
-    if (rImg) { imgs.push(rImg); positions.push('100% 0'); sizes.push('50% 100%'); }
+    if (lImg) { imgs.push(lImg); positions.push('0 0');    sizes.push(`${sp}% 100%`); }
+    if (rImg) { imgs.push(rImg); positions.push('100% 0'); sizes.push(`${100 - sp}% 100%`); }
     if (imgs.length) {
       overlay.style.backgroundImage = imgs.join(', ');
       overlay.style.backgroundPosition = positions.join(', ');
@@ -2558,9 +2583,10 @@ function exportTemplate() {
     // 🆕 split モード: 左右独立グラデ（commit 4 / 2026-05-10）
     const lImg = gradTypeToCssWithOpacity(state.bg.left?.gradType,  state.bg.left?.gradStops || [],  state.bg.left?.opacity);
     const rImg = gradTypeToCssWithOpacity(state.bg.right?.gradType, state.bg.right?.gradStops || [], state.bg.right?.opacity);
+    const sp = state.bg.splitPos != null ? state.bg.splitPos : 50;
     const imgs = [], pos = [], sz = [];
-    if (lImg) { imgs.push(lImg); pos.push('0 0');    sz.push('50% 100%'); }
-    if (rImg) { imgs.push(rImg); pos.push('100% 0'); sz.push('50% 100%'); }
+    if (lImg) { imgs.push(lImg); pos.push('0 0');    sz.push(`${sp}% 100%`); }
+    if (rImg) { imgs.push(rImg); pos.push('100% 0'); sz.push(`${100 - sp}% 100%`); }
     if (imgs.length) {
       lines.push(`/* 画像範囲外グラデ（左右2カラム独立）*/`);
       lines.push(`.bg-overlay {`);
@@ -2724,6 +2750,7 @@ function loadJSON() {
           if (!state.bg.mode) state.bg.mode = 'single';
           if (!state.bg.left)  state.bg.left  = { gradType: 'linear-vertical', gradStops: [{color:'#1e3a8a',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
           if (!state.bg.right) state.bg.right = { gradType: 'linear-vertical', gradStops: [{color:'#7f1d1d',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
+          if (state.bg.splitPos == null) state.bg.splitPos = 50;
           ensureAlpha(state.bg.left.gradStops);
           ensureAlpha(state.bg.right.gradStops);
         }
