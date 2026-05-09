@@ -380,6 +380,40 @@ main {
 .ge-opacity-row input[type=range] { flex: 1; }
 .ge-opacity-row input[type=number] { width: 50px; }
 
+/* ───── プロパティパネル：アコーディオン化（commit 2 / 2026-05-10）───── */
+.prop-section { border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.prop-section:last-of-type { border-bottom: 0; }
+.prop-section > summary {
+  cursor: pointer; padding: 8px 4px; font-size: 13px; font-weight: 700;
+  color: var(--accent); list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.prop-section > summary::-webkit-details-marker { display: none; }
+.prop-section > summary::before {
+  content: '▶'; font-size: 9px; color: var(--muted); transition: transform 0.15s;
+  display: inline-block; width: 10px;
+}
+.prop-section[open] > summary::before { transform: rotate(90deg); }
+.prop-section > summary:hover { background: rgba(245,158,11,0.06); }
+.prop-section .prop-body { padding: 4px 0 12px; }
+
+/* ハロ効果ボックス（テキストの周辺黒靄効果）*/
+.halo-box {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px;
+}
+.halo-box.disabled { opacity: 0.5; }
+.halo-box .halo-row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.halo-box .halo-row .ge-label { font-size: 10px; color: var(--muted); }
+.halo-box input[type=range] { flex: 1; min-width: 100px; }
+.halo-box input[type=number] { width: 50px; }
+.halo-box .halo-presets button {
+  font-size: 10px; padding: 3px 8px; margin-right: 4px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  border-radius: 3px; cursor: pointer;
+}
+.halo-box .halo-presets button:hover { border-color: var(--accent); }
+
 small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2px; }
 </style>
 </head>
@@ -547,70 +581,21 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
   <div id="propsEmpty" style="color:var(--muted);font-size:12px;">テキストを選択するか、+ テキスト追加 から始めてください</div>
   <div id="props" style="display:none;">
 
-    <div class="row">
-      <label>テキスト内容（改行は <code>Enter</code>）</label>
-      <textarea id="pText" oninput="updateProp('text', this.value)"></textarea>
-    </div>
-
-    <div class="row">
-      <label>位置 X (%) → Y (%)</label>
-      <div class="inline">
-        <input type="number" id="pX" min="0" max="100" step="0.5" oninput="updateProp('x', this.value)">
-        <input type="number" id="pY" min="0" max="100" step="0.5" oninput="updateProp('y', this.value)">
+    <!-- 📝 テキスト内容 -->
+    <details open class="prop-section">
+      <summary>📝 テキスト内容</summary>
+      <div class="prop-body">
+        <div class="row">
+          <label>本文（改行は <code>Enter</code>）</label>
+          <textarea id="pText" oninput="updateProp('text', this.value)"></textarea>
+        </div>
       </div>
-      <small class="hint">ドラッグでも位置調整可</small>
-    </div>
+    </details>
 
-    <div class="row">
-      <label>折り返し</label>
-      <select id="pWrap" onchange="updateProp('wrap', this.value)">
-        <option value="normal">自動折り返し（max-width で制限）</option>
-        <option value="nowrap">手動改行のみ（Enter で改行 / 自動折り返しなし）</option>
-      </select>
-    </div>
-
-    <div class="row">
-      <label>幅 (%) - max-width 制限（折り返しありの時のみ有効）</label>
-      <div class="inline">
-        <input type="range" id="pWidth" min="10" max="200" step="1" value="80" oninput="updateProp('width', this.value)">
-        <input type="number" id="pWidthVal" min="10" max="200" step="1" value="80" oninput="document.getElementById('pWidth').value=this.value;updateProp('width', this.value)">
-      </div>
-    </div>
-
-    <div class="row">
-      <label>テキスト揃え</label>
-      <select id="pAlign" onchange="updateProp('align', this.value)">
-        <option value="left">左</option>
-        <option value="center">中央</option>
-        <option value="right">右</option>
-      </select>
-    </div>
-
-    <div class="row">
-      <label>フォントサイズ (px)</label>
-      <div class="inline">
-        <input type="range" id="pSize" min="10" max="400" step="2" value="100" oninput="updateProp('size', this.value)">
-        <input type="number" id="pSizeVal" min="10" max="400" step="2" value="100" oninput="document.getElementById('pSize').value=this.value;updateProp('size', this.value)">
-      </div>
-    </div>
-
-    <div class="row">
-      <label>フォントウェイト</label>
-      <select id="pWeight" onchange="updateProp('weight', this.value)">
-        <option value="100">100 Thin</option>
-        <option value="300">300 Light</option>
-        <option value="400">400 Normal</option>
-        <option value="500">500 Medium</option>
-        <option value="700">700 Bold</option>
-        <option value="900">900 Black（CSS 標準上限）</option>
-        <option value="1000">1000 Ultra+ (variable)</option>
-        <option value="1200">1200 (variable)</option>
-        <option value="1400">1400 (variable)</option>
-        <option value="1600">1600 (variable)</option>
-        <option value="1800">1800 Max (variable)</option>
-      </select>
-      <small class="hint">※ 1000+ は variable font 対応書体のみ反映。900で足りない場合は <b>「極太書体」</b> や <b>text-stroke</b> で太く見せる</small>
-    </div>
+    <!-- 🔤 タイポグラフィ（文字組系を集約 / 行間・字間がフォントサイズの近くに）-->
+    <details open class="prop-section">
+      <summary>🔤 タイポグラフィ</summary>
+      <div class="prop-body">
 
     <div class="row">
       <label>書体</label>
@@ -658,10 +643,61 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
     </div>
 
     <div class="row">
+      <label>フォントウェイト</label>
+      <select id="pWeight" onchange="updateProp('weight', this.value)">
+        <option value="100">100 Thin</option>
+        <option value="300">300 Light</option>
+        <option value="400">400 Normal</option>
+        <option value="500">500 Medium</option>
+        <option value="700">700 Bold</option>
+        <option value="900">900 Black（CSS 標準上限）</option>
+        <option value="1000">1000 Ultra+ (variable)</option>
+        <option value="1200">1200 (variable)</option>
+        <option value="1400">1400 (variable)</option>
+        <option value="1600">1600 (variable)</option>
+        <option value="1800">1800 Max (variable)</option>
+      </select>
+      <small class="hint">※ 1000+ は variable font 対応書体のみ反映。900で足りない場合は <b>「極太書体」</b> や <b>text-stroke</b> で太く見せる</small>
+    </div>
+
+    <div class="row">
+      <label>フォントサイズ (px)</label>
+      <div class="inline">
+        <input type="range" id="pSize" min="10" max="400" step="2" value="100" oninput="updateProp('size', this.value)">
+        <input type="number" id="pSizeVal" min="10" max="400" step="2" value="100" oninput="document.getElementById('pSize').value=this.value;updateProp('size', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>line-height（行間）</label>
+      <div class="inline">
+        <input type="range" id="pLh" min="0.7" max="2.5" step="0.05" value="1.2" oninput="updateProp('lineHeight', this.value)">
+        <input type="number" id="pLhVal" min="0.7" max="2.5" step="0.05" value="1.2" oninput="document.getElementById('pLh').value=this.value;updateProp('lineHeight', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>letter-spacing（字間 px）</label>
+      <div class="inline">
+        <input type="range" id="pLs" min="-20" max="20" step="0.5" value="0" oninput="updateProp('letterSpacing', this.value)">
+        <input type="number" id="pLsVal" min="-20" max="20" step="0.5" value="0" oninput="document.getElementById('pLs').value=this.value;updateProp('letterSpacing', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
       <label>イタリック</label>
       <select id="pItalic" onchange="updateProp('italic', this.value)">
         <option value="normal">なし</option>
         <option value="italic">あり</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>テキスト揃え</label>
+      <select id="pAlign" onchange="updateProp('align', this.value)">
+        <option value="left">左</option>
+        <option value="center">中央</option>
+        <option value="right">右</option>
       </select>
     </div>
 
@@ -717,42 +753,100 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
       <small class="hint">単色・グラデーション どちらでも有効</small>
     </div>
 
-    <div class="row">
-      <label>letter-spacing (px)</label>
-      <div class="inline">
-        <input type="range" id="pLs" min="-20" max="20" step="0.5" value="0" oninput="updateProp('letterSpacing', this.value)">
-        <input type="number" id="pLsVal" min="-20" max="20" step="0.5" value="0" oninput="document.getElementById('pLs').value=this.value;updateProp('letterSpacing', this.value)">
       </div>
-    </div>
+    </details>
 
-    <div class="row">
-      <label>line-height</label>
-      <div class="inline">
-        <input type="range" id="pLh" min="0.7" max="2.5" step="0.05" value="1.2" oninput="updateProp('lineHeight', this.value)">
-        <input type="number" id="pLhVal" min="0.7" max="2.5" step="0.05" value="1.2" oninput="document.getElementById('pLh').value=this.value;updateProp('lineHeight', this.value)">
+    <!-- ✨ 効果 -->
+    <details class="prop-section">
+      <summary>✨ 効果</summary>
+      <div class="prop-body">
+
+        <!-- 🆕 ハロ効果（テキスト周辺の黒靄）-->
+        <div class="row">
+          <label><input type="checkbox" id="pHaloEnable" onchange="updateHalo('enabled', this.checked)" style="margin-right:6px;">✨ ハロ効果（テキスト周辺の黒靄）</label>
+          <div id="pHaloBox" class="halo-box disabled" style="margin-top:6px;">
+            <div class="halo-row">
+              <span class="ge-label">色:</span>
+              <input type="color" id="pHaloColor" value="#000000" oninput="updateHalo('color', this.value)">
+              <span class="ge-label">α(濃さ):</span>
+              <input type="range" id="pHaloAlpha" min="0" max="1" step="0.05" value="0.8" oninput="updateHalo('alpha', this.value)">
+              <input type="number" id="pHaloAlphaVal" min="0" max="1" step="0.05" value="0.8" oninput="updateHalo('alpha', this.value)">
+            </div>
+            <div class="halo-row">
+              <span class="ge-label">滲み:</span>
+              <input type="range" id="pHaloBlur" min="0" max="60" step="1" value="16" oninput="updateHalo('blur', this.value)">
+              <input type="number" id="pHaloBlurVal" min="0" max="60" step="1" value="16" oninput="updateHalo('blur', this.value)">
+              <span class="ge-label">px</span>
+            </div>
+            <div class="halo-row">
+              <span class="ge-label">重ね数:</span>
+              <input type="range" id="pHaloLayers" min="1" max="6" step="1" value="3" oninput="updateHalo('layers', this.value)">
+              <input type="number" id="pHaloLayersVal" min="1" max="6" step="1" value="3" oninput="updateHalo('layers', this.value)">
+            </div>
+            <div class="halo-row halo-presets">
+              <button type="button" onclick="applyHaloPreset('subtle')">淡い</button>
+              <button type="button" onclick="applyHaloPreset('standard')">標準</button>
+              <button type="button" onclick="applyHaloPreset('strong')">ガッツリ</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>テキストシャドウ（プリセット）</label>
+          <select id="pShadow" onchange="updateProp('shadow', this.value)">
+            <option value="none">なし</option>
+            <option value="0 2px 8px rgba(0,0,0,0.85)">弱い黒影</option>
+            <option value="0 4px 18px rgba(0,0,0,0.95)">強い黒影</option>
+            <option value="-3px 3px 0 #7f1d1d, 3px 3px 0 #7f1d1d, 0 6px 22px rgba(0,0,0,0.95)">赤オフセット+黒影</option>
+            <option value="0 0 14px rgba(127,29,29,0.7), 0 6px 22px rgba(0,0,0,0.95)">赤グロー+黒影</option>
+            <option value="0 0 36px rgba(212,164,55,0.55), 0 8px 18px rgba(0,0,0,0.95)">ゴールドグロー+黒影</option>
+            <option value="0 0 14px rgba(30,58,138,0.75), 0 6px 22px rgba(0,0,0,0.95)">青グロー+黒影</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>text-stroke (px / カラー)</label>
+          <div class="inline">
+            <input type="number" id="pStrokeW" min="0" max="6" step="0.5" value="0" oninput="updateProp('strokeWidth', this.value)" style="width:60px;">
+            <input type="color" id="pStrokeC" value="#7f1d1d" oninput="updateProp('strokeColor', this.value)">
+          </div>
+        </div>
+
       </div>
-    </div>
+    </details>
 
-    <div class="row">
-      <label>テキストシャドウ</label>
-      <select id="pShadow" onchange="updateProp('shadow', this.value)">
-        <option value="none">なし</option>
-        <option value="0 2px 8px rgba(0,0,0,0.85)">弱い黒影</option>
-        <option value="0 4px 18px rgba(0,0,0,0.95)">強い黒影</option>
-        <option value="-3px 3px 0 #7f1d1d, 3px 3px 0 #7f1d1d, 0 6px 22px rgba(0,0,0,0.95)">赤オフセット+黒影</option>
-        <option value="0 0 14px rgba(127,29,29,0.7), 0 6px 22px rgba(0,0,0,0.95)">赤グロー+黒影</option>
-        <option value="0 0 36px rgba(212,164,55,0.55), 0 8px 18px rgba(0,0,0,0.95)">ゴールドグロー+黒影</option>
-        <option value="0 0 14px rgba(30,58,138,0.75), 0 6px 22px rgba(0,0,0,0.95)">青グロー+黒影</option>
-      </select>
-    </div>
+    <!-- 📐 配置 -->
+    <details class="prop-section">
+      <summary>📐 配置</summary>
+      <div class="prop-body">
 
-    <div class="row">
-      <label>text-stroke (px / カラー)</label>
-      <div class="inline">
-        <input type="number" id="pStrokeW" min="0" max="6" step="0.5" value="0" oninput="updateProp('strokeWidth', this.value)" style="width:60px;">
-        <input type="color" id="pStrokeC" value="#7f1d1d" oninput="updateProp('strokeColor', this.value)">
+        <div class="row">
+          <label>位置 X (%) → Y (%)</label>
+          <div class="inline">
+            <input type="number" id="pX" min="0" max="100" step="0.5" oninput="updateProp('x', this.value)">
+            <input type="number" id="pY" min="0" max="100" step="0.5" oninput="updateProp('y', this.value)">
+          </div>
+          <small class="hint">ドラッグでも位置調整可</small>
+        </div>
+
+        <div class="row">
+          <label>折り返し</label>
+          <select id="pWrap" onchange="updateProp('wrap', this.value)">
+            <option value="normal">自動折り返し（max-width で制限）</option>
+            <option value="nowrap">手動改行のみ（Enter で改行 / 自動折り返しなし）</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>幅 (%) - max-width 制限（折り返しありの時のみ有効）</label>
+          <div class="inline">
+            <input type="range" id="pWidth" min="10" max="200" step="1" value="80" oninput="updateProp('width', this.value)">
+            <input type="number" id="pWidthVal" min="10" max="200" step="1" value="80" oninput="document.getElementById('pWidth').value=this.value;updateProp('width', this.value)">
+          </div>
+        </div>
+
       </div>
-    </div>
+    </details>
 
     <div class="row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:18px;">
       <button class="danger" style="width:100%;" onclick="deleteSelected()">🗑️ このテキスト削除</button>
@@ -1417,6 +1511,8 @@ function addText() {
     shadow: '0 4px 18px rgba(0,0,0,0.95)',
     strokeWidth: 0,
     strokeColor: '#7f1d1d',
+    // 🆕 ハロ効果（テキスト周辺の靄）
+    halo: { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 },
   };
   state.texts.push(t);
   state.selectedId = id;
@@ -1623,6 +1719,36 @@ function renderTexts() {
   });
 }
 
+// 🆕 ハロ効果（テキスト周辺の靄）の text-shadow ストリングを生成
+function buildHaloShadow(halo) {
+  if (!halo || !halo.enabled) return '';
+  const layers = Math.max(1, parseInt(halo.layers, 10) || 3);
+  const blur = Math.max(0, halo.blur != null ? +halo.blur : 16);
+  const baseAlpha = Math.max(0, Math.min(1, halo.alpha != null ? +halo.alpha : 0.8));
+  const color = halo.color || '#000000';
+  const out = [];
+  for (let i = 1; i <= layers; i++) {
+    const b = (blur * i / layers).toFixed(1);
+    const a = +(baseAlpha * (1 - (i - 1) * 0.18)).toFixed(3);
+    out.push(`0 0 ${b}px ${hexAlphaToRgba(color, a < 0 ? 0 : a)}`);
+  }
+  return out.join(', ');
+}
+
+// halo + emboss + shadow を合成した最終 text-shadow を返す
+function buildCombinedShadow(t) {
+  const parts = [];
+  if (t.texture === 'emboss') {
+    parts.push('1px 1px 0 rgba(255,255,255,0.55)');
+    parts.push('-1px -1px 0 rgba(0,0,0,0.65)');
+    parts.push('0 2px 4px rgba(0,0,0,0.5)');
+  }
+  const halo = buildHaloShadow(t.halo);
+  if (halo) parts.push(halo);
+  if (t.shadow && t.shadow !== 'none') parts.push(t.shadow);
+  return parts.join(', ');
+}
+
 function applyTbStyle(el, t) {
   el.style.left = t.x + '%';
   el.style.top = t.y + '%';
@@ -1646,7 +1772,9 @@ function applyTbStyle(el, t) {
   el.style.fontStyle = t.italic;
   el.style.letterSpacing = t.letterSpacing + 'px';
   el.style.lineHeight = t.lineHeight;
-  el.style.textShadow = t.shadow === 'none' ? 'none' : t.shadow;
+  // halo + emboss + shadow を統合
+  const combined = buildCombinedShadow(t);
+  el.style.textShadow = combined || 'none';
 
   // カラー or グラデ
   if (t.colorMode === 'gradient' && t.gradStops && t.gradStops.length >= 2) {
@@ -1676,14 +1804,7 @@ function applyTbStyle(el, t) {
   } else {
     el.style.filter = '';
   }
-  if (texture === 'emboss') {
-    // エンボス（凹凸感）は text-shadow の多重で擬似実装。
-    // 既存の shadow にハイライト + 暗影を重ねる
-    const baseShadow = (t.shadow && t.shadow !== 'none') ? t.shadow : '';
-    const emboss = '1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.65), 0 2px 4px rgba(0,0,0,0.5)';
-    el.style.textShadow = baseShadow ? (emboss + ', ' + baseShadow) : emboss;
-  }
-  // 通常 shadow は applyTbStyle 上部で既にセットされてる
+  // emboss の text-shadow は buildCombinedShadow() 内で halo / shadow と統合済み
 }
 
 function renderTbList() {
@@ -1825,6 +1946,53 @@ function loadProps() {
   document.getElementById('pStrokeW').value = t.strokeWidth;
   document.getElementById('pStrokeC').value = t.strokeColor;
   document.getElementById('pTexture').value = t.texture || 'none';
+
+  // 🆕 ハロ効果 DOM 復元（halo は state 拡張プロパティ・旧テンプレ互換のため null チェック）
+  if (!t.halo) t.halo = { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 };
+  document.getElementById('pHaloEnable').checked = !!t.halo.enabled;
+  document.getElementById('pHaloColor').value = t.halo.color || '#000000';
+  document.getElementById('pHaloAlpha').value = t.halo.alpha;
+  document.getElementById('pHaloAlphaVal').value = t.halo.alpha;
+  document.getElementById('pHaloBlur').value = t.halo.blur;
+  document.getElementById('pHaloBlurVal').value = t.halo.blur;
+  document.getElementById('pHaloLayers').value = t.halo.layers;
+  document.getElementById('pHaloLayersVal').value = t.halo.layers;
+  document.getElementById('pHaloBox').classList.toggle('disabled', !t.halo.enabled);
+}
+
+// ハロ効果の値更新
+function updateHalo(key, val) {
+  const t = getSelected();
+  if (!t) return;
+  if (!t.halo) t.halo = { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 };
+  if (key === 'enabled') t.halo.enabled = !!val;
+  else if (key === 'color') t.halo.color = String(val);
+  else if (key === 'alpha') t.halo.alpha = Math.max(0, Math.min(1, parseFloat(val) || 0));
+  else if (key === 'blur')  t.halo.blur  = Math.max(0, parseFloat(val) || 0);
+  else if (key === 'layers') t.halo.layers = Math.max(1, Math.min(6, parseInt(val, 10) || 3));
+  // UI 同期（範囲スライダと数値入力の双方向）
+  const ae = document.getElementById('pHaloAlpha'),    av = document.getElementById('pHaloAlphaVal');
+  const be = document.getElementById('pHaloBlur'),     bv = document.getElementById('pHaloBlurVal');
+  const le = document.getElementById('pHaloLayers'),   lv = document.getElementById('pHaloLayersVal');
+  if (ae) ae.value = t.halo.alpha;  if (av) av.value = t.halo.alpha;
+  if (be) be.value = t.halo.blur;   if (bv) bv.value = t.halo.blur;
+  if (le) le.value = t.halo.layers; if (lv) lv.value = t.halo.layers;
+  document.getElementById('pHaloBox').classList.toggle('disabled', !t.halo.enabled);
+  applyTbStyle(document.querySelector(`.tb[data-id="${t.id}"]`), t);
+}
+
+// ハロ効果プリセット
+function applyHaloPreset(name) {
+  const t = getSelected();
+  if (!t) return;
+  if (!t.halo) t.halo = {};
+  t.halo.enabled = true;
+  t.halo.color = t.halo.color || '#000000';
+  if (name === 'subtle')   { t.halo.alpha = 0.5; t.halo.blur = 8;  t.halo.layers = 2; }
+  if (name === 'standard') { t.halo.alpha = 0.8; t.halo.blur = 16; t.halo.layers = 3; }
+  if (name === 'strong')   { t.halo.alpha = 0.9; t.halo.blur = 28; t.halo.layers = 4; }
+  loadProps();
+  applyTbStyle(document.querySelector(`.tb[data-id="${t.id}"]`), t);
 }
 
 // ────────────────────────────────────────────
@@ -1938,12 +2106,8 @@ function exportTemplate() {
     } else {
       lines.push(`  color: ${t.color};`);
     }
-    // text-shadow（emboss 時はハイライト+暗影を合成）
-    let finalShadow = (t.shadow && t.shadow !== 'none') ? t.shadow : '';
-    if (t.texture === 'emboss') {
-      const emboss = '1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.65), 0 2px 4px rgba(0,0,0,0.5)';
-      finalShadow = finalShadow ? (emboss + ', ' + finalShadow) : emboss;
-    }
+    // text-shadow（halo + emboss + shadow を統合）
+    const finalShadow = buildCombinedShadow(t);
     if (finalShadow) lines.push(`  text-shadow: ${finalShadow};`);
     if (t.strokeWidth > 0) lines.push(`  -webkit-text-stroke: ${t.strokeWidth}px ${t.strokeColor};`);
     // テクスチャ（ザラザラ／コーティング）— SVG filter 参照
@@ -1991,6 +2155,12 @@ function loadJSON() {
         if (state.bg && state.bg.gradStops) ensureAlpha(state.bg.gradStops);
         if (Array.isArray(state.imageBoxes)) {
           state.imageBoxes.forEach(ib => { if (ib && ib.innerGrad) ensureAlpha(ib.innerGrad.stops); });
+        }
+        // 🆕 後方互換: halo プロパティを補完（テキスト state 拡張対応）
+        if (Array.isArray(state.texts)) {
+          state.texts.forEach(t => {
+            if (t && !t.halo) t.halo = { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 };
+          });
         }
         renderAll();
       } catch (err) { alert('JSON 読込失敗: ' + err.message); }
