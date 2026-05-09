@@ -48,15 +48,43 @@ function _findEntityData(siData, role, label) {
 }
 
 // ─── /api/v3/data-explorer/projects : 案件一覧 ──────────────
+//   saved_projects.json は揮発的（直近1件しか残らない運用）なので、
+//   si_data ディレクトリを直接スキャンして「過去 fetch 済みの案件」を全部返す。
+//   タイトルは saved_projects から見つかれば使い、無ければファイル名表示。
 router.get('/v3/data-explorer/projects', (req, res) => {
   const saved = safeJson(path.join(DATA_DIR, 'saved_projects.json'), []);
-  const items = (Array.isArray(saved) ? saved : []).map(p => ({
-    id:    p.id,
-    title: p.title || p.titleJa || '(no title)',
-  })).filter(p => p.id);
-  // si_data ファイルが実在するものだけ（fetch 未済の案件は除外）
-  const existing = items.filter(p => fs.existsSync(siPath(p.id)));
-  res.json({ ok: true, projects: existing });
+  const titleByFilename = new Map();
+  if (Array.isArray(saved)) {
+    for (const p of saved) {
+      if (!p?.id) continue;
+      const fn = String(p.id).replace(/[/\?%*:|"<>.]/g, '_');
+      titleByFilename.set(fn, p.title || p.titleJa || '');
+    }
+  }
+  let files = [];
+  try {
+    files = fs.readdirSync(SI_DIR)
+      .filter(f => f.endsWith('.json') && !f.startsWith('_CONTAMINATED'));
+  } catch (e) {
+    return res.status(500).json({ error: 'si_data dir read failed: ' + e.message });
+  }
+  const projects = files.map(f => {
+    const id = f.replace(/\.json$/, '');
+    const t  = titleByFilename.get(id);
+    return {
+      id,
+      title: t || ('📁 ' + id.replace(/^_/, '').replace(/_/g, ' ').slice(0, 90)),
+    };
+  });
+  // 新しいファイル（mtime 降順）から
+  try {
+    projects.sort((a, b) => {
+      const ma = fs.statSync(path.join(SI_DIR, a.id + '.json')).mtimeMs;
+      const mb = fs.statSync(path.join(SI_DIR, b.id + '.json')).mtimeMs;
+      return mb - ma;
+    });
+  } catch (_) {}
+  res.json({ ok: true, projects });
 });
 
 // ─── /api/v3/data-explorer/entities?postId= : 案件内 entity ─
