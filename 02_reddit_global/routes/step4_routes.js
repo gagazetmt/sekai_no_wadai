@@ -222,6 +222,101 @@ router.post('/v2/apply-slot-keys', express.json(), (req, res) => {
   }
 });
 
+// ─── /v2/walker-bind : 主/副 entity を手動指定して walker をバインド（AI不使用）────
+// 「対比連結が AI 任せだと不安定」問題の根本対処（2026-05-10）
+// mod の mainKey/secondary を手動上書き → walker → buildDataSlotsFromMeta で
+// dataSlots を確定構築 → 永続化。compare カードと single カード両対応。
+//
+// Input: { postId, moduleIdx, primary: '<entity label>',
+//          secondary?: '<entity label>'     ← compare カードのみ必須
+//          customSlotKeys?: ['k1','k2',...] ← 省略時は defaultSelection
+//          recipeKey?: '<recipe>' ← 指定時は展開キーで上書き
+// }
+// Output: { ok, mod, primary, secondary, customSlotKeys, availableSlots, recipes }
+router.post('/v2/walker-bind', express.json(), (req, res) => {
+  try {
+    const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
+    const { expandRecipe, hasRecipe } = require('../scripts/v2_story/recipes_curated');
+    const { postId, moduleIdx, primary, secondary, customSlotKeys, recipeKey } = req.body || {};
+    if (!postId || moduleIdx == null || !primary) {
+      return res.status(400).json({ error: 'postId + moduleIdx + primary required' });
+    }
+    const mp = modulesPath(postId);
+    const modulesData = safeJson(mp, { modules: [] });
+    const mod = (modulesData.modules || [])[moduleIdx];
+    if (!mod) return res.status(404).json({ error: 'module not found' });
+
+    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] } } });
+    const isCompareCard = (mod.type === 'comparison');
+    if (isCompareCard && !secondary) {
+      return res.status(400).json({ error: 'comparison カードでは secondary 必須' });
+    }
+
+    // mod の mainKey / secondary を手動上書き（AI推論をバイパス）
+    // match 系（matchcard / match）は触らない。それ以外は entity:<primary> に正規化。
+    const isMatchCard = mod.mainKey?.startsWith('match:') || mod.mainKey?.startsWith('matchcard:');
+    if (!isMatchCard) {
+      mod.mainKey   = 'entity:' + primary;
+      mod.secondary = isCompareCard ? secondary : null;
+      // siBindingLeft/Right は comparison.js 表示用
+      if (isCompareCard) {
+        mod.siBindingLeft  = primary;
+        mod.siBindingRight = secondary;
+      } else {
+        delete mod.siBindingLeft;
+        delete mod.siBindingRight;
+      }
+    }
+
+    const meta = getBindingMeta(mod, si);
+    if (!meta) {
+      return res.status(400).json({
+        error: `walker バインド失敗：${primary}${secondary ? ' / ' + secondary : ''} の SI データが取れていません`
+      });
+    }
+
+    // 採用キーの決定：recipeKey > customSlotKeys > defaultSelection
+    let keys = [];
+    let usedRecipeKey = null;
+    if (recipeKey && hasRecipe(recipeKey)) {
+      keys = expandRecipe(recipeKey, meta.availableSlots) || [];
+      usedRecipeKey = recipeKey;
+    } else if (Array.isArray(customSlotKeys) && customSlotKeys.length) {
+      const validKeys = new Set(meta.availableSlots.map(s => s.key));
+      keys = customSlotKeys.filter(k => validKeys.has(k));
+    }
+    if (!keys.length) keys = (meta.defaultSelection || []).slice(0, meta.isCompare ? 5 : 7);
+
+    mod.dataSlots = buildDataSlotsFromMeta(meta, keys);
+    mod.binding = {
+      subject:        meta.subject,
+      aspect:         meta.aspect,
+      primary:        meta.primary,
+      secondary:      meta.secondary,
+      customSlotKeys: keys,
+      ...(usedRecipeKey ? { recipeKey: usedRecipeKey } : {}),
+    };
+    // history 対戦史型での H2H 固定フラグはユーザ手動上書き時はクリア（次の generate-scenario で再構築させる）
+    delete mod._h2hFixed;
+
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+    console.log(`[walker-bind] mod#${moduleIdx} ${primary}${secondary ? ' vs ' + secondary : ''} → ${keys.length} slot 確定`);
+    res.json({
+      ok: true,
+      mod,
+      primary:      meta.primary,
+      secondary:    meta.secondary,
+      isCompare:    meta.isCompare,
+      customSlotKeys: keys,
+      availableSlots: meta.availableSlots,
+      recipes:      meta.recipes,
+    });
+  } catch (e) {
+    console.error('[v2/walker-bind]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v2/matchcard-lineup : matchcard モジュールの lineup と現状表示名を返す ─
 // Input:  ?postId=X&moduleIdx=N
 // Output: { ok, home: [{ name, displayName }], away: [...], overrides }
@@ -2007,6 +2102,28 @@ function getUI() {
         s4ApplyRecipe(idx, recipeKey);
       });
     });
+    /* 🔧 walker バインド: 主 dropdown 変更時に副の自分自身を除外して再生成 */
+    el.querySelectorAll('.s4-walker-primary').forEach(function(pSel) {
+      pSel.addEventListener('change', function() {
+        const idx = parseInt(pSel.getAttribute('data-idx'), 10);
+        const sSel = el.querySelector('.s4-walker-secondary[data-idx="' + idx + '"]');
+        if (!sSel) return;
+        const newP = pSel.value;
+        // 自分自身が選ばれてたら一旦クリア、選択肢から自分自身を disable
+        Array.from(sSel.options).forEach(function(o) {
+          o.disabled = (o.value && o.value === newP);
+          if (o.disabled && o.selected) sSel.value = '';
+        });
+      });
+    });
+    /* 🔧 walker バインド: 適用ボタン → /v2/walker-bind */
+    el.querySelectorAll('.s4-walker-apply').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        if (Number.isNaN(idx)) return;
+        s4ApplyWalkerBind(idx);
+      });
+    });
 
     /* 🎙️ TTS: chunk 単発再生 */
     el.querySelectorAll('.s4-tts-play-chunk').forEach(function(btn) {
@@ -2032,6 +2149,46 @@ function getUI() {
     const recipes = data.recipes || [];
     const currentRecipeKey = data.currentRecipeKey || '';
     const currentRecipe    = recipes.find(r => r.key === currentRecipeKey);
+
+    /* 🔧 walker バインド UI（主/副を手動指定し AI 介さず確定連結 / 2026-05-10）
+       「対比連結が AI 任せだと不安定」問題の根本対処。
+       subject 同 role の entity だけ dropdown に出す。
+       comparison カードは 副 必須、profile/stats 等は 副 任意（空= single モード）。 */
+    let walkerBindBanner = '';
+    const _bindableSubjects = ['player', 'team', 'manager'];
+    if (_bindableSubjects.indexOf(data.subject) >= 0) {
+      const _mod = window.APP.s4.modules ? window.APP.s4.modules[idx] : null;
+      const _isCmpCard = !!_mod && _mod.type === 'comparison';
+      const _allEnt = ((window.APP.s4.siData && window.APP.s4.siData.boxes && window.APP.s4.siData.boxes.entity && window.APP.s4.siData.boxes.entity.items) || [])
+        .filter(function(e) { return e && e.label && e.role === data.subject; });
+      const _optsP = _allEnt.map(function(e) {
+        return '<option value="' + _esc(e.label) + '"' + (e.label === data.primary ? ' selected' : '') + '>' + _esc(e.label) + '</option>';
+      }).join('');
+      const _optsS = (_isCmpCard ? '' : '<option value="">— なし（単体モード）—</option>')
+        + _allEnt.filter(function(e) { return e.label !== data.primary; }).map(function(e) {
+            return '<option value="' + _esc(e.label) + '"' + (e.label === data.secondary ? ' selected' : '') + '>' + _esc(e.label) + '</option>';
+          }).join('');
+      const _showSec = _isCmpCard || data.isCompare;
+      walkerBindBanner = '<details class="s4-walker-bind" data-idx="' + idx + '"'
+        + ' style="margin:14px 0 10px;border:1px dashed #f59e0b;border-radius:6px;background:#1a1810;">'
+        + '<summary style="cursor:pointer;padding:8px 12px;font-size:11px;color:#fbbf24;font-weight:bold;">'
+        + '🔧 walker バインド（主/副を手動指定 / AI 不使用 / 確実な連結）'
+        + '</summary>'
+        + '<div style="padding:8px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'
+        + '<span style="font-size:10px;color:#fbbf24;">主:</span>'
+        + '<select class="s4-walker-primary inp" data-idx="' + idx + '" style="font-size:11px;padding:4px 8px;background:#0a0d18;color:#e0e0e0;min-width:160px;">'
+        +   _optsP + '</select>'
+        + (_showSec
+            ? '<span style="font-size:10px;color:#fbbf24;">副:</span>'
+              + '<select class="s4-walker-secondary inp" data-idx="' + idx + '" style="font-size:11px;padding:4px 8px;background:#0a0d18;color:#e0e0e0;min-width:160px;">'
+              +   _optsS + '</select>'
+            : '')
+        + '<button class="s4-walker-apply" data-idx="' + idx + '"'
+        + ' style="font-size:11px;padding:5px 14px;background:#f59e0b;color:#000;border:0;border-radius:4px;cursor:pointer;font-weight:bold;">適用</button>'
+        + '<span class="s4-walker-msg" data-idx="' + idx + '" style="font-size:10px;color:#8a9aba;flex-basis:100%;">AI に頼らず手動連結。subject=' + _esc(data.subject) + ' 同 role の entity のみ表示。'
+        + (_isCmpCard ? ' / comparison カードは 副 必須' : ' / 単体カードは 副 を空にすると single モード') + '</span>'
+        + '</div></details>';
+    }
 
     // ─ レシピバナー（recipes が1件以上ある時だけ）─
     let recipeBanner = '';
@@ -2093,7 +2250,7 @@ function getUI() {
       return header + '<div style="padding:4px 6px 8px;">' + items + '</div>';
     }).join('');
 
-    return head + '<div style="background:#0d1220;border-radius:6px;padding:6px;max-height:340px;overflow-y:auto;">'
+    return walkerBindBanner + head + '<div style="background:#0d1220;border-radius:6px;padding:6px;max-height:340px;overflow-y:auto;">'
       + body + '</div>';
   }
 
@@ -2278,6 +2435,53 @@ function getUI() {
       _msg('✅ レシピ適用: ' + recipeKey + ' (' + r.customSlotKeys.length + 'keys)');
     } catch (e) {
       _msg('❌ レシピ適用失敗: ' + e.message);
+    }
+  };
+
+  /* 🔧 walker バインド: 主/副 を強制上書きして walker から dataSlots 再構築（AI不使用）*/
+  window.s4ApplyWalkerBind = async function(idx) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const root = document.getElementById('s4Editor') || document;
+    const pEl = root.querySelector('.s4-walker-primary[data-idx="' + idx + '"]');
+    const sEl = root.querySelector('.s4-walker-secondary[data-idx="' + idx + '"]');
+    const msgEl = root.querySelector('.s4-walker-msg[data-idx="' + idx + '"]');
+    const primary   = pEl ? pEl.value : '';
+    const secondary = sEl ? sEl.value : '';
+    if (!primary) {
+      if (msgEl) msgEl.textContent = '❌ 主 entity を選択してね';
+      return;
+    }
+    if (msgEl) msgEl.textContent = '⏳ walker バインド適用中...';
+    try {
+      const r = await fetchJson('/api/v2/walker-bind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: post.id, moduleIdx: idx, primary,
+          secondary: secondary || null,
+        }),
+      });
+      if (!r.ok) throw new Error(r.error || 'walker バインド失敗');
+      // mod 反映
+      const m = window.APP.s4.modules[idx];
+      if (m && r.mod) {
+        m.dataSlots      = r.mod.dataSlots;
+        m.mainKey        = r.mod.mainKey;
+        m.secondary      = r.mod.secondary;
+        m.siBindingLeft  = r.mod.siBindingLeft;
+        m.siBindingRight = r.mod.siBindingRight;
+        m.binding        = r.mod.binding;
+      }
+      // recipe slot キャッシュ無効化 → 再 fetch
+      delete window.APP.s4.recipeSlotsByIdx[idx];
+      await _loadRecipeSlots(idx);
+      _reloadPreview();
+      if (msgEl) msgEl.textContent = '✅ walker 適用: ' + primary + (secondary ? ' vs ' + secondary : '') + ' / ' + (r.customSlotKeys || []).length + ' slot';
+      _msg('🔧 walker バインド適用 #' + (idx + 1) + ': ' + primary + (secondary ? ' vs ' + secondary : ''));
+    } catch (e) {
+      if (msgEl) msgEl.textContent = '❌ ' + e.message;
+      _msg('❌ walker バインド失敗: ' + e.message);
     }
   };
 
