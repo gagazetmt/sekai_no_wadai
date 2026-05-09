@@ -488,9 +488,35 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
     <input type="color" id="bgBase" value="#000000" oninput="updateBgOverlay()">
   </div>
 
+  <div class="row">
+    <label>背景グラデ モード</label>
+    <select id="bgMode" onchange="updateBgMode(this.value)">
+      <option value="single">単一グラデ（全面に1つ）</option>
+      <option value="split">左右2カラム（独立グラデ）</option>
+    </select>
+    <small class="hint">split: 左右で異なる方向・色のグラデを敷ける（VS型サムネ用）</small>
+  </div>
+
+  <!-- single モード（既定）-->
   <div class="row" id="gradStopsRow">
     <label>外側グラデーション</label>
     <div id="gradStops"><!-- mountGradEditor で挿入 --></div>
+  </div>
+
+  <!-- 🆕 split モード（左右2カラム）-->
+  <div class="row" id="gradSplitRow" style="display:none;">
+    <details open class="prop-section">
+      <summary>🟦 左カラム グラデ</summary>
+      <div class="prop-body">
+        <div id="gradStopsLeft"><!-- mountGradEditor --></div>
+      </div>
+    </details>
+    <details open class="prop-section">
+      <summary>🟥 右カラム グラデ</summary>
+      <div class="prop-body">
+        <div id="gradStopsRight"><!-- mountGradEditor --></div>
+      </div>
+    </details>
   </div>
 
   <h2 style="margin-top:18px;">画像配置範囲</h2>
@@ -1026,12 +1052,32 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
 const state = {
   bg: {
     base: '#000000',
+    // 背景グラデモード（'single' = 全面1グラデ / 'split' = 左右2カラム独立 / commit 4）
+    mode: 'single',
+    // single モード設定（既存互換）
     gradType: 'none',
     gradStops: [
-      { color: '#4b4845', pos: 0 },
-      { color: '#000000', pos: 50 },
+      { color: '#4b4845', alpha: 1, pos: 0 },
+      { color: '#000000', alpha: 1, pos: 50 },
     ],
     overlayOpacity: 0.5,
+    // 🆕 split モード: 左右独立のグラデ設定
+    left: {
+      gradType: 'linear-vertical',
+      gradStops: [
+        { color: '#1e3a8a', alpha: 0.6, pos: 0 },
+        { color: '#000000', alpha: 0.9, pos: 100 },
+      ],
+      opacity: 0.7,
+    },
+    right: {
+      gradType: 'linear-vertical',
+      gradStops: [
+        { color: '#7f1d1d', alpha: 0.6, pos: 0 },
+        { color: '#000000', alpha: 0.9, pos: 100 },
+      ],
+      opacity: 0.7,
+    },
   },
   imageBoxes: [],
   selectedIbId: null,
@@ -1811,22 +1857,61 @@ function endResize() {
 // 背景：オーバーレイ（ベース色 + グラデ）
 // ────────────────────────────────────────────
 // 背景 grad editor のマウント（model = state.bg を共通インターフェイスに合わせて使う）
+//   commit 4: mode='single' / 'split' 両対応
 function renderGradStops() {
+  const mode = state.bg.mode || 'single';
+  // モード切替 UI 表示
+  const sel = document.getElementById('bgMode');
+  if (sel) sel.value = mode;
+  document.getElementById('gradStopsRow').style.display = (mode === 'single') ? 'block' : 'none';
+  document.getElementById('gradSplitRow').style.display = (mode === 'split')  ? 'block' : 'none';
+
+  // single モード grad editor
   const wrap = document.getElementById('gradStops');
-  if (!wrap) return;
-  ensureAlpha(state.bg.gradStops);
-  // mountGradEditor は { stops, gradType, opacity } を直接書き換える
-  const model = {
-    stops: state.bg.gradStops,
-    gradType: state.bg.gradType,
-    opacity: state.bg.overlayOpacity != null ? state.bg.overlayOpacity : 0.5,
-  };
-  mountGradEditor(wrap, model, () => {
-    state.bg.gradType = model.gradType;
-    state.bg.overlayOpacity = model.opacity;
-    updateBgOverlay();
-  }, { showOpacity: true });
+  if (wrap && mode === 'single') {
+    ensureAlpha(state.bg.gradStops);
+    const model = {
+      stops: state.bg.gradStops,
+      gradType: state.bg.gradType,
+      opacity: state.bg.overlayOpacity != null ? state.bg.overlayOpacity : 0.5,
+    };
+    mountGradEditor(wrap, model, () => {
+      state.bg.gradType = model.gradType;
+      state.bg.overlayOpacity = model.opacity;
+      updateBgOverlay();
+    }, { showOpacity: true });
+  }
+
+  // 🆕 split モード grad editor (左右独立)
+  if (mode === 'split') {
+    if (!state.bg.left)  state.bg.left  = { gradType: 'linear-vertical', gradStops: [{color:'#1e3a8a',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
+    if (!state.bg.right) state.bg.right = { gradType: 'linear-vertical', gradStops: [{color:'#7f1d1d',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
+    ['Left','Right'].forEach(side => {
+      const key = side.toLowerCase();
+      const el = document.getElementById('gradStops' + side);
+      if (!el) return;
+      ensureAlpha(state.bg[key].gradStops);
+      const model = {
+        stops:    state.bg[key].gradStops,
+        gradType: state.bg[key].gradType,
+        opacity:  state.bg[key].opacity != null ? state.bg[key].opacity : 0.7,
+      };
+      mountGradEditor(el, model, () => {
+        state.bg[key].gradType = model.gradType;
+        state.bg[key].opacity  = model.opacity;
+        updateBgOverlay();
+      }, { showOpacity: true });
+    });
+  }
 }
+
+// 🆕 背景モード切替（single ↔ split）
+function updateBgMode(val) {
+  state.bg.mode = (val === 'split') ? 'split' : 'single';
+  renderGradStops();
+  updateBgOverlay();
+}
+
 // 互換用: 旧コードが addGradStop を呼ぶ可能性に備える（no-op + 再描画）
 function addGradStop() {
   const last = state.bg.gradStops[state.bg.gradStops.length-1] || { color: '#000000', alpha: 1, pos: 50 };
@@ -1834,30 +1919,73 @@ function addGradStop() {
   renderGradStops();
   updateBgOverlay();
 }
+
+// 1グラデ分の linear-gradient(...) 文字列を生成（opacity を alpha に乗算済みで返す）
+function gradTypeToCssWithOpacity(type, stops, opacity) {
+  if (!type || type === 'none') return '';
+  ensureAlpha(stops);
+  const op = opacity != null ? opacity : 1;
+  const merged = stops.map(s => `${hexAlphaToRgba(s.color, (s.alpha != null ? s.alpha : 1) * op)} ${s.pos}%`).join(', ');
+  if (type === 'linear-vertical')   return `linear-gradient(180deg, ${merged})`;
+  if (type === 'linear-horizontal') return `linear-gradient(90deg, ${merged})`;
+  if (type === 'linear-diagonal')   return `linear-gradient(135deg, ${merged})`;
+  if (type === 'radial')            return `radial-gradient(ellipse at center, ${merged})`;
+  return '';
+}
+
 function updateBgOverlay() {
   const base = document.getElementById('bgBase').value;
   state.bg.base = base;
   document.getElementById('bgLayer').style.background = base;
 
-  const gradType = state.bg.gradType || 'none';
-  const op = state.bg.overlayOpacity != null ? state.bg.overlayOpacity : 0.5;
-  ensureAlpha(state.bg.gradStops);
-  const stops = stopsToCssChain(state.bg.gradStops);
-
-  let grad = '';
-  if (gradType === 'linear-vertical')   grad = `linear-gradient(180deg, ${stops})`;
-  else if (gradType === 'linear-horizontal') grad = `linear-gradient(90deg, ${stops})`;
-  else if (gradType === 'linear-diagonal')   grad = `linear-gradient(135deg, ${stops})`;
-  else if (gradType === 'radial')            grad = `radial-gradient(ellipse at center, ${stops})`;
-
   const overlay = document.getElementById('bgOverlay');
-  if (grad) {
-    overlay.style.background = grad;
-    overlay.style.opacity = op;
-    overlay.style.display = 'block';
+  const mode = state.bg.mode || 'single';
+
+  if (mode === 'single') {
+    // 既存: 全面1グラデ + overlay の opacity で alpha 制御
+    const gradType = state.bg.gradType || 'none';
+    const op = state.bg.overlayOpacity != null ? state.bg.overlayOpacity : 0.5;
+    ensureAlpha(state.bg.gradStops);
+    const stops = stopsToCssChain(state.bg.gradStops);
+    let grad = '';
+    if (gradType === 'linear-vertical')   grad = `linear-gradient(180deg, ${stops})`;
+    else if (gradType === 'linear-horizontal') grad = `linear-gradient(90deg, ${stops})`;
+    else if (gradType === 'linear-diagonal')   grad = `linear-gradient(135deg, ${stops})`;
+    else if (gradType === 'radial')            grad = `radial-gradient(ellipse at center, ${stops})`;
+    if (grad) {
+      overlay.style.backgroundImage = grad;
+      overlay.style.backgroundPosition = '';
+      overlay.style.backgroundSize = '';
+      overlay.style.backgroundRepeat = '';
+      overlay.style.opacity = op;
+      overlay.style.display = 'block';
+    } else {
+      overlay.style.backgroundImage = '';
+      overlay.style.opacity = 0;
+    }
   } else {
-    overlay.style.background = '';
-    overlay.style.opacity = 0;
+    // 🆕 split モード: 左右で別グラデを 50%/50% に並べる
+    //   左右 opacity が異なるため、alpha に乗算済みで書き出す（overlay 自体の opacity=1 固定）
+    const lImg = gradTypeToCssWithOpacity(
+      state.bg.left?.gradType,  state.bg.left?.gradStops || [],  state.bg.left?.opacity);
+    const rImg = gradTypeToCssWithOpacity(
+      state.bg.right?.gradType, state.bg.right?.gradStops || [], state.bg.right?.opacity);
+    const imgs = [];
+    const positions = [];
+    const sizes = [];
+    if (lImg) { imgs.push(lImg); positions.push('0 0');    sizes.push('50% 100%'); }
+    if (rImg) { imgs.push(rImg); positions.push('100% 0'); sizes.push('50% 100%'); }
+    if (imgs.length) {
+      overlay.style.backgroundImage = imgs.join(', ');
+      overlay.style.backgroundPosition = positions.join(', ');
+      overlay.style.backgroundSize = sizes.join(', ');
+      overlay.style.backgroundRepeat = 'no-repeat';
+      overlay.style.opacity = 1;   // alpha は stops 側で乗算済み
+      overlay.style.display = 'block';
+    } else {
+      overlay.style.backgroundImage = '';
+      overlay.style.opacity = 0;
+    }
   }
 }
 
@@ -2416,13 +2544,33 @@ function gradTypeToCss(type, stops) {
 
 function exportTemplate() {
   const lines = [];
+  const bgMode = state.bg.mode || 'single';
   lines.push('/* === 採用コード（既存テンプレ規約準拠）=== */');
   lines.push('/* 全面背景ベース */');
   lines.push(`.canvas-bg { position: absolute; inset: 0; background: ${state.bg.base}; }`);
-  if (state.bg.gradType !== 'none') {
-    const g = gradTypeToCss(state.bg.gradType, state.bg.gradStops);
-    lines.push(`/* 画像範囲外グラデ（全体に効く）*/`);
-    lines.push(`.bg-overlay { position: absolute; inset: 0; background: ${g}; opacity: ${state.bg.overlayOpacity}; pointer-events: none; }`);
+  if (bgMode === 'single') {
+    if (state.bg.gradType !== 'none') {
+      const g = gradTypeToCss(state.bg.gradType, state.bg.gradStops);
+      lines.push(`/* 画像範囲外グラデ（全体に効く）*/`);
+      lines.push(`.bg-overlay { position: absolute; inset: 0; background: ${g}; opacity: ${state.bg.overlayOpacity}; pointer-events: none; }`);
+    }
+  } else {
+    // 🆕 split モード: 左右独立グラデ（commit 4 / 2026-05-10）
+    const lImg = gradTypeToCssWithOpacity(state.bg.left?.gradType,  state.bg.left?.gradStops || [],  state.bg.left?.opacity);
+    const rImg = gradTypeToCssWithOpacity(state.bg.right?.gradType, state.bg.right?.gradStops || [], state.bg.right?.opacity);
+    const imgs = [], pos = [], sz = [];
+    if (lImg) { imgs.push(lImg); pos.push('0 0');    sz.push('50% 100%'); }
+    if (rImg) { imgs.push(rImg); pos.push('100% 0'); sz.push('50% 100%'); }
+    if (imgs.length) {
+      lines.push(`/* 画像範囲外グラデ（左右2カラム独立）*/`);
+      lines.push(`.bg-overlay {`);
+      lines.push(`  position: absolute; inset: 0; pointer-events: none;`);
+      lines.push(`  background-image: ${imgs.join(', ')};`);
+      lines.push(`  background-position: ${pos.join(', ')};`);
+      lines.push(`  background-size: ${sz.join(', ')};`);
+      lines.push(`  background-repeat: no-repeat;`);
+      lines.push(`}`);
+    }
   }
   lines.push('');
   // 画像範囲
@@ -2529,7 +2677,11 @@ function exportTemplate() {
   });
   lines.push('/* === HTML body === */');
   lines.push('<div class="canvas-bg"></div>');
-  if (state.bg.gradType !== 'none') lines.push('<div class="bg-overlay"></div>');
+  // bg-overlay 出力条件: single なら gradType, split なら左右どちらかが有効
+  const showBgOverlay = (bgMode === 'single' && state.bg.gradType !== 'none')
+    || (bgMode === 'split' && ((state.bg.left?.gradType && state.bg.left.gradType !== 'none')
+                            || (state.bg.right?.gradType && state.bg.right.gradType !== 'none')));
+  if (showBgOverlay) lines.push('<div class="bg-overlay"></div>');
   state.imageBoxes.forEach(ib => {
     lines.push(`<div class="image-box-${ib.id}">`);
     lines.push(`  <div class="ib-fill"></div>`);
@@ -2567,6 +2719,14 @@ function loadJSON() {
         Object.assign(state, obj);
         // 後方互換: 旧 stop 形式（alpha 無し）を ensureAlpha で補完
         if (state.bg && state.bg.gradStops) ensureAlpha(state.bg.gradStops);
+        // 🆕 split モード補完（commit 4）
+        if (state.bg) {
+          if (!state.bg.mode) state.bg.mode = 'single';
+          if (!state.bg.left)  state.bg.left  = { gradType: 'linear-vertical', gradStops: [{color:'#1e3a8a',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
+          if (!state.bg.right) state.bg.right = { gradType: 'linear-vertical', gradStops: [{color:'#7f1d1d',alpha:0.6,pos:0},{color:'#000000',alpha:0.9,pos:100}], opacity: 0.7 };
+          ensureAlpha(state.bg.left.gradStops);
+          ensureAlpha(state.bg.right.gradStops);
+        }
         if (Array.isArray(state.imageBoxes)) {
           state.imageBoxes.forEach(ib => { if (ib && ib.innerGrad) ensureAlpha(ib.innerGrad.stops); });
         }
