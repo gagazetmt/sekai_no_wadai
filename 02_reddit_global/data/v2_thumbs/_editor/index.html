@@ -137,13 +137,18 @@ main {
   z-index: 2;
   cursor: move;
   border: 2px dashed transparent;
+  overflow: hidden;   /* zoom > 1 時に画像が枠外にはみ出さないよう（commit 5）*/
 }
 .canvas .image-box.selected { border-color: #3b82f6; }
 .canvas .image-box .ib-fill {
-  /* 画像本体: mask 適用対象 */
+  /* 画像本体: mask 適用対象。
+     枠（image-box）はドラッグ・リサイズで変わるが、画像のズーム/位置は
+     imgZoom/imgX/imgY で独立制御（commit 5 / 2026-05-10）*/
   position: absolute; inset: 0;
   background-size: cover;
   background-position: center;
+  transform-origin: center center;
+  will-change: transform;
 }
 .canvas .image-box .ib-inner-overlay {
   /* 画像範囲内に効くグラデ（box 内のみ表示）*/
@@ -631,9 +636,38 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
       </div>
     </details>
 
+    <!-- 🆕 画像の zoom / pan（枠と独立 / commit 5）-->
+    <details open class="prop-section">
+      <summary>🔍 画像のズーム / 位置（枠とは独立）</summary>
+      <div class="prop-body">
+        <small class="hint" style="margin-bottom:8px;display:block;">枠（image-box）の位置・サイズはドラッグで変更しても、ここで設定した画像のズーム / 位置は <b>そのまま保持</b>されます。</small>
+        <div class="row">
+          <label>ズーム (1.0 = 等倍 / 2.0 = 2倍 / 0.5 = 引き)</label>
+          <div class="inline">
+            <input type="range" id="ibImgZoom" min="0.3" max="3" step="0.05" value="1" oninput="updateIb('imgZoom', this.value)">
+            <input type="number" id="ibImgZoomVal" min="0.3" max="3" step="0.05" value="1" oninput="updateIb('imgZoom', this.value)" style="width:55px;">
+          </div>
+        </div>
+        <div class="row">
+          <label>X オフセット (%)</label>
+          <div class="inline">
+            <input type="range" id="ibImgX" min="-50" max="50" step="1" value="0" oninput="updateIb('imgX', this.value)">
+            <input type="number" id="ibImgXVal" min="-50" max="50" step="1" value="0" oninput="updateIb('imgX', this.value)" style="width:55px;">
+          </div>
+        </div>
+        <div class="row">
+          <label>Y オフセット (%) — 顔を上半分に寄せたいときマイナス</label>
+          <div class="inline">
+            <input type="range" id="ibImgY" min="-50" max="50" step="1" value="-28" oninput="updateIb('imgY', this.value)">
+            <input type="number" id="ibImgYVal" min="-50" max="50" step="1" value="-28" oninput="updateIb('imgY', this.value)" style="width:55px;">
+          </div>
+        </div>
+      </div>
+    </details>
+
     <!-- 📐 配置（手動 - 通常はドラッグで調整するので折りたたみ既定）-->
     <details class="prop-section">
-      <summary>📐 配置（数値で微調整）</summary>
+      <summary>📐 枠の配置（数値で微調整）</summary>
       <div class="prop-body">
         <div class="row">
           <label>位置 X (%) → Y (%)</label>
@@ -652,9 +686,9 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
           <small class="hint">通常は枠の角ハンドルでリサイズ</small>
         </div>
         <div class="row">
-          <label>画像位置 background-position</label>
+          <label>📦 旧 background-position（互換用）</label>
           <input type="text" id="ibBgPos" placeholder="例: center 22%" value="center 22%" oninput="updateIb('bgPos', this.value)">
-          <small class="hint">center / top / 50% 25% など。被写体を画面に収める用（commit 5 で zoom/pan 専用UI予定）</small>
+          <small class="hint">非推奨：上の zoom / X / Y で代用。旧 JSON 互換のため残置</small>
         </div>
       </div>
     </details>
@@ -1320,7 +1354,11 @@ function addImageBox(url = '') {
     url: url || '',
     x: 4, y: 5,
     w: 44, h: 80,
-    bgPos: 'center 22%',
+    bgPos: 'center 22%',          // 互換用: 旧テンプレ向け
+    // 🆕 画像のズーム/位置（枠と独立 / commit 5）
+    imgZoom: 1.0,                 // 1.0 = cover 等倍、2.0 = 2倍ズーム、0.5 = 引き
+    imgX: 0,                      // X オフセット (-50〜50%)
+    imgY: -28,                    // Y オフセット (-50〜50%) / "center 22%" 由来 = 22-50 = -28
     contrast: 1, brightness: 1,
     mask: 'ellipse',
     innerGrad: {
@@ -1431,10 +1469,15 @@ function applyIbStyle(el, ib) {
   // mask クラス再設定
   el.className = el.className.replace(/\bmask-[\w-]+\b/g, '');
   el.classList.add('mask-' + ib.mask);
-  // 画像
+  // 画像（枠と独立した zoom / pan）
   const fill = el.querySelector('.ib-fill');
   fill.style.backgroundImage = ib.url ? `url('${ib.url}')` : '';
-  fill.style.backgroundPosition = ib.bgPos || 'center';
+  // 🆕 imgX/imgY は中心 (50%, 50%) からのオフセット (-50〜50%)
+  const imgX = ib.imgX != null ? ib.imgX : 0;
+  const imgY = ib.imgY != null ? ib.imgY : 0;
+  const imgZoom = ib.imgZoom != null ? ib.imgZoom : 1;
+  fill.style.backgroundPosition = `${50 + imgX}% ${50 + imgY}%`;
+  fill.style.transform = (imgZoom !== 1) ? `scale(${imgZoom})` : '';
   fill.style.filter = `contrast(${ib.contrast}) brightness(${ib.brightness})`;
   // 範囲内グラデ（rgba 対応）
   const ov = el.querySelector('.ib-inner-overlay');
@@ -1465,13 +1508,36 @@ function renderIbList() {
 function updateIb(key, val) {
   const ib = getSelectedIb();
   if (!ib) return;
-  if (['x','y','w','h','contrast','brightness'].includes(key)) ib[key] = parseFloat(val);
+  if (['x','y','w','h','contrast','brightness','imgZoom','imgX','imgY'].includes(key)) ib[key] = parseFloat(val);
   else ib[key] = val;
   const valId = 'ib' + key.charAt(0).toUpperCase() + key.slice(1) + 'Val';
   const valEl = document.getElementById(valId);
   if (valEl) valEl.value = ib[key];
+  // ibImgZoom 等は ImgZoomVal という形式なので別 id 体系
+  const altValEl = document.getElementById('ib' + key.charAt(0).toUpperCase() + key.slice(1) + 'Val');
+  if (altValEl && altValEl.value != ib[key]) altValEl.value = ib[key];
   applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
   renderIbList();
+}
+
+// 旧 background-position 文字列を { x, y } オフセット (%) に変換（commit 5 マイグレーション）
+//   "center 22%" → { x: 0, y: -28 }   ※ 22 - 50 = -28
+//   "50% 50%"     → { x: 0, y: 0 }
+//   "top"         → { x: 0, y: -50 }
+function parseBgPosToXY(bgPos) {
+  if (!bgPos || bgPos === 'center' || bgPos === 'center center') return { x: 0, y: 0 };
+  const parts = String(bgPos).trim().split(/\s+/);
+  const toOff = s => {
+    if (s === 'center') return 0;
+    if (s === 'top' || s === 'left')    return -50;
+    if (s === 'bottom' || s === 'right') return 50;
+    const m = s.match(/(-?\d+(?:\.\d+)?)%/);
+    if (m) return parseFloat(m[1]) - 50;
+    return 0;
+  };
+  const x = parts[0] ? toOff(parts[0]) : 0;
+  const y = parts[1] ? toOff(parts[1]) : 0;
+  return { x, y };
 }
 
 // 互換用（旧 onchange 呼び出しに備えて残す）
@@ -1537,6 +1603,20 @@ function loadIbProps() {
   document.getElementById('ibW').value = ib.w;
   document.getElementById('ibH').value = ib.h;
   document.getElementById('ibBgPos').value = ib.bgPos || 'center';
+  // 🆕 画像 zoom / pan（commit 5）
+  if (ib.imgZoom == null) ib.imgZoom = 1;
+  if (ib.imgX    == null) ib.imgX = 0;
+  if (ib.imgY    == null) {
+    const xy = parseBgPosToXY(ib.bgPos);
+    ib.imgY = xy.y;
+    ib.imgX = xy.x;
+  }
+  document.getElementById('ibImgZoom').value    = ib.imgZoom;
+  document.getElementById('ibImgZoomVal').value = ib.imgZoom;
+  document.getElementById('ibImgX').value       = ib.imgX;
+  document.getElementById('ibImgXVal').value    = ib.imgX;
+  document.getElementById('ibImgY').value       = ib.imgY;
+  document.getElementById('ibImgYVal').value    = ib.imgY;
   document.getElementById('ibContrast').value = ib.contrast;
   document.getElementById('ibContrastVal').value = ib.contrast;
   document.getElementById('ibBrightness').value = ib.brightness;
@@ -2606,12 +2686,21 @@ function exportTemplate() {
     lines.push(`  position: absolute;`);
     lines.push(`  left: ${ib.x}%; top: ${ib.y}%;`);
     lines.push(`  width: ${ib.w}%; height: ${ib.h}%;`);
+    lines.push(`  overflow: hidden;`);   // zoom > 1 時に枠外にはみ出さないため (commit 5)
     lines.push(`}`);
     lines.push(`.image-box-${ib.id} .ib-fill {`);
     lines.push(`  position: absolute; inset: 0;`);
     if (ib.url) lines.push(`  background-image: url('${ib.url}');`);
     lines.push(`  background-size: cover;`);
-    lines.push(`  background-position: ${ib.bgPos || 'center'};`);
+    // 🆕 画像 zoom / pan（枠と独立 / commit 5）
+    const _imgX = ib.imgX != null ? ib.imgX : 0;
+    const _imgY = ib.imgY != null ? ib.imgY : 0;
+    const _imgZoom = ib.imgZoom != null ? ib.imgZoom : 1;
+    lines.push(`  background-position: ${50 + _imgX}% ${50 + _imgY}%;`);
+    if (_imgZoom !== 1) {
+      lines.push(`  transform: scale(${_imgZoom});`);
+      lines.push(`  transform-origin: center center;`);
+    }
     lines.push(`  filter: contrast(${ib.contrast}) brightness(${ib.brightness});`);
     if (ib.mask === 'ellipse') {
       lines.push(`  -webkit-mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);`);
@@ -2745,6 +2834,18 @@ function loadJSON() {
         Object.assign(state, obj);
         // 後方互換: 旧 stop 形式（alpha 無し）を ensureAlpha で補完
         if (state.bg && state.bg.gradStops) ensureAlpha(state.bg.gradStops);
+        // 🆕 imageBox の imgZoom/imgX/imgY マイグレーション（commit 5）
+        if (Array.isArray(state.imageBoxes)) {
+          state.imageBoxes.forEach(ib => {
+            if (!ib) return;
+            if (ib.imgZoom == null) ib.imgZoom = 1;
+            if (ib.imgX == null || ib.imgY == null) {
+              const xy = parseBgPosToXY(ib.bgPos);
+              if (ib.imgX == null) ib.imgX = xy.x;
+              if (ib.imgY == null) ib.imgY = xy.y;
+            }
+          });
+        }
         // 🆕 split モード補完（commit 4）
         if (state.bg) {
           if (!state.bg.mode) state.bg.mode = 'single';
