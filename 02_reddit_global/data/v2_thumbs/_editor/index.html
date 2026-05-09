@@ -506,70 +506,88 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
   <div id="ibProps" style="display:none;">
     <h2>画像範囲プロパティ</h2>
 
-    <div class="row">
-      <label>画像ファイルを選択</label>
-      <input type="file" id="ibFile" accept="image/*" onchange="loadIbFile(this)" style="font-size:11px;">
-      <small class="hint">ローカル PNG / JPG をアップロード（その場で base64 化）</small>
-    </div>
-
-    <div class="row">
-      <label>または 画像 URL</label>
-      <input type="text" id="ibUrl" placeholder="/path/to/image.png" oninput="updateIb('url', this.value)">
-    </div>
-
-    <div class="row">
-      <label>位置 X (%) → Y (%)</label>
-      <div class="inline">
-        <input type="number" id="ibX" min="0" max="100" step="0.5" oninput="updateIb('x', this.value)">
-        <input type="number" id="ibY" min="0" max="100" step="0.5" oninput="updateIb('y', this.value)">
+    <!-- 🖼️ 画像 -->
+    <details open class="prop-section">
+      <summary>🖼️ 画像</summary>
+      <div class="prop-body">
+        <div class="row">
+          <label>画像ファイルを選択</label>
+          <input type="file" id="ibFile" accept="image/*" onchange="loadIbFile(this)" style="font-size:11px;">
+          <small class="hint">ローカル PNG / JPG をアップロード（その場で base64 化）</small>
+        </div>
+        <div class="row">
+          <label>または 画像 URL</label>
+          <input type="text" id="ibUrl" placeholder="/path/to/image.png" oninput="updateIb('url', this.value)">
+        </div>
       </div>
-      <small class="hint">ドラッグでも位置調整可</small>
-    </div>
+    </details>
 
-    <div class="row">
-      <label>サイズ W (%) → H (%)</label>
-      <div class="inline">
-        <input type="number" id="ibW" min="5" max="100" step="0.5" oninput="updateIb('w', this.value)">
-        <input type="number" id="ibH" min="5" max="100" step="0.5" oninput="updateIb('h', this.value)">
+    <!-- 🎨 見え方（contrast/brightness/mask）-->
+    <details open class="prop-section">
+      <summary>🎨 見え方</summary>
+      <div class="prop-body">
+        <div class="row">
+          <label>contrast</label>
+          <div class="inline">
+            <input type="range" id="ibContrast" min="0.5" max="2" step="0.05" value="1" oninput="updateIb('contrast', this.value)">
+            <input type="number" id="ibContrastVal" value="1" step="0.05" oninput="document.getElementById('ibContrast').value=this.value;updateIb('contrast', this.value)">
+          </div>
+        </div>
+        <div class="row">
+          <label>brightness</label>
+          <div class="inline">
+            <input type="range" id="ibBrightness" min="0.3" max="1.5" step="0.05" value="1" oninput="updateIb('brightness', this.value)">
+            <input type="number" id="ibBrightnessVal" value="1" step="0.05" oninput="document.getElementById('ibBrightness').value=this.value;updateIb('brightness', this.value)">
+          </div>
+        </div>
+        <div class="row">
+          <label>マスク（範囲の形）</label>
+          <select id="ibMask" onchange="updateIb('mask', this.value)">
+            <option value="none">矩形（なし）</option>
+            <option value="ellipse">楕円フェード（推奨）</option>
+            <option value="fade-edges">四方フェード</option>
+            <option value="fade-tb">上下フェード</option>
+            <option value="fade-lr">左右フェード</option>
+          </select>
+        </div>
       </div>
-    </div>
+    </details>
 
-    <div class="row">
-      <label>画像位置 background-position</label>
-      <input type="text" id="ibBgPos" placeholder="例: center 22%" value="center 22%" oninput="updateIb('bgPos', this.value)">
-      <small class="hint">center / top / 50% 25% など。被写体を画面に収める用</small>
-    </div>
-
-    <div class="row">
-      <label>contrast</label>
-      <div class="inline">
-        <input type="range" id="ibContrast" min="0.5" max="2" step="0.05" value="1" oninput="updateIb('contrast', this.value)">
-        <input type="number" id="ibContrastVal" value="1" step="0.05" oninput="document.getElementById('ibContrast').value=this.value;updateIb('contrast', this.value)">
+    <!-- 🌈 範囲内グラデ -->
+    <details open class="prop-section">
+      <summary>🌈 範囲内グラデ（画像の上に重ねる）</summary>
+      <div class="prop-body">
+        <div id="ibInnerStops"><!-- mountGradEditor で挿入 --></div>
       </div>
-    </div>
-    <div class="row">
-      <label>brightness</label>
-      <div class="inline">
-        <input type="range" id="ibBrightness" min="0.3" max="1.5" step="0.05" value="1" oninput="updateIb('brightness', this.value)">
-        <input type="number" id="ibBrightnessVal" value="1" step="0.05" oninput="document.getElementById('ibBrightness').value=this.value;updateIb('brightness', this.value)">
+    </details>
+
+    <!-- 📐 配置（手動 - 通常はドラッグで調整するので折りたたみ既定）-->
+    <details class="prop-section">
+      <summary>📐 配置（数値で微調整）</summary>
+      <div class="prop-body">
+        <div class="row">
+          <label>位置 X (%) → Y (%)</label>
+          <div class="inline">
+            <input type="number" id="ibX" min="0" max="100" step="0.5" oninput="updateIb('x', this.value)">
+            <input type="number" id="ibY" min="0" max="100" step="0.5" oninput="updateIb('y', this.value)">
+          </div>
+          <small class="hint">通常はキャンバス上でドラッグ。数値は微調整用</small>
+        </div>
+        <div class="row">
+          <label>サイズ W (%) → H (%)</label>
+          <div class="inline">
+            <input type="number" id="ibW" min="5" max="100" step="0.5" oninput="updateIb('w', this.value)">
+            <input type="number" id="ibH" min="5" max="100" step="0.5" oninput="updateIb('h', this.value)">
+          </div>
+          <small class="hint">通常は枠の角ハンドルでリサイズ</small>
+        </div>
+        <div class="row">
+          <label>画像位置 background-position</label>
+          <input type="text" id="ibBgPos" placeholder="例: center 22%" value="center 22%" oninput="updateIb('bgPos', this.value)">
+          <small class="hint">center / top / 50% 25% など。被写体を画面に収める用（commit 5 で zoom/pan 専用UI予定）</small>
+        </div>
       </div>
-    </div>
-
-    <div class="row">
-      <label>マスク（範囲の形）</label>
-      <select id="ibMask" onchange="updateIb('mask', this.value)">
-        <option value="none">矩形（なし）</option>
-        <option value="ellipse">楕円フェード（推奨）</option>
-        <option value="fade-edges">四方フェード</option>
-        <option value="fade-tb">上下フェード</option>
-        <option value="fade-lr">左右フェード</option>
-      </select>
-    </div>
-
-    <h2 style="margin-top:18px;">範囲内グラデ（画像の上に重ねる）</h2>
-    <div class="row">
-      <div id="ibInnerStops"><!-- mountGradEditor で挿入 --></div>
-    </div>
+    </details>
 
     <div class="row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:18px;">
       <button class="danger" style="width:100%;" onclick="deleteSelectedIb()">🗑️ この画像範囲を削除</button>
