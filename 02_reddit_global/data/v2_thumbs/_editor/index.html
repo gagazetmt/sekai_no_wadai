@@ -1,0 +1,2057 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>サムネエディター - 5分でサッカー分析</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- 太文字が映える Web Font プリロード -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Black+Han+Sans&family=Bowlby+One+SC&family=Bungee&family=Bungee+Inline&family=Cinzel:wght@400;700;900&family=Cormorant+Garamond:wght@500;700&family=DM+Serif+Display&family=EB+Garamond:wght@500;700&family=Playfair+Display:wght@700;900&family=Noto+Sans+JP:wght@100;300;500;700;900&family=Noto+Serif+JP:wght@500;700;900&family=RocknRoll+One&family=Reggae+One&family=Yusei+Magic&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --panel: #161b2e;
+  --border: #2a3050;
+  --text: #f1f5ff;
+  --muted: #8a9aba;
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 320px 1fr 340px;
+  grid-template-rows: 48px 1fr;
+}
+header {
+  grid-column: 1 / -1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 16px;
+}
+header h1 { color: var(--accent); font-size: 14px; letter-spacing: 1px; }
+header .actions { margin-left: auto; display: flex; gap: 8px; }
+button {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 700; }
+button.primary:hover { background: var(--accent-hover); }
+button.danger:hover { border-color: #ef4444; color: #ef4444; }
+
+aside {
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 16px;
+  border-right: 1px solid var(--border);
+}
+aside.right { border-right: 0; border-left: 1px solid var(--border); }
+aside h2 {
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.row { margin-bottom: 12px; }
+.row label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.row input, .row select, .row textarea {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+.row textarea { resize: vertical; min-height: 50px; }
+.row input[type=color] { padding: 2px; height: 32px; }
+.row input[type=range] { padding: 0; }
+.row .inline { display: flex; gap: 4px; align-items: center; }
+.row .inline input[type=number] { width: 70px; }
+.row .inline input[type=range] { flex: 1; }
+.bg-presets { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.bg-presets button {
+  padding: 6px 4px; font-size: 10px;
+}
+.preset-active { background: rgba(245,158,11,0.2) !important; border-color: var(--accent) !important; }
+
+main {
+  background: #050810;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 30px;
+}
+.canvas-wrap {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  background: #000;
+  box-shadow: 0 12px 60px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+  transform-origin: center;
+  flex-shrink: 0;
+}
+.canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+/* 背景レイヤー */
+.canvas .bg-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.canvas .bg-overlay {
+  /* 画像範囲外（全体）に効くグラデ */
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+/* 画像配置範囲：複数配置可能の単体オブジェクト */
+.canvas .image-box {
+  position: absolute;
+  z-index: 2;
+  cursor: move;
+  border: 2px dashed transparent;
+}
+.canvas .image-box.selected { border-color: #3b82f6; }
+.canvas .image-box .ib-fill {
+  /* 画像本体: mask 適用対象 */
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.canvas .image-box .ib-inner-overlay {
+  /* 画像範囲内に効くグラデ（box 内のみ表示）*/
+  position: absolute; inset: 0;
+  pointer-events: none;
+}
+.canvas .image-box .ib-label {
+  position: absolute;
+  top: -22px; left: 0;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-family: -apple-system, sans-serif;
+  letter-spacing: 0;
+  white-space: nowrap;
+  display: none;
+}
+.canvas .image-box.selected .ib-label { display: block; }
+/* mask 種類 */
+.image-box.mask-none .ib-fill {
+  -webkit-mask-image: none; mask-image: none;
+}
+.image-box.mask-ellipse .ib-fill {
+  -webkit-mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);
+          mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.image-box.mask-fade-edges .ib-fill {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%),
+                      linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+          mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%),
+                      linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  -webkit-mask-composite: source-in;
+          mask-composite: intersect;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.image-box.mask-fade-tb .ib-fill {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%);
+          mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%);
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+.image-box.mask-fade-lr .ib-fill {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%);
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+}
+/* テキスト要素 */
+.tb {
+  position: absolute;
+  cursor: move;
+  user-select: none;
+  border: 2px dashed transparent;
+  z-index: 10;
+  padding: 4px 6px;
+  white-space: pre-wrap;
+}
+.tb.selected { border-color: var(--accent); }
+.tb-label {
+  position: absolute;
+  top: -22px;
+  left: 0;
+  background: var(--accent);
+  color: #000;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-family: -apple-system, sans-serif;
+  letter-spacing: 0;
+  white-space: nowrap;
+  display: none;
+}
+.tb.selected .tb-label { display: block; }
+
+/* リサイズハンドル（選択時のみ表示）*/
+.resize-handle {
+  position: absolute;
+  right: -10px; bottom: -10px;
+  width: 18px; height: 18px;
+  background: var(--accent);
+  border: 2px solid #000;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  z-index: 100;
+  display: none;
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.3);
+}
+.tb.selected .resize-handle,
+.image-box.selected .resize-handle { display: block; }
+.image-box.selected .resize-handle { background: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
+
+.tb-list { display: flex; flex-direction: column; gap: 4px; }
+.tb-list .tb-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.tb-list .tb-item:hover { border-color: var(--accent); }
+.tb-list .tb-item.active { background: rgba(245,158,11,0.15); border-color: var(--accent); }
+.tb-list .tb-item .del { color: #ef4444; cursor: pointer; padding: 0 4px; }
+
+.code-output {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 10px;
+  color: #a8c5f0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.zoom-controls {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+}
+.zoom-controls button { padding: 2px 8px; }
+
+.gradient-stops { display: flex; flex-direction: column; gap: 4px; }
+.gradient-stop { display: flex; gap: 4px; align-items: center; }
+.gradient-stop input[type=color] { width: 40px; height: 24px; }
+.gradient-stop input[type=number] { width: 50px; }
+
+/* ───── grad editor v2（rgba 対応 / インタラクティブハンドル / 2026-05-10）───── */
+.grad-editor { padding: 6px 0; }
+.grad-editor .ge-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.grad-editor .ge-label { font-size: 10px; color: var(--muted); margin-right: 4px; }
+
+.ge-dir-btns { display: grid; grid-template-columns: repeat(5, 28px); gap: 3px; }
+.ge-dir-btn {
+  width: 28px; height: 28px; padding: 0;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); cursor: pointer; border-radius: 4px;
+  font-size: 13px; line-height: 1; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+}
+.ge-dir-btn.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.ge-dir-btn:hover { border-color: var(--accent); }
+
+.ge-bar-wrap {
+  position: relative;
+  height: 32px; padding-top: 16px; padding-bottom: 14px;
+  margin-bottom: 6px;
+}
+.ge-bar {
+  position: relative; height: 32px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background-color: transparent;
+  background-image:
+    linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
+    linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  cursor: copy;
+  overflow: visible;
+}
+.ge-bar-grad {
+  position: absolute; inset: 0;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.ge-handle {
+  position: absolute; top: -10px;
+  width: 14px; height: 50px;
+  margin-left: -7px;
+  cursor: grab;
+  z-index: 2;
+}
+.ge-handle::before {
+  content: '';
+  position: absolute; top: 0; left: 0;
+  width: 14px; height: 14px;
+  border: 2px solid #fff;
+  background: var(--handle-bg, #000);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+.ge-handle::after {
+  content: '';
+  position: absolute; top: 14px; left: 6px;
+  width: 2px; height: 36px;
+  background: rgba(255,255,255,0.5);
+}
+.ge-handle.selected::before {
+  border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245,158,11,0.5);
+}
+.ge-handle:active { cursor: grabbing; }
+
+.ge-stop-row {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  padding: 7px 9px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; font-size: 11px; margin-bottom: 6px;
+}
+.ge-stop-row .ge-label { font-size: 10px; color: var(--muted); margin-right: 0; }
+.ge-stop-row input[type=color] { width: 32px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 3px; cursor: pointer; }
+.ge-stop-row input[type=range].ge-stop-alpha { flex: 1; min-width: 70px; }
+.ge-stop-row input[type=number] { width: 50px; }
+.ge-stop-row button.ge-stop-del {
+  background: var(--bg); border: 1px solid var(--border); color: var(--text);
+  padding: 4px 9px; border-radius: 3px; cursor: pointer;
+}
+.ge-stop-row button.ge-stop-del:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+.ge-bar-wrap.empty .ge-bar-grad { background: transparent; }
+.ge-empty-hint { font-size: 10px; color: var(--muted); padding: 4px 0; font-style: italic; }
+.ge-opacity-row { display: flex; gap: 6px; align-items: center; padding: 4px 0; }
+.ge-opacity-row input[type=range] { flex: 1; }
+.ge-opacity-row input[type=number] { width: 50px; }
+
+small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<!-- SVG filter（ザラザラ・コーティング感の質感）─ display:none で見せず、filter url() 参照のみ ── -->
+<svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden;" aria-hidden="true">
+  <defs>
+    <filter id="grain-soft" x="-2%" y="-2%" width="104%" height="104%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3" />
+      <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0" result="noise" />
+      <feComposite in="noise" in2="SourceGraphic" operator="in" result="cutout" />
+      <feMerge>
+        <feMergeNode in="SourceGraphic" />
+        <feMergeNode in="cutout" />
+      </feMerge>
+    </filter>
+    <filter id="grain-strong" x="-2%" y="-2%" width="104%" height="104%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="5" />
+      <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.32 0" result="noise" />
+      <feComposite in="noise" in2="SourceGraphic" operator="in" result="cutout" />
+      <feMerge>
+        <feMergeNode in="SourceGraphic" />
+        <feMergeNode in="cutout" />
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<header>
+  <h1>🎨 サムネエディター</h1>
+  <span style="color:var(--muted);font-size:11px;">1280×720 / WYSIWYG</span>
+  <div class="actions">
+    <button onclick="exportPNG()">💾 PNG</button>
+    <button onclick="exportTemplate()">📋 テンプレコード</button>
+    <button class="primary" onclick="saveJSON()">⭐ 保存</button>
+    <button onclick="loadJSON()">📂 読込</button>
+  </div>
+</header>
+
+<!-- 左サイドバー：背景・画像範囲・テキスト追加 -->
+<aside>
+  <h2>背景（画像範囲外）</h2>
+
+  <div class="row">
+    <label>ベースカラー（全面）</label>
+    <input type="color" id="bgBase" value="#000000" oninput="updateBgOverlay()">
+  </div>
+
+  <div class="row" id="gradStopsRow">
+    <label>外側グラデーション</label>
+    <div id="gradStops"><!-- mountGradEditor で挿入 --></div>
+  </div>
+
+  <h2 style="margin-top:18px;">画像配置範囲</h2>
+  <div class="row">
+    <button class="primary" style="width:100%;" onclick="addImageBox()">+ 画像範囲追加</button>
+    <small class="hint">複数追加可（VS型2人並べ等）。画像は右パネルから設定</small>
+  </div>
+  <div class="tb-list" id="ibList">
+    <!-- JS で挿入 -->
+  </div>
+
+  <h2 style="margin-top:18px;">テキストボックス</h2>
+
+  <div class="row">
+    <button class="primary" style="width:100%;" onclick="addText()">+ テキスト追加</button>
+  </div>
+
+  <div class="tb-list" id="tbList">
+    <!-- JS で挿入 -->
+  </div>
+</aside>
+
+<!-- 中央：キャンバス -->
+<main>
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="canvas" id="canvas">
+      <div class="bg-layer" id="bgLayer"></div>
+      <div class="bg-overlay" id="bgOverlay"></div>
+      <!-- 画像範囲・テキスト要素は JS で追加 -->
+    </div>
+  </div>
+</main>
+
+<!-- 右サイドバー：選択中要素のプロパティ -->
+<aside class="right">
+
+  <!-- 画像範囲プロパティ -->
+  <div id="ibProps" style="display:none;">
+    <h2>画像範囲プロパティ</h2>
+
+    <div class="row">
+      <label>画像ファイルを選択</label>
+      <input type="file" id="ibFile" accept="image/*" onchange="loadIbFile(this)" style="font-size:11px;">
+      <small class="hint">ローカル PNG / JPG をアップロード（その場で base64 化）</small>
+    </div>
+
+    <div class="row">
+      <label>または 画像 URL</label>
+      <input type="text" id="ibUrl" placeholder="/path/to/image.png" oninput="updateIb('url', this.value)">
+    </div>
+
+    <div class="row">
+      <label>位置 X (%) → Y (%)</label>
+      <div class="inline">
+        <input type="number" id="ibX" min="0" max="100" step="0.5" oninput="updateIb('x', this.value)">
+        <input type="number" id="ibY" min="0" max="100" step="0.5" oninput="updateIb('y', this.value)">
+      </div>
+      <small class="hint">ドラッグでも位置調整可</small>
+    </div>
+
+    <div class="row">
+      <label>サイズ W (%) → H (%)</label>
+      <div class="inline">
+        <input type="number" id="ibW" min="5" max="100" step="0.5" oninput="updateIb('w', this.value)">
+        <input type="number" id="ibH" min="5" max="100" step="0.5" oninput="updateIb('h', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>画像位置 background-position</label>
+      <input type="text" id="ibBgPos" placeholder="例: center 22%" value="center 22%" oninput="updateIb('bgPos', this.value)">
+      <small class="hint">center / top / 50% 25% など。被写体を画面に収める用</small>
+    </div>
+
+    <div class="row">
+      <label>contrast</label>
+      <div class="inline">
+        <input type="range" id="ibContrast" min="0.5" max="2" step="0.05" value="1" oninput="updateIb('contrast', this.value)">
+        <input type="number" id="ibContrastVal" value="1" step="0.05" oninput="document.getElementById('ibContrast').value=this.value;updateIb('contrast', this.value)">
+      </div>
+    </div>
+    <div class="row">
+      <label>brightness</label>
+      <div class="inline">
+        <input type="range" id="ibBrightness" min="0.3" max="1.5" step="0.05" value="1" oninput="updateIb('brightness', this.value)">
+        <input type="number" id="ibBrightnessVal" value="1" step="0.05" oninput="document.getElementById('ibBrightness').value=this.value;updateIb('brightness', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>マスク（範囲の形）</label>
+      <select id="ibMask" onchange="updateIb('mask', this.value)">
+        <option value="none">矩形（なし）</option>
+        <option value="ellipse">楕円フェード（推奨）</option>
+        <option value="fade-edges">四方フェード</option>
+        <option value="fade-tb">上下フェード</option>
+        <option value="fade-lr">左右フェード</option>
+      </select>
+    </div>
+
+    <h2 style="margin-top:18px;">範囲内グラデ（画像の上に重ねる）</h2>
+    <div class="row">
+      <div id="ibInnerStops"><!-- mountGradEditor で挿入 --></div>
+    </div>
+
+    <div class="row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:18px;">
+      <button class="danger" style="width:100%;" onclick="deleteSelectedIb()">🗑️ この画像範囲を削除</button>
+    </div>
+  </div>
+
+  <!-- テキストプロパティ -->
+  <h2 id="propsHeader">テキストプロパティ</h2>
+  <div id="propsEmpty" style="color:var(--muted);font-size:12px;">テキストを選択するか、+ テキスト追加 から始めてください</div>
+  <div id="props" style="display:none;">
+
+    <div class="row">
+      <label>テキスト内容（改行は <code>Enter</code>）</label>
+      <textarea id="pText" oninput="updateProp('text', this.value)"></textarea>
+    </div>
+
+    <div class="row">
+      <label>位置 X (%) → Y (%)</label>
+      <div class="inline">
+        <input type="number" id="pX" min="0" max="100" step="0.5" oninput="updateProp('x', this.value)">
+        <input type="number" id="pY" min="0" max="100" step="0.5" oninput="updateProp('y', this.value)">
+      </div>
+      <small class="hint">ドラッグでも位置調整可</small>
+    </div>
+
+    <div class="row">
+      <label>折り返し</label>
+      <select id="pWrap" onchange="updateProp('wrap', this.value)">
+        <option value="normal">自動折り返し（max-width で制限）</option>
+        <option value="nowrap">手動改行のみ（Enter で改行 / 自動折り返しなし）</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>幅 (%) - max-width 制限（折り返しありの時のみ有効）</label>
+      <div class="inline">
+        <input type="range" id="pWidth" min="10" max="200" step="1" value="80" oninput="updateProp('width', this.value)">
+        <input type="number" id="pWidthVal" min="10" max="200" step="1" value="80" oninput="document.getElementById('pWidth').value=this.value;updateProp('width', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>テキスト揃え</label>
+      <select id="pAlign" onchange="updateProp('align', this.value)">
+        <option value="left">左</option>
+        <option value="center">中央</option>
+        <option value="right">右</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>フォントサイズ (px)</label>
+      <div class="inline">
+        <input type="range" id="pSize" min="10" max="400" step="2" value="100" oninput="updateProp('size', this.value)">
+        <input type="number" id="pSizeVal" min="10" max="400" step="2" value="100" oninput="document.getElementById('pSize').value=this.value;updateProp('size', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>フォントウェイト</label>
+      <select id="pWeight" onchange="updateProp('weight', this.value)">
+        <option value="100">100 Thin</option>
+        <option value="300">300 Light</option>
+        <option value="400">400 Normal</option>
+        <option value="500">500 Medium</option>
+        <option value="700">700 Bold</option>
+        <option value="900">900 Black（CSS 標準上限）</option>
+        <option value="1000">1000 Ultra+ (variable)</option>
+        <option value="1200">1200 (variable)</option>
+        <option value="1400">1400 (variable)</option>
+        <option value="1600">1600 (variable)</option>
+        <option value="1800">1800 Max (variable)</option>
+      </select>
+      <small class="hint">※ 1000+ は variable font 対応書体のみ反映。900で足りない場合は <b>「極太書体」</b> や <b>text-stroke</b> で太く見せる</small>
+    </div>
+
+    <div class="row">
+      <label>書体</label>
+      <select id="pFamily" onchange="updateProp('family', this.value)">
+        <optgroup label="🔥 極太（日本語ハマる）">
+          <option value="'Black Han Sans', 'Hiragino Kaku Gothic ProN', sans-serif">Black Han Sans 極太</option>
+          <option value="'Reggae One', 'Hiragino Kaku Gothic ProN', sans-serif">Reggae One 極太筆風</option>
+          <option value="'RocknRoll One', 'Hiragino Kaku Gothic ProN', sans-serif">RocknRoll One 極太丸</option>
+          <option value="'Bowlby One SC', 'Arial Black', sans-serif">Bowlby One 極太角</option>
+          <option value="Bungee, 'Arial Black', sans-serif">Bungee 角張り</option>
+          <option value="'Bungee Inline', 'Arial Black', sans-serif">Bungee Inline 縁取り</option>
+        </optgroup>
+        <optgroup label="日本語ゴシック">
+          <option value="'Hiragino Kaku Gothic ProN', sans-serif">Hiragino Kaku</option>
+          <option value="'Yu Gothic', sans-serif">Yu Gothic</option>
+          <option value="'Noto Sans JP', sans-serif">Noto Sans JP</option>
+          <option value="'Meiryo', sans-serif">Meiryo</option>
+          <option value="'Yusei Magic', 'Hiragino Kaku Gothic ProN', sans-serif">Yusei Magic 手書風</option>
+        </optgroup>
+        <optgroup label="日本語明朝">
+          <option value="'Hiragino Mincho ProN', serif">Hiragino Mincho</option>
+          <option value="'Yu Mincho', serif">Yu Mincho</option>
+          <option value="'Noto Serif JP', serif">Noto Serif JP</option>
+        </optgroup>
+        <optgroup label="英語 Serif（数字向け）">
+          <option value="'Bodoni 72', 'Didot', serif">Bodoni 72</option>
+          <option value="'Didot', serif">Didot</option>
+          <option value="'Playfair Display', serif">Playfair Display</option>
+          <option value="'DM Serif Display', serif">DM Serif Display</option>
+          <option value="'Cinzel', serif">Cinzel</option>
+          <option value="'Cormorant Garamond', serif">Cormorant Garamond</option>
+          <option value="'EB Garamond', serif">EB Garamond</option>
+          <option value="'Old Standard TT', serif">Old Standard TT</option>
+          <option value="'Big Caslon', serif">Big Caslon</option>
+          <option value="Georgia, serif">Georgia</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+        </optgroup>
+        <optgroup label="英語 Sans">
+          <option value="Anton, 'Bebas Neue', sans-serif">Anton 極細縦長</option>
+          <option value="'Bebas Neue', 'Impact', sans-serif">Bebas Neue / Impact</option>
+          <option value="'Arial Black', sans-serif">Arial Black</option>
+          <option value="'Helvetica', sans-serif">Helvetica</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>イタリック</label>
+      <select id="pItalic" onchange="updateProp('italic', this.value)">
+        <option value="normal">なし</option>
+        <option value="italic">あり</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>カラーモード</label>
+      <select id="pColorMode" onchange="updateProp('colorMode', this.value)">
+        <option value="solid">単色</option>
+        <option value="gradient">グラデーション</option>
+      </select>
+    </div>
+
+    <div class="row" id="pColorSolidRow">
+      <label>カラー（単色）</label>
+      <input type="color" id="pColor" value="#ffffff" oninput="updateProp('color', this.value)">
+    </div>
+
+    <div class="row" id="pColorGradRow" style="display:none;">
+      <label>グラデ角度（度）</label>
+      <div class="inline">
+        <input type="range" id="pGradAngle" min="0" max="360" step="15" value="180" oninput="updateProp('gradAngle', this.value)">
+        <input type="number" id="pGradAngleVal" min="0" max="360" step="15" value="180" oninput="document.getElementById('pGradAngle').value=this.value;updateProp('gradAngle', this.value)">
+      </div>
+      <small class="hint">0=右, 90=上, 180=左, 270=下（CSS deg 仕様）</small>
+
+      <label style="margin-top:8px;">ストップ（色 + 位置%）</label>
+      <div class="gradient-stops" id="pGradStops"></div>
+      <button onclick="addTextGradStop()" style="margin-top:4px;font-size:10px;">+ ストップ追加</button>
+      <small class="hint">立体感あり:
+        <a href="#" onclick="applyGradPreset('goldBright');return false;" style="color:#fbbf24;">明金</a> /
+        <a href="#" onclick="applyGradPreset('goldMetal');return false;" style="color:#d4a437;">金属金</a> /
+        <a href="#" onclick="applyGradPreset('silverBright');return false;" style="color:#cbd5e1;">明銀</a> /
+        <a href="#" onclick="applyGradPreset('silverMetal');return false;" style="color:#9ca3af;">金属銀</a> /
+        <a href="#" onclick="applyGradPreset('chromeWhite');return false;" style="color:#ffffff;text-shadow:0 0 3px #d4a437;">クロム白</a> /
+        <a href="#" onclick="applyGradPreset('fire');return false;" style="color:#fbbf24;">炎</a> /
+        <a href="#" onclick="applyGradPreset('ice');return false;" style="color:#60a5fa;">氷</a> /
+        <a href="#" onclick="applyGradPreset('rose');return false;" style="color:#fb7185;">薔薇金</a>
+      </small>
+      <small class="hint" style="margin-top:6px;">🌟 明るさ最優先（暗いストップ無し・推奨組合せ:テクスチャ強）:
+        <a href="#" onclick="applyGradPreset('flatGold');return false;" style="color:#fde68a;">フラット金</a> /
+        <a href="#" onclick="applyGradPreset('flatWhite');return false;" style="color:#ffffff;">フラット白</a> /
+        <a href="#" onclick="applyGradPreset('flatRed');return false;" style="color:#fca5a5;">フラット赤</a>
+      </small>
+    </div>
+
+    <div class="row">
+      <label>🎨 ザラザラ／コーティング質感</label>
+      <select id="pTexture" onchange="updateProp('texture', this.value)">
+        <option value="none">なし（フラット）</option>
+        <option value="grain-soft">微細ノイズ（ザラザラ弱）</option>
+        <option value="grain-strong">粗ノイズ（ザラザラ強）</option>
+        <option value="emboss">エンボス（凹凸感）</option>
+      </select>
+      <small class="hint">単色・グラデーション どちらでも有効</small>
+    </div>
+
+    <div class="row">
+      <label>letter-spacing (px)</label>
+      <div class="inline">
+        <input type="range" id="pLs" min="-20" max="20" step="0.5" value="0" oninput="updateProp('letterSpacing', this.value)">
+        <input type="number" id="pLsVal" min="-20" max="20" step="0.5" value="0" oninput="document.getElementById('pLs').value=this.value;updateProp('letterSpacing', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>line-height</label>
+      <div class="inline">
+        <input type="range" id="pLh" min="0.7" max="2.5" step="0.05" value="1.2" oninput="updateProp('lineHeight', this.value)">
+        <input type="number" id="pLhVal" min="0.7" max="2.5" step="0.05" value="1.2" oninput="document.getElementById('pLh').value=this.value;updateProp('lineHeight', this.value)">
+      </div>
+    </div>
+
+    <div class="row">
+      <label>テキストシャドウ</label>
+      <select id="pShadow" onchange="updateProp('shadow', this.value)">
+        <option value="none">なし</option>
+        <option value="0 2px 8px rgba(0,0,0,0.85)">弱い黒影</option>
+        <option value="0 4px 18px rgba(0,0,0,0.95)">強い黒影</option>
+        <option value="-3px 3px 0 #7f1d1d, 3px 3px 0 #7f1d1d, 0 6px 22px rgba(0,0,0,0.95)">赤オフセット+黒影</option>
+        <option value="0 0 14px rgba(127,29,29,0.7), 0 6px 22px rgba(0,0,0,0.95)">赤グロー+黒影</option>
+        <option value="0 0 36px rgba(212,164,55,0.55), 0 8px 18px rgba(0,0,0,0.95)">ゴールドグロー+黒影</option>
+        <option value="0 0 14px rgba(30,58,138,0.75), 0 6px 22px rgba(0,0,0,0.95)">青グロー+黒影</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>text-stroke (px / カラー)</label>
+      <div class="inline">
+        <input type="number" id="pStrokeW" min="0" max="6" step="0.5" value="0" oninput="updateProp('strokeWidth', this.value)" style="width:60px;">
+        <input type="color" id="pStrokeC" value="#7f1d1d" oninput="updateProp('strokeColor', this.value)">
+      </div>
+    </div>
+
+    <div class="row" style="border-top:1px solid var(--border);padding-top:12px;margin-top:18px;">
+      <button class="danger" style="width:100%;" onclick="deleteSelected()">🗑️ このテキスト削除</button>
+    </div>
+  </div>
+
+  <h2 style="margin-top:18px;">採用コード</h2>
+  <small class="hint" style="margin-bottom:6px;">「📋 テンプレコード」で生成した HTML/CSS スニペットがここに出る</small>
+  <div class="code-output" id="codeOutput">（まだ生成されてません）</div>
+
+</aside>
+
+<div class="zoom-controls">
+  <button onclick="setZoom(0.4)">40%</button>
+  <button onclick="setZoom(0.5)">50%</button>
+  <button onclick="setZoom(0.7)">70%</button>
+  <button onclick="setZoom(1)">100%</button>
+  <span id="zoomLabel" style="margin-left:8px;color:var(--muted);">×0.7</span>
+</div>
+
+<script>
+// ────────────────────────────────────────────
+// 状態管理
+// ────────────────────────────────────────────
+const state = {
+  bg: {
+    base: '#000000',
+    gradType: 'none',
+    gradStops: [
+      { color: '#4b4845', pos: 0 },
+      { color: '#000000', pos: 50 },
+    ],
+    overlayOpacity: 0.5,
+  },
+  imageBoxes: [],
+  selectedIbId: null,
+  texts: [],
+  selectedId: null,
+  nextId: 1,
+  nextIbId: 1,
+};
+
+// 選択モード: 'text' | 'ib'
+function selectionMode() {
+  if (state.selectedIbId != null) return 'ib';
+  if (state.selectedId != null) return 'text';
+  return null;
+}
+
+// ────────────────────────────────────────────
+// 🎨 grad editor v2（rgba 対応 / インタラクティブハンドル / 2026-05-10）
+// ────────────────────────────────────────────
+// hex(#RRGGBB) + alpha → rgba(R,G,B,A)
+function hexAlphaToRgba(hex, alpha) {
+  const a = (alpha == null) ? 1 : Math.max(0, Math.min(1, alpha));
+  if (typeof hex !== 'string' || hex[0] !== '#' || hex.length < 7) return `rgba(0,0,0,${a})`;
+  const r = parseInt(hex.slice(1,3), 16) || 0;
+  const g = parseInt(hex.slice(3,5), 16) || 0;
+  const b = parseInt(hex.slice(5,7), 16) || 0;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// stops 配列 → CSS グラデ用の "rgba(...) %, rgba(...) %, ..." 文字列
+function stopsToCssChain(stops) {
+  return (stops || []).map(s => `${hexAlphaToRgba(s.color, s.alpha != null ? s.alpha : 1)} ${s.pos}%`).join(', ');
+}
+
+// 旧形式 stops（alpha 無し）に alpha=1 を補完
+function ensureAlpha(stops) {
+  if (!Array.isArray(stops)) return;
+  for (const s of stops) { if (s && s.alpha == null) s.alpha = 1; }
+}
+
+// グラデーションエディター・コンポーネント
+//   container: 描画先 div
+//   model:     { stops: [{color,alpha,pos}], gradType: '...', opacity: 0..1 }  ← 内部直接書き換え
+//   onUpdate:  値変更時 callback（CSS 反映用）
+//   opts.showOpacity: 全体 opacity スライダを出すか（既定 true）
+function mountGradEditor(container, model, onUpdate, opts) {
+  opts = opts || {};
+  const showOpacity = opts.showOpacity !== false;
+  ensureAlpha(model.stops);
+
+  container.innerHTML = `
+    <div class="grad-editor">
+      <div class="ge-row">
+        <span class="ge-label">方向:</span>
+        <div class="ge-dir-btns">
+          <button type="button" class="ge-dir-btn" data-type="none" title="なし">×</button>
+          <button type="button" class="ge-dir-btn" data-type="linear-vertical" title="縦リニア(180°)">↓</button>
+          <button type="button" class="ge-dir-btn" data-type="linear-horizontal" title="横リニア(90°)">→</button>
+          <button type="button" class="ge-dir-btn" data-type="linear-diagonal" title="斜め(135°)">↘</button>
+          <button type="button" class="ge-dir-btn" data-type="radial" title="放射(中央)">⊙</button>
+        </div>
+      </div>
+      <div class="ge-bar-wrap"><div class="ge-bar"><div class="ge-bar-grad"></div></div></div>
+      <div class="ge-stop-row">
+        <span class="ge-label">色:</span>
+        <input type="color" class="ge-stop-color">
+        <span class="ge-label">α:</span>
+        <input type="range" class="ge-stop-alpha" min="0" max="1" step="0.01">
+        <input type="number" class="ge-stop-alpha-val" min="0" max="1" step="0.01">
+        <span class="ge-label">位置:</span>
+        <input type="number" class="ge-stop-pos" min="0" max="100" step="1">
+        <button type="button" class="ge-stop-del">×</button>
+      </div>
+      <div class="ge-empty-hint">バーをクリックで stop 追加 / ハンドルをドラッグで位置移動</div>
+      ${showOpacity ? `
+        <div class="ge-opacity-row">
+          <span class="ge-label">全体 opacity:</span>
+          <input type="range" class="ge-opacity" min="0" max="1" step="0.05">
+          <input type="number" class="ge-opacity-val" min="0" max="1" step="0.05">
+        </div>` : ''}
+    </div>
+  `;
+
+  const $ = sel => container.querySelector(sel);
+  const $$ = sel => container.querySelectorAll(sel);
+  const dirBtns = $$('.ge-dir-btn');
+  const bar = $('.ge-bar');
+  const barWrap = $('.ge-bar-wrap');
+  const barGrad = $('.ge-bar-grad');
+  const stopColor = $('.ge-stop-color');
+  const stopAlpha = $('.ge-stop-alpha');
+  const stopAlphaVal = $('.ge-stop-alpha-val');
+  const stopPos = $('.ge-stop-pos');
+  const stopDel = $('.ge-stop-del');
+  const opacityRange = $('.ge-opacity');
+  const opacityVal = $('.ge-opacity-val');
+
+  let selectedIdx = 0;
+
+  function render() {
+    ensureAlpha(model.stops);
+    dirBtns.forEach(b => b.classList.toggle('active', b.dataset.type === (model.gradType || 'none')));
+    const stopsCss = stopsToCssChain(model.stops);
+    barGrad.style.background = stopsCss ? `linear-gradient(90deg, ${stopsCss})` : 'transparent';
+    barWrap.classList.toggle('empty', !stopsCss);
+
+    // ハンドル再描画
+    bar.querySelectorAll('.ge-handle').forEach(h => h.remove());
+    (model.stops || []).forEach((s, i) => {
+      const h = document.createElement('div');
+      h.className = 'ge-handle' + (i === selectedIdx ? ' selected' : '');
+      h.style.left = (s.pos != null ? s.pos : 50) + '%';
+      h.style.setProperty('--handle-bg', s.color || '#000');
+      h.dataset.idx = i;
+      h.addEventListener('mousedown', e => startDragHandle(e, i));
+      bar.appendChild(h);
+    });
+
+    // 選択中 stop
+    const s = model.stops && model.stops[selectedIdx];
+    if (s) {
+      stopColor.value = s.color || '#000000';
+      stopAlpha.value = s.alpha != null ? s.alpha : 1;
+      stopAlphaVal.value = s.alpha != null ? s.alpha : 1;
+      stopPos.value = s.pos != null ? s.pos : 0;
+    }
+
+    if (showOpacity && opacityRange) {
+      const op = model.opacity != null ? model.opacity : 1;
+      opacityRange.value = op;
+      opacityVal.value = op;
+    }
+  }
+
+  function emit() { render(); if (onUpdate) onUpdate(); }
+
+  // 方向ボタン
+  dirBtns.forEach(b => b.addEventListener('click', () => {
+    model.gradType = b.dataset.type;
+    emit();
+  }));
+
+  // バークリック → 新規 stop（ハンドル以外の場所のみ）
+  bar.addEventListener('click', e => {
+    if (e.target.closest('.ge-handle')) return;
+    const rect = bar.getBoundingClientRect();
+    const pos = Math.round((e.clientX - rect.left) / rect.width * 100);
+    const last = (model.stops && model.stops[model.stops.length - 1]) || { color: '#000000', alpha: 1 };
+    if (!Array.isArray(model.stops)) model.stops = [];
+    model.stops.push({ color: last.color, alpha: last.alpha != null ? last.alpha : 1, pos: Math.max(0, Math.min(100, pos)) });
+    selectedIdx = model.stops.length - 1;
+    emit();
+  });
+
+  // ハンドルドラッグ
+  function startDragHandle(e, i) {
+    e.stopPropagation(); e.preventDefault();
+    selectedIdx = i;
+    render();
+    const rect = bar.getBoundingClientRect();
+    const move = ev => {
+      const pos = Math.round((ev.clientX - rect.left) / rect.width * 100);
+      model.stops[i].pos = Math.max(0, Math.min(100, pos));
+      emit();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+
+  // 詳細編集
+  stopColor.addEventListener('input', () => {
+    if (model.stops[selectedIdx]) {
+      model.stops[selectedIdx].color = stopColor.value;
+      emit();
+    }
+  });
+  function syncAlpha(v) {
+    if (!model.stops[selectedIdx]) return;
+    const a = Math.max(0, Math.min(1, parseFloat(v) || 0));
+    model.stops[selectedIdx].alpha = a;
+    emit();
+  }
+  stopAlpha.addEventListener('input',    () => syncAlpha(stopAlpha.value));
+  stopAlphaVal.addEventListener('input', () => syncAlpha(stopAlphaVal.value));
+  stopPos.addEventListener('input', () => {
+    if (model.stops[selectedIdx]) {
+      model.stops[selectedIdx].pos = Math.max(0, Math.min(100, parseFloat(stopPos.value) || 0));
+      emit();
+    }
+  });
+  stopDel.addEventListener('click', () => {
+    if (!model.stops || model.stops.length <= 2) return;
+    model.stops.splice(selectedIdx, 1);
+    selectedIdx = Math.max(0, Math.min(selectedIdx, model.stops.length - 1));
+    emit();
+  });
+
+  if (showOpacity && opacityRange) {
+    opacityRange.addEventListener('input', () => {
+      model.opacity = parseFloat(opacityRange.value);
+      opacityVal.value = model.opacity;
+      if (onUpdate) onUpdate();
+    });
+    opacityVal.addEventListener('input', () => {
+      const v = Math.max(0, Math.min(1, parseFloat(opacityVal.value) || 0));
+      model.opacity = v;
+      opacityRange.value = v;
+      if (onUpdate) onUpdate();
+    });
+  }
+
+  render();
+  return { render, getSelectedIdx: () => selectedIdx };
+}
+
+// ────────────────────────────────────────────
+// 画像範囲（ImageBox）
+// ────────────────────────────────────────────
+function addImageBox(url = '') {
+  const id = state.nextIbId++;
+  const ib = {
+    id,
+    url: url || '',
+    x: 4, y: 5,
+    w: 44, h: 80,
+    bgPos: 'center 22%',
+    contrast: 1, brightness: 1,
+    mask: 'ellipse',
+    innerGrad: {
+      type: 'none',
+      stops: [
+        { color: '#000000', pos: 0 },
+        { color: '#000000', pos: 100 },
+      ],
+      opacity: 0.5,
+    },
+  };
+  state.imageBoxes.push(ib);
+  state.selectedIbId = id;
+  state.selectedId = null;
+  renderImageBoxes();
+  renderIbList();
+  loadIbProps();
+}
+
+function deleteSelectedIb() {
+  if (state.selectedIbId == null) return;
+  state.imageBoxes = state.imageBoxes.filter(b => b.id !== state.selectedIbId);
+  state.selectedIbId = state.imageBoxes.length ? state.imageBoxes[0].id : null;
+  renderImageBoxes();
+  renderIbList();
+  loadIbProps();
+}
+
+function deleteImageBox(id) {
+  state.imageBoxes = state.imageBoxes.filter(b => b.id !== id);
+  if (state.selectedIbId === id) state.selectedIbId = state.imageBoxes.length ? state.imageBoxes[0].id : null;
+  renderImageBoxes();
+  renderIbList();
+  loadIbProps();
+}
+
+function selectImageBox(id) {
+  state.selectedIbId = id;
+  state.selectedId = null;
+  renderImageBoxes();
+  renderTexts();
+  renderIbList();
+  renderTbList();
+  loadIbProps();
+  loadProps();
+}
+
+function setIbImage(url) {
+  const ib = getSelectedIb();
+  if (!ib) return;
+  ib.url = url;
+  const ibUrl = document.getElementById('ibUrl');
+  if (ibUrl) ibUrl.value = url;
+  applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+}
+
+// ローカル画像ファイル → base64 data URL でロード
+function loadIbFile(input) {
+  const ib = getSelectedIb();
+  if (!ib || !input.files || !input.files[0]) return;
+  const f = input.files[0];
+  const r = new FileReader();
+  r.onload = ev => {
+    ib.url = ev.target.result;       // data:image/...;base64,...
+    document.getElementById('ibUrl').value = '(base64 ファイル: ' + f.name + ')';
+    applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+  };
+  r.readAsDataURL(f);
+}
+
+function getSelectedIb() {
+  return state.imageBoxes.find(b => b.id === state.selectedIbId);
+}
+
+function renderImageBoxes() {
+  const canvas = document.getElementById('canvas');
+  canvas.querySelectorAll('.image-box').forEach(el => el.remove());
+  state.imageBoxes.forEach(ib => {
+    const el = document.createElement('div');
+    el.className = 'image-box mask-' + ib.mask + (ib.id === state.selectedIbId ? ' selected' : '');
+    el.dataset.id = ib.id;
+    el.innerHTML = `<div class="ib-fill"></div><div class="ib-inner-overlay"></div><div class="ib-label">IMG#${ib.id}</div>`;
+    applyIbStyle(el, ib);
+    el.addEventListener('mousedown', startDragIb);
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      selectImageBox(ib.id);
+    });
+    // リサイズハンドル
+    const h = document.createElement('div');
+    h.className = 'resize-handle';
+    h.addEventListener('mousedown', e => startResize(e, 'ib', ib.id));
+    el.appendChild(h);
+    canvas.appendChild(el);
+  });
+}
+
+function applyIbStyle(el, ib) {
+  if (!el) return;
+  el.style.left = ib.x + '%';
+  el.style.top  = ib.y + '%';
+  el.style.width  = ib.w + '%';
+  el.style.height = ib.h + '%';
+  // mask クラス再設定
+  el.className = el.className.replace(/\bmask-[\w-]+\b/g, '');
+  el.classList.add('mask-' + ib.mask);
+  // 画像
+  const fill = el.querySelector('.ib-fill');
+  fill.style.backgroundImage = ib.url ? `url('${ib.url}')` : '';
+  fill.style.backgroundPosition = ib.bgPos || 'center';
+  fill.style.filter = `contrast(${ib.contrast}) brightness(${ib.brightness})`;
+  // 範囲内グラデ（rgba 対応）
+  const ov = el.querySelector('.ib-inner-overlay');
+  const g = ib.innerGrad;
+  ensureAlpha(g.stops);
+  let bg = '';
+  if (g.type !== 'none') {
+    const stops = stopsToCssChain(g.stops);
+    if (g.type === 'linear-vertical') bg = `linear-gradient(180deg, ${stops})`;
+    else if (g.type === 'linear-horizontal') bg = `linear-gradient(90deg, ${stops})`;
+    else if (g.type === 'linear-diagonal') bg = `linear-gradient(135deg, ${stops})`;
+    else if (g.type === 'radial') bg = `radial-gradient(ellipse at center, ${stops})`;
+  }
+  ov.style.background = bg;
+  ov.style.opacity = bg ? g.opacity : 0;
+}
+
+function renderIbList() {
+  const list = document.getElementById('ibList');
+  list.innerHTML = state.imageBoxes.map(ib => `
+    <div class="tb-item ${ib.id === state.selectedIbId ? 'active' : ''}" onclick="selectImageBox(${ib.id})">
+      <span>IMG#${ib.id} ${ib.url ? ib.url.slice(-30) : '(画像未設定)'}</span>
+      <span class="del" onclick="event.stopPropagation();deleteImageBox(${ib.id})">×</span>
+    </div>
+  `).join('') || '<small class="hint">画像範囲未追加</small>';
+}
+
+function updateIb(key, val) {
+  const ib = getSelectedIb();
+  if (!ib) return;
+  if (['x','y','w','h','contrast','brightness'].includes(key)) ib[key] = parseFloat(val);
+  else ib[key] = val;
+  const valId = 'ib' + key.charAt(0).toUpperCase() + key.slice(1) + 'Val';
+  const valEl = document.getElementById(valId);
+  if (valEl) valEl.value = ib[key];
+  applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+  renderIbList();
+}
+
+// 互換用（旧 onchange 呼び出しに備えて残す）
+function updateIbGrad(key, val) {
+  const ib = getSelectedIb();
+  if (!ib) return;
+  if (key === 'opacity') ib.innerGrad.opacity = parseFloat(val);
+  else ib.innerGrad[key] = val;
+  applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+}
+
+// 画像範囲の inner grad editor をマウント
+function renderIbInnerStops() {
+  const ib = getSelectedIb();
+  const wrap = document.getElementById('ibInnerStops');
+  if (!wrap) return;
+  if (!ib) { wrap.innerHTML = ''; return; }
+  ensureAlpha(ib.innerGrad.stops);
+  const model = {
+    stops: ib.innerGrad.stops,
+    gradType: ib.innerGrad.type,
+    opacity: ib.innerGrad.opacity != null ? ib.innerGrad.opacity : 0.5,
+  };
+  mountGradEditor(wrap, model, () => {
+    ib.innerGrad.type    = model.gradType;
+    ib.innerGrad.opacity = model.opacity;
+    applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+  }, { showOpacity: true });
+}
+// 互換用（旧コード呼び出しに備えて残す）
+function addIbGradStop() {
+  const ib = getSelectedIb();
+  if (!ib) return;
+  const last = ib.innerGrad.stops[ib.innerGrad.stops.length - 1] || { color: '#000000', alpha: 1, pos: 0 };
+  ib.innerGrad.stops.push({ color: '#000000', alpha: 1, pos: Math.min(100, last.pos + 25) });
+  renderIbInnerStops();
+  applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+}
+function removeIbGradStop(idx) {
+  const ib = getSelectedIb();
+  if (!ib || ib.innerGrad.stops.length <= 2) return;
+  ib.innerGrad.stops.splice(idx, 1);
+  renderIbInnerStops();
+  applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+}
+
+function loadIbProps() {
+  const ib = getSelectedIb();
+  document.getElementById('ibProps').style.display = ib ? 'block' : 'none';
+  // テキストプロパティを隠す（画像範囲選択中は）
+  if (ib) {
+    document.getElementById('propsHeader').style.display = 'none';
+    document.getElementById('propsEmpty').style.display = 'none';
+    document.getElementById('props').style.display = 'none';
+  } else {
+    document.getElementById('propsHeader').style.display = 'block';
+  }
+  if (!ib) return;
+  document.getElementById('ibUrl').value = ib.url || '';
+  document.getElementById('ibX').value = ib.x;
+  document.getElementById('ibY').value = ib.y;
+  document.getElementById('ibW').value = ib.w;
+  document.getElementById('ibH').value = ib.h;
+  document.getElementById('ibBgPos').value = ib.bgPos || 'center';
+  document.getElementById('ibContrast').value = ib.contrast;
+  document.getElementById('ibContrastVal').value = ib.contrast;
+  document.getElementById('ibBrightness').value = ib.brightness;
+  document.getElementById('ibBrightnessVal').value = ib.brightness;
+  document.getElementById('ibMask').value = ib.mask;
+  // ibInnerType / ibInnerOpacity の DOM は廃止（grad editor v2 が内蔵）
+  renderIbInnerStops();
+}
+
+// 画像範囲ドラッグ
+let draggingIb = null;
+function startDragIb(e) {
+  if (e.target.closest('.ib-label')) return;
+  if (e.target.classList.contains('resize-handle')) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const el = e.currentTarget;
+  const id = parseInt(el.dataset.id);
+  const ib = state.imageBoxes.find(b => b.id === id);
+  if (!ib) return;
+  selectImageBox(id);
+  draggingIb = { id, startX: e.clientX, startY: e.clientY, origX: ib.x, origY: ib.y };
+  document.addEventListener('mousemove', onDragIb);
+  document.addEventListener('mouseup', endDragIb);
+}
+function onDragIb(e) {
+  if (!draggingIb) return;
+  const ib = state.imageBoxes.find(b => b.id === draggingIb.id);
+  const wrap = document.getElementById('canvasWrap').getBoundingClientRect();
+  const dx = (e.clientX - draggingIb.startX) / wrap.width * 100;
+  const dy = (e.clientY - draggingIb.startY) / wrap.height * 100;
+  ib.x = Math.max(0, Math.min(100, draggingIb.origX + dx));
+  ib.y = Math.max(0, Math.min(100, draggingIb.origY + dy));
+  applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+  document.getElementById('ibX').value = ib.x.toFixed(1);
+  document.getElementById('ibY').value = ib.y.toFixed(1);
+}
+function endDragIb() {
+  draggingIb = null;
+  document.removeEventListener('mousemove', onDragIb);
+  document.removeEventListener('mouseup', endDragIb);
+}
+
+// ────────────────────────────────────────────
+// リサイズ：右下つまみドラッグで拡大縮小
+// ────────────────────────────────────────────
+let resizing = null;
+function startResize(e, type, id) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (type === 'text') {
+    const t = state.texts.find(x => x.id === id);
+    if (!t) return;
+    resizing = { type, id, startX: e.clientX, startY: e.clientY, origSize: t.size, origLs: t.letterSpacing };
+  } else if (type === 'ib') {
+    const ib = state.imageBoxes.find(x => x.id === id);
+    if (!ib) return;
+    resizing = { type, id, startX: e.clientX, startY: e.clientY, origW: ib.w, origH: ib.h, shift: e.shiftKey, ratio: ib.w / ib.h };
+  }
+  document.addEventListener('mousemove', onResize);
+  document.addEventListener('mouseup', endResize);
+}
+
+function onResize(e) {
+  if (!resizing) return;
+  const wrap = document.getElementById('canvasWrap').getBoundingClientRect();
+  const dxPx = e.clientX - resizing.startX;
+  const dyPx = e.clientY - resizing.startY;
+
+  if (resizing.type === 'text') {
+    const t = state.texts.find(x => x.id === resizing.id);
+    // 対角線方向の動きをサイズ変化量に変換（zoom 考慮）
+    //   右下に引っ張る = サイズ拡大
+    //   左上に引っ張る = サイズ縮小
+    const delta = (dxPx + dyPx) / 2 / zoom;
+    const newSize = Math.max(10, Math.min(400, resizing.origSize + delta));
+    t.size = Math.round(newSize);
+    applyTbStyle(document.querySelector(`.tb[data-id="${t.id}"]`), t);
+    document.getElementById('pSize').value = t.size;
+    document.getElementById('pSizeVal').value = t.size;
+  } else if (resizing.type === 'ib') {
+    const ib = state.imageBoxes.find(x => x.id === resizing.id);
+    const dwPct = dxPx / wrap.width * 100;
+    const dhPct = dyPx / wrap.height * 100;
+    if (e.shiftKey) {
+      // shift で比率維持（X 移動量をベースに H を比率で計算）
+      const newW = Math.max(5, Math.min(100, resizing.origW + dwPct));
+      ib.w = newW;
+      ib.h = Math.max(5, Math.min(100, newW / resizing.ratio));
+    } else {
+      ib.w = Math.max(5, Math.min(100, resizing.origW + dwPct));
+      ib.h = Math.max(5, Math.min(100, resizing.origH + dhPct));
+    }
+    applyIbStyle(document.querySelector(`.image-box[data-id="${ib.id}"]`), ib);
+    document.getElementById('ibW').value = ib.w.toFixed(1);
+    document.getElementById('ibH').value = ib.h.toFixed(1);
+  }
+}
+
+function endResize() {
+  resizing = null;
+  document.removeEventListener('mousemove', onResize);
+  document.removeEventListener('mouseup', endResize);
+}
+
+// ────────────────────────────────────────────
+// 背景：オーバーレイ（ベース色 + グラデ）
+// ────────────────────────────────────────────
+// 背景 grad editor のマウント（model = state.bg を共通インターフェイスに合わせて使う）
+function renderGradStops() {
+  const wrap = document.getElementById('gradStops');
+  if (!wrap) return;
+  ensureAlpha(state.bg.gradStops);
+  // mountGradEditor は { stops, gradType, opacity } を直接書き換える
+  const model = {
+    stops: state.bg.gradStops,
+    gradType: state.bg.gradType,
+    opacity: state.bg.overlayOpacity != null ? state.bg.overlayOpacity : 0.5,
+  };
+  mountGradEditor(wrap, model, () => {
+    state.bg.gradType = model.gradType;
+    state.bg.overlayOpacity = model.opacity;
+    updateBgOverlay();
+  }, { showOpacity: true });
+}
+// 互換用: 旧コードが addGradStop を呼ぶ可能性に備える（no-op + 再描画）
+function addGradStop() {
+  const last = state.bg.gradStops[state.bg.gradStops.length-1] || { color: '#000000', alpha: 1, pos: 50 };
+  state.bg.gradStops.push({ color: '#000000', alpha: 1, pos: Math.min(100, last.pos + 25) });
+  renderGradStops();
+  updateBgOverlay();
+}
+function updateBgOverlay() {
+  const base = document.getElementById('bgBase').value;
+  state.bg.base = base;
+  document.getElementById('bgLayer').style.background = base;
+
+  const gradType = state.bg.gradType || 'none';
+  const op = state.bg.overlayOpacity != null ? state.bg.overlayOpacity : 0.5;
+  ensureAlpha(state.bg.gradStops);
+  const stops = stopsToCssChain(state.bg.gradStops);
+
+  let grad = '';
+  if (gradType === 'linear-vertical')   grad = `linear-gradient(180deg, ${stops})`;
+  else if (gradType === 'linear-horizontal') grad = `linear-gradient(90deg, ${stops})`;
+  else if (gradType === 'linear-diagonal')   grad = `linear-gradient(135deg, ${stops})`;
+  else if (gradType === 'radial')            grad = `radial-gradient(ellipse at center, ${stops})`;
+
+  const overlay = document.getElementById('bgOverlay');
+  if (grad) {
+    overlay.style.background = grad;
+    overlay.style.opacity = op;
+    overlay.style.display = 'block';
+  } else {
+    overlay.style.background = '';
+    overlay.style.opacity = 0;
+  }
+}
+
+// ────────────────────────────────────────────
+// テキストボックス
+// ────────────────────────────────────────────
+function addText() {
+  const id = state.nextId++;
+  const t = {
+    id,
+    text: 'テキスト',
+    x: 30, y: 40,         // %
+    width: 60,             // % max-width (wrap=normal 時のみ効く)
+    wrap: 'nowrap',        // 'normal' | 'nowrap' （既定: 折り返さず横に延びる）
+    align: 'left',
+    size: 80,              // px
+    weight: '900',
+    family: "'Hiragino Kaku Gothic ProN', sans-serif",
+    italic: 'normal',
+    colorMode: 'solid',    // 'solid' | 'gradient'
+    color: '#ffffff',
+    gradAngle: 180,
+    gradStops: [
+      { color: '#fffbeb', pos: 0 },
+      { color: '#fde68a', pos: 25 },
+      { color: '#fbbf24', pos: 60 },
+      { color: '#d97706', pos: 100 },
+    ],
+    texture: 'none',       // 'none' | 'grain-soft' | 'grain-strong' | 'emboss'
+    letterSpacing: 0,      // px
+    lineHeight: 1.2,
+    shadow: '0 4px 18px rgba(0,0,0,0.95)',
+    strokeWidth: 0,
+    strokeColor: '#7f1d1d',
+  };
+  state.texts.push(t);
+  state.selectedId = id;
+  state.selectedIbId = null;
+  renderTexts();
+  renderImageBoxes();
+  renderTbList();
+  renderIbList();
+  loadIbProps();
+  loadProps();
+}
+
+// テキストグラデのプリセット（明るく抜けが良く、メタリック光沢感あり）
+const TEXT_GRAD_PRESETS = {
+  // 明るい金（ハイライト→中間→深め、抜け感重視）
+  goldBright:   { angle: 180, stops: [
+    {color:'#fffbeb',pos:0},
+    {color:'#fde68a',pos:25},
+    {color:'#fbbf24',pos:60},
+    {color:'#d97706',pos:100}
+  ]},
+  // メタリック金（中間ハイライトで金属光沢）
+  goldMetal:    { angle: 180, stops: [
+    {color:'#d4a437',pos:0},
+    {color:'#fde68a',pos:30},
+    {color:'#fffbeb',pos:48},
+    {color:'#fbbf24',pos:62},
+    {color:'#92400e',pos:100}
+  ]},
+  // 明るい銀
+  silverBright: { angle: 180, stops: [
+    {color:'#ffffff',pos:0},
+    {color:'#e5e7eb',pos:30},
+    {color:'#9ca3af',pos:65},
+    {color:'#4b5563',pos:100}
+  ]},
+  // メタリック銀（中間に白ハイライト）
+  silverMetal:  { angle: 180, stops: [
+    {color:'#94a3b8',pos:0},
+    {color:'#cbd5e1',pos:25},
+    {color:'#ffffff',pos:48},
+    {color:'#cbd5e1',pos:62},
+    {color:'#475569',pos:100}
+  ]},
+  // クロム白（白基調、subtle に金がかぶる）
+  chromeWhite:  { angle: 180, stops: [
+    {color:'#ffffff',pos:0},
+    {color:'#fffbeb',pos:35},
+    {color:'#f3e8c7',pos:65},
+    {color:'#cbd5e1',pos:100}
+  ]},
+  // 炎（黄→オレンジ→赤、暗くしすぎない）
+  fire:         { angle: 180, stops: [
+    {color:'#fef3c7',pos:0},
+    {color:'#fbbf24',pos:35},
+    {color:'#ef4444',pos:70},
+    {color:'#991b1b',pos:100}
+  ]},
+  // 氷（白→水色→青、明るい青基調）
+  ice:          { angle: 180, stops: [
+    {color:'#f0f9ff',pos:0},
+    {color:'#7dd3fc',pos:35},
+    {color:'#3b82f6',pos:70},
+    {color:'#1e40af',pos:100}
+  ]},
+  // 薔薇金（ローズゴールド、女性的な高級感）
+  rose:         { angle: 180, stops: [
+    {color:'#fff1f2',pos:0},
+    {color:'#fecdd3',pos:25},
+    {color:'#fb7185',pos:55},
+    {color:'#be185d',pos:100}
+  ]},
+
+  // ── 「金で輝く中に subtle な濁り」金属光沢 ──
+  // ハイライト（白）→ 明金 → 薄濁り → 明金 の波形で立体感を出す。
+  // すべて明度 75%以上 で全体は明るく保つ
+  flatGold:     { angle: 180, stops: [
+    {color:'#fcd34d',pos:0},    // 明金 (上端から)
+    {color:'#ffffff',pos:18},   // 白ハイライト
+    {color:'#fef3c7',pos:32},   // クリーム
+    {color:'#fde68a',pos:48},   // 中間明黄
+    {color:'#fbbf24',pos:62},   // subtle 濁り（明るめ）
+    {color:'#fcd34d',pos:78},   // 明金に戻る
+    {color:'#f59e0b',pos:100}   // 下端 もう一段濁り
+  ]},
+  flatWhite:    { angle: 180, stops: [
+    {color:'#ffffff',pos:0},
+    {color:'#ffffff',pos:30},
+    {color:'#f9fafb',pos:55},   // subtle なグレー
+    {color:'#ffffff',pos:80},
+    {color:'#e5e7eb',pos:100}   // 下端 subtle 濁り
+  ]},
+  flatRed:      { angle: 180, stops: [
+    {color:'#f87171',pos:0},
+    {color:'#fecaca',pos:18},   // ピンクハイライト
+    {color:'#fee2e2',pos:32},   // 薄ピンク
+    {color:'#fda4af',pos:55},
+    {color:'#f87171',pos:78},
+    {color:'#dc2626',pos:100}   // 下端 subtle 濁り
+  ]},
+};
+
+// プリセット別の推奨 text-shadow（外光グロー付きで文字が「光って見える」）
+const FLAT_PRESET_SHADOWS = {
+  flatGold:  '0 0 18px rgba(252,211,77,0.65), 0 0 38px rgba(251,191,36,0.40), 0 3px 8px rgba(0,0,0,0.75)',
+  flatWhite: '0 0 16px rgba(255,255,255,0.50), 0 0 32px rgba(255,255,255,0.25), 0 3px 8px rgba(0,0,0,0.75)',
+  flatRed:   '0 0 18px rgba(248,113,113,0.65), 0 0 38px rgba(220,38,38,0.40), 0 3px 8px rgba(0,0,0,0.75)',
+};
+function applyGradPreset(name) {
+  const t = getSelected();
+  if (!t) return;
+  const p = TEXT_GRAD_PRESETS[name];
+  t.gradAngle = p.angle;
+  t.gradStops = JSON.parse(JSON.stringify(p.stops));
+  // flat 系プリセット適用時は外光グロー shadow を自動セット（光ってる感）
+  if (FLAT_PRESET_SHADOWS[name]) {
+    t.shadow = FLAT_PRESET_SHADOWS[name];
+    // 既存 shadow select に無い値の場合は、プリセット名を expose する option を追加
+    const shadowSelect = document.getElementById('pShadow');
+    let optionExists = false;
+    for (const opt of shadowSelect.options) {
+      if (opt.value === t.shadow) { optionExists = true; break; }
+    }
+    if (!optionExists) {
+      const opt = document.createElement('option');
+      opt.value = t.shadow;
+      opt.textContent = `🌟 ${name} 専用グロー`;
+      shadowSelect.appendChild(opt);
+    }
+    shadowSelect.value = t.shadow;
+  }
+  renderTextGradStops();
+  applyTbStyle(document.querySelector(`.tb[data-id="${t.id}"]`), t);
+}
+
+// テキストグラデストップ管理
+function renderTextGradStops() {
+  const t = getSelected();
+  const wrap = document.getElementById('pGradStops');
+  if (!t) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = t.gradStops.map((s, i) => `
+    <div class="gradient-stop">
+      <input type="color" value="${s.color}" oninput="state.texts.find(x=>x.id===${t.id}).gradStops[${i}].color = this.value; applyTbStyle(document.querySelector('.tb[data-id=&quot;${t.id}&quot;]'), state.texts.find(x=>x.id===${t.id}));">
+      <input type="number" value="${s.pos}" min="0" max="100" step="1" oninput="state.texts.find(x=>x.id===${t.id}).gradStops[${i}].pos = parseFloat(this.value); applyTbStyle(document.querySelector('.tb[data-id=&quot;${t.id}&quot;]'), state.texts.find(x=>x.id===${t.id}));" placeholder="%">
+      <button onclick="removeTextGradStop(${i})" style="padding:2px 6px;">×</button>
+    </div>
+  `).join('');
+}
+function addTextGradStop() {
+  const t = getSelected();
+  if (!t) return;
+  const last = t.gradStops[t.gradStops.length - 1] || { pos: 0 };
+  t.gradStops.push({ color: '#ffffff', pos: Math.min(100, last.pos + 25) });
+  renderTextGradStops();
+  applyTbStyle(document.querySelector(`.tb[data-id="${t.id}"]`), t);
+}
+function removeTextGradStop(idx) {
+  const t = getSelected();
+  if (!t || t.gradStops.length <= 2) return;
+  t.gradStops.splice(idx, 1);
+  renderTextGradStops();
+  applyTbStyle(document.querySelector(`.tb[data-id="${t.id}"]`), t);
+}
+
+function deleteSelected() {
+  if (state.selectedId == null) return;
+  state.texts = state.texts.filter(t => t.id !== state.selectedId);
+  state.selectedId = state.texts.length ? state.texts[0].id : null;
+  renderTexts();
+  renderTbList();
+  loadProps();
+}
+
+function renderTexts() {
+  const canvas = document.getElementById('canvas');
+  // 既存 .tb 削除
+  canvas.querySelectorAll('.tb').forEach(el => el.remove());
+  // 再描画
+  state.texts.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'tb' + (t.id === state.selectedId ? ' selected' : '');
+    el.dataset.id = t.id;
+    el.textContent = t.text;
+    applyTbStyle(el, t);
+    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      state.selectedId = t.id;
+      renderTexts();
+      renderTbList();
+      loadProps();
+    });
+    // ラベル
+    const lbl = document.createElement('div');
+    lbl.className = 'tb-label';
+    lbl.textContent = `#${t.id}`;
+    el.appendChild(lbl);
+    // リサイズハンドル
+    const h = document.createElement('div');
+    h.className = 'resize-handle';
+    h.addEventListener('mousedown', e => startResize(e, 'text', t.id));
+    el.appendChild(h);
+    canvas.appendChild(el);
+  });
+}
+
+function applyTbStyle(el, t) {
+  el.style.left = t.x + '%';
+  el.style.top = t.y + '%';
+  if (t.wrap === 'nowrap') {
+    // 自動折り返し OFF。ただし手動改行 (\n) は尊重 → white-space: pre
+    el.style.maxWidth = 'none';
+    el.style.whiteSpace = 'pre';
+    el.style.wordBreak = 'normal';
+    el.style.overflowWrap = 'normal';
+  } else {
+    // 自動折り返し ON + 改行尊重
+    el.style.maxWidth = t.width + '%';
+    el.style.whiteSpace = 'pre-wrap';
+    el.style.wordBreak = 'break-word';
+    el.style.overflowWrap = 'anywhere';
+  }
+  el.style.textAlign = t.align;
+  el.style.fontSize = t.size + 'px';
+  el.style.fontWeight = t.weight;
+  el.style.fontFamily = t.family;
+  el.style.fontStyle = t.italic;
+  el.style.letterSpacing = t.letterSpacing + 'px';
+  el.style.lineHeight = t.lineHeight;
+  el.style.textShadow = t.shadow === 'none' ? 'none' : t.shadow;
+
+  // カラー or グラデ
+  if (t.colorMode === 'gradient' && t.gradStops && t.gradStops.length >= 2) {
+    const stops = t.gradStops.map(s => `${s.color} ${s.pos}%`).join(', ');
+    const grad = `linear-gradient(${t.gradAngle}deg, ${stops})`;
+    el.style.background = grad;
+    el.style.webkitBackgroundClip = 'text';
+    el.style.backgroundClip = 'text';
+    el.style.color = 'transparent';
+    el.style.webkitTextFillColor = 'transparent';
+  } else {
+    el.style.background = 'transparent';
+    el.style.color = t.color;
+    el.style.webkitTextFillColor = t.color;
+  }
+
+  if (t.strokeWidth > 0) {
+    el.style.webkitTextStroke = `${t.strokeWidth}px ${t.strokeColor}`;
+  } else {
+    el.style.webkitTextStroke = '';
+  }
+
+  // テクスチャ（ザラザラ／エンボス）
+  const texture = t.texture || 'none';
+  if (texture === 'grain-soft' || texture === 'grain-strong') {
+    el.style.filter = `url(#${texture})`;
+  } else {
+    el.style.filter = '';
+  }
+  if (texture === 'emboss') {
+    // エンボス（凹凸感）は text-shadow の多重で擬似実装。
+    // 既存の shadow にハイライト + 暗影を重ねる
+    const baseShadow = (t.shadow && t.shadow !== 'none') ? t.shadow : '';
+    const emboss = '1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.65), 0 2px 4px rgba(0,0,0,0.5)';
+    el.style.textShadow = baseShadow ? (emboss + ', ' + baseShadow) : emboss;
+  }
+  // 通常 shadow は applyTbStyle 上部で既にセットされてる
+}
+
+function renderTbList() {
+  const list = document.getElementById('tbList');
+  list.innerHTML = state.texts.map(t => `
+    <div class="tb-item ${t.id === state.selectedId ? 'active' : ''}" onclick="selectText(${t.id})">
+      <span>#${t.id} ${escHtml(t.text.slice(0, 20))}${t.text.length > 20 ? '…' : ''}</span>
+      <span class="del" onclick="event.stopPropagation();deleteText(${t.id})">×</span>
+    </div>
+  `).join('') || '<small class="hint">テキスト未追加</small>';
+}
+
+function selectText(id) {
+  state.selectedId = id;
+  state.selectedIbId = null;
+  renderTexts();
+  renderImageBoxes();
+  renderTbList();
+  renderIbList();
+  loadIbProps();
+  loadProps();
+}
+function deleteText(id) {
+  state.texts = state.texts.filter(t => t.id !== id);
+  if (state.selectedId === id) state.selectedId = state.texts.length ? state.texts[0].id : null;
+  renderTexts();
+  renderTbList();
+  loadProps();
+}
+
+// ────────────────────────────────────────────
+// ドラッグで移動
+// ────────────────────────────────────────────
+let dragging = null;
+function startDrag(e) {
+  if (e.target.classList.contains('resize-handle')) return;
+  e.preventDefault();
+  const el = e.currentTarget;
+  const id = parseInt(el.dataset.id);
+  const t = state.texts.find(x => x.id === id);
+  if (!t) return;
+  state.selectedId = id;
+  renderTexts();
+  renderTbList();
+  loadProps();
+  dragging = {
+    id,
+    startX: e.clientX,
+    startY: e.clientY,
+    origX: t.x,
+    origY: t.y,
+  };
+  document.addEventListener('mousemove', onDrag);
+  document.addEventListener('mouseup', endDrag);
+}
+function onDrag(e) {
+  if (!dragging) return;
+  const t = state.texts.find(x => x.id === dragging.id);
+  const wrap = document.getElementById('canvasWrap').getBoundingClientRect();
+  const dx = (e.clientX - dragging.startX) / wrap.width * 100;
+  const dy = (e.clientY - dragging.startY) / wrap.height * 100;
+  t.x = Math.max(0, Math.min(100, dragging.origX + dx));
+  t.y = Math.max(0, Math.min(100, dragging.origY + dy));
+  const el = document.querySelector(`.tb[data-id="${t.id}"]`);
+  if (el) { el.style.left = t.x + '%'; el.style.top = t.y + '%'; }
+  document.getElementById('pX').value = t.x.toFixed(1);
+  document.getElementById('pY').value = t.y.toFixed(1);
+}
+function endDrag() {
+  dragging = null;
+  document.removeEventListener('mousemove', onDrag);
+  document.removeEventListener('mouseup', endDrag);
+}
+
+// ────────────────────────────────────────────
+// プロパティ更新
+// ────────────────────────────────────────────
+function getSelected() {
+  return state.texts.find(t => t.id === state.selectedId);
+}
+function updateProp(key, val) {
+  const t = getSelected();
+  if (!t) return;
+  if (['x','y','width','size','letterSpacing','lineHeight','strokeWidth','gradAngle'].includes(key)) {
+    t[key] = parseFloat(val);
+  } else {
+    t[key] = val;
+  }
+  // colorMode 切替で UI 表示切替
+  if (key === 'colorMode') {
+    document.getElementById('pColorSolidRow').style.display = (val === 'gradient') ? 'none' : 'block';
+    document.getElementById('pColorGradRow').style.display = (val === 'gradient') ? 'block' : 'none';
+    if (val === 'gradient') renderTextGradStops();
+  }
+  // 連動表示更新
+  const valId = 'p' + key.charAt(0).toUpperCase() + key.slice(1) + 'Val';
+  const valEl = document.getElementById(valId);
+  if (valEl) valEl.value = t[key];
+  // テキスト要素更新
+  if (key === 'text') {
+    // 内容変更時は DOM を再構築する必要があるので renderTexts で全再描画
+    renderTexts();
+  } else {
+    const el = document.querySelector(`.tb[data-id="${t.id}"]`);
+    if (el) applyTbStyle(el, t);
+  }
+  renderTbList();
+}
+
+function loadProps() {
+  const t = getSelected();
+  document.getElementById('propsEmpty').style.display = t ? 'none' : 'block';
+  document.getElementById('props').style.display = t ? 'block' : 'none';
+  if (!t) return;
+  document.getElementById('pText').value = t.text;
+  document.getElementById('pX').value = t.x;
+  document.getElementById('pY').value = t.y;
+  document.getElementById('pWidth').value = t.width;
+  document.getElementById('pWidthVal').value = t.width;
+  document.getElementById('pWrap').value = t.wrap || 'normal';
+  document.getElementById('pAlign').value = t.align;
+  document.getElementById('pSize').value = t.size;
+  document.getElementById('pSizeVal').value = t.size;
+  document.getElementById('pWeight').value = t.weight;
+  document.getElementById('pFamily').value = t.family;
+  document.getElementById('pItalic').value = t.italic;
+  document.getElementById('pColor').value = t.color || '#ffffff';
+  document.getElementById('pColorMode').value = t.colorMode || 'solid';
+  document.getElementById('pColorSolidRow').style.display = (t.colorMode === 'gradient') ? 'none' : 'block';
+  document.getElementById('pColorGradRow').style.display = (t.colorMode === 'gradient') ? 'block' : 'none';
+  document.getElementById('pGradAngle').value = t.gradAngle || 180;
+  document.getElementById('pGradAngleVal').value = t.gradAngle || 180;
+  renderTextGradStops();
+  document.getElementById('pLs').value = t.letterSpacing;
+  document.getElementById('pLsVal').value = t.letterSpacing;
+  document.getElementById('pLh').value = t.lineHeight;
+  document.getElementById('pLhVal').value = t.lineHeight;
+  document.getElementById('pShadow').value = t.shadow;
+  document.getElementById('pStrokeW').value = t.strokeWidth;
+  document.getElementById('pStrokeC').value = t.strokeColor;
+  document.getElementById('pTexture').value = t.texture || 'none';
+}
+
+// ────────────────────────────────────────────
+// エクスポート
+// ────────────────────────────────────────────
+function exportPNG() {
+  // 選択枠を一時非表示
+  document.querySelectorAll('.tb.selected').forEach(el => el.classList.remove('selected'));
+  html2canvas(document.getElementById('canvas'), {
+    width: 1280, height: 720, scale: 1,
+    backgroundColor: null, useCORS: true,
+  }).then(canvas => {
+    const link = document.createElement('a');
+    link.download = `thumb_${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    // 選択枠を復元
+    if (state.selectedId) renderTexts();
+  });
+}
+
+function gradTypeToCss(type, stops) {
+  // rgba 対応：alpha 付き stop を CSS に変換
+  ensureAlpha(stops);
+  const sStr = stopsToCssChain(stops);
+  if (type === 'linear-vertical') return `linear-gradient(180deg, ${sStr})`;
+  if (type === 'linear-horizontal') return `linear-gradient(90deg, ${sStr})`;
+  if (type === 'linear-diagonal') return `linear-gradient(135deg, ${sStr})`;
+  if (type === 'radial') return `radial-gradient(ellipse at center, ${sStr})`;
+  return '';
+}
+
+function exportTemplate() {
+  const lines = [];
+  lines.push('/* === 採用コード（既存テンプレ規約準拠）=== */');
+  lines.push('/* 全面背景ベース */');
+  lines.push(`.canvas-bg { position: absolute; inset: 0; background: ${state.bg.base}; }`);
+  if (state.bg.gradType !== 'none') {
+    const g = gradTypeToCss(state.bg.gradType, state.bg.gradStops);
+    lines.push(`/* 画像範囲外グラデ（全体に効く）*/`);
+    lines.push(`.bg-overlay { position: absolute; inset: 0; background: ${g}; opacity: ${state.bg.overlayOpacity}; pointer-events: none; }`);
+  }
+  lines.push('');
+  // 画像範囲
+  state.imageBoxes.forEach(ib => {
+    lines.push(`/* 画像範囲 #${ib.id} */`);
+    lines.push(`.image-box-${ib.id} {`);
+    lines.push(`  position: absolute;`);
+    lines.push(`  left: ${ib.x}%; top: ${ib.y}%;`);
+    lines.push(`  width: ${ib.w}%; height: ${ib.h}%;`);
+    lines.push(`}`);
+    lines.push(`.image-box-${ib.id} .ib-fill {`);
+    lines.push(`  position: absolute; inset: 0;`);
+    if (ib.url) lines.push(`  background-image: url('${ib.url}');`);
+    lines.push(`  background-size: cover;`);
+    lines.push(`  background-position: ${ib.bgPos || 'center'};`);
+    lines.push(`  filter: contrast(${ib.contrast}) brightness(${ib.brightness});`);
+    if (ib.mask === 'ellipse') {
+      lines.push(`  -webkit-mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);`);
+      lines.push(`          mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);`);
+      lines.push(`  -webkit-mask-size: 100% 100%; mask-size: 100% 100%;`);
+      lines.push(`  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;`);
+    } else if (ib.mask === 'fade-tb') {
+      lines.push(`  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%);`);
+      lines.push(`          mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%);`);
+    } else if (ib.mask === 'fade-lr') {
+      lines.push(`  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%);`);
+      lines.push(`          mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%);`);
+    } else if (ib.mask === 'fade-edges') {
+      lines.push(`  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%),`);
+      lines.push(`                      linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);`);
+      lines.push(`  -webkit-mask-composite: source-in; mask-composite: intersect;`);
+    }
+    lines.push(`}`);
+    if (ib.innerGrad.type !== 'none') {
+      const g = gradTypeToCss(ib.innerGrad.type, ib.innerGrad.stops);
+      lines.push(`.image-box-${ib.id} .ib-inner-overlay {`);
+      lines.push(`  position: absolute; inset: 0;`);
+      lines.push(`  background: ${g};`);
+      lines.push(`  opacity: ${ib.innerGrad.opacity};`);
+      lines.push(`  pointer-events: none;`);
+      lines.push(`}`);
+    }
+    lines.push('');
+  });
+  state.texts.forEach((t, i) => {
+    lines.push(`/* テキスト #${t.id}: "${t.text.slice(0, 30)}" */`);
+    lines.push(`.tb-${t.id} {`);
+    lines.push(`  position: absolute;`);
+    lines.push(`  left: ${t.x}%; top: ${t.y}%;`);
+    if (t.wrap === 'nowrap') {
+      lines.push(`  white-space: pre;`);  // 改行は尊重、自動折り返しなし
+    } else {
+      lines.push(`  max-width: ${t.width}%;`);
+      lines.push(`  word-break: break-word;`);
+      lines.push(`  overflow-wrap: anywhere;`);
+    }
+    lines.push(`  text-align: ${t.align};`);
+    lines.push(`  font-family: ${t.family};`);
+    lines.push(`  font-size: ${t.size}px;`);
+    lines.push(`  font-weight: ${t.weight};`);
+    if (t.italic === 'italic') lines.push(`  font-style: italic;`);
+    lines.push(`  letter-spacing: ${t.letterSpacing}px;`);
+    lines.push(`  line-height: ${t.lineHeight};`);
+    if (t.colorMode === 'gradient' && t.gradStops && t.gradStops.length >= 2) {
+      const stops = t.gradStops.map(s => `${s.color} ${s.pos}%`).join(', ');
+      lines.push(`  background: linear-gradient(${t.gradAngle}deg, ${stops});`);
+      lines.push(`  -webkit-background-clip: text;`);
+      lines.push(`  background-clip: text;`);
+      lines.push(`  -webkit-text-fill-color: transparent;`);
+    } else {
+      lines.push(`  color: ${t.color};`);
+    }
+    // text-shadow（emboss 時はハイライト+暗影を合成）
+    let finalShadow = (t.shadow && t.shadow !== 'none') ? t.shadow : '';
+    if (t.texture === 'emboss') {
+      const emboss = '1px 1px 0 rgba(255,255,255,0.55), -1px -1px 0 rgba(0,0,0,0.65), 0 2px 4px rgba(0,0,0,0.5)';
+      finalShadow = finalShadow ? (emboss + ', ' + finalShadow) : emboss;
+    }
+    if (finalShadow) lines.push(`  text-shadow: ${finalShadow};`);
+    if (t.strokeWidth > 0) lines.push(`  -webkit-text-stroke: ${t.strokeWidth}px ${t.strokeColor};`);
+    // テクスチャ（ザラザラ／コーティング）— SVG filter 参照
+    if (t.texture === 'grain-soft' || t.texture === 'grain-strong') {
+      lines.push(`  filter: url(#${t.texture});`);
+    }
+    lines.push(`}`);
+    lines.push('');
+  });
+  lines.push('/* === HTML body === */');
+  lines.push('<div class="canvas-bg"></div>');
+  if (state.bg.gradType !== 'none') lines.push('<div class="bg-overlay"></div>');
+  state.imageBoxes.forEach(ib => {
+    lines.push(`<div class="image-box-${ib.id}">`);
+    lines.push(`  <div class="ib-fill"></div>`);
+    if (ib.innerGrad.type !== 'none') lines.push(`  <div class="ib-inner-overlay"></div>`);
+    lines.push(`</div>`);
+  });
+  state.texts.forEach(t => {
+    lines.push(`<div class="tb-${t.id}">${escHtml(t.text)}</div>`);
+  });
+  document.getElementById('codeOutput').textContent = lines.join('\n');
+}
+
+function saveJSON() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.download = `thumb_state_${Date.now()}.json`;
+  link.href = URL.createObjectURL(blob);
+  link.click();
+}
+function loadJSON() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'application/json';
+  inp.onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const obj = JSON.parse(ev.target.result);
+        Object.assign(state, obj);
+        // 後方互換: 旧 stop 形式（alpha 無し）を ensureAlpha で補完
+        if (state.bg && state.bg.gradStops) ensureAlpha(state.bg.gradStops);
+        if (Array.isArray(state.imageBoxes)) {
+          state.imageBoxes.forEach(ib => { if (ib && ib.innerGrad) ensureAlpha(ib.innerGrad.stops); });
+        }
+        renderAll();
+      } catch (err) { alert('JSON 読込失敗: ' + err.message); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+
+// ────────────────────────────────────────────
+// ズーム
+// ────────────────────────────────────────────
+let zoom = 0.7;
+function setZoom(z) {
+  zoom = z;
+  document.getElementById('canvasWrap').style.transform = `scale(${z})`;
+  document.getElementById('zoomLabel').textContent = `×${z}`;
+}
+
+// ────────────────────────────────────────────
+// 全描画
+// ────────────────────────────────────────────
+function renderAll() {
+  document.getElementById('bgBase').value = state.bg.base;
+  // gradType / overlayOpacity の DOM は廃止（grad editor v2 内に統合）
+  ensureAlpha(state.bg.gradStops);
+  renderGradStops();
+  updateBgOverlay();
+  renderImageBoxes();
+  renderIbList();
+  renderTexts();
+  renderTbList();
+  loadIbProps();
+  loadProps();
+}
+
+// ────────────────────────────────────────────
+// ヘルパ
+// ────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 初期化
+renderGradStops();
+setZoom(0.7);
+renderIbList();
+// キャンバスクリックで選択解除（背景レイヤークリック時）
+document.getElementById('canvas').addEventListener('click', e => {
+  if (e.target.classList.contains('canvas') || e.target.id === 'bgLayer' || e.target.id === 'bgOverlay') {
+    state.selectedId = null;
+    state.selectedIbId = null;
+    renderTexts();
+    renderImageBoxes();
+    renderTbList();
+    renderIbList();
+    loadIbProps();
+    loadProps();
+  }
+});
+</script>
+
+</body>
+</html>
