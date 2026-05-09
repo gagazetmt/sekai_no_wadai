@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>📊 Data Explorer (walker / recipe)</title>
+<style>
+  :root {
+    --bg: #0d1220;
+    --panel: #141a2e;
+    --panel-2: #1a2240;
+    --border: #2a3560;
+    --accent: #ef4444;
+    --accent-2: #f59e0b;
+    --good: #10b981;
+    --muted: #8a9aba;
+    --text: #e8edf5;
+    --left-col: #4ea2ff;
+    --right-col: #ff8a8a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    font-size: 13px; line-height: 1.5;
+  }
+  header {
+    padding: 14px 20px; background: var(--panel);
+    border-bottom: 2px solid var(--accent); display: flex; align-items: center; gap: 16px;
+  }
+  header h1 { font-size: 17px; margin: 0; color: var(--accent); }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { padding: 16px 20px 60px; }
+  section { margin-bottom: 18px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  h2 { font-size: 14px; margin: 0 0 10px; color: var(--accent-2); }
+  h3 { font-size: 13px; margin: 14px 0 6px; color: var(--text); }
+  label { color: var(--muted); display: inline-block; margin-right: 6px; font-size: 12px; }
+  select, input[type=text] {
+    background: #0d1220; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; min-width: 140px;
+  }
+  select:disabled { opacity: 0.5; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 6px;
+    padding: 6px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button:hover { filter: brightness(1.1); }
+  button.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  button.ghost:hover { background: var(--panel-2); }
+  button.recipe-btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    text-align: left; padding: 8px 12px; margin: 4px 6px 4px 0; font-size: 12px;
+    border-radius: 6px; cursor: pointer; max-width: 280px;
+  }
+  button.recipe-btn:hover { border-color: var(--accent-2); }
+  button.recipe-btn .key { display: block; color: var(--accent-2); font-weight: 600; }
+  button.recipe-btn .desc { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .row > * { margin-right: 6px; }
+  .stat { color: var(--muted); font-size: 12px; }
+  .stat strong { color: var(--text); }
+  .badge {
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-size: 10.5px; font-weight: 600; background: var(--panel-2); color: var(--text);
+    margin-right: 4px;
+  }
+  .badge.role-player    { background: #1d3a8a; }
+  .badge.role-team      { background: #5b1f8a; }
+  .badge.role-manager   { background: #8a4a1f; }
+  .badge.role-tournament{ background: #1f8a6e; }
+  .badge.role-match     { background: #8a1f4a; }
+  .badge.compare        { background: var(--accent); }
+
+  /* スロット表 */
+  table.slots { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.slots th {
+    background: var(--panel-2); color: var(--accent-2); text-align: left;
+    padding: 6px 10px; border-bottom: 1px solid var(--border); font-weight: 600;
+    position: sticky; top: 0; z-index: 1;
+  }
+  table.slots td {
+    padding: 6px 10px; border-bottom: 1px solid var(--border);
+    vertical-align: top; word-break: break-word;
+  }
+  table.slots tbody tr:hover { background: rgba(239,68,68,0.04); }
+  table.slots .col-key   { color: var(--accent-2); font-family: ui-monospace, monospace; font-size: 11.5px; white-space: nowrap; }
+  table.slots .col-label { font-weight: 500; }
+  table.slots .col-value { color: var(--text); }
+  table.slots .col-l     { color: var(--left-col); }
+  table.slots .col-r     { color: var(--right-col); }
+  table.slots .col-pri   { color: var(--muted); text-align: right; font-family: ui-monospace, monospace; }
+  table.slots .col-src   { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  table.slots .check     { width: 28px; text-align: center; }
+  table.slots .cat-row td {
+    background: linear-gradient(90deg, var(--panel-2), transparent);
+    color: var(--accent-2); font-weight: 600; padding: 8px 10px; font-size: 12px;
+  }
+  table.slots .cat-row .count { color: var(--muted); margin-left: 10px; font-weight: normal; font-size: 11px; }
+
+  /* 選択キー一覧 */
+  .selected-keys {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    background: #0d1220; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px; min-height: 36px;
+  }
+  .key-chip {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 3px 8px; border-radius: 14px; font-size: 11.5px; font-family: ui-monospace, monospace;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .key-chip .x { color: var(--muted); cursor: pointer; padding: 0 2px; }
+  .key-chip .x:hover { color: var(--accent); }
+
+  /* comparison カード プレビュー */
+  .preview-card {
+    background: linear-gradient(145deg, #1a2440, #0f1530);
+    border: 2px solid var(--accent); border-radius: 14px;
+    padding: 18px 22px; margin-top: 10px;
+  }
+  .preview-card .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .preview-card .name { font-size: 16px; font-weight: 700; }
+  .preview-card .name.left  { color: var(--left-col); }
+  .preview-card .name.right { color: var(--right-col); }
+  .preview-card .vs { color: var(--accent); font-size: 18px; font-weight: 800; }
+  .preview-card .row-c {
+    display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 10px; align-items: center;
+    padding: 6px 4px; border-bottom: 1px dashed rgba(255,255,255,0.07);
+  }
+  .preview-card .row-c .l { text-align: right; color: var(--left-col);  font-weight: 600; font-size: 14px; }
+  .preview-card .row-c .lbl { text-align: center; color: var(--muted); font-size: 11.5px; }
+  .preview-card .row-c .r { text-align: left;  color: var(--right-col); font-weight: 600; font-size: 14px; }
+  .preview-card .empty { color: var(--muted); text-align: center; padding: 18px; font-style: italic; }
+
+  .filter-input { width: 320px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .small { color: var(--muted); font-size: 11.5px; }
+  .truncate { max-width: 380px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  details { margin-top: 6px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Data Explorer</h1>
+  <span class="sub">walker / recipe / comparison の挙動を案件ベースで確認</span>
+</header>
+
+<main>
+
+  <!-- ── 上段：案件＋entity 選択 ── -->
+  <section class="panel">
+    <h2>① 案件と entity を選ぶ</h2>
+    <div class="row">
+      <label>案件:</label>
+      <select id="projSel" style="min-width:380px;"></select>
+      <label>主体 (primary):</label>
+      <select id="primarySel" disabled></select>
+      <label>比較相手 (secondary, 任意):</label>
+      <select id="secondarySel" disabled>
+        <option value="">— なし（単体表示）—</option>
+      </select>
+      <button id="probeBtn" disabled>walker 実行</button>
+    </div>
+    <div class="stat" id="probeStat" style="margin-top:8px;">案件と entity を選んで「walker 実行」を押してね。</div>
+  </section>
+
+  <!-- ── 中段：スロット表 ── -->
+  <section class="panel" id="slotPanel" style="display:none;">
+    <h2>② スロット一覧（大分類 = role / 中分類 = category / 小分類 = slot）</h2>
+    <div class="toolbar">
+      <input type="text" class="filter-input" id="filterInput" placeholder="🔍 key / label でフィルタ（例: rating, 監督, market）">
+      <button class="ghost" id="clearSel">選択クリア</button>
+      <span class="stat" id="slotStat"></span>
+    </div>
+    <div style="margin-top:10px; max-height:560px; overflow:auto; border:1px solid var(--border); border-radius:8px;">
+      <table class="slots" id="slotTable">
+        <thead>
+          <tr id="slotHead">
+            <th class="check">☑</th>
+            <th>key</th>
+            <th>label</th>
+            <th>value</th>
+            <th class="col-pri">prio</th>
+            <th class="col-src">source</th>
+          </tr>
+        </thead>
+        <tbody id="slotBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── 下段A：レシピ一覧 ── -->
+  <section class="panel" id="recipePanel" style="display:none;">
+    <h2>③ 利用可能レシピ（クリックで slot を一括選択）</h2>
+    <div id="recipeList"></div>
+    <details>
+      <summary>全レシピを見る（参考）</summary>
+      <div id="allRecipeList" style="margin-top:8px;"></div>
+    </details>
+  </section>
+
+  <!-- ── 下段B：選択中のキー＋プレビュー ── -->
+  <section class="panel" id="selectedPanel" style="display:none;">
+    <h2>④ 選択中の slot keys / プレビュー</h2>
+    <div class="row">
+      <span class="stat">customSlotKeys 推奨件数: 比較=<strong>5</strong> / 単体=<strong>6〜8</strong></span>
+      <button class="ghost" id="copyKeysBtn">📋 keys をコピー</button>
+      <span class="stat" id="copyStat"></span>
+    </div>
+    <div class="selected-keys" id="selectedChips" style="margin-top:8px;"></div>
+
+    <h3 style="margin-top:18px;">プレビュー（<span id="previewMode">単体</span> 表示）</h3>
+    <div class="preview-card" id="previewCard"></div>
+  </section>
+
+</main>
+
+<script>
+const STATE = {
+  postId: null,
+  primary: null,
+  secondary: null,
+  role: null,
+  isCompare: false,
+  slots: [],            // walker 出力
+  selectedKeys: [],     // 順序保持
+  recipes: [],          // walker 結果に紐づく applicableRecipes
+};
+
+// ─── 起動：案件リスト ────────────────────────────
+async function init() {
+  const r = await fetch('/api/v3/data-explorer/projects');
+  const j = await r.json();
+  const sel = document.getElementById('projSel');
+  sel.innerHTML = '<option value="">— 選択 —</option>' +
+    (j.projects || []).map(p => `<option value="${escAttr(p.id)}">${escHtml(p.title)}</option>`).join('');
+  sel.onchange = onProjectChange;
+  document.getElementById('probeBtn').onclick = runWalker;
+  document.getElementById('clearSel').onclick = () => { STATE.selectedKeys = []; renderSelected(); refreshChecks(); };
+  document.getElementById('copyKeysBtn').onclick = copyKeys;
+  document.getElementById('filterInput').oninput = renderSlots;
+  loadAllRecipes();
+}
+
+async function onProjectChange(e) {
+  const postId = e.target.value;
+  STATE.postId = postId;
+  const ps = document.getElementById('primarySel');
+  const ss = document.getElementById('secondarySel');
+  ps.disabled = ss.disabled = !postId;
+  ps.innerHTML = ''; ss.innerHTML = '<option value="">— なし（単体表示）—</option>';
+  document.getElementById('probeBtn').disabled = true;
+  if (!postId) return;
+  const r = await fetch('/api/v3/data-explorer/entities?postId=' + encodeURIComponent(postId));
+  const j = await r.json();
+  if (!j.ok) { alert('entities 取得失敗: ' + (j.error || '')); return; }
+  const ents = (j.entities || []).filter(e => e.sofaOk || e.wikiOk || e.fotmobOk || e.tmOk);
+  const matches = (j.matches || []).filter(m => m.ok);
+  const all = [
+    ...ents.map(e => ({ value: e.label, label: `[${e.role}] ${e.label}`, role: e.role })),
+    ...matches.map(m => ({ value: m.label, label: `[match] ${m.label}`, role: 'match' })),
+  ];
+  const opts = all.map(o => `<option value="${escAttr(o.value)}" data-role="${o.role}">${escHtml(o.label)}</option>`).join('');
+  ps.innerHTML = '<option value="">— 選択 —</option>' + opts;
+  ss.innerHTML = '<option value="">— なし（単体表示）—</option>' + opts;
+  ps.onchange = () => {
+    const v = ps.value;
+    document.getElementById('probeBtn').disabled = !v;
+    // secondary は同 role のみ有効化
+    const role = ps.selectedOptions[0]?.dataset?.role;
+    [...ss.options].forEach(o => {
+      if (!o.value) return;
+      o.disabled = (o.dataset.role !== role) || (o.value === v);
+    });
+    ss.value = '';
+  };
+}
+
+async function runWalker() {
+  const ps = document.getElementById('primarySel');
+  const ss = document.getElementById('secondarySel');
+  STATE.primary   = ps.value;
+  STATE.secondary = ss.value || null;
+  if (!STATE.postId || !STATE.primary) return;
+
+  document.getElementById('probeStat').textContent = '⏳ walker 実行中...';
+  const url = '/api/v3/data-explorer/walker'
+    + '?postId=' + encodeURIComponent(STATE.postId)
+    + '&label=' + encodeURIComponent(STATE.primary)
+    + (STATE.secondary ? '&pairLabel=' + encodeURIComponent(STATE.secondary) : '');
+  const r = await fetch(url);
+  const j = await r.json();
+  if (!j.ok) { document.getElementById('probeStat').textContent = '❌ ' + (j.error || ''); return; }
+
+  STATE.role      = j.role;
+  STATE.isCompare = !!j.isCompare;
+  STATE.slots     = j.slots || [];
+  STATE.recipes   = j.recipes || [];
+  STATE.selectedKeys = [];
+
+  document.getElementById('probeStat').innerHTML =
+    `<span class="badge role-${j.role}">${j.role}</span>` +
+    (j.isCompare ? '<span class="badge compare">COMPARE</span>' : '') +
+    ` <strong>${escHtml(j.primary)}</strong>` +
+    (j.secondary ? ` <span class="vs">vs</span> <strong>${escHtml(j.secondary)}</strong>` : '') +
+    ` <span class="small">— ${j.slotCount} slot</span>`;
+
+  document.getElementById('slotPanel').style.display = '';
+  document.getElementById('recipePanel').style.display = '';
+  document.getElementById('selectedPanel').style.display = '';
+
+  setupSlotHeader();
+  renderSlots();
+  renderRecipes();
+  renderSelected();
+}
+
+function setupSlotHeader() {
+  const head = document.getElementById('slotHead');
+  if (STATE.isCompare) {
+    head.innerHTML =
+      '<th class="check">☑</th>' +
+      '<th>key</th><th>label</th>' +
+      '<th class="col-l">leftValue</th><th class="col-r">rightValue</th>' +
+      '<th class="col-pri">prio</th><th class="col-src">source</th>';
+  } else {
+    head.innerHTML =
+      '<th class="check">☑</th>' +
+      '<th>key</th><th>label</th><th>value</th>' +
+      '<th class="col-pri">prio</th><th class="col-src">source</th>';
+  }
+}
+
+function renderSlots() {
+  const filter = document.getElementById('filterInput').value.trim().toLowerCase();
+  // category 別グループ化
+  const groups = {};
+  let total = 0, shown = 0;
+  for (const s of STATE.slots) {
+    total++;
+    if (filter && !(s.key.toLowerCase().includes(filter) || (s.label||'').toLowerCase().includes(filter))) continue;
+    shown++;
+    const cat = s.category || 'その他';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(s);
+  }
+  // priority 高い順
+  Object.values(groups).forEach(arr => arr.sort((a,b) => (b.priority||0) - (a.priority||0)));
+  const cats = Object.keys(groups).sort();
+
+  const body = document.getElementById('slotBody');
+  body.innerHTML = cats.map(cat => {
+    const arr = groups[cat];
+    const rows = arr.map(s => {
+      const checked = STATE.selectedKeys.includes(s.key) ? 'checked' : '';
+      const valCells = STATE.isCompare
+        ? `<td class="col-l">${fmtVal(s.leftValue)}</td><td class="col-r">${fmtVal(s.rightValue)}</td>`
+        : `<td class="col-value"><span class="truncate" title="${escAttr(s.value)}">${fmtVal(s.value)}</span></td>`;
+      return `<tr data-key="${escAttr(s.key)}">`
+        + `<td class="check"><input type="checkbox" ${checked} onchange="toggleKey('${escAttr(s.key)}', this.checked)"></td>`
+        + `<td class="col-key">${escHtml(s.key)}</td>`
+        + `<td class="col-label">${escHtml(s.label || '')}</td>`
+        + valCells
+        + `<td class="col-pri">${s.priority ?? ''}</td>`
+        + `<td class="col-src">${escHtml(s.source || '')}</td>`
+        + `</tr>`;
+    }).join('');
+    return `<tr class="cat-row"><td colspan="${STATE.isCompare ? 7 : 6}">${escHtml(cat)} <span class="count">(${arr.length})</span></td></tr>` + rows;
+  }).join('');
+
+  document.getElementById('slotStat').textContent =
+    filter ? `${shown}/${total} slot 表示` : `${total} slot`;
+}
+
+function refreshChecks() {
+  document.querySelectorAll('#slotBody tr[data-key] input[type=checkbox]').forEach(cb => {
+    const tr = cb.closest('tr');
+    cb.checked = STATE.selectedKeys.includes(tr.dataset.key);
+  });
+}
+
+window.toggleKey = (key, checked) => {
+  if (checked) {
+    if (!STATE.selectedKeys.includes(key)) STATE.selectedKeys.push(key);
+  } else {
+    STATE.selectedKeys = STATE.selectedKeys.filter(k => k !== key);
+  }
+  renderSelected();
+};
+
+function renderRecipes() {
+  const html = (STATE.recipes || []).map(r => {
+    const expanded = r.expanded || [];
+    return `<button class="recipe-btn" onclick='applyRecipe(${JSON.stringify(JSON.stringify(expanded))})'>`
+      + `<span class="key">${escHtml(r.key)}</span>`
+      + `<span class="desc">${escHtml(r.label)} — ${escHtml(r.description || '')}</span>`
+      + `<span class="small">展開: ${expanded.length} keys</span>`
+      + `</button>`;
+  }).join('');
+  document.getElementById('recipeList').innerHTML = html ||
+    '<div class="small">このエンティティで使えるレシピはありません（customSlotKeys で個別選択）。</div>';
+}
+
+window.applyRecipe = (keysJson) => {
+  try {
+    const keys = JSON.parse(JSON.parse(keysJson));
+    STATE.selectedKeys = keys.slice();
+    refreshChecks(); renderSelected();
+  } catch (e) { console.warn(e); }
+};
+
+function renderSelected() {
+  const chips = document.getElementById('selectedChips');
+  if (!STATE.selectedKeys.length) {
+    chips.innerHTML = '<span class="small">選択なし — 表のチェックボックスで選ぶか、上のレシピをクリックしてね。</span>';
+  } else {
+    chips.innerHTML = STATE.selectedKeys.map(k =>
+      `<span class="key-chip">${escHtml(k)}<span class="x" onclick="toggleKey('${escAttr(k)}', false); refreshChecks();">×</span></span>`
+    ).join('');
+  }
+  // プレビュー
+  document.getElementById('previewMode').textContent = STATE.isCompare ? 'comparison' : '単体';
+  const card = document.getElementById('previewCard');
+  if (!STATE.selectedKeys.length) {
+    card.innerHTML = '<div class="empty">slot を選択するとプレビュー表示</div>';
+    return;
+  }
+  const slotMap = new Map(STATE.slots.map(s => [s.key, s]));
+  if (STATE.isCompare) {
+    const head = `<div class="head">`
+      + `<div class="name left">${escHtml(STATE.primary)}</div>`
+      + `<div class="vs">VS</div>`
+      + `<div class="name right">${escHtml(STATE.secondary)}</div>`
+      + `</div>`;
+    const rows = STATE.selectedKeys.map(k => {
+      const s = slotMap.get(k); if (!s) return '';
+      return `<div class="row-c">`
+        + `<div class="l">${fmtVal(s.leftValue)}</div>`
+        + `<div class="lbl">${escHtml(s.label || k)}</div>`
+        + `<div class="r">${fmtVal(s.rightValue)}</div>`
+        + `</div>`;
+    }).join('');
+    card.innerHTML = head + rows;
+  } else {
+    const head = `<div class="head"><div class="name left">${escHtml(STATE.primary)}</div></div>`;
+    const rows = STATE.selectedKeys.map(k => {
+      const s = slotMap.get(k); if (!s) return '';
+      return `<div class="row-c">`
+        + `<div class="l" style="text-align:right;color:var(--text);">${fmtVal(s.value)}</div>`
+        + `<div class="lbl">${escHtml(s.label || k)}</div>`
+        + `<div class="r" style="text-align:left;color:var(--muted);">${escHtml(s.source || '')}</div>`
+        + `</div>`;
+    }).join('');
+    card.innerHTML = head + rows;
+  }
+}
+
+async function copyKeys() {
+  const txt = JSON.stringify(STATE.selectedKeys);
+  try {
+    await navigator.clipboard.writeText(txt);
+    document.getElementById('copyStat').textContent = '✅ コピー: ' + txt.slice(0, 60) + (txt.length > 60 ? '…' : '');
+    setTimeout(() => document.getElementById('copyStat').textContent = '', 3000);
+  } catch (e) {
+    document.getElementById('copyStat').textContent = '❌ コピー失敗';
+  }
+}
+
+async function loadAllRecipes() {
+  const r = await fetch('/api/v3/data-explorer/all-recipes');
+  const j = await r.json();
+  if (!j.ok) return;
+  document.getElementById('allRecipeList').innerHTML = (j.recipes || []).map(r => {
+    const roles = (r.appliesTo?.role || []).join(',');
+    const cmp = r.appliesTo?.requiresSecondary ? ' / compare' : '';
+    return `<div style="margin:6px 0; padding:6px 10px; background:var(--panel-2); border-radius:6px;">`
+      + `<div style="color:var(--accent-2); font-family:ui-monospace,monospace; font-size:12px;">${escHtml(r.key)} `
+      + `<span class="small">[${roles}${cmp}]</span></div>`
+      + `<div class="small" style="margin-top:2px;">${escHtml(r.label)} — ${escHtml(r.description || '')}</div>`
+      + `<div class="small" style="font-family:ui-monospace,monospace; margin-top:2px;">keys: ${escHtml(r.keys.join(', '))}</div>`
+      + `</div>`;
+  }).join('');
+}
+
+// ─── utils ────────────────────────────────────
+function escHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escAttr(s) { return escHtml(s); }
+function fmtVal(v) {
+  if (v == null || v === '') return '<span class="small">—</span>';
+  if (typeof v === 'object') return '<span class="small">' + escHtml(JSON.stringify(v).slice(0, 80)) + '</span>';
+  const s = String(v);
+  if (s.length > 60) return escHtml(s.slice(0, 60)) + '<span class="small">…</span>';
+  return escHtml(s);
+}
+
+init();
+</script>
+</body>
+</html>

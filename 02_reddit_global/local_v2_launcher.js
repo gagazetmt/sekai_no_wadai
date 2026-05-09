@@ -23,6 +23,7 @@ const { router: s3Router,  getUI: s3UI  } = require('./routes/step3_routes');
 const { router: s35Router, getUI: s35UI } = require('./routes/step35_routes');
 const { router: s4Router,  getUI: s4UI  } = require('./routes/step4_routes');
 const { router: s5Router,  getUI: s5UI  } = require('./routes/step5_routes');
+const { router: dataExplorerRouter }     = require('./routes/data_explorer_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
@@ -30,6 +31,7 @@ app.use('/api', s3Router);
 app.use('/api', s35Router);
 app.use('/api', s4Router);
 app.use('/api', s5Router);
+app.use('/api', dataExplorerRouter);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
@@ -42,6 +44,9 @@ app.use('/v2_videos', require('express').static(path.join(__dirname, 'data', 'v2
 
 // 生成済みサムネを静的配信（Step5 で表示・ダウンロード）
 app.use('/v2_thumbs', require('express').static(path.join(__dirname, 'data', 'v2_thumbs')));
+
+// データエクスプローラ（walker / recipe / comparison の挙動を可視化）
+app.use('/v2_data_explorer', require('express').static(path.join(__dirname, 'data', 'v2_data_explorer')));
 
 // BGM 静的配信（サンプルギャラリーで使う、bgm/ ディレクトリ全体）
 app.use('/bgm', require('express').static(path.join(__dirname, 'bgm')));
