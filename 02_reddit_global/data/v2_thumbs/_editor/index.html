@@ -207,12 +207,18 @@ main {
   position: absolute;
   cursor: move;
   user-select: none;
-  border: 2px dashed transparent;
+  outline: 2px dashed transparent;   /* 選択枠（border は下地枠線専用に解放）*/
+  outline-offset: 2px;
   z-index: 10;
   padding: 4px 6px;
   white-space: pre-wrap;
+  box-sizing: border-box;
 }
-.tb.selected { border-color: var(--accent); }
+.tb.selected { outline-color: var(--accent); }
+/* テキスト本体（.tb の中に span として配置 / 下地と分離）*/
+.tb .tb-content {
+  display: inline;
+}
 .tb-label {
   position: absolute;
   top: -22px;
@@ -931,6 +937,50 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
           <div class="inline">
             <input type="number" id="pStrokeW" min="0" max="6" step="0.5" value="0" oninput="updateProp('strokeWidth', this.value)" style="width:60px;">
             <input type="color" id="pStrokeC" value="#7f1d1d" oninput="updateProp('strokeColor', this.value)">
+          </div>
+        </div>
+
+      </div>
+    </details>
+
+    <!-- 🟦 下地（背景・枠線） -->
+    <details class="prop-section">
+      <summary>🟦 下地（背景・枠線）</summary>
+      <div class="prop-body">
+
+        <div class="row">
+          <label>背景色 / 透明度（α=0 で下地なし）</label>
+          <div class="inline">
+            <input type="color" id="pBgColor" value="#000000" oninput="updateProp('bgColor', this.value)">
+            <input type="range" id="pBgAlpha" min="0" max="1" step="0.05" value="0" oninput="updateProp('bgAlpha', this.value)">
+            <input type="number" id="pBgAlphaVal" min="0" max="1" step="0.05" value="0" oninput="updateProp('bgAlpha', this.value)" style="width:55px;">
+          </div>
+        </div>
+
+        <div class="row">
+          <label>余白 X (px) / Y (px)</label>
+          <div class="inline">
+            <input type="number" id="pBgPadX" min="0" max="80" step="1" value="12" oninput="updateProp('bgPaddingX', this.value)" style="width:70px;">
+            <input type="number" id="pBgPadY" min="0" max="80" step="1" value="6" oninput="updateProp('bgPaddingY', this.value)" style="width:70px;">
+          </div>
+        </div>
+
+        <div class="row">
+          <label>角丸 (px)</label>
+          <div class="inline">
+            <input type="range" id="pBdRadius" min="0" max="80" step="1" value="0" oninput="updateProp('bdRadius', this.value)">
+            <input type="number" id="pBdRadiusVal" min="0" max="80" step="1" value="0" oninput="updateProp('bdRadius', this.value)" style="width:55px;">
+          </div>
+        </div>
+
+        <div class="row">
+          <label>枠線 太さ (px) / 色 / α</label>
+          <div class="inline">
+            <input type="range" id="pBdWidth" min="0" max="20" step="0.5" value="0" oninput="updateProp('bdWidth', this.value)">
+            <input type="number" id="pBdWidthVal" min="0" max="20" step="0.5" value="0" oninput="updateProp('bdWidth', this.value)" style="width:55px;">
+            <input type="color" id="pBdColor" value="#ffffff" oninput="updateProp('bdColor', this.value)">
+            <input type="range" id="pBdAlpha" min="0" max="1" step="0.05" value="1" oninput="updateProp('bdAlpha', this.value)">
+            <input type="number" id="pBdAlphaVal" min="0" max="1" step="0.05" value="1" oninput="updateProp('bdAlpha', this.value)" style="width:55px;">
           </div>
         </div>
 
@@ -2168,6 +2218,12 @@ function addText() {
     strokeColor: '#7f1d1d',
     // 🆕 ハロ効果（テキスト周辺の靄）
     halo: { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 },
+    // 🆕 下地（背景・枠線）/ 2026-05-10
+    bgColor: '#000000', bgAlpha: 0,        // 0 = 下地なし
+    bgPaddingX: 12, bgPaddingY: 6,          // px
+    bdColor: '#ffffff', bdAlpha: 1,         // 枠線
+    bdWidth: 0,                             // px (0 = 枠線なし)
+    bdRadius: 0,                            // px
   };
   state.texts.push(t);
   state.selectedId = id;
@@ -2350,7 +2406,11 @@ function renderTexts() {
     const el = document.createElement('div');
     el.className = 'tb' + (t.id === state.selectedId ? ' selected' : '');
     el.dataset.id = t.id;
-    el.textContent = t.text;
+    // テキスト本体は span に分離（.tb は下地担当 / .tb-content がテキスト担当）
+    const span = document.createElement('span');
+    span.className = 'tb-content';
+    span.textContent = t.text;
+    el.appendChild(span);
     applyTbStyle(el, t);
     el.addEventListener('mousedown', startDrag);
     el.addEventListener('click', e => {
@@ -2405,6 +2465,7 @@ function buildCombinedShadow(t) {
 }
 
 function applyTbStyle(el, t) {
+  // ─── .tb 自体（下地：背景・枠線・余白・配置）───
   el.style.left = t.x + '%';
   el.style.top = t.y + '%';
   if (t.wrap === 'nowrap') {
@@ -2421,43 +2482,66 @@ function applyTbStyle(el, t) {
     el.style.overflowWrap = 'anywhere';
   }
   el.style.textAlign = t.align;
+  // フォント系は親に（子 span は継承）
   el.style.fontSize = t.size + 'px';
   el.style.fontWeight = t.weight;
   el.style.fontFamily = t.family;
   el.style.fontStyle = t.italic;
   el.style.letterSpacing = t.letterSpacing + 'px';
   el.style.lineHeight = t.lineHeight;
+  // 下地（背景色 + 余白 + 角丸 + 枠線）
+  const bgAlpha = t.bgAlpha != null ? +t.bgAlpha : 0;
+  if (bgAlpha > 0) {
+    el.style.background = hexAlphaToRgba(t.bgColor || '#000000', bgAlpha);
+  } else {
+    el.style.background = 'transparent';
+  }
+  const padX = t.bgPaddingX != null ? +t.bgPaddingX : 6;
+  const padY = t.bgPaddingY != null ? +t.bgPaddingY : 4;
+  el.style.padding = `${padY}px ${padX}px`;
+  el.style.borderRadius = (t.bdRadius != null ? +t.bdRadius : 0) + 'px';
+  const bdW = t.bdWidth != null ? +t.bdWidth : 0;
+  const bdA = t.bdAlpha != null ? +t.bdAlpha : 1;
+  if (bdW > 0 && bdA > 0) {
+    el.style.border = `${bdW}px solid ${hexAlphaToRgba(t.bdColor || '#ffffff', bdA)}`;
+  } else {
+    el.style.border = '';
+  }
+
+  // ─── .tb-content（テキスト本体：色・グラデ・stroke・shadow・filter）───
+  const span = el.querySelector('.tb-content');
+  if (!span) return;
   // halo + emboss + shadow を統合
   const combined = buildCombinedShadow(t);
-  el.style.textShadow = combined || 'none';
+  span.style.textShadow = combined || 'none';
 
   // カラー or グラデ
   if (t.colorMode === 'gradient' && t.gradStops && t.gradStops.length >= 2) {
     const stops = t.gradStops.map(s => `${s.color} ${s.pos}%`).join(', ');
     const grad = `linear-gradient(${t.gradAngle}deg, ${stops})`;
-    el.style.background = grad;
-    el.style.webkitBackgroundClip = 'text';
-    el.style.backgroundClip = 'text';
-    el.style.color = 'transparent';
-    el.style.webkitTextFillColor = 'transparent';
+    span.style.background = grad;
+    span.style.webkitBackgroundClip = 'text';
+    span.style.backgroundClip = 'text';
+    span.style.color = 'transparent';
+    span.style.webkitTextFillColor = 'transparent';
   } else {
-    el.style.background = 'transparent';
-    el.style.color = t.color;
-    el.style.webkitTextFillColor = t.color;
+    span.style.background = 'transparent';
+    span.style.color = t.color;
+    span.style.webkitTextFillColor = t.color;
   }
 
   if (t.strokeWidth > 0) {
-    el.style.webkitTextStroke = `${t.strokeWidth}px ${t.strokeColor}`;
+    span.style.webkitTextStroke = `${t.strokeWidth}px ${t.strokeColor}`;
   } else {
-    el.style.webkitTextStroke = '';
+    span.style.webkitTextStroke = '';
   }
 
   // テクスチャ（ザラザラ／エンボス）
   const texture = t.texture || 'none';
   if (texture === 'grain-soft' || texture === 'grain-strong') {
-    el.style.filter = `url(#${texture})`;
+    span.style.filter = `url(#${texture})`;
   } else {
-    el.style.filter = '';
+    span.style.filter = '';
   }
   // emboss の text-shadow は buildCombinedShadow() 内で halo / shadow と統合済み
 }
@@ -2547,7 +2631,8 @@ function getSelected() {
 function updateProp(key, val) {
   const t = getSelected();
   if (!t) return;
-  if (['x','y','width','size','letterSpacing','lineHeight','strokeWidth','gradAngle'].includes(key)) {
+  if (['x','y','width','size','letterSpacing','lineHeight','strokeWidth','gradAngle',
+       'bgAlpha','bgPaddingX','bgPaddingY','bdAlpha','bdWidth','bdRadius'].includes(key)) {
     t[key] = parseFloat(val);
   } else {
     t[key] = val;
@@ -2621,6 +2706,28 @@ function loadProps() {
   document.getElementById('pHaloLayers').value = t.halo.layers;
   document.getElementById('pHaloLayersVal').value = t.halo.layers;
   document.getElementById('pHaloBox').classList.toggle('disabled', !t.halo.enabled);
+
+  // 🆕 下地（背景・枠線）/ 旧テンプレ互換のためデフォルト補完
+  if (t.bgColor    == null) t.bgColor = '#000000';
+  if (t.bgAlpha    == null) t.bgAlpha = 0;
+  if (t.bgPaddingX == null) t.bgPaddingX = 12;
+  if (t.bgPaddingY == null) t.bgPaddingY = 6;
+  if (t.bdColor    == null) t.bdColor = '#ffffff';
+  if (t.bdAlpha    == null) t.bdAlpha = 1;
+  if (t.bdWidth    == null) t.bdWidth = 0;
+  if (t.bdRadius   == null) t.bdRadius = 0;
+  document.getElementById('pBgColor').value     = t.bgColor;
+  document.getElementById('pBgAlpha').value     = t.bgAlpha;
+  document.getElementById('pBgAlphaVal').value  = t.bgAlpha;
+  document.getElementById('pBgPadX').value      = t.bgPaddingX;
+  document.getElementById('pBgPadY').value      = t.bgPaddingY;
+  document.getElementById('pBdRadius').value    = t.bdRadius;
+  document.getElementById('pBdRadiusVal').value = t.bdRadius;
+  document.getElementById('pBdWidth').value     = t.bdWidth;
+  document.getElementById('pBdWidthVal').value  = t.bdWidth;
+  document.getElementById('pBdColor').value     = t.bdColor;
+  document.getElementById('pBdAlpha').value     = t.bdAlpha;
+  document.getElementById('pBdAlphaVal').value  = t.bdAlpha;
 }
 
 // ハロ効果の値更新
@@ -2790,6 +2897,27 @@ function exportTemplate() {
     if (t.italic === 'italic') lines.push(`  font-style: italic;`);
     lines.push(`  letter-spacing: ${t.letterSpacing}px;`);
     lines.push(`  line-height: ${t.lineHeight};`);
+    lines.push(`  box-sizing: border-box;`);
+    // 🆕 下地（背景色 / 余白 / 角丸 / 枠線）
+    const _bgA = t.bgAlpha != null ? +t.bgAlpha : 0;
+    if (_bgA > 0) {
+      lines.push(`  background: ${hexAlphaToRgba(t.bgColor || '#000000', _bgA)};`);
+    }
+    const _padX = t.bgPaddingX != null ? +t.bgPaddingX : 6;
+    const _padY = t.bgPaddingY != null ? +t.bgPaddingY : 4;
+    if (_padX !== 6 || _padY !== 4) {
+      lines.push(`  padding: ${_padY}px ${_padX}px;`);
+    }
+    const _bdR = t.bdRadius != null ? +t.bdRadius : 0;
+    if (_bdR > 0) lines.push(`  border-radius: ${_bdR}px;`);
+    const _bdW = t.bdWidth != null ? +t.bdWidth : 0;
+    const _bdA = t.bdAlpha != null ? +t.bdAlpha : 1;
+    if (_bdW > 0 && _bdA > 0) {
+      lines.push(`  border: ${_bdW}px solid ${hexAlphaToRgba(t.bdColor || '#ffffff', _bdA)};`);
+    }
+    lines.push(`}`);
+    // テキスト本体（.tb-content span）— 色・グラデ・stroke・shadow・filter
+    lines.push(`.tb-${t.id} .tb-content {`);
     if (t.colorMode === 'gradient' && t.gradStops && t.gradStops.length >= 2) {
       const stops = t.gradStops.map(s => `${s.color} ${s.pos}%`).join(', ');
       lines.push(`  background: linear-gradient(${t.gradAngle}deg, ${stops});`);
@@ -2803,7 +2931,6 @@ function exportTemplate() {
     const finalShadow = buildCombinedShadow(t);
     if (finalShadow) lines.push(`  text-shadow: ${finalShadow};`);
     if (t.strokeWidth > 0) lines.push(`  -webkit-text-stroke: ${t.strokeWidth}px ${t.strokeColor};`);
-    // テクスチャ（ザラザラ／コーティング）— SVG filter 参照
     if (t.texture === 'grain-soft' || t.texture === 'grain-strong') {
       lines.push(`  filter: url(#${t.texture});`);
     }
@@ -2849,7 +2976,7 @@ function exportTemplate() {
     lines.push(`<div class="shape-${sh.id}"></div>`);
   });
   state.texts.forEach(t => {
-    lines.push(`<div class="tb-${t.id}">${escHtml(t.text)}</div>`);
+    lines.push(`<div class="tb-${t.id}"><span class="tb-content">${escHtml(t.text)}</span></div>`);
   });
   document.getElementById('codeOutput').textContent = lines.join('\n');
 }
@@ -2899,10 +3026,20 @@ function loadJSON() {
         if (Array.isArray(state.imageBoxes)) {
           state.imageBoxes.forEach(ib => { if (ib && ib.innerGrad) ensureAlpha(ib.innerGrad.stops); });
         }
-        // 🆕 後方互換: halo プロパティを補完（テキスト state 拡張対応）
+        // 🆕 後方互換: halo / 下地プロパティを補完（テキスト state 拡張対応）
         if (Array.isArray(state.texts)) {
           state.texts.forEach(t => {
-            if (t && !t.halo) t.halo = { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 };
+            if (!t) return;
+            if (!t.halo) t.halo = { enabled: false, color: '#000000', alpha: 0.8, blur: 16, layers: 3 };
+            // 下地（背景・枠線）2026-05-10
+            if (t.bgColor    == null) t.bgColor = '#000000';
+            if (t.bgAlpha    == null) t.bgAlpha = 0;
+            if (t.bgPaddingX == null) t.bgPaddingX = 12;
+            if (t.bgPaddingY == null) t.bgPaddingY = 6;
+            if (t.bdColor    == null) t.bdColor = '#ffffff';
+            if (t.bdAlpha    == null) t.bdAlpha = 1;
+            if (t.bdWidth    == null) t.bdWidth = 0;
+            if (t.bdRadius   == null) t.bdRadius = 0;
           });
         }
         // 🆕 後方互換: shapes が未定義なら空配列で補完（commit 3 拡張対応）
