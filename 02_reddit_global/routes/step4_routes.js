@@ -590,6 +590,18 @@ ${rows}`;
         // 🆕 Wikipedia infobox の A代表正解値（FIFA公式準拠 / U-XX/Olympic を除外したシニア代表）
         const wikiNatlAll = it.wikiNational || [];
         const wikiNatlSenior = wikiNatlAll.find(n => n.team && !/U\s?\d+|Olympic|Youth/i.test(n.team)) || wikiNatlAll.slice(-1)[0] || null;
+        // 🆕 怪我履歴（進行中 + 直近5件）
+        const injAll = Array.isArray(it.tmGames.injuries) ? it.tmGames.injuries : [];
+        const injOngoing = injAll.filter(i => i.isOngoing);
+        const injRecent5 = [...injAll].sort((a, b) => (b.fromDate || '').localeCompare(a.fromDate || '')).slice(0, 5);
+        const _fmtInj = i => `${i.injury || '?'} ${i.fromDate || '?'}〜${i.untilDate || '?'} (${i.days || '?'}日 / ${i.missedGames || '?'}試合欠場)`;
+        const injBlock = injAll.length ? `
+
+[怪我履歴 (Transfermarkt DB)]
+${injOngoing.length ? '★進行中: ' + injOngoing.map(_fmtInj).join(' / ') : '進行中: なし'}
+直近5件:
+${injRecent5.map(i => '  - ' + _fmtInj(i)).join('\n')}
+通算: ${injAll.length}件` : '';
         const wikiNatlBlock = wikiNatlSenior ? `
 
 [A代表 (Wikipedia / FIFA公式準拠 ★優先使用)]
@@ -603,7 +615,7 @@ ${wikiNatlSenior.team}: ${wikiNatlSenior.caps ?? '?'}試合 ${wikiNatlSenior.goa
         tmGamesStr = `
 [Transfermarkt 試合単位の選手成績]
 通算 (全試合): ${career?.appearances}試合 ${career?.goals}G ${career?.assists}A (${career?.minutes}分)
-${wikiNatlBlock}${natlBlock}
+${wikiNatlBlock}${natlBlock}${injBlock}
 
 [直近3シーズン × 大会別]
 ${recent || '(なし)'}

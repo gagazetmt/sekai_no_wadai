@@ -481,6 +481,10 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
         // 🆕 Wiki infobox の A代表正解値（FIFA公式準拠 / U-XX や Olympic を除外したシニア代表エントリ）
         const wikiNatlAll = it.wikiNational || [];
         const wikiNatlSenior = wikiNatlAll.find(n => n.team && !/U\s?\d+|Olympic|Youth/i.test(n.team)) || wikiNatlAll.slice(-1)[0] || null;
+        // 🆕 怪我履歴（直近5件 + 進行中フラグ）— W杯選考予測等の重要シグナル
+        const injAll = Array.isArray(it.tmGames.injuries) ? it.tmGames.injuries : [];
+        const injOngoing = injAll.filter(i => i.isOngoing);
+        const injRecent5 = [...injAll].sort((a, b) => (b.fromDate || '').localeCompare(a.fromDate || '')).slice(0, 5);
         const tmgPayload = {
           career: {
             apps: it.tmGames.career?.appearances,
@@ -494,6 +498,18 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
             g:    wikiNatlSenior.goals,
             sinceYear: wikiNatlSenior.years?.start,
           } : null,
+          // 🆕 怪我履歴: ongoing (進行中) を最優先、次に直近 5件
+          injuries: {
+            ongoing: injOngoing.map(i => ({
+              part: i.injury, from: i.fromDate, until: i.untilDate,
+              days: i.days, missedGames: i.missedGames,
+            })),
+            recent5: injRecent5.map(i => ({
+              part: i.injury, from: i.fromDate, until: i.untilDate,
+              days: i.days, missedGames: i.missedGames,
+            })),
+            total: injAll.length,
+          },
           national: (natl && natl.caps > 0) ? {
             caps:     natl.caps,
             g:        natl.goals,

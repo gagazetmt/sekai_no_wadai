@@ -358,12 +358,21 @@ async function _fetchEntity(label, role) {
   //   + 直近シーズン監督別 top3（「アロンソ下のヴィニ」のような複合データ用）
   if (role === 'player') {
     const { searchTransfermarktPlayer, fetchPlayerSummary } = require('../scripts/modules/fetchers/transfermarkt_player_games');
+    const { fetchPlayerInjuries } = require('../scripts/modules/fetchers/transfermarkt_player_injuries');
     tasks.push(
       (async () => {
         const hit = await searchTransfermarktPlayer(label).catch(() => null);
         if (!hit) return { ok: false, error: 'tm player search miss' };
-        const summary = await fetchPlayerSummary(hit.id).catch(e => ({ ok: false, error: e.message }));
-        return summary?.ok ? { ...summary, _slug: hit.slug, _name: hit.name } : summary;
+        // summary + injuries を並列実行（同じ id+slug 共有で search 重複なし）
+        const [summary, injRes] = await Promise.all([
+          fetchPlayerSummary(hit.id).catch(e => ({ ok: false, error: e.message })),
+          fetchPlayerInjuries(hit.id, hit.slug).catch(e => ({ ok: false, error: e.message })),
+        ]);
+        const base = summary?.ok
+          ? { ...summary, _slug: hit.slug, _name: hit.name }
+          : (summary || { ok: false, error: 'summary failed' });
+        base.injuries = (injRes && injRes.ok) ? injRes.injuries : [];
+        return base;
       })()
     );
   } else {
