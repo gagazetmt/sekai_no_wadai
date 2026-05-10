@@ -1697,12 +1697,39 @@ function getUI() {
     el.innerHTML = mods.map(function(m, i) {
       const act = i === window.APP.s4.activeTab;
       return '<div class="s3-tab' + (act ? ' s3-tab-active' : '') + '"'
-        + ' onclick="s4Switch(' + i + ')">'
+        + ' onclick="s4Switch(' + i + ')" style="position:relative;padding-right:14px;">'
         + '<span style="font-size:9px;opacity:.8">' + (i+1) + '/' + mods.length + '</span><br>'
         + '<span style="font-size:10px;">' + _esc((m.title || '').slice(0,10)) + '</span>'
+        + '<button onclick="event.stopPropagation();s4DeleteSlide(' + i + ')" '
+        + 'title="このスライドを削除（modules.json から永久削除）" '
+        + 'style="position:absolute;top:1px;right:2px;background:transparent;'
+        + 'border:0;color:#ff4d4d;cursor:pointer;font-size:12px;line-height:1;'
+        + 'padding:1px 4px;opacity:.55;font-weight:bold;" '
+        + 'onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.55">✕</button>'
         + '</div>';
     }).join('');
   }
+
+  /* ── スライド丸ごと削除 ───────────────────────── */
+  window.s4DeleteSlide = async function(idx) {
+    const mods = window.APP.s4.modules || [];
+    if (!mods.length) return;
+    const m = mods[idx];
+    if (!m) return;
+    const title = m.title || m.type || ('スライド ' + (idx + 1));
+    if (!confirm('スライド「' + title + '」(#' + (idx+1) + ') を削除する？\n\n' +
+                 '・modules.json から永久削除される\n' +
+                 '・取り消し不可\n' +
+                 '・必要なら Step3 で再生成すれば復活可能')) return;
+    mods.splice(idx, 1);
+    // activeTab 調整: 削除位置以降にいたなら 1 つ前にずらす、配列末尾を超えたら末尾に
+    if (window.APP.s4.activeTab > idx) window.APP.s4.activeTab--;
+    if (window.APP.s4.activeTab >= mods.length) window.APP.s4.activeTab = Math.max(0, mods.length - 1);
+    await _saveModulesQuiet();
+    _renderTabs();
+    _renderEditor();
+    _msg('🗑 削除完了 (残り ' + mods.length + ' 枚)');
+  };
 
   /* ── TTS パネル HTML 構築 ── */
   function _buildTtsPanelHtml(m, i) {
