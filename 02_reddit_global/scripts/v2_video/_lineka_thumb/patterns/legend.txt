@@ -1,0 +1,34 @@
+【題材】レジェンド・引退・節目・歴代記録達成・追悼
+
+この題材では「伝説」「敬意」「金色の重み」「永遠」を描く。視聴者に時代の重さを感じさせる。
+
+【中核構図パターン】
+- パターン A: レジェンド単独（最も多用・威厳ある肖像）
+- パターン B: 過去 → 現在 split（若い頃 → ベテラン）
+- パターン C: トロフィーやメダルに囲まれた象徴的肖像
+- パターン D: 最後のセレブレーション・引退試合（涙のシーン）
+
+【感情・ポーズ】
+- 威厳ある凛とした表情 (proud dignified expression, slight knowing smile)
+- 遠い目で過去を見つめる (gazing into the distance, far-off introspective look)
+- 象徴的なゴールセレブレーションの再現 (iconic celebration pose, arms crossed / pointing to sky / "siu" pose 等)
+- 涙の引退シーン (tear in eye, hand on heart, emotional)
+- ファンに敬意を示す (hands raised to applauding fans)
+
+【象徴・データアンカー】
+- 必須: ゴールド・シルバーのメタリック光沢 (gold trim, metallic accents, golden hour glow)
+- トロフィー（CL / W杯 / バロンドール 等そのレジェンドの象徴）
+- 歴代の数字（"500 GOALS", "20 YEARS", "8 BALLON D'OR"）を 3D メタリック text で大きく
+- 名前刻印プレート / hall of fame 風プレート
+- 黄金のキラキラ・落ちる金紙吹雪 (golden confetti falling)
+
+【配色のルール】
+- 全体に warm gold / amber tone を強く
+- 背景は sunset / floodlight golden / indoor warm
+- 寒色は背景の小要素にのみ使用
+
+【プロンプト骨格テンプレ（パターン A 威厳ある肖像）】
+Photorealistic YouTube thumbnail. {Legend Name} in iconic {Team / National Team} jersey, dignified proud expression with slight knowing smile, looking toward the horizon with introspective far-off gaze, {Stadium Name} sunset golden hour lighting, gold metallic confetti falling slowly in the background, large gold {Trophy Type} trophy displayed prominently on the side, bold gold metallic 3D text "{記録数字}" overlay (e.g., "500 GOALS"), warm amber atmospheric lighting, bold Japanese text "{煽り文}" at top in gold-outlined white sans-serif, "{結論文}" at bottom in deep red serif, cinematic warm dramatic lighting with golden bokeh, ultra HD, 16:9
+
+【プロンプト骨格テンプレ（パターン D 引退試合・涙）】
+Photorealistic YouTube thumbnail. {Legend Name} in {Team} jersey with emotional tearful expression, single tear visible, hand placed over heart, walking off the pitch of {Stadium Name} with fans giving standing ovation, golden confetti and lights, large "FAREWELL" or "ARIGATO" gold metallic text, career stats summary in elegant gold serif, bold Japanese text "{煽り文}" at top in gold serif, "{結論文}" at bottom, cinematic emotional warm lighting, ultra HD, 16:9

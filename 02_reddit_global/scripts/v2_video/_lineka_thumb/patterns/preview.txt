@@ -1,0 +1,37 @@
+【題材】試合プレビュー・直前予想・キックオフ前の展望
+
+この題材では「対決前夜の緊張感」「期待」「謎」「予測」を描く。視聴者に「これは見てから試合観たい」と思わせる。
+
+【中核構図】
+- 両チームの中心人物 2 人が向かい合う or 並列
+- まだ起きていない試合なので、対峙と緊張感を演出
+- スコアは絶対に出さない（捏造禁止）
+- 「予想」「展望」のニュアンスを構図で表現
+
+【感情・ポーズ】
+- 鋭い決意の眼差し (fierce determined gaze, focused)
+- 戦闘準備モード (preparing for battle, intense focus)
+- 互いを意識した横顔 (profile view, looking past each other with awareness)
+- ウォーミングアップ風 (warming up, stretched and ready)
+- 静かな闘志（rivalry より控えめ・大爆発前夜の感じ）
+
+【象徴・データアンカー】
+- 試合カードの formal display（kick-off time, venue 名、日付）
+- "VS" の中心配置（rivalry より装飾控えめ・直線的）
+- 両チームのエンブレムを大きく
+- 対戦成績バッジ（Last 5 Meetings, H2H record）
+- "MATCHDAY {N}" の試合節表示
+
+【配色のルール】
+- 両チームの primary color を 50:50 split
+- 中央は metallic chrome / dark gradient で「未来感」を出す
+- 全体トーンは anticipatory（明るすぎない・期待感）
+
+【プロンプト骨格テンプレ】
+Photorealistic YouTube thumbnail. {Player A Name} on the left, {Player B Name} on the right, both with fierce determined focused expressions, looking forward with intense readiness, ready for battle, half {team A primary color} half {team B primary color} background gradient, large metallic chrome "VS" letters at center, both team crests prominently displayed at top corners, "MATCHDAY {N}" or kick-off date label in elegant sans-serif, H2H record badge "{Last 5: W-D-L}" small in corner, bold Japanese text "{煽り文}" at top in large white sans-serif with team color outlines, "{結論文}" at bottom in question-mark style serif, cinematic anticipatory dramatic lighting, ultra HD, 16:9
+
+【避けるべき表現】
+- スコア入りの scoreboard（捏造になる）
+- ゴールセレブレーション（試合まだ起きてない）
+- 確定的な結果を示す要素（勝者を断定する旗・トロフィー）
+- "WIN" / "LOSE" のような結果語

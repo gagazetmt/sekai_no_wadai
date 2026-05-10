@@ -1,0 +1,31 @@
+【題材】移籍・新加入・契約延長・退団
+
+この題材では「変化」「新天地」「期待」「驚き」を描く。視聴者の「マジで！？」を引き出す。
+
+【中核構図パターン】
+- パターン A: 選手単独 + 新クラブのユニ・スタジアム（最も多用）
+- パターン B: 左右 split（左 = 旧クラブ時代の選手、右 = 新クラブのユニ・色）
+- パターン C: 選手 + 招聘した監督・会長（補強物語の場合）
+
+【感情・ポーズ】
+- 誇らしげに新ユニを着こなす (proudly wearing new jersey, looking confidently into camera)
+- 希望に満ちた遠い目 (determined hopeful gaze, looking toward the horizon)
+- 新スタジアムを背にしたウェルカムショット (welcoming arms slightly open, slight smile)
+- 旧クラブとのコントラストなら過去側は wistful expression、新側は energized
+
+【象徴・データアンカー】
+- 新クラブのエンブレム巨大化（背景 or 胸元）
+- 新スタジアムの輪郭（背景の特徴的シルエット）
+- 移籍金 / 契約年数の bold gold metallic badge（例: "€85M", "5 YEARS"）
+- 契約サインのモチーフ（ペン、署名、契約書）
+
+【配色のルール】
+- 必ず新クラブの primary color が画面の 60% 以上を占める
+- 旧クラブの色は使う場合でも 20% 以下、コントラスト要素として
+- 全体は ascendant / hopeful なトーン（明るめ）
+
+【プロンプト骨格テンプレ（パターン A 単独）】
+Photorealistic YouTube thumbnail. {Player Name} wearing brand new {New Club} home jersey, determined hopeful expression, looking confidently toward the camera, {New Club Stadium} iconic silhouette in the background, {New Club} crest visible large behind, transfer fee number "€{amount}M" displayed as bold gold metallic 3D badge in corner, contract years badge "{N} YEARS" below, {New Club primary color} gradient atmospheric background, bold Japanese text "{煽り文}" at top in large white sans-serif with strong outline, "{結論文}" at bottom in {new club color} serif font, cinematic dramatic lighting, ultra HD, 16:9
+
+【プロンプト骨格テンプレ（パターン B 旧 → 新）】
+Photorealistic YouTube thumbnail split composition. Left side: {Player Name} in {Old Club} jersey with wistful expression, slightly desaturated tones. Right side: same player in {New Club} jersey with energized confident smile, vibrant {New Club color} background, {New Club} crest behind. Central transition arrow in chrome. Bold Japanese text "{煽り文}" at top, "{結論文}" at bottom, cinematic dramatic lighting, ultra HD, 16:9

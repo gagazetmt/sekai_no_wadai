@@ -1,0 +1,33 @@
+【題材】ライバル対決（クラシコ・ダービー・優勝争いの直接対決・天王山）
+
+この題材では「対峙」と「火花」を描く。視聴者が「これは見逃せない！」と即決する熱量を作る。
+
+【中核構図：左右対称 SPLIT】
+- 中心線で分かれた背景（左 = team A の color、右 = team B の color）
+- 人物 2 人を中心に向かい合わせ。直接的な敵対関係を示す
+- 体の向きは中央に向けて。鏡像的に対称になるよう指定
+
+【感情・ポーズの選択肢】
+- 互いを睨み合う (glaring at each other across the dividing line)
+- 反対方向に shouting (shouting passionately in opposite directions, fingers pointing)
+- 同じ方向に shouting だが対立構造を残す (both shouting toward central trophy / scoreboard)
+- 体を反らせ気合いの叫び (heads thrown back roaring with fierce intensity)
+
+【象徴・データアンカー】
+- 中央上部に対戦カードの formal element：クラブロゴ並列 + "VS"、scoreboard、トロフィー
+- 観客席は両陣営の旗が左右で分離
+- 直近 H2H の数字バッジ（例: "Last 5 Meetings: 2W-1D-2L"）
+
+【人物選定指針】
+- 監督対決ネタ → 両監督
+- 選手対決ネタ → 両エース
+- チーム対決ネタ → 両キャプテン or 両エース
+- 監督 vs 選手のような変則は避ける（構図破綻リスク）
+
+【配色のルール】
+- 左右の色は team の primary color を強く使う
+- 中央の境界線は dramatic chrome / fire / lightning 効果で繋ぐ
+- 全体的に saturation を高く
+
+【プロンプト骨格テンプレ】
+Photorealistic YouTube thumbnail. {Person A} on the left side facing right, {Person B} on the right side facing left, both shouting passionately with fierce intense expressions, fingers pointing at each other, {Stadium Name} night atmosphere with floodlights blazing, left half {team A primary color} gradient with {team A} flag elements waving, right half {team B primary color} gradient with {team B} flag elements waving, central scoreboard at top showing {match info}, large metallic "VS" lettering at the dividing line, bold Japanese text "{煽り文}" at top in large white sans-serif with red outline, "{結論文}" at bottom in golden serif font, cinematic dramatic lighting, ultra HD, 16:9

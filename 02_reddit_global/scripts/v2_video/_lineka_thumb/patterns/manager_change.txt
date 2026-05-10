@@ -1,0 +1,29 @@
+【題材】監督交代・解任・新監督就任・退任発表
+
+この題材では「断絶」「希望と落胆」「世代交代」を描く。視聴者に時代の節目を感じさせる。
+
+【中核構図パターン】
+- パターン A: 退任監督単独（落胆型・解任ネタ向け）
+- パターン B: 新旧並列 split（世代交代型・最も使用頻度高）
+- パターン C: 新監督単独（明るいトーン・新就任発表向け）
+- パターン D: 監督 + クラブ会長（更迭裏側・暴露ネタ向け）
+
+【感情・ポーズ】
+- 退任側: うなだれる (head down, hands on hips) / 険しい無表情 (stern, gaze averted) / 寂しげな遠い目 (somber, distant gaze) / 後ろ姿で歩き去る (walking away, back to camera)
+- 就任側: 自信に満ちた笑顔 (confident smile, looking forward) / クラブのスカーフを掲げる (raising the club scarf above head) / 観客に向けて挨拶 (waving to the crowd)
+- 二者並列の場合は対比を強調（暗い vs 明るい / 下向き vs 上向き）
+
+【象徴・データアンカー】
+- 退任監督側: 暗いトーン・empty stadium・×印・"OUT" badge・在任期間 / 通算成績の数字
+- 就任監督側: 明るいスタジアム・拍手の観客・"IN" badge・スーツ姿・契約年数
+- 中央 transition: 矢印 / 砂時計 / 時計の針
+
+【配色のルール】
+- パターン B の場合、左半分は desaturated / cool tone（青寄り暗め）、右半分は warm vibrant（赤・金寄り明るめ）
+- 解任ネタは全体的に dim、就任ネタは全体的に bright
+
+【プロンプト骨格テンプレ（パターン B 世代交代）】
+Photorealistic YouTube thumbnail split composition. Left half: {Outgoing Manager} in dark suit with somber downcast expression, head slightly bowed, dim atmospheric lighting, empty {Stadium Name} in the muted background, "{在任期間} YEARS" badge in faded gold. Right half: {Incoming Manager} in sharp tailored suit with confident smile, looking forward with determined gaze, bright stadium lights, fans cheering with raised scarves in vibrant background. Central transition arrow in metallic chrome. Bold Japanese text "{煽り文}" at top in large white sans-serif with red outline, "{結論文}" at bottom in golden serif font, cinematic dramatic contrast lighting, ultra HD, 16:9
+
+【プロンプト骨格テンプレ（パターン A 解任落胆）】
+Photorealistic YouTube thumbnail. {Manager Name} in dark coat, deeply somber expression with head bowed, hands clasped behind back, standing alone in the center of {Stadium Name} at night, empty stands, single floodlight overhead creating dramatic shadows, large red "OUT" badge in corner, "{試合数}試合 / 勝率{%}" stat displayed faded, bold Japanese text "{煽り文}" at top in red-outlined white sans-serif, "{結論文}" at bottom, cinematic somber lighting, ultra HD, 16:9

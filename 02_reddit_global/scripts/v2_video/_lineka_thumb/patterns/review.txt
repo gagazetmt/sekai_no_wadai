@@ -1,0 +1,31 @@
+【題材】試合レビュー・結果分析・ハイライト振り返り
+
+この題材では「結果の確定」「ハイライト」「衝撃の余韻」「歴史的瞬間」を描く。視聴者に「あの試合の真実が知りたい」と感じさせる。
+
+【中核構図パターン】
+- パターン A: 決勝ゴール直後の歓喜（最も多用）
+- パターン B: 勝者 + 敗者の対比（split 構図）
+- パターン C: 試合終了の瞬間・ホイッスル後
+- パターン D: 戦術論的な分析寄り（監督 + 戦術ボード風）
+
+【感情・ポーズ】
+- 勝者: ecstatic, arms raised, screaming joy / 跪いて天を仰ぐ (kneeling, looking up to sky) / チームメイトに飛び乗る (jumping into teammates' arms)
+- 敗者: head down, hands on knees, dejected / 茫然自失で立ち尽くす (standing motionless, staring blankly)
+- 中立的レビュー: 監督がベンチで腕組み・思案 (manager arms crossed on the bench, contemplative)
+
+【象徴・データアンカー】
+- 確定スコアを scoreboard で大きく表示（事実なので OK・むしろ必須）
+- 主要スタッツバッジ（"90 min", "xG: 2.4", "{POSSESSION}%"）を 1 つ
+- ハイライトの瞬間（ゴールネット揺れる / VAR 判定中の主審 / 最終ホイッスル）
+- 試合 MVP の数字（"3G/1A in 1 match"）
+
+【配色のルール】
+- 勝利チームのカラーが画面の 60% 以上
+- 敗者を入れる場合は desaturated tone で
+- 全体は high-contrast / dramatic（warm or cool は試合の雰囲気で）
+
+【プロンプト骨格テンプレ（パターン A 勝利の歓喜）】
+Photorealistic YouTube thumbnail. {Goal Scorer Name} with arms fully raised in ecstatic celebration moments after scoring, screaming with pure joy, eyes squeezed shut in triumph, teammates rushing toward him in the background, {Stadium Name} fans erupting with arms raised in the stands, scoreboard at top showing final score "{Team A} {Score} - {Score} {Team B}", key stat displayed as bold gold metallic 3D badge "{xG / Goals / Assists}", explosive confetti falling, bold Japanese text "{煽り文}" at top in red-outlined white sans-serif, "{結論文}" at bottom in gold serif font, cinematic explosive dramatic lighting with stadium floodlights, ultra HD, 16:9
+
+【プロンプト骨格テンプレ（パターン B 勝敗対比 split）】
+Photorealistic YouTube thumbnail split composition. Left side: {Winner Name} in {Winner Team} jersey with arms raised in ecstatic celebration, vibrant team color background. Right side: {Loser Name} in {Loser Team} jersey with head down hands on knees, devastated expression, desaturated cool tones. Central scoreboard at top displaying definitive final score "{Team A} {Score} - {Score} {Team B}", bold Japanese text "{煽り文}" at top in white sans-serif with strong outline, "{結論文}" at bottom, cinematic high-contrast dramatic lighting, ultra HD, 16:9

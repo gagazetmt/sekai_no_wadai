@@ -1,0 +1,34 @@
+【題材】怪我・離脱・復帰・故障・出場停止
+
+この題材では「危機」「衝撃」「不在の影」を描く。視聴者の「マジで！？大丈夫なの！？」を即喚起する。
+
+【中核構図パターン】
+- パターン A: 怪我した瞬間（pitch で痛みに歪む）
+- パターン B: 治療を受けるシーン（医療スタッフに囲まれる）
+- パターン C: 落胆・治療室・離脱中（暗いシーン）
+- パターン D: 復帰の場合は明るいトーン（笑顔で戻ってくる）
+
+【感情・ポーズ】
+- 痛みに歪んだ顔 (face contorted in pain, eyes closed tightly)
+- 患部を抑える (clutching {body part} with both hands, grimacing)
+- ピッチに横たわる (lying on the pitch, hand on injured area)
+- 担架で運ばれる (being carried on a stretcher, medical staff alongside)
+- 落胆して両手で頭を抱える (head in hands, devastated expression)
+- 復帰の場合: 戻ってきた笑顔 (relieved confident smile, raised arms in return)
+
+【象徴・データアンカー】
+- 包帯・松葉杖・治療台・アイスパック・テーピング
+- 警告マーク / 赤い "OUT" バッジ / "INJURED" ラベル
+- 離脱期間の数字（"4 WEEKS", "OUT FOR THE SEASON"）大きく
+- 試合数の喪失予測（"WILL MISS X MATCHES"）
+- 復帰の場合: 緑の "BACK" badge / 復帰までの日数
+
+【配色のルール】
+- パターン A-C は dim red and dark / 警告色を中心に
+- パターン D 復帰は warm and bright
+
+【プロンプト骨格テンプレ（パターン A 怪我の瞬間）】
+Photorealistic YouTube thumbnail. {Player Name} in {team} jersey grimacing in pain on the pitch of {Stadium Name}, face contorted with eyes tightly closed, both hands clutching {body part}, dramatic dim stadium lighting with single spotlight, medical staff approaching urgently in the blurred background, large red warning "OUT" badge in upper right corner, recovery timeline "{N} WEEKS" displayed prominently in stark white text, bold Japanese text "{煽り文}" at top in red-outlined white sans-serif, "{結論文}" at bottom in deep red, cinematic intense dramatic lighting, ultra HD, 16:9
+
+【プロンプト骨格テンプレ（パターン D 復帰）】
+Photorealistic YouTube thumbnail. {Player Name} in {team} jersey with relieved confident smile, fists raised in triumphant return, walking onto the pitch of {Stadium Name}, fans cheering ecstatically in the bright background, large green "BACK" badge prominent, "{離脱期間}" stat overlay, bold Japanese text "{煽り文}" at top in golden serif, "{結論文}" at bottom in vibrant green outlined, cinematic warm welcoming lighting, ultra HD, 16:9

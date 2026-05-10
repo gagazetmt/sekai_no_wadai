@@ -23,6 +23,7 @@ const { router: s3Router,  getUI: s3UI  } = require('./routes/step3_routes');
 const { router: s35Router, getUI: s35UI } = require('./routes/step35_routes');
 const { router: s4Router,  getUI: s4UI  } = require('./routes/step4_routes');
 const { router: s5Router,  getUI: s5UI  } = require('./routes/step5_routes');
+const { router: s6Router,  getUI: s6UI  } = require('./routes/step6_routes');
 const { router: dataExplorerRouter }     = require('./routes/data_explorer_routes');
 
 app.use('/api', s1Router);
@@ -31,6 +32,7 @@ app.use('/api', s3Router);
 app.use('/api', s35Router);
 app.use('/api', s4Router);
 app.use('/api', s5Router);
+app.use('/api', s6Router);
 app.use('/api', dataExplorerRouter);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
@@ -338,7 +340,8 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. SI情報取得 + 画像選定</div>
     <div class="step-nav"        id="nav3"  onclick="goStep(3)">3. 構成提案</div>
     <div class="step-nav"        id="nav4"  onclick="goStep(4)">4. シナリオ編集</div>
-    <div class="step-nav"        id="nav5"  onclick="goStep(5)">5. サムネ作成</div>
+    <div class="step-nav"        id="nav5"  onclick="goStep(5)">5. サムネ生成</div>
+    <div class="step-nav"        id="nav6"  onclick="goStep(6)">6. 動画投稿</div>
     <div class="step-nav"        id="nav35" onclick="goStep(35)" style="display:none;font-size:9px;opacity:.4;">[旧3.5(裏)]</div>
   </div>
   <div class="content-scroll">
@@ -349,6 +352,7 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     ${s35UI()}
     ${s4UI()}
     ${s5UI()}
+    ${s6UI()}
   </div>
 </div>
 
@@ -386,7 +390,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 3, 35, 4, 5].forEach(i => {
+  [1, 2, 3, 35, 4, 5, 6].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
@@ -463,5 +467,6 @@ app.listen(PORT, () => {
   console.log('  Step3:   構成提案    → routes/step3_routes.js');
   console.log('  Step3.5: 画像選定    → routes/step35_routes.js');
   console.log('  Step4:   シナリオ編集 → routes/step4_routes.js');
-  console.log('  Step5:   サムネ作成   → routes/step5_routes.js');
+  console.log('  Step5:   サムネ生成   → routes/step5_routes.js');
+  console.log('  Step6:   動画投稿     → routes/step6_routes.js');
 });

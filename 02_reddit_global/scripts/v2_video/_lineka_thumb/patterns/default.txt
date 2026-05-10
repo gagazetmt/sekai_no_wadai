@@ -1,0 +1,30 @@
+【題材】その他（一般ネタ・該当なし）
+
+題材が明確でない場合・特定パターンに当てはまらない場合の汎用パターン。
+戦術論・選手評価・噂・雑談系の動画に使用。
+
+【中核構図】
+- 動画タイトルから推測される最重要人物 1〜2 人を中央配置
+- 表情・ポーズは passionate engagement を基調 (intense, focused, alive)
+- 構図はバランス良くシンプル、奇をてらわない
+
+【感情・ポーズ】
+- 強い意志を感じる視線 (intense passionate expression, sharp focused gaze)
+- プレー中の真剣な姿 (mid-action, fully engaged)
+- 監督っぽい思案ポーズ (contemplative, hand on chin)
+- 笑顔だが熱量ある (warm intense smile)
+
+【象徴・データアンカー】
+- 動画タイトルから抽出した数字や事実を 1 つ画面内配置
+- チームエンブレム / 国旗 / 大会ロゴのいずれか
+- 動画の主題に合うシンプルな視覚要素
+
+【配色のルール】
+- 動画の主要エンティティ（チーム / 選手）の color codes を尊重
+- 派手すぎず地味すぎない、saturation はバランス重視
+
+【プロンプト骨格テンプレ】
+Photorealistic YouTube thumbnail. {Main Person(s)} in {team / national team} jersey with intense passionate expression, sharp focused gaze, {appropriate context background such as stadium / pitch / training ground}, {team primary color} accents in atmospheric lighting, key visual element {data point or symbol relevant to topic} prominently displayed, bold Japanese text "{煽り文}" at top in large white sans-serif with strong colored outline, "{結論文}" at bottom in elegant serif font, cinematic dramatic lighting, ultra HD, 16:9
+
+【判断ガイドライン】
+迷ったらこのパターンで安全に作る。題材が後から判明した場合は user prompt で specific theme を指定すれば再生成できる。

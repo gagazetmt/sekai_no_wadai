@@ -1,0 +1,32 @@
+【題材】シーズン総括・年間ランキング・ベストイレブン・MVP発表・受賞
+
+この題材では「総括」「比較」「データの集大成」「栄光」を描く。視聴者の「やっぱりこの人だよな」「え、この順位！？」を引き出す。
+
+【中核構図パターン】
+- パターン A: 単独受賞（MVP・得点王・ベスト監督）
+- パターン B: 3 人ポディウム（ランキング 1-3 位）※共通ルールの 2 人制限の例外
+- パターン C: 5 人ベストイレブン部分（最大 5 人まで顔崩壊リスクと相談）
+- パターン D: 数字大量配置（個人成績の集大成型）
+
+【感情・ポーズ】
+- 単独受賞: トロフィー高々と掲げる (lifting trophy high above head, ecstatic) / 自信に満ちた笑顔
+- ポディウム: 1 位が中央で勝者ポーズ、2-3 位は controlled な誇り
+- ベストイレブン: 全員揃って fist pump、誇り高く前を向く
+- 数字配置型: 主役 1 人が中央、周りに数字オーバーレイ
+
+【象徴・データアンカー】
+- ランキング数字（1, 2, 3）を肩書きとして金・銀・銅で
+- 集計数字（"38 GOALS", "AVG RATING 8.2", "MVP"）大きく
+- 大会・賞のロゴ的要素（バロンドール風メダル・球体トロフィー）
+- ポディウム / 表彰台の物理的構造（センター高め）
+
+【配色のルール】
+- パターン A 単独: gold dominant + spotlight
+- パターン B ポディウム: gold（1位）/ silver（2位）/ bronze（3位）の三色配置
+- パターン C ベストイレブン: クラブカラー混合 + 共通の gold accent
+
+【プロンプト骨格テンプレ（パターン B 3 人ポディウム）】
+Photorealistic YouTube thumbnail. Three players in podium positions: {1st Place Name} at center elevated holding trophy aloft with ecstatic expression, {2nd Place Name} on the left in second position with proud composed smile, {3rd Place Name} on the right in third position with slight smile, all in their respective team jerseys, {League / Competition} stadium background with championship banners, large gold "1" above {1st}, silver "2" above {2nd}, bronze "3" above {3rd}, season total stat numbers below each (e.g., "38 GOALS"), bold Japanese text "{煽り文}" at top in gold serif, "{結論文}" at bottom in elegant white serif, cinematic celebratory lighting with confetti, ultra HD, 16:9
+
+【プロンプト骨格テンプレ（パターン A 単独受賞）】
+Photorealistic YouTube thumbnail. {Winner Name} in {team} jersey lifting {Award / Trophy Name} trophy high above head with ecstatic radiant smile, eyes closed in moment of triumph, golden confetti falling around, dramatic spotlight from above, blurred adoring crowd in the background, large gold "{Award Name}" 3D metallic text overlay, season-defining stat displayed (e.g., "38 GOALS / 12 ASSISTS"), bold Japanese text "{煽り文}" at top in gold serif, "{結論文}" at bottom, cinematic spotlit warm lighting, ultra HD, 16:9
