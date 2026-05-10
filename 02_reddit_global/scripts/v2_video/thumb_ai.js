@@ -64,13 +64,13 @@ async function classifyTheme(input) {
 
   const text = await callAI({
     forceProvider: 'deepseek',
-    max_tokens: 200,
+    max_tokens: 2000,  // V4-Flash の reasoning トークンに食われないよう余裕を持たせる
     system,
     messages: [{ role: 'user', content: userMsg }],
   });
 
   const m = text.match(/\{[\s\S]*\}/);
-  if (!m) return { theme: 'default', confidence: 0, reasoning: '(parse failed)' };
+  if (!m) return { theme: 'default', confidence: 0, reasoning: '(parse failed): ' + (text || '').slice(0, 80) };
   try {
     const parsed = JSON.parse(m[0]);
     if (!VALID_THEMES.includes(parsed.theme)) parsed.theme = 'default';
@@ -121,7 +121,7 @@ async function buildPrompt(input, theme) {
 
   const text = await callAI({
     forceProvider: 'deepseek',
-    max_tokens: 1500,
+    max_tokens: 4000,  // V4-Flash の reasoning + 英語プロンプト本体（長め）の余裕
     system,
     messages: [{ role: 'user', content: userMsg }],
   });
