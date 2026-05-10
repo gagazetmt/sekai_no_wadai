@@ -325,6 +325,7 @@ function getUI() {
       window.APP.saved = window.APP.saved || [];
       window.APP.saved.push(r.project);
       window.APP.selected = r.project;
+      try { localStorage.setItem('v2_selected_id', r.project.id || ''); } catch (_) {}
       window.renderSidebar();
       // 入力 reset & close
       s1CloseCustom();

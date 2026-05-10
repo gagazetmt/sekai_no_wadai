@@ -432,9 +432,22 @@ window.selectLead = function(idx) {
   window.APP.siData    = {};
   window.APP.modules   = [];
   window.APP.activeTab = 0;
+  /* ブラウザリロードでも選択を維持するため localStorage に保存 */
+  try { localStorage.setItem('v2_selected_id', item.id || ''); } catch (_) {}
   window.renderSidebar();
   window.goStep(2);
   window.toggleSidebar(false);  // モバイルでは選択後にサイドバー閉じる
+};
+
+/* ── localStorage から選択を復元（DOMContentLoaded で呼ぶ）── */
+window._restoreSelectedFromStorage = function() {
+  let id = '';
+  try { id = localStorage.getItem('v2_selected_id') || ''; } catch (_) {}
+  if (!id) return;
+  const found = (window.APP.saved || []).find(p => p.id === id);
+  if (found) {
+    window.APP.selected = found;
+  }
 };
 
 /* ── エスケープ（シェル用）── */
@@ -451,6 +464,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   } catch(e) {
     window.APP.saved = [];
   }
+  /* localStorage から前回の選択を復元（リロード対策）*/
+  window._restoreSelectedFromStorage();
   renderSidebar();
   goStep(1);  /* Step1 を表示 */
 });
