@@ -315,14 +315,14 @@ async function sanitizeForTts(text) {
     });
 
   // 5.5) 🆕 W/D/L パターン優先処理（2026-05-10）
-  //   "22勝8分5敗" の "分" は「ぶ」が正しいが kuromoji UNIT_KANA に登録すると
-  //   「90分(きゅうじゅっぷん)」と衝突する。よって 勝/敗 が前後にある時のみ
-  //   この preprocessor で確定読みに変換し、kuromoji を通さない
+  //   "22勝8分5敗" の "分" はサッカー実況では「わけ」（引き分け の wake）が自然。
+  //   kuromoji UNIT_KANA に登録すると「90分(きゅうじゅっぷん)」と衝突するため、
+  //   勝/敗 が前後にある時のみ preprocessor で「わけ」確定変換し kuromoji を通さない。
   s = s
     .replace(/(\d+)勝(\d+)分(\d+)敗/g, (_m, w, d, l) =>
-      numToFullJa(w) + 'しょう' + numToFullJa(d) + 'ぶ' + numToFullJa(l) + 'はい')
+      numToFullJa(w) + 'しょう' + numToFullJa(d) + 'わけ' + numToFullJa(l) + 'はい')
     .replace(/(\d+)勝(\d+)分/g, (_m, w, d) =>
-      numToFullJa(w) + 'しょう' + numToFullJa(d) + 'ぶ')
+      numToFullJa(w) + 'しょう' + numToFullJa(d) + 'わけ')
     .replace(/(\d+)勝(\d+)敗/g, (_m, w, l) =>
       numToFullJa(w) + 'しょう' + numToFullJa(l) + 'はい');
 
