@@ -717,6 +717,15 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
           <label>本文（改行は <code>Enter</code>）</label>
           <textarea id="pText" oninput="updateProp('text', this.value)"></textarea>
         </div>
+        <div class="row">
+          <label>🎨 部分色変更（範囲を選択 → ボタン）</label>
+          <div class="inline" style="gap:6px;">
+            <input type="color" id="markColor" value="#ff5500" title="マーカー色">
+            <button type="button" onclick="markSelection()" title="選択範囲を指定色でマーク">範囲色つける</button>
+            <button type="button" onclick="unmarkSelection()" title="選択範囲のマーカー除去">マーカー解除</button>
+          </div>
+          <small class="hint">本文内では <code>{#ff5500}赤い文字{/}</code> 形式で保存される（手動編集も可）</small>
+        </div>
       </div>
     </details>
 
@@ -2407,9 +2416,10 @@ function renderTexts() {
     el.className = 'tb' + (t.id === state.selectedId ? ' selected' : '');
     el.dataset.id = t.id;
     // テキスト本体は span に分離（.tb は下地担当 / .tb-content がテキスト担当）
+    // 内部マーカー {#color}...{/} をパースして部分色変更に対応
     const span = document.createElement('span');
     span.className = 'tb-content';
-    span.textContent = t.text;
+    span.innerHTML = parseColorMarkers(t.text);
     el.appendChild(span);
     applyTbStyle(el, t);
     el.addEventListener('mousedown', startDrag);
@@ -2976,7 +2986,7 @@ function exportTemplate() {
     lines.push(`<div class="shape-${sh.id}"></div>`);
   });
   state.texts.forEach(t => {
-    lines.push(`<div class="tb-${t.id}"><span class="tb-content">${escHtml(t.text)}</span></div>`);
+    lines.push(`<div class="tb-${t.id}"><span class="tb-content">${parseColorMarkers(t.text)}</span></div>`);
   });
   document.getElementById('codeOutput').textContent = lines.join('\n');
 }
@@ -3093,6 +3103,42 @@ function renderAll() {
 // ────────────────────────────────────────────
 function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// 🆕 マーカー記法パース: {#hex}...{/} を <span style="color:#hex"> に変換
+//    HTML エスケープ → マーカー置換の順で安全に処理
+function parseColorMarkers(text) {
+  const escaped = escHtml(text);
+  return escaped.replace(/\{#([0-9a-fA-F]{3,8})\}([\s\S]*?)\{\/\}/g, (_, color, body) => {
+    return `<span style="color:#${color};-webkit-text-fill-color:#${color}">${body}</span>`;
+  });
+}
+
+// テキスト本文の選択範囲を {#color}...{/} でマーク
+function markSelection() {
+  const ta = document.getElementById('pText');
+  if (!ta || ta.selectionStart === ta.selectionEnd) {
+    alert('色を付けたい範囲をテキスト本文内で選択してね');
+    return;
+  }
+  const color = (document.getElementById('markColor').value || '#ff5500').replace('#', '');
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const v = ta.value;
+  ta.value = v.slice(0, s) + `{#${color}}` + v.slice(s, e) + `{/}` + v.slice(e);
+  updateProp('text', ta.value);
+}
+
+// 選択範囲内のマーカーを除去
+function unmarkSelection() {
+  const ta = document.getElementById('pText');
+  if (!ta) return;
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const v = ta.value;
+  // 範囲未選択なら全文対象
+  const range = (s === e) ? v : v.slice(s, e);
+  const cleaned = range.replace(/\{#[0-9a-fA-F]{3,8}\}/g, '').replace(/\{\/\}/g, '');
+  ta.value = (s === e) ? cleaned : (v.slice(0, s) + cleaned + v.slice(e));
+  updateProp('text', ta.value);
 }
 
 // 初期化
