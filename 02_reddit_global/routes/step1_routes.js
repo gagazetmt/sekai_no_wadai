@@ -81,8 +81,8 @@ router.get('/saved-projects', (req, res) => {
   const filtered = all.filter(p => {
     const isCustom = String(p.id || p.source || '').startsWith('custom') || p.source === 'custom';
     const addedDate = (p.addedAt || '').slice(0, 10);
-    if (!isCustom && addedDate && addedDate < today) return false;  // 古い日付（custom は除く）
-    if (hasGeneratedVideo(p.id, videos)) return false;               // 動画生成済み
+    if (!isCustom && addedDate && addedDate < today) return false;            // 古い日付（custom は除く）
+    if (!isCustom && hasGeneratedVideo(p.id, videos)) return false;           // 動画生成済み（custom は除く・再投稿/再生成ある）
     return true;
   });
 
