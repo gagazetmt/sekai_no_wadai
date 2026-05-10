@@ -38,7 +38,9 @@ function _matchLabelToChunk(label, chunks) {
 function buildComparisonHTML(mod) {
   const leftBg  = imgDataUri(mod.leftImage)  || imgDataUri(mod.bgImage);
   const rightBg = imgDataUri(mod.rightImage);
-  const imgAdj  = imageAdjustCss(mod.imageAdjust);
+  // 左右別個 zoom/offset。imageAdjustLeft/Right が無ければ既存 imageAdjust にフォールバック
+  const imgAdjLeft  = imageAdjustCss(mod.imageAdjustLeft  || mod.imageAdjust);
+  const imgAdjRight = imageAdjustCss(mod.imageAdjustRight || mod.imageAdjust);
   // チーム or 選手の主役名。マップに有れば日本語、無ければ last word
   function _entityName(raw) {
     if (!raw) return '';
@@ -140,17 +142,19 @@ function buildComparisonHTML(mod) {
 }
 .panel-bg {
   position: absolute; inset: 0;
-  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
-  background-position: ${imgAdj.isDefault ? 'center top' : imgAdj.bgPosition};
   opacity: 0;
 }
 @keyframes imgFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .panel-left .panel-bg {
   ${leftBg ? `background-image: url('${leftBg}');` : `background: linear-gradient(160deg, #1e3a8a 0%, ${PALETTE.bg} 100%);`}
+  background-size: ${imgAdjLeft.isDefault ? 'cover' : `${100 * imgAdjLeft.zoom}%`};
+  background-position: ${imgAdjLeft.isDefault ? 'center top' : imgAdjLeft.bgPosition};
   animation: imgFadeIn 0.4s ease-out 0.1s forwards;
 }
 .panel-right .panel-bg {
   ${rightBg ? `background-image: url('${rightBg}');` : `background: linear-gradient(160deg, #7f1d1d 0%, ${PALETTE.bg} 100%);`}
+  background-size: ${imgAdjRight.isDefault ? 'cover' : `${100 * imgAdjRight.zoom}%`};
+  background-position: ${imgAdjRight.isDefault ? 'center top' : imgAdjRight.bgPosition};
   animation: imgFadeIn 0.5s ease-out 0.2s forwards;
 }
 .panel-left .panel-fade {

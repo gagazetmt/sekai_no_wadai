@@ -1940,25 +1940,57 @@ function getUI() {
         + '</div>';
     }
 
-    /* 🔍 画像調整スライダー（ズーム + X/Y 位置）— 全 type で表示 */
-    const _imgAdj = m.imageAdjust || {};
-    const _zoom = (_imgAdj.zoom != null) ? Number(_imgAdj.zoom) : 1;
-    const _ox   = (_imgAdj.offsetX != null) ? Number(_imgAdj.offsetX) : 0;
-    const _oy   = (_imgAdj.offsetY != null) ? Number(_imgAdj.offsetY) : 0;
-    const imgAdjustHtml = ''
-      + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🔍 画像調整 <span style="font-size:10px;color:#5a6a8a;font-weight:normal;">ズーム + 位置</span></div>'
-      + '<div style="display:grid;grid-template-columns:60px 1fr 56px;gap:8px;padding:10px 12px;background:#0d1220;border-radius:6px;align-items:center;">'
-      +   '<span style="font-size:10px;color:#94a3b8;">ズーム</span>'
-      +   '<input type="range" class="s4-img-zoom" min="0.5" max="2.0" step="0.05" value="' + _zoom.toFixed(2) + '" style="width:100%;">'
-      +   '<span class="s4-img-zoom-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _zoom.toFixed(2) + 'x</span>'
-      +   '<span style="font-size:10px;color:#94a3b8;">X位置</span>'
-      +   '<input type="range" class="s4-img-ox" min="-50" max="50" step="1" value="' + _ox + '" style="width:100%;">'
-      +   '<span class="s4-img-ox-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _ox + '%</span>'
-      +   '<span style="font-size:10px;color:#94a3b8;">Y位置</span>'
-      +   '<input type="range" class="s4-img-oy" min="-50" max="50" step="1" value="' + _oy + '" style="width:100%;">'
-      +   '<span class="s4-img-oy-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _oy + '%</span>'
-      + '</div>'
-      + '<button class="s4-img-reset" style="background:#1a2540;color:#94a3b8;border:1px solid #2a3050;border-radius:4px;cursor:pointer;font-size:10px;padding:4px 12px;margin-top:6px;">画像調整をリセット</button>';
+    /* 🔍 画像調整スライダー — comparison は左右別 (imageAdjustLeft / Right)、他は単一 (imageAdjust) */
+    let imgAdjustHtml = '';
+    if (m.type === 'comparison') {
+      const _adjL = m.imageAdjustLeft  || m.imageAdjust || {};
+      const _adjR = m.imageAdjustRight || m.imageAdjust || {};
+      const _zL = (_adjL.zoom    != null) ? Number(_adjL.zoom)    : 1;
+      const _xL = (_adjL.offsetX != null) ? Number(_adjL.offsetX) : 0;
+      const _yL = (_adjL.offsetY != null) ? Number(_adjL.offsetY) : 0;
+      const _zR = (_adjR.zoom    != null) ? Number(_adjR.zoom)    : 1;
+      const _xR = (_adjR.offsetX != null) ? Number(_adjR.offsetX) : 0;
+      const _yR = (_adjR.offsetY != null) ? Number(_adjR.offsetY) : 0;
+      const _row = function(side, label, accent, z, x, y) {
+        return ''
+          + '<div style="font-size:10px;color:' + accent + ';font-weight:bold;margin:8px 0 4px;">' + label + '</div>'
+          + '<div style="display:grid;grid-template-columns:60px 1fr 56px;gap:8px;padding:10px 12px;background:#0d1220;border-radius:6px;align-items:center;">'
+          +   '<span style="font-size:10px;color:#94a3b8;">ズーム</span>'
+          +   '<input type="range" class="s4-img-zoom-' + side + '" min="0.5" max="2.0" step="0.05" value="' + z.toFixed(2) + '" style="width:100%;">'
+          +   '<span class="s4-img-zoom-val-' + side + '" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + z.toFixed(2) + 'x</span>'
+          +   '<span style="font-size:10px;color:#94a3b8;">X位置</span>'
+          +   '<input type="range" class="s4-img-ox-' + side + '" min="-50" max="50" step="1" value="' + x + '" style="width:100%;">'
+          +   '<span class="s4-img-ox-val-' + side + '" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + x + '%</span>'
+          +   '<span style="font-size:10px;color:#94a3b8;">Y位置</span>'
+          +   '<input type="range" class="s4-img-oy-' + side + '" min="-50" max="50" step="1" value="' + y + '" style="width:100%;">'
+          +   '<span class="s4-img-oy-val-' + side + '" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + y + '%</span>'
+          + '</div>'
+          + '<button class="s4-img-reset-' + side + '" style="background:#1a2540;color:#94a3b8;border:1px solid #2a3050;border-radius:4px;cursor:pointer;font-size:10px;padding:4px 12px;margin-top:6px;">' + label + ' をリセット</button>';
+      };
+      imgAdjustHtml = ''
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🔍 画像調整 <span style="font-size:10px;color:#5a6a8a;font-weight:normal;">左右別個・各画像独立</span></div>'
+        + _row('left',  '◀ 左画像', '#60a5fa', _zL, _xL, _yL)
+        + _row('right', '▶ 右画像', '#fb7185', _zR, _xR, _yR);
+    } else {
+      const _imgAdj = m.imageAdjust || {};
+      const _zoom = (_imgAdj.zoom != null) ? Number(_imgAdj.zoom) : 1;
+      const _ox   = (_imgAdj.offsetX != null) ? Number(_imgAdj.offsetX) : 0;
+      const _oy   = (_imgAdj.offsetY != null) ? Number(_imgAdj.offsetY) : 0;
+      imgAdjustHtml = ''
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🔍 画像調整 <span style="font-size:10px;color:#5a6a8a;font-weight:normal;">ズーム + 位置</span></div>'
+        + '<div style="display:grid;grid-template-columns:60px 1fr 56px;gap:8px;padding:10px 12px;background:#0d1220;border-radius:6px;align-items:center;">'
+        +   '<span style="font-size:10px;color:#94a3b8;">ズーム</span>'
+        +   '<input type="range" class="s4-img-zoom" min="0.5" max="2.0" step="0.05" value="' + _zoom.toFixed(2) + '" style="width:100%;">'
+        +   '<span class="s4-img-zoom-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _zoom.toFixed(2) + 'x</span>'
+        +   '<span style="font-size:10px;color:#94a3b8;">X位置</span>'
+        +   '<input type="range" class="s4-img-ox" min="-50" max="50" step="1" value="' + _ox + '" style="width:100%;">'
+        +   '<span class="s4-img-ox-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _ox + '%</span>'
+        +   '<span style="font-size:10px;color:#94a3b8;">Y位置</span>'
+        +   '<input type="range" class="s4-img-oy" min="-50" max="50" step="1" value="' + _oy + '" style="width:100%;">'
+        +   '<span class="s4-img-oy-val" style="font-size:11px;text-align:right;color:#fcd34d;font-weight:bold;">' + _oy + '%</span>'
+        + '</div>'
+        + '<button class="s4-img-reset" style="background:#1a2540;color:#94a3b8;border:1px solid #2a3050;border-radius:4px;cursor:pointer;font-size:10px;padding:4px 12px;margin-top:6px;">画像調整をリセット</button>';
+    }
 
     /* バインドデータ・プルダウン (stats/profile/comparison/history カード用) */
     let bindHtml = '';
@@ -2127,7 +2159,7 @@ function getUI() {
     el.querySelectorAll('.s4-phrase-add').forEach(function(btn) {
       btn.addEventListener('click', function() { s4AddPhrase(); });
     });
-    /* 🔍 画像調整スライダー bind */
+    /* 🔍 画像調整スライダー bind（単一画像スライド）*/
     const _zoomEl = el.querySelector('.s4-img-zoom');
     if (_zoomEl) _zoomEl.addEventListener('input', function(e) { s4OnImageAdjust('zoom', e.target.value); });
     const _oxEl = el.querySelector('.s4-img-ox');
@@ -2136,6 +2168,17 @@ function getUI() {
     if (_oyEl) _oyEl.addEventListener('input', function(e) { s4OnImageAdjust('offsetY', e.target.value); });
     const _resetEl = el.querySelector('.s4-img-reset');
     if (_resetEl) _resetEl.addEventListener('click', function() { s4ResetImageAdjust(); });
+    /* 🔍 画像調整スライダー bind（comparison 左右別）*/
+    ['left', 'right'].forEach(function(side) {
+      const z = el.querySelector('.s4-img-zoom-' + side);
+      if (z) z.addEventListener('input', function(e) { s4OnImageAdjust('zoom', e.target.value, side); });
+      const x = el.querySelector('.s4-img-ox-' + side);
+      if (x) x.addEventListener('input', function(e) { s4OnImageAdjust('offsetX', e.target.value, side); });
+      const y = el.querySelector('.s4-img-oy-' + side);
+      if (y) y.addEventListener('input', function(e) { s4OnImageAdjust('offsetY', e.target.value, side); });
+      const r = el.querySelector('.s4-img-reset-' + side);
+      if (r) r.addEventListener('click', function() { s4ResetImageAdjust(side); });
+    });
     /* matchcard lineup アコーディオン: open 時に lineup fetch して編集 UI を描画 */
     el.querySelectorAll('details.s4-mc-team').forEach(function(det) {
       det.addEventListener('toggle', function() {
@@ -2633,21 +2676,26 @@ function getUI() {
   /* ── 🔍 画像調整スライダー（zoom / X / Y）── */
   //   debounced で _saveAndReload して即時プレビュー反映
   let _imgAdjTimer = null;
-  window.s4OnImageAdjust = function(field, val) {
+  window.s4OnImageAdjust = function(field, val, side) {
+    // side: undefined (単一 imageAdjust) | 'left' (imageAdjustLeft) | 'right' (imageAdjustRight)
     const i = window.APP.s4.activeTab;
     const m = window.APP.s4.modules[i];
     if (!m) return;
-    const adj = Object.assign({ zoom: 1, offsetX: 0, offsetY: 0 }, m.imageAdjust || {});
+    const key = side === 'left' ? 'imageAdjustLeft' : side === 'right' ? 'imageAdjustRight' : 'imageAdjust';
+    // 左右別調整の初回操作時は単一 imageAdjust を起点にして引き継ぐ（既に Phase A で設定済の値を捨てない）
+    const base = m[key] || (side ? m.imageAdjust : null) || {};
+    const adj = Object.assign({ zoom: 1, offsetX: 0, offsetY: 0 }, base);
     if (field === 'zoom')    adj.zoom    = parseFloat(val);
     if (field === 'offsetX') adj.offsetX = parseInt(val, 10);
     if (field === 'offsetY') adj.offsetY = parseInt(val, 10);
-    m.imageAdjust = adj;
+    m[key] = adj;
     // ラベル即時更新（操作中の数字表示）
     const card = document.getElementById('s4Editor');
     if (card) {
-      const z = card.querySelector('.s4-img-zoom-val');
-      const x = card.querySelector('.s4-img-ox-val');
-      const y = card.querySelector('.s4-img-oy-val');
+      const suffix = side ? '-' + side : '';
+      const z = card.querySelector('.s4-img-zoom-val' + suffix);
+      const x = card.querySelector('.s4-img-ox-val' + suffix);
+      const y = card.querySelector('.s4-img-oy-val' + suffix);
       if (z) z.textContent = (adj.zoom || 1).toFixed(2) + 'x';
       if (x) x.textContent = (adj.offsetX || 0) + '%';
       if (y) y.textContent = (adj.offsetY || 0) + '%';
@@ -2656,11 +2704,12 @@ function getUI() {
     _imgAdjTimer = setTimeout(_saveAndReload, 300);  // スライダー操作中の連発を debounce
   };
 
-  window.s4ResetImageAdjust = function() {
+  window.s4ResetImageAdjust = function(side) {
     const i = window.APP.s4.activeTab;
     const m = window.APP.s4.modules[i];
     if (!m) return;
-    m.imageAdjust = { zoom: 1, offsetX: 0, offsetY: 0 };
+    const key = side === 'left' ? 'imageAdjustLeft' : side === 'right' ? 'imageAdjustRight' : 'imageAdjust';
+    m[key] = { zoom: 1, offsetX: 0, offsetY: 0 };
     _renderEditor();
     _saveAndReload();
   };
