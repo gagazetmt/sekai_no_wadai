@@ -1460,6 +1460,52 @@ function renderImageBoxes() {
   });
 }
 
+// 画像の自然サイズキャッシュ（image-box の自前 background-size 計算用）
+const _imgSizeCache = {};
+function getImageNaturalSize(url) {
+  if (!url) return Promise.resolve({ w: 1, h: 1 });
+  if (_imgSizeCache[url]) return Promise.resolve(_imgSizeCache[url]);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      _imgSizeCache[url] = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
+      resolve(_imgSizeCache[url]);
+    };
+    img.onerror = () => { _imgSizeCache[url] = { w: 1, h: 1 }; resolve(_imgSizeCache[url]); };
+    img.src = url;
+  });
+}
+
+// background-size: cover を捨てて自前計算。imgZoom = 1 でも 1.05倍 overscan を保証
+// → 両軸常に overflow があり、imgX/imgY 独立に動く
+function applyIbBackground(fill, el, ib) {
+  if (!ib.url) {
+    fill.style.backgroundImage = '';
+    return;
+  }
+  fill.style.backgroundImage = `url('${ib.url}')`;
+  const imgX = ib.imgX != null ? ib.imgX : 0;
+  const imgY = ib.imgY != null ? ib.imgY : 0;
+  const imgZoom = ib.imgZoom != null ? ib.imgZoom : 1;
+  const minOverscan = 1.05;
+  const effectiveZoom = Math.max(imgZoom, 1) * minOverscan;
+  getImageNaturalSize(ib.url).then(({ w: nw, h: nh }) => {
+    const ew = el.offsetWidth, eh = el.offsetHeight;
+    if (ew === 0 || eh === 0) return;
+    const coverScale = Math.max(ew / nw, eh / nh);
+    const finalScale = coverScale * effectiveZoom;
+    const bgW = nw * finalScale;
+    const bgH = nh * finalScale;
+    const overX = bgW - ew;
+    const overY = bgH - eh;
+    // imgX = 0 → 中央 / imgX = +50 → 画像の右端を要素右端に揃える
+    const posX = -overX / 2 - (imgX / 100) * overX;
+    const posY = -overY / 2 - (imgY / 100) * overY;
+    fill.style.backgroundSize = `${bgW}px ${bgH}px`;
+    fill.style.backgroundPosition = `${posX}px ${posY}px`;
+  });
+}
+
 function applyIbStyle(el, ib) {
   if (!el) return;
   el.style.left = ib.x + '%';
@@ -1469,18 +1515,10 @@ function applyIbStyle(el, ib) {
   // mask クラス再設定
   el.className = el.className.replace(/\bmask-[\w-]+\b/g, '');
   el.classList.add('mask-' + ib.mask);
-  // 画像（枠と独立した zoom / pan）
+  // 画像（枠と独立した zoom / pan / 自前 background-size 計算）
   const fill = el.querySelector('.ib-fill');
-  fill.style.backgroundImage = ib.url ? `url('${ib.url}')` : '';
-  // 🆕 imgX/imgY は中心 (50%, 50%) からのオフセット (-50〜50%)
-  const imgX = ib.imgX != null ? ib.imgX : 0;
-  const imgY = ib.imgY != null ? ib.imgY : 0;
-  const imgZoom = ib.imgZoom != null ? ib.imgZoom : 1;
-  // background-size: cover の仕様上、ぴったり収まる軸は background-position が効かない
-  // ため、最低 1.05 倍にスケールして両軸 overflow を強制（X/Y 独立に動かせる）
-  const renderZoom = Math.max(imgZoom, 1.05);
-  fill.style.backgroundPosition = `${50 + imgX}% ${50 + imgY}%`;
-  fill.style.transform = `scale(${renderZoom})`;
+  fill.style.transform = '';  // cover ベース時の scale は不要に
+  applyIbBackground(fill, el, ib);
   fill.style.filter = `contrast(${ib.contrast}) brightness(${ib.brightness})`;
   // 範囲内グラデ（rgba 対応）
   const ov = el.querySelector('.ib-inner-overlay');
