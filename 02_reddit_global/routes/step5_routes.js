@@ -187,11 +187,18 @@ router.post('/v5/upload-thumb', (req, res) => {
   const finalFile = `external_${Date.now()}_${safeName}.${ext}`;
   fs.writeFileSync(path.join(outDir, finalFile), buffer);
 
+  // 取り込み即選択（Step6 が selectedThumb=null でサムネ反映されない事故を防ぐ）
+  const meta = readMeta(postId);
+  meta.selectedThumb = finalFile;
+  meta.selectedThumbAt = new Date().toISOString();
+  writeMeta(postId, meta);
+
   res.json({
     ok: true,
     file: finalFile,
     url: `/v2_thumbs/${safePostId}/${finalFile}`,
     size: buffer.length,
+    autoSelected: true,
   });
 });
 
@@ -574,8 +581,9 @@ function getUI() {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ postId: id, filename: file.name, dataUrl }),
       });
-      status.textContent = '✅ アップロード完了: ' + r.file + '（保存済みサムネ一覧から選択して）';
+      status.textContent = '✅ 取り込み完了 → このサムネを自動選択しました: ' + r.file;
       status.style.color = 'var(--success)';
+      STATE.selectedThumb = r.file;
       s5LoadSaved();
     } catch (e) {
       status.textContent = '❌ ' + e.message;
