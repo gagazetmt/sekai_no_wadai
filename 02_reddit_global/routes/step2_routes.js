@@ -370,9 +370,19 @@ async function _fetchEntity(label, role) {
     tasks.push(Promise.resolve(null));
   }
 
-  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames] = await Promise.all(tasks);
+  // 🆕 Wikipedia チーム歴代シーズン（team のみ・2026-05-10）
+  //   "List of {team} F.C. seasons" から直近10シーズン分の順位・勝点・得失点抽出
+  //   history / comparison スライドで「アルテタ就任後の順位推移」のような時系列を組める
+  if (role === 'team') {
+    const { fetchWikiTeamSeasons } = require('../scripts/modules/fetchers/wiki_team_seasons');
+    tasks.push(fetchWikiTeamSeasons(label, { limit: 10 }).catch(e => ({ ok: false, error: e.message })));
+  } else {
+    tasks.push(Promise.resolve(null));
+  }
+
+  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames, wikiSeasons] = await Promise.all(tasks);
   const fotmob = fmRes && fmRes.data ? { ok: true, ...fmRes.data, _matched: fmRes.found } : (fmRes || null);
-  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames };
+  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiSeasons };
 }
 
 async function _fetchMatch(label) {

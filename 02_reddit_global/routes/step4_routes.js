@@ -519,6 +519,26 @@ ${tro ? '\n[獲得タイトル]\n' + tro : ''}`;
 ${rows}${tot}`;
       }
 
+      // 🆕 チームのみ: Wikipedia 歴代シーズン順位（2026-05-10 追加）
+      //   直近 N シーズンの順位推移は history / comparison スライドの根拠データ
+      let wikiSeasonsStr = '';
+      if (it.role === 'team' && it.wikiSeasons?.ok) {
+        const rows = (it.wikiSeasons.seasons || []).map(s => {
+          const pos = s.position != null ? `${s.position}位` : '?位';
+          const lg = s.league || '?';
+          const pts = s.points != null ? `勝点${s.points}` : '';
+          const wdl = (s.wins != null && s.draws != null && s.losses != null)
+            ? `${s.wins}勝${s.draws}分${s.losses}敗` : '';
+          const gf = (s.goalsFor != null && s.goalsAgainst != null)
+            ? `(得${s.goalsFor}失${s.goalsAgainst})` : '';
+          const played = s.played != null ? `${s.played}試合` : '';
+          return `  ${s.season} ${lg}: ${pos} / ${[played, wdl, pts, gf].filter(Boolean).join(' ')}`;
+        }).join('\n');
+        wikiSeasonsStr = `
+[Wikipedia 歴代シーズン順位 (直近${it.wikiSeasons.count}シーズン・新しい順)]
+${rows}`;
+      }
+
       // 🆕 選手限定: Transfermarkt 試合単位データ（直近3シーズン × 大会別 + 直近シーズン監督別 + 直近 N 試合生データ）
       let tmGamesStr = '';
       if (it.role === 'player' && it.tmGames?.ok) {
@@ -565,7 +585,7 @@ ${wikitext.slice(0, 3000)}
 
 [SofaScore]
 ${sofaStr}
-${tmStr}${wstatsStr}${tmGamesStr}
+${tmStr}${wstatsStr}${wikiSeasonsStr || ''}${tmGamesStr}
 `;
     }
 
