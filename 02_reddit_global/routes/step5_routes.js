@@ -144,6 +144,34 @@ router.post('/v5/select-thumb', (req, res) => {
   res.json({ ok: true, selectedThumb: thumbFile });
 });
 
+// 外部生成画像（Gemini Web 版・Seedream 等）をアップロード
+router.post('/v5/upload-thumb', (req, res) => {
+  const { postId, filename, dataUrl } = req.body || {};
+  if (!postId || !dataUrl) return res.status(400).json({ error: 'postId/dataUrl required' });
+
+  const m = String(dataUrl).match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: 'invalid dataUrl format' });
+
+  const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+  const buffer = Buffer.from(m[2], 'base64');
+  const safePostId = String(postId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+  const outDir = path.join(THUMB_OUT_BASE, safePostId);
+  fs.mkdirSync(outDir, { recursive: true });
+  const safeName = String(filename || 'external')
+    .replace(/\.[^.]+$/, '')                    // 拡張子除去
+    .replace(/[^a-zA-Z0-9_.-]/g, '_')           // sanitize
+    .slice(0, 40);
+  const finalFile = `external_${Date.now()}_${safeName}.${ext}`;
+  fs.writeFileSync(path.join(outDir, finalFile), buffer);
+
+  res.json({
+    ok: true,
+    file: finalFile,
+    url: `/v2_thumbs/${safePostId}/${finalFile}`,
+    size: buffer.length,
+  });
+});
+
 // ════════════════════════════════════════════════════════════
 // 既存サムネ管理 API（list / delete / case-images）保持
 // ════════════════════════════════════════════════════════════
@@ -268,12 +296,13 @@ function getUI() {
 
     <!-- ステップ 3: プロンプト生成 -->
     <div class="s5card">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
         <strong style="color:var(--c); font-size:12px;">③ Imagen 4 用プロンプト</strong>
         <button onclick="s5SuggestPrompt()" class="s5btn-sub" id="s5-suggest-btn">✨ リネカ＋DeepSeekで提案</button>
+        <button onclick="s5CopyPrompt()" class="s5btn-sub">📋 プロンプトコピー</button>
         <span id="s5-prompt-status" style="font-size:11px; color:var(--muted);"></span>
       </div>
-      <textarea id="s5-prompt" rows="6" class="s5input" style="resize:vertical; font-family:monospace;" placeholder="リネカ＋DeepSeekで提案ボタンで自動生成。手動編集可。"></textarea>
+      <textarea id="s5-prompt" rows="6" class="s5input" style="resize:vertical; font-family:monospace;" placeholder="リネカ＋DeepSeekで提案ボタンで自動生成。手動編集可。コピーして無料 Gemini Web 版に貼り付けても OK。"></textarea>
     </div>
 
     <!-- ステップ 4: 画像生成 -->
@@ -292,10 +321,26 @@ function getUI() {
       <div id="s5-thumbs-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:10px;"></div>
     </div>
 
+    <!-- 外部画像インポート（無料 Gemini Web 版・Seedream 等から） -->
+    <div class="s5card">
+      <strong style="color:var(--c); font-size:12px; display:block; margin-bottom:8px;">📤 外部画像インポート（無料 Gemini Web 版・Seedream 等で生成した画像をアップロード）</strong>
+      <input type="file" id="s5-upload-file" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="s5UploadFile(event)">
+      <div id="s5-drop-zone"
+           onclick="document.getElementById('s5-upload-file').click()"
+           ondragover="event.preventDefault(); this.style.borderColor='var(--c)'; this.style.background='#1a2540';"
+           ondragleave="this.style.borderColor='var(--border)'; this.style.background='#0a0e1a';"
+           ondrop="event.preventDefault(); this.style.borderColor='var(--border)'; this.style.background='#0a0e1a'; s5HandleDrop(event)"
+           style="border:2px dashed var(--border); padding:24px 20px; text-align:center; cursor:pointer; border-radius:6px; background:#0a0e1a; transition: all .15s;">
+        <div style="font-size:14px; color:var(--text); font-weight:bold;">📁 クリック or ここに画像をドラッグ</div>
+        <div style="font-size:11px; color:var(--muted); margin-top:5px;">PNG / JPG / WEBP 対応 / 1280x720（16:9）推奨</div>
+      </div>
+      <div id="s5-upload-status" style="font-size:11px; color:var(--muted); margin-top:8px;"></div>
+    </div>
+
     <!-- 保存済みサムネ一覧 -->
     <div class="s5card">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-        <strong style="color:var(--c); font-size:12px;">💾 保存済みサムネ（過去生成分含む）</strong>
+        <strong style="color:var(--c); font-size:12px;">💾 保存済みサムネ（AI生成・外部import 含む）</strong>
         <button onclick="s5LoadSaved()" class="s5btn-sub">↻ 再読込</button>
       </div>
       <div id="s5-saved-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:10px;"></div>
@@ -435,6 +480,55 @@ function getUI() {
         + (sel ? '<span style="color:var(--c);font-weight:bold;">✅ 選択中</span>' : '<span style="color:var(--muted);">クリックで選択</span>')
         + '</div></div>';
     }).join('');
+  }
+
+  // ═══ プロンプトコピー ═══
+  window.s5CopyPrompt = function() {
+    const t = document.getElementById('s5-prompt').value.trim();
+    if (!t) { alert('プロンプトが空だよ。先に「リネカ＋DeepSeekで提案」押すか、手動入力してね'); return; }
+    navigator.clipboard.writeText(t).then(() => {
+      const el = document.getElementById('s5-prompt-status');
+      el.textContent = '✅ クリップボードにコピー！Gemini Web に貼り付けてね';
+      el.style.color = 'var(--success)';
+    }).catch(e => alert('コピー失敗: ' + e.message));
+  };
+
+  // ═══ 外部画像アップロード ═══
+  window.s5UploadFile = async function(ev) {
+    const file = (ev.target.files || [])[0];
+    if (!file) return;
+    await _s5DoUpload(file);
+    ev.target.value = '';  // 同じファイル再選択できるよう reset
+  };
+  window.s5HandleDrop = async function(ev) {
+    const file = (ev.dataTransfer.files || [])[0];
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { alert('画像ファイルを選んでね（PNG / JPG / WEBP）'); return; }
+    await _s5DoUpload(file);
+  };
+  async function _s5DoUpload(file) {
+    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
+    const status = document.getElementById('s5-upload-status');
+    status.textContent = '⏳ アップロード中... ' + file.name + ' (' + (file.size/1024).toFixed(0) + 'KB)';
+    status.style.color = 'var(--muted)';
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(new Error('ファイル読み込み失敗'));
+        r.readAsDataURL(file);
+      });
+      const r = await window.fetchJson('/api/v5/upload-thumb', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ postId: id, filename: file.name, dataUrl }),
+      });
+      status.textContent = '✅ アップロード完了: ' + r.file + '（保存済みサムネ一覧から選択して）';
+      status.style.color = 'var(--success)';
+      s5LoadSaved();
+    } catch (e) {
+      status.textContent = '❌ ' + e.message;
+      status.style.color = 'var(--c)';
+    }
   }
 
   // ═══ サムネ選択（meta に記録）═══
