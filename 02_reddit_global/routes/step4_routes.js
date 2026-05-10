@@ -1717,9 +1717,9 @@ function getUI() {
     const m = mods[idx];
     if (!m) return;
     const title = m.title || m.type || ('スライド ' + (idx + 1));
-    if (!confirm('スライド「' + title + '」(#' + (idx+1) + ') を削除する？\n\n' +
-                 '・modules.json から永久削除される\n' +
-                 '・取り消し不可\n' +
+    if (!confirm('スライド「' + title + '」(#' + (idx+1) + ') を削除する？\\n\\n' +
+                 '・modules.json から永久削除される\\n' +
+                 '・取り消し不可\\n' +
                  '・必要なら Step3 で再生成すれば復活可能')) return;
     mods.splice(idx, 1);
     // activeTab 調整: 削除位置以降にいたなら 1 つ前にずらす、配列末尾を超えたら末尾に

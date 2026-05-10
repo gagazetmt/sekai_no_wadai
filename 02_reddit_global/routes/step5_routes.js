@@ -555,7 +555,7 @@ function getUI() {
   window.s5HandleDrop = async function(ev) {
     const file = (ev.dataTransfer.files || [])[0];
     if (!file) return;
-    if (!/^image\//.test(file.type)) { alert('画像ファイルを選んでね（PNG / JPG / WEBP）'); return; }
+    if (!/^image\\//.test(file.type)) { alert('画像ファイルを選んでね（PNG / JPG / WEBP）'); return; }
     await _s5DoUpload(file);
   };
   async function _s5DoUpload(file) {
