@@ -13,7 +13,7 @@ const fs      = require('fs');
 const path    = require('path');
 
 const { callAI }                = require('../scripts/ai_client');
-const { fetchWikipediaSafe }    = require('../scripts/modules/fetchers/wikipedia');
+const { fetchWikipediaSafe, fetchWikipediaWikitext, extractNationalCareerFromInfobox } = require('../scripts/modules/fetchers/wikipedia');
 const { fetchSofaScorePlayer }     = require('../scripts/modules/fetchers/sofascore_player');
 const { fetchSofaScoreTeam }       = require('../scripts/modules/fetchers/sofascore_team');
 const { fetchSofaScoreManager }    = require('../scripts/modules/fetchers/sofascore_manager');
@@ -380,9 +380,25 @@ async function _fetchEntity(label, role) {
     tasks.push(Promise.resolve(null));
   }
 
-  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames, wikiSeasons] = await Promise.all(tasks);
+  // 🆕 Wikipedia infobox から A代表 caps（FIFA公式準拠・player のみ・2026-05-10）
+  //   TM aggregateNationalGames はユース代表（U-17/U-20/U-23/五輪）も合算してしまうため、
+  //   FIFA 公式に近い A代表正解値が必要。Wiki infobox の nationalteam/nationalcaps を抽出
+  if (role === 'player') {
+    tasks.push(
+      (async () => {
+        const wt = await fetchWikipediaWikitext(label).catch(() => null);
+        if (!wt?.ok || !wt.wikitext) return null;
+        const arr = extractNationalCareerFromInfobox(wt.wikitext);
+        return Array.isArray(arr) && arr.length ? arr : null;
+      })()
+    );
+  } else {
+    tasks.push(Promise.resolve(null));
+  }
+
+  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames, wikiSeasons, wikiNational] = await Promise.all(tasks);
   const fotmob = fmRes && fmRes.data ? { ok: true, ...fmRes.data, _matched: fmRes.found } : (fmRes || null);
-  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiSeasons };
+  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiSeasons, wikiNational };
 }
 
 async function _fetchMatch(label) {
@@ -403,10 +419,10 @@ router.post('/v3/fetch-label', async (req, res) => {
   try {
     if (box === 'entity') {
       if (!role) return res.status(400).json({ error: 'role required for entity' });
-      const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames } = await _fetchEntity(label, role);
+      const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational } = await _fetchEntity(label, role);
       const items = si.boxes.entity.items;
       const i = items.findIndex(x => x.label === label);
-      const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, fetchedAt: now };
+      const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational, fetchedAt: now };
       if (i >= 0) items[i] = next; else items.push(next);
     }
     else if (box === 'match') {
@@ -465,8 +481,8 @@ router.post('/v3/fetch-all', async (req, res) => {
       const it = queue.shift();
       try {
         if (it.box === 'entity') {
-          const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames } = await _fetchEntity(it.label, it.role);
-          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, fetchedAt: now });
+          const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational } = await _fetchEntity(it.label, it.role);
+          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational, fetchedAt: now });
         } else if (it.box === 'match') {
           const data = await _fetchMatch(it.label);
           results.push({ ...it, data, fetchedAt: now });
@@ -486,7 +502,7 @@ router.post('/v3/fetch-all', async (req, res) => {
     const items = si.boxes[r.box].items;
     const i = items.findIndex(x => x.label === r.label);
     let next;
-    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, tmGames: r.tmGames, fetchedAt: r.fetchedAt, error: r.error };
+    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, tmGames: r.tmGames, wikiNational: r.wikiNational, fetchedAt: r.fetchedAt, error: r.error };
     else                    next = { label: r.label, data: r.data,  fetchedAt: r.fetchedAt, error: r.error };
     if (i >= 0) items[i] = next; else items.push(next);
   }

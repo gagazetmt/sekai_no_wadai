@@ -478,12 +478,22 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
       if (role === 'player' && it.tmGames?.ok) {
         // 🆕 代表通算（caps/G/A/firstCap/lastCap/大会別） — 重要度高につき先頭配置
         const natl = it.tmGames.national;
+        // 🆕 Wiki infobox の A代表正解値（FIFA公式準拠 / U-XX や Olympic を除外したシニア代表エントリ）
+        const wikiNatlAll = it.wikiNational || [];
+        const wikiNatlSenior = wikiNatlAll.find(n => n.team && !/U\s?\d+|Olympic|Youth/i.test(n.team)) || wikiNatlAll.slice(-1)[0] || null;
         const tmgPayload = {
           career: {
             apps: it.tmGames.career?.appearances,
             g: it.tmGames.career?.goals,
             a: it.tmGames.career?.assists,
           },
+          // 🆕 Wikipedia infobox の A代表値 — FIFA 公式準拠で正確 / TM aggregateNational より優先して使うこと
+          wikiNationalSenior: wikiNatlSenior ? {
+            team: wikiNatlSenior.team,
+            caps: wikiNatlSenior.caps,
+            g:    wikiNatlSenior.goals,
+            sinceYear: wikiNatlSenior.years?.start,
+          } : null,
           national: (natl && natl.caps > 0) ? {
             caps:     natl.caps,
             g:        natl.goals,
