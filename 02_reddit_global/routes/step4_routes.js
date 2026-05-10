@@ -585,9 +585,18 @@ ${rows}`;
           const vs = g.venue === 'home' ? 'vs' : '@';
           return `  ${g.date} ${g.season}/${g.competition}${g.gameDay ? ' day'+g.gameDay : ''} | ${vs} ${g.opponent || 'club#'+g.opponentClubId} ${g.score} | ${ga} ${g.minutes||0}分${g.isCaptain ? ' [C]' : ''}`;
         }).join('\n');
+        // 🆕 代表通算（isNationalGame でフィルタ済 / 初選出日・大会別ブレイクダウン付き）
+        const natl = it.tmGames.national;
+        const natlBlock = (natl && natl.caps > 0) ? `
+
+[代表通算]
+通算: ${natl.caps}試合 ${natl.goals}G ${natl.assists}A (${natl.minutes}分) | 初選出 ${natl.firstCapDate} | 最終出場 ${natl.lastCapDate}
+大会別: ${(natl.byCompetition || []).slice(0, 6).map(c => `${c.competition} ${c.caps}試合(${c.goals}G${c.assists}A)`).join(' / ') || '(なし)'}` : '';
+
         tmGamesStr = `
 [Transfermarkt 試合単位の選手成績]
 通算 (全試合): ${career?.appearances}試合 ${career?.goals}G ${career?.assists}A (${career?.minutes}分)
+${natlBlock}
 
 [直近3シーズン × 大会別]
 ${recent || '(なし)'}

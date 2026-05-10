@@ -476,12 +476,25 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
       // 🆕 選手限定: Transfermarkt 試合単位の集計データ（2026-05-08）
       //   直近3シーズン × 大会別の出場/G/A + 直近シーズン監督別 top3 + 直近 N 試合の生データ
       if (role === 'player' && it.tmGames?.ok) {
+        // 🆕 代表通算（caps/G/A/firstCap/lastCap/大会別） — 重要度高につき先頭配置
+        const natl = it.tmGames.national;
         const tmgPayload = {
           career: {
             apps: it.tmGames.career?.appearances,
             g: it.tmGames.career?.goals,
             a: it.tmGames.career?.assists,
           },
+          national: (natl && natl.caps > 0) ? {
+            caps:     natl.caps,
+            g:        natl.goals,
+            a:        natl.assists,
+            minutes:  natl.minutes,
+            firstCap: natl.firstCapDate,
+            lastCap:  natl.lastCapDate,
+            byComp:   (natl.byCompetition || []).slice(0, 6).map(c => ({
+              c: c.competition, apps: c.caps, g: c.goals, a: c.assists,
+            })),
+          } : null,
           recentByComp: (it.tmGames.recentByCompetition || []).slice(0, 10).map(r => ({
             s: r.season, c: r.competition,
             apps: r.appearances, g: r.goals, a: r.assists,
@@ -499,7 +512,7 @@ async function _runScenarioJob(jobId, postId, mods, postIn) {
             G: g.G || 0, A: g.A || 0, m: g.minutes || 0,
           })),
         };
-        tmGamesSum = `\n  tmGames:${JSON.stringify(tmgPayload).slice(0, 2200)}`;
+        tmGamesSum = `\n  tmGames:${JSON.stringify(tmgPayload).slice(0, 2600)}`;
       }
 
       return `- "${it.label}" [${role}]\n  ${wikiSum}\n  ${sofaSum}${tmSum}${wstatsSum}${tmGamesSum}`;
