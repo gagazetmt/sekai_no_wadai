@@ -137,23 +137,78 @@ function _parseInt(s) {
   return m ? parseInt(m[0], 10) : null;
 }
 
+// <tr> の中身から各セルを {text, colspan, rowspan, isTh} の配列で返す
+//   多段ヘッダ（League 列の下に Tier/P/W/D/L 等がぶら下がる）対応に必須
+function _parseRowCells(row) {
+  const result = [];
+  const cellRegex = /<(t[hd])([^>]*)>([\s\S]*?)<\/\1>/gi;
+  let m;
+  while ((m = cellRegex.exec(row)) !== null) {
+    const tag    = m[1];
+    const attrs  = m[2] || '';
+    const inner  = m[3];
+    const colspan = (attrs.match(/colspan\s*=\s*"?(\d+)"?/i) || [])[1];
+    const rowspan = (attrs.match(/rowspan\s*=\s*"?(\d+)"?/i) || [])[1];
+    result.push({
+      text:    _stripHtmlTags(inner),
+      colspan: colspan ? parseInt(colspan, 10) : 1,
+      rowspan: rowspan ? parseInt(rowspan, 10) : 1,
+      isTh:    tag.toLowerCase() === 'th',
+    });
+  }
+  return result;
+}
+
+// row1 + row2 から多段ヘッダを合成して flat な header text 配列を作る
+//   rowspan=2 のセル: そのまま使用
+//   colspan=N のセル: row2 から N 個サブヘッダを取り出して埋める
+function _composeMultiRowHeaders(row1Cells, row2Cells) {
+  const headers = [];
+  let r2Idx = 0;
+  for (const c of row1Cells) {
+    if (c.rowspan >= 2) {
+      headers.push(c.text);
+    } else if (c.colspan > 1) {
+      for (let i = 0; i < c.colspan; i++) {
+        headers.push(r2Idx < row2Cells.length ? row2Cells[r2Idx++].text : '');
+      }
+    } else {
+      headers.push(c.text);
+    }
+  }
+  return headers;
+}
+
 function _parseSeasonsFromHtml(html) {
   const seasons = [];
-  // wikitable をすべて検索
   const tableRegex = /<table[^>]*class="[^"]*wikitable[^"]*"[^>]*>([\s\S]*?)<\/table>/gi;
   let tm;
   while ((tm = tableRegex.exec(html)) !== null) {
     const table = tm[1];
-    // 最初の <tr> をヘッダとして列推定
-    const headerMatch = table.match(/<tr[^>]*>([\s\S]*?)<\/tr>/i);
-    if (!headerMatch) continue;
-    const headerCells = (headerMatch[1].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
-      .map(c => _stripHtmlTags(c));
+    const allRows = (table.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || []);
+    if (allRows.length < 2) continue;
+
+    // ヘッダ row1 を解析
+    const row1Cells = _parseRowCells(allRows[0]);
+    if (row1Cells.length < 3) continue;
+
+    // 多段ヘッダ判定（colspan>1 のセルが存在 → row2 もヘッダ）
+    const hasSpan = row1Cells.some(c => c.colspan > 1);
+    let headerCells, dataStartIdx;
+    if (hasSpan && allRows.length > 2) {
+      const row2Cells = _parseRowCells(allRows[1]);
+      headerCells = _composeMultiRowHeaders(row1Cells, row2Cells);
+      dataStartIdx = 2;
+    } else {
+      headerCells = row1Cells.map(c => c.text);
+      dataStartIdx = 1;
+    }
+
     if (headerCells.length < 4) continue;
 
-    const lowerHeaders = headerCells.map(h => h.toLowerCase());
+    const lowerHeaders = headerCells.map(h => (h || '').toLowerCase());
     const idxSeason = lowerHeaders.findIndex(h => /season/.test(h));
-    const idxLeague = lowerHeaders.findIndex(h => /\bleague\b|\bdiv(\.|ision)\b|\btier\b/.test(h));
+    const idxLeague = lowerHeaders.findIndex(h => /^league$/.test(h) || /^div(\.|ision)$/.test(h) || /^tier$/.test(h));
     const idxPos    = lowerHeaders.findIndex(h => /^pos\.?$/.test(h) || /position/.test(h));
     const idxPts    = lowerHeaders.findIndex(h => /^pts\.?$/.test(h) || /^points$/.test(h));
     const idxP      = lowerHeaders.findIndex(h => /^p\.?$|^pld\.?$|^matches$|^played$/.test(h));
@@ -163,23 +218,13 @@ function _parseSeasonsFromHtml(html) {
     const idxGF     = lowerHeaders.findIndex(h => /^gf\.?$|^f$|goals.*for/.test(h));
     const idxGA     = lowerHeaders.findIndex(h => /^ga\.?$|^a$|goals.*against/.test(h));
 
-    // Season 列が無いテーブルはスキップ
-    if (idxSeason < 0 && !lowerHeaders.some(h => /20\d{2}/.test(h))) {
-      // 一部のページでは Season ヘッダが無く 0列目に直接シーズンが入るパターンも
-    }
-
-    // 各行をパース
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let rm;
-    let isFirst = true;
-    while ((rm = rowRegex.exec(table)) !== null) {
-      if (isFirst) { isFirst = false; continue; }   // ヘッダ行スキップ
-      const cells = (rm[1].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
+    // データ行をパース
+    for (let i = dataStartIdx; i < allRows.length; i++) {
+      const cells = (allRows[i].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [])
         .map(c => _stripHtmlTags(c));
       if (cells.length < 5) continue;
 
       const seasonCell = cells[idxSeason >= 0 ? idxSeason : 0] || '';
-      // 2024–25 / 2024-25 / 2024-2025 を捕捉（en dash と hyphen 両対応）
       const seasonMatch = seasonCell.match(/(\d{4})[–—\-](\d{2,4})/);
       if (!seasonMatch) continue;
       const yearFrom = seasonMatch[1];
@@ -190,7 +235,7 @@ function _parseSeasonsFromHtml(html) {
 
       seasons.push({
         season: `${yearFrom}-${yearTo.slice(-2)}`,
-        league:        idxLeague >= 0 ? cells[idxLeague] : null,
+        league:        idxLeague >= 0 ? cells[idxLeague] : (cells[1] || null),
         position:      idxPos    >= 0 ? _parsePos(cells[idxPos])    : null,
         played:        idxP      >= 0 ? _parseInt(cells[idxP])      : null,
         wins:          idxW      >= 0 ? _parseInt(cells[idxW])      : null,
@@ -199,10 +244,9 @@ function _parseSeasonsFromHtml(html) {
         goalsFor:      idxGF     >= 0 ? _parseInt(cells[idxGF])     : null,
         goalsAgainst:  idxGA     >= 0 ? _parseInt(cells[idxGA])     : null,
         points:        idxPts    >= 0 ? _parseInt(cells[idxPts])    : null,
-        rawCells:      cells.slice(0, 15),
+        rawCells:      cells.slice(0, 18),
       });
     }
-    // 5シーズン以上採れたらこのテーブルで確定
     if (seasons.length >= 5) break;
   }
   return seasons;
