@@ -230,7 +230,7 @@ async function renderSlide(page, html, durationMs, outPath) {
   const ff = spawn(FFMPEG, [
     '-y',
     '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
-    '-c:v', 'libx264', '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p',
     '-r', String(FPS), '-vf', `scale=${W}:${H}`,
     outPath,
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
@@ -635,7 +635,7 @@ async function main() {
 
     const cmd = `"${FFMPEG}" -y ${inputs} -filter_complex_script "${filterScript}" ` +
                 `-map "[vout]" -map "[aout]" ` +
-                `-c:v libx264 -preset veryfast -pix_fmt yuv420p -r ${FPS} ` +
+                `-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -maxrate 12M -bufsize 24M -r ${FPS} ` +
                 `-c:a aac -b:a 128k -movflags +faststart "${concatMp4}"`;
     execSync(cmd, { stdio: 'pipe' });
   }
