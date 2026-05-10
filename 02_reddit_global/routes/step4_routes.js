@@ -519,6 +519,35 @@ ${tro ? '\n[獲得タイトル]\n' + tro : ''}`;
 ${rows}${tot}`;
       }
 
+      // 🆕 チームのみ: 残り試合 + 今季消化済（2026-05-10 追加）
+      //   「残り3試合の対戦相手 + その対戦相手との前半成績」のような構成に必須
+      let scheduleStr = '';
+      if (it.role === 'team' && it.sofa?.ok) {
+        const upcoming = (it.sofa.upcomingFixtures || []).slice(0, 6);
+        const finished = it.sofa.currentSeasonMatches || [];
+        if (upcoming.length || finished.length) {
+          const upRows = upcoming.map(u => {
+            const haOrA = u.isHome ? '(H)' : '(A)';
+            const dt    = u.date || '?';
+            // 同シーズン内で同じ相手との対戦結果（前半戦）を検索
+            const prev = finished.find(m => m.opponent === u.opponent);
+            const prevStr = prev
+              ? ` ← 前半戦 ${prev.score}${prev.isHome ? '(H)' : '(A)'} (${prev.result})`
+              : ' ← 前半戦データなし';
+            return `  ${dt} vs ${u.opponent}${haOrA}${prevStr}`;
+          }).join('\n');
+          const recentRows = finished.slice(-10).reverse().map(m =>
+            `  ${m.date} vs ${m.opponent}${m.isHome ? '(H)' : '(A)'} ${m.score} (${m.result})`
+          ).join('\n');
+          scheduleStr = `
+[今季 ${it.sofa.leagueName || ''} 残り試合 (${upcoming.length}) + 前半戦の対戦結果照合]
+${upRows || '  (なし)'}
+
+[今季 ${it.sofa.leagueName || ''} 直近の消化済 (新しい順 / 最大10件)]
+${recentRows || '  (なし)'}`;
+        }
+      }
+
       // 🆕 チームのみ: Wikipedia 歴代シーズン順位（2026-05-10 追加）
       //   直近 N シーズンの順位推移は history / comparison スライドの根拠データ
       let wikiSeasonsStr = '';
@@ -585,7 +614,7 @@ ${wikitext.slice(0, 3000)}
 
 [SofaScore]
 ${sofaStr}
-${tmStr}${wstatsStr}${wikiSeasonsStr || ''}${tmGamesStr}
+${tmStr}${wstatsStr}${scheduleStr || ''}${wikiSeasonsStr || ''}${tmGamesStr}
 `;
     }
 

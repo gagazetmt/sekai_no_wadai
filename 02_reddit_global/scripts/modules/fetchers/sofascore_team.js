@@ -37,6 +37,23 @@ function formatTeamMatch(e, teamId) {
     score:      `${myScore ?? '?'}-${oppScore ?? '?'}`,
     date:       e.startTimestamp ? new Date(e.startTimestamp * 1000).toISOString().slice(0, 10) : null,
     tournament: e.tournament?.name,
+    tournamentId: e.tournament?.uniqueTournament?.id || null,
+    seasonId:   e.season?.id || null,
+  };
+}
+
+// 未消化試合（schedule 用・スコアと結果は無し）
+function formatUpcomingFixture(e, teamId) {
+  const isHome  = e.homeTeam?.id === teamId;
+  const oppName = isHome ? e.awayTeam?.name : e.homeTeam?.name;
+  return {
+    opponent:   oppName,
+    isHome,
+    date:       e.startTimestamp ? new Date(e.startTimestamp * 1000).toISOString().slice(0, 10) : null,
+    tournament: e.tournament?.name,
+    tournamentId: e.tournament?.uniqueTournament?.id || null,
+    seasonId:   e.season?.id || null,
+    venue:      e.venue?.stadium?.name || null,
   };
 }
 
@@ -515,6 +532,23 @@ async function fetchSofaScoreTeam(teamName) {
       recentForm,
       currentManagerStats,
       seasonAggregate,
+      // 🆕 今季 domestic league の消化済試合（古い順）+ 残り試合（時系列順）2026-05-10
+      currentSeasonMatches: (() => {
+        return allRecentMatches
+          .filter(m => m.tournamentId === tournamentId && m.seasonId === seasonId)
+          .reverse(); // 古い順
+      })(),
+      upcomingFixtures: (() => {
+        const ev = (nxRaw?.events || []);
+        return ev
+          .filter(e =>
+            e.status?.type !== 'finished' &&
+            e.tournament?.uniqueTournament?.id === tournamentId &&
+            e.season?.id === seasonId
+          )
+          .sort((a, b) => (a.startTimestamp || 0) - (b.startTimestamp || 0))
+          .map(e => formatUpcomingFixture(e, teamId));
+      })(),
     };
   } catch (e) {
     if (e.response?.status === 403) {
