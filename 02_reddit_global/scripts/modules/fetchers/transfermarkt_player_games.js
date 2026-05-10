@@ -244,6 +244,73 @@ function aggregateGames(performance, options = {}) {
   };
 }
 
+// 🆕 代表試合を集計（isNationalGame=true でフィルタ）
+//   返却: caps / goals / assists / avgGrade(Kicker式 1.0=神/6.0=最低) / firstCapDate / byCompetition / etc
+//   Transfermarkt 1ファイルで「日本代表通算 試合・G・A・平均評価・初選出・大会別」全部取れる強力 API
+function aggregateNationalGames(performance) {
+  if (!Array.isArray(performance)) return null;
+  const natl = performance.filter(g => g.gameInformation?.isNationalGame);
+  if (!natl.length) {
+    return { caps: 0, goals: 0, assists: 0, avgGrade: null, firstCapDate: null, lastCapDate: null, byCompetition: [], matchesCounted: 0 };
+  }
+  let caps = 0, starts = 0, minutes = 0;
+  let goals = 0, assists = 0, yc = 0;
+  let gradeSum = 0, gradedCount = 0;
+  let firstDate = null, lastDate = null;
+  const byCompMap = {};
+  for (const g of natl) {
+    const gi = g.gameInformation || {};
+    const st = g.statistics || {};
+    const gen = st.generalStatistics || {};
+    const goal = st.goalStatistics || {};
+    const time = st.playingTimeStatistics || {};
+    const card = st.cardStatistics || {};
+    const minutesPlayed = Number(time.playedMinutes) || 0;
+    if (minutesPlayed > 0) {
+      caps++;
+      minutes += minutesPlayed;
+      if (gen.participationState === 'inFromStart' || gen.participationState === 'starter') starts++;
+    }
+    const gs = goal.goalsScoredTotal;
+    if (gs != null) goals += Number(gs) || 0;
+    const ag = goal.assists;
+    if (ag != null) assists += Number(ag) || 0;
+    if (card.yellowCardNet) yc++;
+    if (gen.grade != null) {
+      const grade = Number(gen.grade);
+      if (Number.isFinite(grade) && grade > 0) {
+        gradeSum += grade;
+        gradedCount++;
+      }
+    }
+    const dStr = gi.date?.dateTimeUTC;
+    if (dStr) {
+      if (!firstDate || dStr < firstDate) firstDate = dStr;
+      if (!lastDate  || dStr > lastDate)  lastDate  = dStr;
+    }
+    const comp = gi.competitionId || 'UNKNOWN';
+    if (!byCompMap[comp]) byCompMap[comp] = { competition: comp, caps: 0, goals: 0, assists: 0 };
+    if (minutesPlayed > 0) byCompMap[comp].caps++;
+    if (gs != null) byCompMap[comp].goals += Number(gs) || 0;
+    if (ag != null) byCompMap[comp].assists += Number(ag) || 0;
+  }
+  const avgGrade = gradedCount > 0 ? +(gradeSum / gradedCount).toFixed(2) : null;
+  return {
+    caps,
+    starts,
+    minutes,
+    goals,
+    assists,
+    yellowCards: yc,
+    avgGrade,
+    avgGradeNote: 'Kicker式・1.0(神)〜6.0(最低)',
+    firstCapDate: firstDate ? firstDate.slice(0, 10) : null,
+    lastCapDate:  lastDate  ? lastDate.slice(0, 10)  : null,
+    byCompetition: Object.values(byCompMap).sort((a, b) => b.caps - a.caps),
+    matchesCounted: natl.length,
+  };
+}
+
 // 監督下の成績を取得する高レベル API
 //   coachIds で複数監督渡せば、同じ選手の監督別比較表を一発生成
 async function fetchPlayerStatsUnderCoaches(playerId, coachIds, options = {}) {
@@ -349,6 +416,9 @@ async function fetchPlayerSummary(playerId, opts = {}) {
     };
   });
 
+  // 🆕 代表通算（isNationalGame=true でフィルタ）
+  const national = aggregateNationalGames(perf);
+
   return {
     ok: true,
     playerId: String(playerId),
@@ -358,6 +428,7 @@ async function fetchPlayerSummary(playerId, opts = {}) {
     recentByCompetition,    // 直近3シーズン x 大会別
     byCoachLatest,          // 直近シーズンの監督別 top3
     recentGames,            // 🆕 直近 N 試合の生データ（スコア+対戦相手+G+A、対戦相手名解決済）
+    national,               // 🆕 代表通算（caps/G/A/avgGrade/firstCapDate/byCompetition）
   };
 }
 
@@ -365,6 +436,7 @@ module.exports = {
   searchTransfermarktPlayer,
   fetchPlayerPerformanceGames,
   aggregateGames,
+  aggregateNationalGames,
   fetchPlayerStatsUnderCoaches,
   fetchPlayerSummary,
   resolveClubNames,
