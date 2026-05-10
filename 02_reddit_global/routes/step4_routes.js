@@ -746,6 +746,13 @@ ${incrementalRule}
   ・観点抽出 → "insight"
 - dataSlots shape は type に応じて：
   ・comparison: [{"label":"指標","leftValue":"primaryの値","rightValue":"secondaryの値"}]
+    ⚠️ **監督の comparison では、必ず両者の現所属クラブでの成績を使用すること**。
+       例: Pep Guardiola (Manchester City) vs Mikel Arteta (Arsenal) の場合、
+       各 entity の Transfermarkt coachClubs から該当クラブのエントリ
+       （Pep → Manchester City エントリ / Arteta → Arsenal エントリ）を抽出。
+       「監督通算」のような全期間データは使わない（Pep のバルサ・バイエルン期は混入禁止）。
+       通算成績は「監督歴 N 年」のような career length 系の文脈でのみ使用OK。
+       Wikipedia 監督戦績テーブルにもクラブ別行があれば併用可。
   ・history:    [{"label":"年(YYYY)","value":"出来事"}]
   ・stats/profile: [{"label":"項目","value":"値"}]
   ・insight: dataSlots は空配列、代わりに catchphrases を別途返してOK（今回は dataSlots 中心で）

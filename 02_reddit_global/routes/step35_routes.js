@@ -294,7 +294,9 @@ async function fetchImagesForLabel(postId, label) {
     tasks.push(Promise.resolve({ source: 'x_by_name', paths: [] }));
   }
 
-  if (teamName) {
+  // x_by_time: チーム公式 X の直近投稿（題材問わず）
+  //   ⚠️ 監督ラベルでは混入源（チーム他選手・ファン写真等）になるためスキップ（2026-05-10）
+  if (teamName && effectiveType !== 'manager') {
     tasks.push(
       fetchOfficialXImagesByTime(teamName, '', 10, { outDir, matchKickoff })
         .then(paths => ({ source: 'x_by_time', paths }))
@@ -304,7 +306,8 @@ async function fetchImagesForLabel(postId, label) {
     tasks.push(Promise.resolve({ source: 'x_by_time', paths: [] }));
   }
 
-  if (teamNameAway) {
+  // x_by_time_away: 同上、監督ラベルではスキップ
+  if (teamNameAway && effectiveType !== 'manager') {
     tasks.push(
       fetchOfficialXImagesByTime(teamNameAway, 'away', 10, { outDir, matchKickoff })
         .then(paths => ({ source: 'x_by_time_away', paths }))
@@ -314,9 +317,11 @@ async function fetchImagesForLabel(postId, label) {
     tasks.push(Promise.resolve({ source: 'x_by_time_away', paths: [] }));
   }
 
+  // wikimedia: 監督は本人画像が他のソースから取りにくいため枚数増（3→8）
   if (entity) {
+    const wmCount = effectiveType === 'manager' ? 8 : 3;
     tasks.push(
-      fetchWikimediaImages(entity, '', 3, { outDir })
+      fetchWikimediaImages(entity, '', wmCount, { outDir })
         .then(paths => ({ source: 'wikimedia', paths }))
         .catch(e => { console.warn('[wikimedia]', e.message); return { source: 'wikimedia', paths: [] }; })
     );
@@ -340,6 +345,19 @@ async function fetchImagesForLabel(postId, label) {
     console.warn('[stock]', e.message);
     images.stock = [];
     images.stock_meta = [];
+  }
+
+  // 手動アップロード画像（outDir 内の manual_*.png/jpg/webp をスキャン）
+  try {
+    const manualFiles = fs.existsSync(outDir)
+      ? fs.readdirSync(outDir)
+          .filter(f => f.startsWith('manual_') && /\.(png|jpe?g|webp)$/i.test(f))
+          .map(f => pathToUrl(path.join(outDir, f)))
+      : [];
+    images.manual = manualFiles;
+  } catch (e) {
+    console.warn('[manual]', e.message);
+    images.manual = [];
   }
 
   const total = Object.values(images).reduce((s, a) => Array.isArray(a) ? s + a.length : s, 0);
@@ -367,6 +385,40 @@ router.post('/v35/fetch-images', async (req, res) => {
     console.error('[step35/fetch-images]', e);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── /api/v35/upload-image : 手動画像アップロード（label 単位）──
+// Body: { postId, label, filename, dataUrl }
+//   dataUrl: "data:image/png;base64,..." 形式
+//   保存先: data/v2_thumbs/{postId}/{labelSafe}/manual_{ts}_{name}.{ext}
+router.post('/v35/upload-image', (req, res) => {
+  const { postId, label, filename, dataUrl } = req.body || {};
+  if (!postId || !label || !dataUrl) {
+    return res.status(400).json({ error: 'postId/label/dataUrl required' });
+  }
+  const m = String(dataUrl).match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: 'invalid dataUrl format' });
+
+  const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+  const buffer = Buffer.from(m[2], 'base64');
+
+  const outDir = imageOutDirForLabel(postId, label);
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+  const safeName = String(filename || 'manual')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^a-zA-Z0-9_.-]/g, '_')
+    .slice(0, 40);
+  const finalFile = `manual_${Date.now()}_${safeName}.${ext}`;
+  const finalPath = path.join(outDir, finalFile);
+  fs.writeFileSync(finalPath, buffer);
+
+  res.json({
+    ok: true,
+    file: finalFile,
+    url: pathToUrl(finalPath),
+    size: buffer.length,
+  });
 });
 
 // ─── /api/v35/save-selection : 選択結果を保存（ラベルキー）─
@@ -491,16 +543,18 @@ function getUI() {
 
     const btnLabel = imgGroups ? '🔄 再取得' : '📥 画像取得';
     const btnHTML  = '<button class="btn btn-sm s35-fetch-btn" data-key="' + _esc(L.key) + '" style="background:#3b82f6;color:#fff;">' + btnLabel + '</button>';
+    const upHTML   = '<button class="btn btn-sm s35-upload-btn" data-key="' + _esc(L.key) + '" style="background:#7c3aed;color:#fff;">📤 手動アップロード</button>';
 
     let body = '';
     if (imgGroups) {
       body =
-          _renderGroup('🎁 ストック (公式素材)',       imgGroups.stock,          L.key, sel)
+          _renderGroup('🖼 手動アップロード',          imgGroups.manual,         L.key, sel)
+        + _renderGroup('🎁 ストック (公式素材)',       imgGroups.stock,          L.key, sel)
         + _renderGroup('X公式・名前ソート',          imgGroups.x_by_name,      L.key, sel)
         + _renderGroup('X公式・時間ソート',          imgGroups.x_by_time,      L.key, sel)
         + _renderGroup('X公式・時間ソート (Away)',   imgGroups.x_by_time_away, L.key, sel)
         + _renderGroup('Wikimedia Commons',          imgGroups.wikimedia,      L.key, sel);
-      if (!body) body = '<div class="s35-empty">画像が取得できませんでした（チーム解決失敗 or 該当なし）</div>';
+      if (!body) body = '<div class="s35-empty">画像が取得できませんでした（チーム解決失敗 or 該当なし）。📤 手動アップロードから追加できる</div>';
     }
 
     const slideStr = (L.slidesUsing || []).map(i => '#' + (i + 1)).join(', ');
@@ -514,6 +568,7 @@ function getUI() {
       +     '<span style="font-size:11px;color:#8a9aba">使用スライド: ' + _esc(slideStr || '(なし)') + '</span>'
       +     '<span style="flex:1"></span>'
       +     btnHTML
+      +     upHTML
       +     '<span class="s35-sel-count" style="font-size:11px;color:#10b981;">' + sel.length + ' 枚選択中</span>'
       +   '</div>'
       +   body
@@ -537,10 +592,12 @@ function getUI() {
       + '</div>';
   }
 
-  /* ── イベント委譲（再取得・トグル） ── */
+  /* ── イベント委譲（再取得・手動アップロード・トグル） ── */
   document.addEventListener('click', function(e) {
     const fb = e.target.closest('.s35-fetch-btn');
     if (fb) { window.s35Fetch(fb.getAttribute('data-key')); return; }
+    const ub = e.target.closest('.s35-upload-btn');
+    if (ub) { window.s35Upload(ub.getAttribute('data-key')); return; }
     const th = e.target.closest('#s35LabelList .s35-thumb');
     if (th) {
       const key  = th.getAttribute('data-key');
@@ -548,6 +605,50 @@ function getUI() {
       window.s35Toggle(key, path);
     }
   });
+
+  /* ── 手動アップロード ─────────────────────────── */
+  let _s35UploadKey = null;
+  window.s35Upload = function(key) {
+    _s35UploadKey = key;
+    let inp = document.getElementById('s35-upload-input');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'file';
+      inp.id = 's35-upload-input';
+      inp.accept = 'image/png,image/jpeg,image/webp';
+      inp.style.display = 'none';
+      inp.onchange = window.s35HandleUpload;
+      document.body.appendChild(inp);
+    }
+    inp.click();
+  };
+  window.s35HandleUpload = async function(ev) {
+    const file = (ev.target.files || [])[0];
+    const key  = _s35UploadKey;
+    _s35UploadKey = null;
+    ev.target.value = '';
+    if (!file || !key) return;
+    const post = window.APP.selected;
+    if (!post?.id) { alert('案件未選択だよ'); return; }
+    _msg('⏳ アップロード中: ' + file.name);
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = () => reject(new Error('読込失敗'));
+        r.readAsDataURL(file);
+      });
+      const r = await fetchJson('/api/v35/upload-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, label: key, filename: file.name, dataUrl }),
+      });
+      _msg('✅ アップロード完了: ' + r.file);
+      // 該当ラベルだけ再 fetch して manual グループに反映
+      await window.s35Fetch(key);
+    } catch (e) {
+      _msg('❌ アップロード失敗: ' + e.message);
+    }
+  };
 
   /* ── 画像取得 (1ラベル) ── */
   window.s35Fetch = async function(key) {
