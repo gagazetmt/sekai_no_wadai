@@ -5,7 +5,7 @@
 //   - chunk連動アクティブハイライト（ナレが触れた章が光る）
 //   - 背景にゴールドダスト（金粒が漂う雑誌的質感）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
 const MAX_ITEMS = 8;
 
@@ -45,6 +45,7 @@ function _buildDust() {
 
 function buildTocHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
   let items = [];
   // 新スキーマ {text, chunkText} と旧スキーマ string[] 両対応
   const _itemText = (it) => (typeof it === 'string') ? it : String(it?.text || '');
@@ -81,7 +82,8 @@ function buildTocHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: radial-gradient(ellipse at 30% 40%, #1a2240 0%, #0a0e1a 70%);`}
-  background-size: cover; background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
   ${bg ? 'animation: bgZoom 14s ease-out forwards;' : ''}
   filter: ${bg ? 'brightness(0.45)' : 'none'};
 }

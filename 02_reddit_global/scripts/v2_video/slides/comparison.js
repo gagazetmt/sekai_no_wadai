@@ -13,6 +13,7 @@ const {
   PALETTE, esc, imgDataUri, wrapHTML,
   buildSubtitleBar, subtitleArgFromMod,
   _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC,
+  imageAdjustCss,
 } = require('./_common');
 
 // label を chunk text と部分一致で対応付け（active 強調用）
@@ -37,6 +38,7 @@ function _matchLabelToChunk(label, chunks) {
 function buildComparisonHTML(mod) {
   const leftBg  = imgDataUri(mod.leftImage)  || imgDataUri(mod.bgImage);
   const rightBg = imgDataUri(mod.rightImage);
+  const imgAdj  = imageAdjustCss(mod.imageAdjust);
   // チーム or 選手の主役名。マップに有れば日本語、無ければ last word
   function _entityName(raw) {
     if (!raw) return '';
@@ -138,8 +140,8 @@ function buildComparisonHTML(mod) {
 }
 .panel-bg {
   position: absolute; inset: 0;
-  background-size: cover;
-  background-position: center top;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.isDefault ? 'center top' : imgAdj.bgPosition};
   opacity: 0;
 }
 @keyframes imgFadeIn { from { opacity: 0; } to { opacity: 1; } }

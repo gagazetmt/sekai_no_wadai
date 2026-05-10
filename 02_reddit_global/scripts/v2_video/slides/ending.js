@@ -9,6 +9,7 @@
 const {
   PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle,
   buildSubtitleBar, subtitleArgFromMod, _t,
+  imageAdjustCss,
 } = require('./_common');
 
 // SVG アイコン（emoji 環境依存回避）
@@ -18,6 +19,7 @@ const SVG_ARROW_DOWN = '<svg width="56" height="56" viewBox="0 0 24 24" fill="cu
 
 function buildEndingHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
   const title = _t(mod.title) || '次回もお楽しみに！';
 
   // タイトルが長い場合は 2行に自然分割 + 文字サイズ自動縮小
@@ -53,8 +55,8 @@ function buildEndingHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
   filter: brightness(0.62);
   ${bg ? 'animation: bgZoom 12s ease-out forwards;' : ''}
 }

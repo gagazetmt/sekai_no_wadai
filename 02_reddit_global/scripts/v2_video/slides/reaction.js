@@ -6,7 +6,7 @@
 //   - 上から順に slideDown アニメーション
 //   - 各 comment は対応する音声 chunk が読まれる瞬間に登場 + 読まれてる間 active
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
 // V1 の CMT_BG / CMT_BG_HL カラーパレット
 const CMT_BG    = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
@@ -24,6 +24,7 @@ function _commentFont(text) {
 
 function buildReactionHTML(mod) {
   const bg       = imgDataUri(mod.bgImage);
+  const imgAdj   = imageAdjustCss(mod.imageAdjust);
   const title    = mod.title || '海外の声';
   const comments = (Array.isArray(mod.comments) ? mod.comments : []).slice(0, 7);
 
@@ -94,8 +95,8 @@ function buildReactionHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
   filter: brightness(0.45);
 }
 .bg-overlay {

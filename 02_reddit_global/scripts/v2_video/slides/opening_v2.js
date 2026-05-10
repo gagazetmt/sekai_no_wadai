@@ -8,6 +8,7 @@
 const {
   PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle,
   buildSubtitleBar, subtitleArgFromMod, _t,
+  imageAdjustCss,
 } = require('./_common');
 
 function _inferBadge(title) {
@@ -20,6 +21,7 @@ function _inferBadge(title) {
 
 function buildOpeningHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
   const title = _t(mod.title || mod.narration || 'OPENING');
   const channelName = mod.channelName || '5分でサッカー分析';
   const heroNumber = String(mod.heroNumber || '').trim();  // 例: "63%" "24G" "5-4"
@@ -44,7 +46,8 @@ function buildOpeningHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : 'background: radial-gradient(ellipse at center, #1a2540 0%, #060e1c 100%);'}
-  background-size: cover; background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
   filter: brightness(0.55);
   ${bg ? 'animation: bgZoom 8s ease-out forwards;' : ''}
 }

@@ -8,6 +8,7 @@
 const {
   PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle,
   buildSubtitleBar, subtitleArgFromMod, _t,
+  imageAdjustCss,
 } = require('./_common');
 
 const SVG_BELL = '<svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;flex-shrink:0;"><path d="M12 22a2.2 2.2 0 0 0 2.2-2.2H9.8A2.2 2.2 0 0 0 12 22zm6.6-6.6V10A6.6 6.6 0 0 0 13 3.5V2.6a1 1 0 1 0-2 0v.9A6.6 6.6 0 0 0 5.4 10v5.4L4 17v.8h16V17l-1.4-1.6z"/></svg>';
@@ -16,6 +17,7 @@ const SVG_COMMENT = '<svg width="32" height="32" viewBox="0 0 24 24" fill="curre
 
 function buildEndingHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
   const channelName = mod.channelName || '5分でサッカー分析';
   const ctaText = (mod.endingCta && mod.endingCta.text) || 'チャンネル登録お願い';
   const nextTopic = mod.nextTopic || mod.title || '次回もデータでサッカーを分析';
@@ -27,7 +29,8 @@ function buildEndingHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(135deg, #1a1f3a 0%, #060c1a 100%);`}
-  background-size: cover; background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
   filter: brightness(0.5);
   ${bg ? 'animation: bgZoom 12s ease-out forwards;' : ''}
 }

@@ -2,10 +2,11 @@
 // 汎用フォールバック：背景 + タイトル + ナレーションテキスト
 // stats / profile / comparison / reaction など、個別テンプレを書いてない型の fallback
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, imageAdjustCss } = require('./_common');
 
 function buildUniversalHTML(mod) {
   const bg    = imgDataUri(mod.bgImage);
+  const imgAdj = imageAdjustCss(mod.imageAdjust);
   const title = mod.title || '';
   const narr  = mod.narration || '';
 
@@ -33,8 +34,8 @@ function buildUniversalHTML(mod) {
 .bg-img {
   position: absolute; inset: 0;
   ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
-  background-size: cover;
-  background-position: center;
+  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
+  background-position: ${imgAdj.bgPosition};
   filter: brightness(0.28);
 }
 .content-wrap {
