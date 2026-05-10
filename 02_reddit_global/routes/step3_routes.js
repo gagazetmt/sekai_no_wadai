@@ -88,11 +88,15 @@ router.get('/v3/modules', (req, res) => {
 async function _runProposeModules(postId, count) {
   const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
 
+    // カスタム案件判定（Reddit コメントが無い独自テーマ動画）
+    const isCustom = String(postId || '').startsWith('custom_');
+
     // 案件の文脈（saved_projects.json から）
     let titleJa = '(タイトル不明)';
     let titleOrig = '';
     let topComments = '';
     let bodyExcerpt = '';
+    let customNote = '';
     try {
       const sp = safeJson(path.join(DATA_DIR, 'saved_projects.json'), []);
       const proj = (Array.isArray(sp) ? sp : []).find(p => p.id === postId);
@@ -105,6 +109,7 @@ async function _runProposeModules(postId, count) {
           .map(c => '- ' + (c.bodyJa || c.body || '').slice(0, 200))
           .filter(s => s.length > 4)
           .join('\n');
+        customNote = String(proj.raw?.customNote || '').slice(0, 500);
       }
     } catch (_) {}
 
@@ -142,13 +147,23 @@ async function _runProposeModules(postId, count) {
 
     const todayJst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 
+    const customBanner = isCustom ? `
+━━━ ⚠️ カスタム案件モード ━━━
+この案件は Reddit コメントが無い**独自テーマ動画**。以下を厳守：
+- **reaction 型スライドは絶対に提案しない**（ファンコメント源なし）
+- 「ファンコメントの温度感」視点は使用禁止
+- 取得済みデータと案件タイトルから多角的な視点で構成すること
+${customNote ? `\n【相棒の補足メモ（最重要参考情報）】\n${customNote}` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━
+` : '';
+
     const prompt = `あなたはサッカー解説YouTube動画のクリエイティブ・ディレクターです。
 以下の案件素材を見て、**多角的な視点**で ${count} 枚のスライド構成（outline）を提案してください。
 
 【今日の日付】${todayJst}（JST）
 【案件タイトル】${titleJa}
 ${titleOrig ? `【原題】${titleOrig}` : ''}
-
+${customBanner}
 【案件本文（事実情報の主源）】
 ${bodyExcerpt || '(なし)'}
 
@@ -250,7 +265,10 @@ ${searchBlock}
     }
 
     // バリデーション + 正規化
-    const validTypes = new Set(['opening','ending','insight','stats','profile','comparison','history','reaction','matchcard']);
+    //   custom 案件は reaction を除外（Reddit コメント源なし）
+    const validTypes = new Set(isCustom
+      ? ['opening','ending','insight','stats','profile','comparison','history','matchcard']
+      : ['opening','ending','insight','stats','profile','comparison','history','reaction','matchcard']);
     const cleaned = parsed.modules
       .filter(m => m && validTypes.has(m.type))
       .map(m => ({

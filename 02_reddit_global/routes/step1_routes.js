@@ -71,6 +71,7 @@ router.get('/content', (req, res) => {
 
 // 保存済み案件取得
 // ※自動クリーンアップ：①addedAtが今日(JST)より前の案件 ②動画生成済みの案件 を除外
+//   ただし custom 案件（id が custom_ で始まる）は日付フィルタをスキップ（複数日跨ぎで作業可能）
 router.get('/saved-projects', (req, res) => {
   const all = safeJson(SAVED_FILE, []);
   if (!Array.isArray(all) || !all.length) return res.json(all || []);
@@ -78,9 +79,10 @@ router.get('/saved-projects', (req, res) => {
   const today = todayJst();
   const videos = _videoFilesCache();
   const filtered = all.filter(p => {
+    const isCustom = String(p.id || p.source || '').startsWith('custom') || p.source === 'custom';
     const addedDate = (p.addedAt || '').slice(0, 10);
-    if (addedDate && addedDate < today) return false;       // 古い日付
-    if (hasGeneratedVideo(p.id, videos)) return false;       // 動画生成済み
+    if (!isCustom && addedDate && addedDate < today) return false;  // 古い日付（custom は除く）
+    if (hasGeneratedVideo(p.id, videos)) return false;               // 動画生成済み
     return true;
   });
 
@@ -104,6 +106,55 @@ router.post('/saved-projects', (req, res) => {
   }
 });
 
+// カスタム案件作成（Reddit 起点でない独自テーマで動画作成するため）
+//   入力: { title (必須), note (任意) }
+//   出力: 仮想 postId 付きの project 1 件、saved_projects.json に append
+function _customPostId(title) {
+  const now = new Date(Date.now() + 9 * 3600_000);
+  const ymd = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const hm  = now.toISOString().slice(11, 16).replace(':', '');
+  const ascii = String(title || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16);
+  const slug = ascii.length >= 3 ? ascii : Math.random().toString(36).slice(2, 8);
+  return `custom_${ymd}_${hm}_${slug}`;
+}
+
+router.post('/create-custom-project', (req, res) => {
+  try {
+    const { title, note } = req.body || {};
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ error: 'title required' });
+    }
+    const cleanTitle = String(title).trim().slice(0, 200);
+    const cleanNote  = String(note || '').trim().slice(0, 500);
+    const id = _customPostId(cleanTitle);
+    const now = new Date().toISOString();
+    const newProj = {
+      id,
+      title:    cleanTitle,
+      titleOrig: '',
+      addedAt:  now,
+      source:   'custom',
+      score:    0,
+      raw: {
+        id,
+        title:    cleanTitle,
+        source:   'custom',
+        isCustom: true,
+        customNote: cleanNote,
+        addedAt:  now,
+      },
+    };
+    const all = safeJson(SAVED_FILE, []);
+    const list = Array.isArray(all) ? all : [];
+    list.push(newProj);
+    fs.writeFileSync(SAVED_FILE, JSON.stringify(list, null, 2));
+    res.json({ ok: true, project: newProj });
+  } catch (e) {
+    console.error('[Step1] create-custom-project エラー:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── UI（このファイルを触るだけで Step1 表示が変わる）──────
 
 function getUI() {
@@ -116,12 +167,29 @@ function getUI() {
       <input type="date" id="s1Date" class="inp">
       <button class="btn btn-primary" onclick="s1Load()">📡 案件読込</button>
       <button class="btn btn-success" onclick="s1Save()">💾 選択を保存</button>
+      <button class="btn" onclick="s1OpenCustom()" style="background:#7c3aed;color:#fff;">✨ カスタム案件作成</button>
       <span id="s1Msg" style="font-size:12px;color:#8a9aba;"></span>
     </div>
   </div>
 
   <!-- 案件一覧（アコーディオン） -->
   <div id="s1List"></div>
+
+  <!-- カスタム案件作成 モーダル -->
+  <div id="s1CustomModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:24px; width:min(520px, 92vw); box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+      <h3 style="margin:0 0 6px 0; color:#a78bfa; font-size:18px;">✨ カスタム案件作成</h3>
+      <p style="margin:0 0 16px 0; font-size:11px; color:var(--muted);">Reddit に該当が無い独自テーマで動画を作るためのエントリ。Step2 以降の流れは Reddit 案件と同じ（reaction スライドは自動省略）。</p>
+      <label style="display:block; font-size:11px; color:var(--muted); margin-bottom:4px;">動画タイトル <span style="color:#ff4d4d;">*</span></label>
+      <input type="text" id="s1cmTitle" class="inp" maxlength="200" placeholder="例: 久保建英 今季総括 / W杯メンバー予想 / Big6 監督ランキング" style="width:100%; margin-bottom:12px;">
+      <label style="display:block; font-size:11px; color:var(--muted); margin-bottom:4px;">補足メモ（任意・Step3 で AI が参考にする）</label>
+      <textarea id="s1cmNote" class="inp" rows="3" maxlength="500" placeholder="例: La Liga 残り3節での久保評価。比較対象は伊東純也・南野拓実・三笘薫" style="width:100%; resize:vertical; margin-bottom:18px;"></textarea>
+      <div style="display:flex; gap:10px; justify-content:flex-end;">
+        <button class="btn btn-sm" onclick="s1CloseCustom()">キャンセル</button>
+        <button class="btn" onclick="s1SubmitCustom()" style="background:#7c3aed;color:#fff;">✨ 作成 → サイドバー追加</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -235,6 +303,47 @@ function getUI() {
 
   function _s1Msg(t) { document.getElementById('s1Msg').textContent = t; }
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ═══ ✨ カスタム案件作成 ═══
+  window.s1OpenCustom = function() {
+    document.getElementById('s1CustomModal').style.display = 'flex';
+    setTimeout(() => document.getElementById('s1cmTitle').focus(), 50);
+  };
+  window.s1CloseCustom = function() {
+    document.getElementById('s1CustomModal').style.display = 'none';
+  };
+  window.s1SubmitCustom = async function() {
+    const title = document.getElementById('s1cmTitle').value.trim();
+    if (!title) { alert('タイトル必須だよ'); return; }
+    const note = document.getElementById('s1cmNote').value.trim();
+    try {
+      const r = await fetchJson('/api/create-custom-project', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ title, note }),
+      });
+      // sidebar に即追加（再描画 + 自動選択）
+      window.APP.saved = window.APP.saved || [];
+      window.APP.saved.push(r.project);
+      window.APP.selected = r.project;
+      window.renderSidebar();
+      // 入力 reset & close
+      s1CloseCustom();
+      document.getElementById('s1cmTitle').value = '';
+      document.getElementById('s1cmNote').value  = '';
+      _s1Msg('✅ カスタム案件作成: ' + r.project.id);
+      // Step2 に遷移（既存の selectLead と同じ動線）
+      window.APP.keywords = []; window.APP.siData = {}; window.APP.modules = []; window.APP.activeTab = 0;
+      window.goStep(2);
+    } catch (e) {
+      alert('作成失敗: ' + e.message);
+    }
+  };
+  // ESC でモーダル閉じる
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('s1CustomModal').style.display === 'flex') {
+      s1CloseCustom();
+    }
+  });
 
 })();
 </script>`;
