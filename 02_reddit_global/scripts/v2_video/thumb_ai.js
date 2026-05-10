@@ -20,6 +20,7 @@ const { callAI } = require('../ai_client');
 const LINEKA_DIR        = path.join(__dirname, '_lineka_thumb');
 const SYSTEM_BASE_FILE  = path.join(LINEKA_DIR, '_system_base.txt');
 const CLASSIFIER_FILE   = path.join(LINEKA_DIR, '_classifier.txt');
+const TEXT_EXTRACT_FILE = path.join(LINEKA_DIR, '_text_extractor.txt');
 const PATTERN_DIR       = path.join(LINEKA_DIR, 'patterns');
 
 const VALID_THEMES = [
@@ -36,8 +37,9 @@ const IMAGEN_MODEL   = process.env.GEMINI_IMAGE_MODEL
 const _patternCache = {};
 function _readPattern(name) {
   if (_patternCache[name]) return _patternCache[name];
-  const file = name === '__base__' ? SYSTEM_BASE_FILE
-             : name === '__classifier__' ? CLASSIFIER_FILE
+  const file = name === '__base__'           ? SYSTEM_BASE_FILE
+             : name === '__classifier__'     ? CLASSIFIER_FILE
+             : name === '__text_extractor__' ? TEXT_EXTRACT_FILE
              : path.join(PATTERN_DIR, `${name}.txt`);
   _patternCache[name] = fs.readFileSync(file, 'utf8');
   return _patternCache[name];
@@ -81,6 +83,45 @@ async function classifyTheme(input) {
     };
   } catch (_) {
     return { theme: 'default', confidence: 0, reasoning: '(json error)' };
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// 1.5 オープニングからサムネテキスト抽出
+// ═══════════════════════════════════════════════════
+/**
+ * オープニングスライドの title + narration から、
+ * サムネ内焼き込み用の topText / bottomText 短文を抽出
+ * @param {{openingTitle, openingNarration}} input
+ * @returns {Promise<{topText, bottomText, error?}>}
+ */
+async function extractThumbText(input) {
+  const system = _readPattern('__text_extractor__');
+  const userMsg = [
+    'オープニングスライド情報:',
+    `タイトル: ${input.openingTitle || ''}`,
+    `ナレーション: ${input.openingNarration || ''}`,
+    '',
+    'この内容からサムネイル用の topText（上端煽り）と bottomText（下端結論）を抽出してください。',
+  ].join('\n');
+
+  const text = await callAI({
+    forceProvider: 'deepseek',
+    max_tokens: 2000,
+    system,
+    messages: [{ role: 'user', content: userMsg }],
+  });
+
+  const m = text.match(/\{[\s\S]*\}/);
+  if (!m) return { topText: '', bottomText: '', error: '(parse failed): ' + (text || '').slice(0, 80) };
+  try {
+    const parsed = JSON.parse(m[0]);
+    return {
+      topText:    String(parsed.topText    || '').slice(0, 24),  // safety cap
+      bottomText: String(parsed.bottomText || '').slice(0, 30),
+    };
+  } catch (_) {
+    return { topText: '', bottomText: '', error: '(json error)' };
   }
 }
 
@@ -238,6 +279,7 @@ async function generateThumb(opts) {
 // ═══════════════════════════════════════════════════
 module.exports = {
   classifyTheme,
+  extractThumbText,
   buildPrompt,
   generateThumb,
   VALID_THEMES,

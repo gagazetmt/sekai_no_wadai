@@ -89,6 +89,29 @@ router.post('/v5/classify-theme', async (req, res) => {
   }
 });
 
+// オープニングスライドから topText / bottomText を抽出
+router.post('/v5/extract-thumb-text', async (req, res) => {
+  const { postId } = req.body || {};
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+  const mFile = MODULES_FILE(postId);
+  if (!fs.existsSync(mFile)) return res.status(404).json({ error: 'modules.json not found' });
+  let modules;
+  try { modules = JSON.parse(fs.readFileSync(mFile, 'utf8')); }
+  catch (_) { return res.status(500).json({ error: 'modules.json parse error' }); }
+  const mods = Array.isArray(modules) ? modules : modules.modules || [];
+  const opening = mods.find(m => m.type === 'opening' || m.mainKey === 'opening');
+  if (!opening) return res.status(404).json({ error: 'opening モジュールが見つからない' });
+  try {
+    const result = await thumbAi.extractThumbText({
+      openingTitle: opening.title || '',
+      openingNarration: opening.narration || '',
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // リネカ + DeepSeek で Imagen 4 用英語プロンプト生成
 router.post('/v5/suggest-thumb-prompt', async (req, res) => {
   const { postId, theme, topText, bottomText, title, entities, summary } = req.body || {};
@@ -287,7 +310,11 @@ function getUI() {
 
     <!-- ステップ 2: 日本語テキスト指定 -->
     <div class="s5card">
-      <strong style="color:var(--c); font-size:12px; display:block; margin-bottom:8px;">② サムネ内の日本語テキスト</strong>
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+        <strong style="color:var(--c); font-size:12px;">② サムネ内の日本語テキスト</strong>
+        <button onclick="s5ExtractThumbText()" class="s5btn-sub" id="s5-extract-btn">📺 Step3 オープニングから抽出</button>
+        <span id="s5-extract-status" style="font-size:11px; color:var(--muted);"></span>
+      </div>
       <label class="s5label">上端 煽り文（10文字以内推奨）</label>
       <input type="text" id="s5-top-text" class="s5input" maxlength="20" placeholder="例: プレミア最終決戦">
       <label class="s5label">下端 結論文（12文字以内推奨）</label>
@@ -406,6 +433,31 @@ function getUI() {
     } catch (e) {
       document.getElementById('s5-classify-status').textContent = '❌ ' + e.message;
       document.getElementById('s5-classify-status').style.color = 'var(--c)';
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  // ═══ ② オープニングから topText/bottomText 抽出 ═══
+  window.s5ExtractThumbText = async function() {
+    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
+    const btn = document.getElementById('s5-extract-btn');
+    btn.disabled = true;
+    document.getElementById('s5-extract-status').textContent = '⏳ オープニングから抽出中…';
+    document.getElementById('s5-extract-status').style.color = 'var(--muted)';
+    try {
+      const r = await window.fetchJson('/api/v5/extract-thumb-text', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ postId: id }),
+      });
+      if (r.error) throw new Error(r.error);
+      if (r.topText)    document.getElementById('s5-top-text').value    = r.topText;
+      if (r.bottomText) document.getElementById('s5-bottom-text').value = r.bottomText;
+      document.getElementById('s5-extract-status').textContent = '✅ 抽出完了（編集可）';
+      document.getElementById('s5-extract-status').style.color = 'var(--success)';
+    } catch (e) {
+      document.getElementById('s5-extract-status').textContent = '❌ ' + e.message;
+      document.getElementById('s5-extract-status').style.color = 'var(--c)';
     } finally {
       btn.disabled = false;
     }

@@ -80,10 +80,13 @@ router.post('/v6/gen-meta', async (req, res) => {
   try { modules = JSON.parse(fs.readFileSync(mFile, 'utf8')); }
   catch (_) { return res.status(500).json({ error: 'modules.json parse error' }); }
 
-  const summary = (Array.isArray(modules) ? modules : modules.modules || [])
-    .map(m => `[${m.type}] ${m.title || ''} ${m.narration || ''}`)
-    .join('\n')
-    .slice(0, 4000);
+  const mods = Array.isArray(modules) ? modules : modules.modules || [];
+  const opening = mods.find(m => m.type === 'opening' || m.mainKey === 'opening');
+  const openingHighlight = opening
+    ? `★最重要・オープニングスライド★\n  タイトル: 「${opening.title || ''}」\n  ナレーション: ${opening.narration || ''}\n\n`
+    : '';
+  const summary = openingHighlight
+    + mods.map(m => `[${m.type}] ${m.title || ''} ${m.narration || ''}`).join('\n').slice(0, 4000);
 
   const sys = `あなたは日本のサッカー解説 YouTuber「5分でサッカー分析」のSNSマーケ担当です。
 出力は厳密な JSON のみ。説明文や前置きは絶対に書かない。`;
@@ -94,6 +97,7 @@ ${summary}
 
 要件:
 - titles: バズる候補3つ。30文字前後、煽り系・数字入り重視。【】や絵文字を1個入れる。
+  ⭐ オープニングタイトルのキーワード（人物名・チーム名・キーフレーズ）を必ず1つ以上使うこと。動画とサムネ・タイトルの一貫性を保つため
 - description: 動画の概要欄。3〜5段落、各段落は2〜3行。
   - 1段落: 動画の要点（フック）
   - 2-3段落: 主要データの紹介（数字を含める）
