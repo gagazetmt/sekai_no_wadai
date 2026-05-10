@@ -107,7 +107,7 @@ async function extractThumbText(input) {
 
   const text = await callAI({
     forceProvider: 'deepseek',
-    max_tokens: 2000,
+    max_tokens: 4000,  // system prompt 長め（仕様 + 良い例 3 件）+ V4-Flash reasoning の余裕
     system,
     messages: [{ role: 'user', content: userMsg }],
   });
