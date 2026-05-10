@@ -194,6 +194,12 @@ const UNIT_KANA = {
   'パーセント': 'パーセント',
   'km':   'キロメートル','kg':   'キログラム','時間': 'じかん',
   'クリーンシート': 'クリーンシート',
+  // 🆕 2026-05-10 (通し検証): サッカー戦績用語
+  '節':   'せつ',       // 35節 → さんじゅうごせつ ("ぶし"等の誤読回避)
+  '勝':   'しょう',     // 22勝 → にじゅうにしょう ("かち"の誤読回避)
+  '敗':   'はい',       // 5敗 → ごはい
+  // 注: '分' は「分(draws) vs 分(minutes)」が文脈依存で曖昧なので UNIT_KANA に
+  //     登録せず、_processWdlPattern で N勝M分 / N勝M分K敗 のパターン専用処理する
 };
 
 // 接頭語: 数字との間に MiniMax 分節事故が起きやすい語
@@ -307,6 +313,18 @@ async function sanitizeForTts(text) {
       // 単位有り → "に てん にろく、とくてん" のように単位前にポーズ
       return numToFullJa(intPart) + 'てん' + dec + (unit ? '、' + unitKana : '');
     });
+
+  // 5.5) 🆕 W/D/L パターン優先処理（2026-05-10）
+  //   "22勝8分5敗" の "分" は「ぶ」が正しいが kuromoji UNIT_KANA に登録すると
+  //   「90分(きゅうじゅっぷん)」と衝突する。よって 勝/敗 が前後にある時のみ
+  //   この preprocessor で確定読みに変換し、kuromoji を通さない
+  s = s
+    .replace(/(\d+)勝(\d+)分(\d+)敗/g, (_m, w, d, l) =>
+      numToFullJa(w) + 'しょう' + numToFullJa(d) + 'ぶ' + numToFullJa(l) + 'はい')
+    .replace(/(\d+)勝(\d+)分/g, (_m, w, d) =>
+      numToFullJa(w) + 'しょう' + numToFullJa(d) + 'ぶ')
+    .replace(/(\d+)勝(\d+)敗/g, (_m, w, l) =>
+      numToFullJa(w) + 'しょう' + numToFullJa(l) + 'はい');
 
   // 6) 🆕 kuromoji 形態素ベースで数字+助数詞ペア処理（核心 / 2026-05-08）
   //    旧 regex 3本（接頭語読点 / 数字+一般単位 / 裸数字 fallback）を統合
