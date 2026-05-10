@@ -1476,8 +1476,11 @@ function applyIbStyle(el, ib) {
   const imgX = ib.imgX != null ? ib.imgX : 0;
   const imgY = ib.imgY != null ? ib.imgY : 0;
   const imgZoom = ib.imgZoom != null ? ib.imgZoom : 1;
+  // background-size: cover の仕様上、ぴったり収まる軸は background-position が効かない
+  // ため、最低 1.05 倍にスケールして両軸 overflow を強制（X/Y 独立に動かせる）
+  const renderZoom = Math.max(imgZoom, 1.05);
   fill.style.backgroundPosition = `${50 + imgX}% ${50 + imgY}%`;
-  fill.style.transform = (imgZoom !== 1) ? `scale(${imgZoom})` : '';
+  fill.style.transform = `scale(${renderZoom})`;
   fill.style.filter = `contrast(${ib.contrast}) brightness(${ib.brightness})`;
   // 範囲内グラデ（rgba 対応）
   const ov = el.querySelector('.ib-inner-overlay');
@@ -2697,10 +2700,10 @@ function exportTemplate() {
     const _imgY = ib.imgY != null ? ib.imgY : 0;
     const _imgZoom = ib.imgZoom != null ? ib.imgZoom : 1;
     lines.push(`  background-position: ${50 + _imgX}% ${50 + _imgY}%;`);
-    if (_imgZoom !== 1) {
-      lines.push(`  transform: scale(${_imgZoom});`);
-      lines.push(`  transform-origin: center center;`);
-    }
+    // cover の制約回避：最低 1.05 倍でレンダリング（X/Y 独立 pan を保証）
+    const _renderZoom = Math.max(_imgZoom, 1.05);
+    lines.push(`  transform: scale(${_renderZoom});`);
+    lines.push(`  transform-origin: center center;`);
     lines.push(`  filter: contrast(${ib.contrast}) brightness(${ib.brightness});`);
     if (ib.mask === 'ellipse') {
       lines.push(`  -webkit-mask-image: radial-gradient(ellipse 95% 92% at 50% 48%, #000 50%, transparent 95%);`);
