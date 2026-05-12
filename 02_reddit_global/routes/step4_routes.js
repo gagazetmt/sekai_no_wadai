@@ -1234,32 +1234,41 @@ function audioDirFor(postId) {
   return dir;
 }
 
-// ─── /v2/tts-presets : voice + model 候補リスト + デフォルト ──
+// ─── /v2/tts-presets : provider 別 voice + model 候補リスト + デフォルト ──
+//   ?provider=gemini|minimax で切替（省略時は環境変数の DEFAULT_PROVIDER）
 router.get('/v2/tts-presets', (req, res) => {
   try {
-    const tts = require('../scripts/v2_video/tts_minimax');
+    const tts = require('../scripts/v2_video/tts_engine');
+    const provider = req.query.provider || tts.DEFAULT_PROVIDER;
+    const d = tts.getDefaults(provider);
     res.json({
-      voices: tts.PRESET_VOICES,
-      models: tts.PRESET_MODELS,
-      defaultVoice: tts.DEFAULT_VOICE,
-      defaultModel: tts.DEFAULT_MODEL,
-      emotions: ['(なし)', ...tts.ALLOWED_EMOTIONS],
+      provider: d.provider,
+      providers: tts.PRESET_PROVIDERS,
+      voices: d.presetVoices,
+      models: d.presetModels,
+      defaultVoice: d.voice,
+      defaultModel: d.model,
+      emotions: d.emotions || ['(なし)'],
+      styleInstructions: d.styleInstructions || '',
+      supports: d.supports,
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── /v2/tts-preview : 試聴用 (保存しない、base64 mp3 を返す) ──
+//   body に provider を含めれば gemini/minimax を切替可能
 router.post('/v2/tts-preview', express.json({ limit: '512kb' }), async (req, res) => {
   try {
-    const { generateMiniMaxTTS } = require('../scripts/v2_video/tts_minimax');
-    const { text, voiceId, model, emotion, speed, vol, pitch } = req.body || {};
+    const tts = require('../scripts/v2_video/tts_engine');
+    const { provider, text, voiceId, model, styleInstructions, emotion, speed, vol, pitch } = req.body || {};
     if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
 
     const tmpFile = path.join(AUDIO_DIR, `_preview_${Date.now()}_${Math.random().toString(36).slice(2,6)}.mp3`);
-    await generateMiniMaxTTS({
+    await tts.generate({
+      provider,
       text: String(text).slice(0, 800),  // 試聴は800字までに制限
       outputPath: tmpFile,
-      voiceId, model, emotion, speed, vol, pitch,
+      voiceId, model, styleInstructions, emotion, speed, vol, pitch,
     });
     const buf = fs.readFileSync(tmpFile);
     try { fs.unlinkSync(tmpFile); } catch (_) {}
@@ -1273,8 +1282,8 @@ router.post('/v2/tts-preview', express.json({ limit: '512kb' }), async (req, res
 // ─── /v2/tts-module : 確定生成 (chunk ごとに保存し module.audio[] にメタ書込) ──
 router.post('/v2/tts-module', express.json(), async (req, res) => {
   try {
-    const { generateMiniMaxTTS, splitIntoChunks, probeDurationSec } = require('../scripts/v2_video/tts_minimax');
-    const { postId, moduleIdx, voiceId, model, emotion, speed, vol, pitch } = req.body || {};
+    const tts = require('../scripts/v2_video/tts_engine');
+    const { postId, moduleIdx, provider, voiceId, model, styleInstructions, emotion, speed, vol, pitch } = req.body || {};
     if (!postId) return res.status(400).json({ error: 'postId required' });
     const idx = parseInt(moduleIdx, 10);
     if (Number.isNaN(idx)) return res.status(400).json({ error: 'moduleIdx required' });
@@ -1284,12 +1293,11 @@ router.post('/v2/tts-module', express.json(), async (req, res) => {
     if (!data?.modules?.[idx]) return res.status(404).json({ error: 'module not found' });
     const mod = data.modules[idx];
 
-    // chunk決定: tts_minimax の buildChunksForModule に集約
+    // chunk決定: tts_engine の buildChunksForModule に集約
     //   - reaction は narration + comments[] を順次音声化
     //   - insight / history は narrationChunks 優先
     //   - その他は narration をそのまま1チャンク
-    const { buildChunksForModule } = require('../scripts/v2_video/tts_minimax');
-    const chunks = buildChunksForModule(mod);
+    const chunks = tts.buildChunksForModule(mod);
 
     if (!chunks.length) return res.status(400).json({ error: 'narration empty' });
 
@@ -1305,12 +1313,13 @@ router.post('/v2/tts-module', express.json(), async (req, res) => {
     for (let c = 0; c < chunks.length; c++) {
       const fname = `m${String(idx).padStart(2,'0')}_c${String(c).padStart(2,'0')}.mp3`;
       const out   = path.join(dir, fname);
-      await generateMiniMaxTTS({
+      await tts.generate({
+        provider,
         text: chunks[c],
         outputPath: out,
-        voiceId, model, emotion, speed, vol, pitch,
+        voiceId, model, styleInstructions, emotion, speed, vol, pitch,
       });
-      const dur = probeDurationSec(out);
+      const dur = tts.probeDurationSec(out);
       audio.push({
         chunkIdx: c,
         text: chunks[c],
@@ -1321,8 +1330,10 @@ router.post('/v2/tts-module', express.json(), async (req, res) => {
 
     // module に書き戻し
     mod.tts = {
+      provider: provider || undefined,
       voiceId: voiceId || undefined,
       model:   model   || undefined,
+      styleInstructions: styleInstructions || undefined,
       emotion: emotion || undefined,
       speed:   speed   ?? undefined,
       vol:     vol     ?? undefined,
@@ -1731,10 +1742,16 @@ function getUI() {
       const sd = await fetchJson('/api/v3/si?postId=' + encodeURIComponent(post.id));
       window.APP.s4.siData = sd || null;
     } catch (_) { window.APP.s4.siData = null; }
-    /* TTS preset を一度だけ読み込む */
+    /* TTS preset: provider 別キャッシュ。最初は環境変数で決まったデフォルト provider を取得 */
+    if (!window.APP.s4.ttsPresetsByProvider) window.APP.s4.ttsPresetsByProvider = {};
     if (!window.APP.s4.ttsPresets) {
-      try { window.APP.s4.ttsPresets = await fetchJson('/api/v2/tts-presets'); }
-      catch (_) { window.APP.s4.ttsPresets = { voices: [], models: [], emotions: ['(なし)'] }; }
+      try {
+        const p = await fetchJson('/api/v2/tts-presets');
+        window.APP.s4.ttsPresets = p;
+        if (p.provider) window.APP.s4.ttsPresetsByProvider[p.provider] = p;
+      } catch (_) {
+        window.APP.s4.ttsPresets = { provider: 'gemini', voices: [], models: [], emotions: ['(なし)'], providers: [], supports: {} };
+      }
     }
     _renderTabs();
     _renderEditor();
@@ -1790,13 +1807,21 @@ function getUI() {
 
   /* ── TTS パネル HTML 構築 ── */
   function _buildTtsPanelHtml(m, i) {
-    const presets = window.APP.s4.ttsPresets || { voices: [], models: [], emotions: ['(なし)'] };
-    const tts = m.tts || {};
+    const presets  = window.APP.s4.ttsPresets || { provider: 'gemini', voices: [], models: [], emotions: ['(なし)'], providers: [], supports: {} };
+    const tts      = m.tts || {};
+    const curProvider = tts.provider || presets.provider || 'gemini';
+    const isGemini = curProvider === 'gemini';
+    const supports = presets.supports || {};
     const curVoice   = tts.voiceId  || presets.defaultVoice || (presets.voices[0]?.id || '');
     const curModel   = tts.model    || presets.defaultModel || (presets.models[0]?.id || '');
     const curSpeed   = (tts.speed   != null) ? tts.speed   : 1.0;
     const curEmotion = tts.emotion  || '';
+    const curStyle   = tts.styleInstructions != null ? tts.styleInstructions : (presets.styleInstructions || '');
 
+    const providers = presets.providers || [{ id: 'gemini', label: 'Gemini' }, { id: 'minimax', label: 'MiniMax' }];
+    const providerOpts = providers.map(function(p) {
+      return '<option value="' + _esc(p.id) + '"' + (p.id === curProvider ? ' selected' : '') + '>' + _esc(p.label) + '</option>';
+    }).join('');
     const voiceOpts = presets.voices.map(function(v) {
       return '<option value="' + _esc(v.id) + '"' + (v.id === curVoice ? ' selected' : '') + '>' + _esc(v.label) + '</option>';
     }).join('');
@@ -1823,10 +1848,28 @@ function getUI() {
         + '</div>';
     }
 
+    // Gemini なら Style Instructions、MiniMax なら速度+感情 を表示（supports に基づく）
+    const styleBlockHtml = supports.styleInstructions
+      ? '<div style="margin-bottom:6px;">'
+        + '<div style="font-size:10px;color:#94a3b8;margin-bottom:2px;display:flex;align-items:center;gap:6px;">'
+        +   '<span>🎭 Style Instructions <span style="color:#5a6a8a;">(声のトーン・感情を自然言語指示。角括弧タグ [excited] [short pause] も使える)</span></span>'
+        +   '<span style="flex:1"></span>'
+        +   '<button class="btn btn-sm" onclick="s4TtsResetStyle()" title="採用済デフォルトに戻す" style="background:#1a2540;color:#94a3b8;font-size:9px;padding:1px 6px;">↺ デフォルト</button>'
+        + '</div>'
+        + '<textarea class="inp" id="s4TtsStyleInstructions" rows="3" style="font-size:10px;padding:4px 6px;width:100%;resize:vertical;">' + _esc(curStyle) + '</textarea>'
+        + '</div>'
+      : '';
+    const minimaxBlockHtml = supports.emotion
+      ? '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:10px;color:#94a3b8;">'
+        +   '<label>速度 <input class="inp" type="number" id="s4TtsSpeed" min="0.5" max="2" step="0.05" value="' + curSpeed + '" style="width:60px;font-size:10px;padding:2px 4px;"></label>'
+        +   '<label>感情 <select class="inp" id="s4TtsEmotion" style="font-size:10px;padding:2px 4px;">' + emotionOpts + '</select></label>'
+        + '</div>'
+      : '';
+
     return '<div style="margin-top:14px;padding:10px;background:#0d1220;border:1px solid #4c1d95;border-radius:6px;">'
       +   '<div style="font-size:12px;color:#a78bfa;font-weight:bold;margin-bottom:6px;display:flex;align-items:center;gap:6px;">'
-      +     '🎙️ MiniMax TTS'
-      +     '<span style="font-size:9px;color:#5a6a8a;font-weight:normal;">クローン声 + 試聴 + chunk一括生成</span>'
+      +     '🎙️ TTS'
+      +     '<select class="inp" id="s4TtsProvider" onchange="s4TtsProviderChange(this.value)" style="font-size:10px;padding:2px 6px;background:#1a2540;color:#a78bfa;font-weight:bold;">' + providerOpts + '</select>'
       +     '<span style="flex:1"></span>'
       +     '<span class="s4-tts-status" data-idx="' + i + '" style="font-size:10px;color:#5a6a8a;font-weight:normal;"></span>'
       +   '</div>'
@@ -1834,9 +1877,9 @@ function getUI() {
       +     '<select class="inp" id="s4TtsVoice" style="font-size:10px;padding:3px 6px;">' + voiceOpts + '</select>'
       +     '<select class="inp" id="s4TtsModel" style="font-size:10px;padding:3px 6px;">' + modelOpts + '</select>'
       +   '</div>'
+      +   styleBlockHtml
+      +   minimaxBlockHtml
       +   '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:10px;color:#94a3b8;">'
-      +     '<label>速度 <input class="inp" type="number" id="s4TtsSpeed" min="0.5" max="2" step="0.05" value="' + curSpeed + '" style="width:60px;font-size:10px;padding:2px 4px;"></label>'
-      +     '<label>感情 <select class="inp" id="s4TtsEmotion" style="font-size:10px;padding:2px 4px;">' + emotionOpts + '</select></label>'
       +     '<span style="flex:1"></span>'
       +     '<button class="btn btn-sm" onclick="s4TtsPreview()" style="background:#1a2540;color:#a78bfa;font-size:10px;padding:4px 10px;">▶ 試聴</button>'
       +     '<button class="btn btn-sm" onclick="s4TtsGenerate()" style="background:#7c3aed;color:#fff;font-size:10px;padding:4px 10px;font-weight:bold;">💾 確定生成</button>'
@@ -2681,16 +2724,20 @@ function getUI() {
       }));
     }
     /* TTS settings (panel が画面に出てる場合のみ拾う) */
-    const tv = document.getElementById('s4TtsVoice');
-    const tm = document.getElementById('s4TtsModel');
+    const tp  = document.getElementById('s4TtsProvider');
+    const tv  = document.getElementById('s4TtsVoice');
+    const tm  = document.getElementById('s4TtsModel');
+    const tsi = document.getElementById('s4TtsStyleInstructions');
     const tsp = document.getElementById('s4TtsSpeed');
-    const te = document.getElementById('s4TtsEmotion');
-    if (tv || tm || tsp || te) {
+    const te  = document.getElementById('s4TtsEmotion');
+    if (tp || tv || tm || tsi || tsp || te) {
       m.tts = Object.assign({}, m.tts || {}, {
-        voiceId: tv?.value || (m.tts?.voiceId || ''),
-        model:   tm?.value || (m.tts?.model   || ''),
-        speed:   tsp?.value ? Number(tsp.value) : (m.tts?.speed ?? 1.0),
-        emotion: te?.value || '',
+        provider: tp?.value || (m.tts?.provider || ''),
+        voiceId:  tv?.value || (m.tts?.voiceId || ''),
+        model:    tm?.value || (m.tts?.model   || ''),
+        styleInstructions: tsi ? tsi.value : (m.tts?.styleInstructions || ''),
+        speed:    tsp?.value ? Number(tsp.value) : (m.tts?.speed ?? 1.0),
+        emotion:  te?.value || '',
       });
     }
   }
@@ -3073,6 +3120,36 @@ function getUI() {
     } catch (e) { _msg('❌ ' + e.message); }
   };
 
+  /* ── 🎙️ TTS: provider 切替 (voice/model リストを再取得 → UI 再描画) ── */
+  window.s4TtsProviderChange = async function(provider) {
+    if (!provider) return;
+    _collectInputs();
+    const i = window.APP.s4.activeTab;
+    const m = window.APP.s4.modules[i];
+    if (!m) return;
+    // 既存 voice/model/styleInstructions は捨てる（provider 違いで互換無し）
+    m.tts = Object.assign({}, m.tts || {}, { provider, voiceId: '', model: '', styleInstructions: '' });
+    const cache = window.APP.s4.ttsPresetsByProvider || (window.APP.s4.ttsPresetsByProvider = {});
+    try {
+      if (!cache[provider]) {
+        cache[provider] = await fetchJson('/api/v2/tts-presets?provider=' + encodeURIComponent(provider));
+      }
+      window.APP.s4.ttsPresets = cache[provider];
+    } catch (e) {
+      const status = document.querySelector('.s4-tts-status[data-idx="' + i + '"]');
+      if (status) status.textContent = '❌ provider 切替失敗: ' + e.message;
+      return;
+    }
+    _renderEditor();
+  };
+
+  /* ── 🎙️ TTS: Style Instructions をデフォルトに戻す ── */
+  window.s4TtsResetStyle = function() {
+    const presets = window.APP.s4.ttsPresets || {};
+    const ta = document.getElementById('s4TtsStyleInstructions');
+    if (ta) ta.value = presets.styleInstructions || '';
+  };
+
   /* ── 🎙️ TTS: 試聴 (現ナレ全文を1回投げて即再生・保存しない) ── */
   window.s4TtsPreview = async function() {
     _collectInputs();
@@ -3087,9 +3164,11 @@ function getUI() {
       const j = await fetchJson('/api/v2/tts-preview', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: m.tts?.provider,
           text: text.slice(0, 800),
           voiceId: m.tts?.voiceId,
           model:   m.tts?.model,
+          styleInstructions: m.tts?.styleInstructions || undefined,
           speed:   m.tts?.speed,
           emotion: m.tts?.emotion || undefined,
         }),
@@ -3109,7 +3188,8 @@ function getUI() {
     const m = window.APP.s4.modules[i];
     if (!post?.id || !m) return;
     const status = document.querySelector('.s4-tts-status[data-idx="' + i + '"]');
-    if (!confirm('chunk全部を MiniMax で生成して保存します。続行？')) return;
+    const providerLabel = (m.tts?.provider === 'minimax') ? 'MiniMax' : 'Gemini';
+    if (!confirm('chunk全部を ' + providerLabel + ' で生成して保存します。続行？')) return;
     if (status) status.textContent = '⏳ 生成中...（数十秒）';
     try {
       await _saveModulesQuiet();
@@ -3117,8 +3197,10 @@ function getUI() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postId: post.id, moduleIdx: i,
+          provider: m.tts?.provider,
           voiceId: m.tts?.voiceId,
           model:   m.tts?.model,
+          styleInstructions: m.tts?.styleInstructions || undefined,
           speed:   m.tts?.speed,
           emotion: m.tts?.emotion || undefined,
         }),

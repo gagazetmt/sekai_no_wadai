@@ -19,7 +19,7 @@ const path       = require('path');
 const { spawn, execSync } = require('child_process');
 const puppeteer  = require('puppeteer');
 
-const tts = require('./tts_minimax');
+const tts = require('./tts_engine');  // provider 抽象化レイヤ。既定 Gemini、保険で MiniMax
 const { buildOpeningHTML: buildOpeningV1 } = require('./slides/opening');
 const { buildOpeningHTML: buildOpeningV2 } = require('./slides/opening_v2');
 const { buildOpeningHTML: buildOpeningV3 } = require('./slides/opening_v3');
@@ -150,14 +150,19 @@ function buildSlideTtsTasks(mod, idx, postId) {
     // 通常 default 1.03 → reaction では 1.13 で 10% 早め
     ttsCfg.speed = 1.13;
   }
+  // provider: module 単位 → 環境変数 → 'gemini' の順で解決
+  const provider = ttsCfg.provider || tts.DEFAULT_PROVIDER;
+  const defaults = tts.getDefaults(provider);
   return chunks.map((text, c) => {
     const fname = `m${String(idx).padStart(2, '0')}_c${String(c).padStart(2, '0')}.mp3`;
     const out   = path.join(dir, fname);
     return {
       slideIdx: idx, chunkIdx: c, text, outputPath: out,
-      voiceId: ttsCfg.voiceId || tts.DEFAULT_VOICE,
-      model:   ttsCfg.model   || tts.DEFAULT_MODEL,
-      emotion: ttsCfg.emotion || undefined,
+      provider,
+      voiceId: ttsCfg.voiceId || defaults.voice,
+      model:   ttsCfg.model   || defaults.model,
+      styleInstructions: ttsCfg.styleInstructions || undefined,  // Gemini 専用
+      emotion: ttsCfg.emotion || undefined,                       // MiniMax 専用
       speed:   ttsCfg.speed   ?? undefined,
       vol:     ttsCfg.vol     ?? undefined,
       pitch:   ttsCfg.pitch   ?? undefined,
@@ -168,9 +173,11 @@ function buildSlideTtsTasks(mod, idx, postId) {
 
 // 1チャンク分の TTS 生成 → ファイル書き出し → メタ返却
 async function runSingleTtsTask(t) {
-  await tts.generateMiniMaxTTS({
+  await tts.generate({
+    provider: t.provider,
     text: t.text, outputPath: t.outputPath,
     voiceId: t.voiceId, model: t.model,
+    styleInstructions: t.styleInstructions,
     emotion: t.emotion, speed: t.speed, vol: t.vol, pitch: t.pitch,
   });
   const dur = tts.probeDurationSec(t.outputPath);

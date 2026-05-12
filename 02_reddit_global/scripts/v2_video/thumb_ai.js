@@ -7,7 +7,7 @@
 //
 // 環境変数:
 //   GEMINI_API_KEY        - Google AI Studio の API キー（必須）
-//   GEMINI_IMAGE_MODEL    - Imagen モデル名（任意・既定: imagen-4.0-generate-preview-06-06）
+//   GEMINI_IMAGE_MODEL    - Imagen モデル名（任意・既定: imagen-4.0-generate-001）
 //   FAL_API_KEY           - fal.ai キー（将来 Seedream / Flux 切替時に使用）
 // ═══════════════════════════════════════════════════════════
 
@@ -31,7 +31,7 @@ const VALID_THEMES = [
 // ─── 環境変数 ─────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const IMAGEN_MODEL   = process.env.GEMINI_IMAGE_MODEL
-                    || 'imagen-4.0-generate-preview-06-06';
+                    || 'imagen-4.0-generate-001';
 
 // ─── キャッシュ（パターンファイル読み込みは1回だけ）─
 const _patternCache = {};
