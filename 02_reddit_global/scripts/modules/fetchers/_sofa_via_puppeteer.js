@@ -17,6 +17,7 @@
 require('dotenv').config();
 const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
+const { BANDWIDTH_SAVE_ARGS, attachBlocker } = require('./_puppeteer_bandwidth');
 puppeteerExtra.use(StealthPlugin());
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -47,6 +48,8 @@ async function init() {
       //   sofascore.com → api.sofascore.com の cross-origin fetch でブラウザが TypeError 投げるのを防ぐ
       '--disable-web-security',
       '--disable-features=IsolateOrigins,site-per-process',
+      // 帯域節約: Chrome バックグラウンド通信 + mtalk.google.com 等を停止
+      ...BANDWIDTH_SAVE_ARGS,
     ];
     if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
     _browser = await puppeteerExtra.launch({ headless: 'new', args });
@@ -60,6 +63,8 @@ async function init() {
         });
       }
     }
+    // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（api.sofascore.com は通す）
+    await attachBlocker(_page, { allowHosts: ['api.sofascore.com'] });
     await _page.setUserAgent(UA);
     await _page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
     // sofascore.com で cf cookie/challenge を確実に済ませる（networkidle2 で完全ロード待ち）

@@ -18,6 +18,7 @@
 
 const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
+const { BANDWIDTH_SAVE_ARGS, attachBlocker } = require('./_puppeteer_bandwidth');
 puppeteerExtra.use(StealthPlugin());
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -36,6 +37,8 @@ async function _newBrowser() {
     '--no-sandbox', '--disable-setuid-sandbox',
     '--disable-blink-features=AutomationControlled',
     '--disable-dev-shm-usage',
+    // 帯域節約: mtalk.google.com 等の Chrome 垂れ流し通信を停止
+    ...BANDWIDTH_SAVE_ARGS,
   ];
   if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
   const browser = await puppeteerExtra.launch({ headless: 'new', args });
@@ -53,6 +56,8 @@ async function _newPage(browser, proxyUrl) {
       });
     }
   }
+  // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（fotmob.com API は通す）
+  await attachBlocker(page, { allowHosts: ['www.fotmob.com'] });
   await page.setUserAgent(UA);
   await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
   return page;
