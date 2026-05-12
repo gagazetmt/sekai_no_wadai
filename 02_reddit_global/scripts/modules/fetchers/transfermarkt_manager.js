@@ -27,6 +27,24 @@ async function _fetchHtml(url) {
   return res.body;
 }
 
+// cheerio の .text() は innerText と違い <br>/<div>/<p> を空白なしで連結する
+// → 「Man City」+「Assistant Manager」が「Man CityAssistant Manager」になる問題
+// HTML 側で改行タグを \n に置換してから取得
+function _innerText($el) {
+  if (!$el || !$el.length) return '';
+  const html = $el.html() || '';
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|td|th|li|h[1-6])\s*>/gi, '$&\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/[ \t]+/g, ' ')
+    .split('\n').map(s => s.trim()).filter(Boolean).join('\n');
+}
+
 // "26/03/1982" → "1982-03-26"
 function _parseDateDMY(s) {
   if (!s) return null;
@@ -95,8 +113,8 @@ async function _fetchProfil(slug, id) {
     auf.find('tr').each((_, row) => {
       const cells = $(row).find('th, td');
       if (cells.length < 2) return;
-      const k = $(cells[0]).text().trim().replace(/:$/, '');
-      const v = $(cells[1]).text().trim();
+      const k = _innerText($(cells[0])).replace(/:$/, '');
+      const v = _innerText($(cells[1]));
       if (k && v) out.profile[k] = v;
     });
   }
@@ -108,7 +126,7 @@ async function _fetchProfil(slug, id) {
     const headers = $(rows[0]).find('th, td').map((_i, c) => $(c).text().trim().toLowerCase()).get();
     if (!(headers.includes('w') && headers.includes('d') && headers.includes('l'))) return;
     for (let i = 1; i < rows.length; i++) {
-      const cells = $(rows[i]).find('td').map((_i, c) => $(c).text().trim()).get();
+      const cells = $(rows[i]).find('td').map((_i, c) => _innerText($(c))).get();
       if (cells.length < headers.length) continue;
       const obj = {};
       headers.forEach((h, k) => { obj[h] = cells[k]; });
@@ -138,7 +156,8 @@ async function _fetchStationenPlus(slug, id) {
 
   const rows = [];
   for (let i = 1; i < trs.length; i++) {
-    const cells = $(trs[i]).find('td').map((_i, c) => $(c).text().trim().replace(/\s+/g, ' ')).get();
+    // _innerText で <br>/<div> 等を改行に変換 → club と role が分離される
+    const cells = $(trs[i]).find('td').map((_i, c) => _innerText($(c))).get();
     if (cells.length < 5) {
       // 補足行（Assistant Manager of: ...）
       const last = rows[rows.length - 1];
