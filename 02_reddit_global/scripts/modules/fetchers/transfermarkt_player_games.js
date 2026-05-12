@@ -17,73 +17,29 @@
 //      (cookie+session 必要なので axios 直叩きでは取れない)
 //   3. data.performance[] の各試合を集計関数でフィルタ・合算
 
-const puppeteerExtra = require('puppeteer-extra');
-const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
-const { BANDWIDTH_SAVE_ARGS, attachBlocker } = require('./_puppeteer_bandwidth');
-puppeteerExtra.use(StealthPlugin());
+// 2026-05-12: Puppeteer から curl-cffi に移行。Webshare 帯域 1/3 に削減
+const { curlGet, curlGetJson } = require('./_curl_cffi_caller');
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const PAGE_TIMEOUT = 60000;
-const PROXY_LIST_SIZE = 4000;
-
-function pickProxy() {
-  if (!process.env.WEBSHARE_PROXY_URL) return null;
-  const n = Math.floor(Math.random() * PROXY_LIST_SIZE) + 1;
-  return process.env.WEBSHARE_PROXY_URL.replace('{N}', String(n));
-}
-
-async function _newBrowser() {
-  const proxyUrl = pickProxy();
-  const args = [
-    '--no-sandbox', '--disable-setuid-sandbox',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-dev-shm-usage',
-    // 帯域節約: mtalk.google.com 等の Chrome 垂れ流し通信を停止
-    ...BANDWIDTH_SAVE_ARGS,
-  ];
-  if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
-  const browser = await puppeteerExtra.launch({ headless: 'new', args });
-  return { browser, proxyUrl };
-}
-
-async function _newPage(browser, proxyUrl) {
-  const page = await browser.newPage();
-  if (proxyUrl) {
-    const u = new URL(proxyUrl);
-    if (u.username) {
-      await page.authenticate({
-        username: decodeURIComponent(u.username),
-        password: decodeURIComponent(u.password),
-      });
-    }
-  }
-  // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（transfermarkt は本体ドメイン通す）
-  await attachBlocker(page, { allowHosts: ['transfermarkt.com'] });
-  await page.setUserAgent(UA);
-  await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-  return page;
-}
+const TM_REFERER = 'https://www.transfermarkt.com/';
 
 // 名前 → 選手 ID/slug 解決
 async function searchTransfermarktPlayer(name) {
   if (!name) return null;
-  const { browser, proxyUrl } = await _newBrowser();
   try {
-    const page = await _newPage(browser, proxyUrl);
     const url = `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(name)}&Spieler_page=1`;
-    const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    if (!res || res.status() >= 400) return null;
-    await new Promise(r => setTimeout(r, 1500));
+    const res = await curlGet(url, { referer: TM_REFERER, headers: { Accept: 'text/html' } });
+    if (!res.ok || !res.body) return null;
 
-    const hits = await page.evaluate(() => {
-      const out = [];
-      const links = document.querySelectorAll('a[href*="/profil/spieler/"]');
-      for (const a of links) {
-        const m = a.getAttribute('href')?.match(/\/([\w\-]+)\/profil\/spieler\/(\d+)/);
-        if (m) out.push({ slug: m[1], id: parseInt(m[2], 10), name: (a.textContent || '').trim() });
-      }
-      return out;
-    });
+    // HTML 内の /{slug}/profil/spieler/{id} リンク + 直前の表示名を抽出
+    //   anchor の textContent も拾うため tag 構造を素朴に走査
+    const html = res.body;
+    const re = /<a[^>]+href="\/([\w\-]+)\/profil\/spieler\/(\d+)"[^>]*>([\s\S]*?)<\/a>/g;
+    const hits = [];
+    let m;
+    while ((m = re.exec(html))) {
+      const linkText = m[3].replace(/<[^>]*>/g, '').trim();
+      if (linkText) hits.push({ slug: m[1], id: parseInt(m[2], 10), name: linkText });
+    }
     if (!hits.length) return null;
 
     const lc = String(name).toLowerCase();
@@ -95,8 +51,6 @@ async function searchTransfermarktPlayer(name) {
   } catch (e) {
     console.warn('[transfermarkt_player_games] search 例外:', e.message);
     return null;
-  } finally {
-    await browser.close().catch(() => {});
   }
 }
 
@@ -104,29 +58,20 @@ async function searchTransfermarktPlayer(name) {
 //   返却: data.performance[] = 各試合 { gameInformation, clubsInformation, statistics }
 async function fetchPlayerPerformanceGames(playerId) {
   if (!playerId) throw new Error('playerId required');
-  const { browser, proxyUrl } = await _newBrowser();
   try {
-    const page = await _newPage(browser, proxyUrl);
-    // 一度トップに行ってセッション確立（cookie/UA バインド）
-    await page.goto('https://www.transfermarkt.com/', { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    await new Promise(r => setTimeout(r, 1500));
-
     const url = `https://www.transfermarkt.com/ceapi/performance-game/${playerId}`;
-    const result = await page.evaluate(async (u) => {
-      const r = await fetch(u, { headers: { 'Accept': 'application/json, text/plain, */*' } });
-      const text = await r.text();
-      let parsed = null;
-      try { parsed = JSON.parse(text); } catch (_) {}
-      return { status: r.status, isJson: !!parsed, body: parsed || text.slice(0, 800) };
-    }, url);
-
-    if (!result.isJson || !result.body?.success) {
-      return { ok: false, error: 'API failed', status: result.status, raw: result.body };
+    const body = await curlGetJson(url, {
+      referer: TM_REFERER,
+      headers: { Accept: 'application/json, text/plain, */*' },
+      timeout: 30,
+    });
+    if (!body?.success) {
+      return { ok: false, error: 'API failed', status: 200, raw: body };
     }
-    const performance = result.body.data?.performance || [];
+    const performance = body.data?.performance || [];
     return { ok: true, playerId: String(playerId), performance };
-  } finally {
-    await browser.close().catch(() => {});
+  } catch (e) {
+    return { ok: false, error: e.message, status: e.status || 0 };
   }
 }
 
@@ -135,28 +80,17 @@ async function fetchPlayerPerformanceGames(playerId) {
 async function resolveClubNames(clubIds) {
   if (!Array.isArray(clubIds) || !clubIds.length) return {};
   const ids = [...new Set(clubIds.map(String).filter(Boolean))];
-  const { browser, proxyUrl } = await _newBrowser();
   try {
-    const page = await _newPage(browser, proxyUrl);
-    await page.goto('https://www.transfermarkt.com/', { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    await new Promise(r => setTimeout(r, 1200));
     const url = 'https://tmapi-alpha.transfermarkt.technology/clubs?' + ids.map(id => 'ids[]=' + id).join('&');
-    const result = await page.evaluate(async (u) => {
-      const r = await fetch(u);
-      const t = await r.text();
-      let p; try { p = JSON.parse(t); } catch (_) {}
-      return { status: r.status, body: p };
-    }, url);
-    if (!result.body?.success) return {};
+    const body = await curlGetJson(url, { referer: TM_REFERER });
+    if (!body?.success) return {};
     const map = {};
-    (result.body.data || []).forEach(c => {
+    (body.data || []).forEach(c => {
       if (c.id) map[String(c.id)] = c.baseDetails?.shortName || c.name || '';
     });
     return map;
   } catch (_) {
     return {};
-  } finally {
-    await browser.close().catch(() => {});
   }
 }
 

@@ -16,51 +16,15 @@
 // FotMob と同じく Puppeteer + Webshare 住宅プロキシ経由（Transfermarkt は素のaxiosでも200だが
 // レートリミット回避のため住宅IP使用、また既存の puppeteer-extra-plugin-stealth 環境を流用）
 
-const puppeteerExtra = require('puppeteer-extra');
-const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
-const { BANDWIDTH_SAVE_ARGS, attachBlocker } = require('./_puppeteer_bandwidth');
-puppeteerExtra.use(StealthPlugin());
+// 2026-05-12: Puppeteer → curl-cffi + cheerio に移行
+const cheerio = require('cheerio');
+const { curlGet } = require('./_curl_cffi_caller');
+const TM_REFERER = 'https://www.transfermarkt.com/';
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const PAGE_TIMEOUT = 60000;
-const PROXY_LIST_SIZE = 4000;
-
-function pickProxy() {
-  if (!process.env.WEBSHARE_PROXY_URL) return null;
-  const n = Math.floor(Math.random() * PROXY_LIST_SIZE) + 1;
-  return process.env.WEBSHARE_PROXY_URL.replace('{N}', String(n));
-}
-
-async function _newBrowser() {
-  const proxyUrl = pickProxy();
-  const args = [
-    '--no-sandbox', '--disable-setuid-sandbox',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-dev-shm-usage',
-    // 帯域節約: mtalk.google.com 等の Chrome 垂れ流し通信を停止
-    ...BANDWIDTH_SAVE_ARGS,
-  ];
-  if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
-  const browser = await puppeteerExtra.launch({ headless: 'new', args });
-  return { browser, proxyUrl };
-}
-
-async function _newPage(browser, proxyUrl) {
-  const page = await browser.newPage();
-  if (proxyUrl) {
-    const u = new URL(proxyUrl);
-    if (u.username) {
-      await page.authenticate({
-        username: decodeURIComponent(u.username),
-        password: decodeURIComponent(u.password),
-      });
-    }
-  }
-  // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断
-  await attachBlocker(page, { allowHosts: ['transfermarkt.com'] });
-  await page.setUserAgent(UA);
-  await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-  return page;
+async function _fetchHtml(url) {
+  const res = await curlGet(url, { referer: TM_REFERER, headers: { Accept: 'text/html' }, timeout: 30 });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.body;
 }
 
 // "26/03/1982" → "1982-03-26"
@@ -92,27 +56,18 @@ function _toFloatOrNull(s) {
 //   返却: { id, slug, name } | null
 async function searchTransfermarktManager(name) {
   if (!name) return null;
-  const { browser, proxyUrl } = await _newBrowser();
   try {
-    const page = await _newPage(browser, proxyUrl);
     const url = `https://www.transfermarkt.com/schnellsuche/ergebnis/schnellsuche?query=${encodeURIComponent(name)}&Trainer_page=1`;
-    const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    if (!res || res.status() >= 400) return null;
-    await new Promise(r => setTimeout(r, 1500));
-
-    // /{slug}/profil/trainer/{id} を最初にヒットさせる
-    const hits = await page.evaluate(() => {
-      const out = [];
-      const links = document.querySelectorAll('a[href*="/profil/trainer/"]');
-      for (const a of links) {
-        const m = a.getAttribute('href')?.match(/\/([\w\-]+)\/profil\/trainer\/(\d+)/);
-        if (m) out.push({ slug: m[1], id: parseInt(m[2], 10), name: (a.textContent || '').trim() });
-      }
-      return out;
+    const html = await _fetchHtml(url);
+    const $ = cheerio.load(html);
+    const hits = [];
+    $('a[href*="/profil/trainer/"]').each((_, el) => {
+      const href = $(el).attr('href') || '';
+      const m = href.match(/\/([\w\-]+)\/profil\/trainer\/(\d+)/);
+      if (m) hits.push({ slug: m[1], id: parseInt(m[2], 10), name: $(el).text().trim() });
     });
     if (!hits.length) return null;
 
-    // 完全一致 → 部分一致 の順で選ぶ
     const lc = String(name).toLowerCase();
     const exact = hits.find(h => h.name.toLowerCase() === lc);
     const start = hits.find(h => h.name.toLowerCase().startsWith(lc));
@@ -122,53 +77,46 @@ async function searchTransfermarktManager(name) {
   } catch (e) {
     console.warn('[transfermarkt_manager] search 例外:', e.message);
     return null;
-  } finally {
-    await browser.close().catch(() => {});
   }
 }
 
 // profil ページから 監督プロフィール + 今季大会別 W/D/L を抽出
 //   coachClubs（クラブ別通算）は profil テーブルに W/D/L 列が無いので
 //   別途 _fetchStationenPlus で /stationen/plus/1 から詳細データを取る
-async function _fetchProfil(page, slug, id) {
+async function _fetchProfil(slug, id) {
   const url = `https://www.transfermarkt.com/${slug}/profil/trainer/${id}`;
-  const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-  if (!res || res.status() >= 400) throw new Error(`profil status ${res?.status()}`);
-  await new Promise(r => setTimeout(r, 2000));
+  const html = await _fetchHtml(url);
+  const $ = cheerio.load(html);
+  const out = { profile: {}, currentSeasonByCompetition: [] };
 
-  return await page.evaluate(() => {
-    const out = { profile: {}, currentSeasonByCompetition: [] };
+  // 監督プロフィール（class="auflistung"）の最初の table
+  const auf = $('table.auflistung').first();
+  if (auf.length) {
+    auf.find('tr').each((_, row) => {
+      const cells = $(row).find('th, td');
+      if (cells.length < 2) return;
+      const k = $(cells[0]).text().trim().replace(/:$/, '');
+      const v = $(cells[1]).text().trim();
+      if (k && v) out.profile[k] = v;
+    });
+  }
 
-    // 監督プロフィール（class="auflistung"）
-    const auf = document.querySelector('table.auflistung');
-    if (auf) {
-      for (const row of auf.rows) {
-        const k = (row.cells[0]?.innerText || '').trim().replace(/:$/, '');
-        const v = (row.cells[1]?.innerText || '').trim();
-        if (k && v) out.profile[k] = v;
-      }
+  // 今季大会別 W/D/L テーブル（class="items"、ヘッダに W/D/L を含む）
+  $('table.items').each((_, tbl) => {
+    const rows = $(tbl).find('tr');
+    if (!rows.length) return;
+    const headers = $(rows[0]).find('th, td').map((_i, c) => $(c).text().trim().toLowerCase()).get();
+    if (!(headers.includes('w') && headers.includes('d') && headers.includes('l'))) return;
+    for (let i = 1; i < rows.length; i++) {
+      const cells = $(rows[i]).find('td').map((_i, c) => $(c).text().trim()).get();
+      if (cells.length < headers.length) continue;
+      const obj = {};
+      headers.forEach((h, k) => { obj[h] = cells[k]; });
+      out.currentSeasonByCompetition.push(obj);
     }
-
-    // 今季大会別 W/D/L テーブル（class="items"、ヘッダに W/D/L を含む）
-    const itemsTables = document.querySelectorAll('table.items');
-    for (const tbl of itemsTables) {
-      const headerRow = tbl.rows[0];
-      if (!headerRow) continue;
-      const headers = Array.from(headerRow.cells).map(c => (c.innerText || '').trim().toLowerCase());
-      if (!(headers.includes('w') && headers.includes('d') && headers.includes('l'))) continue;
-      // 今季大会別と判別できる列構成
-      for (let i = 1; i < tbl.rows.length; i++) {
-        const r = tbl.rows[i];
-        const cells = Array.from(r.cells).map(c => (c.innerText || '').trim());
-        if (cells.length < headers.length) continue;
-        const obj = {};
-        headers.forEach((h, k) => { obj[h] = cells[k]; });
-        out.currentSeasonByCompetition.push(obj);
-      }
-    }
-
-    return out;
   });
+
+  return out;
 }
 
 // 🆕 /stationen/plus/1 の詳細表示モードからクラブ別通算を抽出（2026-05-08）
@@ -177,39 +125,35 @@ async function _fetchProfil(page, slug, id) {
 //     | Matches | W | D | L | Players used | ø-Goals | PPM | Games / PPG
 //   ø-Goals は "2.47 : 0.94" 形式（左=平均得点、右=平均失点）
 //   GF/GA は ø-Goals × Matches で四捨五入計算
-async function _fetchStationenPlus(page, slug, id) {
+async function _fetchStationenPlus(slug, id) {
   const url = `https://www.transfermarkt.com/${slug}/stationen/trainer/${id}/plus/1`;
-  const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-  if (!res || res.status() >= 400) return [];
-  await new Promise(r => setTimeout(r, 2000));
+  let html;
+  try { html = await _fetchHtml(url); } catch (_) { return []; }
+  const $ = cheerio.load(html);
+  const tbl = $('table.items').first();
+  if (!tbl.length) return [];
+  const trs = tbl.find('tr');
+  if (!trs.length) return [];
+  const headers = $(trs[0]).find('th, td').map((_i, c) => $(c).text().trim().toLowerCase()).get();
 
-  return await page.evaluate(() => {
-    const tbl = document.querySelector('table.items');
-    if (!tbl) return [];
-    const headerRow = tbl.rows[0];
-    if (!headerRow) return [];
-    const headers = Array.from(headerRow.cells).map(c => (c.innerText || '').trim().toLowerCase());
-
-    const rows = [];
-    for (let i = 1; i < tbl.rows.length; i++) {
-      const r = tbl.rows[i];
-      const cells = Array.from(r.cells).map(c => (c.innerText || '').trim());
-      if (cells.length < 5) {
-        // 補足行（Assistant Manager of: ...）
-        const last = rows[rows.length - 1];
-        const txt = cells.join(' ').trim();
-        if (last && /assistant manager of:/i.test(txt)) {
-          const m = txt.match(/Assistant Manager of:\s*([^()]+)/i);
-          if (m) last.mentor = m[1].trim();
-        }
-        continue;
+  const rows = [];
+  for (let i = 1; i < trs.length; i++) {
+    const cells = $(trs[i]).find('td').map((_i, c) => $(c).text().trim().replace(/\s+/g, ' ')).get();
+    if (cells.length < 5) {
+      // 補足行（Assistant Manager of: ...）
+      const last = rows[rows.length - 1];
+      const txt = cells.join(' ').trim();
+      if (last && /assistant manager of:/i.test(txt)) {
+        const m = txt.match(/Assistant Manager of:\s*([^()]+)/i);
+        if (m) last.mentor = m[1].trim();
       }
-      const obj = {};
-      headers.forEach((h, k) => { obj[h] = cells[k]; });
-      rows.push(obj);
+      continue;
     }
-    return rows;
-  });
+    const obj = {};
+    headers.forEach((h, k) => { obj[h] = cells[k]; });
+    rows.push(obj);
+  }
+  return rows;
 }
 
 // "2.47 : 0.94" → { avgFor: 2.47, avgAgainst: 0.94 }
@@ -228,49 +172,42 @@ function _parseDays(s) {
 }
 
 // erfolge ページから獲得タイトル一覧を抽出
-async function _fetchErfolge(page, slug, id) {
+async function _fetchErfolge(slug, id) {
   const url = `https://www.transfermarkt.com/${slug}/erfolge/trainer/${id}`;
-  const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-  if (!res || res.status() >= 400) return [];
-  await new Promise(r => setTimeout(r, 2000));
+  let html;
+  try { html = await _fetchHtml(url); } catch (_) { return []; }
+  const $ = cheerio.load(html);
 
-  return await page.evaluate(() => {
-    // erfolge ページは <div class="box"> ごとにタイトル種類が並ぶ
-    //   <h2 class="content-box-headline">2x English Champion</h2>
-    //   <table class="auflistung"> 各シーズン+クラブ </table>
-    const out = [];
-    const headers = document.querySelectorAll('h2.content-box-headline, .content-box-headline');
-    for (const h of headers) {
-      const titleRaw = (h.textContent || '').trim();
-      if (!titleRaw) continue;
-      // 直後の table.auflistung を取る
-      let el = h.nextElementSibling;
-      let table = null;
-      for (let i = 0; el && i < 5; i++, el = el.nextElementSibling) {
-        if (el.tagName === 'TABLE') { table = el; break; }
-        const inner = el.querySelector?.('table.auflistung');
-        if (inner) { table = inner; break; }
-      }
-      if (!table) continue;
-
-      const seasons = [];
-      for (const row of table.rows) {
-        const cells = Array.from(row.cells).map(c => (c.innerText || '').trim());
-        // 形式: [ "23/24", "", "Arsenal FC" ] のような3セル
-        if (cells.length >= 1) {
-          const season = cells[0];
-          const club   = cells[cells.length - 1];
-          if (/^\d{2}\/\d{2}$/.test(season)) seasons.push({ season, club });
-        }
-      }
-      // タイトル名から数字接頭辞 ("2x ") を除去 + 回数取得
-      const countMatch = titleRaw.match(/^(\d+)\s*x\s+(.+)$/i);
-      const count = countMatch ? parseInt(countMatch[1], 10) : seasons.length || 1;
-      const title = countMatch ? countMatch[2].trim() : titleRaw;
-      out.push({ title, count, seasons });
+  const out = [];
+  $('h2.content-box-headline, .content-box-headline').each((_, h) => {
+    const titleRaw = $(h).text().trim();
+    if (!titleRaw) return;
+    // 直後の sibling 5個以内に table.auflistung を探す
+    let table = null;
+    let sib = $(h).next();
+    for (let i = 0; sib.length && i < 5; i++) {
+      if (sib.is('table')) { table = sib; break; }
+      const inner = sib.find('table.auflistung').first();
+      if (inner.length) { table = inner; break; }
+      sib = sib.next();
     }
-    return out;
+    if (!table || !table.length) return;
+
+    const seasons = [];
+    table.find('tr').each((_i, row) => {
+      const cells = $(row).find('th, td').map((_j, c) => $(c).text().trim()).get();
+      if (cells.length >= 1) {
+        const season = cells[0];
+        const club   = cells[cells.length - 1];
+        if (/^\d{2}\/\d{2}$/.test(season)) seasons.push({ season, club });
+      }
+    });
+    const countMatch = titleRaw.match(/^(\d+)\s*x\s+(.+)$/i);
+    const count = countMatch ? parseInt(countMatch[1], 10) : seasons.length || 1;
+    const title = countMatch ? countMatch[2].trim() : titleRaw;
+    out.push({ title, count, seasons });
   });
+  return out;
 }
 
 // season は必ず YY/YY 形式（例 "19/20"）。日付の MM/DD と区別するため
@@ -350,13 +287,13 @@ function _isHeadCoachRole(role) {
 //   }
 async function fetchTransfermarktManager(id, slug) {
   if (!id || !slug) throw new Error('id and slug required');
-  const { browser, proxyUrl } = await _newBrowser();
+  // curl-cffi なので browser 不要、各ページ並列取得
+  const [profil, stationenRows, trophies] = await Promise.all([
+    _fetchProfil(slug, id),
+    _fetchStationenPlus(slug, id),
+    _fetchErfolge(slug, id),
+  ]);
   try {
-    const page = await _newPage(browser, proxyUrl);
-
-    const profil          = await _fetchProfil(page, slug, id);
-    const stationenRows   = await _fetchStationenPlus(page, slug, id);
-    const trophies        = await _fetchErfolge(page, slug, id);
 
     // ── プロフィールを構造化 ──
     const profKeys = profil.profile || {};
@@ -461,8 +398,8 @@ async function fetchTransfermarktManager(id, slug) {
       currentSeasonTotal,               // 合計の W/D/L
       trophies: trophies || [],
     };
-  } finally {
-    await browser.close().catch(() => {});
+  } catch (e) {
+    throw e;
   }
 }
 

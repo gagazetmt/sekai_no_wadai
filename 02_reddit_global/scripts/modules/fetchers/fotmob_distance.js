@@ -16,6 +16,13 @@
 //   3. matchDetails / teamStats / lineups 系の JSON を捕まえる
 //   4. distance / sprintsCount / topSpeed フィールド抽出
 //   5. ホーム/アウェイ別 + 選手別データを返す
+//
+// 2026-05-12: 全 fetcher を curl-cffi 化したが、このファイルだけ Puppeteer 維持
+//   理由: matchDetails の直接 API (`/api/data/matchDetails?matchId=`) は
+//        TURNSTILE_REQUIRED 403 を返すため curl-cffi で叩けない
+//        page.on('response') の XHR 傍受方式は実ブラウザでしか動かない
+//   影響: このファイルは V2 ランチャーでは使われていない（grep 確認済）
+//        オンデマンド CLI 利用のみ → 帯域削減対象外でも実害なし
 
 const puppeteerExtra = require('puppeteer-extra');
 const StealthPlugin  = require('puppeteer-extra-plugin-stealth');

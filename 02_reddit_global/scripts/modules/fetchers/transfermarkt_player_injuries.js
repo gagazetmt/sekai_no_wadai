@@ -16,52 +16,9 @@
 //   - 進行中の怪我も登録され、untilDate に「予測復帰日」が入る (Slot 等の監督発言反映)
 //   - 反映ラグは数日〜1週間程度。直近すぎる怪我はまだ未登録の可能性あり
 
-const puppeteerExtra = require('puppeteer-extra');
-const StealthPlugin  = require('puppeteer-extra-plugin-stealth');
-const { BANDWIDTH_SAVE_ARGS, attachBlocker } = require('./_puppeteer_bandwidth');
-puppeteerExtra.use(StealthPlugin());
-
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const PAGE_TIMEOUT = 60000;
-const PROXY_LIST_SIZE = 4000;
-
-function pickProxy() {
-  if (!process.env.WEBSHARE_PROXY_URL) return null;
-  const n = Math.floor(Math.random() * PROXY_LIST_SIZE) + 1;
-  return process.env.WEBSHARE_PROXY_URL.replace('{N}', String(n));
-}
-
-async function _newBrowser() {
-  const proxyUrl = pickProxy();
-  const args = [
-    '--no-sandbox', '--disable-setuid-sandbox',
-    '--disable-blink-features=AutomationControlled',
-    '--disable-dev-shm-usage',
-    // 帯域節約: mtalk.google.com 等の Chrome 垂れ流し通信を停止
-    ...BANDWIDTH_SAVE_ARGS,
-  ];
-  if (proxyUrl) args.push(`--proxy-server=${new URL(proxyUrl).host}`);
-  const browser = await puppeteerExtra.launch({ headless: 'new', args });
-  return { browser, proxyUrl };
-}
-
-async function _newPage(browser, proxyUrl) {
-  const page = await browser.newPage();
-  if (proxyUrl) {
-    const u = new URL(proxyUrl);
-    if (u.username) {
-      await page.authenticate({
-        username: decodeURIComponent(u.username),
-        password: decodeURIComponent(u.password),
-      });
-    }
-  }
-  // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断
-  await attachBlocker(page, { allowHosts: ['transfermarkt.com'] });
-  await page.setUserAgent(UA);
-  await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-  return page;
-}
+// 2026-05-12: Puppeteer → curl-cffi 移行
+const { curlGet } = require('./_curl_cffi_caller');
+const TM_REFERER = 'https://www.transfermarkt.com/';
 
 // "11/02/2026" → "2026-02-11" (Europe → ISO)
 function _toIsoDate(s) {
@@ -76,28 +33,41 @@ function _parseDays(s) {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// HTML table.items の各 <tr> の <td> テキスト配列を抽出
+function _extractInjuryRows(html) {
+  // table.items の最初の塊を探す → tbody → 各 tr の td
+  const tableMatch = html.match(/<table[^>]*class="[^"]*items[^"]*"[^>]*>([\s\S]*?)<\/table>/);
+  if (!tableMatch) return [];
+  const tbodyMatch = tableMatch[1].match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/);
+  const tbodyHtml = tbodyMatch ? tbodyMatch[1] : tableMatch[1];
+  const rows = [];
+  const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/g;
+  let trMatch;
+  while ((trMatch = trRe.exec(tbodyHtml))) {
+    const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
+    const cells = [];
+    let tdMatch;
+    while ((tdMatch = tdRe.exec(trMatch[1]))) {
+      const text = tdMatch[1].replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+      cells.push(text);
+    }
+    if (cells.length) rows.push(cells);
+  }
+  return rows;
+}
+
 // 怪我履歴を取得
 //   返却: { ok, playerId, injuries: [{ season, injury, fromDate, untilDate, days, missedGames, isOngoing, isFuture }, ...] }
 //     - isOngoing: untilDate が今日以降 (進行中 or 予測復帰日が未来)
 //     - isFuture:  fromDate が今日より未来 (理論上ほぼ無いが念のため)
 async function fetchPlayerInjuries(playerId, slug = 'spieler') {
   if (!playerId) return { ok: false, error: 'playerId required' };
-  const { browser, proxyUrl } = await _newBrowser();
   try {
-    const page = await _newPage(browser, proxyUrl);
     const url = `https://www.transfermarkt.com/${slug}/verletzungen/spieler/${playerId}`;
-    const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    if (!res || res.status() >= 400) return { ok: false, error: 'http ' + (res?.status() || '?') };
-    await new Promise(r => setTimeout(r, 1500));
+    const res = await curlGet(url, { referer: TM_REFERER, headers: { Accept: 'text/html' } });
+    if (!res.ok) return { ok: false, error: 'http ' + res.status };
 
-    const rows = await page.evaluate(() => {
-      const tables = document.querySelectorAll('table.items');
-      if (!tables.length) return [];
-      const t = tables[0];
-      return Array.from(t.querySelectorAll('tbody tr')).map(r =>
-        Array.from(r.querySelectorAll('td')).map(td => (td.textContent || '').trim())
-      );
-    });
+    const rows = _extractInjuryRows(res.body);
 
     const today = new Date().toISOString().slice(0, 10);
     const injuries = rows.map(cells => {
@@ -119,8 +89,6 @@ async function fetchPlayerInjuries(playerId, slug = 'spieler') {
     return { ok: true, playerId: String(playerId), injuries };
   } catch (e) {
     return { ok: false, error: e.message };
-  } finally {
-    await browser.close().catch(() => {});
   }
 }
 

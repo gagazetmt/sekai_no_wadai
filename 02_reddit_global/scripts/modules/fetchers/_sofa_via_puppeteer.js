@@ -35,7 +35,10 @@ function _pickProxy() {
   return process.env.WEBSHARE_PROXY_URL.replace('{N}', String(n));
 }
 
-// ── lazy init: 初回呼出時にブラウザ起動 + sofascore.com で cookie/CF challenge 済ませる ──
+// ── lazy init: 初回呼出時にブラウザ起動（2026-05-12: www.sofascore.com 訪問不要と判明）──
+//   旧: www.sofascore.com 訪問で CF cookie 取得 → api.sofascore.com 叩く
+//   実: api.sofascore.com には CF challenge 無し、Webshare 住宅IP からは直接 200 が返る
+//   → init() での www.sofascore.com 訪問 (1.5-3MB) は完全に無駄だったので削除
 async function init() {
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
@@ -67,9 +70,7 @@ async function init() {
     await attachBlocker(_page, { allowHosts: ['api.sofascore.com'] });
     await _page.setUserAgent(UA);
     await _page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-    // sofascore.com で cf cookie/challenge を確実に済ませる（networkidle2 で完全ロード待ち）
-    await _page.goto('https://www.sofascore.com/', { waitUntil: 'networkidle2', timeout: PAGE_TIMEOUT });
-    await new Promise(r => setTimeout(r, 1500));
+    // www.sofascore.com 訪問は不要（上記コメント参照）。即 API 叩ける状態にする
     // プロセス終了時に自動 close
     process.once('exit',   () => { try { _browser?.close(); } catch (_) {} });
     process.once('SIGINT', () => { try { _browser?.close(); } catch (_) {} process.exit(); });
