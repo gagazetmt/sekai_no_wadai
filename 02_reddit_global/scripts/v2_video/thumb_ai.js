@@ -6,9 +6,12 @@
 //   3. generateThumb()  : Imagen 4 で画像 N 枚並列生成（provider 抽象化）
 //
 // 環境変数:
-//   GEMINI_API_KEY        - Google AI Studio の API キー（必須）
+//   GEMINI_API_KEY        - Google AI Studio の API キー（imagen4 provider 用、必須）
 //   GEMINI_IMAGE_MODEL    - Imagen モデル名（任意・既定: imagen-4.0-generate-001）
 //   FAL_API_KEY           - fal.ai キー（将来 Seedream / Flux 切替時に使用）
+//   GCP_PROJECT_ID        - Vertex AI 用 Google Cloud プロジェクト ID（vertex/imagen4 provider 用）
+//   GCP_LOCATION          - Vertex AI リージョン（任意・既定: us-central1）
+//   GOOGLE_APPLICATION_CREDENTIALS - Service Account JSON のフルパス（vertex 認証用）
 // ═══════════════════════════════════════════════════════════
 
 const fs    = require('fs');
@@ -250,6 +253,98 @@ async function _generateImagen4({ prompt, count, aspectRatio, outputDir }) {
 }
 
 /**
+ * Vertex AI 経由で Imagen 4 を叩く（celebrity / 公人指定が通る別ルート）
+ *   generativelanguage.googleapis.com (consumer 向け・安全側) と違い、
+ *   docs.cloud.google.com の Vertex AI は personGeneration: allow_adult が
+ *   公式 docs で celebrity を含むと明記されてる
+ */
+let _vertexAuthClient = null;
+async function _getVertexAccessToken() {
+  // 遅延 require（google-auth-library 未インストールでも他 provider は動かす）
+  if (!_vertexAuthClient) {
+    let GoogleAuth;
+    try {
+      ({ GoogleAuth } = require('google-auth-library'));
+    } catch (_) {
+      throw new Error('google-auth-library が未インストール。npm install google-auth-library を実行');
+    }
+    const auth = new GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
+    _vertexAuthClient = await auth.getClient();
+  }
+  const tokenInfo = await _vertexAuthClient.getAccessToken();
+  return tokenInfo?.token;
+}
+
+async function _generateVertexImagen4({ prompt, count, aspectRatio, outputDir, model }) {
+  const projectId = process.env.GCP_PROJECT_ID;
+  if (!projectId) throw new Error('GCP_PROJECT_ID が .env に未設定');
+  const location = process.env.GCP_LOCATION || 'us-central1';
+  const vertexModel = model || process.env.VERTEX_IMAGEN_MODEL || 'imagen-4.0-generate-001';
+
+  const token = await _getVertexAccessToken();
+  if (!token) throw new Error('Vertex AI access token 取得失敗。GOOGLE_APPLICATION_CREDENTIALS を確認');
+
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${vertexModel}:predict`;
+  const body = {
+    instances: [{ prompt }],
+    parameters: {
+      sampleCount: count,
+      aspectRatio,
+      personGeneration: 'allow_adult',  // Vertex AI ではこれで celebrity 通る
+    },
+  };
+
+  let res;
+  try {
+    res = await axios.post(url, body, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type':  'application/json',
+      },
+      timeout: 90000,
+      validateStatus: () => true,
+    });
+  } catch (e) {
+    throw new Error(`Vertex Imagen 4 network error: ${e.message}`);
+  }
+
+  if (res.status !== 200) {
+    const errMsg = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    throw new Error(`Vertex Imagen 4 API ${res.status}: ${errMsg.slice(0, 800)}`);
+  }
+
+  const predictions = (res.data && res.data.predictions) || [];
+  if (predictions.length === 0) {
+    throw new Error(`Vertex Imagen 4: 生成結果なし。raw=${JSON.stringify(res.data)}`);
+  }
+  const filtered = predictions.filter(p => p.raiFilteredReason && !p.bytesBase64Encoded);
+  if (filtered.length) {
+    console.warn(`  ⚠️ Vertex Imagen 4: ${filtered.length}/${predictions.length} 枚 safety filter:`,
+      filtered.map(p => p.raiFilteredReason).join(' | '));
+  }
+
+  fs.mkdirSync(outputDir, { recursive: true });
+  const ts = Date.now();
+  const results = [];
+  predictions.forEach((p, i) => {
+    if (!p.bytesBase64Encoded) return;
+    const filename = `vertex_imagen4_${ts}_${i}.png`;
+    const fullPath = path.join(outputDir, filename);
+    fs.writeFileSync(fullPath, Buffer.from(p.bytesBase64Encoded, 'base64'));
+    results.push({
+      file: filename,
+      path: fullPath,
+      provider: 'vertex/imagen4',
+      model: vertexModel,
+    });
+  });
+
+  return results;
+}
+
+/**
  * fal.ai 経由で生成（Seedream / Flux など）— 将来実装
  */
 async function _generateFal(_opts) {
@@ -281,6 +376,15 @@ async function generateThumb(opts) {
   switch (provider) {
     case 'imagen4':
       return await _generateImagen4({ prompt, count, aspectRatio, outputDir });
+    case 'vertex/imagen4':
+    case 'vertex/imagen4-ultra':
+    case 'vertex/imagen4-fast':
+      return await _generateVertexImagen4({
+        prompt, count, aspectRatio, outputDir,
+        model: provider === 'vertex/imagen4-ultra' ? 'imagen-4.0-ultra-generate-001'
+             : provider === 'vertex/imagen4-fast'  ? 'imagen-4.0-fast-generate-001'
+             : undefined,
+      });
     case 'fal/seedream':
     case 'fal/flux-pro':
     case 'fal/flux-ultra':
