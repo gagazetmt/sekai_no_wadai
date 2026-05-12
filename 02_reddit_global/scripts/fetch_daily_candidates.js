@@ -63,8 +63,28 @@ async function redditGet(url) {
       timeout:    12000,
       httpsAgent: agent || undefined,
     });
+    // WEBSHARE_AUDIT=1 で帯域監査ログ出力
+    if (process.env.WEBSHARE_AUDIT === '1' && agent) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const auditPath = path.join(__dirname, '..', 'logs', 'webshare_audit.log');
+        const sz = Buffer.byteLength(typeof res.data === 'string' ? res.data : JSON.stringify(res.data || ''), 'utf8');
+        const ts = new Date().toISOString();
+        fs.appendFileSync(auditPath, [ts, 'redditGet', res.status, sz, url.slice(0, 120), 'fetch_daily_candidates.js:redditGet'].join('\t') + '\n');
+      } catch (_) {}
+    }
     return res.data;
   } catch (e) {
+    if (process.env.WEBSHARE_AUDIT === '1' && agent) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const auditPath = path.join(__dirname, '..', 'logs', 'webshare_audit.log');
+        const ts = new Date().toISOString();
+        fs.appendFileSync(auditPath, [ts, 'redditGet', e.response?.status || 'EX', 0, url.slice(0, 120), 'fetch_daily_candidates.js:redditGet'].join('\t') + '\n');
+      } catch (_) {}
+    }
     console.warn(`[Reddit] ${url.slice(0, 80)} → ${e.response?.status || e.code || e.message}`);
     return null;
   }

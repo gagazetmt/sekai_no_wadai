@@ -26,6 +26,23 @@ function _pickProxy() {
   return process.env.WEBSHARE_PROXY_URL.replace('{N}', String(n));
 }
 
+// 帯域犯人探し用：WEBSHARE_AUDIT=1 で /logs/webshare_audit.log に出力
+//   いつ・どのURL・どこから呼ばれたか・サイズ を1行ずつ append
+const _AUDIT_PATH = path.join(__dirname, '..', '..', '..', 'logs', 'webshare_audit.log');
+function _auditWrite(url, stackHint, sizeBytes, status, source) {
+  if (process.env.WEBSHARE_AUDIT !== '1') return;
+  try {
+    const ts = new Date().toISOString();
+    const line = [ts, source, status ?? '?', (sizeBytes ?? '?'), url.slice(0, 120), stackHint || '?'].join('\t');
+    require('fs').appendFileSync(_AUDIT_PATH, line + '\n');
+  } catch (_) {}
+}
+function _stackHint() {
+  const lines = (new Error().stack || '').split('\n').slice(2, 6);
+  const interesting = lines.find(l => l && !/_curl_cffi_caller/.test(l));
+  return (interesting || '').trim().replace(/^at\s+/, '').slice(0, 100);
+}
+
 // 内部: Python サブプロセス起動 + stdin に JSON 渡し + stdout 解釈
 function _runPython(input, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
@@ -80,7 +97,10 @@ async function curlGet(url, opts = {}) {
     retries: opts.retries == null ? 1 : opts.retries,
     binary: false,
   };
-  return await _runPython(input, (opts.timeout || 20) * 1000 * 3);
+  const hint = proxy ? _stackHint() : null;
+  const r = await _runPython(input, (opts.timeout || 20) * 1000 * 3);
+  if (proxy) _auditWrite(url, hint, r?.size, r?.status, 'curlGet');
+  return r;
 }
 
 // 画像取得（data:image/...;base64,... を返す）
@@ -100,12 +120,15 @@ async function curlGetImage(url, opts = {}) {
     retries: opts.retries == null ? 1 : opts.retries,
     binary: true,
   };
+  const hint = proxy ? _stackHint() : null;
   try {
     const r = await _runPython(input, (opts.timeout || 20) * 1000 * 3);
+    if (proxy) _auditWrite(url, hint, r?.size, r?.status, 'curlGetImage');
     if (!r.ok || !r.body) return null;
     const mime = (r.content_type || 'image/png').split(';')[0];
     return `data:${mime};base64,${r.body}`;
   } catch (e) {
+    if (proxy) _auditWrite(url, hint, 0, 'EX', 'curlGetImage');
     return null;
   }
 }
