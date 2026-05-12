@@ -1,2 +1,18 @@
 .env
 node_modules/
+
+# TTS / 検証用 PoC スクリプト（2026-05-12 セッション。役目終了したら gitignore）
+_poc_*.js
+_inspect_*.py
+_demo_*.png
+_demo_*.html
+_yt_thumb_*.jpg
+_mu_preview.html
+
+# YouTube OAuth トークン（VPS ローカル管理）
+.youtube_tokens.json
+.youtube_tokens.json.bak_*
+
+# 各種バックアップ
+.env.bak
+.env.bak.*
