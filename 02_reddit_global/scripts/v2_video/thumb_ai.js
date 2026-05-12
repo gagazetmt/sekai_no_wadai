@@ -205,12 +205,28 @@ async function _generateImagen4({ prompt, count, aspectRatio, outputDir }) {
 
   if (res.status !== 200) {
     const errMsg = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-    throw new Error(`Imagen 4 API ${res.status}: ${errMsg.slice(0, 500)}`);
+    throw new Error(`Imagen 4 API ${res.status}: ${errMsg.slice(0, 800)}`);
   }
 
   const predictions = (res.data && res.data.predictions) || [];
   if (predictions.length === 0) {
-    throw new Error(`Imagen 4: 生成結果なし。raw=${JSON.stringify(res.data).slice(0, 300)}`);
+    // safety filter / モデレーション理由を抽出（raiFilteredReason / blockReason / promptFeedback）
+    const reasons = [];
+    if (res.data?.raiFilteredReason) reasons.push('raiFilteredReason=' + res.data.raiFilteredReason);
+    if (res.data?.promptFeedback)    reasons.push('promptFeedback='    + JSON.stringify(res.data.promptFeedback));
+    if (res.data?.blockReason)       reasons.push('blockReason='       + res.data.blockReason);
+    const hint = reasons.length
+      ? ` [${reasons.join(' / ')}] 公人・有名選手の写実プロンプトや暴力的描写は弾かれる可能性あり。プロンプトを匿名・象徴的に書き直して再試行。`
+      : ' プロンプトが Google のコンテンツポリシーに抵触した可能性。'
+        + '具体名・公人を匿名化 (例: "young Asian midfielder in red jersey")、'
+        + '激しい競り合いや喧嘩描写は避ける、で再試行。';
+    throw new Error(`Imagen 4: 生成結果なし。${hint}raw=${JSON.stringify(res.data)}`);
+  }
+  // 一部だけ safety filter ヒット時（predictions に raiFilteredReason 入りの空 entry が混じる）
+  const filtered = predictions.filter(p => p.raiFilteredReason && !p.bytesBase64Encoded);
+  if (filtered.length) {
+    console.warn(`  ⚠️ Imagen 4: ${filtered.length}/${predictions.length} 枚が safety filter で除外:`,
+      filtered.map(p => p.raiFilteredReason).join(' | '));
   }
 
   fs.mkdirSync(outputDir, { recursive: true });

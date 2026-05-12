@@ -315,28 +315,22 @@ function getUI() {
       </select>
     </div>
 
-    <!-- ステップ 2: 日本語テキスト指定 -->
+    <!-- ステップ 2+3: テキスト抽出 + プロンプト生成（一括） -->
     <div class="s5card">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
-        <strong style="color:var(--c); font-size:12px;">② サムネ内の日本語テキスト</strong>
-        <button onclick="s5ExtractThumbText()" class="s5btn-sub" id="s5-extract-btn">📺 Step3 オープニングから抽出</button>
-        <span id="s5-extract-status" style="font-size:11px; color:var(--muted);"></span>
-      </div>
-      <label class="s5label">上端 煽り文（10文字以内推奨）</label>
-      <input type="text" id="s5-top-text" class="s5input" maxlength="20" placeholder="例: プレミア最終決戦">
-      <label class="s5label">下端 結論文（12文字以内推奨）</label>
-      <input type="text" id="s5-bottom-text" class="s5input" maxlength="24" placeholder="例: 優勝はどちらの手に！？">
-    </div>
-
-    <!-- ステップ 3: プロンプト生成 -->
-    <div class="s5card">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
-        <strong style="color:var(--c); font-size:12px;">③ Imagen 4 用プロンプト</strong>
-        <button onclick="s5SuggestPrompt()" class="s5btn-sub" id="s5-suggest-btn">✨ リネカ＋DeepSeekで提案</button>
+        <strong style="color:var(--c); font-size:12px;">②③ サムネテキスト＋プロンプト</strong>
+        <button onclick="s5ExtractAndSuggest()" class="s5btn-sub" id="s5-extract-suggest-btn">📺✨ オープニングから一括生成</button>
         <button onclick="s5CopyPrompt()" class="s5btn-sub">📋 プロンプトコピー</button>
-        <span id="s5-prompt-status" style="font-size:11px; color:var(--muted);"></span>
+        <span id="s5-extract-suggest-status" style="font-size:11px; color:var(--muted);"></span>
       </div>
-      <textarea id="s5-prompt" rows="6" class="s5input" style="resize:vertical; font-family:monospace;" placeholder="リネカ＋DeepSeekで提案ボタンで自動生成。手動編集可。コピーして無料 Gemini Web 版に貼り付けても OK。"></textarea>
+
+      <label class="s5label">② 上端 煽り文（10文字以内推奨）</label>
+      <input type="text" id="s5-top-text" class="s5input" maxlength="20" placeholder="例: プレミア最終決戦">
+      <label class="s5label">② 下端 結論文（12文字以内推奨）</label>
+      <input type="text" id="s5-bottom-text" class="s5input" maxlength="24" placeholder="例: 優勝はどちらの手に！？">
+
+      <label class="s5label" style="margin-top:10px;">③ Imagen 4 用プロンプト</label>
+      <textarea id="s5-prompt" rows="6" class="s5input" style="resize:vertical; font-family:monospace;" placeholder="📺✨ 一括生成ボタンで自動生成。手動編集可。コピーして無料 Gemini Web 版に貼り付けても OK。"></textarea>
     </div>
 
     <!-- ステップ 4: 画像生成 -->
@@ -445,7 +439,54 @@ function getUI() {
     }
   };
 
-  // ═══ ② オープニングから topText/bottomText 抽出 ═══
+  // ═══ ②③ 一括生成（テキスト抽出 → プロンプト生成 を順次）═══
+  window.s5ExtractAndSuggest = async function() {
+    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
+    const btn = document.getElementById('s5-extract-suggest-btn');
+    const status = document.getElementById('s5-extract-suggest-status');
+    btn.disabled = true;
+    status.style.color = 'var(--muted)';
+
+    // ② オープニングから topText/bottomText
+    status.textContent = '⏳ ② オープニングから抽出中…';
+    let topText = '', bottomText = '';
+    try {
+      const r = await window.fetchJson('/api/v5/extract-thumb-text', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: id }),
+      });
+      if (r.error) throw new Error(r.error);
+      topText = r.topText || '';
+      bottomText = r.bottomText || '';
+      if (topText)    document.getElementById('s5-top-text').value    = topText;
+      if (bottomText) document.getElementById('s5-bottom-text').value = bottomText;
+    } catch (e) {
+      status.textContent = '❌ ② 抽出失敗: ' + e.message;
+      status.style.color = 'var(--c)';
+      btn.disabled = false;
+      return;
+    }
+
+    // ③ プロンプト生成（②の結果をそのまま渡す）
+    status.textContent = '⏳ ② 完了 → ③ DeepSeek 思考中…';
+    const theme = document.getElementById('s5-theme').value;
+    try {
+      const r = await window.fetchJson('/api/v5/suggest-thumb-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: id, theme, topText, bottomText, title: postTitle() }),
+      });
+      document.getElementById('s5-prompt').value = r.prompt;
+      status.textContent = '✅ 一括生成完了（②テキスト + ③プロンプト・編集可）';
+      status.style.color = 'var(--success)';
+    } catch (e) {
+      status.textContent = '⚠️ ② OK だが ③ プロンプト生成失敗: ' + e.message;
+      status.style.color = 'var(--c)';
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  // ═══ ② オープニングから topText/bottomText 抽出（単体・後方互換）═══
   window.s5ExtractThumbText = async function() {
     const id = postId(); if (!id) { alert('案件を選択してね'); return; }
     const btn = document.getElementById('s5-extract-btn');
