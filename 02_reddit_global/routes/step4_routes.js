@@ -1350,6 +1350,146 @@ router.post('/v2/tts-module', express.json(), async (req, res) => {
   }
 });
 
+// ─── /v2/tts-module-bulk : 複数 module を worker-pool 並列で一括生成 ──
+//   /v2/tts-module を逐次叩くより 4-8 倍速い（chunk 全展開して並列）
+//   body: { postId, moduleIdxList?, provider, voiceId, model, styleInstructions, concurrency? }
+//   moduleIdxList 省略時は narration/title/reaction/toc を持つ全 module が対象
+router.post('/v2/tts-module-bulk', express.json({ limit: '512kb' }), async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const tts = require('../scripts/v2_video/tts_engine');
+    const { postId, provider, voiceId, model, styleInstructions, emotion, speed, vol, pitch } = req.body || {};
+    if (!postId) return res.status(400).json({ error: 'postId required' });
+    const concurrency = Math.max(1, Math.min(8, parseInt(req.body?.concurrency, 10) || 4));
+
+    const mp = modulesPath(postId);
+    const data = safeJson(mp, null);
+    if (!data?.modules?.length) return res.status(404).json({ error: 'modules not found' });
+
+    // 対象 module 選定
+    const reqList = Array.isArray(req.body?.moduleIdxList) ? req.body.moduleIdxList.map(n => parseInt(n, 10)).filter(Number.isFinite) : null;
+    const targets = data.modules
+      .map((m, i) => ({ m, i }))
+      .filter(({ m, i }) => {
+        if (reqList && !reqList.includes(i)) return false;
+        const narr = (m.narration || '').trim();
+        if (narr) return true;
+        if (m.type === 'opening' && (m.title || '').trim()) return true;
+        if (m.type === 'reaction') return true;
+        if (m.type === 'toc' && Array.isArray(m.tocItems) && m.tocItems.length) return true;
+        return false;
+      });
+    if (!targets.length) return res.status(400).json({ error: 'no eligible modules' });
+
+    const dir = audioDirFor(postId);
+
+    // 各 module 内の旧 chunk ファイルを掃除
+    for (const { i } of targets) {
+      try {
+        fs.readdirSync(dir).filter(f => f.startsWith(`m${String(i).padStart(2,'0')}_`)).forEach(f => {
+          try { fs.unlinkSync(path.join(dir, f)); } catch (_) {}
+        });
+      } catch (_) {}
+    }
+
+    // 全タスク展開（module × chunk）
+    const allTasks = [];
+    const moduleChunks = new Map();  // moduleIdx → chunks 配列
+    for (const { m, i } of targets) {
+      const chunks = tts.buildChunksForModule(m);
+      moduleChunks.set(i, chunks);
+      chunks.forEach((text, c) => {
+        const fname = `m${String(i).padStart(2,'0')}_c${String(c).padStart(2,'0')}.mp3`;
+        allTasks.push({
+          moduleIdx: i, chunkIdx: c, text,
+          outputPath: path.join(dir, fname),
+        });
+      });
+    }
+
+    if (!allTasks.length) return res.status(400).json({ error: 'all narrations empty' });
+
+    // 結果バッファ（moduleIdx → { chunkIdx → audio entry }）
+    const resultsByModule = new Map();
+    const errors = [];
+
+    // worker pool 並列実行
+    let nextIdx = 0;
+    await Promise.all(Array.from({ length: concurrency }, async (_, workerIdx) => {
+      while (true) {
+        const idx = nextIdx++;
+        if (idx >= allTasks.length) return;
+        const t = allTasks[idx];
+        try {
+          await tts.generate({
+            provider, text: t.text, outputPath: t.outputPath,
+            voiceId, model, styleInstructions, emotion, speed, vol, pitch,
+          });
+          const dur = tts.probeDurationSec(t.outputPath);
+          if (!resultsByModule.has(t.moduleIdx)) resultsByModule.set(t.moduleIdx, new Map());
+          resultsByModule.get(t.moduleIdx).set(t.chunkIdx, {
+            chunkIdx: t.chunkIdx, text: t.text,
+            file: path.relative(path.join(__dirname, '..'), t.outputPath).replace(/\\/g, '/'),
+            durationSec: dur,
+          });
+        } catch (e) {
+          errors.push({ moduleIdx: t.moduleIdx, chunkIdx: t.chunkIdx, error: e.message });
+          console.warn(`[tts-bulk] worker#${workerIdx} m${t.moduleIdx}c${t.chunkIdx} 失敗: ${e.message}`);
+        }
+      }
+    }));
+
+    // module ごとに audio[] を順序付きで集約 + mod.tts 更新
+    const perModule = [];
+    for (const { m, i } of targets) {
+      const chunkMap = resultsByModule.get(i) || new Map();
+      const chunks = moduleChunks.get(i) || [];
+      const audio = [];
+      for (let c = 0; c < chunks.length; c++) {
+        const entry = chunkMap.get(c);
+        if (entry) audio.push(entry);
+      }
+      m.tts = Object.assign({}, m.tts || {}, {
+        provider: provider || undefined,
+        voiceId: voiceId || undefined,
+        model:   model   || undefined,
+        styleInstructions: styleInstructions || undefined,
+        emotion: emotion || undefined,
+        speed:   speed   ?? undefined,
+        vol:     vol     ?? undefined,
+        pitch:   pitch   ?? undefined,
+        generatedAt: new Date().toISOString(),
+      });
+      m.audio = audio;
+      perModule.push({
+        moduleIdx: i,
+        chunkCount: audio.length,
+        expectedChunkCount: chunks.length,
+        totalDurationSec: audio.reduce((a, b) => a + (b.durationSec || 0), 0),
+        audio,
+      });
+    }
+
+    // modules.json を 1 度だけ書き戻し
+    fs.writeFileSync(mp, JSON.stringify(data, null, 2));
+
+    res.json({
+      ok: true,
+      moduleCount: targets.length,
+      taskCount:   allTasks.length,
+      successCount: allTasks.length - errors.length,
+      errorCount:   errors.length,
+      concurrency,
+      elapsedMs: Date.now() - t0,
+      perModule,
+      errors,
+    });
+  } catch (e) {
+    console.warn('[tts-module-bulk]', e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ─── /v2/tts-audio : 生成済 mp3 を直接返す (UI再生用) ──
 router.get('/v2/tts-audio', (req, res) => {
   try {
@@ -3225,7 +3365,6 @@ function getUI() {
     const defVoice = presets.defaultVoice || '';
     const defModel = presets.defaultModel || '';
     const defStyle = presets.styleInstructions || '';
-    // 対象スライド絞り込み: narration or opening title or reaction or toc どれかある分だけ
     const targets = mods.map((m, i) => ({ m, i })).filter(({ m }) => {
       const narr = (m.narration || '').trim();
       if (narr) return true;
@@ -3238,7 +3377,7 @@ function getUI() {
 
     if (!confirm(
       '全 ' + targets.length + ' スライドを ' + providerLabel
-      + '（' + (defVoice || 'default voice') + '）で一括再生成するよ。\\n'
+      + '（' + (defVoice || 'default voice') + '）で並列一括再生成するよ（worker 4 並列）。\\n'
       + '各スライドの mod.tts / mod.audio は完全に上書きされる。続行？'
     )) return;
 
@@ -3246,45 +3385,53 @@ function getUI() {
     if (btn) btn.disabled = true;
     await _saveModulesQuiet();
 
-    let ok = 0, ng = 0;
-    for (const { m, i } of targets) {
-      _msg('⏳ 一括再生成 ' + (ok + ng + 1) + '/' + targets.length
-        + ' (#' + (i+1) + ' ' + _esc((m.title||m.type||'').slice(0,12)) + ')…');
-      // 各 module の tts を新デフォルトで上書き
+    for (const { m } of targets) {
       m.tts = Object.assign({}, m.tts || {}, {
-        provider,
-        voiceId:           defVoice,
-        model:             defModel,
-        styleInstructions: defStyle,
+        provider, voiceId: defVoice, model: defModel, styleInstructions: defStyle,
       });
-      try {
-        const j = await window.fetchJson('/api/v2/tts-module', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            postId: post.id, moduleIdx: i,
-            provider,
-            voiceId: defVoice,
-            model:   defModel,
-            styleInstructions: defStyle || undefined,
-          }),
-        });
-        if (!j.ok) throw new Error(j.error || '失敗');
-        m.audio = j.audio;
-        ok++;
-      } catch (e) {
-        console.warn('[s4RegenAllTts] #' + (i+1) + ' 失敗:', e.message);
-        ng++;
-      }
     }
 
-    _renderEditor();
-    _renderTabs();
-    if (btn) btn.disabled = false;
-    _msg('✅ 一括再生成完了: 成功 ' + ok + '/' + targets.length
-      + (ng ? ' / 失敗 ' + ng : '') + '（' + providerLabel + '）');
+    const startedAt = Date.now();
+    _msg('⏳ ' + targets.length + ' スライドを ' + providerLabel + ' で並列生成中…（worker 4 並列）');
+
+    try {
+      const j = await window.fetchJson('/api/v2/tts-module-bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId: post.id,
+          moduleIdxList: targets.map(t => t.i),
+          provider, voiceId: defVoice, model: defModel,
+          styleInstructions: defStyle || undefined,
+          concurrency: 4,
+        }),
+      });
+      if (!j.ok) throw new Error(j.error || '一括生成失敗');
+      const byIdx = new Map((j.perModule || []).map(p => [p.moduleIdx, p]));
+      for (const { m, i } of targets) {
+        const pm = byIdx.get(i);
+        if (pm && Array.isArray(pm.audio)) m.audio = pm.audio;
+      }
+      _renderEditor();
+      _renderTabs();
+      const sec = ((Date.now() - startedAt) / 1000).toFixed(1);
+      const taskOk = j.successCount || 0;
+      const taskNg = j.errorCount || 0;
+      _msg('✅ 一括並列再生成 完了: '
+        + j.moduleCount + ' スライド / ' + taskOk + '/' + j.taskCount + ' chunks 成功'
+        + (taskNg ? ' / ' + taskNg + ' chunks 失敗' : '')
+        + '（' + providerLabel + '・' + sec + '秒）');
+      if (taskNg && j.errors?.length) {
+        console.warn('[s4RegenAllTts] 失敗 chunks:', j.errors);
+      }
+    } catch (e) {
+      _msg('❌ 一括並列再生成失敗: ' + e.message);
+      console.warn('[s4RegenAllTts]', e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   };
 
-  /* ── 🎙️ TTS: chunk 単発再生 ── */
+    /* ── 🎙️ TTS: chunk 単発再生 ── */
   window.s4TtsPlayChunk = function(idx, cidx) {
     const post = window.APP.selected;
     if (!post?.id) return;
