@@ -126,7 +126,9 @@ async function fetchMatchDistance(matchId, opts = {}) {
 
     const url = `https://www.fotmob.com/match/${matchId}`;
     if (debug) console.log(`  goto: ${url} (proxy=${proxyUrl ? 'yes' : 'no'})`);
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: PAGE_TIMEOUT });
+    // 帯域節約パッチで image/css/font を abort してるので networkidle2 が解決しない
+    // → domcontentloaded で goto し、後段の WAIT_AFTER_LOAD (8s) で XHR 完了待つ
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
 
     // 物理タブのリンクを探してクリック（あれば）
     try {

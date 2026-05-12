@@ -124,7 +124,9 @@ async function fetchFotMobCareer(fotmobId, opts = {}) {
   try {
     const page = await _newPage(browser, proxyUrl);
     const url = `https://www.fotmob.com/players/${fotmobId}/${slug}`;
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: PAGE_TIMEOUT });
+    // 帯域節約パッチで image/css/font を abort してるので networkidle2 が解決しない
+    // → domcontentloaded + 固定待機で確実に取れる形に変更（2026-05-12）
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
     await new Promise(r => setTimeout(r, 3000));
 
     const nextDataRaw = await page.evaluate(() => {
