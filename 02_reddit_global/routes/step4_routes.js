@@ -1635,6 +1635,7 @@ function getUI() {
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span id="s4Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件未選択</span>
       <button class="btn btn-sm" id="s4BtnSave" style="background:#3b82f6;color:#fff;">💾 保存</button>
+      <button class="btn btn-sm" id="s4BtnRegenAllTts" onclick="s4RegenAllTts()" title="全スライドの音声を現プロバイダ(既定: Gemini)で一括再生成。既存音声は上書き" style="background:#a855f7;color:#fff;">🎙️ 全スライド一括再生成</button>
       <button class="btn btn-success" id="s4BtnGenVideo" style="font-size:13px;padding:8px 18px;">🎬 動画生成</button>
       <span id="s4Msg" style="font-size:12px;color:#8a9aba;"></span>
     </div>
@@ -3210,6 +3211,77 @@ function getUI() {
       _renderEditor();
       if (status) status.textContent = '✅ ' + j.audio.length + 'chunk / ' + (j.totalDurationSec||0).toFixed(1) + 's';
     } catch (e) { if (status) status.textContent = '❌ ' + e.message; }
+  };
+
+  /* ── 🎙️ TTS: 全スライド一括再生成（現プロバイダ・現デフォルト voice/style で上書き）── */
+  window.s4RegenAllTts = async function() {
+    _collectInputs();
+    const post = window.APP.selected;
+    const mods = window.APP.s4.modules || [];
+    if (!post?.id || !mods.length) { _msg('案件 or スライド未選択'); return; }
+    const presets = window.APP.s4.ttsPresets || {};
+    const provider = presets.provider || 'gemini';
+    const providerLabel = provider === 'minimax' ? 'MiniMax' : 'Gemini';
+    const defVoice = presets.defaultVoice || '';
+    const defModel = presets.defaultModel || '';
+    const defStyle = presets.styleInstructions || '';
+    // 対象スライド絞り込み: narration or opening title or reaction or toc どれかある分だけ
+    const targets = mods.map((m, i) => ({ m, i })).filter(({ m }) => {
+      const narr = (m.narration || '').trim();
+      if (narr) return true;
+      if (m.type === 'opening' && (m.title || '').trim()) return true;
+      if (m.type === 'reaction') return true;
+      if (m.type === 'toc' && Array.isArray(m.tocItems) && m.tocItems.length) return true;
+      return false;
+    });
+    if (!targets.length) { _msg('音声化対象のスライドが無い'); return; }
+
+    if (!confirm(
+      '全 ' + targets.length + ' スライドを ' + providerLabel
+      + '（' + (defVoice || 'default voice') + '）で一括再生成するよ。\\n'
+      + '各スライドの mod.tts / mod.audio は完全に上書きされる。続行？'
+    )) return;
+
+    const btn = document.getElementById('s4BtnRegenAllTts');
+    if (btn) btn.disabled = true;
+    await _saveModulesQuiet();
+
+    let ok = 0, ng = 0;
+    for (const { m, i } of targets) {
+      _msg('⏳ 一括再生成 ' + (ok + ng + 1) + '/' + targets.length
+        + ' (#' + (i+1) + ' ' + _esc((m.title||m.type||'').slice(0,12)) + ')…');
+      // 各 module の tts を新デフォルトで上書き
+      m.tts = Object.assign({}, m.tts || {}, {
+        provider,
+        voiceId:           defVoice,
+        model:             defModel,
+        styleInstructions: defStyle,
+      });
+      try {
+        const j = await window.fetchJson('/api/v2/tts-module', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            postId: post.id, moduleIdx: i,
+            provider,
+            voiceId: defVoice,
+            model:   defModel,
+            styleInstructions: defStyle || undefined,
+          }),
+        });
+        if (!j.ok) throw new Error(j.error || '失敗');
+        m.audio = j.audio;
+        ok++;
+      } catch (e) {
+        console.warn('[s4RegenAllTts] #' + (i+1) + ' 失敗:', e.message);
+        ng++;
+      }
+    }
+
+    _renderEditor();
+    _renderTabs();
+    if (btn) btn.disabled = false;
+    _msg('✅ 一括再生成完了: 成功 ' + ok + '/' + targets.length
+      + (ng ? ' / 失敗 ' + ng : '') + '（' + providerLabel + '）');
   };
 
   /* ── 🎙️ TTS: chunk 単発再生 ── */
