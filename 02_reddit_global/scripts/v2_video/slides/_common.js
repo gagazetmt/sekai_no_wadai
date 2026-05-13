@@ -229,33 +229,69 @@ function buildSubtitleBar(textOrChunks, options = {}) {
   const leadPadSec = (options.leadPadMs ?? LEAD_PAD_SEC * 1000) / 1000;
   const tailPadSec = (options.tailPadMs ?? TAIL_PAD_SEC * 1000) / 1000;
 
-  // 🆕 単一 chunk + words[] (Gemini ASR) → words を字幕単位に再グループ化して
-  //   既存パスに流す。1 slide 1 chunk + ASR タイムスタンプで完全同期字幕（2026-05-14）
+  // 🆕 単一 chunk + (words[] あり or 無し) → 原文ナレーションを字幕単位に分割
+  //   words あり: 字幕タイミングを ASR の word timestamps で完全同期（2026-05-14）
+  //   words 無し: 原文の文字位置比で時間配分（ASR 失敗時 fallback）
+  //   ⚠️ 字幕に表示するテキストは「原文ナレーション」(chunk.text) であって、ASR の認識結果ではない
+  //      ASR は誤認識（W杯→WPF など）を含むので、画面には絶対に出さない
   if (Array.isArray(textOrChunks) && textOrChunks.length === 1
-      && Array.isArray(textOrChunks[0]?.words) && textOrChunks[0].words.length > 1) {
+      && textOrChunks[0]?.text && Number(textOrChunks[0]?.durationSec) > 0) {
     const chunk = textOrChunks[0];
+    const fullText = String(chunk.text);
     const groupChars = maxLineLen * 2;  // 2 行収まる文字数
+
+    // 原文を「、」「。」で文末/節末分割し、字幕単位に再結合
+    let parts = fullText.split(/(?<=[、。！？!?])/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 0) parts = [fullText];
     const groups = [];
-    let curText = '', curStart = null;
-    for (const w of chunk.words) {
-      const wt = String(w.text || '');
-      if (curText.length + wt.length > groupChars && curText) {
-        groups.push({ text: curText, start: curStart, end: w.start });
-        curText = ''; curStart = null;
+    let curText = '';
+    for (const p of parts) {
+      if (curText.length + p.length > groupChars && curText) {
+        groups.push(curText);
+        curText = '';
       }
-      if (curStart == null) curStart = w.start;
-      curText += wt;
+      curText += p;
     }
-    if (curText) {
-      const lastEnd = chunk.words[chunk.words.length - 1].end || chunk.durationSec;
-      groups.push({ text: curText, start: curStart, end: lastEnd });
-    }
+    if (curText) groups.push(curText);
+
     if (groups.length > 1) {
-      // 各グループ表示時間 = 次グループ開始まで（最後は own end）
-      const pseudoChunks = groups.map((g, i) => ({
-        text: g.text,
-        durationSec: Math.max(0.3, i < groups.length - 1 ? (groups[i+1].start - g.start) : (g.end - g.start)),
-      }));
+      // 各 group の開始時刻を決定
+      //   words あり: 文字位置 → words 連結内の同比率位置の word.start を取得
+      //   words 無し: chunk.durationSec を文字数比で按分（線形配分）
+      const hasWords = Array.isArray(chunk.words) && chunk.words.length > 1;
+      let charToTime;
+      if (hasWords) {
+        let wordsCumText = '';
+        const wordsCharToStart = [];
+        for (const w of chunk.words) {
+          const wt = String(w.text || '');
+          for (let j = 0; j < wt.length; j++) wordsCharToStart.push(w.start);
+          wordsCumText += wt;
+        }
+        const wordsTotalChars = wordsCumText.length || 1;
+        const totalChars = fullText.length || 1;
+        charToTime = (charPos) => {
+          const wordsPos = Math.round((charPos / totalChars) * wordsTotalChars);
+          return wordsCharToStart[Math.min(wordsPos, wordsCharToStart.length - 1)] || 0;
+        };
+      } else {
+        const totalChars = fullText.length || 1;
+        const dur = Number(chunk.durationSec) || 1;
+        charToTime = (charPos) => dur * (charPos / totalChars);
+      }
+
+      let charPos = 0;
+      const pseudoChunks = groups.map((g, i) => {
+        const startSec = charToTime(charPos);
+        charPos += g.length;
+        const endSec = i < groups.length - 1
+          ? charToTime(charPos)
+          : Number(chunk.durationSec) || (startSec + 1);
+        return {
+          text: g,
+          durationSec: Math.max(0.3, endSec - startSec),
+        };
+      });
       return buildSubtitleBar(pseudoChunks, options);
     }
   }
@@ -332,10 +368,14 @@ function buildSubtitleBar(textOrChunks, options = {}) {
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。
 function subtitleArgFromMod(mod) {
-  if (mod && Array.isArray(mod.audio)) {
+  if (mod && Array.isArray(mod.audio) && mod.audio.length) {
     // 2 chunk 以上 → chunk タイミング連動字幕
-    // 1 chunk + words[] あり → words タイミング連動字幕（1 slide 1 chunk モード）
-    if (mod.audio.length > 1 || (mod.audio.length === 1 && Array.isArray(mod.audio[0]?.words) && mod.audio[0].words.length > 1)) {
+    if (mod.audio.length > 1) return mod.audio;
+    // 1 chunk + durationSec + text あり → 原文を分割して時間配分（buildSubtitleBar 側で処理）
+    //   words があれば ASR 同期、無ければ文字数比 fallback
+    if (mod.audio.length === 1
+        && Number(mod.audio[0]?.durationSec) > 0
+        && String(mod.audio[0]?.text || '').trim()) {
       return mod.audio;
     }
   }
