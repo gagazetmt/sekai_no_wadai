@@ -229,6 +229,37 @@ function buildSubtitleBar(textOrChunks, options = {}) {
   const leadPadSec = (options.leadPadMs ?? LEAD_PAD_SEC * 1000) / 1000;
   const tailPadSec = (options.tailPadMs ?? TAIL_PAD_SEC * 1000) / 1000;
 
+  // 🆕 単一 chunk + words[] (Gemini ASR) → words を字幕単位に再グループ化して
+  //   既存パスに流す。1 slide 1 chunk + ASR タイムスタンプで完全同期字幕（2026-05-14）
+  if (Array.isArray(textOrChunks) && textOrChunks.length === 1
+      && Array.isArray(textOrChunks[0]?.words) && textOrChunks[0].words.length > 1) {
+    const chunk = textOrChunks[0];
+    const groupChars = maxLineLen * 2;  // 2 行収まる文字数
+    const groups = [];
+    let curText = '', curStart = null;
+    for (const w of chunk.words) {
+      const wt = String(w.text || '');
+      if (curText.length + wt.length > groupChars && curText) {
+        groups.push({ text: curText, start: curStart, end: w.start });
+        curText = ''; curStart = null;
+      }
+      if (curStart == null) curStart = w.start;
+      curText += wt;
+    }
+    if (curText) {
+      const lastEnd = chunk.words[chunk.words.length - 1].end || chunk.durationSec;
+      groups.push({ text: curText, start: curStart, end: lastEnd });
+    }
+    if (groups.length > 1) {
+      // 各グループ表示時間 = 次グループ開始まで（最後は own end）
+      const pseudoChunks = groups.map((g, i) => ({
+        text: g.text,
+        durationSec: Math.max(0.3, i < groups.length - 1 ? (groups[i+1].start - g.start) : (g.end - g.start)),
+      }));
+      return buildSubtitleBar(pseudoChunks, options);
+    }
+  }
+
   // チャンク配列 → タイミング連動字幕
   if (Array.isArray(textOrChunks) && textOrChunks.length) {
     const items = textOrChunks
@@ -301,8 +332,12 @@ function buildSubtitleBar(textOrChunks, options = {}) {
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。
 function subtitleArgFromMod(mod) {
-  if (mod && Array.isArray(mod.audio) && mod.audio.length > 1) {
-    return mod.audio;
+  if (mod && Array.isArray(mod.audio)) {
+    // 2 chunk 以上 → chunk タイミング連動字幕
+    // 1 chunk + words[] あり → words タイミング連動字幕（1 slide 1 chunk モード）
+    if (mod.audio.length > 1 || (mod.audio.length === 1 && Array.isArray(mod.audio[0]?.words) && mod.audio[0].words.length > 1)) {
+      return mod.audio;
+    }
   }
   return mod?.narration || '';
 }

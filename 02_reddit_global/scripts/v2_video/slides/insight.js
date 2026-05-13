@@ -49,6 +49,39 @@ function _matchPhraseToChunk(phrase, chunks) {
   return bestScore > 0 ? bestIdx : -1;
 }
 
+// 🆕 catchphrase テキストを words[] (Gemini ASR の word timestamps) と照合して
+//   発話開始時刻 (秒) を返す。マッチ無しなら null
+function _matchPhraseToWordTime(phrase, words) {
+  if (!Array.isArray(words) || !words.length) return null;
+  // words 連結テキスト + 文字位置 → word index の逆引き
+  let cumText = '';
+  const charToWordIdx = [];
+  for (let i = 0; i < words.length; i++) {
+    const wt = String(words[i].text || '');
+    for (let j = 0; j < wt.length; j++) charToWordIdx.push(i);
+    cumText += wt;
+  }
+  if (!cumText) return null;
+  const target = String(phrase || '');
+  // 1) 完全一致を試す
+  let pos = cumText.indexOf(target);
+  // 2) ダメなら token 単位（助詞・記号除去）の最長一致
+  if (pos < 0) {
+    const tokens = target
+      .replace(/[の・はがをにでとや、。…!?！？「」『』【】（）\s〜ー]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 2)
+      .sort((a, b) => b.length - a.length);  // 長い token 優先
+    for (const tok of tokens) {
+      const p = cumText.indexOf(tok);
+      if (p >= 0) { pos = p; break; }
+    }
+  }
+  if (pos < 0 || pos >= charToWordIdx.length) return null;
+  const wIdx = charToWordIdx[pos];
+  return Number(words[wIdx]?.start) || 0;
+}
+
 function buildInsightHTML(mod) {
   const bg = imgDataUri(mod.bgImage);
   const imgAdj = imageAdjustCss(mod.imageAdjust);
@@ -87,10 +120,20 @@ function buildInsightHTML(mod) {
   const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1, startSec + 1);
   const evenStep = phrasesRaw.length > 1 ? (lastSec - startSec) / (phrasesRaw.length - 1) : 0;
 
+  // 🆕 word timestamps モード判定: 1 chunk + words[] あり → ASR ベースで高精度同期
+  const useWordMode = audio.length === 1 && Array.isArray(audio[0]?.words) && audio[0].words.length > 1;
+  const wordsForMatch = useWordMode ? audio[0].words : null;
+
   const tempDelays = phrasesRich.map((p, i) => {
     if (!audio.length) return startSec + evenStep * i;
     // chunkText があればそっちで照合（長文なので精度高い）、無ければ短い text
     const matchTarget = p.chunkText || p.text;
+    if (useWordMode) {
+      // word timestamps モード: phrase 発話時刻を words から取得（±0.2s 精度）
+      const wTime = _matchPhraseToWordTime(matchTarget, wordsForMatch);
+      return wTime != null ? (LEAD_PAD_SEC + wTime + 0.3) : (startSec + evenStep * i);
+    }
+    // 従来モード: chunk 開始時刻ベース
     const cIdx = _matchPhraseToChunk(matchTarget, audio);
     return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
   });
