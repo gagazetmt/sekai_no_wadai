@@ -245,11 +245,25 @@ function _buildRe() {
   return { re: _cachedRe, keys: _cachedKeys };
 }
 
+// 戦績マトリックス置換: "N勝N分N敗" / "N勝N分" → 「N しょう N わけ N はい」
+//   Gemini TTS は文脈で「分=ぶん/わけ」を判別できず、隣接する「敗」に引きずられて
+//   「分=はい」と誤読する事故が確認された（2026-05-13 相棒指摘）。
+//   先にひらがな化して読みを固定する。「分」の単独使用（時間文脈の「3分」等）は影響受けない。
+function _replaceFootballRecord(text) {
+  return String(text).replace(/(\d+)\s*勝\s*(\d+)\s*分(?:\s*(\d+)\s*敗)?/g, (_, w, d, l) => {
+    return l != null
+      ? `${w}しょう ${d}わけ ${l}はい`
+      : `${w}しょう ${d}わけ`;
+  });
+}
+
 // テキストに辞書を適用
 function applyJpDict(text) {
   if (!text) return text;
+  // 戦績パターンを先に処理（辞書置換だと「分」単独を変えてしまい時間文脈を壊すため）
+  const pre = _replaceFootballRecord(text);
   const { re } = _buildRe();
-  return String(text).replace(re, (m) => FULL_DICT[m] || m);
+  return pre.replace(re, (m) => FULL_DICT[m] || m);
 }
 
 module.exports = {
