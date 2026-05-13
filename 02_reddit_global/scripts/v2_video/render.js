@@ -180,6 +180,7 @@ async function runSingleTtsTask(t) {
     voiceId: t.voiceId, model: t.model,
     styleInstructions: t.styleInstructions,
     emotion: t.emotion, speed: t.speed, vol: t.vol, pitch: t.pitch,
+    apiKey: t.apiKey,  // 影分身: 事前割当キー（未指定なら従来通り）
   });
   const dur = tts.probeDurationSec(t.outputPath);
   return {
@@ -458,6 +459,25 @@ async function main() {
   });
 
   if (allTasks.length) {
+    // 影分身術: 各 chunk に Gemini API キーを事前ブロック分配（複数キー設定時のみ）
+    //   chunks=50, keys=3 → key#0: chunk 1-17, key#1: chunk 18-34, key#2: chunk 35-50
+    //   各並列ワーカーが固定キーで叩く → RPM/RPD を完全独立活用
+    //   失敗 chunk は 2 パス目で（apiKey 未指定なら）グローバル hot swap が走る
+    try {
+      const geminiKeys = tts.getEngine('gemini')?.getApiKeys?.() || [];
+      if (geminiKeys.length > 1) {
+        const chunksPerKey = Math.ceil(allTasks.length / geminiKeys.length);
+        allTasks.forEach((t, i) => {
+          const keyIdx = Math.min(Math.floor(i / chunksPerKey), geminiKeys.length - 1);
+          t.apiKey = geminiKeys[keyIdx];
+          t._keyIdxForLog = keyIdx;
+        });
+        console.log(`🥷 影分身術: ${geminiKeys.length} キーに ${allTasks.length} chunk をブロック分配（各 ${chunksPerKey} chunk）`);
+      }
+    } catch (e) {
+      console.warn('  ⚠️ キー事前割当 skip:', e.message);
+    }
+
     console.log(`🎙️ TTS自動生成: ${allTasks.length}チャンク / ${slidesNeedingTts.size}スライド (並列度${TTS_CONCURRENCY})`);
     const ttsT0 = Date.now();
     let ttsDone = 0;

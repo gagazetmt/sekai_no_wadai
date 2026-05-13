@@ -67,6 +67,7 @@ async function generate(opts = {}) {
     model:   opts.model,
     styleInstructions: opts.styleInstructions,
     speed:   opts.speed,
+    apiKey:  opts.apiKey,   // task 単位で API キー指定可（影分身並列）
   });
 }
 
