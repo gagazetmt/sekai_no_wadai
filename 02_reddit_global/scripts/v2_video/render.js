@@ -159,6 +159,7 @@ function buildSlideTtsTasks(mod, idx, postId) {
   //   modules.json の m.reactionVoices に保存して再生成しても同じ voice を維持
   //   chunk[0] (前置きナレ) はメイン voice、chunk[1+] (各コメント) がランダム
   let reactionVoices = null;
+  let reactionStyleInstructions = null;
   if (mod.type === 'reaction' && provider === 'gemini') {
     const commentChunkCount = Math.max(0, chunks.length - 1);
     if (Array.isArray(mod.reactionVoices) && mod.reactionVoices.length >= commentChunkCount) {
@@ -171,22 +172,27 @@ function buildSlideTtsTasks(mod, idx, postId) {
       }
       mod.reactionVoices = reactionVoices;  // modules.json に保存される
     }
+    // reaction comment 用 style: 感情控えめ + テンポやや早め (引用文読み)
+    const ttsGemini = require('./tts_gemini');
+    reactionStyleInstructions = ttsGemini.getReactionStyleInstructions();
   }
 
   return chunks.map((text, c) => {
     const fname = `m${String(idx).padStart(2, '0')}_c${String(c).padStart(2, '0')}.mp3`;
     const out   = path.join(dir, fname);
     let voiceId = ttsCfg.voiceId || defaults.voice;
-    // reaction の comment chunk (c >= 1) は事前抽選されたランダム voice を使用
+    let styleInstructions = ttsCfg.styleInstructions || undefined;
+    // reaction の comment chunk (c >= 1) は事前抽選 voice + 専用 style
     if (reactionVoices && c >= 1) {
       voiceId = reactionVoices[c - 1] || voiceId;
+      styleInstructions = reactionStyleInstructions;
     }
     return {
       slideIdx: idx, chunkIdx: c, text, outputPath: out,
       provider,
       voiceId,
       model:   ttsCfg.model   || defaults.model,
-      styleInstructions: ttsCfg.styleInstructions || undefined,  // Gemini 専用
+      styleInstructions,                                          // Gemini 専用
       emotion: ttsCfg.emotion || undefined,                       // MiniMax 専用
       speed:   ttsCfg.speed   ?? undefined,
       vol:     ttsCfg.vol     ?? undefined,
