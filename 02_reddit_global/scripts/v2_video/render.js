@@ -463,16 +463,43 @@ async function main() {
     let ttsDone = 0;
     // chunk 単位の global プール → スライド境界跨いで並列
     const results = new Array(allTasks.length);
-    await processInParallel(allTasks, TTS_CONCURRENCY, async (task, taskIdx) => {
-      try {
-        results[taskIdx] = await runSingleTtsTask(task);
-      } catch (e) {
-        console.warn(`  ⚠️ slide#${task.slideIdx+1}/c${task.chunkIdx+1} TTS失敗: ${e.message}`);
-        results[taskIdx] = null;
+    const taskToIdx = new Map(allTasks.map((t, i) => [t, i]));
+
+    // 2 パス戦略（2026-05-13）: 1パス目失敗 chunk を 30秒待機後に再試行
+    //   - Gemini TTS の RPM/RPD 制限で失敗した chunk が回復後に成功する見込み
+    //   - 失敗→即諦め (リトライ無し) で 1 chunk = 1 req に絞り、雪崩式クォータ消費を防ぐ
+    //   - tts_gemini.js の hot swap と併用：429 受けたら次のキー → 後続 chunk が新キーで叩く
+    const MAX_PASSES = parseInt(process.env.TTS_MAX_PASSES || '3', 10);
+    const PASS_WAIT_MS = parseInt(process.env.TTS_PASS_WAIT_MS || '30000', 10);
+    let pendingTasks = allTasks.slice();
+
+    for (let pass = 0; pass < MAX_PASSES; pass++) {
+      if (!pendingTasks.length) break;
+      if (pass > 0) {
+        console.log(`  ⏳ pass#${pass + 1}/${MAX_PASSES}: 残 ${pendingTasks.length} chunks → ${PASS_WAIT_MS/1000}s 待機後 再試行`);
+        await new Promise(r => setTimeout(r, PASS_WAIT_MS));
       }
-      ttsDone++;
-      updateJob(jobId, { ttsDone, ttsTotal: allTasks.length });
-    });
+      const failedThisPass = [];
+      await processInParallel(pendingTasks, TTS_CONCURRENCY, async (task) => {
+        const resultIdx = taskToIdx.get(task);
+        try {
+          results[resultIdx] = await runSingleTtsTask(task);
+          ttsDone++;
+          updateJob(jobId, { ttsDone, ttsTotal: allTasks.length });
+        } catch (e) {
+          if (pass + 1 >= MAX_PASSES) {
+            console.warn(`  ⚠️ slide#${task.slideIdx+1}/c${task.chunkIdx+1} TTS最終失敗 (pass${pass+1}/${MAX_PASSES}): ${e.message.slice(0, 120)}`);
+            results[resultIdx] = null;
+            ttsDone++;
+            updateJob(jobId, { ttsDone, ttsTotal: allTasks.length });
+          } else {
+            failedThisPass.push(task);
+          }
+        }
+      });
+      if (!failedThisPass.length) break;
+      pendingTasks = failedThisPass;
+    }
     // スライド毎に audio[] を chunkIdx 順で集約
     const bySlide = new Map();
     for (const r of results) {
