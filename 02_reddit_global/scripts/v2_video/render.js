@@ -48,11 +48,12 @@ const TAIL_PAD_MS = Math.round(TAIL_PAD_SEC * 1000);
 const MAX_SLIDE_MS     = 90000;  // 暴走防止（2026-05-07: 60→90s に拡張、reaction 7コメント全件読み切る尺確保）
 
 // 並列度（VPS は 6 コア / 11GB RAM）
-//   TTS: MiniMax API 同時 4 並列。レート制限考慮の上限
+//   TTS: env TTS_CONCURRENCY で上書き可能（既定 4）
+//     MiniMax: 4 並列 OK / Gemini 2.5 Pro TTS: RPM 10 制限あり → 1-2 推奨
 //   RENDER: 共有 browser に N page 作って各 page をワーカーが担当
 //     並列度4だと CDP コールが 4ページ分キュー詰まりして
 //     Puppeteer protocolTimeout (30秒) で失敗が頻発。3 に下げて余裕を持たせる
-const TTS_CONCURRENCY    = 4;  // チャンク単位の並列数（slide 跨いで最大4チャンク同時生成）
+const TTS_CONCURRENCY    = Math.max(1, parseInt(process.env.TTS_CONCURRENCY || '4', 10));
 const RENDER_CONCURRENCY = 3;
 
 // 配列を limit 並列で順次処理（worker pool）
