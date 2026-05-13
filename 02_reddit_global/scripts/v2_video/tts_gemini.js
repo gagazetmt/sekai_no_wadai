@@ -117,10 +117,10 @@ function pickReactionVoice() {
 }
 
 // 🆕 reaction の comment chunk 専用 styleInstructions (2026-05-14)
-//   コメント欄の文章引用 → 感情控えめ + テンポやや早め
+//   コメント欄の文章引用 → 感情控えめ + メインより更に高速
 //   env REACTION_STYLE_INSTRUCTIONS で上書き可能
 const REACTION_STYLE_INSTRUCTIONS_DEFAULT =
-  '感情を控えめに、引用文を読むように、テンポをやや早めに読んで。';
+  '感情を控えめに、引用文を読むように、超高速で早口に読んで。';
 function getReactionStyleInstructions() {
   return process.env.REACTION_STYLE_INSTRUCTIONS || REACTION_STYLE_INSTRUCTIONS_DEFAULT;
 }
