@@ -154,13 +154,37 @@ function buildSlideTtsTasks(mod, idx, postId) {
   // provider: module 単位 → 環境変数 → 'gemini' の順で解決
   const provider = ttsCfg.provider || tts.DEFAULT_PROVIDER;
   const defaults = tts.getDefaults(provider);
+
+  // 🆕 reaction の comment chunk (c >= 1) はランダム voice（複数キャラ感）
+  //   modules.json の m.reactionVoices に保存して再生成しても同じ voice を維持
+  //   chunk[0] (前置きナレ) はメイン voice、chunk[1+] (各コメント) がランダム
+  let reactionVoices = null;
+  if (mod.type === 'reaction' && provider === 'gemini') {
+    const commentChunkCount = Math.max(0, chunks.length - 1);
+    if (Array.isArray(mod.reactionVoices) && mod.reactionVoices.length >= commentChunkCount) {
+      reactionVoices = mod.reactionVoices.slice(0, commentChunkCount);
+    } else {
+      const ttsGemini = require('./tts_gemini');
+      reactionVoices = [];
+      for (let i = 0; i < commentChunkCount; i++) {
+        reactionVoices.push(ttsGemini.pickReactionVoice());
+      }
+      mod.reactionVoices = reactionVoices;  // modules.json に保存される
+    }
+  }
+
   return chunks.map((text, c) => {
     const fname = `m${String(idx).padStart(2, '0')}_c${String(c).padStart(2, '0')}.mp3`;
     const out   = path.join(dir, fname);
+    let voiceId = ttsCfg.voiceId || defaults.voice;
+    // reaction の comment chunk (c >= 1) は事前抽選されたランダム voice を使用
+    if (reactionVoices && c >= 1) {
+      voiceId = reactionVoices[c - 1] || voiceId;
+    }
     return {
       slideIdx: idx, chunkIdx: c, text, outputPath: out,
       provider,
-      voiceId: ttsCfg.voiceId || defaults.voice,
+      voiceId,
       model:   ttsCfg.model   || defaults.model,
       styleInstructions: ttsCfg.styleInstructions || undefined,  // Gemini 専用
       emotion: ttsCfg.emotion || undefined,                       // MiniMax 専用
