@@ -71,33 +71,47 @@ async function transcribeWithTimestamps(audioFilePath, opts = {}) {
     generationConfig: { temperature: 0 },
   };
 
-  const res = await axios.post(URL, body, { timeout: 120000, validateStatus: () => true });
-
-  if (res.status === 429) {
-    if (keys.length > 1) {
-      _asrKeyIdx = (_asrKeyIdx + 1) % keys.length;
+  // 1 chunk 60秒級の音声で 120s timeout する事象があったため 180s に延長 + 1 回リトライ
+  const TIMEOUT_MS = 180000;
+  const MAX_RETRIES = 1;
+  let lastErr = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    let res;
+    try {
+      res = await axios.post(URL, body, { timeout: TIMEOUT_MS, validateStatus: () => true });
+    } catch (e) {
+      lastErr = e;
+      if (/timeout/i.test(e.message) && attempt < MAX_RETRIES) {
+        console.warn(`  ⏳ Gemini ASR timeout → retry (${attempt + 1}/${MAX_RETRIES})`);
+        continue;
+      }
+      throw e;
     }
-    const err = new Error(`Gemini ASR 429: ${JSON.stringify(res.data).slice(0, 200)}`);
-    err.is429 = true;
-    throw err;
+
+    if (res.status === 429) {
+      if (keys.length > 1) _asrKeyIdx = (_asrKeyIdx + 1) % keys.length;
+      const err = new Error(`Gemini ASR 429: ${JSON.stringify(res.data).slice(0, 200)}`);
+      err.is429 = true;
+      throw err;
+    }
+    if (res.status !== 200) {
+      throw new Error(`Gemini ASR ${res.status}: ${JSON.stringify(res.data).slice(0, 300)}`);
+    }
+    const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const m = text.match(/\[[\s\S]*\]/);
+    if (!m) throw new Error(`Gemini ASR: JSON array not found. raw: ${text.slice(0, 200)}`);
+    let words;
+    try {
+      words = JSON.parse(m[0]);
+    } catch (e) {
+      throw new Error(`Gemini ASR JSON parse fail: ${e.message}`);
+    }
+    if (!Array.isArray(words)) throw new Error('Gemini ASR: not an array');
+    return words
+      .filter(w => w && typeof w.text === 'string' && typeof w.start === 'number' && typeof w.end === 'number')
+      .map(w => ({ text: w.text, start: w.start, end: w.end }));
   }
-  if (res.status !== 200) {
-    throw new Error(`Gemini ASR ${res.status}: ${JSON.stringify(res.data).slice(0, 300)}`);
-  }
-  const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  const m = text.match(/\[[\s\S]*\]/);
-  if (!m) throw new Error(`Gemini ASR: JSON array not found. raw: ${text.slice(0, 200)}`);
-  let words;
-  try {
-    words = JSON.parse(m[0]);
-  } catch (e) {
-    throw new Error(`Gemini ASR JSON parse fail: ${e.message}`);
-  }
-  if (!Array.isArray(words)) throw new Error('Gemini ASR: not an array');
-  // 形式正規化
-  return words
-    .filter(w => w && typeof w.text === 'string' && typeof w.start === 'number' && typeof w.end === 'number')
-    .map(w => ({ text: w.text, start: w.start, end: w.end }));
+  throw lastErr || new Error('Gemini ASR unknown failure');
 }
 
 module.exports = {

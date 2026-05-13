@@ -49,6 +49,29 @@ function _matchPhraseToChunk(phrase, chunks) {
   return bestScore > 0 ? bestIdx : -1;
 }
 
+// 🆕 catchphrase テキストを chunk 原文内の文字位置で検索し、文字数比で発話時刻を推定
+//   ASR 失敗時の fallback（words 無し + 1 chunk）用
+function _matchPhraseToCharPosTime(phrase, chunk) {
+  const target = String(phrase || '');
+  const fullText = String(chunk?.text || '');
+  const dur = Number(chunk?.durationSec) || 0;
+  if (!fullText || !dur) return null;
+  let pos = fullText.indexOf(target);
+  if (pos < 0) {
+    const tokens = target
+      .replace(/[の・はがをにでとや、。…!?！？「」『』【】（）\s〜ー]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 2)
+      .sort((a, b) => b.length - a.length);
+    for (const tok of tokens) {
+      const p = fullText.indexOf(tok);
+      if (p >= 0) { pos = p; break; }
+    }
+  }
+  if (pos < 0) return null;
+  return dur * (pos / fullText.length);
+}
+
 // 🆕 catchphrase テキストを words[] (Gemini ASR の word timestamps) と照合して
 //   発話開始時刻 (秒) を返す。マッチ無しなら null
 function _matchPhraseToWordTime(phrase, words) {
@@ -122,6 +145,9 @@ function buildInsightHTML(mod) {
 
   // 🆕 word timestamps モード判定: 1 chunk + words[] あり → ASR ベースで高精度同期
   const useWordMode = audio.length === 1 && Array.isArray(audio[0]?.words) && audio[0].words.length > 1;
+  // 🆕 文字位置 fallback: 1 chunk + words 無し（ASR 失敗 or 未取得）→ chunk.text 内の文字位置比で時刻推定
+  const useCharPosFallback = audio.length === 1 && !useWordMode
+    && audio[0]?.text && Number(audio[0]?.durationSec) > 0;
   const wordsForMatch = useWordMode ? audio[0].words : null;
 
   const tempDelays = phrasesRich.map((p, i) => {
@@ -133,7 +159,12 @@ function buildInsightHTML(mod) {
       const wTime = _matchPhraseToWordTime(matchTarget, wordsForMatch);
       return wTime != null ? (LEAD_PAD_SEC + wTime + 0.3) : (startSec + evenStep * i);
     }
-    // 従来モード: chunk 開始時刻ベース
+    if (useCharPosFallback) {
+      // ASR 失敗時 fallback: chunk 原文内の文字位置比で発話時刻を推定
+      const cTime = _matchPhraseToCharPosTime(matchTarget, audio[0]);
+      return cTime != null ? (LEAD_PAD_SEC + cTime + 0.3) : (startSec + evenStep * i);
+    }
+    // 従来 (chunk 複数) モード: chunk 開始時刻ベース
     const cIdx = _matchPhraseToChunk(matchTarget, audio);
     return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
   });
