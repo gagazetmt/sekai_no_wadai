@@ -562,11 +562,18 @@ function buildChunksForModule(mod) {
 
   // toc は intro narration のみ読み上げ（アイテム名は intro 内で既に列挙されているため
   //   別途読むと重複してくどい）。アイテムは toc.js の固定間隔リビールで順次表示される
+  //   catchphrase ↔ chunk 連動なしなので 1 chunk で投げる (レート制限緩和・2026-05-13)
   if (mod.type === 'toc') {
-    return narr ? splitIntoChunks(narr) : [];
+    return narr ? [narr] : [];
   }
 
-  // 通常タイプ: narration を文末分割
+  // ending も catchphrase ↔ chunk 連動なしなので 1 chunk で投げる (レート制限緩和・2026-05-13)
+  if (mod.type === 'ending') {
+    return narr ? [narr] : [];
+  }
+
+  // 通常タイプ (insight / reaction / comparison / stats / history): 文末分割
+  //   chunk 数 = catchphrase 出現タイミングのアンカーになるため削減不可
   let baseChunks = splitIntoChunks(narr);
 
   if (mod.type === 'reaction') {
