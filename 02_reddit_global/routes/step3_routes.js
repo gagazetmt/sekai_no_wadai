@@ -207,6 +207,8 @@ ${searchBlock}
 - profile: 基本情報カード（dataSlots [{label,value}]）
 - comparison: 2項対比（dataSlots [{label,leftValue,rightValue}]）
 - history: 時系列・年表（dataSlots [{label:年, value:出来事}]）★必ず label の YYYY を昇順（古い→新しい）に並べる
+- ranking: 順位ランキング（items [{rank,name,value,subtext?}] 1〜5件）★得点王/順位表/アシスト王/MVP候補など"複数主体を順序付けて比較したい時に最適"
+- timeline: 折れ線時系列チャート（series [{name,points:[{x,y}]}] 最大4本）★市場価値/順位/得点数などの推移を視覚化したい時に最適。1選手の年次推移でも複数選手の比較でも OK
 - reaction: コメント反応（comments[]）
 - matchcard: 試合プレビュー / 試合スコア詳細（match data 必須）
 - ending: 締め・問いかけ（必ず末尾に1枚）

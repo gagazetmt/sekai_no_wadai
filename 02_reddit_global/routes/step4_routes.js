@@ -818,9 +818,11 @@ ${webResearchBlock}${recipesSection}
 ${userPrompt}
 ${incrementalRule}
 【生成ルール（厳守）】
-- type は注文の意図に合わせて選ぶ（許容: insight/stats/profile/comparison/history/reaction）
+- type は注文の意図に合わせて選ぶ（許容: insight/stats/profile/comparison/history/ranking/timeline/reaction）
   ・2人/2チーム比較なら "comparison"
   ・時系列の来歴・年表なら "history"
+  ・順位/ランキングなら "ranking" （得点王・順位表・MVP候補など複数主体を順序付けて表示）
+  ・推移を折れ線で見せたい → "timeline" （市場価値推移・順位推移・得点数推移）
   ・数字データ並べる → "stats"
   ・基本情報カード → "profile"
   ・コメント反応 → "reaction"
@@ -837,6 +839,13 @@ ${incrementalRule}
   ・history:    [{"label":"年(YYYY)","value":"出来事"}]
   ・stats/profile: [{"label":"項目","value":"値"}]
   ・insight: dataSlots は空配列、代わりに catchphrases を別途返してOK（今回は dataSlots 中心で）
+  ・ranking: dataSlots は空配列、代わりに **items** を返す
+       items: [{"rank":1,"name":"選手/チーム名","value":"27 ゴール","subtext":"所属クラブなど"}]
+       1〜5件、rank 昇順、value は数字+単位を含むコンパクト表現
+  ・timeline: dataSlots は空配列、代わりに **series** を返す
+       series: [{"name":"系列名","points":[{"x":"21/22","y":80},{"x":"22/23","y":120}...]}]
+       1〜4系列、各系列の points は同じ x ラベル群を使う（揃ってる方が見やすい）
+       y は数値。順位推移の場合は別途 "invertY": true を mod 直下に付ける
 - 件数: 4〜10件
 - データに**明示されていない**値・固有名・数字は **絶対** 出さない（推測補完NG）
   ・該当データが見つからない場合は値に「データ未取得」と入れる（数字を捏造しない）
@@ -870,6 +879,13 @@ ${incrementalRule}
     // 既定: Sonnet（脚本品質優先） → JSON崩れ時 v4flash 保険
     // ⚡SPRINT モード: 最初から DeepSeek 直行（fallback なし）
     let raw, parsed = null, used = _sprint ? 'v4flash-sprint' : 'sonnet';
+    // type 別に必要な payload キー: dataSlots / items / series のいずれか
+    const _hasPayload = (p) => {
+      if (!p?.type) return false;
+      if (p.type === 'ranking')  return Array.isArray(p.items)  && p.items.length > 0;
+      if (p.type === 'timeline') return Array.isArray(p.series) && p.series.length > 0;
+      return Array.isArray(p.dataSlots);
+    };
     try {
       raw = await callAI({
         forceProvider: _aiProv,
@@ -879,7 +895,7 @@ ${incrementalRule}
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
       if (m1) parsed = JSON.parse(m1[0]);
     } catch (e) { console.warn(`[ai-fill-slide] ${_aiProv} 例外:`, e.message); }
-    if ((!parsed?.type || !Array.isArray(parsed?.dataSlots)) && !_sprint) {
+    if (!_hasPayload(parsed) && !_sprint) {
       console.warn('[ai-fill-slide] sonnet 失敗、v4flash にフォールバック');
       try {
         raw = await callAI({
@@ -892,7 +908,7 @@ ${incrementalRule}
         used = 'v4flash';
       } catch (_) {}
     }
-    if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
+    if (!_hasPayload(parsed)) {
       return res.status(500).json({ error: 'AI応答のパースに失敗' });
     }
 
@@ -1013,11 +1029,24 @@ ${parsed.narration || ''}
 
     // 反映（既存の siBindingLeft/Right や homeTeam/awayTeam 等の補助フィールドは温存）
     // matchcard は matchData ベースで dataSlots を使わないので、AI が返しても空に固定
-    const ALLOWED_TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard'];
+    const ALLOWED_TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard','ranking','timeline'];
     if (ALLOWED_TYPES.includes(parsed.type)) mod.type = parsed.type;
     if (typeof parsed.title === 'string')     mod.title = parsed.title;
     if (typeof parsed.narration === 'string') mod.narration = parsed.narration;
-    mod.dataSlots = (mod.type === 'matchcard') ? [] : parsed.dataSlots;
+    if (mod.type === 'matchcard') {
+      mod.dataSlots = [];
+    } else if (mod.type === 'ranking') {
+      mod.items = Array.isArray(parsed.items) ? parsed.items : [];
+      mod.dataSlots = [];  // ranking は items を使うので空
+    } else if (mod.type === 'timeline') {
+      mod.series = Array.isArray(parsed.series) ? parsed.series : [];
+      if (parsed.invertY != null) mod.invertY = !!parsed.invertY;
+      if (parsed.xLabel)  mod.xLabel  = String(parsed.xLabel);
+      if (parsed.yLabel)  mod.yLabel  = String(parsed.yLabel);
+      mod.dataSlots = [];  // timeline は series を使うので空
+    } else {
+      mod.dataSlots = parsed.dataSlots;
+    }
 
     // ── walker 経由で dataSlots を実値で再構築（AI捏造値を上書き）──
     //   優先順位:
