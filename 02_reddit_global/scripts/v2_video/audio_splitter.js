@@ -24,13 +24,17 @@ const { transcribeWithTimestamps } = require('./gemini_asr');
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
 
-// 区切り音声: チャイム系の「ピンポン」3 連発
-//   - 健全、一意（サッカー動画ナレに絶対出ない）
-//   - 長文 ASR でも 1 segment として確実 transcribe 化（PoC で実証）
-//   - 「ぴゅっ」3 連発は下ネタ連想あるため変更（2026-05-15）
-const SEPARATOR_TEXT = 'ピンポンピンポンピンポン。';
-const SEPARATOR_DETECT = 'ピンポン';  // ASR transcribe での部分一致キー
-const SAFETY_MARGIN_SEC = 0.2;    // 境界の安全マージン（ASR timestamp 揺らぎ吸収・区切り音漏れ防止）
+// 区切り音声: 完全な文「はい、ここで一旦切ってください。」
+//   - 擬音語は ASR で「ノイズ扱い・省略」されるリスクある（Gemini ASR は自然言語処理）
+//   - 完全な命令文は ASR が確実に segment 化（PoC で実証）
+//   - 「一旦」が漢字熟語として 1 segment に出る（一意性最大）
+const SEPARATOR_TEXT = 'はい、ここで一旦切ってください。';
+const SEPARATOR_DETECT = '一旦';  // ASR で 1 segment になる漢字熟語、サッカーナレに絶対出ない
+const SAFETY_MARGIN_SEC = 0.2;    // 境界の安全マージン（ASR timestamp 揺らぎ吸収）
+// 区切り文「はい、ここで一旦切ってください。」は約 3 秒の長文だが、
+//   ASR で検出するキーワードは「一旦」だけ。その前後を区切り文全体としてカットする
+const SEPARATOR_PRE_EXPAND_SEC  = 1.5;  // 「一旦」より前（「はい、ここで」分）
+const SEPARATOR_POST_EXPAND_SEC = 1.5;  // 「一旦」より後（「切ってください」分）
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。既定 10 = 600 字/分（動画ナレ標準）
 const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
 
@@ -112,7 +116,12 @@ async function generateAndSplit(parts, opts = {}) {
     throw new Error(`separator detection failed: groups=${sepGroups.length}, expected=${expectedHits}. ASR text head: ${words.slice(0, 5).map(w => w.text).join('|')}`);
   }
   // 余分なグループがあれば先頭から expectedHits 個だけ採用（誤検出防止）
-  const useHits = sepGroups.slice(0, expectedHits);
+  // 各グループの境界を「区切り文全体」を表すよう前後拡張（「一旦」だけ検出した時の対応）
+  const useHits = sepGroups.slice(0, expectedHits).map(g => ({
+    start: Math.max(0, g.start - SEPARATOR_PRE_EXPAND_SEC),
+    end:   g.end + SEPARATOR_POST_EXPAND_SEC,
+    count: g.count,
+  }));
 
   // 7. 境界 timestamps から各 slide 範囲を確定
   const totalDur = probeDurationSec(finalMp3);
