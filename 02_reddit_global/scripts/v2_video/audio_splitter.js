@@ -91,15 +91,28 @@ async function generateAndSplit(parts, opts = {}) {
   const words = await transcribeChunked(finalMp3);
   if (!words.length) throw new Error('ASR returned no words');
 
-  // 6. 区切り「ぴゅ」を検出
-  const sepHits = words.filter(w => (w.text || '').includes(SEPARATOR_DETECT));
-  const expectedHits = parts.length - 1;
-  console.log(`  🎯 separator hits: ${sepHits.length} / expected ${expectedHits}`);
-  if (sepHits.length < expectedHits) {
-    throw new Error(`separator detection failed: hits=${sepHits.length}, expected=${expectedHits}. ASR text head: ${words.slice(0, 5).map(w => w.text).join('|')}`);
+  // 6. 区切り「ピンポン」を検出してグループ化
+  //   長文 ASR では「ピンポンピンポンピンポン」が「ピンポン | ピンポン | ピンポン」と
+  //   3 segments に分かれて transcribe されることがある（PoC 短文では 1 segment）。
+  //   1.0 秒以内に連続する hits を 1 グループにまとめて 1 区切りと扱う。
+  const sepHitsRaw = words.filter(w => (w.text || '').includes(SEPARATOR_DETECT));
+  const sepGroups = [];
+  for (const h of sepHitsRaw) {
+    const last = sepGroups[sepGroups.length - 1];
+    if (last && h.start - last.end < 1.0) {
+      last.end = Math.max(last.end, h.end);
+      last.count++;
+    } else {
+      sepGroups.push({ start: h.start, end: h.end, count: 1 });
+    }
   }
-  // 余分な hits があれば先頭から expectedHits 個だけ採用（誤検出防止）
-  const useHits = sepHits.slice(0, expectedHits);
+  const expectedHits = parts.length - 1;
+  console.log(`  🎯 separator: raw hits=${sepHitsRaw.length} / groups=${sepGroups.length} / expected groups=${expectedHits}`);
+  if (sepGroups.length < expectedHits) {
+    throw new Error(`separator detection failed: groups=${sepGroups.length}, expected=${expectedHits}. ASR text head: ${words.slice(0, 5).map(w => w.text).join('|')}`);
+  }
+  // 余分なグループがあれば先頭から expectedHits 個だけ採用（誤検出防止）
+  const useHits = sepGroups.slice(0, expectedHits);
 
   // 7. 境界 timestamps から各 slide 範囲を確定
   const totalDur = probeDurationSec(finalMp3);
