@@ -127,11 +127,11 @@ function buildTimelineHTML(mod) {
             stroke-linecap="round" stroke-linejoin="round"
             style="stroke-dasharray: ${totalLen.toFixed(1)}; stroke-dashoffset: ${totalLen.toFixed(1)};"/>
       ${segs.map((pt, i) => `
-        <circle class="series-dot series-dot-${sIdx}" cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="8"
-                fill="${s.color}" stroke="${PALETTE.bg}" stroke-width="3"
+        <circle class="series-dot series-dot-${sIdx}" cx="${pt.x.toFixed(1)}" cy="${pt.y.toFixed(1)}" r="11"
+                fill="${s.color}" stroke="${PALETTE.bg}" stroke-width="4"
                 style="opacity: 0;"/>
-        <text class="series-val series-val-${sIdx}" x="${pt.x.toFixed(1)}" y="${(pt.y - 18).toFixed(1)}"
-              text-anchor="middle" fill="${s.color}" font-size="22" font-weight="800"
+        <text class="series-val series-val-${sIdx}" x="${pt.x.toFixed(1)}" y="${(pt.y - 24).toFixed(1)}"
+              text-anchor="middle" fill="${s.color}" font-size="32" font-weight="900"
               style="opacity: 0;">${esc(String(pt.val))}</text>
       `).join('')}
     `;
@@ -147,8 +147,8 @@ function buildTimelineHTML(mod) {
 
   // x 軸ラベル
   const xAxisHtml = xLabels.map((lbl, i) => `
-    <text x="${xCoord(i).toFixed(1)}" y="${(innerY + innerH + 32).toFixed(1)}"
-          text-anchor="middle" fill="${PALETTE.muted}" font-size="22" font-weight="600">${esc(lbl)}</text>
+    <text x="${xCoord(i).toFixed(1)}" y="${(innerY + innerH + 44).toFixed(1)}"
+          text-anchor="middle" fill="${PALETTE.muted}" font-size="32" font-weight="700">${esc(lbl)}</text>
   `).join('');
 
   // y 軸 5 グリッド
@@ -159,9 +159,9 @@ function buildTimelineHTML(mod) {
     const yPx = innerY + ratio * innerH;
     return `
       <line x1="${innerX}" x2="${innerX + innerW}" y1="${yPx.toFixed(1)}" y2="${yPx.toFixed(1)}"
-            stroke="rgba(148,163,184,0.18)" stroke-width="1"/>
-      <text x="${(innerX - 16).toFixed(1)}" y="${(yPx + 7).toFixed(1)}"
-            text-anchor="end" fill="${PALETTE.muted}" font-size="22" font-weight="600">${esc(String(Math.round(yVal)))}</text>
+            stroke="rgba(148,163,184,0.20)" stroke-width="1.5"/>
+      <text x="${(innerX - 20).toFixed(1)}" y="${(yPx + 10).toFixed(1)}"
+            text-anchor="end" fill="${PALETTE.muted}" font-size="30" font-weight="700">${esc(String(Math.round(yVal)))}</text>
     `;
   }).join('');
 
@@ -183,40 +183,41 @@ function buildTimelineHTML(mod) {
 }
 .tl-title {
   position: absolute;
-  top: 60px;
+  top: 50px;
   left: 80px;
   right: 80px;
-  font-size: 60px;
+  font-size: 76px;
   font-weight: 900;
   color: ${PALETTE.accent};
   letter-spacing: 2px;
   text-shadow: 0 4px 18px rgba(0,0,0,0.8);
-  line-height: 1.1;
+  line-height: 1.05;
   z-index: 5;
 }
 .tl-subtitle {
   position: absolute;
-  top: 140px;
+  top: 148px;
   left: 80px;
-  font-size: 24px;
+  font-size: 34px;
+  font-weight: 600;
   color: ${PALETTE.muted};
   letter-spacing: 1px;
   z-index: 5;
 }
 .tl-legend {
   position: absolute;
-  top: 80px;
+  top: 70px;
   right: 80px;
   display: flex;
-  gap: 24px;
+  gap: 32px;
   flex-wrap: wrap;
   justify-content: flex-end;
-  max-width: 800px;
+  max-width: 900px;
   z-index: 5;
 }
-.legend-item { display: inline-flex; align-items: center; gap: 8px; }
-.legend-swatch { width: 24px; height: 8px; border-radius: 2px; }
-.legend-name { color: ${PALETTE.text}; font-size: 22px; font-weight: 700; }
+.legend-item { display: inline-flex; align-items: center; gap: 12px; }
+.legend-swatch { width: 36px; height: 12px; border-radius: 3px; }
+.legend-name { color: ${PALETTE.text}; font-size: 32px; font-weight: 800; }
 .tl-chart {
   position: absolute;
   top: 230px;

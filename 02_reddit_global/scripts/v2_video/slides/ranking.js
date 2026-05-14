@@ -12,7 +12,7 @@
 //
 // レイアウト: 縦リスト型、上から rank=1〜N で並べる。1位は金、2位銀、3位銅、4-5位は通常カード。
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
 const MAX_ITEMS = 5;
 
@@ -26,12 +26,13 @@ const RANK_STYLE = {
 };
 
 // item 数に応じてカード高さを動的調整（1080 - title 200 - subtitle 60 - padding 80 = 約 740）
+//   各値は item 数で割って収まる範囲で最大化（2026-05-14 フォント+ロゴ拡大）
 function _layoutForCount(n) {
-  if (n === 1) return { cardH: 540, gap: 20, nameSize: 78, valueSize: 64, logoSize: 240 };
-  if (n === 2) return { cardH: 330, gap: 24, nameSize: 60, valueSize: 50, logoSize: 170 };
-  if (n === 3) return { cardH: 220, gap: 22, nameSize: 52, valueSize: 44, logoSize: 130 };
-  if (n === 4) return { cardH: 160, gap: 20, nameSize: 44, valueSize: 38, logoSize: 110 };
-  return        { cardH: 130, gap: 18, nameSize: 38, valueSize: 32, logoSize: 92 };  // 5件
+  if (n === 1) return { cardH: 600, gap: 20, nameSize: 100, valueSize: 88, logoSize: 360, subSize: 38 };
+  if (n === 2) return { cardH: 360, gap: 24, nameSize: 80,  valueSize: 70, logoSize: 240, subSize: 32 };
+  if (n === 3) return { cardH: 230, gap: 22, nameSize: 68,  valueSize: 58, logoSize: 170, subSize: 28 };
+  if (n === 4) return { cardH: 168, gap: 20, nameSize: 58,  valueSize: 50, logoSize: 140, subSize: 24 };
+  return        { cardH: 134, gap: 18, nameSize: 52,  valueSize: 44, logoSize: 116, subSize: 22 };  // 5件
 }
 
 function buildRankingHTML(mod) {
@@ -42,6 +43,8 @@ function buildRankingHTML(mod) {
     value: String(it.value || ''),
     subtext: String(it.subtext || ''),
     logo: it.logo ? imgDataUri(it.logo) : null,
+    // 各 item 個別の画像調整 { zoom, offsetX, offsetY }
+    imgAdj: imageAdjustCss(it.imageAdjust),
   })).filter(it => it.name);
 
   const title = String(mod.title || 'ランキング');
@@ -76,29 +79,30 @@ function buildRankingHTML(mod) {
 }
 .rank-title {
   position: absolute;
-  top: 60px;
+  top: 50px;
   left: 80px;
   right: 80px;
-  font-size: 60px;
+  font-size: 76px;
   font-weight: 900;
   color: ${PALETTE.accent};
   letter-spacing: 2px;
   text-shadow: 0 4px 18px rgba(0,0,0,0.8);
-  line-height: 1.1;
+  line-height: 1.05;
   z-index: 5;
 }
 .rank-subtitle {
   position: absolute;
-  top: 140px;
+  top: 148px;
   left: 80px;
-  font-size: 24px;
+  font-size: 34px;
+  font-weight: 600;
   color: ${PALETTE.muted};
   letter-spacing: 1px;
   z-index: 5;
 }
 .rank-list {
   position: absolute;
-  top: ${subtitle ? 200 : 180}px;
+  top: ${subtitle ? 210 : 180}px;
   left: 80px;
   right: 80px;
   bottom: 180px;
@@ -122,62 +126,65 @@ function buildRankingHTML(mod) {
   transform: translateX(-30px);
 }
 .rank-number {
-  font-size: ${Math.round(layout.cardH * 0.55)}px;
+  font-size: ${Math.round(layout.cardH * 0.7)}px;
   font-weight: 900;
   color: var(--num-color);
   font-family: 'Bebas Neue', 'Oswald', system-ui, sans-serif;
   letter-spacing: -2px;
-  min-width: ${Math.round(layout.cardH * 0.6)}px;
+  min-width: ${Math.round(layout.cardH * 0.65)}px;
   text-align: center;
   line-height: 1;
-  text-shadow: 0 4px 12px rgba(0,0,0,0.7);
+  text-shadow: 0 4px 14px rgba(0,0,0,0.7);
 }
 .rank-medal {
   position: absolute;
-  top: 6px;
-  left: 6px;
-  font-size: 42px;
+  top: 8px;
+  left: 10px;
+  font-size: 50px;
   filter: drop-shadow(0 2px 6px rgba(0,0,0,0.7));
 }
 .rank-logo {
   width: ${layout.logoSize}px;
   height: ${layout.logoSize}px;
   flex: 0 0 auto;
-  border-radius: 8px;
+  border-radius: 10px;
   background: rgba(255,255,255,0.06);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.15);
 }
 .rank-logo img {
-  max-width: 88%;
-  max-height: 88%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform-origin: center;
 }
 .rank-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 .rank-name {
   font-size: ${layout.nameSize}px;
-  font-weight: 800;
+  font-weight: 900;
   color: ${PALETTE.text};
-  line-height: 1.1;
+  line-height: 1.05;
   text-shadow: 0 2px 8px rgba(0,0,0,0.6);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.5px;
 }
 .rank-subtext {
-  font-size: ${Math.round(layout.nameSize * 0.42)}px;
+  font-size: ${layout.subSize}px;
+  font-weight: 600;
   color: ${PALETTE.muted};
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
 }
 .rank-value {
   flex: 0 0 auto;
@@ -186,7 +193,7 @@ function buildRankingHTML(mod) {
   color: var(--num-color);
   font-family: 'Bebas Neue', 'Oswald', system-ui, sans-serif;
   letter-spacing: 1px;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.7);
+  text-shadow: 0 2px 12px rgba(0,0,0,0.8);
 }
 .hl-num {
   color: ${PALETTE.accent};
@@ -211,10 +218,12 @@ ${items.map((_, i) => {
       /([\d０-９]+(?:[\.,．，][\d０-９]+)?)/g,
       '<span class="hl-num">$1</span>'
     );
+    const imgStyle = it.imgAdj && !it.imgAdj.isDefault
+      ? `style="transform: ${it.imgAdj.transform};"` : '';
     return `<div class="rank-card rank-card-${i}" style="--ring-color: ${s.ring}; --glow-color: ${s.glow}; --num-color: ${s.numColor};">
       ${s.medal ? `<div class="rank-medal">${s.medal}</div>` : ''}
       <div class="rank-number">${it.rank}</div>
-      ${it.logo ? `<div class="rank-logo"><img src="${it.logo}" alt=""></div>` : ''}
+      ${it.logo ? `<div class="rank-logo"><img src="${it.logo}" alt="" ${imgStyle}></div>` : ''}
       <div class="rank-body">
         <div class="rank-name">${esc(it.name)}</div>
         ${it.subtext ? `<div class="rank-subtext">${esc(it.subtext)}</div>` : ''}
