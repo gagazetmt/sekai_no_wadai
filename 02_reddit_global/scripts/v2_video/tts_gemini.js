@@ -177,11 +177,21 @@ function _pcmToWav(pcm, sampleRate) {
 //   2026-05-14: loudnorm filter で音量正規化（YouTube 標準 -16 LUFS 準拠）
 //   chunk 間の音量差を排除し「ナレーションが安定しない」問題を解消
 //   I=-16 (target LUFS) / TP=-1.5 (true peak ceiling) / LRA=11 (loudness range)
+// 🆕 2026-05-14: atempo filter で速度を数値制御
+//   env TTS_GEMINI_SPEED=1.10 で 10% 高速化（既定 1.0）
+//   Gemini TTS は speed param 非対応のため、後処理で速度統一する
+//   atempo は時間引き伸ばし系で、ピッチを変えず再生速度のみ変える（音質保持）
 function _wavBufferToMp3File(wavBuf, outPath) {
   return new Promise((resolve, reject) => {
+    const speed = parseFloat(process.env.TTS_GEMINI_SPEED || '1.0');
+    const clampedSpeed = Math.max(0.5, Math.min(2.0, isFinite(speed) ? speed : 1.0));
+    // atempo は 1.0 = 等速。1.0 の時はフィルタ不要（音質劣化ゼロ）
+    const audioFilter = clampedSpeed === 1.0
+      ? 'loudnorm=I=-16:TP=-1.5:LRA=11'
+      : `loudnorm=I=-16:TP=-1.5:LRA=11,atempo=${clampedSpeed.toFixed(3)}`;
     const args = [
       '-y', '-i', 'pipe:0',
-      '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+      '-af', audioFilter,
       '-codec:a', 'libmp3lame', '-b:a', '128k',
       outPath,
     ];
