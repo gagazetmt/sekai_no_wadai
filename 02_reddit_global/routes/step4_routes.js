@@ -396,7 +396,11 @@ router.post('/v2/matchcard-lineup-overrides', express.json(), (req, res) => {
 //   useWebResearch=true: ウェブリサーチ → 検索結果をプロンプト文脈に注入してから生成
 //   researchPrompt: リサーチの観点（省略時は userPrompt を流用）
 // Output: { ok, jobId } 即返却 → クライアントが /v2/ai-fill-slide-status?jobId= をポーリング
-async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, useWebResearch, researchPrompt }) {
+async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, useWebResearch, researchPrompt, sprint }) {
+  // ⚡SPRINT モード: AI 呼び出しを全て DeepSeek に強制（生成 + 監修）
+  const _sprint = !!sprint;
+  const _aiProv = _sprint ? 'deepseek' : 'anthropic';
+  const _aiModel = _sprint ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
     const mp = modulesPath(postId);
     if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
     const modulesData = JSON.parse(fs.readFileSync(mp, 'utf8'));
@@ -863,18 +867,19 @@ ${incrementalRule}
 }
 ※ recipeKey と dataSlots は **どちらか片方** だけ返す`;
 
-    // Sonnet 既定（構成・データ選定・脚本品質を優先） → JSON崩れ時 v4flash 保険
-    let raw, parsed = null, used = 'sonnet';
+    // 既定: Sonnet（脚本品質優先） → JSON崩れ時 v4flash 保険
+    // ⚡SPRINT モード: 最初から DeepSeek 直行（fallback なし）
+    let raw, parsed = null, used = _sprint ? 'v4flash-sprint' : 'sonnet';
     try {
       raw = await callAI({
-        forceProvider: 'anthropic',
-        model: 'claude-sonnet-4-6', max_tokens: 3500,
+        forceProvider: _aiProv,
+        model: _aiModel, max_tokens: 3500,
         messages: [{ role: 'user', content: prompt }],
       });
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
       if (m1) parsed = JSON.parse(m1[0]);
-    } catch (e) { console.warn('[ai-fill-slide] sonnet 例外:', e.message); }
-    if (!parsed?.type || !Array.isArray(parsed?.dataSlots)) {
+    } catch (e) { console.warn(`[ai-fill-slide] ${_aiProv} 例外:`, e.message); }
+    if ((!parsed?.type || !Array.isArray(parsed?.dataSlots)) && !_sprint) {
       console.warn('[ai-fill-slide] sonnet 失敗、v4flash にフォールバック');
       try {
         raw = await callAI({
@@ -981,8 +986,8 @@ ${parsed.narration || ''}
 }`;
 
       const reviewRaw = await callAI({
-        forceProvider: 'anthropic',
-        model: 'claude-sonnet-4-6', max_tokens: 4000,
+        forceProvider: _aiProv,
+        model: _aiModel, max_tokens: 4000,
         messages: [{ role: 'user', content: reviewPrompt }],
       });
       const rm = reviewRaw && reviewRaw.match(/\{[\s\S]*\}/);
@@ -1563,6 +1568,10 @@ function getUI() {
   <div class="panel" style="margin-bottom:12px;">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span id="s4Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件未選択</span>
+      <label id="sprintToggleWrap" title="⚡SPRINT モード: AI 呼び出しを全て DeepSeek 化（コスト 1/15）。step2モジュール提案 / step3構成おまかせ / step4脚本生成+監修 / step6投稿テキスト が対象。サムネは元から DeepSeek。" style="display:inline-flex;align-items:center;gap:6px;background:#1a2540;border:1px solid #f59e0b;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;color:#fcd34d;">
+        <input type="checkbox" id="sprintToggle" onchange="window.appSprint=this.checked; try{localStorage.setItem('v2_sprint_mode', this.checked?'1':'0');}catch(_){}" style="cursor:pointer;">
+        <span>⚡ SPRINT</span>
+      </label>
       <button class="btn btn-sm" id="s4BtnSave" style="background:#3b82f6;color:#fff;">💾 保存</button>
       <button class="btn btn-success" id="s4BtnGenVideo" style="font-size:13px;padding:8px 18px;">🎬 動画生成</button>
       <span id="s4Msg" style="font-size:12px;color:#8a9aba;"></span>
@@ -1604,6 +1613,14 @@ function getUI() {
   'use strict';
   window.APP = window.APP || {};
   window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null, recipeSlotsByIdx: {}, openCategoriesByIdx: {}, ttsPresets: null };
+
+  // ⚡SPRINT モード初期化（localStorage から復元）
+  try {
+    const saved = localStorage.getItem('v2_sprint_mode') === '1';
+    window.appSprint = saved;
+    const cb = document.getElementById('sprintToggle');
+    if (cb) cb.checked = saved;
+  } catch (_) {}
 
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
@@ -2431,7 +2448,7 @@ function getUI() {
       const initRes = await fetchJson('/api/v2/ai-fill-slide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt }),
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt, sprint: localStorage.getItem('v2_sprint_mode') === '1' }),
       });
       const jobId = initRes && initRes.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');

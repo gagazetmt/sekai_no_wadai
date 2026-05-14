@@ -85,7 +85,9 @@ router.get('/v3/modules', (req, res) => {
 // 出力: { ok, modules: [{type, mainKey, secondary?, scriptDir}, ...] }
 //   - Sonnet 既定で生成、JSON崩れ時のみ V4-Flash 保険（5/1切替後）
 //   - クライアントは返却 outline を Step3 のテーブルに流し込んで微調整 → save-modules
-async function _runProposeModules(postId, count) {
+async function _runProposeModules(postId, count, opts = {}) {
+  const _sprint = !!opts.sprint;
+  const _initialProv = _sprint ? 'deepseek' : 'anthropic';
   const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
 
     // カスタム案件判定（Reddit コメントが無い独自テーマ動画）
@@ -246,9 +248,9 @@ ${searchBlock}
       return callAI({ forceProvider: provider, model, max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
     }
     let raw = '';
-    try { raw = await _askPropose('anthropic'); }
-    catch (e) { console.warn('[propose-modules] sonnet 例外:', e.message); }
-    if (!raw || !raw.match(/\{[\s\S]*\}/)) {
+    try { raw = await _askPropose(_initialProv); }
+    catch (e) { console.warn(`[propose-modules] ${_initialProv} 例外:`, e.message); }
+    if ((!raw || !raw.match(/\{[\s\S]*\}/)) && _initialProv !== 'deepseek') {
       console.warn('[propose-modules] sonnet 失敗、v4flash にフォールバック');
       raw = await _askPropose('deepseek');
     }
@@ -297,7 +299,7 @@ ${searchBlock}
 
 // 🆕 /v3/propose-modules: ジョブ作成 → jobId 即返却
 router.post('/v3/propose-modules', express.json(), (req, res) => {
-  const { postId } = req.body || {};
+  const { postId, sprint } = req.body || {};
   let count = parseInt(req.body?.count, 10);
   if (!Number.isFinite(count) || count < 5) count = 7;
   if (count > 10) count = 10;
@@ -308,7 +310,7 @@ router.post('/v3/propose-modules', express.json(), (req, res) => {
   setImmediate(async () => {
     try {
       writeJob(jobId, { jobId, postId, status: 'running', step: 'ai-generation', updatedAt: new Date().toISOString() });
-      const result = await _runProposeModules(postId, count);
+      const result = await _runProposeModules(postId, count, { sprint: !!sprint });
       writeJob(jobId, { jobId, postId, status: 'done', step: 'merged', result, updatedAt: new Date().toISOString() });
     } catch (e) {
       console.error(`[Step3/propose-modules:${jobId}]`, e);
@@ -1778,7 +1780,7 @@ function getUI() {
       const r = await fetchJson('/api/v3/propose-modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, count: 7 }),
+        body: JSON.stringify({ postId: post.id, count: 7, sprint: localStorage.getItem('v2_sprint_mode') === '1' }),
       });
       const jobId = r && r.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');

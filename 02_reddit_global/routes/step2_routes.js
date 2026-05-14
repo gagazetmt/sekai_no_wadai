@@ -115,7 +115,9 @@ function _dedupeEntities(...lists) {
 }
 
 // suggest-labels の実処理（ジョブ化のためバックグラウンド実行用）
-async function _runSuggestLabels(post, onProgress = () => {}) {
+async function _runSuggestLabels(post, onProgress = () => {}, opts = {}) {
+  const _sprint = !!opts.sprint;
+  const _initialProv = _sprint ? 'deepseek' : 'anthropic';
   const title    = post.titleOrig || post.title || '';
   const titleJa  = post.titleJa   || '';
   const selftext = (post.selftext || post.raw?.selftext || '').slice(0, 2000);
@@ -167,11 +169,12 @@ JSONのみ:
   }
   let phase1 = null;
   try {
-    const raw = await _askPhase1('anthropic');
+    const raw = await _askPhase1(_initialProv);
     phase1 = _parseEntities(raw);
-    if (!phase1) console.warn('[Step2 phase1] sonnet JSON parse 失敗 / raw=' + (raw||'').slice(0, 200));
-  } catch (e) { console.warn('[Step2 phase1] sonnet 例外:', e.message); }
-  if (!phase1) {
+    if (!phase1) console.warn(`[Step2 phase1] ${_initialProv} JSON parse 失敗 / raw=` + (raw||'').slice(0, 200));
+  } catch (e) { console.warn(`[Step2 phase1] ${_initialProv} 例外:`, e.message); }
+  // sprint=true (initial=deepseek) なら fallback 不要、それ以外は deepseek にフォールバック
+  if (!phase1 && _initialProv !== 'deepseek') {
     console.warn('[Step2 phase1] sonnet 失敗、v4flash にフォールバック');
     try {
       const raw = await _askPhase1('deepseek');
@@ -256,12 +259,12 @@ JSONのみ:
       return callAI({ forceProvider: provider, model, max_tokens: 1200, messages: [{ role: 'user', content: phase2Prompt }] });
     }
     try {
-      const raw = await _askPhase2('anthropic');
+      const raw = await _askPhase2(_initialProv);
       const p2 = _parseEntities(raw);
       if (Array.isArray(p2?.entities)) {
         phase2Entities = p2.entities;
-        console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (sonnet)`);
-      } else {
+        console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (${_initialProv})`);
+      } else if (_initialProv !== 'deepseek') {
         console.warn('[Step2 phase2-ai] sonnet JSON parse 失敗、v4flash にフォールバック');
         const raw2 = await _askPhase2('deepseek');
         const p2b = _parseEntities(raw2);
@@ -285,15 +288,16 @@ JSONのみ:
 }
 
 // 🆕 /v3/suggest-labels: ジョブ作成 → jobId 即返却（バックグラウンド実行）
+//   body.sprint=true で ⚡SPRINT モード: AI 呼び出しを全て DeepSeek に強制
 router.post('/v3/suggest-labels', (req, res) => {
-  const { post } = req.body;
+  const { post, sprint } = req.body;
   if (!post) return res.status(400).json({ error: 'post required' });
   const jobId = createJob('sl', { postId: post.id, kind: 'suggest-labels', step: 'init' });
   res.json({ ok: true, jobId });
   setImmediate(async () => {
     try {
       updateJob(jobId, { status: 'running', step: 'phase1' });
-      const result = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch));
+      const result = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch), { sprint: !!sprint });
       updateJob(jobId, { status: 'done', step: 'merged', result });
     } catch (e) {
       console.error(`[Step2/suggest-labels:${jobId}]`, e);
@@ -1050,7 +1054,7 @@ function getUI() {
     try {
       const j = await fetchJson('/api/v3/suggest-labels', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post }),
+        body: JSON.stringify({ post, sprint: localStorage.getItem('v2_sprint_mode') === '1' }),
       });
       const jobId = j && j.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');

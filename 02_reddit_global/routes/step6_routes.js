@@ -70,8 +70,11 @@ router.post('/v6/save-meta', (req, res) => {
 });
 
 router.post('/v6/gen-meta', async (req, res) => {
-  const { postId } = req.body || {};
+  const { postId, sprint } = req.body || {};
   if (!postId) return res.status(400).json({ error: 'postId required' });
+  // ⚡SPRINT モード: 最初から DeepSeek 直行
+  const _sprint = !!sprint;
+  const _initialProv = _sprint ? 'deepseek' : 'anthropic';
 
   const mFile = MODULES_FILE(postId);
   if (!fs.existsSync(mFile)) return res.status(404).json({ error: 'modules.json not found' });
@@ -114,11 +117,11 @@ JSON形式で返してください:
   try {
     let text = '', parsed = null;
     try {
-      text = await _ask('anthropic');
+      text = await _ask(_initialProv);
       const m = text.match(/\{[\s\S]*\}/);
       if (m) parsed = JSON.parse(m[0]);
-    } catch (e) { console.warn('[step6 meta-gen] sonnet 例外:', e.message); }
-    if (!parsed) {
+    } catch (e) { console.warn(`[step6 meta-gen] ${_initialProv} 例外:`, e.message); }
+    if (!parsed && _initialProv !== 'deepseek') {
       console.warn('[step6 meta-gen] sonnet 失敗、deepseek にフォールバック');
       text = await _ask('deepseek');
       const m = text.match(/\{[\s\S]*\}/);
@@ -368,7 +371,7 @@ function getUI() {
     btn.disabled = true; btn.textContent = '⏳ 生成中…';
     document.getElementById('s6-meta-status').textContent = 'AI にお願い中…';
     try {
-      const r = await window.fetchJson('/api/v6/gen-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: id }) });
+      const r = await window.fetchJson('/api/v6/gen-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: id, sprint: localStorage.getItem('v2_sprint_mode') === '1' }) });
       const candEl = document.getElementById('s6-title-candidates');
       candEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">💡 タイトル候補（クリックで採用）</div>'
         + (r.titles || []).map((t,i) => '<div onclick="document.getElementById(\\'s6-title\\').value = this.dataset.t" data-t="'+_e(t)+'" style="cursor:pointer;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;font-size:12px;">'+(i+1)+'. '+_e(t)+'</div>').join('');
