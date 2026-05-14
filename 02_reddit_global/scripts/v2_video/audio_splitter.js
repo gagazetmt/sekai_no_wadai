@@ -24,7 +24,9 @@ const { transcribeWithTimestamps } = require('./gemini_asr');
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
 
-const SEPARATOR_TEXT = 'ぴゅっ。';
+// 区切り音声: 「ぴゅっ」を 3 連発で約 1.5 秒の明確な音にする
+//   長文 ASR (5分超) では短い擬音が segment 化されず黙殺される事象を確認したため強化
+const SEPARATOR_TEXT = 'ぴゅっぴゅっぴゅっ。';
 const SEPARATOR_DETECT = 'ぴゅ';  // ASR transcribe での部分一致キー
 const SAFETY_MARGIN_SEC = 0.05;   // 境界の安全マージン
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。既定 10 = 600 字/分（動画ナレ標準）
