@@ -37,6 +37,8 @@ const { buildStatsHTML }      = require('./slides/stats');
 const { buildComparisonHTML } = require('./slides/comparison');
 const { buildReactionHTML }   = require('./slides/reaction');
 const { buildTocHTML }        = require('./slides/toc');
+const { buildRankingHTML }    = require('./slides/ranking');
+const { buildTimelineHTML }   = require('./slides/timeline');
 const { mapImagesToModule, LEAD_PAD_SEC, TAIL_PAD_SEC }   = require('./slides/_common');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
@@ -256,6 +258,8 @@ function buildSlideHTML(mod) {
     case 'profile':     return buildStatsHTML(m);
     case 'comparison':  return buildComparisonHTML(m);
     case 'reaction':    return buildReactionHTML(m);
+    case 'ranking':     return buildRankingHTML(m);
+    case 'timeline':    return buildTimelineHTML(m);
     default:            return buildUniversalHTML(m);
   }
 }
