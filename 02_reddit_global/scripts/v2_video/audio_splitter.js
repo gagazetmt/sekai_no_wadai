@@ -85,8 +85,10 @@ async function generateAndSplit(parts, opts = {}) {
   const finalMp3 = path.join(baseDir, `_combined_final_${stamp}.mp3`);
   await applyFilters(rawMp3, finalMp3, atempo);
 
-  // 5. ASR
-  const words = await transcribeWithTimestamps(finalMp3);
+  // 5. ASR（長文は分割実行 → マージ）
+  //   長文 audio (4分超) を一発 transcribe すると JSON 出力が長すぎて構文崩れ → parse fail
+  //   60-90 秒ずつに分割 + 各 chunk を並列 ASR + offset 加算してマージで回避
+  const words = await transcribeChunked(finalMp3);
   if (!words.length) throw new Error('ASR returned no words');
 
   // 6. 区切り「ぴゅ」を検出
@@ -181,6 +183,57 @@ function ffmpegSlice(srcMp3, outMp3, startSec, durSec) {
       else reject(new Error(`ffmpeg slice exit ${code}: ${stderr.slice(-300)}`));
     });
   });
+}
+
+// 🆕 ASR 分割: 長文 audio を chunkSec ずつに分割して並列 transcribe → offset 加算でマージ
+//   Gemini ASR の JSON 出力長制限を回避（5分超でも安定）
+async function transcribeChunked(mp3Path, chunkSec = 75) {
+  const totalDur = probeDurationSec(mp3Path);
+  if (totalDur <= chunkSec * 1.2) {
+    // 短い → そのまま 1 回 ASR
+    return await transcribeWithTimestamps(mp3Path);
+  }
+  const nChunks = Math.ceil(totalDur / chunkSec);
+  console.log(`  🔪 ASR 分割: ${totalDur.toFixed(1)}s → ${nChunks} chunks (${chunkSec}s each, 並列実行)`);
+  const baseDir = path.dirname(mp3Path);
+  const stamp = Date.now();
+  const tmpFiles = [];
+  for (let i = 0; i < nChunks; i++) {
+    const start = i * chunkSec;
+    const dur = Math.min(chunkSec, totalDur - start);
+    const tmpPath = path.join(baseDir, `_asr_chunk_${i}_${stamp}.mp3`);
+    await ffmpegSlice(mp3Path, tmpPath, start, dur);
+    tmpFiles.push({ path: tmpPath, offset: start });
+  }
+  // 並列 ASR（API クォータに優しく 2 並列）
+  const PAR = 2;
+  const results = new Array(tmpFiles.length).fill([]);
+  let nextIdx = 0;
+  await Promise.all(Array.from({ length: PAR }, async () => {
+    while (true) {
+      const idx = nextIdx++;
+      if (idx >= tmpFiles.length) return;
+      const f = tmpFiles[idx];
+      try {
+        const w = await transcribeWithTimestamps(f.path);
+        results[idx] = w.map(ww => ({
+          text: ww.text,
+          start: (Number(ww.start) || 0) + f.offset,
+          end: (Number(ww.end) || 0) + f.offset,
+        }));
+      } catch (e) {
+        console.warn(`  ⚠️ ASR chunk#${idx + 1}/${tmpFiles.length} 失敗 (offset=${f.offset}s): ${e.message.slice(0, 100)}`);
+      }
+    }
+  }));
+  // cleanup
+  for (const f of tmpFiles) {
+    try { fs.unlinkSync(f.path); } catch (_) {}
+  }
+  // 全 chunk の words を時刻順にマージ
+  const merged = results.flat().filter(w => w && typeof w.start === 'number').sort((a, b) => a.start - b.start);
+  console.log(`  🔪 ASR 分割完了: ${merged.length} words 取得`);
+  return merged;
 }
 
 function probeDurationSec(filePath) {
