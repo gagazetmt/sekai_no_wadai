@@ -30,7 +30,7 @@ const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 
 //   - 「ぴゅっ」3 連発は下ネタ連想あるため変更（2026-05-15）
 const SEPARATOR_TEXT = 'ピンポンピンポンピンポン。';
 const SEPARATOR_DETECT = 'ピンポン';  // ASR transcribe での部分一致キー
-const SAFETY_MARGIN_SEC = 0.05;   // 境界の安全マージン
+const SAFETY_MARGIN_SEC = 0.2;    // 境界の安全マージン（ASR timestamp 揺らぎ吸収・区切り音漏れ防止）
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。既定 10 = 600 字/分（動画ナレ標準）
 const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
 
