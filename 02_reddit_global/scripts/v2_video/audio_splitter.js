@@ -24,10 +24,12 @@ const { transcribeWithTimestamps } = require('./gemini_asr');
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
 
-// 区切り音声: 「ぴゅっ」を 3 連発で約 1.5 秒の明確な音にする
-//   長文 ASR (5分超) では短い擬音が segment 化されず黙殺される事象を確認したため強化
-const SEPARATOR_TEXT = 'ぴゅっぴゅっぴゅっ。';
-const SEPARATOR_DETECT = 'ぴゅ';  // ASR transcribe での部分一致キー
+// 区切り音声: チャイム系の「ピンポン」3 連発
+//   - 健全、一意（サッカー動画ナレに絶対出ない）
+//   - 長文 ASR でも 1 segment として確実 transcribe 化（PoC で実証）
+//   - 「ぴゅっ」3 連発は下ネタ連想あるため変更（2026-05-15）
+const SEPARATOR_TEXT = 'ピンポンピンポンピンポン。';
+const SEPARATOR_DETECT = 'ピンポン';  // ASR transcribe での部分一致キー
 const SAFETY_MARGIN_SEC = 0.05;   // 境界の安全マージン
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。既定 10 = 600 字/分（動画ナレ標準）
 const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
