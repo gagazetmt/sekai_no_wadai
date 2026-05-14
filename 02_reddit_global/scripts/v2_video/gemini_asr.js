@@ -71,9 +71,9 @@ async function transcribeWithTimestamps(audioFilePath, opts = {}) {
     generationConfig: { temperature: 0 },
   };
 
-  // 1 chunk 60秒級の音声で 120s timeout する事象があったため 180s に延長 + 1 回リトライ
+  // timeout 180s + 最大 2 回 retry（timeout / JSON not found / JSON parse fail 全てに対応）
   const TIMEOUT_MS = 180000;
-  const MAX_RETRIES = 1;
+  const MAX_RETRIES = 2;
   let lastErr = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let res;
@@ -95,23 +95,70 @@ async function transcribeWithTimestamps(audioFilePath, opts = {}) {
       throw err;
     }
     if (res.status !== 200) {
-      throw new Error(`Gemini ASR ${res.status}: ${JSON.stringify(res.data).slice(0, 300)}`);
+      lastErr = new Error(`Gemini ASR ${res.status}: ${JSON.stringify(res.data).slice(0, 300)}`);
+      if (res.status >= 500 && attempt < MAX_RETRIES) {
+        console.warn(`  ⏳ Gemini ASR ${res.status} → retry (${attempt + 1}/${MAX_RETRIES})`);
+        continue;
+      }
+      throw lastErr;
     }
     const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const m = text.match(/\[[\s\S]*\]/);
-    if (!m) throw new Error(`Gemini ASR: JSON array not found. raw: ${text.slice(0, 200)}`);
-    let words;
+    if (!m) {
+      lastErr = new Error(`Gemini ASR: JSON array not found. raw: ${text.slice(0, 200)}`);
+      if (attempt < MAX_RETRIES) {
+        console.warn(`  ⏳ Gemini ASR JSON array not found → retry (${attempt + 1}/${MAX_RETRIES})`);
+        continue;
+      }
+      throw lastErr;
+    }
+    let words = null;
     try {
       words = JSON.parse(m[0]);
     } catch (e) {
-      throw new Error(`Gemini ASR JSON parse fail: ${e.message}`);
+      // 1) 修復試行: 末尾切れ JSON を最後の正常 `}` までで閉じて再 parse
+      words = _tryRepairJsonArray(m[0]);
+      if (words) {
+        console.warn(`  🔧 Gemini ASR JSON 修復成功 (${words.length} エントリ採用)`);
+      } else {
+        lastErr = new Error(`Gemini ASR JSON parse fail: ${e.message}`);
+        if (attempt < MAX_RETRIES) {
+          console.warn(`  ⏳ Gemini ASR JSON parse fail → retry (${attempt + 1}/${MAX_RETRIES})`);
+          continue;
+        }
+        throw lastErr;
+      }
     }
-    if (!Array.isArray(words)) throw new Error('Gemini ASR: not an array');
+    if (!Array.isArray(words)) {
+      lastErr = new Error('Gemini ASR: not an array');
+      if (attempt < MAX_RETRIES) {
+        console.warn(`  ⏳ Gemini ASR not-array → retry (${attempt + 1}/${MAX_RETRIES})`);
+        continue;
+      }
+      throw lastErr;
+    }
     return words
       .filter(w => w && typeof w.text === 'string' && typeof w.start === 'number' && typeof w.end === 'number')
       .map(w => ({ text: w.text, start: w.start, end: w.end }));
   }
   throw lastErr || new Error('Gemini ASR unknown failure');
+}
+
+// JSON array が途中切れの場合の修復: 最後の正常な `}` までで切って閉じる
+//   例: '[{"a":1},{"b":2},{"c":' → '[{"a":1},{"b":2}]'
+function _tryRepairJsonArray(str) {
+  if (typeof str !== 'string') return null;
+  const lastCurly = str.lastIndexOf('}');
+  if (lastCurly < 0) return null;
+  // `[` から始まる前提
+  const startBracket = str.indexOf('[');
+  if (startBracket < 0 || startBracket > lastCurly) return null;
+  const candidate = str.slice(startBracket, lastCurly + 1) + ']';
+  try {
+    const arr = JSON.parse(candidate);
+    if (Array.isArray(arr) && arr.length > 0) return arr;
+  } catch (_) {}
+  return null;
 }
 
 module.exports = {
