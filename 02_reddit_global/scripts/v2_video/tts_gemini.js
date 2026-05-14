@@ -174,9 +174,17 @@ function _pcmToWav(pcm, sampleRate) {
 }
 
 // WAV Buffer → mp3 ファイル（ffmpeg pipe）
+//   2026-05-14: loudnorm filter で音量正規化（YouTube 標準 -16 LUFS 準拠）
+//   chunk 間の音量差を排除し「ナレーションが安定しない」問題を解消
+//   I=-16 (target LUFS) / TP=-1.5 (true peak ceiling) / LRA=11 (loudness range)
 function _wavBufferToMp3File(wavBuf, outPath) {
   return new Promise((resolve, reject) => {
-    const args = ['-y', '-i', 'pipe:0', '-codec:a', 'libmp3lame', '-b:a', '128k', outPath];
+    const args = [
+      '-y', '-i', 'pipe:0',
+      '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+      '-codec:a', 'libmp3lame', '-b:a', '128k',
+      outPath,
+    ];
     const proc = spawn(FFMPEG, args, { stdio: ['pipe', 'ignore', 'pipe'] });
     let stderr = '';
     proc.stderr.on('data', d => { stderr += d.toString(); });
