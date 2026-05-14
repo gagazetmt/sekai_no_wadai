@@ -82,55 +82,91 @@ function _runPython(input, timeoutMs = 30000) {
 //   opts.retries: リトライ回数 (デフォ 1)
 //   opts.impersonate: chrome131 (デフォ)
 //   返却: { ok, status, body, size, content_type } または例外
+// proxy ハズレ判定: Webshare 出口 IP が CF で蹴られた時の典型エラー
+//   "curl: (56) CONNECT tunnel failed, response 403" のようなトンネル系失敗
+function _isProxyFail(r) {
+  if (!r || r.ok) return false;
+  // HTTP status が無い（接続自体失敗）+ tunnel 系メッセージ
+  if (r.status) return false;
+  const err = String(r.error || r.body || '');
+  return /tunnel failed|CONNECT tunnel|\(56\)|\(7\)|\(35\)|response 403/i.test(err);
+}
+
 async function curlGet(url, opts = {}) {
-  const proxy = opts.useProxy === false ? null : _pickProxy();
-  const headers = {
-    Referer: opts.referer || 'https://www.google.com/',
-    ...(opts.headers || {}),
-  };
-  const input = {
-    url,
-    proxy,
-    headers,
-    timeout: opts.timeout || 20,
-    impersonate: opts.impersonate || 'chrome131',
-    retries: opts.retries == null ? 1 : opts.retries,
-    binary: false,
-  };
-  const hint = proxy ? _stackHint() : null;
-  const r = await _runPython(input, (opts.timeout || 20) * 1000 * 3);
-  if (proxy) _auditWrite(url, hint, r?.size, r?.status, 'curlGet');
-  return r;
+  const direct = opts.useProxy === false;
+  // Webshare 経由時のみ proxy ハズレ retry を有効化（max 3 回別 IP で試行）
+  const MAX_PROXY_RETRY = direct ? 0 : 3;
+  let lastResult = null;
+  for (let attempt = 0; attempt <= MAX_PROXY_RETRY; attempt++) {
+    const proxy = direct ? null : _pickProxy();
+    const headers = {
+      Referer: opts.referer || 'https://www.google.com/',
+      ...(opts.headers || {}),
+    };
+    const input = {
+      url,
+      proxy,
+      headers,
+      timeout: opts.timeout || 20,
+      impersonate: opts.impersonate || 'chrome131',
+      retries: opts.retries == null ? 1 : opts.retries,
+      binary: false,
+    };
+    const hint = proxy ? _stackHint() : null;
+    const r = await _runPython(input, (opts.timeout || 20) * 1000 * 3);
+    if (proxy) _auditWrite(url, hint, r?.size, r?.status, 'curlGet');
+    if (r.ok) return r;
+    if (_isProxyFail(r) && attempt < MAX_PROXY_RETRY) {
+      console.warn(`  ⏳ Webshare proxy ハズレ (${attempt + 1}/${MAX_PROXY_RETRY}) → 別 IP で再試行: ${url.slice(0, 60)}`);
+      continue;
+    }
+    lastResult = r;
+    break;
+  }
+  return lastResult;
 }
 
 // 画像取得（data:image/...;base64,... を返す）
-//   失敗時は null
+//   失敗時は null。proxy ハズレ時は別 IP で max 3 回 retry
 async function curlGetImage(url, opts = {}) {
-  const proxy = opts.useProxy === false ? null : _pickProxy();
-  const headers = {
-    Referer: opts.referer || 'https://www.google.com/',
-    ...(opts.headers || {}),
-  };
-  const input = {
-    url,
-    proxy,
-    headers,
-    timeout: opts.timeout || 20,
-    impersonate: opts.impersonate || 'chrome131',
-    retries: opts.retries == null ? 1 : opts.retries,
-    binary: true,
-  };
-  const hint = proxy ? _stackHint() : null;
-  try {
-    const r = await _runPython(input, (opts.timeout || 20) * 1000 * 3);
-    if (proxy) _auditWrite(url, hint, r?.size, r?.status, 'curlGetImage');
-    if (!r.ok || !r.body) return null;
-    const mime = (r.content_type || 'image/png').split(';')[0];
-    return `data:${mime};base64,${r.body}`;
-  } catch (e) {
-    if (proxy) _auditWrite(url, hint, 0, 'EX', 'curlGetImage');
-    return null;
+  const direct = opts.useProxy === false;
+  const MAX_PROXY_RETRY = direct ? 0 : 3;
+  for (let attempt = 0; attempt <= MAX_PROXY_RETRY; attempt++) {
+    const proxy = direct ? null : _pickProxy();
+    const headers = {
+      Referer: opts.referer || 'https://www.google.com/',
+      ...(opts.headers || {}),
+    };
+    const input = {
+      url,
+      proxy,
+      headers,
+      timeout: opts.timeout || 20,
+      impersonate: opts.impersonate || 'chrome131',
+      retries: opts.retries == null ? 1 : opts.retries,
+      binary: true,
+    };
+    const hint = proxy ? _stackHint() : null;
+    try {
+      const r = await _runPython(input, (opts.timeout || 20) * 1000 * 3);
+      if (proxy) _auditWrite(url, hint, r?.size, r?.status, 'curlGetImage');
+      if (r.ok && r.body) {
+        const mime = (r.content_type || 'image/png').split(';')[0];
+        return `data:${mime};base64,${r.body}`;
+      }
+      if (_isProxyFail(r) && attempt < MAX_PROXY_RETRY) {
+        console.warn(`  ⏳ Webshare proxy ハズレ (image, ${attempt + 1}/${MAX_PROXY_RETRY}) → 別 IP で再試行`);
+        continue;
+      }
+      return null;
+    } catch (e) {
+      if (proxy) _auditWrite(url, hint, 0, 'EX', 'curlGetImage');
+      // 一過性ネットワークエラーも proxy 切替で救済を試行
+      if (attempt < MAX_PROXY_RETRY) continue;
+      return null;
+    }
   }
+  return null;
 }
 
 // JSON として取得（curlGet + JSON.parse）
