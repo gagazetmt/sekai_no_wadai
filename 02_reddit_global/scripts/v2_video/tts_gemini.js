@@ -226,6 +226,7 @@ async function generateGeminiTTS(opts = {}) {
     voiceId = DEFAULT_VOICE,
     model   = MODEL,
     styleInstructions = DEFAULT_STYLE_INSTRUCTIONS,
+    timeoutMs = 120000,  // 既定 120s。combined TTS のような長文では 300000 (5分) 等を指定
   } = opts;
 
   if (!text)        throw new Error('text is required');
@@ -265,7 +266,7 @@ async function generateGeminiTTS(opts = {}) {
   let res;
   res = await axios.post(url, body, {
     headers: { 'Content-Type': 'application/json' },
-    timeout: 120000,
+    timeout: timeoutMs,
     validateStatus: () => true,
   });
 

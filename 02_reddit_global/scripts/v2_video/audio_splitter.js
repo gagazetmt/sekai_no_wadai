@@ -64,6 +64,7 @@ async function generateAndSplit(parts, opts = {}) {
       model: opts.model,
       styleInstructions: opts.styleInstructions,
       outputPath: rawMp3,
+      timeoutMs: 300000,  // 長文 (2000+ 字) は応答に 2-3 分かかる、 5 分マージン
     });
   } finally {
     if (oldSpeed != null) process.env.TTS_GEMINI_SPEED = oldSpeed;
