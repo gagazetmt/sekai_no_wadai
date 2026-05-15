@@ -88,7 +88,9 @@ async function generateAndSplit(parts, opts = {}) {
       model: opts.model,
       styleInstructions: opts.styleInstructions,
       outputPath: rawMp3,
-      timeoutMs: 300000,  // 長文応答 5 分マージン
+      // 長文では Gemini TTS の生成時間が音声尺と同等 (1800字 ≒ 5分)
+      // env TTS_COMBINED_TIMEOUT_MS で override 可、既定 10 分
+      timeoutMs: parseInt(process.env.TTS_COMBINED_TIMEOUT_MS || '600000', 10),
     });
   } finally {
     if (oldSpeed != null) process.env.TTS_GEMINI_SPEED = oldSpeed;
