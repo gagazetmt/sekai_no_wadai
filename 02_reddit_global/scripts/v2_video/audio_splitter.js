@@ -1,19 +1,20 @@
 // scripts/v2_video/audio_splitter.js
-// 全 slide narration を 1 本取り → ASR で境界検出 → 各 slide に切り出すパイプ
+// 全 slide narration を 1 本取り → ASR words から文字数累積で境界決定 → 各 slide に切り出し
 //
 // 目的:
 //   - Gemini TTS の生成揺らぎ（±35% の duration ブレ）を排除
 //   - 全 slide で声色・速度・音量を完璧に統一
 //   - クォータ消費を 9 → 1 に削減
 //
-// フロー:
-//   1. 全 narration を結合（slide 間に「ぴゅっ。」挿入）
-//   2. Gemini TTS で 1 リクエスト生成
-//   3. raw duration から動的 atempo 算出（目標字/秒を達成）
-//   4. atempo + loudnorm で final mp3
-//   5. ASR で words+timestamps 取得
-//   6. 「ぴゅ」を含む segments を検出 → 各 slide 境界決定
-//   7. ffmpeg で各 slide 範囲切り出し（区切り部分はカット）
+// 旧方式（区切り音「一旦カット」検出）は 2026-05-15 廃止:
+//   TTS が反復区切り文を頻繁に省略するため検出失敗 → fallback 連発でクォータ食い尽くし。
+//
+// 新方式:
+//   1. 全 narration を素直に連結（区切り音なし）→ TTS 1 リクエスト
+//   2. ASR で words[] (text + timestamps) 取得
+//   3. 各 slide の原文文字数比率で ASR words を分配
+//   4. 境界は word 間ギャップ最大位置に snap（自然な間で切る）
+//   5. 各 slide 内では word timestamps を相対化（字幕同期維持）
 
 const fs = require('fs');
 const path = require('path');
@@ -24,20 +25,12 @@ const { transcribeWithTimestamps } = require('./gemini_asr');
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
 
-// 区切り音声: 「沈黙 + 命令文 + 沈黙」のパターン（2026-05-15 相棒提案）
-//   - 三点リーダー × 改行で TTS に物理的な「間」を取らせる（沈黙時間生成）
-//   - 「一旦カット」は完全な命令文 = ASR が確実 segment 化
-//   - 1816 字の長文に 7 回挿入しても省略されにくい（前後の沈黙で「明確な区切り感」が出る）
-//   - 「一旦」を検出キーに（漢字熟語 1 segment、 一意性最大）
-const SEPARATOR_TEXT = '\n\n\n。。。はい、ここで一旦カットです。。。。\n\n\n';
-const SEPARATOR_DETECT = '一旦';
-const SAFETY_MARGIN_SEC = 0.2;    // 境界の安全マージン（ASR timestamp 揺らぎ吸収）
-// 区切り文「はい、ここで一旦切ってください。」は約 3 秒の長文だが、
-//   ASR で検出するキーワードは「一旦」だけ。その前後を区切り文全体としてカットする
-const SEPARATOR_PRE_EXPAND_SEC  = 1.5;  // 「一旦」より前（「はい、ここで」分）
-const SEPARATOR_POST_EXPAND_SEC = 1.5;  // 「一旦」より後（「切ってください」分）
-// 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。既定 10 = 600 字/分（動画ナレ標準）
+// 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。 既定 10 = 600 字/分
 const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
+// 境界 snap マージン: candidate ± この秒数の範囲で最大ギャップを探して snap
+const BOUNDARY_MARGIN_SEC = parseFloat(process.env.TTS_BOUNDARY_MARGIN || '1.5');
+// 連結時の slide 間デリミタ（TTS に「次の話題」と認識させる軽い区切り、検出には使わない）
+const JOIN_DELIM = '\n\n';
 
 /**
  * 複数 slide の narration をまとめて生成し、 個別 mp3 に切り出す
@@ -48,16 +41,18 @@ const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
 async function generateAndSplit(parts, opts = {}) {
   if (!parts.length) return [];
 
-  // 1. 全文結合
-  const fullText = parts.map(p => String(p.text || '').trim()).filter(Boolean)
-    .join('\n' + SEPARATOR_TEXT + '\n');
-  if (!fullText) return [];
+  // 1. 各 part の正規化文字数（読み長近似）
+  const normalizedLens = parts.map(p => normalizeForCount(p.text || '').length);
+  const totalNormChars = normalizedLens.reduce((a, b) => a + b, 0);
+  if (totalNormChars === 0) return [];
 
-  // 出力ディレクトリは parts[0].outputPath を基準に
+  // 2. 全文結合（区切り音なし）
+  const fullText = parts.map(p => String(p.text || '').trim()).filter(Boolean).join(JOIN_DELIM);
+
   const baseDir = path.dirname(parts[0].outputPath);
   fs.mkdirSync(baseDir, { recursive: true });
 
-  // 2. raw TTS 生成（atempo=1.0、 一旦元速度）
+  // 3. raw TTS 生成 (atempo=1.0、 後段で動的調整)
   const stamp = Date.now();
   const rawMp3 = path.join(baseDir, `_combined_raw_${stamp}.mp3`);
   const oldSpeed = process.env.TTS_GEMINI_SPEED;
@@ -69,72 +64,41 @@ async function generateAndSplit(parts, opts = {}) {
       model: opts.model,
       styleInstructions: opts.styleInstructions,
       outputPath: rawMp3,
-      timeoutMs: 300000,  // 長文 (2000+ 字) は応答に 2-3 分かかる、 5 分マージン
+      timeoutMs: 300000,  // 長文応答 5 分マージン
     });
   } finally {
     if (oldSpeed != null) process.env.TTS_GEMINI_SPEED = oldSpeed;
     else delete process.env.TTS_GEMINI_SPEED;
   }
 
-  // 3. raw duration → 動的 atempo 算出
+  // 4. raw duration → 動的 atempo
   const rawDur = probeDurationSec(rawMp3);
   if (rawDur <= 0) throw new Error('raw audio duration zero');
-  const totalChars = fullText.replace(/\s/g, '').length;
-  const idealDur = totalChars / TARGET_CHARS_PER_SEC;
-  const rawAtempo = rawDur / idealDur;
-  // atempo は 0.5 〜 2.0 の範囲にクランプ
-  const atempo = Math.max(0.5, Math.min(2.0, rawAtempo));
-  console.log(`  🎵 combined: raw=${rawDur.toFixed(1)}s / chars=${totalChars} / target=${idealDur.toFixed(1)}s / atempo=${atempo.toFixed(3)}`);
+  const idealDur = totalNormChars / TARGET_CHARS_PER_SEC;
+  const atempo = Math.max(0.5, Math.min(2.0, rawDur / idealDur));
+  console.log(`  🎵 combined: raw=${rawDur.toFixed(1)}s / chars=${totalNormChars} / target=${idealDur.toFixed(1)}s / atempo=${atempo.toFixed(3)}`);
 
-  // 4. atempo + loudnorm 適用して final mp3
+  // 5. atempo + loudnorm 適用
   const finalMp3 = path.join(baseDir, `_combined_final_${stamp}.mp3`);
   await applyFilters(rawMp3, finalMp3, atempo);
 
-  // 5. ASR（長文は分割実行 → マージ）
-  //   長文 audio (4分超) を一発 transcribe すると JSON 出力が長すぎて構文崩れ → parse fail
-  //   60-90 秒ずつに分割 + 各 chunk を並列 ASR + offset 加算してマージで回避
+  // 6. ASR（長文は分割マージ）
   const words = await transcribeChunked(finalMp3);
   if (!words.length) throw new Error('ASR returned no words');
 
-  // 6. 区切り「ピンポン」を検出してグループ化
-  //   長文 ASR では「ピンポンピンポンピンポン」が「ピンポン | ピンポン | ピンポン」と
-  //   3 segments に分かれて transcribe されることがある（PoC 短文では 1 segment）。
-  //   1.0 秒以内に連続する hits を 1 グループにまとめて 1 区切りと扱う。
-  const sepHitsRaw = words.filter(w => (w.text || '').includes(SEPARATOR_DETECT));
-  const sepGroups = [];
-  for (const h of sepHitsRaw) {
-    const last = sepGroups[sepGroups.length - 1];
-    if (last && h.start - last.end < 1.0) {
-      last.end = Math.max(last.end, h.end);
-      last.count++;
-    } else {
-      sepGroups.push({ start: h.start, end: h.end, count: 1 });
-    }
-  }
-  const expectedHits = parts.length - 1;
-  console.log(`  🎯 separator: raw hits=${sepHitsRaw.length} / groups=${sepGroups.length} / expected groups=${expectedHits}`);
-  if (sepGroups.length < expectedHits) {
-    throw new Error(`separator detection failed: groups=${sepGroups.length}, expected=${expectedHits}. ASR text head: ${words.slice(0, 5).map(w => w.text).join('|')}`);
-  }
-  // 余分なグループがあれば先頭から expectedHits 個だけ採用（誤検出防止）
-  // 各グループの境界を「区切り文全体」を表すよう前後拡張（「一旦」だけ検出した時の対応）
-  const useHits = sepGroups.slice(0, expectedHits).map(g => ({
-    start: Math.max(0, g.start - SEPARATOR_PRE_EXPAND_SEC),
-    end:   g.end + SEPARATOR_POST_EXPAND_SEC,
-    count: g.count,
-  }));
-
-  // 7. 境界 timestamps から各 slide 範囲を確定
+  // 7. 境界決定：文字数比率配分 + 自然ギャップ snap
   const totalDur = probeDurationSec(finalMp3);
+  const boundaries = computeBoundaries(words, normalizedLens, totalDur);
+  console.log(`  🎯 境界(文字数比配分): ${boundaries.map(b => b.toFixed(1) + 's').join(' / ')}`);
+
+  // 8. 各 slide 範囲を確定
   const ranges = parts.map((p, i) => {
-    const start = i === 0 ? 0 : Math.max(0, useHits[i - 1].end + SAFETY_MARGIN_SEC);
-    const end = i === parts.length - 1
-      ? totalDur
-      : Math.min(totalDur, useHits[i].start - SAFETY_MARGIN_SEC);
+    const start = i === 0 ? 0 : boundaries[i - 1];
+    const end = i === parts.length - 1 ? totalDur : boundaries[i];
     return { slideIdx: p.slideIdx, start, end, outputPath: p.outputPath, text: p.text };
   });
 
-  // 8. ffmpeg で各 slide を切り出し + 各 slide 内 word timestamps を計算
+  // 9. ffmpeg で切り出し + 各 slide 内 word timestamps を相対化
   const results = [];
   for (const r of ranges) {
     const durSec = r.end - r.start;
@@ -144,7 +108,6 @@ async function generateAndSplit(parts, opts = {}) {
     }
     await ffmpegSlice(finalMp3, r.outputPath, r.start, durSec);
     const actualDur = probeDurationSec(r.outputPath);
-    // 各 slide 内の words を相対時間に変換
     const slideWords = words
       .filter(w => w.start >= r.start && w.end <= r.end)
       .map(w => ({
@@ -161,14 +124,107 @@ async function generateAndSplit(parts, opts = {}) {
     });
   }
 
-  // 9. cleanup（中間ファイル削除）
+  // 10. cleanup
   try { fs.unlinkSync(rawMp3); } catch (_) {}
   try { fs.unlinkSync(finalMp3); } catch (_) {}
 
   return results;
 }
 
-// atempo + loudnorm を一括適用
+/**
+ * 原文文字数 + ASR words[] から各 slide の境界 timestamp を決定
+ *   累積文字数比率を ASR の累積文字数に当てはめ、対応 word の end を candidate に
+ *   candidate ± BOUNDARY_MARGIN_SEC の範囲で最大ギャップ中央に snap（自然な切れ目）
+ * @param {Array<{text, start, end}>} words ASR words（時刻順）
+ * @param {Array<number>} normLens 各 slide の正規化文字数
+ * @param {number} totalDur 全体 duration
+ * @returns {Array<number>} 境界 timestamps（長さ = slides 数 - 1）
+ */
+function computeBoundaries(words, normLens, totalDur) {
+  const n = normLens.length;
+  if (n <= 1) return [];
+
+  const wordNormLens = words.map(w => normalizeForCount(w.text || '').length);
+  const totalAsrChars = wordNormLens.reduce((a, b) => a + b, 0);
+  const totalNorm = normLens.reduce((a, b) => a + b, 0);
+
+  // ASR テキスト無い → 時間比配分 fallback
+  if (totalAsrChars === 0) {
+    const boundaries = [];
+    let cum = 0;
+    for (let i = 0; i < n - 1; i++) {
+      cum += normLens[i];
+      boundaries.push(totalDur * cum / totalNorm);
+    }
+    return boundaries;
+  }
+
+  const boundaries = [];
+  let wordIdx = 0;
+  let accAsr = 0;
+  let cumNorm = 0;
+
+  for (let i = 0; i < n - 1; i++) {
+    cumNorm += normLens[i];
+    const targetAsrChars = totalAsrChars * (cumNorm / totalNorm);
+
+    while (wordIdx < words.length && accAsr + wordNormLens[wordIdx] < targetAsrChars) {
+      accAsr += wordNormLens[wordIdx];
+      wordIdx++;
+    }
+    const candidateTime = (words[wordIdx] && words[wordIdx].end) || totalDur;
+
+    const snappedTime = snapToNearestGap(words, candidateTime, BOUNDARY_MARGIN_SEC);
+    boundaries.push(snappedTime);
+
+    // wordIdx を snap 後の位置に合わせる（次 slide で同じ word を二重消化しない）
+    while (wordIdx < words.length && words[wordIdx].end <= snappedTime) {
+      accAsr += wordNormLens[wordIdx];
+      wordIdx++;
+    }
+  }
+  return boundaries;
+}
+
+/**
+ * target ± margin の範囲で word 間ギャップが最大の位置に snap
+ * 該当ギャップが無ければ target をそのまま返す
+ */
+function snapToNearestGap(words, target, margin) {
+  let bestPos = target;
+  let bestGap = -1;
+  for (let i = 1; i < words.length; i++) {
+    const gapStart = words[i - 1].end;
+    const gapEnd = words[i].start;
+    if (gapEnd <= gapStart) continue;
+    const gapCenter = (gapStart + gapEnd) / 2;
+    if (Math.abs(gapCenter - target) <= margin) {
+      const gapSize = gapEnd - gapStart;
+      if (gapSize > bestGap) {
+        bestGap = gapSize;
+        bestPos = gapCenter;
+      }
+    }
+  }
+  return bestPos;
+}
+
+/**
+ * 文字数カウント用の正規化（原文と ASR を同じスケールで比較するため）
+ *   - 空白・改行・タブ除去
+ *   - 句読点・記号類除去（ASR が出力しない要素を原文から除く）
+ *   - 絵文字除去
+ *   ※数字・英字略語の読み展開ズレは BOUNDARY_MARGIN_SEC で吸収する前提
+ */
+function normalizeForCount(s) {
+  if (!s) return '';
+  let t = String(s).replace(/[\s　]/g, '');
+  t = t.replace(/[、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
+  t = t.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '');
+  return t;
+}
+
+// atempo + loudnorm 一括適用
 function applyFilters(srcMp3, outMp3, atempo) {
   return new Promise((resolve, reject) => {
     const af = atempo === 1.0
@@ -208,12 +264,10 @@ function ffmpegSlice(srcMp3, outMp3, startSec, durSec) {
   });
 }
 
-// 🆕 ASR 分割: 長文 audio を chunkSec ずつに分割して並列 transcribe → offset 加算でマージ
-//   Gemini ASR の JSON 出力長制限を回避（5分超でも安定）
+// 長文 audio を分割 → 並列 ASR → offset 加算でマージ
 async function transcribeChunked(mp3Path, chunkSec = 75) {
   const totalDur = probeDurationSec(mp3Path);
   if (totalDur <= chunkSec * 1.2) {
-    // 短い → そのまま 1 回 ASR
     return await transcribeWithTimestamps(mp3Path);
   }
   const nChunks = Math.ceil(totalDur / chunkSec);
@@ -228,7 +282,6 @@ async function transcribeChunked(mp3Path, chunkSec = 75) {
     await ffmpegSlice(mp3Path, tmpPath, start, dur);
     tmpFiles.push({ path: tmpPath, offset: start });
   }
-  // 並列 ASR（API クォータに優しく 2 並列）
   const PAR = 2;
   const results = new Array(tmpFiles.length).fill([]);
   let nextIdx = 0;
@@ -249,11 +302,9 @@ async function transcribeChunked(mp3Path, chunkSec = 75) {
       }
     }
   }));
-  // cleanup
   for (const f of tmpFiles) {
     try { fs.unlinkSync(f.path); } catch (_) {}
   }
-  // 全 chunk の words を時刻順にマージ
   const merged = results.flat().filter(w => w && typeof w.start === 'number').sort((a, b) => a.start - b.start);
   console.log(`  🔪 ASR 分割完了: ${merged.length} words 取得`);
   return merged;
@@ -270,6 +321,7 @@ function probeDurationSec(filePath) {
 
 module.exports = {
   generateAndSplit,
-  SEPARATOR_TEXT,
-  SEPARATOR_DETECT,
+  // 内部関数は test 用に export
+  _computeBoundaries: computeBoundaries,
+  _normalizeForCount: normalizeForCount,
 };

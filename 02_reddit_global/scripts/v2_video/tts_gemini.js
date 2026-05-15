@@ -31,10 +31,10 @@ const _minimax = require('./tts_minimax');
 const { applyJpDict } = require('./jp_dict');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-// 2026-05-13 (再更新): 相棒指示で 3.1 Flash TTS に再戻し（品質優先）。
-//   過去経緯: 3.1 Flash → 100 RPD 枯渇 → 2.5 Flash 退避 → 2.5 Pro 切替 → 3.1 Flash 復帰
-//   RPD 100 再枯渇時は GEMINI_TTS_MODEL=gemini-2.5-pro-preview-tts で env 切替可能
-const MODEL    = process.env.GEMINI_TTS_MODEL || 'gemini-3.1-flash-tts-preview';
+// 2026-05-15 (相棒指示): Combined TTS Mode 検証フェーズで 2.5 Pro に切替。
+//   3.1 Flash は連続検証で RPD 100 を枯渇しがち。 2.5 Pro は別クォータ枠で残量あり。
+//   過去経緯: 3.1 Flash → 100 RPD 枯渇 → 2.5 Flash 退避 → 2.5 Pro → 3.1 Flash → 2.5 Pro (本切替)
+const MODEL    = process.env.GEMINI_TTS_MODEL || 'gemini-2.5-pro-preview-tts';
 // 2026-05-13 採用: Zubenelgenubi（男性・カジュアル会話調）
 //   日本の商店街の八百屋のおじさん風プロンプトと組合せ、視聴者主層 45-54 に親和
 const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Zubenelgenubi';
