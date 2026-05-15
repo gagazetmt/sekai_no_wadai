@@ -34,8 +34,10 @@ const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 
 // ASR provider 切替: openai (Whisper, 既定) / gemini (multimodal, 長文で詰まる事故あり)
 const ASR_PROVIDER = (process.env.ASR_PROVIDER || 'openai').toLowerCase();
 
-// 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。 既定 10 = 600 字/分
-const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
+// 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。 既定 6 = 360 字/分
+//   2026-05-16: 10 → 6 に既定変更。10 だと常に atempo 倍速で読み上げる速すぎる動画になっていた。
+//   Gemini TTS の自然読み速度が約 6 cps なので 6 にすると atempo ≒ 1.0 で等倍再生になる
+const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '6');
 // 境界 snap マージン: candidate ± この秒数の範囲で最大ギャップを探して snap
 const BOUNDARY_MARGIN_SEC = parseFloat(process.env.TTS_BOUNDARY_MARGIN || '1.5');
 // 連結時の slide 間デリミタ（TTS に「次の話題」と認識させる軽い区切り、検出には使わない）
