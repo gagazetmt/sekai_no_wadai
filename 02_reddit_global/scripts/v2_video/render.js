@@ -498,11 +498,21 @@ async function main() {
     const audioSplitter = require('./audio_splitter');
     const combinedTargets = [];
     modules.forEach((m, idx) => {
-      if (m.type === 'reaction') return;
+      // reaction: legacy では除外（chunk 毎ランダム voice 維持のため個別 TTS）
+      //   INTEGRATED モード時は narration + comments[] を 1 chunk 統合してナレーター voice で combined に含める
+      //   (ランダム voice 演出は犠牲、 INTEGRATED の simplicity 優先。将来 amix で復活予定)
+      if (m.type === 'reaction' && !INTEGRATED_AUDIO_MODE) return;
       if (Array.isArray(m.audio) && m.audio.length) return;
-      const narr = m.type === 'opening'
-        ? String(m.title || m.narration || '').trim()
-        : String(m.narration || '').trim();
+      let narr;
+      if (m.type === 'reaction') {
+        const comments = (Array.isArray(m.comments) ? m.comments : [])
+          .map(c => String(c?.text || '').trim()).filter(Boolean).slice(0, 7);
+        narr = [String(m.narration || '').trim(), ...comments].filter(Boolean).join('。 ');
+      } else if (m.type === 'opening') {
+        narr = String(m.title || m.narration || '').trim();
+      } else {
+        narr = String(m.narration || '').trim();
+      }
       if (!narr) return;
       const fname = `m${String(idx).padStart(2, '0')}_c00.mp3`;
       combinedTargets.push({
