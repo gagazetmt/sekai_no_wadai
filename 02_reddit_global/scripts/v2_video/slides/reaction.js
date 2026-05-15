@@ -48,12 +48,39 @@ function buildReactionHTML(mod) {
   const STAGGER  = 0.6;
   const FIRST_AT = 0.5;
 
+  // ── 🆕 INTEGRATED モード判定（2026-05-16）─────────────
+  //   audio が 1 chunk で words[] を持つ場合、 narration + comments を統合読み上げしているので
+  //   各 comment 出現時刻を ASR words から逆引き（chunk 数ベースだとズレるため）
+  const integratedAudio = audio.length === 1
+    && Array.isArray(audio[0].words) && audio[0].words.length > 0
+    && comments.length > 0;
+  // 統合モード用: words から文字位置 → 時刻 マップを構築
+  let _commentStartTimes = null;  // [sec, sec, ...] 各 comment の絶対 start 時刻 (LEAD_PAD 含む)
+  if (integratedAudio) {
+    _commentStartTimes = _computeCommentStartsFromWords(
+      audio[0].words, comments, audio[0].durationSec || 1
+    );
+  }
+
   // 各 comment ごとに：
   //   delay        = 登場（slideDown）開始時刻
   //   activeStart  = 読まれ始める時刻（active 強調 ON）
   //   activeEnd    = 読み終わる時刻（active 強調 OFF）
   //   hasActive    = 音声が紐付くか（true なら active animation 付与）
   const commentTiming = comments.map((_, i) => {
+    // INTEGRATED モード: words から逆引きした時刻を使う
+    if (_commentStartTimes && _commentStartTimes[i] != null) {
+      const s = LEAD_PAD_SEC + _commentStartTimes[i];
+      const nextS = _commentStartTimes[i + 1] != null
+        ? LEAD_PAD_SEC + _commentStartTimes[i + 1]
+        : LEAD_PAD_SEC + (audio[0].durationSec || 1);
+      return {
+        delay: Math.max(0, s - 0.15),
+        activeStart: s,
+        activeEnd:   Math.max(nextS, s + 1.0),
+        hasActive:   true,
+      };
+    }
     const ci = narrCount + i;
     if (audio.length && ci < audio.length) {
       const s = chunkStarts[ci];
@@ -195,6 +222,57 @@ ${activeStyles}
 ${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
+}
+
+// 🆕 INTEGRATED モード用: audio[0].words[] と comments[] から
+//   各 comment が読まれ始める時刻 (audio chunk 内相対秒) を逆引きする
+//   - words[] の text を連結した ASR 認識文字列を作成
+//   - 各 word の text 開始位置 → start 時刻 のマップを構築
+//   - 各 comment.text の先頭 4-8 文字を ASR 文字列内で indexOf
+//   - 該当位置の word.start を comment 出現時刻として返す
+//   - マッチしない comment は null (フォールバックに任せる)
+function _computeCommentStartsFromWords(words, comments, audioDur) {
+  if (!words || !words.length || !comments.length) return null;
+  // ASR 文字列と「文字位置 → 時刻」テーブルを構築
+  let asrText = '';
+  const charStartTime = [];  // charStartTime[i] = i 文字目の word.start
+  for (const w of words) {
+    const wt = String(w.text || '');
+    for (let j = 0; j < wt.length; j++) {
+      charStartTime.push(typeof w.start === 'number' ? w.start : 0);
+    }
+    asrText += wt;
+  }
+  // 検索用に簡略化: 句読点・空白を削除した版も用意（誤差耐性）
+  const normalize = (s) => String(s || '').replace(/[\s、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
+  const asrNorm = normalize(asrText);
+  // asrNorm の文字位置 → 元 asrText 位置 のマップ
+  const normToOrigIdx = [];
+  for (let i = 0, j = 0; i < asrText.length; i++) {
+    if (normalize(asrText[i]).length > 0) {
+      normToOrigIdx[j] = i;
+      j++;
+    }
+  }
+  const starts = [];
+  let searchFrom = 0;  // asrNorm 内で次回検索の起点
+  for (const c of comments) {
+    const cTextNorm = normalize(c.text || '');
+    if (!cTextNorm) { starts.push(null); continue; }
+    // 先頭 4-12 文字を段階的に短くしてマッチング (TTS 訛り / 句読点ズレ耐性)
+    let found = -1;
+    for (const headLen of [12, 10, 8, 6, 5, 4]) {
+      const head = cTextNorm.slice(0, Math.min(headLen, cTextNorm.length));
+      if (head.length < 3) continue;
+      const idx = asrNorm.indexOf(head, searchFrom);
+      if (idx >= 0) { found = idx; break; }
+    }
+    if (found < 0) { starts.push(null); continue; }
+    const origIdx = normToOrigIdx[found] != null ? normToOrigIdx[found] : 0;
+    starts.push(charStartTime[origIdx] != null ? charStartTime[origIdx] : null);
+    searchFrom = found + Math.max(3, cTextNorm.length - 1);
+  }
+  return starts;
 }
 
 module.exports = { buildReactionHTML };
