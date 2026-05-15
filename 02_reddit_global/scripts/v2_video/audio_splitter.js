@@ -15,15 +15,24 @@
 //   3. 各 slide の原文文字数比率で ASR words を分配
 //   4. 境界は word 間ギャップ最大位置に snap（自然な間で切る）
 //   5. 各 slide 内では word timestamps を相対化（字幕同期維持）
+//
+// ASR provider (env ASR_PROVIDER):
+//   openai (既定) — Whisper (verbose_json + word timestamps)。25MB / ≒30分 / 1 リクエスト
+//   gemini         — multimodal。長文は 75s ずつ chunk 分割 + 並列マージ (構造上失敗しやすい)
+//   いずれにせよ Whisper 失敗時は Gemini にフォールバック
 
 const fs = require('fs');
 const path = require('path');
 const { spawn, execSync } = require('child_process');
 const { generateGeminiTTS } = require('./tts_gemini');
-const { transcribeWithTimestamps } = require('./gemini_asr');
+const geminiAsr = require('./gemini_asr');
+const openaiAsr = require('./openai_asr');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
+
+// ASR provider 切替: openai (Whisper, 既定) / gemini (multimodal, 長文で詰まる事故あり)
+const ASR_PROVIDER = (process.env.ASR_PROVIDER || 'openai').toLowerCase();
 
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。 既定 10 = 600 字/分
 const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '10');
@@ -82,8 +91,10 @@ async function generateAndSplit(parts, opts = {}) {
   const finalMp3 = path.join(baseDir, `_combined_final_${stamp}.mp3`);
   await applyFilters(rawMp3, finalMp3, atempo);
 
-  // 6. ASR（長文は分割マージ）
-  const words = await transcribeChunked(finalMp3);
+  // 6. ASR
+  //    primary: Whisper (1 リクエストで動画全体カバー、25MB 制限内)
+  //    fallback: Gemini multimodal (chunk 分割マージ、長文で失敗報告あり)
+  const words = await transcribeAuto(finalMp3);
   if (!words.length) throw new Error('ASR returned no words');
 
   // 7. 境界決定：文字数比率配分 + 自然ギャップ snap
@@ -264,14 +275,32 @@ function ffmpegSlice(srcMp3, outMp3, startSec, durSec) {
   });
 }
 
-// 長文 audio を分割 → 並列 ASR → offset 加算でマージ
-async function transcribeChunked(mp3Path, chunkSec = 75) {
+// ASR 実行: primary (Whisper) → 失敗時 fallback (Gemini chunked)
+async function transcribeAuto(mp3Path) {
+  if (ASR_PROVIDER === 'gemini') {
+    return await transcribeGeminiChunked(mp3Path);
+  }
+  // openai (Whisper) を先に試す。25MB 内なら 1 リクエストで完走
+  try {
+    const t0 = Date.now();
+    const words = await openaiAsr.transcribeWithTimestamps(mp3Path);
+    console.log(`  🎙️ Whisper ASR: ${words.length} words (${((Date.now() - t0) / 1000).toFixed(1)}s)`);
+    if (words.length > 0) return words;
+    console.warn('  ⚠️ Whisper ASR: words 空 → Gemini fallback');
+  } catch (e) {
+    console.warn(`  ⚠️ Whisper ASR 失敗 → Gemini fallback: ${e.message.slice(0, 150)}`);
+  }
+  return await transcribeGeminiChunked(mp3Path);
+}
+
+// Gemini multimodal ASR: 長文は 75s ずつ分割 → 並列 → offset 加算マージ
+async function transcribeGeminiChunked(mp3Path, chunkSec = 75) {
   const totalDur = probeDurationSec(mp3Path);
   if (totalDur <= chunkSec * 1.2) {
-    return await transcribeWithTimestamps(mp3Path);
+    return await geminiAsr.transcribeWithTimestamps(mp3Path);
   }
   const nChunks = Math.ceil(totalDur / chunkSec);
-  console.log(`  🔪 ASR 分割: ${totalDur.toFixed(1)}s → ${nChunks} chunks (${chunkSec}s each, 並列実行)`);
+  console.log(`  🔪 Gemini ASR 分割: ${totalDur.toFixed(1)}s → ${nChunks} chunks (${chunkSec}s each, 並列実行)`);
   const baseDir = path.dirname(mp3Path);
   const stamp = Date.now();
   const tmpFiles = [];
@@ -291,14 +320,14 @@ async function transcribeChunked(mp3Path, chunkSec = 75) {
       if (idx >= tmpFiles.length) return;
       const f = tmpFiles[idx];
       try {
-        const w = await transcribeWithTimestamps(f.path);
+        const w = await geminiAsr.transcribeWithTimestamps(f.path);
         results[idx] = w.map(ww => ({
           text: ww.text,
           start: (Number(ww.start) || 0) + f.offset,
           end: (Number(ww.end) || 0) + f.offset,
         }));
       } catch (e) {
-        console.warn(`  ⚠️ ASR chunk#${idx + 1}/${tmpFiles.length} 失敗 (offset=${f.offset}s): ${e.message.slice(0, 100)}`);
+        console.warn(`  ⚠️ Gemini ASR chunk#${idx + 1}/${tmpFiles.length} 失敗 (offset=${f.offset}s): ${e.message.slice(0, 100)}`);
       }
     }
   }));
@@ -306,7 +335,7 @@ async function transcribeChunked(mp3Path, chunkSec = 75) {
     try { fs.unlinkSync(f.path); } catch (_) {}
   }
   const merged = results.flat().filter(w => w && typeof w.start === 'number').sort((a, b) => a.start - b.start);
-  console.log(`  🔪 ASR 分割完了: ${merged.length} words 取得`);
+  console.log(`  🔪 Gemini ASR 分割完了: ${merged.length} words 取得`);
   return merged;
 }
 
