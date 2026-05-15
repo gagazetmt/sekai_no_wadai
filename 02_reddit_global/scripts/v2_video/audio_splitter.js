@@ -24,12 +24,13 @@ const { transcribeWithTimestamps } = require('./gemini_asr');
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
 
-// 区切り音声: 完全な文「はい、ここで一旦切ってください。」
-//   - 擬音語は ASR で「ノイズ扱い・省略」されるリスクある（Gemini ASR は自然言語処理）
-//   - 完全な命令文は ASR が確実に segment 化（PoC で実証）
-//   - 「一旦」が漢字熟語として 1 segment に出る（一意性最大）
-const SEPARATOR_TEXT = 'はい、ここで一旦切ってください。';
-const SEPARATOR_DETECT = '一旦';  // ASR で 1 segment になる漢字熟語、サッカーナレに絶対出ない
+// 区切り音声: 「沈黙 + 命令文 + 沈黙」のパターン（2026-05-15 相棒提案）
+//   - 三点リーダー × 改行で TTS に物理的な「間」を取らせる（沈黙時間生成）
+//   - 「一旦カット」は完全な命令文 = ASR が確実 segment 化
+//   - 1816 字の長文に 7 回挿入しても省略されにくい（前後の沈黙で「明確な区切り感」が出る）
+//   - 「一旦」を検出キーに（漢字熟語 1 segment、 一意性最大）
+const SEPARATOR_TEXT = '\n\n\n。。。はい、ここで一旦カットです。。。。\n\n\n';
+const SEPARATOR_DETECT = '一旦';
 const SAFETY_MARGIN_SEC = 0.2;    // 境界の安全マージン（ASR timestamp 揺らぎ吸収）
 // 区切り文「はい、ここで一旦切ってください。」は約 3 秒の長文だが、
 //   ASR で検出するキーワードは「一旦」だけ。その前後を区切り文全体としてカットする
