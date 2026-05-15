@@ -11,8 +11,9 @@ const W = 1920, H = 1080;
 //   - 末尾も TAIL_PAD_SEC の余韻を取る（次スライド遷移までの呼吸）
 //   - render.js の buildSlideAudio が先頭に silence pad、slideDurationMs が前後 pad を含めた長さを返す
 //   2026-05-08: 1.5s → 1.43s に 5% 短縮（テンポ感UP）
-const LEAD_PAD_SEC = 1.43;
-const TAIL_PAD_SEC = 1.43;
+//   2026-05-16: env で 0 化可能に (INTEGRATED_AUDIO_MODE で combined.mp3 直接利用時に使用)
+const LEAD_PAD_SEC = parseFloat(process.env.LEAD_PAD_SEC ?? '1.43');
+const TAIL_PAD_SEC = parseFloat(process.env.TAIL_PAD_SEC ?? '1.43');
 
 // 型3 ダークネイビー基調（全スライド共通）
 const PALETTE = {

@@ -44,11 +44,26 @@ const JOIN_DELIM = '\n\n';
 /**
  * 複数 slide の narration をまとめて生成し、 個別 mp3 に切り出す
  * @param {Array<{ slideIdx, text, outputPath }>} parts
- * @param {Object} opts - { voiceId, styleInstructions, model }
- * @returns {Promise<Array<{ slideIdx, audioPath, durationSec, words, text }>>}
+ * @param {Object} opts
+ *   voiceId, styleInstructions, model: TTS パラメータ
+ *   keepIndividual: true(既定) で各 slide の個別 mp3 を切り出す。
+ *                   false なら combined.mp3 のみ保持、個別 mp3 切り出しスキップ。
+ *                   INTEGRATED_AUDIO_MODE 向けの新パス用。
+ *   keepCombined  : true なら combined.mp3 を残す（既定: keepIndividual の逆）
+ * @returns {Promise<{
+ *   parts: Array<{ slideIdx, audioPath?, durationSec, words, text, startAbsSec, endAbsSec }>,
+ *   combinedAudioPath: string | null,
+ *   totalDurationSec: number,
+ *   wordsAbs: Array<{text,start,end}>
+ * }>}
+ *
+ * 後方互換: 戻り値は parts 配列としても iterable. result[i] === result.parts[i]
+ *   既存呼び出し側 (for (const r of results)) を壊さないため Proxy.
  */
 async function generateAndSplit(parts, opts = {}) {
-  if (!parts.length) return [];
+  const keepIndividual = opts.keepIndividual !== false;  // 既定 true
+  const keepCombined   = opts.keepCombined   ?? !keepIndividual;  // 既定 = !keepIndividual
+  if (!parts.length) return _makeResult([], null, 0, []);
 
   // 1. 各 part の正規化文字数（読み長近似）
   const normalizedLens = parts.map(p => normalizeForCount(p.text || '').length);
@@ -109,7 +124,7 @@ async function generateAndSplit(parts, opts = {}) {
     return { slideIdx: p.slideIdx, start, end, outputPath: p.outputPath, text: p.text };
   });
 
-  // 9. ffmpeg で切り出し + 各 slide 内 word timestamps を相対化
+  // 9. ffmpeg で切り出し (keepIndividual=false なら省略) + 各 slide 内 word timestamps を相対化
   const results = [];
   for (const r of ranges) {
     const durSec = r.end - r.start;
@@ -117,8 +132,13 @@ async function generateAndSplit(parts, opts = {}) {
       console.warn(`  ⚠️ slide#${r.slideIdx + 1} duration <= 0.2s, skip`);
       continue;
     }
-    await ffmpegSlice(finalMp3, r.outputPath, r.start, durSec);
-    const actualDur = probeDurationSec(r.outputPath);
+    let actualDur = durSec;
+    let audioPath = null;
+    if (keepIndividual) {
+      await ffmpegSlice(finalMp3, r.outputPath, r.start, durSec);
+      actualDur = probeDurationSec(r.outputPath);
+      audioPath = r.outputPath;
+    }
     const slideWords = words
       .filter(w => w.start >= r.start && w.end <= r.end)
       .map(w => ({
@@ -128,18 +148,37 @@ async function generateAndSplit(parts, opts = {}) {
       }));
     results.push({
       slideIdx: r.slideIdx,
-      audioPath: r.outputPath,
+      audioPath,
       durationSec: actualDur,
       words: slideWords,
       text: r.text,
+      startAbsSec: r.start,
+      endAbsSec: r.end,
     });
   }
 
   // 10. cleanup
   try { fs.unlinkSync(rawMp3); } catch (_) {}
-  try { fs.unlinkSync(finalMp3); } catch (_) {}
+  let combinedAudioPath = null;
+  if (keepCombined) {
+    // baseDir に分かりやすい名前で残す
+    combinedAudioPath = path.join(baseDir, `_combined_${stamp}.mp3`);
+    fs.renameSync(finalMp3, combinedAudioPath);
+  } else {
+    try { fs.unlinkSync(finalMp3); } catch (_) {}
+  }
 
-  return results;
+  return _makeResult(results, combinedAudioPath, totalDur, words);
+}
+
+// 戻り値を「parts 配列としても iterable」「{parts, combinedAudioPath, ...} としても展開可」
+//   既存呼出 (for (const r of result)) を壊さない後方互換
+function _makeResult(parts, combinedAudioPath, totalDurationSec, wordsAbs) {
+  Object.defineProperty(parts, 'parts', { value: parts, enumerable: false });
+  Object.defineProperty(parts, 'combinedAudioPath', { value: combinedAudioPath, enumerable: false });
+  Object.defineProperty(parts, 'totalDurationSec', { value: totalDurationSec, enumerable: false });
+  Object.defineProperty(parts, 'wordsAbs', { value: wordsAbs, enumerable: false });
+  return parts;
 }
 
 /**
