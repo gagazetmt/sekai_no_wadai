@@ -79,21 +79,51 @@ async function generateAndSplit(parts, opts = {}) {
   fs.mkdirSync(baseDir, { recursive: true });
 
   // 3. raw TTS 生成 (atempo=1.0、 後段で動的調整)
+  //    長文 (fullText.length > TTS_CHUNK_CHAR_LIMIT) は 2-3 sub-text に分割して
+  //    別 TTS リクエストで生成 → ffmpeg concat で 1 本にまとめる
+  //    Gemini 2.5 Pro TTS は ~1300 tokens (≒1700字) で finishReason: OTHER 返す
+  //    上限事故あり、それ未満で割れば確実
   const stamp = Date.now();
+  const TTS_CHUNK_CHAR_LIMIT = parseInt(process.env.TTS_CHUNK_CHAR_LIMIT || '1500', 10);
+  const subTexts = fullText.length > TTS_CHUNK_CHAR_LIMIT
+    ? _splitLongTextForTTS(fullText, TTS_CHUNK_CHAR_LIMIT)
+    : [fullText];
+  if (subTexts.length > 1) {
+    console.log(`  ✂️ TTS 自動分割: fullText ${fullText.length} 字 → ${subTexts.length} parts (${subTexts.map(s => s.length).join(' / ')} 字)`);
+  }
+
   const rawMp3 = path.join(baseDir, `_combined_raw_${stamp}.mp3`);
   const oldSpeed = process.env.TTS_GEMINI_SPEED;
   process.env.TTS_GEMINI_SPEED = '1.0';
   try {
-    await generateGeminiTTS({
-      text: fullText,
-      voiceId: opts.voiceId,
-      model: opts.model,
-      styleInstructions: opts.styleInstructions,
-      outputPath: rawMp3,
-      // 長文では Gemini TTS の生成時間が音声尺と同等 (1800字 ≒ 5分)
-      // env TTS_COMBINED_TIMEOUT_MS で override 可、既定 10 分
-      timeoutMs: parseInt(process.env.TTS_COMBINED_TIMEOUT_MS || '600000', 10),
-    });
+    if (subTexts.length === 1) {
+      await generateGeminiTTS({
+        text: subTexts[0],
+        voiceId: opts.voiceId,
+        model: opts.model,
+        styleInstructions: opts.styleInstructions,
+        outputPath: rawMp3,
+        // 長文では Gemini TTS の生成時間が音声尺と同等 (1500字 ≒ 4 分)
+        // env TTS_COMBINED_TIMEOUT_MS で override 可、既定 10 分
+        timeoutMs: parseInt(process.env.TTS_COMBINED_TIMEOUT_MS || '600000', 10),
+      });
+    } else {
+      const subRawMp3s = [];
+      for (let i = 0; i < subTexts.length; i++) {
+        const subPath = path.join(baseDir, `_combined_sub${i}_${stamp}.mp3`);
+        await generateGeminiTTS({
+          text: subTexts[i],
+          voiceId: opts.voiceId,
+          model: opts.model,
+          styleInstructions: opts.styleInstructions,
+          outputPath: subPath,
+          timeoutMs: parseInt(process.env.TTS_COMBINED_TIMEOUT_MS || '600000', 10),
+        });
+        subRawMp3s.push(subPath);
+      }
+      await ffmpegConcatMp3s(subRawMp3s, rawMp3);
+      subRawMp3s.forEach(p => { try { fs.unlinkSync(p); } catch (_) {} });
+    }
   } finally {
     if (oldSpeed != null) process.env.TTS_GEMINI_SPEED = oldSpeed;
     else delete process.env.TTS_GEMINI_SPEED;
@@ -276,6 +306,63 @@ function normalizeForCount(s) {
   t = t.replace(/[、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
   t = t.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '');
   return t;
+}
+
+// 長文を文末で 2-3 分割: 各 part が limit 以下になるまで再帰的に半割
+//   文末 (。 ！ ？) を優先、無ければ 読点 (、) で半割、それも無ければ強制半割
+function _splitLongTextForTTS(text, limit) {
+  if (!text || text.length <= limit) return [text].filter(Boolean);
+  // 中央付近で文末を探す (まず後半、次に前半)
+  const mid = Math.floor(text.length / 2);
+  let splitPos = -1;
+  const isStrongBreak = c => c === '。' || c === '！' || c === '？';
+  const isSoftBreak   = c => c === '、';
+  // 後半中央以降で強い区切り
+  for (let i = mid; i < Math.min(text.length, limit); i++) {
+    if (isStrongBreak(text[i])) { splitPos = i + 1; break; }
+  }
+  // 前半中央以前で強い区切り
+  if (splitPos < 0) {
+    for (let i = mid - 1; i > 0; i--) {
+      if (isStrongBreak(text[i])) { splitPos = i + 1; break; }
+    }
+  }
+  // 強い区切り無ければ 読点
+  if (splitPos < 0) {
+    for (let i = mid; i < Math.min(text.length, limit); i++) {
+      if (isSoftBreak(text[i])) { splitPos = i + 1; break; }
+    }
+  }
+  // それでも無ければ強制半割
+  if (splitPos < 0) splitPos = mid;
+
+  const left  = text.slice(0, splitPos).trim();
+  const right = text.slice(splitPos).trim();
+  return [..._splitLongTextForTTS(left, limit), ..._splitLongTextForTTS(right, limit)];
+}
+
+// 複数の mp3 を ffmpeg concat demuxer で 1 本にまとめる (同じ codec/sample rate 前提)
+function ffmpegConcatMp3s(srcMp3s, outMp3) {
+  return new Promise((resolve, reject) => {
+    const baseDir = path.dirname(outMp3);
+    const listFile = path.join(baseDir, `_concat_list_${Date.now()}.txt`);
+    fs.writeFileSync(listFile, srcMp3s.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n'));
+    const args = [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      '-f', 'concat', '-safe', '0', '-i', listFile,
+      '-codec:a', 'libmp3lame', '-b:a', '128k',
+      outMp3,
+    ];
+    const proc = spawn(FFMPEG, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderr = '';
+    proc.stderr.on('data', d => { stderr += d.toString(); });
+    proc.on('error', e => { try { fs.unlinkSync(listFile); } catch (_) {}; reject(e); });
+    proc.on('close', code => {
+      try { fs.unlinkSync(listFile); } catch (_) {}
+      if (code === 0) resolve(outMp3);
+      else reject(new Error(`ffmpeg concat exit ${code}: ${stderr.slice(-300)}`));
+    });
+  });
 }
 
 // atempo + loudnorm 一括適用
