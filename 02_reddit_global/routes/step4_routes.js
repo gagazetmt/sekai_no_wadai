@@ -1877,21 +1877,32 @@ function getUI() {
       const _addBtn = (m.dataSlots.length < SLOT_MAX)
         ? '<button class="s4-slot-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.dataSlots.length + '/' + SLOT_MAX + ')</button>'
         : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + SLOT_MAX + '/' + SLOT_MAX + ')</div>';
+      // 2026-05-17: 並び替えボタン (↑↓) を追加（相棒指示）
+      const _mkOrderBtns = (idx, total) => {
+        const upDis = idx === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+        const dnDis = idx === total - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+        return '<button class="s4-slot-up" data-idx="' + idx + '" title="上へ"' + upDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;align-self:center;">↑</button>'
+             + '<button class="s4-slot-down" data-idx="' + idx + '" title="下へ"' + dnDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;align-self:center;">↓</button>';
+      };
+      const _total = m.dataSlots.length;
       dataHtml = '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📊 dataSlots</div>'
         + m.dataSlots.map(function(s, idx) {
+            const orderBtns = _mkOrderBtns(idx, _total);
             const delBtn = '<button class="s4-slot-del" data-idx="' + idx + '" title="この行を削除" '
               + 'style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:13px;padding:0 6px;line-height:24px;height:24px;align-self:center;">×</button>';
             if (isCmp) {
-              return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 28px;gap:6px;margin-bottom:4px;">'
+              return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 24px 24px 28px;gap:4px;margin-bottom:4px;">'
                 + '<input class="inp s4-cmp-label" data-idx="' + idx + '" value="' + _esc(s.label||'') + '" placeholder="LABEL" style="font-size:11px;padding:4px 6px;">'
                 + '<input class="inp s4-cmp-left" data-idx="' + idx + '" value="' + _esc(s.leftValue||'') + '" placeholder="左" style="font-size:11px;padding:4px 6px;color:#93c5fd;">'
                 + '<input class="inp s4-cmp-right" data-idx="' + idx + '" value="' + _esc(s.rightValue||'') + '" placeholder="右" style="font-size:11px;padding:4px 6px;color:#fca5a5;">'
+                + orderBtns
                 + delBtn
                 + '</div>';
             } else {
-              return '<div style="display:grid;grid-template-columns:140px 1fr 28px;gap:6px;margin-bottom:4px;">'
+              return '<div style="display:grid;grid-template-columns:140px 1fr 24px 24px 28px;gap:4px;margin-bottom:4px;">'
                 + '<input class="inp s4-slot-label" data-idx="' + idx + '" value="' + _esc(s.label||'') + '" placeholder="ラベル" style="font-size:11px;padding:4px 6px;">'
                 + '<input class="inp s4-slot-value" data-idx="' + idx + '" value="' + _esc(s.value||'') + '" placeholder="値" style="font-size:11px;padding:4px 6px;">'
+                + orderBtns
                 + delBtn
                 + '</div>';
             }
@@ -1903,18 +1914,32 @@ function getUI() {
       const _addPh = (m.catchphrases.length < SLOT_MAX)
         ? '<button class="s4-phrase-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.catchphrases.length + '/' + SLOT_MAX + ')</button>'
         : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + SLOT_MAX + '/' + SLOT_MAX + ')</div>';
+      // 2026-05-17: catchphrases にも ↑↓ ボタン追加
+      const _totalPh = m.catchphrases.length;
       extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🎯 catchphrases</div>'
         + m.catchphrases.map(function(p, idx) {
             const txt = (typeof p === 'string') ? p : (p && p.text) || '';
-            return '<input class="inp s4-phrase" data-idx="' + idx + '" value="' + _esc(txt) + '" placeholder="キャッチコピー" style="display:block;width:100%;font-size:11px;padding:4px 6px;margin-bottom:4px;">';
+            const upDis = idx === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+            const dnDis = idx === _totalPh - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+            return '<div style="display:grid;grid-template-columns:1fr 24px 24px;gap:4px;margin-bottom:4px;">'
+              + '<input class="inp s4-phrase" data-idx="' + idx + '" value="' + _esc(txt) + '" placeholder="キャッチコピー" style="font-size:11px;padding:4px 6px;">'
+              + '<button class="s4-phrase-up" data-idx="' + idx + '" title="上へ"' + upDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;">↑</button>'
+              + '<button class="s4-phrase-down" data-idx="' + idx + '" title="下へ"' + dnDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;">↓</button>'
+              + '</div>';
           }).join('') + _addPh;
     }
     if (Array.isArray(m.comments) && m.comments.length) {
+      // 2026-05-17: comments にも ↑↓ ボタン追加
+      const _totalCmt = m.comments.length;
       extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">💬 comments</div>'
         + m.comments.map(function(c, idx) {
-            return '<div style="display:grid;grid-template-columns:1fr 60px;gap:6px;margin-bottom:4px;">'
+            const upDis = idx === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+            const dnDis = idx === _totalCmt - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+            return '<div style="display:grid;grid-template-columns:1fr 60px 24px 24px;gap:4px;margin-bottom:4px;">'
               + '<input class="inp s4-cmt-text" data-idx="' + idx + '" value="' + _esc(c.text||'') + '" style="font-size:11px;padding:4px 6px;">'
               + '<input type="number" class="inp s4-cmt-score" data-idx="' + idx + '" value="' + (c.score||0) + '" style="font-size:11px;padding:4px 6px;">'
+              + '<button class="s4-cmt-up" data-idx="' + idx + '" title="上へ"' + upDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;">↑</button>'
+              + '<button class="s4-cmt-down" data-idx="' + idx + '" title="下へ"' + dnDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;">↓</button>'
               + '</div>';
           }).join('');
     }
@@ -2197,6 +2222,30 @@ function getUI() {
     el.querySelectorAll('.s4-phrase-add').forEach(function(btn) {
       btn.addEventListener('click', function() { s4AddPhrase(); });
     });
+    // 2026-05-17: 並び替え (↑↓) ハンドラ
+    function _s4Swap(arr, idx, dir) {
+      if (!Array.isArray(arr)) return;
+      const j = idx + dir;
+      if (idx < 0 || j < 0 || idx >= arr.length || j >= arr.length) return;
+      const tmp = arr[idx]; arr[idx] = arr[j]; arr[j] = tmp;
+    }
+    function _bindSwap(selector, getArr, dir) {
+      el.querySelectorAll(selector).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (btn.disabled) return;
+          const idx = parseInt(btn.getAttribute('data-idx'), 10);
+          const arr = getArr();
+          _s4Swap(arr, idx, dir);
+          _renderEditor();
+        });
+      });
+    }
+    _bindSwap('.s4-slot-up',   () => m.dataSlots,   -1);
+    _bindSwap('.s4-slot-down', () => m.dataSlots,   +1);
+    _bindSwap('.s4-phrase-up',   () => m.catchphrases, -1);
+    _bindSwap('.s4-phrase-down', () => m.catchphrases, +1);
+    _bindSwap('.s4-cmt-up',   () => m.comments, -1);
+    _bindSwap('.s4-cmt-down', () => m.comments, +1);
     /* 🔍 画像調整スライダー bind（単一画像スライド）*/
     const _zoomEl = el.querySelector('.s4-img-zoom');
     if (_zoomEl) _zoomEl.addEventListener('input', function(e) { s4OnImageAdjust('zoom', e.target.value); });
