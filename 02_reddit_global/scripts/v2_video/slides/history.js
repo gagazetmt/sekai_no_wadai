@@ -305,17 +305,15 @@ function buildHistoryHTML(mod) {
 
   const eventsHtml = events.map((e, displayIdx) => {
     const ttl = String(e.title || '');
-    const sub = String(e.sub   || '');
     const dateHtml = _highlightNumbers(esc(String(e.date || '')));
     const ttlHtml  = _highlightNumbers(esc(ttl));
-    const subHtml  = _highlightNumbers(esc(sub));
     const delay = delays[displayIdx].toFixed(2);
     const lastClass = e.isLastInData ? ' is-last' : '';
+    // 2026-05-17: メインテキストの下のサブテキスト (tl-sub) は削除 (相棒指示)
     return `<div class="tl-event${lastClass}" style="animation-delay:${delay}s;${e.isLastInData ? `--pulse-delay:${(parseFloat(delay) + 0.3).toFixed(2)}s;` : ''}">
       <div class="tl-date">${dateHtml}</div>
       <div class="tl-card">
         <div class="tl-title" style="font-size:${_titleFont(ttl, layout)}px">${ttlHtml}</div>
-        ${e.sub ? `<div class="tl-sub" style="font-size:${_subFont(sub, layout)}px">${subHtml}</div>` : ''}
       </div>
     </div>`;
   }).join('');
