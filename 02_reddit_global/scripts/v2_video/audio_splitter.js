@@ -35,10 +35,13 @@ const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 
 // ASR provider 切替: openai (Whisper, 既定) / gemini (multimodal, 長文で詰まる事故あり)
 const ASR_PROVIDER = (process.env.ASR_PROVIDER || 'openai').toLowerCase();
 
-// 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。 既定 6 = 360 字/分
-//   2026-05-16: 10 → 6 に既定変更。10 だと常に atempo 倍速で読み上げる速すぎる動画になっていた。
-//   Gemini TTS の自然読み速度が約 6 cps なので 6 にすると atempo ≒ 1.0 で等倍再生になる
-const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '6');
+// 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。
+//   2026-05-16 (相棒判断): 6 → 7.2 に既定変更。
+//     - 6 cps は Hearts 検証で「やや遅い」印象 (相棒)
+//     - 8 cps は「若干早すぎ」(相棒の聴き比べ)
+//     - 7.2 cps が中間妥当値。3.1 Flash の raw 5.4-6.4 cps に対し atempo ≒ 1.13-1.33 で軽加速
+//   履歴: 10 → 6 (2026-05-16 早朝) → 7.2 (2026-05-16 検証後)
+const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '7.2');
 // 境界 snap マージン: candidate ± この秒数の範囲で最大ギャップを探して snap
 const BOUNDARY_MARGIN_SEC = parseFloat(process.env.TTS_BOUNDARY_MARGIN || '1.5');
 // 連結時の slide 間デリミタ（TTS に「次の話題」と認識させる軽い区切り、検出には使わない）
