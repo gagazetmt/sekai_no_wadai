@@ -7,19 +7,22 @@
 
 const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
 
-const MAX_ITEMS = 8;
+// 2026-05-16: MAX_ITEMS 8 → 9 に拡張（相棒指示）
+const MAX_ITEMS = 9;
 
 // 項目数で行高 / フォント / 番号フォントを動的調整
 //   行高はそのままで、フォントは行高ぎりぎりまで大きく
 //   numFz: line-height 1 / Georgia italic → 行高×0.85 まで
 //   titleFz: line-height 1.25 → 行高×0.65 まで
+//   2026-05-16: 1〜5件は現状維持、6〜9件は段階的に可変（9件サポート追加）
 function _layoutForCount(n) {
   if (n <= 3) return { rowH: 130, titleFz: 84, numFz: 130 };
   if (n <= 4) return { rowH: 110, titleFz: 68, numFz: 110 };
   if (n === 5) return { rowH: 96,  titleFz: 60, numFz: 96  };
   if (n === 6) return { rowH: 84,  titleFz: 52, numFz: 84  };
   if (n === 7) return { rowH: 74,  titleFz: 44, numFz: 72  };
-  return        { rowH: 64,  titleFz: 38, numFz: 62  };  // 8件
+  if (n === 8) return { rowH: 64,  titleFz: 38, numFz: 62  };
+  return         { rowH: 56,  titleFz: 32, numFz: 54  };  // 9件
 }
 
 function _itemFontSize(text, baseFz) {
@@ -157,9 +160,10 @@ function buildTocHTML(mod) {
 }
 
 /* ─── リスト ─── */
+/* 2026-05-16: 字幕復活に伴い bottom 180→260 に上げる（字幕バー 110px + 余白 150px） */
 .toc-list {
   position: absolute;
-  top: 200px; left: 80px; right: 80px; bottom: 180px;
+  top: 200px; left: 80px; right: 80px; bottom: 260px;
   display: flex; flex-direction: column;
   justify-content: center;
   gap: 8px;
@@ -284,9 +288,10 @@ function buildTocHTML(mod) {
 </div>
 <div class="toc-list">
   ${itemsHtml}
-</div>`;
-  /* 2026-05-08 相棒指示: TOC スライドは目次レイアウト自体が見出しと同等の役割を果たすため、
-     字幕バーで二重表示にせず削除（"見出し→字幕"の冗長感を排除）*/
+</div>
+${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
+  /* 2026-05-08 → 2026-05-16: 字幕復活（相棒指示）。
+     toc-list の bottom を 180→260 に上げて被らないよう調整。 */
 
   return wrapHTML({ slideBody, extraStyles });
 }
