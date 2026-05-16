@@ -487,7 +487,13 @@ async function main() {
   //     LEAD_PAD_SEC=0 / TAIL_PAD_SEC=0 / xfade transition=0 と組合せて使う想定 (boundary は ASR word ギャップで自然に確保)
   //   メリット: 声色・速度・音量を完璧に統一、 RPD 9→1 削減、 揺らぎ完全排除
   //   reaction は除外（chunk[0] 前置き + chunk[1+] コメント voice の構造が違うため）
-  const INTEGRATED_AUDIO_MODE = process.env.INTEGRATED_AUDIO_MODE === '1';
+  // 2026-05-16: AUDIO_MODE による明示切替を追加 (pm2 メモリ env が頑固に残るケース対策)
+  //   .env に AUDIO_MODE=legacy を入れれば 強制 legacy (INTEGRATED 無効)
+  //   .env に AUDIO_MODE=integrated を入れれば 強制 INTEGRATED
+  //   AUDIO_MODE 未設定なら旧 INTEGRATED_AUDIO_MODE=1 をフォールバック
+  const AUDIO_MODE = process.env.AUDIO_MODE
+    || (process.env.INTEGRATED_AUDIO_MODE === '1' ? 'integrated' : 'legacy');
+  const INTEGRATED_AUDIO_MODE = AUDIO_MODE === 'integrated';
   if (INTEGRATED_AUDIO_MODE) {
     // INTEGRATED モードでは Combined TTS 前提
     process.env.TTS_COMBINED_MODE = '1';
