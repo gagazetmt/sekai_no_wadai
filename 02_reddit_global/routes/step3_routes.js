@@ -245,9 +245,10 @@ ${searchBlock}
 
     const t0 = Date.now();
     // Sonnet 既定（構成・データ選定・脚本指示の質を優先） → JSON崩れ時 v4flash 保険
+    // 2026-05-17: max_tokens 3000 → 6000 (7-10 module の構成JSONが3000で切れる事故対策)
     async function _askPropose(provider) {
       const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
-      return callAI({ forceProvider: provider, model, max_tokens: 3000, messages: [{ role: 'user', content: prompt }] });
+      return callAI({ forceProvider: provider, model, max_tokens: 6000, messages: [{ role: 'user', content: prompt }] });
     }
     let raw = '';
     try { raw = await _askPropose(_initialProv); }
