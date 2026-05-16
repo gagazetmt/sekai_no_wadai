@@ -679,6 +679,72 @@ async function main() {
     console.log('🎙️ TTS生成済 or ナレーション無し → スキップ');
   }
 
+  // ── 🆕 per-slide normalize フェーズ（2026-05-16）──
+  //   slide 単位で atempo + loudnorm を適用し、 cps と音量を全 slide で揃える
+  //   原点回帰アーキテクチャ：個別 TTS → 後処理 → 動画生成 の②
+  //   env AUDIO_NORMALIZE_PER_SLIDE=1 で有効化（既定 OFF）
+  if (process.env.AUDIO_NORMALIZE_PER_SLIDE === '1') {
+    const { spawn: _spawn, execSync: _exec } = require('child_process');
+    const FFMPEG_BIN  = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
+    const FFPROBE_BIN = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
+    const _probeDur = (p) => {
+      try { return parseFloat(_exec(`"${FFPROBE_BIN}" -v error -show_entries format=duration -of csv=p=0 "${p}"`).toString().trim()) || 0; }
+      catch (_) { return 0; }
+    };
+    const _ffmpegRun = (args) => new Promise((resolve, reject) => {
+      const proc = _spawn(FFMPEG_BIN, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderr = '';
+      proc.stderr.on('data', d => { stderr += d.toString(); });
+      proc.on('error', reject);
+      proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(-200)}`)));
+    });
+    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '6.6');
+    console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS)...`);
+    const normT0 = Date.now();
+    let normalized = 0;
+    for (let mi = 0; mi < modules.length; mi++) {
+      const m = modules[mi];
+      if (!Array.isArray(m.audio) || !m.audio.length) continue;
+      const isReaction = m.type === 'reaction';
+      for (let i = 0; i < m.audio.length; i++) {
+        const audio = m.audio[i];
+        if (!audio.file) continue;
+        if (isReaction && i >= 1) continue;  // reaction の comment chunks は除外（voice 違うため）
+        const text = audio.text || m.narration || '';
+        const chars = text.length;
+        if (chars === 0) continue;
+        const mp3Path = path.join(BASE_DIR, audio.file);
+        if (!fs.existsSync(mp3Path)) continue;
+        const rawDur = _probeDur(mp3Path);
+        if (rawDur <= 0) continue;
+        const rawCps = chars / rawDur;
+        // atempo の方向: rawCps > targetCps (速読み) なら遅くしたい → atempo < 1
+        //   atempo = targetCps / rawCps
+        const atempo = Math.max(0.5, Math.min(2.0, targetCps / rawCps));
+        const tmpPath = mp3Path + '.normalize.mp3';
+        try {
+          await _ffmpegRun([
+            '-y', '-hide_banner', '-loglevel', 'error',
+            '-i', mp3Path,
+            '-af', `loudnorm=I=-16:TP=-1.5:LRA=11,atempo=${atempo.toFixed(3)}`,
+            '-codec:a', 'libmp3lame', '-b:a', '128k',
+            tmpPath,
+          ]);
+          fs.renameSync(tmpPath, mp3Path);
+          const newDur = _probeDur(mp3Path);
+          audio.durationSec = newDur;
+          const newCps = chars / newDur;
+          console.log(`  ✓ m${mi}/c${i} (${m.type}): ${rawCps.toFixed(2)}cps → atempo ${atempo.toFixed(3)} → ${newCps.toFixed(2)}cps (${newDur.toFixed(1)}s)`);
+          normalized++;
+        } catch (e) {
+          console.warn(`  ⚠️ normalize fail m${mi}/c${i}: ${e.message.slice(0, 100)}`);
+        }
+      }
+    }
+    fs.writeFileSync(mp, JSON.stringify({ postId, modules, savedAt: new Date().toISOString() }, null, 2));
+    console.log(`🎚️ per-slide normalize 完了: ${((Date.now() - normT0) / 1000).toFixed(1)}秒 (${normalized} 件)`);
+  }
+
   // ── 🆕 ASR フェーズ（2026-05-14）──
   //   生成された音声ファイルを Gemini multimodal に投げて word-level timestamps を取得
   //   audio[i].words[] に格納 → 字幕・catchphrase の完全同期に使用
