@@ -36,12 +36,9 @@ const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 
 const ASR_PROVIDER = (process.env.ASR_PROVIDER || 'openai').toLowerCase();
 
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。
-//   2026-05-16 (相棒判断): 6 → 7.2 に既定変更。
-//     - 6 cps は Hearts 検証で「やや遅い」印象 (相棒)
-//     - 8 cps は「若干早すぎ」(相棒の聴き比べ)
-//     - 7.2 cps が中間妥当値。3.1 Flash の raw 5.4-6.4 cps に対し atempo ≒ 1.13-1.33 で軽加速
-//   履歴: 10 → 6 (2026-05-16 早朝) → 7.2 (2026-05-16 検証後)
-const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '7.2');
+//   2026-05-16: 検証を経て 7.2 → 6.6 に再調整 (相棒判断「7.2 でも早い」)
+//   履歴: 10 → 6 (早朝) → 7.2 (聴き比べ後) → 6.6 (最終調整、自然なテンポ感)
+const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '6.6');
 // 境界 snap マージン: candidate ± この秒数の範囲で最大ギャップを探して snap
 const BOUNDARY_MARGIN_SEC = parseFloat(process.env.TTS_BOUNDARY_MARGIN || '1.5');
 // 連結時の slide 間デリミタ（TTS に「次の話題」と認識させる軽い区切り、検出には使わない）
@@ -122,11 +119,12 @@ async function generateAndSplit(parts, opts = {}) {
   //    別 TTS リクエストで生成 → ffmpeg concat で 1 本にまとめる
   //
   //    2026-05-15: Gemini 2.5 Pro TTS は ~1300 tokens (≒1700字) で finishReason: OTHER → 1500 で分割
-  //    2026-05-16: 3.1 Flash で 1828 字を 1 リクエスト処理可能と検証 (Hearts narration / _test_step1)
-  //                INTEGRATED の理想は「1 本撮り = concat 由来の声色ブレなし」なので既定を 99999 (実質無制限) に
-  //                2.5 Pro に戻す場合は env TTS_CHUNK_CHAR_LIMIT=1500 を指定すること
+  //    2026-05-16 朝: 3.1 Flash で 1828 字を 1 リクエスト処理可能と検証 → 99999 (実質無制限)
+  //    2026-05-16 夜: 1 リクエスト長文だと後半に音量低下(-55 dB に劣化)、 cps 揺らぎも残る
+  //                  → 900 (≒ 4 slide chunk) に再変更。 chunk 切替で音量リセットさせる設計
+  //                  4 slide chunk 検証で -16〜-20 dB の安定域に収まることを確認
   const stamp = Date.now();
-  const TTS_CHUNK_CHAR_LIMIT = parseInt(process.env.TTS_CHUNK_CHAR_LIMIT || '99999', 10);
+  const TTS_CHUNK_CHAR_LIMIT = parseInt(process.env.TTS_CHUNK_CHAR_LIMIT || '900', 10);
   const subTexts = fullText.length > TTS_CHUNK_CHAR_LIMIT
     ? _splitLongTextForTTS(fullText, TTS_CHUNK_CHAR_LIMIT)
     : [fullText];
