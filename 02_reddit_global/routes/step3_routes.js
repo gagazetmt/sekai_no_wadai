@@ -246,16 +246,31 @@ ${searchBlock}
     const t0 = Date.now();
     // Sonnet 既定（構成・データ選定・脚本指示の質を優先） → JSON崩れ時 v4flash 保険
     // 2026-05-17: max_tokens 3000 → 6000 (7-10 module の構成JSONが3000で切れる事故対策)
+    // 2026-05-17: フォールバックを両方向対応に変更
+    //   旧: _initialProv !== 'deepseek' でのみ deepseek にフォールバック (sprint=true で deepseek 失敗時に救えない)
+    //   新: どちらの initial でも反対側にフォールバック
     async function _askPropose(provider) {
       const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
       return callAI({ forceProvider: provider, model, max_tokens: 6000, messages: [{ role: 'user', content: prompt }] });
     }
     let raw = '';
+    let lastError = '';
     try { raw = await _askPropose(_initialProv); }
-    catch (e) { console.warn(`[propose-modules] ${_initialProv} 例外:`, e.message); }
-    if ((!raw || !raw.match(/\{[\s\S]*\}/)) && _initialProv !== 'deepseek') {
-      console.warn('[propose-modules] sonnet 失敗、v4flash にフォールバック');
-      raw = await _askPropose('deepseek');
+    catch (e) {
+      lastError = `${_initialProv}: ${e.message}`;
+      console.warn(`[propose-modules] ${_initialProv} 例外:`, e.message);
+    }
+    if (!raw || !raw.match(/\{[\s\S]*\}/)) {
+      const fallback = _initialProv === 'deepseek' ? 'anthropic' : 'deepseek';
+      console.warn(`[propose-modules] ${_initialProv} 失敗/空応答 → ${fallback} にフォールバック`);
+      try { raw = await _askPropose(fallback); }
+      catch (e) {
+        lastError += (lastError ? ' / ' : '') + `${fallback}: ${e.message}`;
+        console.warn(`[propose-modules] ${fallback} 例外:`, e.message);
+      }
+    }
+    if (!raw) {
+      throw new Error(`AI応答が取得できませんでした: ${lastError || '両プロバイダ空応答'}`);
     }
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
