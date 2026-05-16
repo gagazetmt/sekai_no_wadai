@@ -19,9 +19,12 @@ const router  = express.Router();
 
 const ROOT_DIR        = path.join(__dirname, '..');
 const THUMB_OUT_BASE  = path.join(ROOT_DIR, 'data', 'v2_thumbs');
-const META_FILE       = (postId) => path.join(ROOT_DIR, 'data', `${postId}_step5.json`);
-const SI_DATA_FILE    = (postId) => path.join(ROOT_DIR, 'data', 'si_data', `${postId.replace(/[\/\?%*:|"<>\.]/g, '_')}.json`);
-const MODULES_FILE    = (postId) => path.join(ROOT_DIR, 'data', `${postId}_modules.json`);
+// 2026-05-16: postId に '/' 等を含む Reddit 形式に対応するため、 step4 modulesPath と同様にサニタイズ
+//   未サニタイズだと '/r/soccer/comments/.../' でパスが壊れて 404
+const _sanitizePostId = (s) => (s || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_');
+const META_FILE       = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_step5.json');
+const SI_DATA_FILE    = (postId) => path.join(ROOT_DIR, 'data', 'si_data', _sanitizePostId(postId) + '.json');
+const MODULES_FILE    = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_modules.json');
 
 const thumbAi = require('../scripts/v2_video/thumb_ai');
 
