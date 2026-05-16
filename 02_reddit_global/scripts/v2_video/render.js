@@ -564,6 +564,13 @@ async function main() {
         fs.writeFileSync(mp, JSON.stringify({ postId, modules, savedAt: new Date().toISOString() }, null, 2));
         console.log(`🎵 Combined TTS 完了: ${((Date.now() - ttsT0) / 1000).toFixed(1)}s, ${results.length} slides 処理`);
       } catch (e) {
+        // INTEGRATED モード or 明示的 NO_FALLBACK 指定時は fallback 禁止 (クォータ保護)
+        //   - INTEGRATED は「1本撮り成功 or 失敗」設計のため、個別TTS復路は整合性違反
+        //   - 個別TTSへフォールバックすると combined失敗時に 9 リクエスト消費し、 quota 全焼を招く
+        if (INTEGRATED_AUDIO_MODE || process.env.TTS_COMBINED_NO_FALLBACK === '1') {
+          console.error(`❌ Combined TTS 失敗（fallback 無効, integrated=${INTEGRATED_AUDIO_MODE}, no_fallback=${process.env.TTS_COMBINED_NO_FALLBACK}）: ${e.message}`);
+          throw e;
+        }
         console.error(`❌ Combined TTS 失敗 → 個別 TTS にフォールバック: ${e.message}`);
         // 失敗時は audio 未生成のまま、 既存ロジックで補完される
       }

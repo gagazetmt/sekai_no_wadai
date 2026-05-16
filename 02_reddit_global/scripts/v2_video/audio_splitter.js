@@ -27,6 +27,7 @@ const { spawn, execSync } = require('child_process');
 const { generateGeminiTTS } = require('./tts_gemini');
 const geminiAsr = require('./gemini_asr');
 const openaiAsr = require('./openai_asr');
+const { applyJpDict } = require('./jp_dict');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 'ffprobe';
@@ -42,6 +43,41 @@ const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '6');
 const BOUNDARY_MARGIN_SEC = parseFloat(process.env.TTS_BOUNDARY_MARGIN || '1.5');
 // 連結時の slide 間デリミタ（TTS に「次の話題」と認識させる軽い区切り、検出には使わない）
 const JOIN_DELIM = '\n\n';
+
+// 2026-05-16: 末尾マッチ方式の境界決定パラメータ
+//   各 slide の末尾 N 字を「原文 → applyJpDict → kuroshiro → 正規化」しておき、
+//   ASR 全文(同正規化)から fuzzy 検索する。 文字数比配分より原文準拠で堅牢。
+//   旧 computeBoundaries (文字数比配分 + ギャップ snap) は fallback として残す
+const BOUNDARY_TAIL_LEN  = parseInt(process.env.BOUNDARY_TAIL_LEN || '20', 10);
+const BOUNDARY_FUZZY_MIN = parseFloat(process.env.BOUNDARY_FUZZY_MIN || '0.85');
+const TAIL_FALLBACK_LENS = [20, 15, 10, 7];
+
+// Sanity check: 各 slide の duration が平均 cps からどれだけ乖離してよいか
+//   各 slide の duration を「全体平均 cps から逆算した予想 duration」と比較
+//   ratio < MIN → 短すぎ (誤マッチで手前の slide が拾われた可能性) → retry
+//   ratio > MAX → 長すぎ (採用するが suspect フラグ。 20字偶然一致は稀のため警告のみ)
+const BOUNDARY_SANITY_MIN  = parseFloat(process.env.BOUNDARY_SANITY_MIN || '0.5');
+const BOUNDARY_SANITY_MAX  = parseFloat(process.env.BOUNDARY_SANITY_MAX || '2.0');
+const BOUNDARY_RETRY_LIMIT = parseInt(process.env.BOUNDARY_RETRY_LIMIT || '3', 10);
+
+// kuroshiro singleton (再 init を避ける)
+let _kuroshiroPromise = null;
+async function _getKuroshiro() {
+  if (_kuroshiroPromise) return _kuroshiroPromise;
+  _kuroshiroPromise = (async () => {
+    try {
+      const Kuroshiro = require('kuroshiro').default;
+      const KuromojiAnalyzer = require('kuroshiro-analyzer-kuromoji');
+      const k = new Kuroshiro();
+      await k.init(new KuromojiAnalyzer());
+      return k;
+    } catch (e) {
+      console.warn('  ⚠️ kuroshiro 初期化失敗 → 文字数比配分 fallback:', e.message);
+      return null;
+    }
+  })();
+  return _kuroshiroPromise;
+}
 
 /**
  * 複数 slide の narration をまとめて生成し、 個別 mp3 に切り出す
@@ -81,10 +117,13 @@ async function generateAndSplit(parts, opts = {}) {
   // 3. raw TTS 生成 (atempo=1.0、 後段で動的調整)
   //    長文 (fullText.length > TTS_CHUNK_CHAR_LIMIT) は 2-3 sub-text に分割して
   //    別 TTS リクエストで生成 → ffmpeg concat で 1 本にまとめる
-  //    Gemini 2.5 Pro TTS は ~1300 tokens (≒1700字) で finishReason: OTHER 返す
-  //    上限事故あり、それ未満で割れば確実
+  //
+  //    2026-05-15: Gemini 2.5 Pro TTS は ~1300 tokens (≒1700字) で finishReason: OTHER → 1500 で分割
+  //    2026-05-16: 3.1 Flash で 1828 字を 1 リクエスト処理可能と検証 (Hearts narration / _test_step1)
+  //                INTEGRATED の理想は「1 本撮り = concat 由来の声色ブレなし」なので既定を 99999 (実質無制限) に
+  //                2.5 Pro に戻す場合は env TTS_CHUNK_CHAR_LIMIT=1500 を指定すること
   const stamp = Date.now();
-  const TTS_CHUNK_CHAR_LIMIT = parseInt(process.env.TTS_CHUNK_CHAR_LIMIT || '1500', 10);
+  const TTS_CHUNK_CHAR_LIMIT = parseInt(process.env.TTS_CHUNK_CHAR_LIMIT || '99999', 10);
   const subTexts = fullText.length > TTS_CHUNK_CHAR_LIMIT
     ? _splitLongTextForTTS(fullText, TTS_CHUNK_CHAR_LIMIT)
     : [fullText];
@@ -146,10 +185,21 @@ async function generateAndSplit(parts, opts = {}) {
   const words = await transcribeAuto(finalMp3);
   if (!words.length) throw new Error('ASR returned no words');
 
-  // 7. 境界決定：文字数比率配分 + 自然ギャップ snap
+  // 7. 境界決定：primary = 末尾マッチ fuzzy (原文準拠で堅牢) / fallback = 文字数比配分
   const totalDur = probeDurationSec(finalMp3);
-  const boundaries = computeBoundaries(words, normalizedLens, totalDur);
-  console.log(`  🎯 境界(文字数比配分): ${boundaries.map(b => b.toFixed(1) + 's').join(' / ')}`);
+  let boundaries = null;
+  try {
+    boundaries = await computeBoundariesByTail(words, parts, totalDur);
+  } catch (e) {
+    console.warn(`  ⚠️ computeBoundariesByTail 例外 → 文字数比 fallback: ${e.message}`);
+    boundaries = null;
+  }
+  if (boundaries) {
+    console.log(`  🎯 境界(末尾マッチ): ${boundaries.map(b => b.toFixed(1) + 's').join(' / ')}`);
+  } else {
+    boundaries = computeBoundaries(words, normalizedLens, totalDur);
+    console.log(`  🎯 境界(文字数比配分 fallback): ${boundaries.map(b => b.toFixed(1) + 's').join(' / ')}`);
+  }
 
   // 8. 各 slide 範囲を確定
   const ranges = parts.map((p, i) => {
@@ -215,10 +265,176 @@ function _makeResult(parts, combinedAudioPath, totalDurationSec, wordsAbs) {
   return parts;
 }
 
+// fuzzy match 用の正規化 (両側を揃えて比較)
+//   カタカナ→ひらがな + 空白・句読点除去
+function normalizeForMatch(s) {
+  if (!s) return '';
+  let t = String(s).replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+  t = t.replace(/[\s　]/g, '');
+  t = t.replace(/[、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
+  t = t.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]/gu, '');
+  return t;
+}
+
+// Levenshtein 距離 → 類似度 [0, 1]
+function _levenshteinSim(a, b) {
+  if (a === b) return 1.0;
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+
+// fullHira から needle に最も近い window 位置を fuzzy 検索
+function _fuzzyFind(fullHira, needle, fromPos, minSim) {
+  if (!needle) return null;
+  const exact = fullHira.indexOf(needle, fromPos);
+  if (exact >= 0) return { pos: exact, similarity: 1.0, matched: needle };
+  const L = needle.length;
+  const start = Math.max(0, fromPos);
+  const end = fullHira.length - L;
+  let bestSim = 0, bestPos = -1, bestWindow = '';
+  for (let i = start; i <= end; i++) {
+    const window = fullHira.slice(i, i + L);
+    const sim = _levenshteinSim(needle, window);
+    if (sim > bestSim) {
+      bestSim = sim;
+      bestPos = i;
+      bestWindow = window;
+      if (sim >= 1.0) break;
+    }
+  }
+  return bestSim >= minSim ? { pos: bestPos, similarity: bestSim, matched: bestWindow } : null;
+}
+
+/**
+ * 末尾マッチ方式の境界決定（2026-05-16 採用）
+ *   1. ASR words[] を **全文連結** して kuroshiro でひらがな化 (文脈付き → 漢字 1 文字も正しい音読み)
+ *   2. 各 slide の原文末尾 BOUNDARY_TAIL_LEN 字も同じ正規化
+ *   3. fuzzy 検索 (Levenshtein 類似度 >= BOUNDARY_FUZZY_MIN) でヒット位置の word.end を境界に
+ *   4. 1 slide でも失敗したら null を返し、 呼び出し側で computeBoundaries (文字数比配分) に fallback
+ *
+ *   旧 computeBoundaries との違い:
+ *     - 文字数比配分は ASR の漢字読み崩れ (例: 「原動力」を ASR が「げんどうりょく」と聞き取れず) で
+ *       累積カウントがズレる ⇒ 境界位置が想定より N 秒ずれる
+ *     - 末尾マッチは原文の固有テキストを直接探すので、 ASR 誤認の影響が局所化される
+ *
+ * @returns {Promise<Array<number>|null>} 境界 timestamps （成功時）/ null (失敗で fallback 要)
+ */
+async function computeBoundariesByTail(words, parts, totalDur) {
+  const k = await _getKuroshiro();
+  if (!k) return null;  // kuroshiro 失敗 → fallback
+
+  const n = parts.length;
+  if (n <= 1) return [];
+
+  // 1. ASR 全文ひらがな化
+  const asrFullRaw = words.map(w => String(w.text || '')).join('');
+  const asrDict    = applyJpDict(asrFullRaw);
+  const asrHiraRaw = await k.convert(asrDict, { to: 'hiragana' });
+  const fullHira   = normalizeForMatch(asrHiraRaw);
+
+  // 2. word 境界 → fullHira 上の位置 を比例配分で近似
+  //    (連続漢字の正しい音読み化を優先するため、 word 単位の正確な char マッピングは犠牲)
+  //    精度: ±1-2 字 (tail20 マッチには十分)
+  const ratio = fullHira.length / Math.max(asrFullRaw.length, 1);
+  const segments = [];
+  let rawCum = 0;
+  for (let i = 0; i < words.length; i++) {
+    const text = String(words[i].text || '');
+    const ns = Math.round(rawCum * ratio);
+    rawCum += text.length;
+    const ne = Math.round(rawCum * ratio);
+    segments.push({ wordIdx: i, charStart: Math.min(ns, fullHira.length), charEnd: Math.min(ne, fullHira.length) });
+  }
+  const findWord = charPos => {
+    for (const s of segments) if (s.charStart < charPos && charPos <= s.charEnd) return s;
+    for (let i = segments.length - 1; i >= 0; i--) if (segments[i].charEnd <= charPos) return segments[i];
+    return segments[segments.length - 1];
+  };
+
+  // 3. 各 slide の末尾正規化 + fuzzy 検索 (sanity check + retry 付き)
+  //    Sanity check: actualDur / expectedDur で異常な長さを検知
+  //      短すぎ (< MIN) → 次の候補位置から再 fuzzy (最大 RETRY_LIMIT 回)
+  //      長すぎ (> MAX) → 採用 + suspect フラグ (20 字偶然一致は稀)
+  const partsCharLens = parts.map(p => String(p.text || '').length);
+  const totalPartsChars = partsCharLens.reduce((a, b) => a + b, 0);
+  const avgCps = totalPartsChars / Math.max(totalDur, 0.001);
+
+  const boundaries = [];
+  let searchFromPos = 0;
+  let prevTs = 0;  // 前 slide の境界 (i=0 では 0)
+
+  for (let i = 0; i < n - 1; i++) {
+    const partText = String(parts[i].text || '');
+    const partDict = applyJpDict(partText);
+    const partHiraRaw = await k.convert(partDict, { to: 'hiragana' });
+    const partHira = normalizeForMatch(partHiraRaw);
+    const tail = partHira.slice(-BOUNDARY_TAIL_LEN);
+    const expectedDur = partsCharLens[i] / avgCps;
+
+    let accepted = null;
+    for (const len of TAIL_FALLBACK_LENS) {
+      const t = tail.slice(-len);
+      if (t.length < len) continue;
+      let retryFromPos = searchFromPos;
+      for (let attempt = 0; attempt < BOUNDARY_RETRY_LIMIT; attempt++) {
+        const r = _fuzzyFind(fullHira, t, retryFromPos, BOUNDARY_FUZZY_MIN);
+        if (!r || r.pos == null) break;  // この tail 長では候補なし → 次の短い tail へ
+
+        const matchEnd = r.pos + t.length;
+        const seg = findWord(matchEnd);
+        const ts = words[seg.wordIdx].end;
+        const actualDur = ts - prevTs;
+        const ratio = actualDur / Math.max(expectedDur, 0.001);
+
+        if (ratio < BOUNDARY_SANITY_MIN) {
+          // 短すぎ → 次の候補位置から再検索
+          console.log(`     [sanity] slide#${i + 1} tail${len} pos=${r.pos} ratio=${ratio.toFixed(2)} < ${BOUNDARY_SANITY_MIN} (短すぎ) → retry`);
+          retryFromPos = r.pos + 1;
+          continue;
+        }
+        // OK or 長すぎ (採用): どちらも accept
+        accepted = { ...r, usedLen: len, usedTail: t, ts, seg, ratio, suspect: ratio > BOUNDARY_SANITY_MAX, attempt };
+        break;
+      }
+      if (accepted) break;
+    }
+
+    if (!accepted) {
+      console.warn(`  ⚠️ slide#${i + 1} 境界 fuzzy 失敗 (全 tail 全 retry 範囲外) → 文字数比配分 fallback`);
+      return null;
+    }
+
+    const simTag = accepted.similarity >= 1.0 ? 'exact' : `${(accepted.similarity * 100).toFixed(0)}%`;
+    const flag = accepted.suspect ? ` ⚠️ ratio=${accepted.ratio.toFixed(2)} (長すぎ suspect)` : '';
+    const retryTag = accepted.attempt > 0 ? ` retry${accepted.attempt + 1}` : '';
+    console.log(`  ✓ slide#${i + 1} 境界: ${accepted.ts.toFixed(2)}s (tail${accepted.usedLen} ${simTag}${retryTag}, ratio=${accepted.ratio.toFixed(2)})${flag}`);
+    boundaries.push(accepted.ts);
+    searchFromPos = accepted.pos + accepted.usedTail.length;
+    prevTs = accepted.ts;
+  }
+  return boundaries;
+}
+
 /**
  * 原文文字数 + ASR words[] から各 slide の境界 timestamp を決定
  *   累積文字数比率を ASR の累積文字数に当てはめ、対応 word の end を candidate に
  *   candidate ± BOUNDARY_MARGIN_SEC の範囲で最大ギャップ中央に snap（自然な切れ目）
+ *
+ *   2026-05-16: 文字数比方式は ASR 誤認に弱い。 computeBoundariesByTail が primary。
+ *   ここは fuzzy 失敗時の fallback として残置。
+ *
  * @param {Array<{text, start, end}>} words ASR words（時刻順）
  * @param {Array<number>} normLens 各 slide の正規化文字数
  * @param {number} totalDur 全体 duration
@@ -482,5 +698,9 @@ module.exports = {
   generateAndSplit,
   // 内部関数は test 用に export
   _computeBoundaries: computeBoundaries,
+  _computeBoundariesByTail: computeBoundariesByTail,
   _normalizeForCount: normalizeForCount,
+  _splitLongTextForTTS,
+  _ffmpegConcatMp3s: ffmpegConcatMp3s,
+  _probeDurationSec: probeDurationSec,
 };

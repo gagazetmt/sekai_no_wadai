@@ -16,3 +16,11 @@ _mu_preview.html
 # 各種バックアップ
 .env.bak
 .env.bak.*
+
+# 検証 test の出力ディレクトリ (mp3 / json 等で容量大)
+_test_step1_out/
+_test_step2_out/
+_test_step3_out/
+_test_step4_out/
+_test_splitter_out/
+_test_whisper_out/

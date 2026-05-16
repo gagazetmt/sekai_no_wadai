@@ -39,10 +39,19 @@ const MODEL    = process.env.GEMINI_TTS_MODEL || 'gemini-2.5-pro-preview-tts';
 //   日本の商店街の八百屋のおじさん風プロンプトと組合せ、視聴者主層 45-54 に親和
 const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE || 'Zubenelgenubi';
 
-// 採用済みの Style Instructions（2026-05-13 強化版）
-//   重低音 + 超テンポ + 感情込めて。八百屋のおじさんの早口熱量を狙う
+// Style Instructions（2026-05-16 改修版）
+//   旧: '重低音のしゃがれ声で、超早くテンポ良く読んで。感情をこめて。'
+//   検証 (Hearts 1828字 1リクエスト) で判明:
+//     - 「超早くテンポ良く」は raw cps を 6.4 → 8.0 に押し上げる効果あり (25% 加速)
+//     - しかし速度指示は出力ブレを誘発する (seed ごとに解釈が変動 → 速度・声色が連動して揺らぐ)
+//     - 加速は audio_splitter atempo で後付け可能 (決定論的・可逆) → prompt から削除
+//   2026-05-16 採用方針:
+//     - テンポ指示は完全削除 (raw 速度を安定化)
+//     - 「明快にハッキリ」追加 (相棒の「音がこもる」フィードバック対策)
+//     - 重低音しゃがれ声 + 感情 は維持
+//   速度調整は env TTS_TARGET_CPS (audio_splitter) で行う
 const DEFAULT_STYLE_INSTRUCTIONS =
-  '重低音のしゃがれ声で、超早くテンポ良く読んで。感情をこめて。';
+  '重低音のしゃがれ声で、明快にハッキリと、感情をこめて読んで。';
 
 // Gemini TTS の prebuilt voices（公式 30 voice 全件、男性声優先で並べる）
 // 採用は Algenib (⭐)。性別と特徴は公式ドキュメント由来
@@ -290,7 +299,9 @@ async function generateGeminiTTS(opts = {}) {
   const parts = res.data?.candidates?.[0]?.content?.parts || [];
   const audioPart = parts.find(p => p.inlineData?.mimeType?.startsWith('audio/'));
   if (!audioPart) {
-    throw new Error(`Gemini TTS: audio part not found. raw=${JSON.stringify(res.data).slice(0, 300)}`);
+    const finishReason = res.data?.candidates?.[0]?.finishReason || 'unknown';
+    const promptFeedback = res.data?.promptFeedback ? JSON.stringify(res.data.promptFeedback) : '';
+    throw new Error(`Gemini TTS: audio part not found. finishReason=${finishReason}${promptFeedback ? ` promptFeedback=${promptFeedback.slice(0, 200)}` : ''} raw=${JSON.stringify(res.data).slice(0, 400)}`);
   }
   const mime = audioPart.inlineData.mimeType;
   const sampleRate = (mime.match(/rate=(\d+)/) || [, 24000])[1] | 0;
