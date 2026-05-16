@@ -265,7 +265,9 @@ ${searchBlock}
     } catch (_) {}
 
     if (!parsed?.modules || !Array.isArray(parsed.modules) || !parsed.modules.length) {
-      return res.status(500).json({ error: 'AI応答のパースに失敗', raw: (raw || '').slice(0, 500) });
+      // 2026-05-17: _runProposeModules は res を持たない async 関数なので throw に変更
+      //   旧コードの res.status(500) が ReferenceError: res is not defined を起こしていた
+      throw new Error('AI応答のパースに失敗: ' + (raw || '').slice(0, 200));
     }
 
     // バリデーション + 正規化
