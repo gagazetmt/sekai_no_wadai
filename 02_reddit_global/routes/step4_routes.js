@@ -402,11 +402,12 @@ async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, use
   const _aiProv = _sprint ? 'deepseek' : 'anthropic';
   const _aiModel = _sprint ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
     const mp = modulesPath(postId);
-    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+    // 2026-05-17: _runAiFillSlide は async ジョブ関数で res を持たない → throw に変更
+    if (!fs.existsSync(mp)) throw new Error('modules not found');
     const modulesData = JSON.parse(fs.readFileSync(mp, 'utf8'));
     const idx = parseInt(moduleIdx, 10);
     const mod = modulesData.modules?.[idx];
-    if (!mod) return res.status(404).json({ error: 'idx out of range' });
+    if (!mod) throw new Error('idx out of range');
 
     const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
     const items = si.boxes?.entity?.items || [];
@@ -909,7 +910,7 @@ ${incrementalRule}
       } catch (_) {}
     }
     if (!_hasPayload(parsed)) {
-      return res.status(500).json({ error: 'AI応答のパースに失敗' });
+      throw new Error('AI応答のパースに失敗: ' + (raw || '').slice(0, 200));
     }
 
     // ── Pass 2: DeepSeek 自己監修（事実整合性チェック）──
