@@ -295,13 +295,19 @@ function buildComparisonHTML(mod) {
     0 0 12px rgba(255, 255, 255, 0.55),
     0 0 28px rgba(252, 211, 77, 0.45),
     0 4px 14px rgba(0, 0, 0, 0.85);
-  /* 長文は2行まで折り返し可能 + はみ出しは省略 */
+  overflow: hidden;
+  hyphens: auto;
+}
+/* 2026-05-16 相棒指示: 1行に縮小して収める / 70%以下なら2行折り返し */
+.val-1line {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.val-2line {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
   word-break: break-word;
-  hyphens: auto;
 }
 .val-left {
   text-align: right;
@@ -364,17 +370,33 @@ ${rowActiveStyles}
     return [' lose', ' win'];
   }
 
-  // 値の文字数 → フォントサイズ（base 56px、win=+8 / lose=-8 を内包）
-  function _valFont(text, mod) {
-    const base  = mod === 'win' ? 64 : (mod === 'lose' ? 48 : 56);
-    const len   = String(text || '').length;
-    if (len <= 5)  return base;
-    if (len <= 7)  return Math.round(base * 0.82);
-    if (len <= 10) return Math.round(base * 0.66);
-    if (len <= 14) return Math.round(base * 0.52);
-    if (len <= 20) return Math.round(base * 0.42);
-    return Math.round(base * 0.34);  // 21文字超
+  // 値の文字数 → { fontSize, oneLine } (2026-05-16 相棒指示で改修)
+  //   - 1行に収まるなら base サイズで 1 行表示
+  //   - 収まらないなら font を縮小して 1 行に収める
+  //   - 縮小率が 70% を下回る場合のみ 2 行折り返し許可（70% で固定）
+  //   - val width: 35% × 1920 = 672px、 左右余白 40px → 632px 利用可
+  //   - 日本語 1文字幅 ≒ font-size × 0.55、英数字は × 0.50 と推定
+  function _valFontWithMode(text, mod) {
+    const base = mod === 'win' ? 64 : (mod === 'lose' ? 48 : 56);
+    const t    = String(text || '');
+    const len  = t.length;
+    // 日本語かどうかでざっくり width 係数を切替
+    const hasJp = /[ぁ-んァ-ヶ一-龯]/.test(t);
+    const charRatio = hasJp ? 0.55 : 0.50;
+    const availW = 632;
+    const fitsAtBase = len * base * charRatio <= availW;
+    if (fitsAtBase) return { fontSize: base, oneLine: true };
+    // 縮小して 1 行に収めるなら何 % か
+    const scale = availW / (len * base * charRatio);
+    if (scale >= 0.7) {
+      // 70% 以上で 1 行に収まる → 縮小して 1 行
+      return { fontSize: Math.max(20, Math.round(base * scale * 0.95)), oneLine: true };
+    }
+    // 70% を下回る → 70% で固定して 2 行折り返し
+    return { fontSize: Math.max(20, Math.round(base * 0.7)), oneLine: false };
   }
+  // 後方互換 (使ってる箇所が他にあれば fontSize だけ返す)
+  function _valFont(text, mod) { return _valFontWithMode(text, mod).fontSize; }
   // ラベル文字数 → フォントサイズ（base 30px）
   // 真ん中の項目名が見えないと比較スライドが「何の比較なのか」分からなくなるので大きめに
   function _labelFont(text) {
@@ -394,14 +416,18 @@ ${rowActiveStyles}
         const lb = String(s.label      || '');
         const lMod = (lc || '').trim();
         const rMod = (rc || '').trim();
-        const lFs = _valFont(lv, lMod) + 'px';
-        const rFs = _valFont(rv, rMod) + 'px';
+        const { fontSize: lFsNum, oneLine: lOne } = _valFontWithMode(lv, lMod);
+        const { fontSize: rFsNum, oneLine: rOne } = _valFontWithMode(rv, rMod);
+        const lFs = lFsNum + 'px';
+        const rFs = rFsNum + 'px';
+        const lWrap = lOne ? ' val-1line' : ' val-2line';
+        const rWrap = rOne ? ' val-1line' : ' val-2line';
         const lbFs = _labelFont(lb) + 'px';
         const activeClass = (slotChunkIdx[i] >= 0 && audio.length) ? ` active-${i}` : '';
         return `<div class="data-row${activeClass}">
-          <div class="val val-left${lc}" style="font-size:${lFs}">${esc(lv)}</div>
+          <div class="val val-left${lc}${lWrap}" style="font-size:${lFs}">${esc(lv)}</div>
           <div class="label-col"><div class="label-text" style="font-size:${lbFs}">${esc(lb)}</div></div>
-          <div class="val val-right${rc}" style="font-size:${rFs}">${esc(rv)}</div>
+          <div class="val val-right${rc}${rWrap}" style="font-size:${rFs}">${esc(rv)}</div>
         </div>`;
       }).join('')
     : '<div style="text-align:center;color:#5a6a8a;font-size:24px">対比データなし</div>';

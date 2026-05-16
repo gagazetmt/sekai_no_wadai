@@ -600,11 +600,25 @@ function getUI() {
   <div class="panel" style="margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span id="s2Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件を選択してください</span>
+      <!-- 2026-05-16: SPRINT モードを step4 から step2 に移動（相棒指示） -->
+      <label id="sprintToggleWrap" title="⚡SPRINT モード: AI 呼び出しを全て DeepSeek 化（コスト 1/15）。step2モジュール提案 / step3構成おまかせ / step4脚本生成+監修 / step6投稿テキスト が対象。サムネは元から DeepSeek。" style="display:inline-flex;align-items:center;gap:6px;background:#1a2540;border:1px solid #f59e0b;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;color:#fcd34d;">
+        <input type="checkbox" id="sprintToggle" onchange="window.appSprint=this.checked; try{localStorage.setItem('v2_sprint_mode', this.checked?'1':'0');}catch(_){}" style="cursor:pointer;">
+        <span>⚡ SPRINT</span>
+      </label>
       <button class="btn btn-primary" id="s2BtnSuggest">&#x1F916; AIラベル提案</button>
       <button class="btn btn-success" id="s2BtnFetchAll">&#x1F4E1; 未取得を全部取得</button>
       <span id="s2Msg" style="font-size:12px;color:#8a9aba"></span>
     </div>
   </div>
+  <script>
+    // ⚡SPRINT モード初期化（localStorage から復元）
+    try {
+      const saved = localStorage.getItem('v2_sprint_mode') === '1';
+      window.appSprint = saved;
+      const cb = document.getElementById('sprintToggle');
+      if (cb) cb.checked = saved;
+    } catch (_) {}
+  </script>
 
   <!-- 3ボックス -->
   <div id="s2Boxes" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:flex-start;margin-bottom:14px;">

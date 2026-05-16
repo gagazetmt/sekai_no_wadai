@@ -1597,10 +1597,7 @@ function getUI() {
   <div class="panel" style="margin-bottom:12px;">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span id="s4Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件未選択</span>
-      <label id="sprintToggleWrap" title="⚡SPRINT モード: AI 呼び出しを全て DeepSeek 化（コスト 1/15）。step2モジュール提案 / step3構成おまかせ / step4脚本生成+監修 / step6投稿テキスト が対象。サムネは元から DeepSeek。" style="display:inline-flex;align-items:center;gap:6px;background:#1a2540;border:1px solid #f59e0b;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:12px;color:#fcd34d;">
-        <input type="checkbox" id="sprintToggle" onchange="window.appSprint=this.checked; try{localStorage.setItem('v2_sprint_mode', this.checked?'1':'0');}catch(_){}" style="cursor:pointer;">
-        <span>⚡ SPRINT</span>
-      </label>
+      <!-- 2026-05-16: SPRINT トグルは step2 に移動（相棒指示） -->
       <button class="btn btn-sm" id="s4BtnSave" style="background:#3b82f6;color:#fff;">💾 保存</button>
       <button class="btn btn-success" id="s4BtnGenVideo" style="font-size:13px;padding:8px 18px;">🎬 動画生成</button>
       <span id="s4Msg" style="font-size:12px;color:#8a9aba;"></span>
@@ -1643,13 +1640,9 @@ function getUI() {
   window.APP = window.APP || {};
   window.APP.s4 = { modules: [], activeTab: 0, currentJobId: null, imageSelections: {}, siData: null, recipeSlotsByIdx: {}, openCategoriesByIdx: {}, ttsPresets: null };
 
-  // ⚡SPRINT モード初期化（localStorage から復元）
-  try {
-    const saved = localStorage.getItem('v2_sprint_mode') === '1';
-    window.appSprint = saved;
-    const cb = document.getElementById('sprintToggle');
-    if (cb) cb.checked = saved;
-  } catch (_) {}
+  // ⚡SPRINT モード初期化: step2 に移動済み (2026-05-16)
+  //   localStorage の v2_sprint_mode は引き続き参照する（fetch 時の sprint: localStorage.getItem... で利用）
+  try { window.appSprint = localStorage.getItem('v2_sprint_mode') === '1'; } catch (_) {}
 
   function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _msg(s) { const el = document.getElementById('s4Msg'); if (el) el.innerHTML = s; }
