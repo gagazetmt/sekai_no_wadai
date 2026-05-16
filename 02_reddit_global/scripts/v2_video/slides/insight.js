@@ -74,9 +74,17 @@ function _matchPhraseToCharPosTime(phrase, chunk) {
 
 // 🆕 catchphrase テキストを words[] (Gemini ASR の word timestamps) と照合して
 //   発話開始時刻 (秒) を返す。マッチ無しなら null
-function _matchPhraseToWordTime(phrase, words) {
+//
+// 2026-05-16 拡張: words[].hira が存在する場合 (env CATCHPHRASE_FUZZY=1 で render.js が生成)
+//   1) raw 完全一致 (従来)
+//   2) raw token 最長一致 (従来)
+//   3) hira 完全一致 (🆕 漢字同音異字・全角半角差・カタカナひらがな差を吸収)
+//   4) hira token 最長一致 (🆕)
+//
+// phraseHira: catchphrase の事前生成ひらがな版 (m.catchphrases[i].textHira)
+function _matchPhraseToWordTime(phrase, words, phraseHira) {
   if (!Array.isArray(words) || !words.length) return null;
-  // words 連結テキスト + 文字位置 → word index の逆引き
+  // words 連結テキスト + 文字位置 → word index の逆引き (raw)
   let cumText = '';
   const charToWordIdx = [];
   for (let i = 0; i < words.length; i++) {
@@ -100,9 +108,40 @@ function _matchPhraseToWordTime(phrase, words) {
       if (p >= 0) { pos = p; break; }
     }
   }
-  if (pos < 0 || pos >= charToWordIdx.length) return null;
-  const wIdx = charToWordIdx[pos];
-  return Number(words[wIdx]?.start) || 0;
+  if (pos >= 0 && pos < charToWordIdx.length) {
+    const wIdx = charToWordIdx[pos];
+    return Number(words[wIdx]?.start) || 0;
+  }
+  // 🆕 3-4) hira fallback (CATCHPHRASE_FUZZY=1 で render.js が生成)
+  if (phraseHira && words[0]?.hira != null) {
+    let cumHira = '';
+    const hiraCharToWordIdx = [];
+    for (let i = 0; i < words.length; i++) {
+      const wh = String(words[i].hira || '');
+      for (let j = 0; j < wh.length; j++) hiraCharToWordIdx.push(i);
+      cumHira += wh;
+    }
+    if (cumHira) {
+      // 3) hira 完全一致
+      let hpos = cumHira.indexOf(phraseHira);
+      // 4) hira token 最長一致
+      if (hpos < 0) {
+        const tokens = String(phraseHira)
+          .split(/(?=[ぁ-ん])/)  // ひらがなブロックで雑に分割
+          .filter(t => t.length >= 2)
+          .sort((a, b) => b.length - a.length);
+        for (const tok of tokens) {
+          const p = cumHira.indexOf(tok);
+          if (p >= 0) { hpos = p; break; }
+        }
+      }
+      if (hpos >= 0 && hpos < hiraCharToWordIdx.length) {
+        const wIdx = hiraCharToWordIdx[hpos];
+        return Number(words[wIdx]?.start) || 0;
+      }
+    }
+  }
+  return null;
 }
 
 function buildInsightHTML(mod) {
@@ -116,10 +155,13 @@ function buildInsightHTML(mod) {
     ? mod.catchphrases.slice(0, MAX_PHRASES).map(p => ({
         text: (typeof p === 'string') ? p : String(p?.text || ''),
         chunkText: (typeof p === 'object' && p) ? String(p?.chunkText || '') : '',
+        // 2026-05-16: render.js が事前生成した hira フィールドを引き継ぐ (CATCHPHRASE_FUZZY=1)
+        textHira: (typeof p === 'object' && p) ? String(p?.textHira || '') : '',
+        chunkTextHira: (typeof p === 'object' && p) ? String(p?.chunkTextHira || '') : '',
       })).filter(p => p.text)
     : (Array.isArray(mod.narrationChunks)
-        ? mod.narrationChunks.slice(0, MAX_PHRASES).map(t => ({ text: t, chunkText: t }))
-        : (mod.title ? [{ text: mod.title, chunkText: '' }] : []));
+        ? mod.narrationChunks.slice(0, MAX_PHRASES).map(t => ({ text: t, chunkText: t, textHira: '', chunkTextHira: '' }))
+        : (mod.title ? [{ text: mod.title, chunkText: '', textHira: '', chunkTextHira: '' }] : []));
   const phrasesRaw = phrasesRich.map(p => p.text);
   const insightTitle = mod.title || '注目ポイント';
   const layout = _layoutForCount(phrasesRaw.length);
@@ -156,7 +198,9 @@ function buildInsightHTML(mod) {
     const matchTarget = p.chunkText || p.text;
     if (useWordMode) {
       // word timestamps モード: phrase 発話時刻を words から取得（±0.2s 精度）
-      const wTime = _matchPhraseToWordTime(matchTarget, wordsForMatch);
+      // 2026-05-16: p.chunkTextHira / p.textHira があれば hira fallback も使う
+      const phraseHira = p.chunkText ? (p.chunkTextHira || '') : (p.textHira || '');
+      const wTime = _matchPhraseToWordTime(matchTarget, wordsForMatch, phraseHira);
       return wTime != null ? (LEAD_PAD_SEC + wTime + 0.3) : (startSec + evenStep * i);
     }
     if (useCharPosFallback) {

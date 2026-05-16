@@ -702,9 +702,16 @@ async function main() {
     console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS)...`);
     const normT0 = Date.now();
     let normalized = 0;
+    // 2026-05-16: opening (タイトルコール) は normalize 対象外にする
+    //   短い煽り文を target_cps まで加速すると早すぎて威厳が消える (相棒判断)
+    const SKIP_NORMALIZE_TYPES = new Set((process.env.NORMALIZE_SKIP_TYPES || 'opening').split(',').map(s => s.trim()).filter(Boolean));
     for (let mi = 0; mi < modules.length; mi++) {
       const m = modules[mi];
       if (!Array.isArray(m.audio) || !m.audio.length) continue;
+      if (SKIP_NORMALIZE_TYPES.has(m.type)) {
+        console.log(`  ⏭️ m${mi} (${m.type}) skip (NORMALIZE_SKIP_TYPES)`);
+        continue;
+      }
       const isReaction = m.type === 'reaction';
       for (let i = 0; i < m.audio.length; i++) {
         const audio = m.audio[i];
@@ -781,6 +788,66 @@ async function main() {
       }
     } catch (e) {
       console.warn(`  ⚠️ ASR フェーズ全体エラー (非致命): ${e.message}`);
+    }
+  }
+
+  // ── 🆕 catchphrase fuzzy 同期準備（2026-05-16）──
+  //   ASR の text (例: 「脅威」) と原文 catchphrase (例: 「驚異」) で漢字同音異字 や
+  //   全角半角差 (「３」 vs 「3」) でマッチ失敗していた。
+  //   両側を applyJpDict + kuroshiro でひらがな化して比較できるよう、
+  //   audio[].words[].hira と mod.catchphrases[].textHira を事前生成しておく。
+  //   insight.js の _matchPhraseToWordTime は hira フィールド があれば fallback で使う。
+  if (process.env.CATCHPHRASE_FUZZY === '1') {
+    try {
+      const Kuroshiro = require('kuroshiro').default;
+      const KuromojiAnalyzer = require('kuroshiro-analyzer-kuromoji');
+      const { applyJpDict } = require('./jp_dict');
+      const k = new Kuroshiro();
+      await k.init(new KuromojiAnalyzer());
+      const _normHira = (s) => (s || '').normalize('NFKC').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)).replace(/[\s　、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
+      let processed = 0;
+      console.log(`🔤 catchphrase 用 hira 生成中...`);
+      for (const m of modules) {
+        // 1. audio[].words[].hira
+        for (const audio of (m.audio || [])) {
+          if (!Array.isArray(audio.words) || !audio.words.length) continue;
+          const fullText = audio.words.map(w => String(w.text || '')).join('');
+          if (!fullText) continue;
+          const dictApplied = applyJpDict(fullText);
+          const fullHira = await k.convert(dictApplied, { to: 'hiragana' });
+          const fullHiraNorm = _normHira(fullHira);
+          const totalRaw = fullText.length;
+          const ratio = fullHiraNorm.length / Math.max(totalRaw, 1);
+          let cumRaw = 0;
+          for (const w of audio.words) {
+            const wText = String(w.text || '');
+            const hStart = Math.round(cumRaw * ratio);
+            cumRaw += wText.length;
+            const hEnd = Math.round(cumRaw * ratio);
+            w.hira = fullHiraNorm.slice(Math.min(hStart, fullHiraNorm.length), Math.min(hEnd, fullHiraNorm.length));
+          }
+          processed++;
+        }
+        // 2. mod.catchphrases[].textHira
+        if (Array.isArray(m.catchphrases) && m.catchphrases.length) {
+          for (let ci = 0; ci < m.catchphrases.length; ci++) {
+            const c = m.catchphrases[ci];
+            const text = typeof c === 'string' ? c : String(c?.text || '');
+            const chunkText = typeof c === 'object' && c ? String(c?.chunkText || '') : '';
+            if (!text) continue;
+            const hira = _normHira(await k.convert(applyJpDict(text), { to: 'hiragana' }));
+            const chunkHira = chunkText ? _normHira(await k.convert(applyJpDict(chunkText), { to: 'hiragana' })) : '';
+            // 新スキーマ (object) に置換 (旧 string も object 化)
+            m.catchphrases[ci] = (typeof c === 'object' && c)
+              ? Object.assign({}, c, { textHira: hira, chunkTextHira: chunkHira })
+              : { text, textHira: hira, chunkTextHira: '' };
+          }
+        }
+      }
+      fs.writeFileSync(mp, JSON.stringify({ postId, modules, savedAt: new Date().toISOString() }, null, 2));
+      console.log(`🔤 catchphrase hira 生成完了: ${processed} audio chunks`);
+    } catch (e) {
+      console.warn(`  ⚠️ catchphrase hira 生成エラー (非致命): ${e.message}`);
     }
   }
 
