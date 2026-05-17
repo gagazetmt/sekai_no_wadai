@@ -390,10 +390,12 @@ ${rowActiveStyles}
     const fitsAtBase = len * base * charRatio <= availW;
     if (fitsAtBase) return { fontSize: base, oneLine: true };
     const scale = availW / (len * base * charRatio);
-    if (scale >= 0.7) {
-      return { fontSize: Math.max(20, Math.round(base * scale)), oneLine: true };
+    // 2026-05-17: 縮小許可を 70% → 60% に拡大（相棒指示）
+    //   60-70% でも 1 行で粘る、 60% 未満で 2 行折り返し
+    if (scale >= 0.6) {
+      return { fontSize: Math.max(18, Math.round(base * scale)), oneLine: true };
     }
-    return { fontSize: Math.max(20, Math.round(base * 0.7)), oneLine: false };
+    return { fontSize: Math.max(18, Math.round(base * 0.6)), oneLine: false };
   }
   // 後方互換 (使ってる箇所が他にあれば fontSize だけ返す)
   function _valFont(text, mod) { return _valFontWithMode(text, mod).fontSize; }
