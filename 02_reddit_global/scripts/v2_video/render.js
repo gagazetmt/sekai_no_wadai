@@ -740,8 +740,18 @@ async function main() {
           fs.renameSync(tmpPath, mp3Path);
           const newDur = _probeDur(mp3Path);
           audio.durationSec = newDur;
+          // 🆕 2026-05-17: word timestamps を atempo に合わせて更新
+          //   atempo 適用で mp3 duration が変わるため、 ASR で取得済み words[].start/end も
+          //   同じ倍率で縮減しないと字幕がナレーションと数秒ズレる事故が発生する。
+          //   new_t = old_t / atempo  (atempo>1で縮小、atempo<1で拡大)
+          if (Array.isArray(audio.words) && audio.words.length) {
+            for (const w of audio.words) {
+              w.start = (Number(w.start) || 0) / atempo;
+              w.end   = (Number(w.end)   || 0) / atempo;
+            }
+          }
           const newCps = chars / newDur;
-          console.log(`  ✓ m${mi}/c${i} (${m.type}): ${rawCps.toFixed(2)}cps → atempo ${atempo.toFixed(3)} → ${newCps.toFixed(2)}cps (${newDur.toFixed(1)}s)`);
+          console.log(`  ✓ m${mi}/c${i} (${m.type}): ${rawCps.toFixed(2)}cps → atempo ${atempo.toFixed(3)} → ${newCps.toFixed(2)}cps (${newDur.toFixed(1)}s, words=${audio.words?.length||0} 更新)`);
           normalized++;
         } catch (e) {
           console.warn(`  ⚠️ normalize fail m${mi}/c${i}: ${e.message.slice(0, 100)}`);
