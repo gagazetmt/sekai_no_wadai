@@ -416,11 +416,36 @@ window.renderSidebar = function() {
   document.getElementById('savedList').innerHTML = window.APP.saved.length
     ? window.APP.saved.map((item, i) =>
         '<div class="lead-item' + (window.APP.selected?.id === item.id ? ' active' : '') + '"'
+        + ' style="display:flex;align-items:center;gap:6px;"'
         + ' onclick="selectLead(' + i + ')">'
+        + '<div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;">'
         + _shEsc(item.title || '(タイトル不明)')
+        + '</div>'
+        + '<span class="lead-del" title="削除"'
+        + ' style="flex-shrink:0;color:#7a8aaa;cursor:pointer;padding:2px 6px;font-size:14px;line-height:1;"'
+        + ' onclick="event.stopPropagation();deleteSavedProject(' + i + ')">✕</span>'
         + '</div>'
       ).join('')
     : '<div style="padding:10px;font-size:11px;color:#3a4a6a;">保存された案件はありません</div>';
+};
+
+/* ── 保存案件を個別削除 ── */
+window.deleteSavedProject = async function(idx) {
+  const item = window.APP.saved[idx];
+  if (!item) return;
+  if (!confirm('「' + (item.title || '(タイトル不明)') + '」を削除する？')) return;
+  try {
+    await fetchJson('/api/saved-projects/' + encodeURIComponent(item.id), { method: 'DELETE' });
+  } catch (e) {
+    alert('削除エラー: ' + (e.message || e));
+    return;
+  }
+  window.APP.saved.splice(idx, 1);
+  if (window.APP.selected?.id === item.id) {
+    window.APP.selected = null;
+    try { localStorage.removeItem('v2_selected_id'); } catch (_) {}
+  }
+  window.renderSidebar();
 };
 
 /* ── 案件選択（サイドバー → Step2 遷移）── */

@@ -70,28 +70,28 @@ router.get('/content', (req, res) => {
 });
 
 // 保存済み案件取得
-// ※自動クリーンアップ：①addedAtが今日(JST)より前の案件 ②動画生成済みの案件 を除外
-//   ただし custom 案件（id が custom_ で始まる）は日付フィルタをスキップ（複数日跨ぎで作業可能）
+// 2026-05-17: 自動クリーンアップ廃止。 手動削除 (✕ ボタン) まで保持する方針に変更 (相棒判断)。
+//   旧: ①addedAt が今日(JST)より前 ②動画生成済み を自動除外
+//   新: 全件そのまま返す。 削除は DELETE /api/saved-projects/:id で行う
 router.get('/saved-projects', (req, res) => {
   const all = safeJson(SAVED_FILE, []);
-  if (!Array.isArray(all) || !all.length) return res.json(all || []);
+  res.json(Array.isArray(all) ? all : []);
+});
 
-  const today = todayJst();
-  const videos = _videoFilesCache();
-  const filtered = all.filter(p => {
-    const isCustom = String(p.id || p.source || '').startsWith('custom') || p.source === 'custom';
-    const addedDate = (p.addedAt || '').slice(0, 10);
-    if (!isCustom && addedDate && addedDate < today) return false;            // 古い日付（custom は除く）
-    if (!isCustom && hasGeneratedVideo(p.id, videos)) return false;           // 動画生成済み（custom は除く・再投稿/再生成ある）
-    return true;
-  });
-
-  // 件数が変わっていれば永続化
-  if (filtered.length !== all.length) {
-    try { fs.writeFileSync(SAVED_FILE, JSON.stringify(filtered, null, 2)); }
-    catch (e) { console.error('[Step1] saved-projects 自動クリーンアップ書込失敗:', e.message); }
+// 個別削除
+router.delete('/saved-projects/:id', (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const all = safeJson(SAVED_FILE, []);
+    if (!Array.isArray(all)) return res.json({ ok: true, removed: 0 });
+    const filtered = all.filter(p => String(p.id) !== id);
+    fs.writeFileSync(SAVED_FILE, JSON.stringify(filtered, null, 2));
+    res.json({ ok: true, removed: all.length - filtered.length });
+  } catch (e) {
+    console.error('[Step1] saved-projects 個別削除エラー:', e.message);
+    res.status(500).json({ error: e.message });
   }
-  res.json(filtered);
 });
 
 // 保存済み案件更新
