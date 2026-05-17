@@ -763,12 +763,17 @@ async function main() {
   }
 
   // ── 🆕 ASR フェーズ（2026-05-14）──
-  //   生成された音声ファイルを Gemini multimodal に投げて word-level timestamps を取得
+  //   生成された音声ファイルから word-level timestamps を取得
   //   audio[i].words[] に格納 → 字幕・catchphrase の完全同期に使用
   //   失敗しても致命ではない（words 無し時は従来の文字数比配分にフォールバック）
+  //
+  //   2026-05-17: primary を OpenAI Whisper に切替（Gemini ASR は chunk 並列 + JSON retry で
+  //               コスト膨張。Whisper は slide 単位 1リクエストで 1/10 のコスト）
+  //               Whisper 失敗時のみ Gemini ASR にフォールバック
   if (process.env.ASR_ENABLED !== '0') {
     try {
-      const asr = require('./gemini_asr');
+      const whisperAsr = require('./openai_asr');
+      const geminiAsr  = require('./gemini_asr');
       const asrTasks = [];
       modules.forEach((m, mi) => {
         (m.audio || []).forEach((a, ai) => {
@@ -778,23 +783,37 @@ async function main() {
         });
       });
       if (asrTasks.length) {
-        console.log(`🎤 ASR フェーズ: ${asrTasks.length} chunk の word timestamps 取得 (並列度3)`);
+        console.log(`🎤 ASR フェーズ: ${asrTasks.length} chunk の word timestamps 取得 (Whisper primary, Gemini fallback, 並列度3)`);
         updateJob(jobId, { status: 'asr-processing' });
         const asrT0 = Date.now();
-        let asrDone = 0, asrFail = 0;
+        let asrDone = 0, asrFail = 0, whisperOk = 0, geminiFb = 0;
         await processInParallel(asrTasks, 3, async (task) => {
+          const audioPath = path.join(BASE_DIR, task.a.file);
+          // primary: Whisper (1 リクエスト / mp3、安価で高精度)
           try {
-            const audioPath = path.join(BASE_DIR, task.a.file);
-            const words = await asr.transcribeWithTimestamps(audioPath);
+            const words = await whisperAsr.transcribeWithTimestamps(audioPath);
+            if (words && words.length) {
+              task.a.words = words;
+              asrDone++;
+              whisperOk++;
+              return;
+            }
+          } catch (e) {
+            console.warn(`  ⏭️ Whisper slide#${task.mi+1}/c${task.ai+1} 失敗 → Gemini fallback: ${e.message.slice(0, 100)}`);
+          }
+          // fallback: Gemini ASR
+          try {
+            const words = await geminiAsr.transcribeWithTimestamps(audioPath);
             task.a.words = words;
             asrDone++;
+            geminiFb++;
           } catch (e) {
             asrFail++;
-            console.warn(`  ⚠️ ASR slide#${task.mi+1}/c${task.ai+1} 失敗: ${e.message.slice(0, 120)}`);
+            console.warn(`  ⚠️ ASR slide#${task.mi+1}/c${task.ai+1} 両 provider 失敗: ${e.message.slice(0, 100)}`);
           }
         });
         fs.writeFileSync(mp, JSON.stringify({ postId, modules, savedAt: new Date().toISOString() }, null, 2));
-        console.log(`🎤 ASR完了: ${((Date.now() - asrT0) / 1000).toFixed(1)}秒 (成功${asrDone}/失敗${asrFail})`);
+        console.log(`🎤 ASR完了: ${((Date.now() - asrT0) / 1000).toFixed(1)}秒 (成功${asrDone}/失敗${asrFail} | Whisper ${whisperOk} / Gemini fb ${geminiFb})`);
       }
     } catch (e) {
       console.warn(`  ⚠️ ASR フェーズ全体エラー (非致命): ${e.message}`);
