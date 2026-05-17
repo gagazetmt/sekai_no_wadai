@@ -880,6 +880,8 @@ ${incrementalRule}
     // 既定: Sonnet（脚本品質優先） → JSON崩れ時 v4flash 保険
     // ⚡SPRINT モード: 最初から DeepSeek 直行（fallback なし）
     let raw, parsed = null, used = _sprint ? 'v4flash-sprint' : 'sonnet';
+    // ⑧ 2026-05-18: SPRINT 効果検証用に AI 選択をログ明示（af_*.json.result.used とセット）
+    console.log(`[ai-fill-slide] AI=${used} (provider=${_aiProv}, model=${_aiModel}) で生成開始 / SPRINT=${_sprint ? 'ON' : 'OFF'}`);
     // type 別に必要な payload キー: dataSlots / items / series のいずれか
     const _hasPayload = (p) => {
       if (!p?.type) return false;
@@ -912,6 +914,7 @@ ${incrementalRule}
     if (!_hasPayload(parsed)) {
       throw new Error('AI応答のパースに失敗: ' + (raw || '').slice(0, 200));
     }
+    console.log(`[ai-fill-slide] Pass1 完了: AI=${used} / type=${parsed.type}`);
 
     // ── Pass 2: DeepSeek 自己監修（事実整合性チェック）──
     //   元データと生成結果を突き合わせ、矛盾を検出して修正版を返させる。
