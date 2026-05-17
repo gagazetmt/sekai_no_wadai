@@ -1875,8 +1875,9 @@ function getUI() {
     // matchcard は matchData (試合データ) を表示するテンプレで dataSlots は使わない
     if (Array.isArray(m.dataSlots) && m.dataSlots.length && m.type !== 'matchcard') {
       const isCmp = m.type === 'comparison';
+      // 2026-05-17: onclick 属性を直書き（addEventListener bind 失敗時の保険）
       const _addBtn = (m.dataSlots.length < SLOT_MAX)
-        ? '<button class="s4-slot-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.dataSlots.length + '/' + SLOT_MAX + ')</button>'
+        ? '<button class="s4-slot-add" onclick="s4AddSlot()" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.dataSlots.length + '/' + SLOT_MAX + ')</button>'
         : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + SLOT_MAX + '/' + SLOT_MAX + ')</div>';
       // 2026-05-17: 並び替えボタン (↑↓) を追加（相棒指示）
       const _mkOrderBtns = (idx, total) => {
@@ -1912,8 +1913,9 @@ function getUI() {
 
     let extraHtml = '';
     if (Array.isArray(m.catchphrases) && m.catchphrases.length) {
+      // 2026-05-17: onclick 属性直書き保険
       const _addPh = (m.catchphrases.length < SLOT_MAX)
-        ? '<button class="s4-phrase-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.catchphrases.length + '/' + SLOT_MAX + ')</button>'
+        ? '<button class="s4-phrase-add" onclick="s4AddPhrase()" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + m.catchphrases.length + '/' + SLOT_MAX + ')</button>'
         : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + SLOT_MAX + '/' + SLOT_MAX + ')</div>';
       // 2026-05-17: catchphrases にも ↑↓ ボタン追加
       const _totalPh = m.catchphrases.length;
