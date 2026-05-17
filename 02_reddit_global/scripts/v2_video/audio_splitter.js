@@ -36,9 +36,11 @@ const FFPROBE = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffprobe.exe' : 
 const ASR_PROVIDER = (process.env.ASR_PROVIDER || 'openai').toLowerCase();
 
 // 目標読み速度（字/秒）。env TTS_TARGET_CPS で上書き可能。
-//   2026-05-16: 検証を経て 7.2 → 6.6 に再調整 (相棒判断「7.2 でも早い」)
-//   履歴: 10 → 6 (早朝) → 7.2 (聴き比べ後) → 6.6 (最終調整、自然なテンポ感)
-const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '6.6');
+//   2026-05-17: 6.6 → 7.5 に再調整。
+//     2026-05-17 改修で cps 計算をひらがな化ベース（実音節）に変更した結果、
+//     6.6 はやや遅い体感。実音節 7.5 で自然なテンポになる（相棒判断）。
+//   履歴: 10 → 6 → 7.2 → 6.6 → 7.5 (ひらがな化計算後の最終値)
+const TARGET_CHARS_PER_SEC = parseFloat(process.env.TTS_TARGET_CPS || '7.5');
 // 境界 snap マージン: candidate ± この秒数の範囲で最大ギャップを探して snap
 const BOUNDARY_MARGIN_SEC = parseFloat(process.env.TTS_BOUNDARY_MARGIN || '1.5');
 // 連結時の slide 間デリミタ（TTS に「次の話題」と認識させる軽い区切り、検出には使わない）
