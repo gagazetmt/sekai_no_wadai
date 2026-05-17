@@ -412,7 +412,26 @@ function getUI() {
   window.s6StartAuth = async function() {
     try {
       const r = await window.fetchJson('/api/v6/youtube-auth-url');
-      const w = window.open(r.url, 'ytauth', 'width=600,height=700');
+      // 2026-05-17: ポップアップブロック対策。 _blank で新タブを開く + 失敗時は同タブ遷移
+      let w = null;
+      try { w = window.open(r.url, '_blank'); } catch (_) {}
+      if (!w || w.closed || typeof w.closed === 'undefined') {
+        // ポップアップブロックされた → カード内にクリック可能なリンクを表示
+        const card = document.getElementById('s6-yt-auth-card');
+        if (card) {
+          card.insertAdjacentHTML('beforeend',
+            '<div style="margin-top:10px;font-size:12px;color:var(--c);">'
+            + '⚠️ ポップアップブロックされました。 下記リンクを<b>右クリック → 新しいタブで開く</b>でも OK：<br>'
+            + '<a href="' + r.url + '" target="_blank" rel="noopener" '
+            + 'style="color:var(--c);word-break:break-all;text-decoration:underline;">' + r.url + '</a>'
+            + '</div>');
+        } else {
+          // フォールバック：同タブで遷移
+          window.location.href = r.url;
+        }
+        return;
+      }
+      // ポップアップ open 成功 → 閉じたら認証 status 再チェック
       const tm = setInterval(() => {
         if (w && w.closed) { clearInterval(tm); checkYouTubeAuth(); }
       }, 1000);
