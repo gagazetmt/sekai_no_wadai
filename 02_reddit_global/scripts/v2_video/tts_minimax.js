@@ -586,11 +586,17 @@ function buildChunksForModule(mod) {
   let baseChunks = splitIntoChunks(narr);
 
   if (mod.type === 'reaction') {
+    // 2026-05-17: 前段 narration は 1 chunk に強制統合（相棒指示）
+    //   旧: splitIntoChunks で 50字超だと 2 chunks 化 → render.js の c>=1 判定で
+    //       narration 2 chunk目が reaction voice に誤適用されるバグあり
+    //   新: narration 全体を 1 chunk に → c=0 のみ default voice 確実、
+    //       c=1+ が comments で reaction voice という意図通りの分離
+    const narrChunks = narr ? [narr] : [];
     const commentChunks = (Array.isArray(mod.comments) ? mod.comments : [])
       .map(c => String(c?.text || '').trim())
       .filter(Boolean)
       .slice(0, 7);
-    return [...baseChunks, ...commentChunks];
+    return [...narrChunks, ...commentChunks];
   }
   return baseChunks;
 }
