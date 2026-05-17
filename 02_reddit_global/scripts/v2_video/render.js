@@ -699,12 +699,37 @@ async function main() {
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(-200)}`)));
     });
     const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '6.6');
-    console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS)...`);
+    console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS, cps計算=ひらがな化ベース)...`);
     const normT0 = Date.now();
     let normalized = 0;
     // 2026-05-16: opening (タイトルコール) は normalize 対象外にする
     //   短い煽り文を target_cps まで加速すると早すぎて威厳が消える (相棒判断)
+    // 2026-05-17 改訂: TOC は skip 撤回。ひらがな化 cps 計算で正確になるため
+    //   旧: 漢字字数で cps 計算 → 「観戦」=2字でカウント、 実音節 (4音) と乖離
+    //   新: ひらがな化後の字数で cps 計算 → 音節ベースで正確
     const SKIP_NORMALIZE_TYPES = new Set((process.env.NORMALIZE_SKIP_TYPES || 'opening').split(',').map(s => s.trim()).filter(Boolean));
+    // 🆕 ひらがな化 cps 計算用 kuroshiro (1 回 init)
+    let _kuroNorm = null;
+    try {
+      const Kuroshiro = require('kuroshiro').default;
+      const KuromojiAnalyzer = require('kuroshiro-analyzer-kuromoji');
+      const { applyJpDict } = require('./jp_dict');
+      const k = new Kuroshiro();
+      await k.init(new KuromojiAnalyzer());
+      _kuroNorm = {
+        async toHira(text) {
+          const dictApplied = applyJpDict(text);
+          const hira = await k.convert(dictApplied, { to: 'hiragana' });
+          // カタカナ→ひらがな、句読点・空白除去で純粋音節数
+          return hira
+            .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+            .replace(/[\s　、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
+        }
+      };
+      console.log(`  ✓ kuroshiro ready for ひらがな cps 計算`);
+    } catch (e) {
+      console.warn(`  ⚠️ kuroshiro init 失敗、 漢字字数 cps で fallback: ${e.message.slice(0, 100)}`);
+    }
     for (let mi = 0; mi < modules.length; mi++) {
       const m = modules[mi];
       if (!Array.isArray(m.audio) || !m.audio.length) continue;
@@ -718,7 +743,16 @@ async function main() {
         if (!audio.file) continue;
         if (isReaction && i >= 1) continue;  // reaction の comment chunks は除外（voice 違うため）
         const text = audio.text || m.narration || '';
-        const chars = text.length;
+        // 2026-05-17 (相棒提案): ひらがな化後の字数で cps 計算
+        //   理由: 漢字 1 字 = 2-3 音節（観戦=かんせん=4音）なのに漢字字数だと 2 で過小評価
+        //   実発話速度（音節ベース）に近い数値で atempo を計算するため
+        let chars;
+        if (_kuroNorm) {
+          const hira = await _kuroNorm.toHira(text);
+          chars = hira.length;
+        } else {
+          chars = text.length;
+        }
         if (chars === 0) continue;
         const mp3Path = path.join(BASE_DIR, audio.file);
         if (!fs.existsSync(mp3Path)) continue;

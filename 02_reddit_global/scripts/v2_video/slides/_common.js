@@ -295,6 +295,10 @@ function buildSubtitleBar(textOrChunks, options = {}) {
           : Number(chunk.durationSec) || (startSec + 1);
         return {
           text: g,
+          // 2026-05-17: startSec を保持 (mp3 内 LOCAL 時刻、word.start ベース)
+          //   下流の items 経路で leadPadSec + startSec を絶対時刻に使う
+          //   これ無しだと group[0] の breath 分 (~0.4s) 早く字幕が出てズレ感
+          startSec: startSec,
           durationSec: Math.max(0.3, endSec - startSec),
         };
       });
@@ -313,10 +317,13 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     if (items.length === 0) return '';
     if (items.length === 1) return buildSubtitleBar(items[0].text, options);
 
+    // 2026-05-17: c.startSec があれば mp3 内 LOCAL 時刻として活用
+    //   start = leadPadSec + c.startSec (絶対時刻、 音声 breath を考慮)
+    //   無ければ従来の累積方式 (durationSec を順に積み上げ)
     let cum = leadPadSec;
     const segs = items.map((c, i) => {
-      const start = cum;
-      cum += c.durationSec;
+      const start = c.startSec != null ? (leadPadSec + c.startSec) : cum;
+      cum = start + (Number(c.durationSec) || 0);
       const end = cum;
       const { lines } = splitSubtitle(c.text, maxLineLen);
       return { idx: i, start, end, lines };
