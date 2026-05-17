@@ -121,23 +121,61 @@ async function upload({ videoPath, thumbPath, title, description, tags, privacyS
   const videoId = response.data.id;
   console.log(`[YouTube] 動画完了: https://youtu.be/${videoId}`);
 
+  /* サムネ設定（2026-05-18 #6 修正）: ログ可視化 + 2MB 超 sharp 圧縮 + thumbReason 返却
+     これまで「ファイル無 / API失敗」を warn で握りつぶしてたため、相棒側で原因が見えなかった。
+     thumbReason を返して step6 UI で明示できるようにする。 */
   let thumbSet = false;
-  if (thumbPath && fs.existsSync(thumbPath)) {
+  let thumbReason = null;
+  if (!thumbPath) {
+    thumbReason = 'noPath';
+    console.log('[YouTube] thumbnail: 指定無し（自動生成サムネのまま）');
+  } else if (!fs.existsSync(thumbPath)) {
+    thumbReason = 'notFound';
+    console.error('[YouTube] サムネファイル無: ' + thumbPath);
+  } else {
     try {
-      const ext = path.extname(thumbPath).slice(1).toLowerCase();
+      const origSize = fs.statSync(thumbPath).size;
+      const origMB = origSize / 1024 / 1024;
+      console.log(`[YouTube] thumbnail: path=${thumbPath} size=${origMB.toFixed(2)}MB`);
+
+      // YouTube サムネ制限: 2MB。 1.9MB 超なら sharp で jpeg 圧縮（quality 段階下げ）
+      let uploadPath = thumbPath;
+      let tempPath = null;
+      if (origMB > 1.9) {
+        const sharp = require('sharp');
+        tempPath = thumbPath.replace(/(\.[^.]+)$/, '_yt.jpg');
+        let quality = 90, outBuf = null;
+        while (quality >= 50) {
+          outBuf = await sharp(thumbPath).jpeg({ quality }).toBuffer();
+          if (outBuf.length < 1.9 * 1024 * 1024) break;
+          quality -= 10;
+        }
+        fs.writeFileSync(tempPath, outBuf);
+        uploadPath = tempPath;
+        console.log(`[YouTube] サムネ圧縮: ${origMB.toFixed(2)}MB → ${(outBuf.length/1024/1024).toFixed(2)}MB (quality=${quality})`);
+      }
+
+      const ext = path.extname(uploadPath).slice(1).toLowerCase();
       const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
       await youtube.thumbnails.set({
         videoId,
-        media: { mimeType, body: fs.createReadStream(thumbPath) },
+        media: { mimeType, body: fs.createReadStream(uploadPath) },
       });
       thumbSet = true;
       console.log('[YouTube] サムネイル設定完了');
+
+      if (tempPath && fs.existsSync(tempPath)) {
+        try { fs.unlinkSync(tempPath); } catch (_) {}
+      }
     } catch (tErr) {
-      console.warn('[YouTube] サムネ設定失敗（動画は投稿済み）:', tErr.message);
+      thumbReason = 'apiError';
+      console.error('[YouTube] サムネ設定失敗（動画は投稿済み）:', tErr.message);
+      if (tErr.errors) console.error('  詳細:', JSON.stringify(tErr.errors));
+      if (tErr.code)   console.error('  code:', tErr.code);
     }
   }
 
-  return { videoId, url: `https://youtu.be/${videoId}`, thumbSet };
+  return { videoId, url: `https://youtu.be/${videoId}`, thumbSet, thumbReason };
 }
 
 module.exports = { getAuthUrl, handleCallback, isAuthenticated, upload };
