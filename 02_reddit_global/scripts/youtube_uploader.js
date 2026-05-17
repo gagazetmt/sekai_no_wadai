@@ -64,6 +64,22 @@ function isAuthenticated() {
   return fs.existsSync(TOKEN_PATH) && !!oauth2Client.credentials.access_token;
 }
 
+// 2026-05-17: refresh token 失効 (invalid_grant) を検出したら token ファイルを退避し、
+//   isAuthenticated() が false を返すようにする → UI で再認証ボタン表示
+function _invalidateTokenOnAuthError(err) {
+  const msg = String(err?.message || err);
+  if (msg.includes('invalid_grant') || msg.includes('invalid_token')) {
+    try {
+      if (fs.existsSync(TOKEN_PATH)) {
+        const deadPath = TOKEN_PATH + '.dead_' + Date.now();
+        fs.renameSync(TOKEN_PATH, deadPath);
+        console.warn('[YouTube] token 失効検出 → 退避:', path.basename(deadPath));
+      }
+      oauth2Client.setCredentials({});
+    } catch (_) {}
+  }
+}
+
 async function upload({ videoPath, thumbPath, title, description, tags, privacyStatus = 'public', categoryId = '17' }) {
   init();
   if (!isAuthenticated()) throw new Error('YouTube未認証');
@@ -75,23 +91,32 @@ async function upload({ videoPath, thumbPath, title, description, tags, privacyS
   const fileSize = fs.statSync(videoPath).size;
   console.log(`[YouTube] アップロード開始: ${path.basename(videoPath)} (${(fileSize / 1024 / 1024).toFixed(1)}MB)`);
 
-  const response = await youtube.videos.insert({
-    part: ['snippet', 'status'],
-    requestBody: {
-      snippet: {
-        title: title || '（タイトルなし）',
-        description: description || '',
-        tags: tagArr,
-        categoryId,
-        defaultLanguage: 'ja',
+  let response;
+  try {
+    response = await youtube.videos.insert({
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title: title || '（タイトルなし）',
+          description: description || '',
+          tags: tagArr,
+          categoryId,
+          defaultLanguage: 'ja',
+        },
+        status: {
+          privacyStatus,
+          selfDeclaredMadeForKids: false,
+        },
       },
-      status: {
-        privacyStatus,
-        selfDeclaredMadeForKids: false,
-      },
-    },
-    media: { body: fs.createReadStream(videoPath) },
-  });
+      media: { body: fs.createReadStream(videoPath) },
+    });
+  } catch (e) {
+    _invalidateTokenOnAuthError(e);
+    if (String(e?.message || '').includes('invalid_grant')) {
+      throw new Error('YouTube認証期限切れ → 再認証してください (token退避済)');
+    }
+    throw e;
+  }
 
   const videoId = response.data.id;
   console.log(`[YouTube] 動画完了: https://youtu.be/${videoId}`);
