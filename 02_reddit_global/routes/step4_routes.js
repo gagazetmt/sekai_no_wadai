@@ -2587,9 +2587,10 @@ function getUI() {
     const sel = new Set(cached.selected || []);
     if (sel.has(key)) sel.delete(key);
     else {
-      // 上限は type 別: comparison=5固定 / stats/history=8 / profile=7 / insight=6
+      // 上限は type 別: comparison=7 / stats/history=8 / profile=7 / insight=6
+      // 2026-05-17: SLOT_MAX (line 1872/3031) と整合性取って comparison 5→7 に統一
       const m = window.APP.s4.modules[idx];
-      const limit = ({ comparison: 5, stats: 8, profile: 7, history: 8, insight: 6 })[m?.type] || 8;
+      const limit = ({ comparison: 7, stats: 8, profile: 7, history: 8, insight: 6 })[m?.type] || 8;
       if (sel.size >= limit) {
         _msg(limit + 'メトリック選択済 — どれかを外してから追加してください');
         return;
