@@ -2176,21 +2176,23 @@ function getUI() {
       +     '<span class="s4-fill-status" data-idx="' + i + '" style="font-size:10px;color:#5a6a8a;font-weight:normal;"></span>'
       +   '</div>'
       +   '<textarea class="inp s4-fill-prompt" data-idx="' + i + '" placeholder="例: メッシとロナウドの比較。デビュー年・年齢・通算ゴール・バロンドール・主要タイトルを比較で。ナレーションは2人の違いを語って" '
-      +     'style="display:block;width:100%;font-size:11px;padding:5px 8px;min-height:60px;resize:vertical;background:#0a0d18;color:#e0e0e0;border:1px solid #2a2f4a;"></textarea>'
+      +     'oninput="s4OnInput()" '
+      +     'style="display:block;width:100%;font-size:11px;padding:5px 8px;min-height:60px;resize:vertical;background:#0a0d18;color:#e0e0e0;border:1px solid #2a2f4a;">' + _esc(m.fillPrompt || '') + '</textarea>'
       +   '<div style="display:flex;gap:10px;margin-top:6px;align-items:center;flex-wrap:wrap;">'
       +     '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#a5b4fc;cursor:pointer;user-select:none;">'
-      +       '<input type="checkbox" class="s4-fill-incremental" data-idx="' + i + '" style="margin:0;">'
+      +       '<input type="checkbox" class="s4-fill-incremental" data-idx="' + i + '" style="margin:0;" oninput="s4OnInput()"' + (m.fillIncremental ? ' checked' : '') + '>'
       +       '微調整モード（既存内容を保持して差分のみ適用）'
       +     '</label>'
       +     '<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#34d399;cursor:pointer;user-select:none;">'
-      +       '<input type="checkbox" class="s4-fill-webresearch" data-idx="' + i + '" style="margin:0;" onchange="s4ToggleResearchPrompt(' + i + ', this.checked)">'
+      +       '<input type="checkbox" class="s4-fill-webresearch" data-idx="' + i + '" style="margin:0;" onchange="s4OnInput();s4ToggleResearchPrompt(' + i + ', this.checked)"' + (m.fillWebresearch ? ' checked' : '') + '>'
       +       '🌐 ウェブリサーチを使う'
       +     '</label>'
       +     '<span style="flex:1"></span>'
       +     '<button class="btn btn-sm s4-fill-go" data-idx="' + i + '" style="background:#6366f1;color:#fff;font-size:11px;padding:5px 14px;font-weight:bold;">🪄 生成</button>'
       +   '</div>'
       +   '<textarea class="inp s4-fill-research-prompt" data-idx="' + i + '" placeholder="リサーチの観点（例: BlueCo の経済モデル / Boehly の介入履歴 / 失敗トランスファー詳細）。空ならユーザー注文を流用。" '
-      +     'style="display:none;width:100%;font-size:11px;padding:5px 8px;min-height:50px;resize:vertical;background:#0a0d18;color:#34d399;border:1px solid #34d39955;margin-top:6px;"></textarea>'
+      +     'oninput="s4OnInput()" '
+      +     'style="display:' + (m.fillWebresearch ? 'block' : 'none') + ';width:100%;font-size:11px;padding:5px 8px;min-height:50px;resize:vertical;background:#0a0d18;color:#34d399;border:1px solid #34d39955;margin-top:6px;">' + _esc(m.fillResearchPrompt || '') + '</textarea>'
       +   '<div style="font-size:9px;color:#5a6a8a;margin-top:4px;">Sonnet 既定 → 失敗時 DeepSeek フォールバック / 🌐 ON で Serper最大3クエリ検索→文脈注入</div>'
       + '</div>'
       + galleryHtml
@@ -2743,6 +2745,16 @@ function getUI() {
         score: Number(ss[idx]?.value) || 0,
       }));
     }
+    /* 🪄 おまかせ AI パネルの編集内容（タブ切替で消えないよう state へ書き戻す / 2026-05-17 #5 修正）*/
+    const fp = document.querySelector('.s4-fill-prompt[data-idx="' + i + '"]');
+    const fi = document.querySelector('.s4-fill-incremental[data-idx="' + i + '"]');
+    const fw = document.querySelector('.s4-fill-webresearch[data-idx="' + i + '"]');
+    const fr = document.querySelector('.s4-fill-research-prompt[data-idx="' + i + '"]');
+    if (fp) m.fillPrompt = fp.value;
+    if (fi) m.fillIncremental = !!fi.checked;
+    if (fw) m.fillWebresearch = !!fw.checked;
+    if (fr) m.fillResearchPrompt = fr.value;
+
     /* TTS settings (panel が画面に出てる場合のみ拾う) */
     const tp  = document.getElementById('s4TtsProvider');
     const tv  = document.getElementById('s4TtsVoice');
