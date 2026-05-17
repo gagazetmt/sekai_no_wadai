@@ -215,14 +215,55 @@ async function main() {
   const { date, iso } = jstNow();
   console.log(`\n🚀 案件収集開始: ${iso}`);
 
-  // 既存案件のIDセットを先に読込（既出除外用）
-  const formattedDateForDedup = date.replace(/-/g, "_");
-  const fileNameForDedup = path.join(DATA_DIR, `stories_${formattedDateForDedup}.json`);
-  let existingIds = new Set();
-  if (fs.existsSync(fileNameForDedup)) {
+  // 既存案件のIDセットを先に読込（既出除外用 / 2026-05-18 #7 修正:
+  //   0時跨ぎで前日の継続スレを再取得してしまう問題への対処。
+  //   過去7日分の stories と saved_projects から既出 ID を集約 +
+  //   saved_projects 内部の id 重複も削除する。)
+  const existingIds = new Set();
+
+  // 過去7日分の stories から
+  {
+    const [_y, _m, _d] = date.split('-').map(Number);
+    const baseUtc = Date.UTC(_y, _m - 1, _d);
+    let loadedDays = 0;
+    for (let off = 0; off < 7; off++) {
+      const dt = new Date(baseUtc - off * 86400000);
+      const dateKey = `${dt.getUTCFullYear()}_${String(dt.getUTCMonth() + 1).padStart(2, '0')}_${String(dt.getUTCDate()).padStart(2, '0')}`;
+      const fp = path.join(DATA_DIR, `stories_${dateKey}.json`);
+      if (!fs.existsSync(fp)) continue;
+      try {
+        const _ex = JSON.parse(fs.readFileSync(fp, 'utf8'));
+        for (const p of (_ex.posts || [])) if (p?.id) existingIds.add(p.id);
+        loadedDays++;
+      } catch (_) {}
+    }
+    console.log(`  📚 dedup: stories 過去7日 (${loadedDays}日分ヒット) → 既出${existingIds.size}件`);
+  }
+
+  // saved_projects.json からも（相棒が保存したネタは再取得しない & 内部重複は削除）
+  const savedPath = path.join(DATA_DIR, 'saved_projects.json');
+  if (fs.existsSync(savedPath)) {
     try {
-      const _ex = JSON.parse(fs.readFileSync(fileNameForDedup, "utf8"));
-      existingIds = new Set((_ex.posts || []).map(p => p.id));
+      const saved = JSON.parse(fs.readFileSync(savedPath, 'utf8'));
+      if (Array.isArray(saved)) {
+        const seen = new Set();
+        const dedupSaved = [];
+        let dupCount = 0;
+        for (const p of saved) {
+          const id = p?.id;
+          if (!id) { dedupSaved.push(p); continue; }
+          if (seen.has(id)) { dupCount++; continue; }
+          seen.add(id);
+          existingIds.add(id);
+          dedupSaved.push(p);
+        }
+        if (dupCount > 0) {
+          fs.writeFileSync(`${savedPath}.bak_${Date.now()}`, JSON.stringify(saved, null, 2));
+          fs.writeFileSync(savedPath, JSON.stringify(dedupSaved, null, 2));
+          console.log(`  🧹 saved_projects: 重複id${dupCount}件削除 (bakあり / ${dedupSaved.length}件残)`);
+        }
+        console.log(`  💾 dedup: saved_projects ${seen.size}件 → 合計既出${existingIds.size}件`);
+      }
     } catch (_) {}
   }
 
