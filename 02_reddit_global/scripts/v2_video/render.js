@@ -698,7 +698,7 @@ async function main() {
       proc.on('error', reject);
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(-200)}`)));
     });
-    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '6.6');
+    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '8.1');
     console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS, cps計算=ひらがな化ベース)...`);
     const normT0 = Date.now();
     let normalized = 0;
