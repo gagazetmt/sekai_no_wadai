@@ -370,29 +370,29 @@ ${rowActiveStyles}
     return [' lose', ' win'];
   }
 
-  // 値の文字数 → { fontSize, oneLine } (2026-05-16 相棒指示で改修)
+  // 値の文字数 → { fontSize, oneLine } (2026-05-17 相棒指示で再改修)
   //   - 1行に収まるなら base サイズで 1 行表示
   //   - 収まらないなら font を縮小して 1 行に収める
   //   - 縮小率が 70% を下回る場合のみ 2 行折り返し許可（70% で固定）
   //   - val width: 35% × 1920 = 672px、 左右余白 40px → 632px 利用可
-  //   - 日本語 1文字幅 ≒ font-size × 0.55、英数字は × 0.50 と推定
+  //   - 2026-05-17: 「テキスト大きすぎてはみ出す」 (相棒) ため:
+  //       (1) base を win/lose 関係なく 50px に統一 (旧: win 64 / lose 48 / neutral 56)
+  //           勝ち方を「光らせる」効果は text-shadow で残す、 フォント拡大は廃止
+  //       (2) charRatio を 0.55 → 0.62 / 0.50 → 0.56 に厳しく (実測ベース)
+  //       (3) availW を 632 → 600 に詰めて padding 余裕確保
   function _valFontWithMode(text, mod) {
-    const base = mod === 'win' ? 64 : (mod === 'lose' ? 48 : 56);
+    const base = 50;  // win/lose 共通の base サイズ
     const t    = String(text || '');
     const len  = t.length;
-    // 日本語かどうかでざっくり width 係数を切替
     const hasJp = /[ぁ-んァ-ヶ一-龯]/.test(t);
-    const charRatio = hasJp ? 0.55 : 0.50;
-    const availW = 632;
+    const charRatio = hasJp ? 0.62 : 0.56;
+    const availW = 600;
     const fitsAtBase = len * base * charRatio <= availW;
     if (fitsAtBase) return { fontSize: base, oneLine: true };
-    // 縮小して 1 行に収めるなら何 % か
     const scale = availW / (len * base * charRatio);
     if (scale >= 0.7) {
-      // 70% 以上で 1 行に収まる → 縮小して 1 行
-      return { fontSize: Math.max(20, Math.round(base * scale * 0.95)), oneLine: true };
+      return { fontSize: Math.max(20, Math.round(base * scale)), oneLine: true };
     }
-    // 70% を下回る → 70% で固定して 2 行折り返し
     return { fontSize: Math.max(20, Math.round(base * 0.7)), oneLine: false };
   }
   // 後方互換 (使ってる箇所が他にあれば fontSize だけ返す)
