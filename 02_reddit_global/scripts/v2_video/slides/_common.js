@@ -12,9 +12,13 @@ const W = 1920, H = 1080;
 //   - render.js の buildSlideAudio が先頭に silence pad、slideDurationMs が前後 pad を含めた長さを返す
 //   2026-05-08: 1.5s → 1.43s に 5% 短縮（テンポ感UP）
 //   2026-05-16: env で 0 化可能に (INTEGRATED_AUDIO_MODE で combined.mp3 直接利用時に使用)
-//   2026-05-16 (相棒指示): 1.43 → 2.43 に +1秒（スライド前後の暗転時間を増やす）
-const LEAD_PAD_SEC = parseFloat(process.env.LEAD_PAD_SEC ?? '2.43');
-const TAIL_PAD_SEC = parseFloat(process.env.TAIL_PAD_SEC ?? '2.43');
+//   2026-05-17 (修正): 2.43 → 1.43 に戻す
+//     旧: 2.43 に上げて「スライド前後の暗転 +1秒」を実装したつもりだったが、
+//         LEAD_PAD は音声前 silence であり、暗転（fadeblack）とは別物。
+//         結果として xfade 1.5s 後に 0.93s の無音帯が発生 → 字幕ズレ感
+//     新: LEAD/TAIL は元値、 暗転は render.js の TRANSITION_SEC (1.5→2.5) で +1秒
+const LEAD_PAD_SEC = parseFloat(process.env.LEAD_PAD_SEC ?? '1.43');
+const TAIL_PAD_SEC = parseFloat(process.env.TAIL_PAD_SEC ?? '1.43');
 
 // 型3 ダークネイビー基調（全スライド共通）
 const PALETTE = {

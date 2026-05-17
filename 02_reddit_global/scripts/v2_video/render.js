@@ -912,7 +912,9 @@ async function main() {
   //   視覚的に明確な「間」が生まれる。TAIL_PAD/LEAD_PAD が1.5sずつあるため、
   //   この overlap region は両スライドの silence pad に収まり、コンテンツは欠けない。
   //   2026-05-16: INTEGRATED_AUDIO_MODE では combined.mp3 が単一トラックで動画より縮められないため 0
-  const TRANSITION_SEC = INTEGRATED_AUDIO_MODE ? 0 : 1.5;
+  //   2026-05-17 (相棒指示): 1.5 → 2.5 に +1秒（スライド前後の暗転を伸ばす本来の実装）
+  //     旧: LEAD_PAD で実装しようとしたが副作用（silence 帯発生で字幕ズレ感）→ こちらに移行
+  const TRANSITION_SEC = INTEGRATED_AUDIO_MODE ? 0 : 2.5;
   const slideVideos = new Array(modules.length);
   const slideAudios = new Array(modules.length);
   const slideDursMs = new Array(modules.length);
