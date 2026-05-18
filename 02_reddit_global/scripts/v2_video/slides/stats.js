@@ -425,6 +425,11 @@ ${cardActiveStyles}
     return Math.max(m - 19, 19);
   }
 
+  // 2026-05-18: \n を <br> に変換して 2 行折り返し対応。
+  //   改行を含むテキストは line-clamp を最低 2 に拡張（7-8 件時の 1 行制限を上書き）
+  const escBr = (s) => esc(s).replace(/\r?\n/g, '<br>');
+  const hasNl = (s) => /\r?\n/.test(String(s || ''));
+
   const cardsHtml = slots.map((s, i) => {
     let lbl, val;
     if (s.merged && s.merged.includes('：')) {
@@ -439,9 +444,12 @@ ${cardActiveStyles}
     const wave = isActive
       ? `<div class="sound-wave"><span></span><span></span><span></span></div>`
       : '';
+    // 改行入りの場合は line-clamp を 2 に上書き（CSS 既定が 1 でも）
+    const lblClamp = hasNl(lbl) ? Math.max(2, layout.lblLine) : layout.lblLine;
+    const valClamp = hasNl(val) ? Math.max(2, layout.valLine) : layout.valLine;
     return `<div class="data-card${activeClass}">
-      <div class="card-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
-      <div class="card-value" style="font-size:${_valFont(val)}px"><span class="val-text">${esc(val)}</span></div>
+      <div class="card-label" style="font-size:${_labelFont(lbl)}px;-webkit-line-clamp:${lblClamp}">${escBr(lbl)}</div>
+      <div class="card-value" style="font-size:${_valFont(val)}px;-webkit-line-clamp:${valClamp}"><span class="val-text">${escBr(val)}</span></div>
       ${wave}
     </div>`;
   }).join('');

@@ -295,12 +295,18 @@ ${slots.map((_, i) => `.data-row:nth-of-type(${i + 1}) .val-text { animation-del
     return Math.max(labelBase - 11, 18);
   }
 
+  // 2026-05-18: \n を <br> に変換して 2 行折り返し対応。
+  //   改行を含むテキストは line-clamp を最低 2 に拡張（N>=6 時の 1 行制限を上書き）
+  const escBr = (s) => esc(s).replace(/\r?\n/g, '<br>');
+  const hasNl = (s) => /\r?\n/.test(String(s || ''));
+
   const dataRows = slots.map(s => {
     const lbl = s.label || '';
     const val = s.value || '-';
+    const clamp = (hasNl(lbl) || hasNl(val)) ? Math.max(2, rowLineClamp) : rowLineClamp;
     return `<div class="data-row">
-      <div class="row-label" style="font-size:${_labelFont(lbl)}px">${esc(lbl)}</div>
-      <div class="row-value" style="font-size:${_valFont(val)}px"><span class="val-text">${esc(val)}</span></div>
+      <div class="row-label" style="font-size:${_labelFont(lbl)}px;-webkit-line-clamp:${clamp}">${escBr(lbl)}</div>
+      <div class="row-value" style="font-size:${_valFont(val)}px;-webkit-line-clamp:${clamp}"><span class="val-text">${escBr(val)}</span></div>
     </div>`;
   }).join('');
 
