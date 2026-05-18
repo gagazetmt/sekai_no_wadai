@@ -275,6 +275,7 @@ function buildComparisonHTML(mod) {
   display: flex;
   align-items: center;
   height: 90px;
+  position: relative;  /* 2026-05-18: 中央 label-col を absolute 中央配置にする親基準 */
   width: 100%;
   border-bottom: 1px solid rgba(255,255,255,0.07);
   position: relative;
@@ -285,7 +286,8 @@ function buildComparisonHTML(mod) {
 .data-row:last-child { border-bottom: none; }
 
 .val {
-  width: 35%;
+  /* 2026-05-18: 35% → 50% に拡大。 中央 label は absolute で重ね配置 */
+  width: 50%;
   font-size: 50px;
   font-weight: 900;
   line-height: 1.05;
@@ -311,11 +313,12 @@ function buildComparisonHTML(mod) {
 }
 .val-left {
   text-align: right;
-  padding-right: 40px;
+  /* 2026-05-18: padding-right を 40 → 100 に拡大 (中央 label との重なり緩衝域) */
+  padding-right: 100px;
 }
 .val-right {
   text-align: left;
-  padding-left: 40px;
+  padding-left: 100px;
 }
 /* 数値比較で勝ってる方は更に金色グロー強化、負けは少し控えめ */
 .val.win {
@@ -328,11 +331,21 @@ function buildComparisonHTML(mod) {
 .val.lose { opacity: 0.55; }
 
 .label-col {
-  width: 30%;
+  /* 2026-05-18: row 中央に absolute 配置。 width 30% → 280px 固定 (はみ出し許容)
+     value は 50% ずつで row 全幅を占め、 label はその上に重ねて表示する */
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 280px;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   padding: 0 8px;
+  pointer-events: none;
 }
 .label-text {
   /* +30% (22→29) / 金色 / 浮かび上がり (embossed) 効果 */
@@ -386,7 +399,9 @@ ${rowActiveStyles}
     const len  = t.length;
     const hasJp = /[ぁ-んァ-ヶ一-龯]/.test(t);
     const charRatio = hasJp ? 0.62 : 0.56;
-    const availW = 600;
+    // 2026-05-18: .val width 35% → 50% 拡大に合わせて availW を 600 → 800 に増やす
+    //   (val 内部幅 ≈ 50% × row 1800 - padding 100 = 800px)
+    const availW = 800;
     const fitsAtBase = len * base * charRatio <= availW;
     if (fitsAtBase) return { fontSize: base, oneLine: true };
     const scale = availW / (len * base * charRatio);
