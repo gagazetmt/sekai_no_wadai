@@ -1815,6 +1815,16 @@ function getUI() {
             scriptDir: m.scriptDir || '',
           }));
           _renderOutline();
+          // 2026-05-19: propose 結果を即サーバ保存（別画面遷移で消える事故防止）
+          try {
+            await fetchJson('/api/save-modules', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ postId: post.id, modules: window.APP.s3.modules }),
+            });
+          } catch (saveErr) {
+            console.warn('[Step3] propose 結果の自動保存失敗:', saveErr.message);
+          }
           _msg('✅ ' + r.modules.length + ' 枚構成を提案しました（' + r.elapsed + '秒）。各行を確認・編集してから「✨ 脚本生成」へ');
           break;
         }
