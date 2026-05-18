@@ -3233,22 +3233,25 @@ function getUI() {
 
   /* ── 🎙️ TTS: 既存 TTS を削除して再生成可能にする (2026-05-18 追加) ── */
   //   isAll=true なら全スライド対象、 false なら idx 指定のスライドのみ
+  //   このファイル全体が外側テンプレートリテラル内にあるため、 内側で
+  //   バッククォートは絶対に使わない (string concat で書く)
   window.s4TtsRegen = async function(idx, isAll) {
     const post = window.APP.selected;
-    if (!post?.id) return;
-    const label = isAll ? '全スライド' : `スライド #${(idx ?? window.APP.s4.activeTab) + 1}`;
-    if (!confirm(`${label} の TTS を削除する？\n（次の動画生成で新しいナレーションで再生成される）`)) return;
-    const status = document.querySelector('.s4-tts-status[data-idx="' + (idx ?? window.APP.s4.activeTab) + '"]');
+    if (!post || !post.id) return;
+    const _idx = (idx != null) ? idx : window.APP.s4.activeTab;
+    const label = isAll ? '全スライド' : ('スライド #' + (_idx + 1));
+    if (!confirm(label + ' の TTS を削除する？\\n（次の動画生成で新しいナレーションで再生成される）')) return;
+    const status = document.querySelector('.s4-tts-status[data-idx="' + _idx + '"]');
     if (status) status.textContent = '⏳ TTS 削除中...';
     try {
       const body = { postId: post.id };
-      if (!isAll) body.moduleIdx = (idx ?? window.APP.s4.activeTab);
+      if (!isAll) body.moduleIdx = _idx;
       const r = await fetchJson('/api/v2/clear-audio', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (status) status.textContent = `✅ 削除完了: audio ${r.cleared}件 / mp3 ${r.mp3Removed}件`;
-      _msg(`🗑️ TTS 削除: ${label} (audio ${r.cleared} / mp3 ${r.mp3Removed})`);
+      if (status) status.textContent = '✅ 削除完了: audio ' + r.cleared + '件 / mp3 ' + r.mp3Removed + '件';
+      _msg('🗑️ TTS 削除: ' + label + ' (audio ' + r.cleared + ' / mp3 ' + r.mp3Removed + ')');
       // modules を再読み込みして audio:[] 状態を UI に反映
       await _loadModules();
     } catch (e) {
