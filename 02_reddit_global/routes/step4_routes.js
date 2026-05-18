@@ -1907,16 +1907,16 @@ function getUI() {
               + 'style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:13px;padding:0 6px;line-height:24px;height:24px;align-self:center;">×</button>';
             if (isCmp) {
               return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 24px 24px 28px;gap:4px;margin-bottom:4px;">'
-                + '<input class="inp s4-cmp-label" data-idx="' + idx + '" value="' + _esc(s.label||'') + '" placeholder="LABEL" style="font-size:11px;padding:4px 6px;">'
-                + '<input class="inp s4-cmp-left" data-idx="' + idx + '" value="' + _esc(s.leftValue||'') + '" placeholder="左" style="font-size:11px;padding:4px 6px;color:#93c5fd;">'
-                + '<input class="inp s4-cmp-right" data-idx="' + idx + '" value="' + _esc(s.rightValue||'') + '" placeholder="右" style="font-size:11px;padding:4px 6px;color:#fca5a5;">'
+                + '<textarea class="inp s4-cmp-label" data-idx="' + idx + '" placeholder="LABEL" rows="1" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;resize:vertical;min-height:28px;">' + _esc(s.label||'') + '</textarea>'
+                + '<textarea class="inp s4-cmp-left" data-idx="' + idx + '" placeholder="左" rows="1" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;color:#93c5fd;resize:vertical;min-height:28px;">' + _esc(s.leftValue||'') + '</textarea>'
+                + '<textarea class="inp s4-cmp-right" data-idx="' + idx + '" placeholder="右" rows="1" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;color:#fca5a5;resize:vertical;min-height:28px;">' + _esc(s.rightValue||'') + '</textarea>'
                 + orderBtns
                 + delBtn
                 + '</div>';
             } else {
               return '<div style="display:grid;grid-template-columns:140px 1fr 24px 24px 28px;gap:4px;margin-bottom:4px;">'
-                + '<input class="inp s4-slot-label" data-idx="' + idx + '" value="' + _esc(s.label||'') + '" placeholder="ラベル" style="font-size:11px;padding:4px 6px;">'
-                + '<input class="inp s4-slot-value" data-idx="' + idx + '" value="' + _esc(s.value||'') + '" placeholder="値" style="font-size:11px;padding:4px 6px;">'
+                + '<textarea class="inp s4-slot-label" data-idx="' + idx + '" placeholder="ラベル" rows="1" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;resize:vertical;min-height:28px;">' + _esc(s.label||'') + '</textarea>'
+                + '<textarea class="inp s4-slot-value" data-idx="' + idx + '" placeholder="値" rows="1" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;resize:vertical;min-height:28px;">' + _esc(s.value||'') + '</textarea>'
                 + orderBtns
                 + delBtn
                 + '</div>';

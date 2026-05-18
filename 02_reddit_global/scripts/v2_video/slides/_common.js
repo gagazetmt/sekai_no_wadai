@@ -37,6 +37,31 @@ function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// 2026-05-18: 改行対応エスケープ
+//   ユーザーが Step4 のテキストボックスで Enter で改行入力した場合 (\n)、
+//   もしくは AI が JSON で "value": "...\\n..." と literal 文字列で返した場合、
+//   どちらも <br> に変換して表示する。
+//   esc() 後に変換することでタグ注入を防ぐ。
+//
+// 重要: 余分な改行を正規化する:
+//   - 先頭・末尾の改行は除去（AI 出力に「スペイン\n」が混じると line-clamp 1 で省略事故）
+//   - 連続改行 \n\n+ は 1 つにまとめる（過剰な空行を防止）
+function _normNl(s) {
+  return String(s ?? '')
+    .replace(/\\n/g, '\n')        // literal \\n を実改行に
+    .replace(/\r\n/g, '\n')       // CRLF を LF に
+    .replace(/^\n+|\n+$/g, '')    // 先頭・末尾の改行除去
+    .replace(/\n{2,}/g, '\n');    // 連続改行を 1 つに
+}
+function escBr(s) {
+  return esc(_normNl(s)).replace(/\n/g, '<br>');
+}
+// 改行を含むか判定 (line-clamp の動的拡張用)
+//   正規化後に改行が残ってるかで判定（末尾だけの改行は無視される）
+function hasNewline(s) {
+  return /\n/.test(_normNl(s));
+}
+
 // 画像を base64 で埋め込み（Puppeteer の file:// アクセス回避）
 function imgDataUri(imgPath) {
   if (!imgPath) return null;
@@ -665,7 +690,7 @@ function fitFont(text, baseFontPx, innerWidthPx, opts = {}) {
 }
 
 module.exports = {
-  W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
+  W, H, PALETTE, esc, escBr, hasNewline, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
   LEAD_PAD_SEC, TAIL_PAD_SEC,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,

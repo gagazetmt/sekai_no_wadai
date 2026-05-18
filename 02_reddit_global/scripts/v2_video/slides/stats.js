@@ -8,7 +8,7 @@
 //   - 名前ボックス: 下から浮上ゴーストトレイル + 本体 fade in（insight の縦版）
 //   - データカード: 該当 chunk が再生中だけ active（金枠 + scale 1.04 + グロー）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
+const { PALETTE, esc, escBr, hasNewline, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
 // チーム or 選手 → 日本語/カタカナ
 function _entityName(raw) {
@@ -413,11 +413,8 @@ ${cardActiveStyles}
   const _valFont   = (t) => fitFont(t, layout.maxValFont,   _cardInnerW, { lines: layout.valLine, minFontPx: 20 });
   const _labelFont = (t) => fitFont(t, layout.maxLabelFont, _cardInnerW, { lines: layout.lblLine, minFontPx: 19 });
 
-  // 2026-05-18: \n を <br> に変換して 2 行折り返し対応。
+  // 2026-05-18: \n / \\n を <br> に変換して 2 行折り返し対応 (_common.escBr 使用)
   //   改行を含むテキストは line-clamp を最低 2 に拡張（7-8 件時の 1 行制限を上書き）
-  const escBr = (s) => esc(s).replace(/\r?\n/g, '<br>');
-  const hasNl = (s) => /\r?\n/.test(String(s || ''));
-
   const cardsHtml = slots.map((s, i) => {
     let lbl, val;
     if (s.merged && s.merged.includes('：')) {
@@ -433,8 +430,8 @@ ${cardActiveStyles}
       ? `<div class="sound-wave"><span></span><span></span><span></span></div>`
       : '';
     // 改行入りの場合は line-clamp を 2 に上書き（CSS 既定が 1 でも）
-    const lblClamp = hasNl(lbl) ? Math.max(2, layout.lblLine) : layout.lblLine;
-    const valClamp = hasNl(val) ? Math.max(2, layout.valLine) : layout.valLine;
+    const lblClamp = hasNewline(lbl) ? Math.max(2, layout.lblLine) : layout.lblLine;
+    const valClamp = hasNewline(val) ? Math.max(2, layout.valLine) : layout.valLine;
     return `<div class="data-card${activeClass}">
       <div class="card-label" style="font-size:${_labelFont(lbl)}px;-webkit-line-clamp:${lblClamp}">${escBr(lbl)}</div>
       <div class="card-value" style="font-size:${_valFont(val)}px;-webkit-line-clamp:${valClamp}"><span class="val-text">${escBr(val)}</span></div>

@@ -3,7 +3,7 @@
 //   左カラム: [国旗][クラブロゴ] / タイトル(選手名) / メイン画像(選手写真)
 //   右カラム: データ行（出場・ゴール等のスタッツ）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, imageAdjustCss, fitFont } = require('./_common');
+const { PALETTE, esc, escBr, hasNewline, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, imageAdjustCss, fitFont } = require('./_common');
 
 function buildProfileHTML(mod) {
   // dataSlots 4〜7 件を data-row で使う
@@ -286,15 +286,11 @@ ${slots.map((_, i) => `.data-row:nth-of-type(${i + 1}) .val-text { animation-del
   // labelBase は短い時にやや拡大したい (旧仕様 +11) → base を labelBase+8 にしておく
   const _labelFont = (t) => fitFont(t, labelBase + 8, _labelInnerW, { lines: rowLineClamp, minFontPx: 18 });
 
-  // 2026-05-18: \n を <br> に変換して 2 行折り返し対応。
-  //   改行を含むテキストは line-clamp を最低 2 に拡張（N>=6 時の 1 行制限を上書き）
-  const escBr = (s) => esc(s).replace(/\r?\n/g, '<br>');
-  const hasNl = (s) => /\r?\n/.test(String(s || ''));
-
+  // 2026-05-18: \n / \\n を <br> に変換して 2 行折り返し対応 (_common.escBr 使用)
   const dataRows = slots.map(s => {
     const lbl = s.label || '';
     const val = s.value || '-';
-    const clamp = (hasNl(lbl) || hasNl(val)) ? Math.max(2, rowLineClamp) : rowLineClamp;
+    const clamp = (hasNewline(lbl) || hasNewline(val)) ? Math.max(2, rowLineClamp) : rowLineClamp;
     return `<div class="data-row">
       <div class="row-label" style="font-size:${_labelFont(lbl)}px;-webkit-line-clamp:${clamp}">${escBr(lbl)}</div>
       <div class="row-value" style="font-size:${_valFont(val)}px;-webkit-line-clamp:${clamp}"><span class="val-text">${escBr(val)}</span></div>
