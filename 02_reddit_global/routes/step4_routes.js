@@ -796,6 +796,16 @@ ${incremental
   ? '既存内容を保持しながら、ユーザー注文の差分だけ適用して type / title / dataSlots / narration を返してください。'
   : 'type / title / dataSlots / narration を**一気通貫で**生成してください。'}
 
+━━━ ⚡ 最低基準（絶対厳守 / 違反すると無効）━━━
+${incremental ? '※ 微調整モード時も、 修正後に以下を満たすこと' : ''}
+- **narration**: 220〜280字（reaction は 100〜140字 / opening は空 / toc は 150〜200字）
+- **dataSlots（stats / profile）**: **6個以上**（5個以下は不可・必ず元データから 6 個以上抽出）
+- **dataSlots（history B 単独史型 / comparison）**: 4〜7個
+- **catchphrases（insight）**: 3〜6個
+- **narration 内の具体数字**: 1カードあたり**最低3個以上**（試合数/ゴール数/順位/年/勝率/評価/移籍金 等）
+- 「〜と言われています」等の冗長表現は削除し、 数字と事実で勝負
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ${projectCtx}
 ${currentSnapshot}
 【現スライド情報（# ${idx + 1} 枚目 / 全 ${allMods.length} 枚）】
