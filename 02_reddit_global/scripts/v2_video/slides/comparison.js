@@ -431,9 +431,9 @@ ${rowActiveStyles}
         const lb = String(s.label      || '');
         const activeClass = (slotChunkIdx[i] >= 0 && audio.length) ? ` active-${i}` : '';
         return `<div class="data-row${activeClass}">
-          <div class="val val-left${lc}${_unifiedValWrap}" style="font-size:${_unifiedValFs}">${esc(lv)}</div>
+          <div class="val val-left${lc}${_unifiedValWrap}" style="font-size:${_unifiedValFs}">${escBr(lv)}</div>
           <div class="label-col"><div class="label-text" style="font-size:${_unifiedLabelFs};-webkit-line-clamp:${_unifiedLabelClamp}">${escBr(lb)}</div></div>
-          <div class="val val-right${rc}${_unifiedValWrap}" style="font-size:${_unifiedValFs}">${esc(rv)}</div>
+          <div class="val val-right${rc}${_unifiedValWrap}" style="font-size:${_unifiedValFs}">${escBr(rv)}</div>
         </div>`;
       }).join('')
     : '<div style="text-align:center;color:#5a6a8a;font-size:24px">対比データなし</div>';
