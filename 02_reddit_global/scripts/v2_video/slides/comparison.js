@@ -275,7 +275,6 @@ function buildComparisonHTML(mod) {
   display: flex;
   align-items: center;
   height: 90px;
-  position: relative;  /* 2026-05-18: 中央 label-col を absolute 中央配置にする親基準 */
   width: 100%;
   border-bottom: 1px solid rgba(255,255,255,0.07);
   position: relative;
@@ -286,8 +285,7 @@ function buildComparisonHTML(mod) {
 .data-row:last-child { border-bottom: none; }
 
 .val {
-  /* 2026-05-18: 35% → 50% に拡大。 中央 label は absolute で重ね配置 */
-  width: 50%;
+  width: 35%;
   font-size: 50px;
   font-weight: 900;
   line-height: 1.05;
@@ -313,12 +311,11 @@ function buildComparisonHTML(mod) {
 }
 .val-left {
   text-align: right;
-  /* 2026-05-18: padding-right を 40 → 100 に拡大 (中央 label との重なり緩衝域) */
-  padding-right: 100px;
+  padding-right: 40px;
 }
 .val-right {
   text-align: left;
-  padding-left: 100px;
+  padding-left: 40px;
 }
 /* 数値比較で勝ってる方は更に金色グロー強化、負けは少し控えめ */
 .val.win {
@@ -331,21 +328,11 @@ function buildComparisonHTML(mod) {
 .val.lose { opacity: 0.55; }
 
 .label-col {
-  /* 2026-05-18: row 中央に absolute 配置。 width 30% → 280px 固定 (はみ出し許容)
-     value は 50% ずつで row 全幅を占め、 label はその上に重ねて表示する */
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  transform: translateX(-50%);
-  width: 280px;
-  z-index: 2;
+  width: 30%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   padding: 0 8px;
-  pointer-events: none;
 }
 .label-text {
   /* +30% (22→29) / 金色 / 浮かび上がり (embossed) 効果 */
@@ -394,15 +381,15 @@ ${rowActiveStyles}
   //       (2) charRatio を 0.55 → 0.62 / 0.50 → 0.56 に厳しく (実測ベース)
   //       (3) availW を 632 → 600 に詰めて padding 余裕確保
   function _valFontWithMode(text, mod) {
-    // 2026-05-18: base 50 → 72 に拡大 (横幅拡張に合わせて文字も大きく見せる)
-    //   threshold 60% → 70% に揃える (全スライド統一仕様)
+    // 2026-05-18: base font は 72 を維持 (大きく見せる) / 比率は元の 35% に戻したので availW を 350 に
+    //   threshold 70% で全スライド統一 (60% 未満で 2 行折り返し)
     const base = 72;
     const t    = String(text || '');
     const len  = t.length;
     const hasJp = /[ぁ-んァ-ヶ一-龯]/.test(t);
     const charRatio = hasJp ? 0.62 : 0.56;
-    // val 内部幅: 50% × row 1600 - padding 100 = 700px (実 row 全幅は 1600〜1700px)
-    const availW = 700;
+    // val 内部幅: 35% × row 1600 - padding 80 ≈ 480px (実 row 全幅は約 1600px)
+    const availW = 480;
     const fitsAtBase = len * base * charRatio <= availW;
     if (fitsAtBase) return { fontSize: base, oneLine: true };
     const scale = availW / (len * base * charRatio);
