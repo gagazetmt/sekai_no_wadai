@@ -1303,6 +1303,47 @@ router.get('/v2/tts-presets', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ─── /v2/clear-audio : 既存 TTS を削除して再生成可能にする (2026-05-18 追加)
+//   body: { postId, moduleIdx? }  moduleIdx 省略時は全スライド対象
+router.post('/v2/clear-audio', express.json(), (req, res) => {
+  try {
+    const { postId, moduleIdx } = req.body || {};
+    if (!postId) return res.status(400).json({ error: 'postId required' });
+    const safeId = String(postId).replace(/[\/\?%*:|"<>\.]/g, '_');
+    const mp = path.join(DATA_DIR, safeId + '_modules.json');
+    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
+    const data = JSON.parse(fs.readFileSync(mp, 'utf8'));
+    const dir = audioDirFor(postId);
+
+    const targets = (moduleIdx != null && moduleIdx !== '')
+      ? [parseInt(moduleIdx, 10)]
+      : (data.modules || []).map((_, i) => i);
+
+    let cleared = 0;
+    let mp3Removed = 0;
+    for (const idx of targets) {
+      const m = (data.modules || [])[idx];
+      if (!m) continue;
+      if (Array.isArray(m.audio) && m.audio.length > 0) {
+        m.audio = [];
+        cleared++;
+      }
+      const prefix = `m${String(idx).padStart(2, '0')}_`;
+      try {
+        fs.readdirSync(dir)
+          .filter(f => f.startsWith(prefix) && f.endsWith('.mp3'))
+          .forEach(f => { try { fs.unlinkSync(path.join(dir, f)); mp3Removed++; } catch (_) {} });
+      } catch (_) {}
+    }
+    fs.writeFileSync(mp, JSON.stringify(data, null, 2));
+    console.log(`[v2/clear-audio] ${safeId} idx=${moduleIdx ?? 'ALL'} → audio cleared:${cleared} mp3:${mp3Removed}`);
+    res.json({ ok: true, cleared, mp3Removed, targets: targets.length });
+  } catch (e) {
+    console.error('[v2/clear-audio]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── /v2/tts-preview : 試聴用 (保存しない、base64 mp3 を返す) ──
 //   body に provider を含めれば gemini/minimax を切替可能
 router.post('/v2/tts-preview', express.json({ limit: '512kb' }), async (req, res) => {
@@ -1863,6 +1904,8 @@ function getUI() {
       +   minimaxBlockHtml
       +   '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:10px;color:#94a3b8;">'
       +     '<span style="flex:1"></span>'
+      +     '<button class="btn btn-sm" onclick="s4TtsRegen(' + i + ', false)" style="background:#7c2d12;color:#fed7aa;font-size:10px;padding:4px 10px;" title="このスライドの TTS を削除して再生成可能にする">🎙️ このスライドの TTS 削除</button>'
+      +     '<button class="btn btn-sm" onclick="s4TtsRegen(null, true)" style="background:#7f1d1d;color:#fecaca;font-size:10px;padding:4px 10px;" title="全スライドの TTS を削除（再生成で新しい設定が反映される）">🗑️ 全スライド TTS 削除</button>'
       +     '<button class="btn btn-sm" onclick="s4TtsPreview()" style="background:#1a2540;color:#a78bfa;font-size:10px;padding:4px 10px;">▶ 試聴</button>'
       +   '</div>'
       +   audioListHtml
@@ -3186,6 +3229,32 @@ function getUI() {
       return;
     }
     _renderEditor();
+  };
+
+  /* ── 🎙️ TTS: 既存 TTS を削除して再生成可能にする (2026-05-18 追加) ── */
+  //   isAll=true なら全スライド対象、 false なら idx 指定のスライドのみ
+  window.s4TtsRegen = async function(idx, isAll) {
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const label = isAll ? '全スライド' : `スライド #${(idx ?? window.APP.s4.activeTab) + 1}`;
+    if (!confirm(`${label} の TTS を削除する？\n（次の動画生成で新しいナレーションで再生成される）`)) return;
+    const status = document.querySelector('.s4-tts-status[data-idx="' + (idx ?? window.APP.s4.activeTab) + '"]');
+    if (status) status.textContent = '⏳ TTS 削除中...';
+    try {
+      const body = { postId: post.id };
+      if (!isAll) body.moduleIdx = (idx ?? window.APP.s4.activeTab);
+      const r = await fetchJson('/api/v2/clear-audio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (status) status.textContent = `✅ 削除完了: audio ${r.cleared}件 / mp3 ${r.mp3Removed}件`;
+      _msg(`🗑️ TTS 削除: ${label} (audio ${r.cleared} / mp3 ${r.mp3Removed})`);
+      // modules を再読み込みして audio:[] 状態を UI に反映
+      await _loadModules();
+    } catch (e) {
+      if (status) status.textContent = '❌ ' + e.message;
+      _msg('❌ TTS 削除失敗: ' + e.message);
+    }
   };
 
   /* ── 🎙️ TTS: Style Instructions をデフォルトに戻す ── */
