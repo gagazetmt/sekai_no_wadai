@@ -286,17 +286,20 @@ ${slots.map((_, i) => `.data-row:nth-of-type(${i + 1}) .val-text { animation-del
   const _valFit   = (t) => fitFont(t, valueBase,     _valueInnerW, { maxLines: 2, minFontPx: 20 });
   const _labelFit = (t) => fitFont(t, labelBase + 8, _labelInnerW, { maxLines: 2, minFontPx: 18 });
 
-  // 2026-05-18: fitFont が「縮小率 70% 未満で 2 行折り返し」を判定 + \n / \\n を <br> に
+  // 2026-05-18: 全 row でフォントサイズを統一（行ごとにサイズが違うと比較しにくい）
+  //   slots 全体の中で最も縮小される (= 最長) value/label に合わせて単一サイズで描画
+  const _longestLabel = slots.reduce((m, s) => (s.label || '').length > m.length ? (s.label || '') : m, '');
+  const _longestVal   = slots.reduce((m, s) => (s.value || '-').length > m.length ? (s.value || '-') : m, '');
+  const _unifLabel = _labelFit(_longestLabel);
+  const _unifVal   = _valFit(_longestVal);
+  const _unifClamp = Math.max(_unifLabel.lines, _unifVal.lines);
+
   const dataRows = slots.map(s => {
     const lbl = s.label || '';
     const val = s.value || '-';
-    const lblFit = _labelFit(lbl);
-    const valFit = _valFit(val);
-    // row 全体の line-clamp は label / value のどちらか大きい方に揃える (背景高さの不揃いを防止)
-    const clamp = Math.max(lblFit.lines, valFit.lines);
     return `<div class="data-row">
-      <div class="row-label" style="font-size:${lblFit.fontSize}px;-webkit-line-clamp:${clamp}">${escBr(lbl)}</div>
-      <div class="row-value" style="font-size:${valFit.fontSize}px;-webkit-line-clamp:${clamp}"><span class="val-text">${escBr(val)}</span></div>
+      <div class="row-label" style="font-size:${_unifLabel.fontSize}px;-webkit-line-clamp:${_unifClamp}">${escBr(lbl)}</div>
+      <div class="row-value" style="font-size:${_unifVal.fontSize}px;-webkit-line-clamp:${_unifClamp}"><span class="val-text">${escBr(val)}</span></div>
     </div>`;
   }).join('');
 

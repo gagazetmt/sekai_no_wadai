@@ -419,28 +419,34 @@ ${rowActiveStyles}
   //   中央の label column 幅は約 280px (VS バッジ含むエリア)
   const _labelFit = (text) => fitFont(text, 30, 280, { maxLines: 2, minFontPx: 17 });
 
+  // 2026-05-18: 全 row で value フォントを統一する。
+  //   行ごとに違うサイズだと「左右の値の比較」が視覚的にしにくいため、
+  //   slots 全体の中で最も縮小される (= 最長 / 日本語含む) value に合わせて単一サイズで描画。
+  //   label も同じ理由で統一。
+  const _allVals = slots.flatMap(s => [String(s.leftValue || '-'), String(s.rightValue || '-')]);
+  const _longestVal = _allVals.reduce((m, v) => v.length > m.length ? v : m, '');
+  const _unifiedVal = _valFontWithMode(_longestVal, '');
+  const _unifiedValFs = _unifiedVal.fontSize + 'px';
+  const _unifiedValOne = _unifiedVal.oneLine;
+  const _unifiedValWrap = _unifiedValOne ? ' val-1line' : ' val-2line';
+
+  const _allLabels = slots.map(s => String(s.label || ''));
+  const _longestLabel = _allLabels.reduce((m, v) => v.length > m.length ? v : m, '');
+  const _unifiedLabel = _labelFit(_longestLabel);
+  const _unifiedLabelFs = _unifiedLabel.fontSize + 'px';
+  const _unifiedLabelClamp = _unifiedLabel.lines;
+
   const rowsHtml = slots.length
     ? slots.map((s, i) => {
         const [lc, rc] = compareSides(s);
         const lv = String(s.leftValue  || '-');
         const rv = String(s.rightValue || '-');
         const lb = String(s.label      || '');
-        const lMod = (lc || '').trim();
-        const rMod = (rc || '').trim();
-        const { fontSize: lFsNum, oneLine: lOne } = _valFontWithMode(lv, lMod);
-        const { fontSize: rFsNum, oneLine: rOne } = _valFontWithMode(rv, rMod);
-        const lFs = lFsNum + 'px';
-        const rFs = rFsNum + 'px';
-        const lWrap = lOne ? ' val-1line' : ' val-2line';
-        const rWrap = rOne ? ' val-1line' : ' val-2line';
-        const lbFit = _labelFit(lb);
-        const lbFs = lbFit.fontSize + 'px';
-        const lbClamp = lbFit.lines;
         const activeClass = (slotChunkIdx[i] >= 0 && audio.length) ? ` active-${i}` : '';
         return `<div class="data-row${activeClass}">
-          <div class="val val-left${lc}${lWrap}" style="font-size:${lFs}">${esc(lv)}</div>
-          <div class="label-col"><div class="label-text" style="font-size:${lbFs};-webkit-line-clamp:${lbClamp}">${escBr(lb)}</div></div>
-          <div class="val val-right${rc}${rWrap}" style="font-size:${rFs}">${esc(rv)}</div>
+          <div class="val val-left${lc}${_unifiedValWrap}" style="font-size:${_unifiedValFs}">${esc(lv)}</div>
+          <div class="label-col"><div class="label-text" style="font-size:${_unifiedLabelFs};-webkit-line-clamp:${_unifiedLabelClamp}">${escBr(lb)}</div></div>
+          <div class="val val-right${rc}${_unifiedValWrap}" style="font-size:${_unifiedValFs}">${esc(rv)}</div>
         </div>`;
       }).join('')
     : '<div style="text-align:center;color:#5a6a8a;font-size:24px">対比データなし</div>';

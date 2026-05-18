@@ -414,28 +414,30 @@ ${cardActiveStyles}
   const _valFit   = (t) => fitFont(t, layout.maxValFont,   _cardInnerW, { maxLines: 2, minFontPx: 20 });
   const _labelFit = (t) => fitFont(t, layout.maxLabelFont, _cardInnerW, { maxLines: 2, minFontPx: 19 });
 
-  // 2026-05-18: \n / \\n を <br> に変換して 2 行折り返し対応 (_common.escBr 使用)
-  //   改行を含むテキストは line-clamp を最低 2 に拡張（7-8 件時の 1 行制限を上書き）
-  const cardsHtml = slots.map((s, i) => {
-    let lbl, val;
+  // 2026-05-18: 全カードでフォントサイズを統一（カードごとにサイズが違うと比較しにくい）
+  //   slots 全体の中で最も縮小される (= 最長) value/label に合わせて単一サイズで描画
+  const _slotPairs = slots.map(s => {
     if (s.merged && s.merged.includes('：')) {
-      [lbl, val] = s.merged.split('：');
-    } else {
-      lbl = s.label || '';
-      val = s.value || '-';
+      const [l, v] = s.merged.split('：');
+      return { lbl: l, val: v };
     }
+    return { lbl: s.label || '', val: s.value || '-' };
+  });
+  const _longestLabel = _slotPairs.reduce((m, p) => p.lbl.length > m.length ? p.lbl : m, '');
+  const _longestVal   = _slotPairs.reduce((m, p) => p.val.length > m.length ? p.val : m, '');
+  const _unifLabel = _labelFit(_longestLabel);
+  const _unifVal   = _valFit(_longestVal);
+
+  const cardsHtml = slots.map((s, i) => {
+    const { lbl, val } = _slotPairs[i];
     const isActive = (slotChunkIdx[i] >= 0 && audio.length);
     const activeClass = isActive ? ` active-${i}` : '';
-    // active カードのみ波形アイコン（active 期間だけ opacity 1 になる）
     const wave = isActive
       ? `<div class="sound-wave"><span></span><span></span><span></span></div>`
       : '';
-    // fitFont が「縮小率 70% 未満で 2 行折り返し」「明示改行で 2 行」を判定済
-    const lblFit = _labelFit(lbl);
-    const valFit = _valFit(val);
     return `<div class="data-card${activeClass}">
-      <div class="card-label" style="font-size:${lblFit.fontSize}px;-webkit-line-clamp:${lblFit.lines}">${escBr(lbl)}</div>
-      <div class="card-value" style="font-size:${valFit.fontSize}px;-webkit-line-clamp:${valFit.lines}"><span class="val-text">${escBr(val)}</span></div>
+      <div class="card-label" style="font-size:${_unifLabel.fontSize}px;-webkit-line-clamp:${_unifLabel.lines}">${escBr(lbl)}</div>
+      <div class="card-value" style="font-size:${_unifVal.fontSize}px;-webkit-line-clamp:${_unifVal.lines}"><span class="val-text">${escBr(val)}</span></div>
       ${wave}
     </div>`;
   }).join('');
