@@ -1337,7 +1337,9 @@ router.post('/v2/clear-audio', express.json(), (req, res) => {
     }
     fs.writeFileSync(mp, JSON.stringify(data, null, 2));
     console.log(`[v2/clear-audio] ${safeId} idx=${moduleIdx ?? 'ALL'} → audio cleared:${cleared} mp3:${mp3Removed}`);
-    res.json({ ok: true, cleared, mp3Removed, targets: targets.length });
+    // 2026-05-19: 更新後の modules を返す → クライアント側 state を同期し
+    //   古い「audio あり」を再保存してしまう事故を防ぐ
+    res.json({ ok: true, cleared, mp3Removed, targets: targets.length, modules: data.modules });
   } catch (e) {
     console.error('[v2/clear-audio]', e);
     res.status(500).json({ error: e.message });
@@ -3252,6 +3254,12 @@ function getUI() {
       });
       if (status) status.textContent = '✅ 削除完了: audio ' + r.cleared + '件 / mp3 ' + r.mp3Removed + '件';
       _msg('🗑️ TTS 削除: ' + label + ' (audio ' + r.cleared + ' / mp3 ' + r.mp3Removed + ') → 動画生成で新ナレーションが反映されます');
+      // 2026-05-19: サーバから受け取った最新 modules で state を上書き
+      //   → 動画生成時に client が古い「audio あり」を再送信して上書きしてしまう事故を防ぐ
+      if (Array.isArray(r.modules)) {
+        window.APP.s4.modules = r.modules;
+        if (typeof _renderEditor === 'function') _renderEditor();
+      }
     } catch (e) {
       if (status) status.textContent = '❌ ' + e.message;
       _msg('❌ TTS 削除失敗: ' + e.message);
