@@ -14,8 +14,8 @@ const CMT_BG_HL = ['#FFD700', '#5BB8F5', '#5ED45E', '#B86FFF', '#FF9F43', '#FF70
 
 // 2026-05-18: 横幅実測ベース (_common.fitFont)
 //   各コメント吹き出し availW ≈ 480px、 3 行折り返し許容
-function _commentFont(text) {
-  return fitFont(text, 44, 480, { lines: 3, minFontPx: 24 });
+function _commentFit(text) {
+  return fitFont(text, 44, 480, { maxLines: 3, minFontPx: 24 });
 }
 
 function buildReactionHTML(mod) {
@@ -198,7 +198,7 @@ ${activeStyles}
         const isHL  = (c.score || 0) === maxScore && maxScore > 0 && comments.length > 1;
         const side  = i % 2 === 0 ? 'flex-start' : 'flex-end';
         const bgC   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
-        const fz    = _commentFont(trim);
+        const fz    = _commentFit(trim).fontSize;  // reaction は元々折り返し OK のデザイン → lines は使わない
         const t     = commentTiming[i];
         const rot   = (((i * 1.7) % 5) - 2).toFixed(1);
         const activeClass = t.hasActive ? ` active-${i}` : '';

@@ -10,7 +10,7 @@
 //   - データ行: 該当 chunk 再生中だけ active（金枠 + scale + glow）
 
 const {
-  PALETTE, esc, imgDataUri, wrapHTML,
+  PALETTE, esc, escBr, hasNewline, imgDataUri, wrapHTML,
   buildSubtitleBar, subtitleArgFromMod,
   _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC,
   imageAdjustCss, fitFont,
@@ -399,10 +399,9 @@ ${rowActiveStyles}
   }
   // 後方互換 (使ってる箇所が他にあれば fontSize だけ返す)
   function _valFont(text, mod) { return _valFontWithMode(text, mod).fontSize; }
-  // 2026-05-18: 横幅実測ベース (_common.fitFont)
+  // 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
   //   中央の label column 幅は約 280px (VS バッジ含むエリア)
-  //   9 割の 252px までは base 30px を維持、 超えた分だけ縮小
-  const _labelFont = (text) => fitFont(text, 30, 280, { lines: 1, minFontPx: 17 });
+  const _labelFit = (text) => fitFont(text, 30, 280, { maxLines: 2, minFontPx: 17 });
 
   const rowsHtml = slots.length
     ? slots.map((s, i) => {
@@ -418,11 +417,13 @@ ${rowActiveStyles}
         const rFs = rFsNum + 'px';
         const lWrap = lOne ? ' val-1line' : ' val-2line';
         const rWrap = rOne ? ' val-1line' : ' val-2line';
-        const lbFs = _labelFont(lb) + 'px';
+        const lbFit = _labelFit(lb);
+        const lbFs = lbFit.fontSize + 'px';
+        const lbClamp = lbFit.lines;
         const activeClass = (slotChunkIdx[i] >= 0 && audio.length) ? ` active-${i}` : '';
         return `<div class="data-row${activeClass}">
           <div class="val val-left${lc}${lWrap}" style="font-size:${lFs}">${esc(lv)}</div>
-          <div class="label-col"><div class="label-text" style="font-size:${lbFs}">${esc(lb)}</div></div>
+          <div class="label-col"><div class="label-text" style="font-size:${lbFs};-webkit-line-clamp:${lbClamp}">${escBr(lb)}</div></div>
           <div class="val val-right${rc}${rWrap}" style="font-size:${rFs}">${esc(rv)}</div>
         </div>`;
       }).join('')

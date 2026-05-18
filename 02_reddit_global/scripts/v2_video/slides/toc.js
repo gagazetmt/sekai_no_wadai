@@ -25,10 +25,10 @@ function _layoutForCount(n) {
   return         { rowH: 56,  titleFz: 32, numFz: 54  };  // 9件
 }
 
-// 2026-05-18: 横幅実測ベース (_common.fitFont)
-//   章タイトル横長 1 行表示、 連番分を引いて availW ≈ 1200px
-function _itemFontSize(text, baseFz) {
-  return fitFont(text, baseFz, 1200, { lines: 1, minFontPx: 26 });
+// 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
+//   章タイトル availW ≈ 1200px (連番分を引いた利用域)
+function _itemFit(text, baseFz) {
+  return fitFont(text, baseFz, 1200, { maxLines: 2, minFontPx: 26 });
 }
 
 // 12粒のゴールドダスト（背景に漂う金粒）
@@ -263,15 +263,19 @@ function buildTocHTML(mod) {
 `;
 
   const itemsHtml = items.map((it, i) => {
-    const fz = _itemFontSize(it, layout.titleFz);
+    const itFit = _itemFit(it, layout.titleFz);
     const enterDelay = enterDelays[i].toFixed(2);
     const pulseDelay = pulseDelays[i].toFixed(2);
     const numStr = String(i + 1).padStart(2, '0');
     // 2 アニメ並走: rowSlideIn (登場 1回) + tocPulse (脈動 無限ループ)
     const animStyle = `style="animation-delay:${enterDelay}s, ${pulseDelay}s;"`;
+    // 2 行折り返し時: line-clamp + line-height を圧縮して row 高さに収める
+    const titleStyle = itFit.lines >= 2
+      ? `font-size:${itFit.fontSize}px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.1;`
+      : `font-size:${itFit.fontSize}px;`;
     return `<div class="toc-row r${i}" ${animStyle}>`
       + `<div class="toc-num"><span class="toc-num-prefix">No.</span>${numStr}</div>`
-      + `<div class="toc-title" style="font-size:${fz}px;">${esc(it)}</div>`
+      + `<div class="toc-title" style="${titleStyle}">${esc(it)}</div>`
       + `<div class="toc-badge">Chapter ${i + 1}</div>`
       + `</div>`;
   }).join('');

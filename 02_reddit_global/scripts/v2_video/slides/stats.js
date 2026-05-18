@@ -404,14 +404,15 @@ ${slots.map((_, i) => `.data-card:nth-of-type(${i + 1}) .val-text { animation-de
 ${cardActiveStyles}
 `;
 
-  // 2026-05-18: 横幅実測ベースの縮小ロジック (_common.fitFont)
+  // 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
   //   panel-data 幅 (60%) - padding 104 - gap × (cols-1) → 1 カード幅
   //   さらに cardPad × 2 と border 余裕を引いて内部幅を算出
+  //   card 高さは grid-auto-rows: 1fr で固定 → 2 行になっても他カードに侵食しない
   const _gridInnerW = 1920 * 0.60 - 64 - 40; // 1048
   const _cardW      = (_gridInnerW - layout.gap * (layout.cols - 1)) / layout.cols;
   const _cardInnerW = _cardW - layout.cardPad * 2 - 8; // 8 = border + 余裕
-  const _valFont   = (t) => fitFont(t, layout.maxValFont,   _cardInnerW, { lines: layout.valLine, minFontPx: 20 });
-  const _labelFont = (t) => fitFont(t, layout.maxLabelFont, _cardInnerW, { lines: layout.lblLine, minFontPx: 19 });
+  const _valFit   = (t) => fitFont(t, layout.maxValFont,   _cardInnerW, { maxLines: 2, minFontPx: 20 });
+  const _labelFit = (t) => fitFont(t, layout.maxLabelFont, _cardInnerW, { maxLines: 2, minFontPx: 19 });
 
   // 2026-05-18: \n / \\n を <br> に変換して 2 行折り返し対応 (_common.escBr 使用)
   //   改行を含むテキストは line-clamp を最低 2 に拡張（7-8 件時の 1 行制限を上書き）
@@ -429,12 +430,12 @@ ${cardActiveStyles}
     const wave = isActive
       ? `<div class="sound-wave"><span></span><span></span><span></span></div>`
       : '';
-    // 改行入りの場合は line-clamp を 2 に上書き（CSS 既定が 1 でも）
-    const lblClamp = hasNewline(lbl) ? Math.max(2, layout.lblLine) : layout.lblLine;
-    const valClamp = hasNewline(val) ? Math.max(2, layout.valLine) : layout.valLine;
+    // fitFont が「縮小率 70% 未満で 2 行折り返し」「明示改行で 2 行」を判定済
+    const lblFit = _labelFit(lbl);
+    const valFit = _valFit(val);
     return `<div class="data-card${activeClass}">
-      <div class="card-label" style="font-size:${_labelFont(lbl)}px;-webkit-line-clamp:${lblClamp}">${escBr(lbl)}</div>
-      <div class="card-value" style="font-size:${_valFont(val)}px;-webkit-line-clamp:${valClamp}"><span class="val-text">${escBr(val)}</span></div>
+      <div class="card-label" style="font-size:${lblFit.fontSize}px;-webkit-line-clamp:${lblFit.lines}">${escBr(lbl)}</div>
+      <div class="card-value" style="font-size:${valFit.fontSize}px;-webkit-line-clamp:${valFit.lines}"><span class="val-text">${escBr(val)}</span></div>
       ${wave}
     </div>`;
   }).join('');

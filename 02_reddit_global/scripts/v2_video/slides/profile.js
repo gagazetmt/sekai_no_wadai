@@ -274,26 +274,29 @@ ${slots.map((_, i) => `.data-row:nth-of-type(${i + 1}) .val-text { animation-del
 }
 `;
 
-  // 2026-05-18: 横幅実測ベースの縮小ロジック (_common.fitFont)
+  // 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
   //   panel-right 幅 (58%) - padding 80 - gap 20 → row 内訳
   //   row-label: 35% - padding/border ≈ 320px / row-value: 残 - padding 60 ≈ 590px
+  //   data-row は flex: 1 1 0 で row 高さ均等 → 2 行になっても他カードに侵食しない
   const _panelInnerW = 1920 * 0.58 - 60 - 20; // 1033.6
   const _labelW      = _panelInnerW * 0.35;
   const _valueW      = _panelInnerW - _labelW - 20; // gap 20
-  const _labelInnerW = _labelW - 28 - 14;  // padding-left 28 + 右余裕
-  const _valueInnerW = _valueW - 35 - 24 - 8; // padding 35+24 + border 余裕
-  const _valFont   = (t) => fitFont(t, valueBase,      _valueInnerW, { lines: rowLineClamp, minFontPx: 20 });
-  // labelBase は短い時にやや拡大したい (旧仕様 +11) → base を labelBase+8 にしておく
-  const _labelFont = (t) => fitFont(t, labelBase + 8, _labelInnerW, { lines: rowLineClamp, minFontPx: 18 });
+  const _labelInnerW = _labelW - 28 - 14;
+  const _valueInnerW = _valueW - 35 - 24 - 8;
+  const _valFit   = (t) => fitFont(t, valueBase,     _valueInnerW, { maxLines: 2, minFontPx: 20 });
+  const _labelFit = (t) => fitFont(t, labelBase + 8, _labelInnerW, { maxLines: 2, minFontPx: 18 });
 
-  // 2026-05-18: \n / \\n を <br> に変換して 2 行折り返し対応 (_common.escBr 使用)
+  // 2026-05-18: fitFont が「縮小率 70% 未満で 2 行折り返し」を判定 + \n / \\n を <br> に
   const dataRows = slots.map(s => {
     const lbl = s.label || '';
     const val = s.value || '-';
-    const clamp = (hasNewline(lbl) || hasNewline(val)) ? Math.max(2, rowLineClamp) : rowLineClamp;
+    const lblFit = _labelFit(lbl);
+    const valFit = _valFit(val);
+    // row 全体の line-clamp は label / value のどちらか大きい方に揃える (背景高さの不揃いを防止)
+    const clamp = Math.max(lblFit.lines, valFit.lines);
     return `<div class="data-row">
-      <div class="row-label" style="font-size:${_labelFont(lbl)}px;-webkit-line-clamp:${clamp}">${escBr(lbl)}</div>
-      <div class="row-value" style="font-size:${_valFont(val)}px;-webkit-line-clamp:${clamp}"><span class="val-text">${escBr(val)}</span></div>
+      <div class="row-label" style="font-size:${lblFit.fontSize}px;-webkit-line-clamp:${clamp}">${escBr(lbl)}</div>
+      <div class="row-value" style="font-size:${valFit.fontSize}px;-webkit-line-clamp:${clamp}"><span class="val-text">${escBr(val)}</span></div>
     </div>`;
   }).join('');
 

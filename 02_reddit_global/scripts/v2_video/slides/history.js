@@ -47,14 +47,14 @@ function _layoutForCount(n) {
   return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 28, maxSub: 19, lineClamp: 1 }; // 8件
 }
 
-// 2026-05-18: 横幅実測ベース (_common.fitFont)
+// 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
 //   panel-timeline は右側 50% で固定 (≈ 960px)、 各カード内部幅 ≈ 540px
 const _CARD_INNER_W = 540;
-function _titleFont(text, layout) {
-  return fitFont(text, layout.maxTitle, _CARD_INNER_W, { lines: layout.lineClamp, minFontPx: 14 });
+function _titleFit(text, layout) {
+  return fitFont(text, layout.maxTitle, _CARD_INNER_W, { maxLines: 2, minFontPx: 14 });
 }
-function _subFont(text, layout) {
-  return fitFont(text, layout.maxSub, _CARD_INNER_W, { lines: layout.lineClamp, minFontPx: 13 });
+function _subFit(text, layout) {
+  return fitFont(text, layout.maxSub, _CARD_INNER_W, { maxLines: 2, minFontPx: 13 });
 }
 
 function buildHistoryHTML(mod) {
@@ -305,7 +305,7 @@ function buildHistoryHTML(mod) {
     return `<div class="tl-event${lastClass}" style="animation-delay:${delay}s;${e.isLastInData ? `--pulse-delay:${(parseFloat(delay) + 0.3).toFixed(2)}s;` : ''}">
       <div class="tl-date">${dateHtml}</div>
       <div class="tl-card">
-        <div class="tl-title" style="font-size:${_titleFont(ttl, layout)}px">${ttlHtml}</div>
+        <div class="tl-title" style="font-size:${_titleFit(ttl, layout).fontSize}px;-webkit-line-clamp:${_titleFit(ttl, layout).lines}">${ttlHtml}</div>
       </div>
     </div>`;
   }).join('');

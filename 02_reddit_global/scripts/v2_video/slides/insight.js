@@ -22,10 +22,10 @@ function _layoutForCount(n) {
   return        { minHeight: 86, gap: 20, maxFont: 50 };  // 6件
 }
 
-// 2026-05-18: 横幅実測ベース (_common.fitFont)
-//   中央配置のキャッチコピー、 横長表示 availW ≈ 1500px (左右余白引いた利用域)
-function _phraseFontSize(text, layout) {
-  return fitFont(text, layout.maxFont, 1500, { lines: 1, minFontPx: 28 });
+// 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
+//   中央配置のキャッチコピー availW ≈ 1500px (左右余白引いた利用域)
+function _phraseFit(text, layout) {
+  return fitFont(text, layout.maxFont, 1500, { maxLines: 2, minFontPx: 28 });
 }
 
 // catchphrase に含まれる重要トークン（数字+単位 / 2文字以上の語）を音声 chunk と照合し、
@@ -290,10 +290,14 @@ function buildInsightHTML(mod) {
 `;
 
   const phrasesHtml = phrases.map((p, displayIdx) => {
-    const fz   = _phraseFontSize(p, layout);
+    const pFit = _phraseFit(p, layout);
     const html = _highlightNumbers(esc(p));
     const d    = delays[displayIdx].toFixed(2);
-    return `<div class="phrase" style="font-size:${fz}px;animation-delay:${d}s;">${html}</div>`;
+    // 2 行折り返し時: line-clamp + line-height 圧縮
+    const wrapStyle = pFit.lines >= 2
+      ? `display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.15;`
+      : '';
+    return `<div class="phrase" style="font-size:${pFit.fontSize}px;animation-delay:${d}s;${wrapStyle}">${html}</div>`;
   }).join('');
 
   const slideBody = `
