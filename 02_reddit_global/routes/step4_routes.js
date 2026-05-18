@@ -3251,9 +3251,7 @@ function getUI() {
         body: JSON.stringify(body),
       });
       if (status) status.textContent = '✅ 削除完了: audio ' + r.cleared + '件 / mp3 ' + r.mp3Removed + '件';
-      _msg('🗑️ TTS 削除: ' + label + ' (audio ' + r.cleared + ' / mp3 ' + r.mp3Removed + ')');
-      // modules を再読み込みして audio:[] 状態を UI に反映
-      await _loadModules();
+      _msg('🗑️ TTS 削除: ' + label + ' (audio ' + r.cleared + ' / mp3 ' + r.mp3Removed + ') → 動画生成で新ナレーションが反映されます');
     } catch (e) {
       if (status) status.textContent = '❌ ' + e.message;
       _msg('❌ TTS 削除失敗: ' + e.message);
