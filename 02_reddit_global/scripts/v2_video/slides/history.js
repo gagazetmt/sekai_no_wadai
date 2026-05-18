@@ -91,30 +91,23 @@ function buildHistoryHTML(mod) {
   const totalSec = audio.length ? (audioSec + LEAD_PAD_SEC + TAIL_PAD_SEC) : 8;
   const chunkStarts = audio.map((_, i) =>
     LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
-  const startSec = LEAD_PAD_SEC + 0.5;
-  const lastSec  = Math.max(totalSec - TAIL_PAD_SEC - 1, startSec + 1);
-  const evenStep = eventsRaw.length > 1 ? (lastSec - startSec) / (eventsRaw.length - 1) : 0;
+  // 2026-05-19 相棒指示: history は時系列が大事なので、 スライド全体長の 80% を
+  //   効果範囲として件数で等分して時間経過で 1 つずつ表示する設計に変更。
+  //   旧: chunk マッチで「先に話された順」に並べ替えていた → 編集順が崩れる事故
+  //   新: 編集順そのまま + 等間隔で登場
+  //
+  // 例: 60秒スライド + 6 件 → 効果範囲 48秒、 8 秒間隔で上から 1 つずつ
+  //     delays = [0, 8, 16, 24, 32, 40]
+  const EFFECTIVE_RATIO = 0.80;
+  const effectiveSec = totalSec * EFFECTIVE_RATIO;
+  const stepSec = eventsRaw.length > 0 ? effectiveSec / eventsRaw.length : 0;
+  const delays = eventsRaw.map((_, i) => stepSec * i);
 
-  // 各 event の登場タイミングは chunkText (narration の対応文) で chunk と照合して決定。
-  //   chunkText が無ければ title + date で照合、それでも無マッチは均等分配 fallback。
-  //   旧 directMapping (chunks 数 == events 数で index 一致と仮定) は廃止。
-  //   AI が narration に「前置き」や「繋ぎ」を含めると 1 段ずれる事故が発生したため。
-  const tempDelays = eventsRaw.map((e, i) => {
-    if (!audio.length) return startSec + evenStep * i;
-    const matchTarget = e.chunkText || `${e.title} ${e.date}`;
-    const cIdx = _matchToChunk(matchTarget, audio);
-    return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
-  });
-
-  // 2026-05-19: 相棒指示で並べ替え廃止。 ランチャーで設定した dataSlots 編集順を維持する。
-  //   旧仕様: narration で先に話された event を画面上で先に表示（音声同期目的）
-  //   新仕様: 編集順そのまま。 音声タイミング (delays) だけは chunk マッチで取得して使う
   const originalLastIdx = eventsRaw.length - 1;
   const events = eventsRaw.map((e, i) => ({
     ...e,
-    isLastInData: i === originalLastIdx, // データ上の最新を保持
+    isLastInData: i === originalLastIdx, // データ上の最新を保持（緑脈動用）
   }));
-  const delays = tempDelays;
 
   // タイトル系 ─ AI 生成 or 既定（日本語）
   //   オーファン回避のため splitSubtitle で 1〜2 行に整形
