@@ -394,23 +394,24 @@ ${rowActiveStyles}
   //       (2) charRatio を 0.55 → 0.62 / 0.50 → 0.56 に厳しく (実測ベース)
   //       (3) availW を 632 → 600 に詰めて padding 余裕確保
   function _valFontWithMode(text, mod) {
-    const base = 50;  // win/lose 共通の base サイズ
+    // 2026-05-18: base 50 → 72 に拡大 (横幅拡張に合わせて文字も大きく見せる)
+    //   threshold 60% → 70% に揃える (全スライド統一仕様)
+    const base = 72;
     const t    = String(text || '');
     const len  = t.length;
     const hasJp = /[ぁ-んァ-ヶ一-龯]/.test(t);
     const charRatio = hasJp ? 0.62 : 0.56;
-    // 2026-05-18: .val width 35% → 50% 拡大に合わせて availW を 600 → 800 に増やす
-    //   (val 内部幅 ≈ 50% × row 1800 - padding 100 = 800px)
-    const availW = 800;
+    // val 内部幅: 50% × row 1600 - padding 100 = 700px (実 row 全幅は 1600〜1700px)
+    const availW = 700;
     const fitsAtBase = len * base * charRatio <= availW;
     if (fitsAtBase) return { fontSize: base, oneLine: true };
     const scale = availW / (len * base * charRatio);
-    // 2026-05-17: 縮小許可を 70% → 60% に拡大（相棒指示）
-    //   60-70% でも 1 行で粘る、 60% 未満で 2 行折り返し
-    if (scale >= 0.6) {
-      return { fontSize: Math.max(18, Math.round(base * scale)), oneLine: true };
+    // 70%以上 なら 1 行で粘る、 70% 未満で 2 行折り返し
+    if (scale >= 0.7) {
+      return { fontSize: Math.max(20, Math.round(base * scale)), oneLine: true };
     }
-    return { fontSize: Math.max(18, Math.round(base * 0.6)), oneLine: false };
+    // 2 行折り返し時は char/line が半減できるので font 縮小を緩和できる
+    return { fontSize: Math.max(20, Math.round(base * 0.7)), oneLine: false };
   }
   // 後方互換 (使ってる箇所が他にあれば fontSize だけ返す)
   function _valFont(text, mod) { return _valFontWithMode(text, mod).fontSize; }
