@@ -660,8 +660,10 @@ function imageAdjustCss(adj, opts = {}) {
 }
 
 // 2026-05-18: 全スライド共通の文字サイズ自動調整ヘルパー
-//   横幅実測ベースで「コンテナ幅の 90% を使うまで base を維持、 超えた分だけ縮小」
-//   縮小率が base の 70% を下回る場合は 2 行折り返しに自動切替して読みやすさ維持。
+//   1) 1 行で base font を維持、 横幅に入らない場合だけ縮小
+//   2) 縮小率 70% 以上で 1 行表示 (base × 0.7 まで縮めて収まれば 1 行)
+//   3) 70% 未満まで縮めないと 1 行に収まらない場合 → 2 行折り返し
+//      2 行時のフォントサイズは base × 0.85 で固定 (読みやすさ優先)
 //
 // 使い方:
 //   const { fontSize, lines } = fitFont(text, base, innerW, { maxLines: 2 });
@@ -675,9 +677,10 @@ function imageAdjustCss(adj, opts = {}) {
 //   innerWidthPx:       コンテナの内部幅（padding/border を引いた実描画幅）
 //   opts.maxLines:      最大行数 (default 2)。 1 にすると折り返しなし
 //   opts.wrapThreshold: 縮小率の下限 (default 0.70)。 base × 0.7 を下回ると 2 行へ
+//   opts.wrapFontRatio: 2 行時のフォント縮小率 (default 0.85)
 //   opts.minFontPx:     最小フォントサイズ (default 18)
 //   opts.charWidth:     文字幅係数 (default 0.62 = 日本語+数字+記号混在の Sans-Serif 経験値)
-//   opts.allowedRatio:  横幅の許容比率 (default 0.90 = 9割使い切ったら縮小開始)
+//   opts.allowedRatio:  横幅の許容比率 (default 1.00 = 横幅いっぱいを基準にする)
 function fitFont(text, baseFontPx, innerWidthPx, opts = {}) {
   const norm = String(text ?? '')
     .replace(/\\n/g, '\n').replace(/\r\n/g, '\n')
@@ -686,9 +689,10 @@ function fitFont(text, baseFontPx, innerWidthPx, opts = {}) {
   if (len === 0) return { fontSize: baseFontPx, lines: 1 };
   const maxLines      = opts.maxLines      ?? 2;
   const wrapThreshold = opts.wrapThreshold ?? 0.70;
+  const wrapFontRatio = opts.wrapFontRatio ?? 0.85;
   const minFontPx     = opts.minFontPx     ?? 18;
   const charWidth     = opts.charWidth     ?? 0.62;
-  const allowedRatio  = opts.allowedRatio  ?? 0.90;
+  const allowedRatio  = opts.allowedRatio  ?? 1.00;
 
   // 明示改行 (正規化後に残った \n) があれば強制 2 行
   const hasExplicitNl = /\n/.test(norm);
@@ -698,13 +702,13 @@ function fitFont(text, baseFontPx, innerWidthPx, opts = {}) {
   const wrapBoundary = baseFontPx * wrapThreshold;
 
   // 2 行折り返しの条件:
-  //   (A) 明示改行あり、 または (B) 1 行ではフォントが base×0.7 未満まで縮む
+  //   (A) 明示改行あり、 または (B) 1 行で base×0.7 未満まで縮まないと収まらない
   //   かつ maxLines >= 2 が必須
   if (maxLines >= 2 && (hasExplicitNl || oneLineFont < wrapBoundary)) {
-    const charsPerLine = Math.ceil(len / 2);
-    const twoLineFont = Math.floor(allowedW / (charsPerLine * charWidth));
+    // 相棒指示: 2 行時は base × 0.85 のサイズで描画 (読みやすさ優先で固定値)
+    const twoLineFont = Math.floor(baseFontPx * wrapFontRatio);
     return {
-      fontSize: Math.max(minFontPx, Math.min(baseFontPx, twoLineFont)),
+      fontSize: Math.max(minFontPx, twoLineFont),
       lines: 2,
     };
   }
