@@ -340,7 +340,10 @@ async function main() {
   const finalItems = translated.map(it => ({ ...it, added_at: iso }));
 
   // 4. ファイル保存とマージ (#1-2)
-  const fileName = fileNameForDedup;  // 冒頭で定義済み
+  //   2026-05-18: ⑦ dedup 改修で fileNameForDedup 変数を廃止したが、 ここの参照が残ってて
+  //   ReferenceError で fetch が全失敗してた。 ここでローカルに再計算する。
+  const _formattedDate = date.replace(/-/g, "_");
+  const fileName = path.join(DATA_DIR, `stories_${_formattedDate}.json`);
 
   let existing = { posts: [] };
   if (fs.existsSync(fileName)) {
