@@ -381,9 +381,8 @@ ${rowActiveStyles}
   //       (2) charRatio を 0.55 → 0.62 / 0.50 → 0.56 に厳しく (実測ベース)
   //       (3) availW を 632 → 600 に詰めて padding 余裕確保
   function _valFontWithMode(text, mod) {
-    // 2026-05-18: base font は 72 を維持 (大きく見せる) / 比率は元の 35% に戻したので availW を 350 に
-    //   threshold 70% で全スライド統一 (60% 未満で 2 行折り返し)
-    const base = 72;
+    // 2026-05-18: 相棒指示で base font を 48 に統一 (comparison / stats / profile)
+    const base = 48;
     const t    = String(text || '');
     const len  = t.length;
     const hasJp = /[ぁ-んァ-ヶ一-龯]/.test(t);

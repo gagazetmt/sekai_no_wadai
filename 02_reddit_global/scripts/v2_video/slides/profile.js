@@ -17,8 +17,8 @@ function buildProfileHTML(mod) {
   const dataGap     = N >= 7 ? 6  : N >= 6 ? 8  : N >= 5 ? 12 : 15;
   // ラベル基準フォント (px)
   const labelBase   = N >= 7 ? 22 : N >= 6 ? 26 : N >= 5 ? 32 : 38;
-  // 値基準フォント (px)
-  const valueBase   = N >= 7 ? 32 : N >= 6 ? 38 : N >= 5 ? 44 : 56;
+  // 値基準フォント (px) - 2026-05-18: 相棒指示で 48 に統一 (件数依存を廃止)
+  const valueBase   = 48;
   // 行内 padding：上下 (高さ膨張を抑える)
   const rowPad      = N >= 7 ? 4  : N >= 6 ? 6  : 10;
   // line-clamp：N が多い時は 1 行に絞って overflow 回避

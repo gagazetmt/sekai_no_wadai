@@ -25,11 +25,12 @@ function _entityName(raw) {
 //   7-8件は line-clamp 1（1行表示）にすることで card 内縦幅に余裕ができる →
 //   その分フォントを大きく確保して可読性を保つ（横幅は変わらないため過剰縮小不要）
 function _gridLayout(count) {
-  if (count <= 2) return { cols: count, gap: 18, maxValFont: 88, maxLabelFont: 49, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 };
-  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 80, maxLabelFont: 46, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 }; // profile 2x2
-  if (count <= 6) return { cols: 2, gap: 14, maxValFont: 72, maxLabelFont: 42, padTop: 60, padBottom: 130, cardPad: 14, valLine: 2, lblLine: 2 }; // stats 2x3 基本形
-  if (count <= 7) return { cols: 2, gap: 12, maxValFont: 70, maxLabelFont: 40, padTop: 50, padBottom: 124, cardPad: 14, valLine: 1, lblLine: 1 }; // stats 2x4 (7件)
-  return            { cols: 2, gap: 10, maxValFont: 64, maxLabelFont: 36, padTop: 44, padBottom: 120, cardPad: 12, valLine: 1, lblLine: 1 };       // stats 2x4 (8件)
+  // 2026-05-18: 相棒指示で maxValFont を 48 に統一 (件数依存を廃止)
+  if (count <= 2) return { cols: count, gap: 18, maxValFont: 48, maxLabelFont: 49, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 };
+  if (count <= 4) return { cols: 2, gap: 18, maxValFont: 48, maxLabelFont: 46, padTop: 80, padBottom: 140, cardPad: 18, valLine: 2, lblLine: 2 }; // profile 2x2
+  if (count <= 6) return { cols: 2, gap: 14, maxValFont: 48, maxLabelFont: 42, padTop: 60, padBottom: 130, cardPad: 14, valLine: 2, lblLine: 2 }; // stats 2x3 基本形
+  if (count <= 7) return { cols: 2, gap: 12, maxValFont: 48, maxLabelFont: 40, padTop: 50, padBottom: 124, cardPad: 14, valLine: 1, lblLine: 1 }; // stats 2x4 (7件)
+  return            { cols: 2, gap: 10, maxValFont: 48, maxLabelFont: 36, padTop: 44, padBottom: 120, cardPad: 12, valLine: 1, lblLine: 1 };       // stats 2x4 (8件)
 }
 
 // 金粒パーティクル（左カラム背景の動き出し用・toc から流用、件数 8）

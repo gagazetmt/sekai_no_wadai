@@ -40,11 +40,12 @@ function _matchToChunk(text, chunks) {
 //   件数が増えると 1 イベントあたりの縦幅だけ圧縮されるため、line-clamp と padding で吸収。
 //   tl-card は通常 line-clamp 2 だが 7-8 件なら 1 にして縦幅を稼ぐ（slides 側で適用）
 function _layoutForCount(n) {
-  if (n <= 3) return { gap: 32, padTop: 80, padBottom: 100, maxTitle: 36, maxSub: 24, lineClamp: 2 };
-  if (n <= 5) return { gap: 22, padTop: 70, padBottom: 96,  maxTitle: 32, maxSub: 22, lineClamp: 2 };
-  if (n === 6) return { gap: 16, padTop: 60, padBottom: 92, maxTitle: 30, maxSub: 21, lineClamp: 2 };
-  if (n === 7) return { gap: 12, padTop: 56, padBottom: 90, maxTitle: 30, maxSub: 21, lineClamp: 1 };
-  return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 28, maxSub: 19, lineClamp: 1 }; // 8件
+  // 2026-05-18: 相棒指示で maxTitle を 42 に統一 (件数依存を廃止)
+  if (n <= 3) return { gap: 32, padTop: 80, padBottom: 100, maxTitle: 42, maxSub: 24, lineClamp: 2 };
+  if (n <= 5) return { gap: 22, padTop: 70, padBottom: 96,  maxTitle: 42, maxSub: 22, lineClamp: 2 };
+  if (n === 6) return { gap: 16, padTop: 60, padBottom: 92, maxTitle: 42, maxSub: 21, lineClamp: 2 };
+  if (n === 7) return { gap: 12, padTop: 56, padBottom: 90, maxTitle: 42, maxSub: 21, lineClamp: 1 };
+  return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 42, maxSub: 19, lineClamp: 1 }; // 8件
 }
 
 // 2026-05-18: 横幅実測ベース (_common.fitFont) + 縮小率 70% 未満で 2 行折り返し
