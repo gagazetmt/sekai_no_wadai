@@ -219,7 +219,8 @@ async function main() {
   //   0時跨ぎで前日の継続スレを再取得してしまう問題への対処。
   //   過去7日分の stories と saved_projects から既出 ID を集約 +
   //   saved_projects 内部の id 重複も削除する。)
-  const existingIds = new Set();
+  // 2026-05-19: 354 行で再代入するため let。 const のままだと TypeError で cron 全失敗。
+  let existingIds = new Set();
 
   // 過去7日分の stories から
   {
