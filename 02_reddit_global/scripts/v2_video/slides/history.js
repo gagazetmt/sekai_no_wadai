@@ -106,16 +106,15 @@ function buildHistoryHTML(mod) {
     return cIdx >= 0 ? chunkStarts[cIdx] + 0.3 : (startSec + evenStep * i);
   });
 
-  // 検出 delay 順に並べ替え（早く話される event を画面上に）
-  //   ただし「最新イベント」(緑脈動) を判別できなくなるので、元順での "最後" を記憶
+  // 2026-05-19: 相棒指示で並べ替え廃止。 ランチャーで設定した dataSlots 編集順を維持する。
+  //   旧仕様: narration で先に話された event を画面上で先に表示（音声同期目的）
+  //   新仕様: 編集順そのまま。 音声タイミング (delays) だけは chunk マッチで取得して使う
   const originalLastIdx = eventsRaw.length - 1;
-  const orderIdx = eventsRaw.map((_, i) => i)
-    .sort((a, b) => (tempDelays[a] - tempDelays[b]) || (a - b));
-  const events = orderIdx.map(i => ({
-    ...eventsRaw[i],
+  const events = eventsRaw.map((e, i) => ({
+    ...e,
     isLastInData: i === originalLastIdx, // データ上の最新を保持
   }));
-  const delays = orderIdx.map(i => tempDelays[i]);
+  const delays = tempDelays;
 
   // タイトル系 ─ AI 生成 or 既定（日本語）
   //   オーファン回避のため splitSubtitle で 1〜2 行に整形
