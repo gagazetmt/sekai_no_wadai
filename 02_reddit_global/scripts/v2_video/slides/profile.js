@@ -3,7 +3,7 @@
 //   左カラム: [国旗][クラブロゴ] / タイトル(選手名) / メイン画像(選手写真)
 //   右カラム: データ行（出場・ゴール等のスタッツ）
 
-const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, imageAdjustCss } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML , buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, imageAdjustCss, fitFont } = require('./_common');
 
 function buildProfileHTML(mod) {
   // dataSlots 4〜7 件を data-row で使う
@@ -274,26 +274,17 @@ ${slots.map((_, i) => `.data-row:nth-of-type(${i + 1}) .val-text { animation-del
 }
 `;
 
-  // 値の長さに応じてフォント縮小（base = N に応じた valueBase）
-  function _valFont(text) {
-    const len = String(text || '').length;
-    const m = valueBase;
-    if (len <= 6)  return m;
-    if (len <= 9)  return Math.max(m - 10, 28);
-    if (len <= 13) return Math.max(m - 20, 24);
-    if (len <= 18) return Math.max(m - 28, 22);
-    return Math.max(m - 32, 20);
-  }
-  // ラベル：base = N に応じた labelBase
-  function _labelFont(text) {
-    const len = String(text || '').length;
-    const m = labelBase + 11;  // 旧仕様 +11 (短い時はやや拡大)
-    if (len <= 6)  return Math.min(m, labelBase + 11);
-    if (len <= 10) return Math.max(labelBase + 3, 24);
-    if (len <= 14) return Math.max(labelBase - 3, 22);
-    if (len <= 18) return Math.max(labelBase - 8, 20);
-    return Math.max(labelBase - 11, 18);
-  }
+  // 2026-05-18: 横幅実測ベースの縮小ロジック (_common.fitFont)
+  //   panel-right 幅 (58%) - padding 80 - gap 20 → row 内訳
+  //   row-label: 35% - padding/border ≈ 320px / row-value: 残 - padding 60 ≈ 590px
+  const _panelInnerW = 1920 * 0.58 - 60 - 20; // 1033.6
+  const _labelW      = _panelInnerW * 0.35;
+  const _valueW      = _panelInnerW - _labelW - 20; // gap 20
+  const _labelInnerW = _labelW - 28 - 14;  // padding-left 28 + 右余裕
+  const _valueInnerW = _valueW - 35 - 24 - 8; // padding 35+24 + border 余裕
+  const _valFont   = (t) => fitFont(t, valueBase,      _valueInnerW, { lines: rowLineClamp, minFontPx: 20 });
+  // labelBase は短い時にやや拡大したい (旧仕様 +11) → base を labelBase+8 にしておく
+  const _labelFont = (t) => fitFont(t, labelBase + 8, _labelInnerW, { lines: rowLineClamp, minFontPx: 18 });
 
   // 2026-05-18: \n を <br> に変換して 2 行折り返し対応。
   //   改行を含むテキストは line-clamp を最低 2 に拡張（N>=6 時の 1 行制限を上書き）

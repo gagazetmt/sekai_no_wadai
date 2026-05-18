@@ -6,20 +6,16 @@
 //   - 上から順に slideDown アニメーション
 //   - 各 comment は対応する音声 chunk が読まれる瞬間に登場 + 読まれてる間 active
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
 // V1 の CMT_BG / CMT_BG_HL カラーパレット
 const CMT_BG    = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
 const CMT_BG_HL = ['#FFD700', '#5BB8F5', '#5ED45E', '#B86FFF', '#FF9F43', '#FF70A6'];
 
-// 文字数からフォントサイズを段階決定
+// 2026-05-18: 横幅実測ベース (_common.fitFont)
+//   各コメント吹き出し availW ≈ 480px、 3 行折り返し許容
 function _commentFont(text) {
-  const len = String(text || '').length;
-  if (len <= 30) return 44;
-  if (len <= 50) return 38;
-  if (len <= 70) return 32;
-  if (len <= 90) return 28;
-  return 24;
+  return fitFont(text, 44, 480, { lines: 3, minFontPx: 24 });
 }
 
 function buildReactionHTML(mod) {

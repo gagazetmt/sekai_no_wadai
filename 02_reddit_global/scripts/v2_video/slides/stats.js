@@ -8,7 +8,7 @@
 //   - 名前ボックス: 下から浮上ゴーストトレイル + 本体 fade in（insight の縦版）
 //   - データカード: 該当 chunk が再生中だけ active（金枠 + scale 1.04 + グロー）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
 // チーム or 選手 → 日本語/カタカナ
 function _entityName(raw) {
@@ -404,26 +404,14 @@ ${slots.map((_, i) => `.data-card:nth-of-type(${i + 1}) .val-text { animation-de
 ${cardActiveStyles}
 `;
 
-  // 値・ラベルの長さに応じてフォント縮小（layout の最大値起点）
-  function _valFont(text) {
-    const len = String(text || '').length;
-    const m = layout.maxValFont;
-    if (len <= 4)  return m;
-    if (len <= 6)  return Math.max(m - 10, 36);
-    if (len <= 9)  return Math.max(m - 24, 32);
-    if (len <= 13) return Math.max(m - 36, 28);
-    if (len <= 18) return Math.max(m - 46, 24);
-    return Math.max(m - 52, 20);
-  }
-  function _labelFont(text) {
-    const len = String(text || '').length;
-    const m = layout.maxLabelFont;
-    if (len <= 6)  return m;
-    if (len <= 10) return Math.max(m - 5, 27);
-    if (len <= 14) return Math.max(m - 11, 24);
-    if (len <= 18) return Math.max(m - 16, 22);
-    return Math.max(m - 19, 19);
-  }
+  // 2026-05-18: 横幅実測ベースの縮小ロジック (_common.fitFont)
+  //   panel-data 幅 (60%) - padding 104 - gap × (cols-1) → 1 カード幅
+  //   さらに cardPad × 2 と border 余裕を引いて内部幅を算出
+  const _gridInnerW = 1920 * 0.60 - 64 - 40; // 1048
+  const _cardW      = (_gridInnerW - layout.gap * (layout.cols - 1)) / layout.cols;
+  const _cardInnerW = _cardW - layout.cardPad * 2 - 8; // 8 = border + 余裕
+  const _valFont   = (t) => fitFont(t, layout.maxValFont,   _cardInnerW, { lines: layout.valLine, minFontPx: 20 });
+  const _labelFont = (t) => fitFont(t, layout.maxLabelFont, _cardInnerW, { lines: layout.lblLine, minFontPx: 19 });
 
   // 2026-05-18: \n を <br> に変換して 2 行折り返し対応。
   //   改行を含むテキストは line-clamp を最低 2 に拡張（7-8 件時の 1 行制限を上書き）

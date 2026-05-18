@@ -634,10 +634,41 @@ function imageAdjustCss(adj, opts = {}) {
   };
 }
 
+// 2026-05-18: 全スライド共通の文字サイズ自動調整ヘルパー
+//   旧: 各スライドで「文字数階段式」(len <= 6 ? base : len <= 10 ? base-5 : ...) を独自定義
+//   新: 横幅実測ベースで「コンテナ幅の 90% を使うまで base を維持、 超えた分だけ縮小」
+//
+// 使い方:
+//   const fontPx = fitFont(text, baseFontPx, innerWidthPx, { lines: 2 });
+//
+// 引数:
+//   text:         測定対象の文字列
+//   baseFontPx:   基準フォントサイズ（縮小はここから下のみ、 拡大はしない）
+//   innerWidthPx: コンテナの内部幅（padding/border を引いた実描画幅）
+//   opts.lines:        line-clamp 行数 (default 1)。\n を含む場合は自動で最低 2
+//   opts.minFontPx:    最小フォントサイズ (default 18)
+//   opts.charWidth:    文字幅係数 (default 0.62 = 日本語+数字+記号混在の Sans-Serif 経験値)
+//   opts.allowedRatio: 横幅の許容比率 (default 0.90 = 9割使い切ったら縮小開始)
+function fitFont(text, baseFontPx, innerWidthPx, opts = {}) {
+  const len = String(text || '').length;
+  if (len === 0) return baseFontPx;
+  const lines        = opts.lines        ?? 1;
+  const minFontPx    = opts.minFontPx    ?? 18;
+  const charWidth    = opts.charWidth    ?? 0.62;
+  const allowedRatio = opts.allowedRatio ?? 0.90;
+  // \n を含むなら 1 行あたり文字数を半減できるので lines を最低 2 に
+  const effectiveLines = Math.max(lines, /\r?\n/.test(text) ? 2 : 1);
+  const charsPerLine = Math.max(1, Math.ceil(len / effectiveLines));
+  const allowedW = innerWidthPx * allowedRatio;
+  const neededFont = allowedW / (charsPerLine * charWidth);
+  return Math.max(minFontPx, Math.min(baseFontPx, Math.floor(neededFont)));
+}
+
 module.exports = {
   W, H, PALETTE, esc, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
   LEAD_PAD_SEC, TAIL_PAD_SEC,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,
   imageAdjustCss,
+  fitFont,
 };

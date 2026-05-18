@@ -5,7 +5,7 @@
 //   - chunk連動アクティブハイライト（ナレが触れた章が光る）
 //   - 背景にゴールドダスト（金粒が漂う雑誌的質感）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
 // 2026-05-16: MAX_ITEMS 8 → 9 に拡張（相棒指示）
 const MAX_ITEMS = 9;
@@ -25,11 +25,10 @@ function _layoutForCount(n) {
   return         { rowH: 56,  titleFz: 32, numFz: 54  };  // 9件
 }
 
+// 2026-05-18: 横幅実測ベース (_common.fitFont)
+//   章タイトル横長 1 行表示、 連番分を引いて availW ≈ 1200px
 function _itemFontSize(text, baseFz) {
-  const len = String(text || '').length;
-  if (len <= 12) return baseFz;
-  if (len <= 18) return Math.max(baseFz - 4, 28);
-  return Math.max(baseFz - 10, 26);
+  return fitFont(text, baseFz, 1200, { lines: 1, minFontPx: 26 });
 }
 
 // 12粒のゴールドダスト（背景に漂う金粒）

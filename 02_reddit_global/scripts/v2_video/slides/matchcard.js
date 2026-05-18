@@ -506,13 +506,15 @@ function buildMatchcardHTML(mod) {
   }
   function posLabel(pos) { return ({ goalkeeper:'GK', defender:'DF', midfielder:'MF', forward:'FW' })[pos] || ''; }
 
-  // 選手名 文字数 → フォントサイズ調整（8文字以下デフォルト、長いほど縮小）
+  // 選手名 文字数 → フォントサイズ調整
+  //   2026-05-18: 閾値緩和 (旧 8 文字でデフォルト → 11 文字までデフォルト維持)
+  //   選手名タグ幅 ≈ 90px、 デフォルト 13px なら 11 文字まで収まる想定
   function nameFontSize(name) {
     const len = String(name || '').length;
-    if (len <= 8)  return null;     // デフォルト 13px
-    if (len <= 10) return '12px';
-    if (len <= 12) return '11px';
-    if (len <= 14) return '10px';
+    if (len <= 11) return null;     // デフォルト 13px (旧 8 文字 → 11 文字に緩和)
+    if (len <= 14) return '12px';
+    if (len <= 17) return '11px';
+    if (len <= 20) return '10px';
     return '9px';
   }
 

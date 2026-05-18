@@ -13,7 +13,7 @@ const {
   PALETTE, esc, imgDataUri, wrapHTML,
   buildSubtitleBar, subtitleArgFromMod,
   _t, _player, LEAD_PAD_SEC, TAIL_PAD_SEC,
-  imageAdjustCss,
+  imageAdjustCss, fitFont,
 } = require('./_common');
 
 // label を chunk text と部分一致で対応付け（active 強調用）
@@ -399,16 +399,10 @@ ${rowActiveStyles}
   }
   // 後方互換 (使ってる箇所が他にあれば fontSize だけ返す)
   function _valFont(text, mod) { return _valFontWithMode(text, mod).fontSize; }
-  // ラベル文字数 → フォントサイズ（base 30px）
-  // 真ん中の項目名が見えないと比較スライドが「何の比較なのか」分からなくなるので大きめに
-  function _labelFont(text) {
-    const len = String(text || '').length;
-    if (len <= 6)  return 30;
-    if (len <= 10) return 26;
-    if (len <= 14) return 22;
-    if (len <= 18) return 19;
-    return 17;
-  }
+  // 2026-05-18: 横幅実測ベース (_common.fitFont)
+  //   中央の label column 幅は約 280px (VS バッジ含むエリア)
+  //   9 割の 252px までは base 30px を維持、 超えた分だけ縮小
+  const _labelFont = (text) => fitFont(text, 30, 280, { lines: 1, minFontPx: 17 });
 
   const rowsHtml = slots.length
     ? slots.map((s, i) => {

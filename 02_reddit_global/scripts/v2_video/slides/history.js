@@ -7,7 +7,7 @@
 //   - 最新イベント dot は緑脈動を維持
 //   - hero-subject / tl-header は AI 動的生成 or 日本語既定
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, splitSubtitle, _t, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
 const MAX_EVENTS = 8;
 
@@ -47,22 +47,14 @@ function _layoutForCount(n) {
   return        { gap: 10, padTop: 52, padBottom: 88,  maxTitle: 28, maxSub: 19, lineClamp: 1 }; // 8件
 }
 
+// 2026-05-18: 横幅実測ベース (_common.fitFont)
+//   panel-timeline は右側 50% で固定 (≈ 960px)、 各カード内部幅 ≈ 540px
+const _CARD_INNER_W = 540;
 function _titleFont(text, layout) {
-  const len = String(text || '').length;
-  const m = layout.maxTitle;
-  if (len <= 14) return m;
-  if (len <= 20) return Math.max(m - 4, 22);
-  if (len <= 28) return Math.max(m - 9, 19);
-  if (len <= 38) return Math.max(m - 13, 16);
-  return Math.max(m - 16, 14);
+  return fitFont(text, layout.maxTitle, _CARD_INNER_W, { lines: layout.lineClamp, minFontPx: 14 });
 }
 function _subFont(text, layout) {
-  const len = String(text || '').length;
-  const m = layout.maxSub;
-  if (len <= 18) return m;
-  if (len <= 28) return Math.max(m - 3, 17);
-  if (len <= 40) return Math.max(m - 6, 14);
-  return Math.max(m - 8, 13);
+  return fitFont(text, layout.maxSub, _CARD_INNER_W, { lines: layout.lineClamp, minFontPx: 13 });
 }
 
 function buildHistoryHTML(mod) {

@@ -2,7 +2,7 @@
 // Insight スライド：キャッチコピーが上から順に登場（左からゴーストトレイル + 本体fadeIn）
 // テンプレート元: /insight/index.html（プレビュー版から editor を除外して1920x1080 に最適化）
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss } = require('./_common');
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
 const MAX_PHRASES = 6;
 
@@ -22,14 +22,10 @@ function _layoutForCount(n) {
   return        { minHeight: 86, gap: 20, maxFont: 50 };  // 6件
 }
 
-// phrase 文字長 + 件数から個別フォントサイズを決定
+// 2026-05-18: 横幅実測ベース (_common.fitFont)
+//   中央配置のキャッチコピー、 横長表示 availW ≈ 1500px (左右余白引いた利用域)
 function _phraseFontSize(text, layout) {
-  const len = String(text || '').length;
-  const max = layout.maxFont;
-  if (len <= 18) return max;
-  if (len <= 24) return Math.max(max - 8,  32);
-  if (len <= 30) return Math.max(max - 14, 30);
-  return Math.max(max - 18, 28);
+  return fitFont(text, layout.maxFont, 1500, { lines: 1, minFontPx: 28 });
 }
 
 // catchphrase に含まれる重要トークン（数字+単位 / 2文字以上の語）を音声 chunk と照合し、
