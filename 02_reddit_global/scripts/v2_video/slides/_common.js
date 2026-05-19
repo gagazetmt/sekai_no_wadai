@@ -250,8 +250,20 @@ const SUB_FONT_PX     = 50;
 const SUB_LINE_HEIGHT = 1.2;
 const SUB_LINE_PX     = Math.ceil(SUB_FONT_PX * SUB_LINE_HEIGHT);  // 60
 const SUB_PADDING_PX  = 12;
+const SUB_INNER_W_PX  = 1920 - 70 * 2;  // padding 70 を引いた描画幅 = 1780
+const SUB_MIN_FONT_PX = 32;             // 縮小下限（これ以上小さくしない）
+const SUB_CHAR_W_RATIO = 1.10;          // 太字日本語の実測経験値（折返し回避の安全係数込み）
 function _heightForLines(lineCount) {
   return SUB_LINE_PX * Math.max(1, lineCount) + SUB_PADDING_PX;
+}
+// 2026-05-19: 字幕「3行はみ出し」対策
+//   各行が SUB_INNER_W_PX に収まるフォントサイズを算出。SUB_FONT_PX を超えず、SUB_MIN_FONT_PX を下回らない
+//   buildSubtitleBar の各 chunk / 静的字幕パスで個別に適用
+function _fontSizeForLines(lines) {
+  const maxLen = lines.reduce((m, l) => Math.max(m, String(l || '').length), 0);
+  if (maxLen === 0) return SUB_FONT_PX;
+  const maxByFit = Math.floor(SUB_INNER_W_PX / (maxLen * SUB_CHAR_W_RATIO));
+  return Math.max(SUB_MIN_FONT_PX, Math.min(SUB_FONT_PX, maxByFit));
 }
 
 function buildSubtitleBar(textOrChunks, options = {}) {
@@ -351,7 +363,8 @@ function buildSubtitleBar(textOrChunks, options = {}) {
       cum = start + (Number(c.durationSec) || 0);
       const end = cum;
       const { lines } = splitSubtitle(c.text, maxLineLen);
-      return { idx: i, start, end, lines };
+      const fontSize = _fontSizeForLines(lines);
+      return { idx: i, start, end, lines, fontSize };
     });
     const totalSec = cum + tailPadSec;
     if (totalSec <= 0) return buildSubtitleBar(items[0].text, options);
@@ -380,13 +393,14 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     const chunkDivs = segs.map(s => {
       const linesHtml = s.lines.map(l => `<div>${esc(l)}</div>`).join('');
       return `<div class="v2-sub-chunk" style="opacity:0;animation:v2subc_${s.idx} ${totalSec.toFixed(3)}s linear forwards;">`
-        + `<div class="v2-sub-text">${linesHtml}</div></div>`;
+        + `<div class="v2-sub-text" style="font-size:${s.fontSize}px;">${linesHtml}</div></div>`;
     }).join('');
 
     return `<style>${keyframes}
       .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
       .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-top:8px;}
       .v2-sub-text{color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;padding:0 70px;line-height:${SUB_LINE_HEIGHT};}
+      .v2-sub-text > div{white-space:nowrap;}
     </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
   }
 
@@ -394,13 +408,14 @@ function buildSubtitleBar(textOrChunks, options = {}) {
   const t = String(textOrChunks || '').trim();
   if (!t) return '';
   const { lines } = splitSubtitle(t, maxLineLen);
+  const fontSize = _fontSizeForLines(lines);
   const height = Math.max(minHeight, _heightForLines(lines.length));
-  const linesHtml = lines.map(l => `<div>${esc(l)}</div>`).join('');
+  const linesHtml = lines.map(l => `<div style="white-space:nowrap">${esc(l)}</div>`).join('');
 
   return `<div class="v2-sub-bar" style="position:absolute;bottom:0;left:0;right:0;height:${height}px;`
     + `background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);`
     + `display:flex;align-items:center;justify-content:center;padding-top:8px;z-index:20">`
-    + `<div style="color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;`
+    + `<div style="color:#fff;font-size:${fontSize}px;font-weight:800;text-align:center;`
     + `padding:0 70px;line-height:${SUB_LINE_HEIGHT};">${linesHtml}</div></div>`;
 }
 
