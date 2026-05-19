@@ -25,6 +25,7 @@ const { router: s4Router,  getUI: s4UI  } = require('./routes/step4_routes');
 const { router: s5Router,  getUI: s5UI  } = require('./routes/step5_routes');
 const { router: s6Router,  getUI: s6UI  } = require('./routes/step6_routes');
 const { router: dataExplorerRouter }     = require('./routes/data_explorer_routes');
+const { router: chatRouter, getUI: chatUI } = require('./routes/chat_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
@@ -34,6 +35,7 @@ app.use('/api', s4Router);
 app.use('/api', s5Router);
 app.use('/api', s6Router);
 app.use('/api', dataExplorerRouter);
+app.use('/api', chatRouter);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
@@ -496,6 +498,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 </script>
 
+${chatUI()}
+
 </body>
 </html>`;
 }
@@ -509,4 +513,5 @@ app.listen(PORT, () => {
   console.log('  Step4:   シナリオ編集 → routes/step4_routes.js');
   console.log('  Step5:   サムネ生成   → routes/step5_routes.js');
   console.log('  Step6:   動画投稿     → routes/step6_routes.js');
+  console.log('  Chat:    リサーチミア → routes/chat_routes.js');
 });

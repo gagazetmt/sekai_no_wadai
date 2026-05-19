@@ -1,0 +1,419 @@
+// routes/chat_routes.js
+// ─── サッカー専門チャットパネル ─────────────────────────────────
+// ランチャー右下フローティング窓から DeepSeek V4-Flash に質問。
+// AI Tool Use (Function Calling) で必要に応じて既存 fetcher を呼んで
+// SofaScore / Transfermarkt 等の生データを参照させる。
+//
+// エンドポイント:
+//   POST /api/chat/ask { messages, provider? } → { text, toolCalls }
+//   GET  /api/chat/ui                          → 右下フローティング HTML (シェル組込)
+
+const express = require('express');
+const router  = express.Router();
+const OpenAI  = require('openai');
+
+const { fetchSofaScorePlayer }    = require('../scripts/modules/fetchers/sofascore_player');
+const { searchTransfermarktManager, fetchTransfermarktManager } = require('../scripts/modules/fetchers/transfermarkt_manager');
+const { fetchSofaScoreTeam }      = require('../scripts/modules/fetchers/sofascore_team');
+const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
+
+let _deepseek = null;
+function getDeepseek() {
+  if (!_deepseek) {
+    _deepseek = new OpenAI({
+      apiKey:  process.env.DEEPSEEK_API_KEY,
+      baseURL: 'https://api.deepseek.com',
+    });
+  }
+  return _deepseek;
+}
+
+const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント「リサーチミア」。
+- 役割: 案件選定や原稿編集の合間に背景情報を即時提供する
+- 必要に応じて以下のツールを使い、SofaScore/Transfermarkt の生データから正確な数値を返す
+  - search_player: 選手の現シーズン統計・通算・移籍履歴
+  - search_manager: 監督のクラブ別 W/D/L・タイトル・在任期間
+  - search_team: チームの順位・直近5試合・シーズン統計
+  - search_tournament: 大会の順位表・得点王・アシスト王
+- 日本語で簡潔に回答。数字は表 or 箇条書きで読みやすく
+- ツール取得失敗時は AI 学習データから推定し、必ず「(取得失敗のため推定)」と明示
+- 曖昧な質問は確認してから動く（例: 「アンチェロッティ」→ レアル時代？ナポリ時代？など）`;
+
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_player',
+      description: '選手の詳細データを取得。プロフィール / 現シーズン統計 / 通算キャリア / 移籍履歴 / 代表成績を返す。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '選手名（英語推奨。例: Jude Bellingham, Kaoru Mitoma）' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_manager',
+      description: '監督のキャリアデータを取得。クラブ別 W/D/L・PPM・在任日数・獲得タイトル・今季成績を返す。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '監督名（英語推奨。例: Carlo Ancelotti, Mikel Arteta）' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_team',
+      description: 'クラブの現状データを取得。順位 / 直近5試合 / シーズン統計 / トップスコアラー等を返す。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'クラブ名（英語推奨。例: Chelsea, Real Madrid）' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_tournament',
+      description: '大会の現シーズンデータを取得。全チーム順位表 / 得点王ランキング / アシスト王ランキングを返す。',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: '大会名（英語推奨。例: Premier League, LaLiga, Champions League）' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+];
+
+// ─── tool 実行 ────────────────────────────────────────────────
+async function executeTool(name, args) {
+  const q = String(args?.name || '').trim();
+  if (!q) return { error: 'name は必須' };
+  switch (name) {
+    case 'search_player':
+      return await fetchSofaScorePlayer(q);
+    case 'search_manager': {
+      const hit = await searchTransfermarktManager(q);
+      if (!hit) return { error: `manager not found: ${q}` };
+      return await fetchTransfermarktManager(hit.id, hit.slug);
+    }
+    case 'search_team':
+      return await fetchSofaScoreTeam(q);
+    case 'search_tournament':
+      return await fetchSofaScoreTournament(q);
+    default:
+      return { error: `unknown tool: ${name}` };
+  }
+}
+
+// 大きすぎる tool 結果は AI に渡す前に切る（DeepSeek 128k context 内に収める）
+const TOOL_RESULT_MAX_CHARS = 30000;
+function safeStringify(obj) {
+  let s;
+  try { s = JSON.stringify(obj); } catch { s = String(obj); }
+  if (s.length > TOOL_RESULT_MAX_CHARS) {
+    s = s.slice(0, TOOL_RESULT_MAX_CHARS) + `\n...[truncated, total ${s.length} chars]`;
+  }
+  return s;
+}
+
+const MAX_ITER = 5;
+
+// ─── POST /api/chat/ask ───────────────────────────────────────
+router.post('/chat/ask', async (req, res) => {
+  const t0 = Date.now();
+  try {
+    const { messages: userMessages } = req.body;
+    if (!Array.isArray(userMessages) || userMessages.length === 0) {
+      return res.status(400).json({ error: 'messages 配列が必須' });
+    }
+
+    const messages = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...userMessages.map(m => ({ role: m.role, content: String(m.content || '') })),
+    ];
+
+    const client = getDeepseek();
+    const toolCallsLog = [];
+    let finalText = '';
+
+    for (let iter = 0; iter < MAX_ITER; iter++) {
+      const response = await client.chat.completions.create({
+        model:       'deepseek-v4-flash',
+        messages,
+        tools:       TOOLS,
+        tool_choice: 'auto',
+        max_tokens:  2000,
+      });
+
+      const msg = response.choices?.[0]?.message;
+      if (!msg) {
+        finalText = '(AI 応答なし)';
+        break;
+      }
+      messages.push(msg);
+
+      const toolCalls = msg.tool_calls || [];
+      if (toolCalls.length === 0) {
+        finalText = msg.content || '';
+        break;
+      }
+
+      // 各 tool call を並列実行
+      const results = await Promise.all(toolCalls.map(async tc => {
+        let args = {};
+        try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { /* ignore */ }
+        const tool = tc.function?.name || 'unknown';
+        console.log(`[chat] iter=${iter} tool=${tool} args=${JSON.stringify(args)}`);
+        toolCallsLog.push({ tool, args });
+        let result;
+        try {
+          result = await executeTool(tool, args);
+        } catch (e) {
+          console.warn(`[chat] tool error: ${e.message}`);
+          result = { error: e.message };
+        }
+        return { tool_call_id: tc.id, content: safeStringify(result) };
+      }));
+
+      for (const r of results) {
+        messages.push({ role: 'tool', tool_call_id: r.tool_call_id, content: r.content });
+      }
+    }
+
+    const elapsedMs = Date.now() - t0;
+    console.log(`[chat] done in ${elapsedMs}ms, ${toolCallsLog.length} tool calls`);
+    res.json({ text: finalText, toolCalls: toolCallsLog, elapsedMs });
+  } catch (e) {
+    console.error('[chat/ask] error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── getUI: シェル組み込み用 HTML/CSS/JS ───────────────────────
+// 右下フローティングボタン → 展開でチャットパネル
+// 履歴は localStorage に保持（タブ閉じても残る）
+function getUI() {
+  return `
+<!-- ═══ チャット窓 (リサーチミア) ═══ -->
+<style>
+.chat-fab {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9998;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; font-size: 28px; cursor: pointer;
+  box-shadow: 0 6px 16px rgba(99,102,241,0.45);
+  display: flex; align-items: center; justify-content: center;
+  border: none; transition: transform 0.15s;
+}
+.chat-fab:hover { transform: scale(1.08); }
+.chat-panel {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  width: 400px; height: 560px;
+  background: #1f2937; border: 1px solid #374151; border-radius: 12px;
+  display: none; flex-direction: column;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.chat-panel.open { display: flex; }
+.chat-header {
+  padding: 12px 16px; background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff; border-radius: 12px 12px 0 0; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.chat-header-title { font-size: 14px; }
+.chat-header-btns { display: flex; gap: 8px; }
+.chat-header-btn {
+  background: rgba(255,255,255,0.18); color: #fff; border: none;
+  width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+  font-size: 16px; display: flex; align-items: center; justify-content: center;
+}
+.chat-header-btn:hover { background: rgba(255,255,255,0.3); }
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: #111827;
+}
+.chat-msg {
+  padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5;
+  max-width: 85%; word-wrap: break-word; white-space: pre-wrap;
+}
+.chat-msg-user {
+  background: #6366f1; color: #fff; align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+.chat-msg-asst {
+  background: #374151; color: #f3f4f6; align-self: flex-start;
+  border-bottom-left-radius: 2px;
+}
+.chat-msg-tool {
+  background: #1e3a5f; color: #93c5fd; align-self: flex-start;
+  font-size: 11px; font-family: ui-monospace, monospace;
+  padding: 6px 10px; border-radius: 6px; opacity: 0.85;
+}
+.chat-input-wrap {
+  padding: 10px; background: #1f2937; border-top: 1px solid #374151;
+  border-radius: 0 0 12px 12px;
+}
+.chat-input {
+  width: 100%; background: #111827; color: #f3f4f6; border: 1px solid #374151;
+  border-radius: 8px; padding: 10px; font-size: 13px; resize: none;
+  font-family: inherit; outline: none; box-sizing: border-box;
+}
+.chat-input:focus { border-color: #6366f1; }
+.chat-input-row { display: flex; gap: 8px; margin-top: 8px; }
+.chat-send-btn {
+  flex: 1; background: #6366f1; color: #fff; border: none;
+  padding: 8px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13px;
+}
+.chat-send-btn:hover { background: #4f46e5; }
+.chat-send-btn:disabled { background: #4b5563; cursor: not-allowed; }
+.chat-clear-btn {
+  background: transparent; color: #9ca3af; border: 1px solid #4b5563;
+  padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 12px;
+}
+.chat-clear-btn:hover { background: #374151; color: #fff; }
+.chat-loading { color: #9ca3af; font-size: 12px; padding: 4px 8px; }
+.chat-empty {
+  color: #6b7280; font-size: 12px; text-align: center; padding: 40px 20px;
+  line-height: 1.6;
+}
+</style>
+
+<button class="chat-fab" id="chatFab" title="リサーチミアに聞く">💬</button>
+
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <div class="chat-header-title">💬 リサーチミア</div>
+    <div class="chat-header-btns">
+      <button class="chat-header-btn" id="chatClearBtn" title="履歴クリア">🗑</button>
+      <button class="chat-header-btn" id="chatCloseBtn" title="閉じる">×</button>
+    </div>
+  </div>
+  <div class="chat-messages" id="chatMessages"></div>
+  <div class="chat-input-wrap">
+    <textarea class="chat-input" id="chatInput" rows="2" placeholder="例: アンチェロッティのレアル時代の成績は？  (Enter で送信 / Shift+Enter で改行)"></textarea>
+    <div class="chat-input-row">
+      <button class="chat-send-btn" id="chatSendBtn">送信</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const STORAGE_KEY = 'soccer_yt_chat_history_v1';
+  const fab    = document.getElementById('chatFab');
+  const panel  = document.getElementById('chatPanel');
+  const closeBtn = document.getElementById('chatCloseBtn');
+  const clearBtn = document.getElementById('chatClearBtn');
+  const sendBtn  = document.getElementById('chatSendBtn');
+  const input    = document.getElementById('chatInput');
+  const msgsEl   = document.getElementById('chatMessages');
+
+  let history = loadHistory();
+  let busy = false;
+  render();
+
+  fab.addEventListener('click', () => {
+    panel.classList.toggle('open');
+    fab.style.display = panel.classList.contains('open') ? 'none' : 'flex';
+    if (panel.classList.contains('open')) input.focus();
+  });
+  closeBtn.addEventListener('click', () => {
+    panel.classList.remove('open');
+    fab.style.display = 'flex';
+  });
+  clearBtn.addEventListener('click', () => {
+    if (confirm('チャット履歴をクリアする？')) {
+      history = [];
+      saveHistory();
+      render();
+    }
+  });
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+
+  async function send() {
+    if (busy) return;
+    const text = input.value.trim();
+    if (!text) return;
+    history.push({ role: 'user', content: text });
+    saveHistory();
+    input.value = '';
+    busy = true; sendBtn.disabled = true;
+    render(true);
+
+    try {
+      const res = await fetch('/api/chat/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history.slice(-20) }),  // 直近20ターンのみ送信
+      });
+      const data = await res.json();
+      if (data.error) {
+        history.push({ role: 'assistant', content: '⚠️ ' + data.error });
+      } else {
+        const tcSuffix = (data.toolCalls && data.toolCalls.length)
+          ? '\\n\\n_📡 ツール使用: ' + data.toolCalls.map(t => t.tool).join(', ') + '_'
+          : '';
+        history.push({ role: 'assistant', content: (data.text || '(空)') + tcSuffix });
+      }
+    } catch (e) {
+      history.push({ role: 'assistant', content: '⚠️ 通信エラー: ' + e.message });
+    } finally {
+      busy = false; sendBtn.disabled = false;
+      saveHistory();
+      render();
+    }
+  }
+
+  function render(loading) {
+    if (history.length === 0 && !loading) {
+      msgsEl.innerHTML = '<div class="chat-empty">サッカーに関する質問なんでも聞いて！<br>選手・監督・チーム・大会のデータは AI が SofaScore/Transfermarkt から自動取得して回答するよ。</div>';
+      return;
+    }
+    msgsEl.innerHTML = history.map(m => {
+      const cls = m.role === 'user' ? 'chat-msg-user' : 'chat-msg-asst';
+      return '<div class="chat-msg ' + cls + '">' + escapeHtml(m.content) + '</div>';
+    }).join('');
+    if (loading) {
+      msgsEl.innerHTML += '<div class="chat-loading">⏳ 考え中… (データ取得時は10秒程度かかります)</div>';
+    }
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[c]);
+  }
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+  }
+  function saveHistory() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); } catch (_) {}
+  }
+})();
+</script>
+`;
+}
+
+module.exports = { router, getUI };
