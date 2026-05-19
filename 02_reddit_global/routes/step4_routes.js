@@ -2037,12 +2037,13 @@ function getUI() {
       });
     });
     const cardImgs = Array.isArray(m.images) ? m.images : [];
+    const uploadBtn = '<button class="s4-upload-btn" style="background:#7c3aed;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;margin-left:8px;">📤 アップロード</button>';
     if (pool.length) {
       galleryHtml = ''
-        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ 共有画像プール ('
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">🖼️ 共有画像プール ('
         + pool.length + '枚)<span style="color:#5a6a8a;font-weight:normal;margin-left:6px;font-size:10px;">全スライド共通</span>'
         + ' <span style="color:#10b981;font-weight:normal;margin-left:6px;">このカードで '
-        + cardImgs.length + ' 枚選択中</span></div>'
+        + cardImgs.length + ' 枚選択中</span>' + uploadBtn + '</div>'
         + '<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px;background:#0d1220;border-radius:6px;max-height:200px;overflow-y:auto;">'
         + pool.map(function(it) {
             const p = it.path;
@@ -2059,8 +2060,10 @@ function getUI() {
           }).join('')
         + '</div>';
     } else {
-      galleryHtml = '<div style="font-size:10px;color:#5a6a8a;margin-top:14px;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
-        + '🖼️ 画像がまだ選択されていません — Step 3.5 で取得・選択してください'
+      galleryHtml = ''
+        + '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;display:flex;align-items:center;gap:4px;">🖼️ 画像プール (0枚)' + uploadBtn + '</div>'
+        + '<div style="font-size:10px;color:#5a6a8a;padding:8px;background:#0d1220;border-radius:6px;text-align:center;">'
+        + '画像未取得 — Step 3.5 で取得 or 上の「📤 アップロード」で手動追加'
         + '</div>';
     }
 
@@ -2264,6 +2267,9 @@ function getUI() {
       div.addEventListener('click', function() {
         s4ToggleImage(div.getAttribute('data-path'));
       });
+    });
+    el.querySelectorAll('.s4-upload-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { s4UploadImage(); });
     });
     el.querySelectorAll('.s4-bind-add').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -2951,6 +2957,64 @@ function getUI() {
     _renderEditor();
     _saveAndReload();
   };
+
+  /* ── 画像ギャラリー: 手動アップロード ──
+       __manual__ ラベル固定で /api/v35/upload-image にPOST、共有プールに即時追加 */
+  window.s4UploadImage = function() {
+    const post = window.APP.selected;
+    if (!post?.id) { alert('案件未選択だよ'); return; }
+    let inp = document.getElementById('s4-upload-input');
+    if (!inp) {
+      inp = document.createElement('input');
+      inp.type = 'file';
+      inp.id = 's4-upload-input';
+      inp.accept = 'image/png,image/jpeg,image/webp';
+      inp.style.display = 'none';
+      inp.multiple = true;  // 複数選択対応
+      inp.onchange = _s4HandleUpload;
+      document.body.appendChild(inp);
+    }
+    inp.click();
+  };
+  async function _s4HandleUpload(ev) {
+    const files = Array.from(ev.target.files || []);
+    ev.target.value = '';
+    if (files.length === 0) return;
+    const post = window.APP.selected;
+    if (!post?.id) return;
+    const sels = window.APP.s4.imageSelections || (window.APP.s4.imageSelections = {});
+    if (!Array.isArray(sels.__manual__)) sels.__manual__ = [];
+    let okCount = 0;
+    for (const file of files) {
+      try {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = () => reject(new Error('読込失敗'));
+          r.readAsDataURL(file);
+        });
+        const r = await fetchJson('/api/v35/upload-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postId: post.id, label: '__manual__', filename: file.name, dataUrl }),
+        });
+        if (r?.url) { sels.__manual__.push(r.url); okCount++; }
+      } catch (e) {
+        console.warn('[s4Upload] ' + file.name + ' 失敗: ' + e.message);
+      }
+    }
+    if (okCount === 0) { alert('❌ アップロード全失敗'); return; }
+    /* selections を永続化 */
+    try {
+      await fetchJson('/api/v35/save-selection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, selections: sels }),
+      });
+    } catch (e) { console.warn('[s4Upload] save-selection 失敗: ' + e.message); }
+    _renderEditor();
+    alert('✅ ' + okCount + '枚アップロード完了。ギャラリーから選択してね');
+  }
 
   /* ── バインドデータ: si.boxes から該当エントリの利用可能フィールドを抽出 ── */
   function _findEntityItem(items, name) {
