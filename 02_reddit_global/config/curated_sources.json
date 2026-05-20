@@ -15,7 +15,7 @@
       "id": "soccerdigest",
       "name": "サッカーダイジェスト Web",
       "url": "https://www.soccerdigestweb.com/",
-      "feedUrl": "https://www.soccerdigestweb.com/rss",
+      "feedUrl": "https://www.soccerdigestweb.com/yahoo_rss/",
       "layer": "speed",
       "language": "ja",
       "enabled": true
@@ -36,7 +36,8 @@
       "feedUrl": "https://www.goal.com/jp/feeds/news?fmt=rss",
       "layer": "speed",
       "language": "ja",
-      "enabled": true
+      "enabled": false,
+      "_note": "Goal は RSS 廃止傾向、 404 確認済。 代替手段検討中"
     },
     {
       "id": "skysports-football",
@@ -61,7 +62,7 @@
       "id": "number-web",
       "name": "Number Web",
       "url": "https://number.bunshun.jp/",
-      "feedUrl": "https://number.bunshun.jp/list/rss",
+      "feedUrl": "https://number.bunshun.jp/list/rsscolumn",
       "layer": "story",
       "language": "ja",
       "enabled": true
@@ -118,7 +119,8 @@
       "feedUrl": "https://qoly.jp/feed",
       "layer": "gossip",
       "language": "ja",
-      "enabled": true
+      "enabled": false,
+      "_note": "公開 RSS 未確認、404 確認済。 Sitemap 経由 or 別 URL 要調査"
     },
     {
       "id": "theworld-jp",
