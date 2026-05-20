@@ -55,7 +55,8 @@
       "feedUrl": "https://www.espn.com/espn/rss/soccer/news",
       "layer": "speed",
       "language": "en",
-      "enabled": true
+      "enabled": false,
+      "_note": "Cloudflare で 403、 VPS 直 IP 不可。 Webshare 経由なら突破可能だが、 他に BBC/Sky/MARCA/Gazzetta で十分カバーできるため disabled"
     },
     {
       "id": "marca-futbol",
