@@ -46,7 +46,34 @@
       "feedUrl": "https://www.skysports.com/rss/12040",
       "layer": "speed",
       "language": "en",
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "id": "espn-soccer",
+      "name": "ESPN Soccer",
+      "url": "https://www.espn.com/soccer/",
+      "feedUrl": "https://www.espn.com/espn/rss/soccer/news",
+      "layer": "speed",
+      "language": "en",
+      "enabled": true
+    },
+    {
+      "id": "marca-futbol",
+      "name": "MARCA Futbol",
+      "url": "https://www.marca.com/futbol.html",
+      "feedUrl": "https://e00-marca.uecdn.es/rss/futbol.xml",
+      "layer": "speed",
+      "language": "es",
+      "enabled": true
+    },
+    {
+      "id": "gazzetta-calcio",
+      "name": "Gazzetta dello Sport - Calcio",
+      "url": "https://www.gazzetta.it/Calcio/",
+      "feedUrl": "https://www.gazzetta.it/rss/Calcio.xml",
+      "layer": "speed",
+      "language": "it",
+      "enabled": true
     },
     {
       "id": "premierleague-official",
