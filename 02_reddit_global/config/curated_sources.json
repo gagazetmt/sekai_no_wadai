@@ -1,0 +1,133 @@
+{
+  "_meta": {
+    "purpose": "良質サッカーサイト群の RSS / Sitemap 設定。Curated RAG パイプラインで参照する。",
+    "lastUpdated": "2026-05-20",
+    "selectedBy": "リネカ (4 レイヤー構成)",
+    "layers": {
+      "speed":   "速報 (鮮度最重視・JST 当日記事化)",
+      "story":   "ストーリー/ヒューマンドラマ (数日〜1週間後の深掘り)",
+      "tactics": "戦術分析 (試合翌日〜数日後)",
+      "gossip":  "ゴシップ/移籍噂"
+    }
+  },
+  "sources": [
+    {
+      "id": "soccerdigest",
+      "name": "サッカーダイジェスト Web",
+      "url": "https://www.soccerdigestweb.com/",
+      "feedUrl": "https://www.soccerdigestweb.com/rss",
+      "layer": "speed",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "footballchannel",
+      "name": "フットボールチャンネル",
+      "url": "https://www.footballchannel.jp/",
+      "feedUrl": "https://www.footballchannel.jp/feed/",
+      "layer": "speed",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "goal-jp",
+      "name": "Goal.com 日本版",
+      "url": "https://www.goal.com/jp",
+      "feedUrl": "https://www.goal.com/jp/feeds/news?fmt=rss",
+      "layer": "speed",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "skysports-football",
+      "name": "Sky Sports Football",
+      "url": "https://www.skysports.com/football",
+      "feedUrl": "https://www.skysports.com/rss/12040",
+      "layer": "speed",
+      "language": "en",
+      "enabled": false
+    },
+    {
+      "id": "premierleague-official",
+      "name": "Premier League 公式",
+      "url": "https://www.premierleague.com/",
+      "feedUrl": null,
+      "layer": "speed",
+      "language": "en",
+      "enabled": false,
+      "_note": "公式は RSS なし、必要なら HTML スクレイプ"
+    },
+    {
+      "id": "number-web",
+      "name": "Number Web",
+      "url": "https://number.bunshun.jp/",
+      "feedUrl": "https://number.bunshun.jp/list/rss",
+      "layer": "story",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "sportiva",
+      "name": "Sportiva (集英社)",
+      "url": "https://sportiva.shueisha.co.jp/",
+      "feedUrl": "https://sportiva.shueisha.co.jp/rss/clm_socr.xml",
+      "layer": "story",
+      "language": "ja",
+      "enabled": false
+    },
+    {
+      "id": "guardian-football",
+      "name": "The Guardian Football",
+      "url": "https://www.theguardian.com/football",
+      "feedUrl": "https://www.theguardian.com/football/rss",
+      "layer": "story",
+      "language": "en",
+      "enabled": false
+    },
+    {
+      "id": "footballista",
+      "name": "footballista",
+      "url": "https://www.footballista.jp/",
+      "feedUrl": "https://www.footballista.jp/feed",
+      "layer": "tactics",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "raikard",
+      "name": "らいかーと (個人ブログ)",
+      "url": "https://rakanal.hatenablog.com/",
+      "feedUrl": "https://rakanal.hatenablog.com/rss",
+      "layer": "tactics",
+      "language": "ja",
+      "enabled": false
+    },
+    {
+      "id": "bbc-gossip",
+      "name": "BBC Sport Gossip Column",
+      "url": "https://www.bbc.co.uk/sport/football/gossip",
+      "feedUrl": "https://feeds.bbci.co.uk/sport/football/gossip/rss.xml",
+      "layer": "gossip",
+      "language": "en",
+      "enabled": false
+    },
+    {
+      "id": "qoly",
+      "name": "qoly",
+      "url": "https://qoly.jp/",
+      "feedUrl": "https://qoly.jp/feed",
+      "layer": "gossip",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "theworld-jp",
+      "name": "theWORLD",
+      "url": "https://theworld.jp/",
+      "feedUrl": "https://theworld.jp/feed",
+      "layer": "gossip",
+      "language": "ja",
+      "enabled": false
+    }
+  ]
+}

@@ -27,6 +27,7 @@ const { router: s6Router,  getUI: s6UI  } = require('./routes/step6_routes');
 const { router: dataExplorerRouter }     = require('./routes/data_explorer_routes');
 const { router: chatRouter, getUI: chatUI } = require('./routes/chat_routes');
 const { router: personaRouter }          = require('./routes/persona_routes');
+const { router: curatedRouter }          = require('./routes/curated_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
@@ -38,6 +39,7 @@ app.use('/api', s6Router);
 app.use('/api', dataExplorerRouter);
 app.use('/api', chatRouter);
 app.use('/api', personaRouter);
+app.use('/api', curatedRouter);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
@@ -517,4 +519,5 @@ app.listen(PORT, () => {
   console.log('  Step6:   動画投稿     → routes/step6_routes.js');
   console.log('  Chat:    リサーチミア → routes/chat_routes.js');
   console.log('  EntityCard: 人物の事実情報 AI 蒸留 (env SUBJECT_PROFILE_MODE=' + (process.env.SUBJECT_PROFILE_MODE === '1' ? 'ON' : 'OFF') + ') → routes/persona_routes.js');
+  console.log('  Curated:    良質サイト RAG (RSS + 本文取得 / ¥0) → routes/curated_routes.js');
 });
