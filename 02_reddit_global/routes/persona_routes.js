@@ -1,6 +1,8 @@
 // routes/persona_routes.js
 // ═══════════════════════════════════════════════════════════════
-// Subject Profile (ペルソナ) 生成 / 取得 / 削除
+// Entity Card 生成 / 取得 / 削除
+//   (ファイル名は persona_routes.js のままだが、機能名は Entity Card に統一。
+//    旧称: Subject Profile / ペルソナ — 不正確だったため Entity Card に変更 2026-05-20)
 //
 // 案件 (postId) × 主体エンティティ (entityName) ごとに、AI が素材を蒸留した
 // 「この人物を語る上で外せないエピソード + 数字ハイライト + 現在の文脈」を JSON で構造化。
@@ -90,7 +92,7 @@ ${tmManager ? '=== Transfermarkt 監督データ ===\n' + JSON.stringify(tmManag
 ${tmGames ? '=== Transfermarkt 試合データ ===\n' + JSON.stringify(tmGames).slice(0, 4500) + '\n' : ''}`;
 
   const prompt = `あなたはサッカー専門のリサーチアナリスト。
-動画案件で扱う人物「${entityName}」の Subject Profile を、以下の素材から JSON で構造化してください。
+動画案件で扱う人物「${entityName}」の Entity Card を、以下の素材から JSON で構造化してください。
 
 ════ 案件文脈 ════
 動画テーマ: ${topic || m.title || '(指定なし)'}
@@ -175,7 +177,7 @@ router.post('/v3/build-subject-profile', async (req, res) => {
         error: `エンティティ "${entityName}" が si_data.boxes.entity.items に見つかりません。Step2 で取得済みか確認してください。`,
       });
     }
-    console.log(`[persona/build] postId=${postId} entity=${entityName} 開始`);
+    console.log(`[entity-card/build] postId=${postId} entity=${entityName} 開始`);
     const profile = await generateProfile(materials, { entityName, topic });
     profile.postId       = postId;
     profile.generatedAt  = new Date().toISOString();
@@ -184,10 +186,10 @@ router.post('/v3/build-subject-profile', async (req, res) => {
 
     fs.writeFileSync(profilePath(postId, entityName), JSON.stringify(profile, null, 2));
     const ms = Date.now() - t0;
-    console.log(`[persona/build] 完了 (${ms}ms / episodes=${profile.iconicEpisodes?.length || 0})`);
+    console.log(`[entity-card/build] 完了 (${ms}ms / episodes=${profile.iconicEpisodes?.length || 0})`);
     res.json({ ok: true, profile, elapsedMs: ms });
   } catch (e) {
-    console.error('[persona/build] error:', e);
+    console.error('[entity-card/build] error:', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -256,7 +258,7 @@ function formatProfileForPrompt(p) {
   const _nm = n => `  - ${n.label}: ${n.value}` + (n.source ? ` [${n.source}]` : '');
   const _fc = f => `  - ${f.fact}` + (f.source ? ` [${f.source}]` : '');
 
-  return `[Subject Profile (AI 蒸留・出典タグ付き)]
+  return `[Entity Card (AI 蒸留・出典タグ付き)]
 テーマ: ${p.topic || ''}
 
 ★最重要エピソード (この人物の核となる出来事):

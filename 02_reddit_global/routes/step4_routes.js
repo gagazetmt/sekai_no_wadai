@@ -11,9 +11,10 @@ const path    = require('path');
 const { spawn } = require('child_process');
 
 const { callAI } = require('../scripts/ai_client');
-// 🆕 Subject Profile (env SUBJECT_PROFILE_MODE=1 で発動 / 未生成案件は従来動作)
+// 🆕 Entity Card (env SUBJECT_PROFILE_MODE=1 で発動 / 未生成案件は従来動作)
+//    env 名は互換性維持のため SUBJECT_PROFILE_MODE のまま (旧称 Subject Profile からのリネーム)
 const { getProfileSync, formatProfileForPrompt } = require('./persona_routes');
-const USE_SUBJECT_PROFILE = process.env.SUBJECT_PROFILE_MODE === '1';
+const USE_ENTITY_CARD = process.env.SUBJECT_PROFILE_MODE === '1';
 
 const router    = express.Router();
 const DATA_DIR  = path.join(__dirname, '..', 'data');
@@ -635,19 +636,19 @@ ${byCoach || '(なし)'}
 ${games || '(なし)'}`;
       }
 
-      // 🆕 Subject Profile (env SUBJECT_PROFILE_MODE=1 + profile 生成済) があれば
+      // 🆕 Entity Card (env SUBJECT_PROFILE_MODE=1 + card 生成済) があれば
       //    wiki 生データ 3000 字切り取り → AI 蒸留済の構造化エピソードに置き換え
       //    無ければ完全に従来通り
       let wikiBlock;
-      let profileApplied = false;
-      if (USE_SUBJECT_PROFILE) {
-        const prof = getProfileSync(postId, label);
-        if (prof) {
-          wikiBlock = formatProfileForPrompt(prof);
-          profileApplied = true;
+      let cardApplied = false;
+      if (USE_ENTITY_CARD) {
+        const card = getProfileSync(postId, label);
+        if (card) {
+          wikiBlock = formatProfileForPrompt(card);
+          cardApplied = true;
         }
       }
-      if (!profileApplied) {
+      if (!cardApplied) {
         wikiBlock = `[Wikipedia 生データ抜粋]
 ${wikitext.slice(0, 3000)}`;
       }
@@ -1674,7 +1675,7 @@ function getUI() {
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span id="s4Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件未選択</span>
       <!-- 2026-05-16: SPRINT トグルは step2 に移動（相棒指示） -->
-      <button class="btn btn-sm" id="s4BtnPersona" style="background:#7c3aed;color:#fff;" title="案件 primary 全エンティティの Subject Profile を Sonnet で生成。env SUBJECT_PROFILE_MODE=1 で生成済 profile が ai-fill-slide に反映される">📚 ペルソナ生成</button>
+      <button class="btn btn-sm" id="s4BtnPersona" style="background:#7c3aed;color:#fff;" title="案件 primary 全エンティティの Entity Card (人物の事実情報を AI 蒸留した JSON) を Sonnet で生成。env SUBJECT_PROFILE_MODE=1 で生成済 card が ai-fill-slide に反映される">📚 エンティティカード生成</button>
       <button class="btn btn-sm" id="s4BtnSave" style="background:#3b82f6;color:#fff;">💾 保存</button>
       <button class="btn btn-success" id="s4BtnGenVideo" style="font-size:13px;padding:8px 18px;">🎬 動画生成</button>
       <span id="s4Msg" style="font-size:12px;color:#8a9aba;"></span>
@@ -3420,10 +3421,10 @@ function getUI() {
     _msg('✅ 保存しました');
   });
 
-  /* ── 📚 ペルソナ (Subject Profile) 生成 ──
+  /* ── 📚 エンティティカード (Entity Card) 生成 ──
        modules.mainKey から primary エンティティ名を抽出 → 重複排除 →
        /api/v3/build-subject-profile を順次叩く。
-       env SUBJECT_PROFILE_MODE=1 で ai-fill-slide が生成済 profile を参照する */
+       env SUBJECT_PROFILE_MODE=1 で ai-fill-slide が生成済 card を参照する */
   document.getElementById('s4BtnPersona').addEventListener('click', async function() {
     const post = window.APP.selected;
     if (!post?.id) { alert('案件未選択だよ'); return; }
@@ -3439,13 +3440,13 @@ function getUI() {
     if (entities.length === 0) { alert('primary エンティティが mainKey に見つからない'); return; }
     const topic = post.title || post.titleOrig || '';
     const estCost = entities.length * 5;  // Sonnet 1回 ~¥5 概算
-    if (!confirm('Subject Profile を ' + entities.length + ' エンティティ生成します:\\n  - ' + entities.join('\\n  - ') + '\\n\\nテーマ: ' + topic.slice(0, 60) + '\\n推定コスト: ¥' + estCost + ' (Sonnet)\\n\\nOK?')) return;
-    _msg('⏳ ペルソナ生成中: 0/' + entities.length);
+    if (!confirm('Entity Card を ' + entities.length + ' エンティティ生成します:\\n  - ' + entities.join('\\n  - ') + '\\n\\nテーマ: ' + topic.slice(0, 60) + '\\n推定コスト: ¥' + estCost + ' (Sonnet)\\n\\nOK?')) return;
+    _msg('⏳ エンティティカード生成中: 0/' + entities.length);
     let ok = 0, ng = 0;
     const errs = [];
     for (let i = 0; i < entities.length; i++) {
       const name = entities[i];
-      _msg('⏳ ペルソナ生成中: ' + i + '/' + entities.length + ' (' + _esc(name) + ')');
+      _msg('⏳ エンティティカード生成中: ' + i + '/' + entities.length + ' (' + _esc(name) + ')');
       try {
         const r = await fetchJson('/api/v3/build-subject-profile', {
           method: 'POST',
@@ -3459,9 +3460,9 @@ function getUI() {
         errs.push(name + ': ' + e.message);
       }
     }
-    const msg = '✅ ペルソナ生成完了: ' + ok + '件成功 / ' + ng + '件失敗' + (errs.length ? '\\n失敗:\\n' + errs.join('\\n') : '');
+    const msg = '✅ エンティティカード生成完了: ' + ok + '件成功 / ' + ng + '件失敗' + (errs.length ? '\\n失敗:\\n' + errs.join('\\n') : '');
     _msg('✅ ' + ok + '/' + entities.length + ' 件生成');
-    alert(msg + '\\n\\n※ env SUBJECT_PROFILE_MODE=1 がセットされている時のみ ai-fill-slide が profile を参照します');
+    alert(msg + '\\n\\n※ env SUBJECT_PROFILE_MODE=1 がセットされている時のみ ai-fill-slide が card を参照します');
   });
 
   /* ── プレビュー縮小スケール再計算 ── */

@@ -516,5 +516,5 @@ app.listen(PORT, () => {
   console.log('  Step5:   サムネ生成   → routes/step5_routes.js');
   console.log('  Step6:   動画投稿     → routes/step6_routes.js');
   console.log('  Chat:    リサーチミア → routes/chat_routes.js');
-  console.log('  Persona: Subject Profile (env SUBJECT_PROFILE_MODE=' + (process.env.SUBJECT_PROFILE_MODE === '1' ? 'ON' : 'OFF') + ') → routes/persona_routes.js');
+  console.log('  EntityCard: 人物の事実情報 AI 蒸留 (env SUBJECT_PROFILE_MODE=' + (process.env.SUBJECT_PROFILE_MODE === '1' ? 'ON' : 'OFF') + ') → routes/persona_routes.js');
 });
