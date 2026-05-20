@@ -104,13 +104,40 @@
       "enabled": false
     },
     {
+      "id": "bbc-football",
+      "name": "BBC Sport Football",
+      "url": "https://www.bbc.co.uk/sport/football",
+      "feedUrl": "https://feeds.bbci.co.uk/sport/football/rss.xml",
+      "layer": "speed",
+      "language": "en",
+      "enabled": true
+    },
+    {
       "id": "bbc-gossip",
       "name": "BBC Sport Gossip Column",
       "url": "https://www.bbc.co.uk/sport/football/gossip",
       "feedUrl": "https://feeds.bbci.co.uk/sport/football/gossip/rss.xml",
       "layer": "gossip",
       "language": "en",
-      "enabled": false
+      "enabled": true
+    },
+    {
+      "id": "soccer-king",
+      "name": "サッカーキング",
+      "url": "https://www.soccer-king.jp/",
+      "feedUrl": "https://www.soccer-king.jp/feed",
+      "layer": "speed",
+      "language": "ja",
+      "enabled": true
+    },
+    {
+      "id": "gekisaka",
+      "name": "ゲキサカ",
+      "url": "https://web.gekisaka.jp/",
+      "feedUrl": "https://web.gekisaka.jp/feed",
+      "layer": "speed",
+      "language": "ja",
+      "enabled": true
     },
     {
       "id": "qoly",
