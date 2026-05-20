@@ -18,6 +18,9 @@ const JOB_DIR  = path.join(DATA_DIR, 'v3_jobs');
 
 const { listMainTags, resolveType, parseMainKey, VALID_TYPES } = require('../scripts/v3_tags');
 const { callAI } = require('../scripts/ai_client');
+// 🆕 Entity Card 参照 (env SUBJECT_PROFILE_MODE=1 で発動 / 未生成 entity は従来動作)
+const { getProfileSync } = require('./persona_routes');
+const USE_ENTITY_CARD = process.env.SUBJECT_PROFILE_MODE === '1';
 const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
 const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
 
@@ -116,8 +119,28 @@ async function _runProposeModules(postId, count, opts = {}) {
     } catch (_) {}
 
     // si.boxes 整形（generate-scenario と同じ要約方式）
+    //   🆕 env SUBJECT_PROFILE_MODE=1 + Entity Card 生成済 → wiki extract 200字 を
+    //      Card の象徴的エピソード (relevance=high 上位3件) に置換。scriptDir に深い文脈が乗る
     function _entityBlock(it) {
-      const role    = it.role || '?';
+      const role = it.role || '?';
+      if (USE_ENTITY_CARD) {
+        const card = getProfileSync(postId, it.label);
+        if (card) {
+          const highEps = (card.iconicEpisodes || [])
+            .filter(e => e.relevance === 'high')
+            .slice(0, 3)
+            .map(e => `${e.title}${e.year ? '('+e.year+')' : ''}`)
+            .join(' / ');
+          const medEps = (card.iconicEpisodes || [])
+            .filter(e => e.relevance === 'medium')
+            .slice(0, 2)
+            .map(e => `${e.title}${e.year ? '('+e.year+')' : ''}`)
+            .join(' / ');
+          const topic = (card.topic || '').slice(0, 80);
+          const ctxSum = (card.currentContext?.summary || '').slice(0, 120);
+          return `- [${role}] "${it.label}"  📚card:{topic:"${topic}", ★high:[${highEps}], med:[${medEps}], ctx:"${ctxSum}"}`;
+        }
+      }
       const wikiSum = it.wiki?.ok
         ? `wiki:{title:"${it.wiki.title || ''}",extract:"${(it.wiki.extract || '').slice(0, 200)}"}` : 'wiki:×';
       const sofaSum = it.sofa?.ok

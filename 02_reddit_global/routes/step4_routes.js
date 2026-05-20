@@ -3439,8 +3439,8 @@ function getUI() {
     const entities = Array.from(seen);
     if (entities.length === 0) { alert('primary エンティティが mainKey に見つからない'); return; }
     const topic = post.title || post.titleOrig || '';
-    const estCost = entities.length * 5;  // Sonnet 1回 ~¥5 概算
-    if (!confirm('Entity Card を ' + entities.length + ' エンティティ生成します:\\n  - ' + entities.join('\\n  - ') + '\\n\\nテーマ: ' + topic.slice(0, 60) + '\\n推定コスト: ¥' + estCost + ' (Sonnet)\\n\\nOK?')) return;
+    const estCost = entities.length;  // V4-Flash 約 ¥1/件
+    if (!confirm('Entity Card を ' + entities.length + ' エンティティ生成します:\\n  - ' + entities.join('\\n  - ') + '\\n\\nテーマ: ' + topic.slice(0, 60) + '\\n推定コスト: ¥' + estCost + ' (V4-Flash / 約¥1/件)\\n\\nOK?')) return;
     _msg('⏳ エンティティカード生成中: 0/' + entities.length);
     let ok = 0, ng = 0;
     const errs = [];

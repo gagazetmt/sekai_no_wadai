@@ -148,16 +148,27 @@ currentContext:
 - 案件発生時点 (本文/コメント参照) の状況
 - 「今、何が起きているか」が分かる 2-3 文`;
 
+  // 2026-05-20: デフォルト DeepSeek V4-Flash (Sonnet の 1/15 コスト = ¥1/件)
+  //   Entity Card は事実整理タスクで創造力不要 → V4-Flash で十分
+  //   env ENTITY_CARD_PROVIDER=sonnet で高品質モード (¥14/件) に切替可
+  const cardProvider = (process.env.ENTITY_CARD_PROVIDER || 'deepseek').toLowerCase();
+  const cardModel    = cardProvider === 'anthropic' || cardProvider === 'sonnet'
+    ? 'claude-sonnet-4-6'
+    : 'deepseek-v4-flash';
+  const forceProv    = (cardProvider === 'anthropic' || cardProvider === 'sonnet') ? 'anthropic' : 'deepseek';
+
   const raw = await callAI({
-    forceProvider: 'anthropic',
-    model:         'claude-sonnet-4-6',
+    forceProvider: forceProv,
+    model:         cardModel,
     max_tokens:    4000,
     messages:      [{ role: 'user', content: prompt }],
   });
 
   const match = raw && raw.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Profile JSON 抽出失敗 (AI 応答に JSON 構造なし)');
-  return JSON.parse(match[0]);
+  const parsed = JSON.parse(match[0]);
+  parsed._modelUsed = cardModel;
+  return parsed;
 }
 
 // ─── API ──────────────────────────────────────────────────────
@@ -181,12 +192,13 @@ router.post('/v3/build-subject-profile', async (req, res) => {
     const profile = await generateProfile(materials, { entityName, topic });
     profile.postId       = postId;
     profile.generatedAt  = new Date().toISOString();
-    profile.model        = 'claude-sonnet-4-6';
+    profile.model        = profile._modelUsed || 'unknown';
+    delete profile._modelUsed;
     profile.entityName   = entityName;  // AI が変更してきても上書き
 
     fs.writeFileSync(profilePath(postId, entityName), JSON.stringify(profile, null, 2));
     const ms = Date.now() - t0;
-    console.log(`[entity-card/build] 完了 (${ms}ms / episodes=${profile.iconicEpisodes?.length || 0})`);
+    console.log(`[entity-card/build] 完了 (${ms}ms / model=${profile.model} / episodes=${profile.iconicEpisodes?.length || 0})`);
     res.json({ ok: true, profile, elapsedMs: ms });
   } catch (e) {
     console.error('[entity-card/build] error:', e);
