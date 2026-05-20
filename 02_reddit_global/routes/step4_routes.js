@@ -403,10 +403,18 @@ router.post('/v2/matchcard-lineup-overrides', express.json(), (req, res) => {
 //   researchPrompt: リサーチの観点（省略時は userPrompt を流用）
 // Output: { ok, jobId } 即返却 → クライアントが /v2/ai-fill-slide-status?jobId= をポーリング
 async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, useWebResearch, researchPrompt, sprint }) {
-  // ⚡SPRINT モード: AI 呼び出しを全て DeepSeek に強制（生成 + 監修）
-  const _sprint = !!sprint;
-  const _aiProv = _sprint ? 'deepseek' : 'anthropic';
-  const _aiModel = _sprint ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
+  // 🆕 sprint は 3 値対応:
+  //   true / 'deepseek' / 'sprint'  → DeepSeek V4-Flash (コスト最安)
+  //   'kimi'                        → Moonshot Kimi K2.6 via OpenRouter (中庸)
+  //   false / 未指定                → Claude Sonnet 4.6 (高品質)
+  const _mode = (typeof sprint === 'string') ? sprint.toLowerCase() : (sprint ? 'deepseek' : 'sonnet');
+  const _aiProv = _mode === 'kimi' ? 'kimi'
+                : (_mode === 'deepseek' || _mode === 'sprint') ? 'deepseek'
+                : 'anthropic';
+  const _aiModel = _aiProv === 'kimi' ? 'moonshotai/kimi-k2.6'
+                 : _aiProv === 'deepseek' ? 'deepseek-v4-flash'
+                 : 'claude-sonnet-4-6';
+  const _sprint = _aiProv === 'deepseek';  // 既存ログ互換のため
     const mp = modulesPath(postId);
     // 2026-05-17: _runAiFillSlide は async ジョブ関数で res を持たない → throw に変更
     if (!fs.existsSync(mp)) throw new Error('modules not found');
