@@ -562,8 +562,56 @@ router.post('/v3/fetch-all', async (req, res) => {
   }
   console.log(`[Step2 v3] 画像取得を ${imgKicked} ラベル分バックグラウンド発火`);
 
+  // 🆕 Curated RAG: 良質サッカーサイト群から関連記事を自動取得 (fire-and-forget / ¥0)
+  //   案件タイトル + entity ラベルをキーワードに → si.curatedArticles へ保存
+  //   Step3 propose-modules / Step4 ai-fill-slide が参照
+  setImmediate(async () => {
+    try {
+      const { searchCuratedArticles } = require('../scripts/modules/curated_articles');
+      const sp = safeJson(path.join(DATA_DIR, 'saved_projects.json'), []);
+      const proj = (Array.isArray(sp) ? sp : []).find(p => p.id === postId);
+      const curSi = safeJson(siPath(postId), null);
+      if (!curSi) return;
+      const keywords = _buildCuratedKeywords(curSi, proj);
+      if (keywords.length === 0) {
+        console.log('[Step2 v3] curated 取得スキップ (keywords 抽出ゼロ)');
+        return;
+      }
+      console.log(`[Step2 v3] curated 自動取得開始 (keywords ${keywords.length}: ${keywords.slice(0, 5).join(', ')}${keywords.length > 5 ? '...' : ''})`);
+      const articles = await searchCuratedArticles({
+        keywords,
+        maxItems: 15,
+        maxFetch: 8,
+      });
+      // 最新の si を再読み込みして書き戻し (worker と競合しない)
+      const saveSi = safeJson(siPath(postId), null);
+      if (!saveSi) return;
+      saveSi.curatedArticles = {
+        fetchedAt:  new Date().toISOString(),
+        keywords,
+        count:      articles.length,
+        articles,
+      };
+      fs.writeFileSync(siPath(postId), JSON.stringify(saveSi, null, 2));
+      console.log(`[Step2 v3] curated 自動取得完了: ${articles.length} 記事 / 上位スコア ${(articles[0] || {})._score || 0}`);
+    } catch (e) {
+      console.warn('[Step2 v3] curated 取得失敗 (silent fallback):', e.message);
+    }
+  });
+
   res.json({ ok: true, count: results.length, imageJobsKicked: imgKicked });
 });
+
+// curated 取得用キーワード組成
+//   案件タイトルからカタカナ/漢字/英字 2-3 字以上のトークン + entity ラベル
+function _buildCuratedKeywords(si, proj) {
+  const kws = new Set();
+  const title = String(proj?.title || proj?.titleOrig || '');
+  const tokens = title.match(/[ァ-ヶー]{2,}|[一-龯]{2,}|[A-Za-z]{3,}/g) || [];
+  tokens.forEach(t => kws.add(t));
+  (si?.boxes?.entity?.items || []).forEach(it => { if (it?.label) kws.add(it.label); });
+  return Array.from(kws);
+}
 
 // ─── /v3/entity-suggest : 入力中ラベルのタイプアヘッド候補
 //   query string: q=<入力> & role=<player|manager|team|all>

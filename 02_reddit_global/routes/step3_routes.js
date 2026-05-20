@@ -21,6 +21,13 @@ const { callAI } = require('../scripts/ai_client');
 // 🆕 Entity Card 参照 (env SUBJECT_PROFILE_MODE=1 で発動 / 未生成 entity は従来動作)
 const { getProfileSync } = require('./persona_routes');
 const USE_ENTITY_CARD = process.env.SUBJECT_PROFILE_MODE === '1';
+// 🆕 Curated RAG (si.curatedArticles に Step2 fetch-all で保存済みなら自動注入)
+const { formatForPrompt: formatCuratedForPrompt } = require('../scripts/modules/curated_articles');
+function _curatedBlock(si) {
+  const cur = si?.curatedArticles;
+  if (!cur || !Array.isArray(cur.articles) || cur.articles.length === 0) return '';
+  return '\n' + formatCuratedForPrompt(cur.articles, 6000) + '\n';
+}
 const { fetchWikipediaWikitext } = require('../scripts/modules/fetchers/wikipedia');
 const { getBindingMeta, buildDataSlotsFromMeta } = require('../scripts/v2_story/binding_meta');
 
@@ -212,6 +219,7 @@ ${matchBlock}
 [search 一覧（関連ニュース）]
 ${searchBlock}
 ━━━━━━━━━━━━━━━━
+${_curatedBlock(si)}
 
 【視点の引き出し（多角的に組み合わせる）】
 動画の視聴維持率を上げるため、以下のような複数の視点を**バランスよく**織り交ぜる：
