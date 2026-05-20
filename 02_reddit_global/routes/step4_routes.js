@@ -923,12 +923,12 @@ ${incrementalRule}
     ・末尾は次スライドへ意識を誘導（例「まさに〜の領域に達しようとしている」「次に注目すべきは〜」）
     ・前スライドで既に語った数字を不自然に再放出しない
     ・案件全体のメインテーマ（タイトル参照）を絶対に外さない
-- title: 10〜25文字、フックのある表現
+- **title (必須・絶対省略禁止)**: 10〜25文字、フックのある表現。 narration があっても title を空文字 / 省略しない
 
-【出力】JSONのみ（マークダウン不要）:
+【出力】JSONのみ（マークダウン不要）。**"title" は必ず先頭、 空文字禁止**:
 {
+  "title": "...",                    // ★必須・空禁止 / 10〜25文字 / フック効かせる
   "type": "...",
-  "title": "...",
   "recipeKey": "<上記レシピキー>",   // 推奨：レシピで意図カバーできるなら
   // または
   "dataSlots": [...],                // レシピで足りない時のみ
@@ -1094,7 +1094,20 @@ ${parsed.narration || ''}
     // matchcard は matchData ベースで dataSlots を使わないので、AI が返しても空に固定
     const ALLOWED_TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard','ranking','timeline'];
     if (ALLOWED_TYPES.includes(parsed.type)) mod.type = parsed.type;
-    if (typeof parsed.title === 'string')     mod.title = parsed.title;
+    // 🆕 2026-05-21: title fallback 強化 (AI が title 省略 or 空文字でも「スライドN」事故を防ぐ)
+    {
+      const _aiT = typeof parsed.title === 'string' ? parsed.title.trim() : '';
+      const _isPh = (s) => !s || /^スライド\d+$/.test(s);
+      const _strip = (s) => String(s || '').replace(/^(まずは?|では|続いて|次に|ここで|最後に|それでは)、?/, '').trim();
+      if (!_isPh(_aiT)) {
+        mod.title = _aiT;
+      } else if (_isPh(mod.title)) {
+        // 既存も placeholder → narration / scriptDir から自動生成
+        const fb = _strip(parsed.narration || mod.narration || mod.scriptDir).slice(0, 25);
+        if (fb) mod.title = fb;
+      }
+      // 既存 title が人間の手書きならそのまま温存 (どちらも空でなければ何もしない)
+    }
     if (typeof parsed.narration === 'string') mod.narration = parsed.narration;
     if (mod.type === 'matchcard') {
       mod.dataSlots = [];
