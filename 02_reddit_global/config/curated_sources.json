@@ -70,7 +70,7 @@
       "id": "gazzetta-calcio",
       "name": "Gazzetta dello Sport - Calcio",
       "url": "https://www.gazzetta.it/Calcio/",
-      "feedUrl": "https://www.gazzetta.it/rss/Calcio.xml",
+      "feedUrl": "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio/Serie-A.xml",
       "layer": "speed",
       "language": "it",
       "enabled": true

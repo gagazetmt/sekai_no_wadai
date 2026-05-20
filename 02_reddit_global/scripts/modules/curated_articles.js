@@ -89,7 +89,7 @@ async function fetchSourceFeed(source) {
       timeout: 8000,
       maxRedirects: 3,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SoccerYTBot/1.0)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept':     'application/rss+xml,application/xml;q=0.9,text/xml;q=0.8,*/*;q=0.5',
       },
       responseType: 'text',
