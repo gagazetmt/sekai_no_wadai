@@ -720,9 +720,14 @@ async function main() {
         async toHira(text) {
           const dictApplied = applyJpDict(text);
           const hira = await k.convert(dictApplied, { to: 'hiragana' });
-          // カタカナ→ひらがな、句読点・空白除去で純粋音節数
+          // カタカナ→ひらがな、 数字を音節数近似で膨らます、 句読点・空白除去で純粋音節数
+          // 2026-05-22 (相棒指摘): 数字は kuroshiro で変換されず残るため、 cps 計算で過小評価 → 早口化
+          //   例: "82" → "はちじゅうに" (6 音節) なのに「2 字」でカウントされてた
+          //   桁数 × 2 + 1 で音節数近似 (1桁=3, 2桁=5, 3桁=7, 4桁=9 音節)
+          //   "82" → 5 字相当、 "2026" → 9 字相当、 実際の音節数に近づく
           return hira
             .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+            .replace(/(\d+)/g, (m) => '_'.repeat(m.length * 2 + 1))
             .replace(/[\s　、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
         }
       };
