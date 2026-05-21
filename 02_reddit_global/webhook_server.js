@@ -1,6 +1,7 @@
 // webhook_server.js
 // GitHubからpush通知を受け取り、git pull → pm2 restart を自動実行
 // 起動: pm2 start webhook_server.js --name webhook
+// 2026-05-21: restart 対象を soccer-yt-v2 (V2 本番) に修正済 (commit 11dc15b)
 
 require("dotenv").config();
 const http   = require("http");
