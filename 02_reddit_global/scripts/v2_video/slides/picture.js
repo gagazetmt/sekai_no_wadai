@@ -31,6 +31,7 @@ function buildPictureHTML(mod) {
 
   // ─── レイアウト構築 ─────────────────────────────────
   let bodyHTML;
+  let wrapClass = '';
   if (orientation === 'horizontal') {
     bodyHTML = `
       <div class="pic-area-h">
@@ -38,6 +39,7 @@ function buildPictureHTML(mod) {
       </div>
     `;
   } else {
+    wrapClass = 'pic-vertical-mode';
     bodyHTML = `
       <div class="pic-area-v">
         <div class="pic-text">
@@ -77,18 +79,19 @@ function buildPictureHTML(mod) {
   object-fit: contain;
 }
 
-/* ─── 縦画像 (右寄せ + 左タイトル) ─────── */
+/* ─── 縦画像 (右寄せ + 左タイトル / 字幕は左カラムのみ) ─── */
 .pic-area-v {
   position: absolute;
   top: 40px; left: 60px; right: 60px;
-  bottom: ${SUB_BAR_HEIGHT + 40}px;
-  display: flex;
+  bottom: 0;  /* 画像は下端 (字幕バー下まで) フル使用 */
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 60px;
   align-items: stretch;
 }
 .pic-text {
-  flex: 1;
   display: flex; align-items: center;
+  padding-bottom: ${SUB_BAR_HEIGHT + 40}px;  /* 字幕バー上で止まる */
   min-width: 0;
 }
 .pic-title {
@@ -99,12 +102,21 @@ function buildPictureHTML(mod) {
   padding-left: 40px;
   text-shadow: 0 4px 20px rgba(0,0,0,0.8);
   word-break: break-word;
+  white-space: pre-line;  /* \\n を改行扱い */
 }
 .pic-img-v {
-  height: 100%;
+  align-self: center;
+  max-height: calc(100% - 40px);  /* 上下に 20px 余白 */
+  max-width: 100%;
   width: auto;
   object-fit: contain;
-  flex-shrink: 0;
+  margin: 20px 0;
+}
+
+/* 🆕 縦画像モード時: 字幕バーを左カラム幅のみに制限 (右の画像エリアにかぶせない) */
+.pic-vertical-mode .v2-sub-bar-wrapper,
+.pic-vertical-mode .v2-sub-bar {
+  right: 50% !important;
 }
 
 /* ─── 共通: 画像枠グロー + pulse ─────── */
@@ -139,8 +151,10 @@ function buildPictureHTML(mod) {
   const slideBody = `
 <div class="bg-base"></div>
 <div class="grid-overlay"></div>
+<div class="${wrapClass}">
 ${bodyHTML}
 ${subBarHTML}
+</div>
 `;
 
   return wrapHTML({ slideBody, extraStyles });
