@@ -948,10 +948,11 @@ ${incrementalRule}
       if (p.type === 'timeline') return Array.isArray(p.series) && p.series.length > 0;
       return Array.isArray(p.dataSlots);
     };
+    // 2026-05-21: max_tokens 3500 → 6000 (curated 統合で入力肥大 / DeepSeek reasoning 余裕確保)
     try {
       raw = await callAI({
         forceProvider: _aiProv,
-        model: _aiModel, max_tokens: 3500,
+        model: _aiModel, max_tokens: 6000,
         messages: [{ role: 'user', content: prompt }],
       });
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
@@ -962,7 +963,7 @@ ${incrementalRule}
       try {
         raw = await callAI({
           forceProvider: 'deepseek',
-          model: 'deepseek-v4-flash', max_tokens: 3500,
+          model: 'deepseek-v4-flash', max_tokens: 6000,
           messages: [{ role: 'user', content: prompt }],
         });
         const m2 = raw && raw.match(/\{[\s\S]*\}/);
@@ -1064,9 +1065,10 @@ ${parsed.narration || ''}
   }
 }`;
 
+      // 2026-05-21: max_tokens 4000 → 6000 (監修 fix 出力余裕確保)
       const reviewRaw = await callAI({
         forceProvider: _aiProv,
-        model: _aiModel, max_tokens: 4000,
+        model: _aiModel, max_tokens: 6000,
         messages: [{ role: 'user', content: reviewPrompt }],
       });
       const rm = reviewRaw && reviewRaw.match(/\{[\s\S]*\}/);
