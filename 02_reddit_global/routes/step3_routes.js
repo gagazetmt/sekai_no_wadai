@@ -242,6 +242,7 @@ ${_curatedBlock(si)}
 - timeline: 折れ線時系列チャート（series [{name,points:[{x,y}]}] 最大4本）★市場価値/順位/得点数などの推移を視覚化したい時に最適。1選手の年次推移でも複数選手の比較でも OK
 - reaction: コメント反応（comments[]）
 - matchcard: 試合プレビュー / 試合スコア詳細（match data 必須）
+- picture: 1 枚の画像を大きく見せる (images[] 1枚 / orientation: horizontal | vertical)★印象的な写真でナレーションを補強したい時 / オレンジ glow pulse 装飾付き
 - ending: 締め・問いかけ（必ず末尾に1枚）
 
 【構成ルール（厳守）】

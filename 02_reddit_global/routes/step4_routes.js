@@ -1472,6 +1472,7 @@ const _slideBuilders = (() => {
     toc:        require('../scripts/v2_video/slides/toc').buildTocHTML,
     ranking:    require('../scripts/v2_video/slides/ranking').buildRankingHTML,
     timeline:   require('../scripts/v2_video/slides/timeline').buildTimelineHTML,
+    picture:    require('../scripts/v2_video/slides/picture').buildPictureHTML,
     mapImagesToModule: require('../scripts/v2_video/slides/_common').mapImagesToModule,
   };
 })();
@@ -1494,6 +1495,7 @@ function _buildSlideForPreview(mod) {
     case 'reaction':    return _slideBuilders.reaction(m);
     case 'ranking':     return _slideBuilders.ranking(m);
     case 'timeline':    return _slideBuilders.timeline(m);
+    case 'picture':     return _slideBuilders.picture(m);
     default:            return _slideBuilders.universal(m);
   }
 }
@@ -2087,6 +2089,23 @@ function getUI() {
         + '</details>';
     }
 
+    // ── 🆕 picture 編集: orientation プルダウン + 画像選択ヒント ──
+    if (m.type === 'picture') {
+      const orient = m.orientation === 'vertical' ? 'vertical' : 'horizontal';
+      extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🖼️ picture 設定</div>'
+        + '<div style="display:grid;grid-template-columns:120px 1fr;gap:6px;padding:10px 12px;background:#0d1220;border-radius:6px;align-items:center;">'
+        +   '<span style="font-size:11px;color:#94a3b8;">orientation</span>'
+        +   '<select class="inp s4-pic-orient" oninput="s4OnInput()" style="font-size:12px;padding:5px 8px;">'
+        +     '<option value="horizontal"' + (orient === 'horizontal' ? ' selected' : '') + '>horizontal (横長・字幕上の全領域に画像)</option>'
+        +     '<option value="vertical"'   + (orient === 'vertical'   ? ' selected' : '') + '>vertical (縦長・右寄せ + 左にタイトル)</option>'
+        +   '</select>'
+        + '</div>'
+        + '<div style="font-size:10px;color:#8a9aba;margin-top:6px;padding:6px 10px;background:#0d1220;border-radius:4px;">'
+        +   '👇 下の「🖼️ 共有画像プール」から **1 枚クリック** で選択。 picture スライドは images[0] を使う。'
+        +   ' vertical の場合は左側の title (上のタイトル欄) も入力推奨'
+        + '</div>';
+    }
+
     // ── 🆕 ranking 編集: items 配列 (rank / name / value / subtext) ──
     if (m.type === 'ranking') {
       const RANK_MAX = 5;
@@ -2146,7 +2165,7 @@ function getUI() {
         + _addSer;
     }
 
-    const ALL_TYPES = ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ranking','timeline','ending'];
+    const ALL_TYPES = ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ranking','timeline','picture','ending'];
     const typeOpts = ALL_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
@@ -3021,6 +3040,11 @@ function getUI() {
         text:  ts[idx]?.value || c.text || '',
         score: Number(ss[idx]?.value) || 0,
       }));
+    }
+    /* 🆕 picture: orientation 集約 */
+    if (m.type === 'picture') {
+      const orient = document.querySelector('.s4-pic-orient');
+      if (orient) m.orientation = (orient.value === 'vertical' ? 'vertical' : 'horizontal');
     }
     /* 🆕 ranking: items 配列 集約 */
     if (m.type === 'ranking') {
