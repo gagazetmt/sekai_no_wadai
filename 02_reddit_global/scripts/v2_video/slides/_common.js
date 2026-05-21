@@ -124,7 +124,11 @@ function mapImagesToModule(mod) {
   if (!mod) return mod;
   const imgs = (Array.isArray(mod.images) ? mod.images : []).map(p => String(p || '').replace(/^\//, ''));
   if (!imgs.length) return mod;
-  const m = { ...mod };
+  // m.images 自体も normalize 済みに置き換える
+  //   理由: picture.js は m.images[0] を直接読むが、leading "/" 付きパスを渡すと
+  //         imgDataUri 内の path.isAbsolute 判定で true となり (POSIX/Windows 両方)
+  //         fs.existsSync がファイルシステムルートを探して null → 画像未選択になる
+  const m = { ...mod, images: imgs };
   switch (mod.type) {
     case 'opening':
     case 'ending':
