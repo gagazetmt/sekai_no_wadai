@@ -758,10 +758,17 @@ async function main() {
           // 数字を漢数字に置換してから kuroshiro 通す → 厳密な音節数
           const numConverted = dictApplied.replace(/\d+/g, (m) => _numToKanji(parseInt(m, 10)));
           const hira = await k.convert(numConverted, { to: 'hiragana' });
-          // カタカナ→ひらがな、 句読点・空白除去で純粋音節数
+          // 2026-05-22: 句読点 = 息継ぎ・間 を文字数加算 (相棒指摘で cps 精度向上)
+          //   。！？ → 3 字 (強い区切り / 実時間 0.3-0.5s の息継ぎ)
+          //   、    → 2 字 (軽い区切り / 0.2s)
+          //   ・…  → 1 字 (短いポーズ)
+          //   他記号 → 削除 (発話に影響なし)
           return hira
             .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
-            .replace(/[\s　、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
+            .replace(/[。！？!?]/g, '___')   // 強い区切り = 3 字
+            .replace(/[、]/g, '__')           // 軽い区切り = 2 字
+            .replace(/[・…]/g, '_')           // 短いポーズ = 1 字
+            .replace(/[\s　「」『』（）()―\-—:：;；,\.]/g, '');
         }
       };
       console.log(`  ✓ kuroshiro ready for ひらがな cps 計算`);
