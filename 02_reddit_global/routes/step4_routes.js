@@ -11,10 +11,6 @@ const path    = require('path');
 const { spawn } = require('child_process');
 
 const { callAI } = require('../scripts/ai_client');
-// 🆕 Entity Card (env SUBJECT_PROFILE_MODE=1 で発動 / 未生成案件は従来動作)
-//    env 名は互換性維持のため SUBJECT_PROFILE_MODE のまま (旧称 Subject Profile からのリネーム)
-const { getProfileSync, formatProfileForPrompt } = require('./persona_routes');
-const USE_ENTITY_CARD = process.env.SUBJECT_PROFILE_MODE === '1';
 // 🆕 Curated RAG (si.curatedArticles に Step2 fetch 時に保存済みなら自動注入)
 const { formatForPrompt: formatCuratedForPrompt } = require('../scripts/modules/curated_articles');
 
@@ -646,25 +642,11 @@ ${byCoach || '(なし)'}
 ${games || '(なし)'}`;
       }
 
-      // 🆕 Entity Card (env SUBJECT_PROFILE_MODE=1 + card 生成済) があれば
-      //    wiki 生データ 3000 字切り取り → AI 蒸留済の構造化エピソードに置き換え
-      //    無ければ完全に従来通り
-      let wikiBlock;
-      let cardApplied = false;
-      if (USE_ENTITY_CARD) {
-        const card = getProfileSync(postId, label);
-        if (card) {
-          wikiBlock = formatProfileForPrompt(card);
-          cardApplied = true;
-        }
-      }
-      if (!cardApplied) {
-        // 2026-05-20: 3000字 → 12000字に拡張 (V4-Flash 128k context に余裕で収まる)
-        //   旧: 冒頭 3000字切り取りで Wiki 後半の象徴的エピソード (W杯離脱・移籍金記録 等) が落ちてた
-        //   新: 12000字 ≒ Wiki 本文ほぼ全体カバー
-        wikiBlock = `[Wikipedia 生データ抜粋 (最大 12000字)]
+      // 2026-05-20: 3000字 → 12000字に拡張 (V4-Flash 128k context に余裕で収まる)
+      //   旧: 冒頭 3000字切り取りで Wiki 後半の象徴的エピソード (W杯離脱・移籍金記録 等) が落ちてた
+      //   新: 12000字 ≒ Wiki 本文ほぼ全体カバー
+      const wikiBlock = `[Wikipedia 生データ抜粋 (最大 12000字)]
 ${wikitext.slice(0, 12000)}`;
-      }
 
       return `=== 主体: ${label} (${it.role || '?'}) ===
 [Wikipedia 要約]
@@ -1725,7 +1707,6 @@ function getUI() {
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span id="s4Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件未選択</span>
       <!-- 2026-05-16: SPRINT トグルは step2 に移動（相棒指示） -->
-      <button class="btn btn-sm" id="s4BtnPersona" style="background:#7c3aed;color:#fff;" title="案件 primary 全エンティティの Entity Card (人物の事実情報を AI 蒸留した JSON) を Sonnet で生成。env SUBJECT_PROFILE_MODE=1 で生成済 card が ai-fill-slide に反映される">📚 エンティティカード生成</button>
       <button class="btn btn-sm" id="s4BtnSave" style="background:#3b82f6;color:#fff;">💾 保存</button>
       <button class="btn btn-success" id="s4BtnGenVideo" style="font-size:13px;padding:8px 18px;">🎬 動画生成</button>
       <span id="s4Msg" style="font-size:12px;color:#8a9aba;"></span>
@@ -3678,50 +3659,6 @@ function getUI() {
     _collectInputs();
     await _saveModulesQuiet();
     _msg('✅ 保存しました');
-  });
-
-  /* ── 📚 エンティティカード (Entity Card) 生成 ──
-       modules.mainKey から primary エンティティ名を抽出 → 重複排除 →
-       /api/v3/build-subject-profile を順次叩く。
-       env SUBJECT_PROFILE_MODE=1 で ai-fill-slide が生成済 card を参照する */
-  document.getElementById('s4BtnPersona').addEventListener('click', async function() {
-    const post = window.APP.selected;
-    if (!post?.id) { alert('案件未選択だよ'); return; }
-    /* primary エンティティ名を収集 (mod.mainKey = "player:神戸薫" 形式) */
-    const seen = new Set();
-    (window.APP.s4.modules || []).forEach(function(m) {
-      const mk = m?.mainKey || '';
-      const idx = mk.indexOf(':');
-      const name = idx >= 0 ? mk.slice(idx + 1).trim() : '';
-      if (name) seen.add(name);
-    });
-    const entities = Array.from(seen);
-    if (entities.length === 0) { alert('primary エンティティが mainKey に見つからない'); return; }
-    const topic = post.title || post.titleOrig || '';
-    const estCost = entities.length;  // V4-Flash 約 ¥1/件
-    if (!confirm('Entity Card を ' + entities.length + ' エンティティ生成します:\\n  - ' + entities.join('\\n  - ') + '\\n\\nテーマ: ' + topic.slice(0, 60) + '\\n推定コスト: ¥' + estCost + ' (V4-Flash / 約¥1/件)\\n\\nOK?')) return;
-    _msg('⏳ エンティティカード生成中: 0/' + entities.length);
-    let ok = 0, ng = 0;
-    const errs = [];
-    for (let i = 0; i < entities.length; i++) {
-      const name = entities[i];
-      _msg('⏳ エンティティカード生成中: ' + i + '/' + entities.length + ' (' + _esc(name) + ')');
-      try {
-        const r = await fetchJson('/api/v3/build-subject-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postId: post.id, entityName: name, topic: topic }),
-        });
-        if (r?.ok) { ok++; }
-        else { ng++; errs.push(name + ': ' + (r?.error || 'unknown')); }
-      } catch (e) {
-        ng++;
-        errs.push(name + ': ' + e.message);
-      }
-    }
-    const msg = '✅ エンティティカード生成完了: ' + ok + '件成功 / ' + ng + '件失敗' + (errs.length ? '\\n失敗:\\n' + errs.join('\\n') : '');
-    _msg('✅ ' + ok + '/' + entities.length + ' 件生成');
-    alert(msg + '\\n\\n※ env SUBJECT_PROFILE_MODE=1 がセットされている時のみ ai-fill-slide が card を参照します');
   });
 
   /* ── プレビュー縮小スケール再計算 ── */

@@ -655,7 +655,6 @@ function getUI() {
       </label>
       <button class="btn btn-primary" id="s2BtnSuggest">&#x1F916; AIラベル提案</button>
       <button class="btn btn-success" id="s2BtnFetchAll">&#x1F4E1; 未取得を全部取得</button>
-      <button class="btn btn-sm" id="s2BtnEntityCard" style="background:#7c3aed;color:#fff;" title="取得済 entity 全件の Entity Card (人物の事実情報 AI 蒸留 JSON) を Sonnet で生成。Step3 構成提案 / Step4 ナレーション生成 で参照される (env SUBJECT_PROFILE_MODE=1 時)">&#x1F4DA; エンティティカード生成</button>
       <span id="s2Msg" style="font-size:12px;color:#8a9aba"></span>
     </div>
   </div>
@@ -994,47 +993,7 @@ function getUI() {
     }
   };
 
-  /* ── 📚 エンティティカード生成 (Step2 版・推奨設置場所) ──
-       fetch 完了済 entity 全件を Sonnet で蒸留 →
-       Step3 propose-modules / Step4 ai-fill-slide が参照する */
   document.addEventListener('click', async function(e) {
-    if (e.target.id === 's2BtnEntityCard') {
-      const post = window.APP.selected;
-      if (!post?.id) { alert('案件未選択'); return; }
-      const si = window.APP.s2.siData;
-      const items = ((si?.boxes?.entity?.items) || []).filter(it => it.fetchedAt && !it.error);
-      if (items.length === 0) { alert('fetch 完了済の entity が無い。 まず「📡 未取得を全部取得」してね'); return; }
-      const names = items.map(it => it.label);
-      /* saved_projects から topic 取得 */
-      let topic = '';
-      try {
-        const sp = await fetchJson('/api/saved-projects');
-        const proj = (sp || []).find(p => p.id === post.id);
-        topic = proj?.title || proj?.titleOrig || '';
-      } catch (_) {}
-      const estCost = names.length;  // V4-Flash 約 ¥1/件
-      if (!confirm('Entity Card を ' + names.length + ' エンティティ生成します:\\n  - ' + names.join('\\n  - ') + '\\n\\nテーマ: ' + topic.slice(0, 60) + '\\n推定コスト: ¥' + estCost + ' (V4-Flash / 約¥1/件)\\n\\nこの段階で生成すると、 Step3 構成提案 / Step4 ナレーション生成 の両方に反映されます。\\n\\nOK?')) return;
-      _msg('⏳ エンティティカード生成中: 0/' + names.length);
-      let ok = 0, ng = 0;
-      const errs = [];
-      for (let i = 0; i < names.length; i++) {
-        const name = names[i];
-        _msg('⏳ エンティティカード生成中: ' + i + '/' + names.length + ' (' + name + ')');
-        try {
-          const r = await fetchJson('/api/v3/build-subject-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ postId: post.id, entityName: name, topic }),
-          });
-          if (r?.ok) { ok++; } else { ng++; errs.push(name + ': ' + (r?.error || 'unknown')); }
-        } catch (e2) {
-          ng++; errs.push(name + ': ' + e2.message);
-        }
-      }
-      _msg('✅ ' + ok + '/' + names.length + ' 件生成');
-      alert('✅ Entity Card: ' + ok + '件成功 / ' + ng + '件失敗' + (errs.length ? '\\n失敗:\\n' + errs.join('\\n') : '') + '\\n\\n※ env SUBJECT_PROFILE_MODE=1 がセットされている時のみ Step3/Step4 が card を参照します');
-      return;
-    }
     if (e.target.id === 's2BtnFetchAll') {
       const post = window.APP.selected;
       if (!post?.id) return;
