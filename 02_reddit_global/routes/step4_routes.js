@@ -1470,6 +1470,8 @@ const _slideBuilders = (() => {
     comparison: require('../scripts/v2_video/slides/comparison').buildComparisonHTML,
     reaction:   require('../scripts/v2_video/slides/reaction').buildReactionHTML,
     toc:        require('../scripts/v2_video/slides/toc').buildTocHTML,
+    ranking:    require('../scripts/v2_video/slides/ranking').buildRankingHTML,
+    timeline:   require('../scripts/v2_video/slides/timeline').buildTimelineHTML,
     mapImagesToModule: require('../scripts/v2_video/slides/_common').mapImagesToModule,
   };
 })();
@@ -1490,6 +1492,8 @@ function _buildSlideForPreview(mod) {
     case 'profile':     return _slideBuilders.profile(m);
     case 'comparison':  return _slideBuilders.comparison(m);
     case 'reaction':    return _slideBuilders.reaction(m);
+    case 'ranking':     return _slideBuilders.ranking(m);
+    case 'timeline':    return _slideBuilders.timeline(m);
     default:            return _slideBuilders.universal(m);
   }
 }
