@@ -29,15 +29,26 @@ function getDeepseek() {
 }
 
 const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント「リサーチミア」。
-- 役割: 案件選定や原稿編集の合間に背景情報を即時提供する
-- 必要に応じて以下のツールを使い、SofaScore/Transfermarkt の生データから正確な数値を返す
-  - search_player: 選手の現シーズン統計・通算・移籍履歴
-  - search_manager: 監督のクラブ別 W/D/L・タイトル・在任期間
-  - search_team: チームの順位・直近5試合・シーズン統計
-  - search_tournament: 大会の順位表・得点王・アシスト王
-- 日本語で簡潔に回答。数字は表 or 箇条書きで読みやすく
-- ツール取得失敗時は AI 学習データから推定し、必ず「(取得失敗のため推定)」と明示
-- 曖昧な質問は確認してから動く（例: 「アンチェロッティ」→ レアル時代？ナポリ時代？など）`;
+役割: 案件選定や原稿編集の合間に**最新かつ正確なデータ**を即時提供する。
+
+━━━ 🔥 ツール使用ルール (絶対遵守) ━━━
+**選手 / 監督 / チーム / 大会の名前が質問に含まれる場合、必ず該当ツールを呼んで取得**:
+  - 選手 (Bellingham / 三笘 / Neymar 等) → search_player
+  - 監督 (Arteta / Guardiola / Ancelotti 等) → search_manager
+  - クラブ (Arsenal / Real Madrid 等) → search_team
+  - リーグ・大会 (Premier League / Champions League 等) → search_tournament
+
+**禁止事項**:
+- 自分の学習データだけで数値 (試合数 / ゴール / 勝率 / 順位 等) を回答するのは**禁止**。 必ず tool を呼ぶ
+- 「だいたい〇〇試合」「約〇〇ゴール」のような曖昧な数値はハルシネーションの元
+- tool 取得失敗時のみ AI 学習データから推定し、 必ず「**(取得失敗のため推定値)**」と明示
+
+**判断基準**:
+- 数値・成績・順位・移籍履歴 → 100% tool 使用
+- 一般論・歴史・戦術解説 → tool 不要 (学習データから回答可)
+- 曖昧な質問は確認してから動く (例: 「アンチェロッティ」→ レアル時代？ナポリ時代？)
+
+【出力】日本語で簡潔。 数字は表 or 箇条書きで読みやすく。`;
 
 const TOOLS = [
   {
@@ -290,6 +301,23 @@ function getUI() {
 .chat-empty {
   color: #6b7280; font-size: 12px; text-align: center; padding: 40px 20px;
   line-height: 1.6;
+}
+
+/* スマホ対応: 600px 以下では全画面風に表示 */
+@media (max-width: 600px) {
+  .chat-fab {
+    bottom: 16px; right: 16px;
+    width: 52px; height: 52px; font-size: 24px;
+  }
+  .chat-panel {
+    bottom: 0; right: 0; left: 0; top: 0;
+    width: 100vw; height: 100vh;
+    border-radius: 0;
+  }
+  .chat-header { border-radius: 0; }
+  .chat-input-wrap { border-radius: 0; }
+  .chat-msg { max-width: 92%; font-size: 14px; }
+  .chat-input { font-size: 14px; }
 }
 </style>
 
