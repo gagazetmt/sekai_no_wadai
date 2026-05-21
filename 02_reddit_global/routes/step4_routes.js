@@ -2087,7 +2087,66 @@ function getUI() {
         + '</details>';
     }
 
-    const ALL_TYPES = ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ending'];
+    // ── 🆕 ranking 編集: items 配列 (rank / name / value / subtext) ──
+    if (m.type === 'ranking') {
+      const RANK_MAX = 5;
+      const itemsRk = Array.isArray(m.items) ? m.items : [];
+      const _addRk = itemsRk.length < RANK_MAX
+        ? '<button class="s4-rank-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + itemsRk.length + '/' + RANK_MAX + ')</button>'
+        : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + RANK_MAX + '/' + RANK_MAX + ')</div>';
+      extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">🏆 ranking items (順位カード)</div>'
+        + itemsRk.map(function(it, idx) {
+            const upDis = idx === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+            const dnDis = idx === itemsRk.length - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+            return '<div style="display:grid;grid-template-columns:42px 1fr 110px 1fr 24px 24px 28px;gap:4px;margin-bottom:4px;">'
+              + '<input class="inp s4-rank-num" data-idx="' + idx + '" type="number" value="' + (it.rank || idx + 1) + '" title="rank" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;text-align:center;">'
+              + '<input class="inp s4-rank-name" data-idx="' + idx + '" value="' + _esc(it.name || '') + '" placeholder="名前 (例: Arsenal)" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;">'
+              + '<input class="inp s4-rank-value" data-idx="' + idx + '" value="' + _esc(it.value || '') + '" placeholder="値 (例: 82 pt)" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;color:#fcd34d;font-weight:bold;">'
+              + '<input class="inp s4-rank-subtext" data-idx="' + idx + '" value="' + _esc(it.subtext || '') + '" placeholder="補足" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;">'
+              + '<button class="s4-rank-up" data-idx="' + idx + '" title="上へ"' + upDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;align-self:center;">↑</button>'
+              + '<button class="s4-rank-down" data-idx="' + idx + '" title="下へ"' + dnDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;align-self:center;">↓</button>'
+              + '<button class="s4-rank-del" data-idx="' + idx + '" title="削除" style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:13px;padding:0 6px;line-height:24px;height:24px;align-self:center;">×</button>'
+              + '</div>';
+          }).join('')
+        + _addRk;
+    }
+
+    // ── 🆕 timeline 編集: series 配列 (name / color / points[]) ──
+    if (m.type === 'timeline') {
+      const SER_MAX = 4;
+      const seriesT = Array.isArray(m.series) ? m.series : [];
+      const _addSer = seriesT.length < SER_MAX
+        ? '<button class="s4-time-ser-add" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 系列追加 (' + seriesT.length + '/' + SER_MAX + ')</button>'
+        : '<div style="font-size:10px;color:#666;margin-top:6px;">系列上限 (' + SER_MAX + '/' + SER_MAX + ')</div>';
+      extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📈 timeline series (折れ線データ)</div>'
+        + seriesT.map(function(sr, sIdx) {
+            const pts = Array.isArray(sr.points) ? sr.points : [];
+            const ptsHtml = pts.map(function(p, pIdx) {
+              const upDis = pIdx === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+              const dnDis = pIdx === pts.length - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
+              return '<div style="display:grid;grid-template-columns:1fr 100px 24px 24px 28px;gap:4px;margin-bottom:3px;">'
+                + '<input class="inp s4-time-x" data-sidx="' + sIdx + '" data-pidx="' + pIdx + '" value="' + _esc(p.x || '') + '" placeholder="x (例: 22/23)" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;">'
+                + '<input class="inp s4-time-y" data-sidx="' + sIdx + '" data-pidx="' + pIdx + '" type="number" step="any" value="' + (p.y != null ? p.y : 0) + '" placeholder="y" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;text-align:right;color:#fcd34d;">'
+                + '<button class="s4-time-pt-up" data-sidx="' + sIdx + '" data-pidx="' + pIdx + '" title="上へ"' + upDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;align-self:center;">↑</button>'
+                + '<button class="s4-time-pt-down" data-sidx="' + sIdx + '" data-pidx="' + pIdx + '" title="下へ"' + dnDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;align-self:center;">↓</button>'
+                + '<button class="s4-time-pt-del" data-sidx="' + sIdx + '" data-pidx="' + pIdx + '" title="削除" style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:13px;padding:0 6px;line-height:24px;height:24px;align-self:center;">×</button>'
+                + '</div>';
+            }).join('');
+            return '<div style="border:1px solid #2a3050;border-radius:6px;padding:10px;margin-bottom:8px;background:#0d1220;">'
+              + '<div style="display:grid;grid-template-columns:1fr 120px 80px;gap:6px;margin-bottom:8px;align-items:center;">'
+              +   '<input class="inp s4-time-name" data-sidx="' + sIdx + '" value="' + _esc(sr.name || '') + '" placeholder="シリーズ名 (例: Arsenal 勝点)" oninput="s4OnInput()" style="font-size:12px;padding:5px 8px;font-weight:bold;">'
+              +   '<input class="inp s4-time-color" data-sidx="' + sIdx + '" value="' + _esc(sr.color || '#fcd34d') + '" placeholder="#fcd34d" oninput="s4OnInput()" style="font-size:11px;padding:4px 6px;text-align:center;">'
+              +   '<button class="s4-time-ser-del" data-sidx="' + sIdx + '" title="この系列削除" style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:11px;padding:5px;">系列削除</button>'
+              + '</div>'
+              + '<div style="font-size:10px;color:#8a9aba;margin-bottom:4px;">📌 points (x: ラベル / y: 数値)</div>'
+              + ptsHtml
+              + '<button class="s4-time-pt-add" data-sidx="' + sIdx + '" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:3px;cursor:pointer;font-size:11px;padding:4px 10px;margin-top:4px;">＋ point 追加</button>'
+              + '</div>';
+          }).join('')
+        + _addSer;
+    }
+
+    const ALL_TYPES = ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ranking','timeline','ending'];
     const typeOpts = ALL_TYPES.map(function(t) {
       return '<option value="' + t + '"' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     }).join('');
@@ -2384,6 +2443,91 @@ function getUI() {
     _bindSwap('.s4-phrase-down', () => m.catchphrases, +1);
     _bindSwap('.s4-cmt-up',   () => m.comments, -1);
     _bindSwap('.s4-cmt-down', () => m.comments, +1);
+
+    /* 🆕 ranking items ハンドラ */
+    _bindSwap('.s4-rank-up',   () => m.items, -1);
+    _bindSwap('.s4-rank-down', () => m.items, +1);
+    el.querySelectorAll('.s4-rank-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _collectInputs();
+        const idx = parseInt(btn.getAttribute('data-idx'), 10);
+        if (Array.isArray(m.items) && idx >= 0 && idx < m.items.length) {
+          m.items.splice(idx, 1);
+          _renderEditor(); _saveAndReload();
+        }
+      });
+    });
+    el.querySelectorAll('.s4-rank-add').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _collectInputs();
+        if (!Array.isArray(m.items)) m.items = [];
+        m.items.push({ rank: m.items.length + 1, name: '', value: '', subtext: '' });
+        _renderEditor(); _saveAndReload();
+      });
+    });
+
+    /* 🆕 timeline series + points ハンドラ */
+    el.querySelectorAll('.s4-time-ser-add').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _collectInputs();
+        if (!Array.isArray(m.series)) m.series = [];
+        m.series.push({ name: '新シリーズ', color: '#fcd34d', points: [{ x: '', y: 0 }] });
+        _renderEditor(); _saveAndReload();
+      });
+    });
+    el.querySelectorAll('.s4-time-ser-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _collectInputs();
+        const sIdx = parseInt(btn.getAttribute('data-sidx'), 10);
+        if (Array.isArray(m.series) && sIdx >= 0 && sIdx < m.series.length) {
+          m.series.splice(sIdx, 1);
+          _renderEditor(); _saveAndReload();
+        }
+      });
+    });
+    el.querySelectorAll('.s4-time-pt-add').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _collectInputs();
+        const sIdx = parseInt(btn.getAttribute('data-sidx'), 10);
+        const ser = m.series && m.series[sIdx];
+        if (ser) {
+          if (!Array.isArray(ser.points)) ser.points = [];
+          ser.points.push({ x: '', y: 0 });
+          _renderEditor(); _saveAndReload();
+        }
+      });
+    });
+    el.querySelectorAll('.s4-time-pt-del').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        _collectInputs();
+        const sIdx = parseInt(btn.getAttribute('data-sidx'), 10);
+        const pIdx = parseInt(btn.getAttribute('data-pidx'), 10);
+        const ser = m.series && m.series[sIdx];
+        if (ser && Array.isArray(ser.points) && pIdx >= 0 && pIdx < ser.points.length) {
+          ser.points.splice(pIdx, 1);
+          _renderEditor(); _saveAndReload();
+        }
+      });
+    });
+    /* points は sidx/pidx 2 軸なので _bindSwap 使えない、自前 */
+    function _bindPointSwap(selector, dir) {
+      el.querySelectorAll(selector).forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          if (btn.disabled) return;
+          _collectInputs();
+          const sIdx = parseInt(btn.getAttribute('data-sidx'), 10);
+          const pIdx = parseInt(btn.getAttribute('data-pidx'), 10);
+          const ser = m.series && m.series[sIdx];
+          if (!ser || !Array.isArray(ser.points)) return;
+          const j = pIdx + dir;
+          if (pIdx < 0 || j < 0 || pIdx >= ser.points.length || j >= ser.points.length) return;
+          const tmp = ser.points[pIdx]; ser.points[pIdx] = ser.points[j]; ser.points[j] = tmp;
+          _renderEditor(); _saveAndReload();
+        });
+      });
+    }
+    _bindPointSwap('.s4-time-pt-up',   -1);
+    _bindPointSwap('.s4-time-pt-down', +1);
     /* 🔍 画像調整スライダー bind（単一画像スライド）*/
     const _zoomEl = el.querySelector('.s4-img-zoom');
     if (_zoomEl) _zoomEl.addEventListener('input', function(e) { s4OnImageAdjust('zoom', e.target.value); });
@@ -2877,6 +3021,49 @@ function getUI() {
         text:  ts[idx]?.value || c.text || '',
         score: Number(ss[idx]?.value) || 0,
       }));
+    }
+    /* 🆕 ranking: items 配列 集約 */
+    if (m.type === 'ranking') {
+      const nums = document.querySelectorAll('.s4-rank-num');
+      const names = document.querySelectorAll('.s4-rank-name');
+      const vals = document.querySelectorAll('.s4-rank-value');
+      const subs = document.querySelectorAll('.s4-rank-subtext');
+      const total = Math.max(nums.length, names.length);
+      m.items = [];
+      for (let idx = 0; idx < total; idx++) {
+        const name = names[idx]?.value || '';
+        if (!name.trim()) continue;
+        m.items.push({
+          rank: parseInt(nums[idx]?.value, 10) || (idx + 1),
+          name,
+          value: vals[idx]?.value || '',
+          subtext: subs[idx]?.value || '',
+        });
+      }
+    }
+    /* 🆕 timeline: series 配列 + 各 series.points 配列 集約 */
+    if (m.type === 'timeline') {
+      const serNames = document.querySelectorAll('.s4-time-name');
+      const serColors = document.querySelectorAll('.s4-time-color');
+      m.series = [];
+      for (let sIdx = 0; sIdx < serNames.length; sIdx++) {
+        const name = serNames[sIdx]?.value || '';
+        if (!name.trim()) continue;
+        const xs = document.querySelectorAll('.s4-time-x[data-sidx="' + sIdx + '"]');
+        const ys = document.querySelectorAll('.s4-time-y[data-sidx="' + sIdx + '"]');
+        const points = [];
+        for (let pIdx = 0; pIdx < xs.length; pIdx++) {
+          const x = xs[pIdx]?.value || '';
+          const yRaw = ys[pIdx]?.value;
+          if (!x.trim()) continue;
+          points.push({ x, y: yRaw !== '' && yRaw != null ? Number(yRaw) : 0 });
+        }
+        m.series.push({
+          name,
+          color: serColors[sIdx]?.value || '#fcd34d',
+          points,
+        });
+      }
     }
     /* 🪄 おまかせ AI パネルの編集内容（タブ切替で消えないよう state へ書き戻す / 2026-05-17 #5 修正）*/
     const fp = document.querySelector('.s4-fill-prompt[data-idx="' + i + '"]');
