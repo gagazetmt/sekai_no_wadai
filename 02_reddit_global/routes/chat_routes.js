@@ -12,10 +12,44 @@ const express = require('express');
 const router  = express.Router();
 const OpenAI  = require('openai');
 
+const fs   = require('fs');
+const path = require('path');
+
 const { fetchSofaScorePlayer }    = require('../scripts/modules/fetchers/sofascore_player');
 const { searchTransfermarktManager, fetchTransfermarktManager } = require('../scripts/modules/fetchers/transfermarkt_manager');
 const { fetchSofaScoreTeam }      = require('../scripts/modules/fetchers/sofascore_team');
 const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
+
+// 🆕 現案件の si_data からキャッシュ参照 (fetcher 呼び出し前のヒット判定)
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const SI_DIR   = path.join(DATA_DIR, 'si_data');
+function _safeId(s) { return String(s || '').replace(/[\/\?%*:|"<>\.]/g, '_'); }
+function _loadSi(postId) {
+  if (!postId) return null;
+  const file = path.join(SI_DIR, _safeId(postId) + '.json');
+  try {
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch { return null; }
+}
+const _TOOL_TO_ROLE = {
+  search_player:     'player',
+  search_manager:    'manager',
+  search_team:       'team',
+  search_tournament: 'tournament',
+};
+function _findEntityInSi(si, name, toolName) {
+  if (!si?.boxes?.entity?.items || !name) return null;
+  const target = String(name).toLowerCase().trim();
+  const expectedRole = _TOOL_TO_ROLE[toolName];
+  return si.boxes.entity.items.find(it => {
+    const lbl = String(it.label || '').toLowerCase().trim();
+    const nameMatch = lbl === target || lbl.includes(target) || target.includes(lbl);
+    if (!nameMatch) return false;
+    if (!expectedRole) return true;
+    return it.role === expectedRole;
+  }) || null;
+}
 
 let _deepseek = null;
 function getDeepseek() {
@@ -110,9 +144,27 @@ const TOOLS = [
 ];
 
 // ─── tool 実行 ────────────────────────────────────────────────
-async function executeTool(name, args) {
+//   🆕 currentPostId が渡された時は、 先に si_data からキャッシュ確認 →
+//      ヒットすればそれを返却 (fetcher / Webshare 帯域消費スキップ)
+async function executeTool(name, args, currentPostId) {
   const q = String(args?.name || '').trim();
   if (!q) return { error: 'name は必須' };
+
+  // 🆕 cache check (現案件 si_data)
+  if (currentPostId) {
+    const si = _loadSi(currentPostId);
+    const cached = _findEntityInSi(si, q, name);
+    if (cached) {
+      console.log(`[chat] cache HIT ${name}(${q}) ← si_data/${currentPostId}`);
+      // si_data の entity object をそのまま返す + 出典タグ
+      return {
+        _source: 'cache (現案件 si_data から / fetcher 不使用)',
+        ...cached,
+      };
+    }
+    console.log(`[chat] cache MISS ${name}(${q}) → fetcher へ`);
+  }
+
   switch (name) {
     case 'search_player':
       return await fetchSofaScorePlayer(q);
@@ -147,7 +199,7 @@ const MAX_ITER = 5;
 router.post('/chat/ask', async (req, res) => {
   const t0 = Date.now();
   try {
-    const { messages: userMessages } = req.body;
+    const { messages: userMessages, currentPostId } = req.body;
     if (!Array.isArray(userMessages) || userMessages.length === 0) {
       return res.status(400).json({ error: 'messages 配列が必須' });
     }
@@ -192,7 +244,7 @@ router.post('/chat/ask', async (req, res) => {
         toolCallsLog.push({ tool, args });
         let result;
         try {
-          result = await executeTool(tool, args);
+          result = await executeTool(tool, args, currentPostId);
         } catch (e) {
           console.warn(`[chat] tool error: ${e.message}`);
           result = { error: e.message };
@@ -390,10 +442,12 @@ function getUI() {
     render(true);
 
     try {
+      // 🆕 現在開いてる案件の postId を渡す (chat 側で si_data 参照キャッシュに使う)
+      const _curPostId = (window.APP && window.APP.selected && window.APP.selected.id) || null;
       const res = await fetch('/api/chat/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history.slice(-20) }),  // 直近20ターンのみ送信
+        body: JSON.stringify({ messages: history.slice(-20), currentPostId: _curPostId }),  // 直近20ターン + 案件 ID
       });
       const data = await res.json();
       if (data.error) {
