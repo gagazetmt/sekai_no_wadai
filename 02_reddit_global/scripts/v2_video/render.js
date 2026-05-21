@@ -802,10 +802,14 @@ async function main() {
         const atempo = Math.max(0.5, Math.min(2.0, targetCps / rawCps));
         const tmpPath = mp3Path + '.normalize.mp3';
         try {
+          // 🆕 2026-05-22: silenceremove で TTS 先頭無音 (典型 0.3-0.7s breath) を削除
+          //   旧: Whisper が無音を skip して word.start=0 と判定 → 字幕表示が実発話より早い
+          //   新: 先頭無音削除済 mp3 を ASR にかけて word.start=0 = 真の発話開始
+          //   結果: 字幕表示 (LEAD_PAD_SEC + 0) = 実発話開始時刻と一致 (ズレ解消)
           await _ffmpegRun([
             '-y', '-hide_banner', '-loglevel', 'error',
             '-i', mp3Path,
-            '-af', `loudnorm=I=-16:TP=-1.5:LRA=11,atempo=${atempo.toFixed(3)}`,
+            '-af', `silenceremove=start_periods=1:start_silence=0.05:start_threshold=-40dB,loudnorm=I=-16:TP=-1.5:LRA=11,atempo=${atempo.toFixed(3)}`,
             '-codec:a', 'libmp3lame', '-b:a', '128k',
             tmpPath,
           ]);
