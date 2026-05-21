@@ -698,7 +698,8 @@ async function main() {
       proc.on('error', reject);
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(-200)}`)));
     });
-    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '8.1');
+    // 2026-05-22: 8.1 → 7.7 (相棒指示、 全体的に少し落ち着いた速度に)
+    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '7.7');
     console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS, cps計算=ひらがな化ベース)...`);
     const normT0 = Date.now();
     let normalized = 0;
@@ -716,18 +717,48 @@ async function main() {
       const { applyJpDict } = require('./jp_dict');
       const k = new Kuroshiro();
       await k.init(new KuromojiAnalyzer());
+      // 🆕 2026-05-22: 数字 → 漢数字 → kuroshiro で厳密な音節数算出
+      //   例: "82" → "八十二" → kuroshiro → "はちじゅうに" (6 音節)
+      //       "2026" → "二千二十六" → "にせんにじゅうろく" (9 音節)
+      //   旧の `'_' × (桁数×2+1)` 近似より正確 (1桁, 4桁 で誤差大きかった)
+      function _segToKanji(n) {
+        if (n === 0) return '';
+        const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+        const units4 = ['', '十', '百', '千'];
+        const str = String(n); const len = str.length;
+        let s = '';
+        for (let i = 0; i < len; i++) {
+          const d = parseInt(str[i], 10);
+          const unitIdx = len - 1 - i;
+          if (d === 0) continue;
+          // 1 の位以外で 1 は省略 (10→十、 100→百、 1000→千)
+          if (d === 1 && unitIdx > 0) s += units4[unitIdx];
+          else                        s += digits[d] + units4[unitIdx];
+        }
+        return s;
+      }
+      function _numToKanji(n) {
+        if (!Number.isFinite(n) || n < 0) return String(n);
+        if (n === 0) return '〇';
+        if (n >= 100000000) return String(n); // 億以上は fallback
+        let result = '';
+        const oku = 0; // 億は未対応
+        const man = Math.floor(n / 10000);
+        const rest = n % 10000;
+        if (man > 0)  result += _segToKanji(man) + '万';
+        if (rest > 0) result += _segToKanji(rest);
+        return result || String(n);
+      }
+
       _kuroNorm = {
         async toHira(text) {
           const dictApplied = applyJpDict(text);
-          const hira = await k.convert(dictApplied, { to: 'hiragana' });
-          // カタカナ→ひらがな、 数字を音節数近似で膨らます、 句読点・空白除去で純粋音節数
-          // 2026-05-22 (相棒指摘): 数字は kuroshiro で変換されず残るため、 cps 計算で過小評価 → 早口化
-          //   例: "82" → "はちじゅうに" (6 音節) なのに「2 字」でカウントされてた
-          //   桁数 × 2 + 1 で音節数近似 (1桁=3, 2桁=5, 3桁=7, 4桁=9 音節)
-          //   "82" → 5 字相当、 "2026" → 9 字相当、 実際の音節数に近づく
+          // 数字を漢数字に置換してから kuroshiro 通す → 厳密な音節数
+          const numConverted = dictApplied.replace(/\d+/g, (m) => _numToKanji(parseInt(m, 10)));
+          const hira = await k.convert(numConverted, { to: 'hiragana' });
+          // カタカナ→ひらがな、 句読点・空白除去で純粋音節数
           return hira
             .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
-            .replace(/(\d+)/g, (m) => '_'.repeat(m.length * 2 + 1))
             .replace(/[\s　、。「」『』（）()！!？?・…―\-—:：;；,\.]/g, '');
         }
       };
