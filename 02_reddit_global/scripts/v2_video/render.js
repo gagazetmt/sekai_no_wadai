@@ -700,8 +700,8 @@ async function main() {
       proc.on('error', reject);
       proc.on('close', code => code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}: ${stderr.slice(-200)}`)));
     });
-    // 2026-05-22: 8.1 → 7.7 (相棒指示、 全体的に少し落ち着いた速度に)
-    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '7.7');
+    // 2026-05-22: 8.1 → 7.7 → 7.8 (相棒指示で微調整)
+    const targetCps = parseFloat(process.env.TTS_TARGET_CPS || '7.8');
     console.log(`🎚️ per-slide normalize (target_cps=${targetCps}, target_loudness=-16 LUFS, cps計算=ひらがな化ベース)...`);
     const normT0 = Date.now();
     let normalized = 0;
