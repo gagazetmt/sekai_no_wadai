@@ -106,6 +106,9 @@ async function upload({ videoPath, thumbPath, title, description, tags, privacyS
         status: {
           privacyStatus,
           selfDeclaredMadeForKids: false,
+          // 改変・合成コンテンツ宣言: サムネで実在人物の AI 生成画像 (Imagen 4) を使用しているため true
+          //   YouTube ポリシー (2024-03 導入): 実在人物の顔/声を AI で生成・改変する場合は申告必須
+          containsSyntheticMedia: true,
         },
       },
       media: { body: fs.createReadStream(videoPath) },
