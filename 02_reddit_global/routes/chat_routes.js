@@ -274,7 +274,7 @@ function getUI() {
 <!-- ═══ チャット窓 (リサーチミア) ═══ -->
 <style>
 .chat-fab {
-  position: fixed; bottom: 24px; right: 24px; z-index: 9998;
+  position: fixed; bottom: 10px; right: 10px; z-index: 9998;
   width: 60px; height: 60px; border-radius: 50%;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   color: #fff; font-size: 28px; cursor: pointer;
@@ -284,8 +284,13 @@ function getUI() {
 }
 .chat-fab:hover { transform: scale(1.08); }
 .chat-panel {
-  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  /* right: 10px + max-width: calc(100vw - 20px) で左右どちらにも 10px の余白を確保
+     (right が大きいと、 max-width クランプ時に左へはみ出るので 10px に揃える) */
+  position: fixed; bottom: 10px; right: 10px; z-index: 9999;
   width: 400px; height: 560px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - 20px);
+  max-height: calc(100dvh - 20px);  /* iOS Safari URL バー対応 (100vh は URL バー込みで枠外になる) */
   background: #1f2937; border: 1px solid #374151; border-radius: 12px;
   display: none; flex-direction: column;
   box-shadow: 0 12px 32px rgba(0,0,0,0.4);
@@ -312,7 +317,9 @@ function getUI() {
 }
 .chat-msg {
   padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5;
-  max-width: 85%; word-wrap: break-word; white-space: pre-wrap;
+  max-width: 85%; word-wrap: break-word; word-break: break-word;
+  overflow-wrap: anywhere;  /* 長い URL や英単語が枠外に出るのを防止 */
+  white-space: pre-wrap;
 }
 .chat-msg-user {
   background: #6366f1; color: #fff; align-self: flex-end;
@@ -355,15 +362,20 @@ function getUI() {
   line-height: 1.6;
 }
 
-/* スマホ対応: 600px 以下では全画面風に表示 */
-@media (max-width: 600px) {
+/* スマホ対応: 768px 以下では全画面風に表示 (シェルの mobile breakpoint と揃える) */
+@media (max-width: 768px) {
   .chat-fab {
-    bottom: 16px; right: 16px;
+    bottom: 10px; right: 10px;
     width: 52px; height: 52px; font-size: 24px;
   }
   .chat-panel {
     bottom: 0; right: 0; left: 0; top: 0;
-    width: 100vw; height: 100vh;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;  /* iOS Safari: URL バー領域で枠外にならないように動的 vh を使う */
+    max-width: 100vw;
+    max-height: 100vh;
+    max-height: 100dvh;
     border-radius: 0;
   }
   .chat-header { border-radius: 0; }
