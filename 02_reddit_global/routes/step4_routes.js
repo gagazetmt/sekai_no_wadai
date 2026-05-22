@@ -1889,12 +1889,30 @@ function getUI() {
       el.innerHTML = '<div style="font-size:11px;color:#5a6a8a;padding:8px;">Step3で脚本を生成してください</div>';
       return;
     }
-    el.innerHTML = mods.map(function(m, i) {
+    const tabsHtml = mods.map(function(m, i) {
       const act = i === window.APP.s4.activeTab;
+      const isFixed = m.type === 'opening' || m.type === 'ending';
+      /* opening / ending 自身は動かさない。 また隣が opening/ending の方向にも入れ替え禁止 */
+      const canLeft  = !isFixed && i > 0                 && mods[i-1].type !== 'opening';
+      const canRight = !isFixed && i < mods.length - 1   && mods[i+1].type !== 'ending';
+      const arrow = function(dir, ok) {
+        return '<button onclick="event.stopPropagation();s4MoveSlide(' + i + ',' + dir + ')" '
+          + 'title="' + (dir < 0 ? '左へ' : '右へ') + '入れ替え" '
+          + (ok ? '' : 'disabled ')
+          + 'style="flex:1;background:#1a2540;border:1px solid #2a3560;color:#7dc8ff;'
+          + 'cursor:' + (ok ? 'pointer' : 'not-allowed') + ';font-size:10px;line-height:1;'
+          + 'padding:2px 0;border-radius:3px;'
+          + (ok ? '' : 'opacity:.25;')
+          + '">' + (dir < 0 ? '◀' : '▶') + '</button>';
+      };
       return '<div class="s3-tab' + (act ? ' s3-tab-active' : '') + '"'
-        + ' onclick="s4Switch(' + i + ')" style="position:relative;padding-right:14px;">'
-        + '<span style="font-size:9px;opacity:.8">' + (i+1) + '/' + mods.length + '</span><br>'
-        + '<span style="font-size:10px;">' + _esc((m.title || '').slice(0,10)) + '</span>'
+        + ' onclick="s4Switch(' + i + ')" style="position:relative;padding:3px 18px 3px 6px;">'
+        + '<div style="font-size:9px;opacity:.8">' + (i+1) + '/' + mods.length + '</div>'
+        + '<div style="font-size:10px;">' + _esc((m.title || '').slice(0,10)) + '</div>'
+        + (isFixed
+            ? '<div style="font-size:8px;color:#7a8aaa;text-align:center;margin-top:2px;">[' + m.type + ']</div>'
+            : '<div style="display:flex;gap:2px;margin-top:2px;">' + arrow(-1, canLeft) + arrow(1, canRight) + '</div>'
+          )
         + '<button onclick="event.stopPropagation();s4DeleteSlide(' + i + ')" '
         + 'title="このスライドを削除（modules.json から永久削除）" '
         + 'style="position:absolute;top:1px;right:2px;background:transparent;'
@@ -1903,7 +1921,70 @@ function getUI() {
         + 'onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.55">✕</button>'
         + '</div>';
     }).join('');
+    /* 末尾に「＋ 追加」タブ */
+    const addBtn = '<div class="s3-tab" onclick="s4AddSlide()" '
+      + 'title="新規スライドを追加 (insight でひな型生成 → エディタで type 変更可)" '
+      + 'style="cursor:pointer;background:#0d2818;border-color:#1a5a2a;color:#6bff8b;'
+      + 'font-weight:bold;display:flex;align-items:center;justify-content:center;'
+      + 'min-width:70px;padding:6px;">'
+      + '＋ 追加</div>';
+    el.innerHTML = tabsHtml + addBtn;
   }
+
+  /* ── スライド追加（insight デフォルト・ending の手前 / 無ければ末尾）── */
+  window.s4AddSlide = async function() {
+    if (typeof _collectInputs === 'function') {
+      try { _collectInputs(); } catch (_) {}
+    }
+    const mods = window.APP.s4.modules || [];
+    const newSlide = {
+      type:         'insight',
+      mainKey:      '',
+      title:        '新規スライド',
+      scriptDir:    '',
+      narration:    '',
+      catchphrases: [],
+      dataSlots:    [],
+    };
+    /* ending があれば直前に、無ければ末尾に挿入 */
+    const endIdx = mods.findIndex(function(m) { return m.type === 'ending'; });
+    let insertAt;
+    if (endIdx >= 0) {
+      mods.splice(endIdx, 0, newSlide);
+      insertAt = endIdx;
+    } else {
+      mods.push(newSlide);
+      insertAt = mods.length - 1;
+    }
+    window.APP.s4.activeTab = insertAt;
+    await _saveModulesQuiet();
+    _renderTabs();
+    _renderEditor();
+    _reloadPreview();
+    _msg('➕ スライド追加 (#' + (insertAt+1) + ' / type=insight → エディタで変更可)');
+  };
+
+  /* ── スライド入れ替え (左右隣と swap) ─────────────── */
+  window.s4MoveSlide = async function(idx, dir) {
+    if (typeof _collectInputs === 'function') {
+      try { _collectInputs(); } catch (_) {}
+    }
+    const mods = window.APP.s4.modules || [];
+    const j = idx + dir;
+    if (j < 0 || j >= mods.length) return;
+    /* opening / ending 自身および隣が opening/ending は禁止 */
+    if (mods[idx].type === 'opening' || mods[idx].type === 'ending') return;
+    if (mods[j].type === 'opening'   || mods[j].type === 'ending')   return;
+    const tmp = mods[idx]; mods[idx] = mods[j]; mods[j] = tmp;
+    /* activeTab 追従: 動いた方を引き続き選択 */
+    if (window.APP.s4.activeTab === idx) window.APP.s4.activeTab = j;
+    else if (window.APP.s4.activeTab === j) window.APP.s4.activeTab = idx;
+    await _saveModulesQuiet();
+    _renderTabs();
+    _renderEditor();
+    _reloadPreview();
+    _msg('↔ スライド ' + (idx+1) + ' ↔ ' + (j+1) + ' を入れ替え');
+  };
 
   /* ── スライド丸ごと削除 ───────────────────────── */
   window.s4DeleteSlide = async function(idx) {
