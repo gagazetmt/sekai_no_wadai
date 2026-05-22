@@ -315,9 +315,10 @@ ${_curatedBlock(si)}
 
     // バリデーション + 正規化
     //   custom 案件は reaction を除外（Reddit コメント源なし）
+    //   ranking / timeline / picture も提案対象 (プロンプト 211-222 行 で説明済)
     const validTypes = new Set(isCustom
-      ? ['opening','ending','insight','stats','profile','comparison','history','matchcard']
-      : ['opening','ending','insight','stats','profile','comparison','history','reaction','matchcard']);
+      ? ['opening','ending','insight','stats','profile','comparison','history','matchcard','ranking','timeline','picture']
+      : ['opening','ending','insight','stats','profile','comparison','history','reaction','matchcard','ranking','timeline','picture']);
     const cleaned = parsed.modules
       .filter(m => m && validTypes.has(m.type))
       .map(m => ({
