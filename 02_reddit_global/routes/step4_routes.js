@@ -1208,20 +1208,18 @@ router.get('/v2/ai-fill-slide-status', (req, res) => {
   res.json(j);
 });
 
-// ─── /v2/regen-narration : 1カードのナレーション再生成 ─
-router.post('/v2/regen-narration', async (req, res) => {
-  const { postId, idx } = req.body;
-  if (!postId || idx == null) return res.status(400).json({ error: 'postId + idx required' });
-  try {
-    const mp = modulesPath(postId);
-    if (!fs.existsSync(mp)) return res.status(404).json({ error: 'modules not found' });
-    const j = JSON.parse(fs.readFileSync(mp, 'utf8'));
-    const m = j.modules?.[parseInt(idx, 10)];
-    if (!m) return res.status(404).json({ error: 'idx out of range' });
+// ─── 内部: regen-narration の本体（ジョブから呼ぶ）──────────
+async function _runRegenNarration({ postId, idx }) {
+  if (!postId || idx == null) throw new Error('postId + idx required');
+  const mp = modulesPath(postId);
+  if (!fs.existsSync(mp)) throw new Error('modules not found');
+  const j = JSON.parse(fs.readFileSync(mp, 'utf8'));
+  const m = j.modules?.[parseInt(idx, 10)];
+  if (!m) throw new Error('idx out of range');
 
-    const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
-    const entityCtx = (si.boxes.entity?.items || []).slice(0, 6).map(e => `- ${e.label} [${e.role}]`).join('\n');
-    const prompt = `あなたはサッカーYouTubeの脚本家。1枚のスライドのナレーションだけを再生成してください。
+  const si = safeJson(siPath(postId), { boxes: { entity: { items: [] } } });
+  const entityCtx = (si.boxes.entity?.items || []).slice(0, 6).map(e => `- ${e.label} [${e.role}]`).join('\n');
+  const prompt = `あなたはサッカーYouTubeの脚本家。1枚のスライドのナレーションだけを再生成してください。
 
 【カード情報】
 type: ${m.type}
@@ -1241,19 +1239,43 @@ ${entityCtx}
 - データに無い固有名は出さない
 - JSONのみ: {"narration":"..."}`;
 
-    const raw = await callAI({
-      forceProvider: 'anthropic',
-      model: 'claude-sonnet-4-6', max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    const m1 = raw.match(/\{[\s\S]*\}/);
-    if (!m1) return res.status(500).json({ error: 'JSON parse failed' });
-    const parsed = JSON.parse(m1[0]);
-    if (!parsed.narration) return res.status(500).json({ error: 'narration empty' });
-    res.json({ ok: true, narration: parsed.narration });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  const raw = await callAI({
+    forceProvider: 'anthropic',
+    model: 'claude-sonnet-4-6', max_tokens: 1000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const m1 = raw.match(/\{[\s\S]*\}/);
+  if (!m1) throw new Error('JSON parse failed');
+  const parsed = JSON.parse(m1[0]);
+  if (!parsed.narration) throw new Error('narration empty');
+  return { ok: true, narration: parsed.narration };
+}
+
+// ─── /v2/regen-narration : 1カードのナレーション再生成（ジョブ化）─
+router.post('/v2/regen-narration', (req, res) => {
+  const { postId, idx } = req.body || {};
+  if (!postId || idx == null) return res.status(400).json({ error: 'postId + idx required' });
+  const { createJob, updateJob } = require('./_job_helper');
+  const jobId = createJob('rn', { postId, idx, kind: 'regen-narration' });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      updateJob(jobId, { status: 'running', step: 'ai-generation' });
+      const result = await _runRegenNarration(req.body);
+      updateJob(jobId, { status: 'done', result });
+    } catch (e) {
+      console.error(`[Step4/regen-narration:${jobId}]`, e.message);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
+});
+
+// ─── /v2/regen-narration-status : ジョブ進捗（フロントポーリング）─
+router.get('/v2/regen-narration-status', (req, res) => {
+  const { readJob } = require('./_job_helper');
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 // ─── /v2/generate-video : 動画生成ジョブ起動 ────────────
@@ -1392,28 +1414,50 @@ router.post('/v2/clear-audio', express.json(), (req, res) => {
   }
 });
 
-// ─── /v2/tts-preview : 試聴用 (保存しない、base64 mp3 を返す) ──
-//   body に provider を含めれば gemini/minimax を切替可能
-router.post('/v2/tts-preview', express.json({ limit: '512kb' }), async (req, res) => {
-  try {
-    const tts = require('../scripts/v2_video/tts_engine');
-    const { provider, text, voiceId, model, styleInstructions, emotion, speed, vol, pitch } = req.body || {};
-    if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
+// ─── 内部: tts-preview の本体（ジョブから呼ぶ）─────────────
+async function _runTtsPreview(body) {
+  const tts = require('../scripts/v2_video/tts_engine');
+  const { provider, text, voiceId, model, styleInstructions, emotion, speed, vol, pitch } = body || {};
+  if (!text || !String(text).trim()) throw new Error('text required');
 
-    const tmpFile = path.join(AUDIO_DIR, `_preview_${Date.now()}_${Math.random().toString(36).slice(2,6)}.mp3`);
-    await tts.generate({
-      provider,
-      text: String(text).slice(0, 800),  // 試聴は800字までに制限
-      outputPath: tmpFile,
-      voiceId, model, styleInstructions, emotion, speed, vol, pitch,
-    });
-    const buf = fs.readFileSync(tmpFile);
-    try { fs.unlinkSync(tmpFile); } catch (_) {}
-    res.json({ ok: true, mime: 'audio/mpeg', base64: buf.toString('base64') });
-  } catch (e) {
-    console.warn('[tts-preview]', e.message);
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const tmpFile = path.join(AUDIO_DIR, `_preview_${Date.now()}_${Math.random().toString(36).slice(2,6)}.mp3`);
+  await tts.generate({
+    provider,
+    text: String(text).slice(0, 800),  // 試聴は800字までに制限
+    outputPath: tmpFile,
+    voiceId, model, styleInstructions, emotion, speed, vol, pitch,
+  });
+  const buf = fs.readFileSync(tmpFile);
+  try { fs.unlinkSync(tmpFile); } catch (_) {}
+  return { ok: true, mime: 'audio/mpeg', base64: buf.toString('base64') };
+}
+
+// ─── /v2/tts-preview : 試聴用（ジョブ化 / クライアント切断耐性）──
+//   base64 mp3 をジョブ result に格納（数百KB程度）
+router.post('/v2/tts-preview', express.json({ limit: '512kb' }), (req, res) => {
+  const { text } = req.body || {};
+  if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
+  const { createJob, updateJob } = require('./_job_helper');
+  const jobId = createJob('tp', { kind: 'tts-preview', textLen: String(text).length });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      updateJob(jobId, { status: 'running', step: 'tts-generate' });
+      const result = await _runTtsPreview(req.body);
+      updateJob(jobId, { status: 'done', result });
+    } catch (e) {
+      console.warn(`[Step4/tts-preview:${jobId}]`, e.message);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
+});
+
+// ─── /v2/tts-preview-status : ジョブ進捗（フロントポーリング）───
+router.get('/v2/tts-preview-status', (req, res) => {
+  const { readJob } = require('./_job_helper');
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 // ─── /v2/tts-audio : 生成済 mp3 を直接返す (UI再生用) ──
@@ -3511,29 +3555,56 @@ function getUI() {
     _saveAndReload();
   };
 
-  /* ── ナレーション再生成 ── */
+  /* ── ナレーション再生成（ジョブ化・タブ閉じても継続）── */
   window.s4RegenNarr = async function() {
     _collectInputs();
     const post = window.APP.selected;
     const i = window.APP.s4.activeTab;
     if (!post?.id) return;
-    _msg('⏳ ナレーション再生成中...');
+    _msg('⏳ ナレーション再生成中...（タブ閉じても継続）');
     try {
       await _saveModulesQuiet();  // 先に保存（endpointはディスクから読む）
-      const j = await fetchJson('/api/v2/regen-narration', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, idx: i }),
+      const result = await window.runJob({
+        startUrl:  '/api/v2/regen-narration',
+        statusUrl: '/api/v2/regen-narration-status',
+        body: { postId: post.id, idx: i },
+        kind: 'regen-narration',
+        key:  's4_regen:' + post.id + ':' + i,
+        onProgress: (j) => { if (j.status === 'running') _msg('⏳ AI 生成中...'); },
       });
-      if (j.narration) {
-        window.APP.s4.modules[i].narration = j.narration;
-        _renderEditor();
-        _reloadPreview();
+      if (result && result.narration) {
+        if (window.APP.selected?.id === post.id && window.APP.s4.activeTab === i) {
+          window.APP.s4.modules[i].narration = result.narration;
+          _renderEditor();
+          _reloadPreview();
+        }
         _msg('✅ 再生成完了');
       } else {
         _msg('❌ 失敗');
       }
     } catch (e) { _msg('❌ ' + e.message); }
   };
+  /* ナレーション再生成の resumer 登録（リロード復帰時に自動 polling 続行）*/
+  if (window.registerJobResumer) {
+    window.registerJobResumer('regen-narration', async ({ key, meta }) => {
+      const postId = meta.body && meta.body.postId;
+      const i = meta.body && meta.body.idx;
+      if (postId == null || i == null) return;
+      try {
+        const result = await window.runJob({
+          startUrl: null, statusUrl: meta.statusUrl,
+          kind: 'regen-narration', key,
+        });
+        if (result && result.narration && window.APP.selected?.id === postId
+            && window.APP.s4 && window.APP.s4.activeTab === i
+            && window.APP.s4.modules && window.APP.s4.modules[i]) {
+          window.APP.s4.modules[i].narration = result.narration;
+          /* 描画関数はクロージャ内なので window.* に依存しない呼び出しは難しい
+             → モジュール再描画は次回操作で行われるので、ここでは触らない（データ更新のみ） */
+        }
+      } catch (e) { console.warn('[resumer regen]', e.message); }
+    });
+  }
 
   /* ── 🎙️ TTS: provider 切替 (voice/model リストを再取得 → UI 再描画) ── */
   window.s4TtsProviderChange = async function(provider) {
@@ -3598,7 +3669,7 @@ function getUI() {
     if (ta) ta.value = presets.styleInstructions || '';
   };
 
-  /* ── 🎙️ TTS: 試聴 (現ナレ全文を1回投げて即再生・保存しない) ── */
+  /* ── 🎙️ TTS: 試聴 (現ナレ全文を1回投げて即再生・保存しない / ジョブ化) ── */
   window.s4TtsPreview = async function() {
     _collectInputs();
     const i = window.APP.s4.activeTab;
@@ -3609,9 +3680,10 @@ function getUI() {
     if (!text) { if (status) status.textContent = '❌ ナレーション空'; return; }
     if (status) status.textContent = '⏳ 試聴生成中...';
     try {
-      const j = await fetchJson('/api/v2/tts-preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await window.runJob({
+        startUrl:  '/api/v2/tts-preview',
+        statusUrl: '/api/v2/tts-preview-status',
+        body: {
           provider: m.tts?.provider,
           text: text.slice(0, 800),
           voiceId: m.tts?.voiceId,
@@ -3619,10 +3691,13 @@ function getUI() {
           styleInstructions: m.tts?.styleInstructions || undefined,
           speed:   m.tts?.speed,
           emotion: m.tts?.emotion || undefined,
-        }),
+        },
+        kind: 'tts-preview',
+        /* 試聴は使い捨てなので key を毎回ユニーク化（resume 不要）*/
+        key:  'tts-preview:' + Date.now() + ':' + Math.random().toString(36).slice(2,6),
       });
-      if (!j.ok) throw new Error(j.error || '失敗');
-      const audio = new Audio('data:' + j.mime + ';base64,' + j.base64);
+      if (!result || !result.ok) throw new Error('失敗');
+      const audio = new Audio('data:' + result.mime + ';base64,' + result.base64);
       audio.play();
       if (status) status.textContent = '▶ 再生中';
     } catch (e) { if (status) status.textContent = '❌ ' + e.message; }

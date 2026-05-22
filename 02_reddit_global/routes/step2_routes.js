@@ -25,7 +25,8 @@ const { fetchImagesForLabel }      = require('./step35_routes');
 const { createJob, readJob, updateJob } = require('./_job_helper');
 
 const router = express.Router();
-const SI_DIR = path.join(__dirname, '..', 'data', 'si_data');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const SI_DIR = path.join(DATA_DIR, 'si_data');
 if (!fs.existsSync(SI_DIR)) fs.mkdirSync(SI_DIR, { recursive: true });
 
 // ─── ユーティリティ ───────────────────────────────────────
@@ -420,75 +421,97 @@ async function _fetchMatch(label) {
   return await fetchSofaScoreMatch(parts[0], parts[1]);
 }
 
-// ─── /v3/fetch-label : 1件取得 ───────────────────────────
-router.post('/v3/fetch-label', async (req, res) => {
-  const { postId, box, label, role } = req.body;
-  if (!postId || !box || !label) return res.status(400).json({ error: 'postId + box + label required' });
+// ─── 内部: 1ラベル取得の本体（ジョブからも同期APIからも呼べる）───
+async function _runFetchLabel({ postId, box, label, role }) {
+  if (!postId || !box || !label) throw new Error('postId + box + label required');
 
   let si = safeJson(siPath(postId), null);
   if (!si || si.version !== 'v3') si = emptySiData(postId);
 
   const now = new Date().toISOString();
-  try {
-    if (box === 'entity') {
-      if (!role) return res.status(400).json({ error: 'role required for entity' });
-      const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational } = await _fetchEntity(label, role);
-      const items = si.boxes.entity.items;
-      const i = items.findIndex(x => x.label === label);
-      const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational, fetchedAt: now };
-      if (i >= 0) items[i] = next; else items.push(next);
-    }
-    else if (box === 'match') {
-      const data = await _fetchMatch(label);
-      const items = si.boxes.match.items;
-      const i = items.findIndex(x => x.label === label);
-      const next = { label, data, fetchedAt: now };
-      if (i >= 0) items[i] = next; else items.push(next);
-    }
-    else if (box === 'search') {
-      const data = await fetchSerper(label).catch(e => ({ ok: false, error: e.message }));
-      const items = si.boxes.search.items;
-      const i = items.findIndex(x => x.label === label);
-      const next = { label, data, fetchedAt: now };
-      if (i >= 0) items[i] = next; else items.push(next);
-    }
-    else {
-      return res.status(400).json({ error: '不明な box: ' + box });
-    }
-
-    fs.writeFileSync(siPath(postId), JSON.stringify(si, null, 2));
-
-    // 🆕 画像取得を fire-and-forget でバックグラウンド発火（response は待たない）
-    if (box === 'entity' || box === 'match') {
-      const imgLabel = box === 'entity' ? `entity:${label}` : `match:${label}`;
-      setImmediate(() => {
-        fetchImagesForLabel(postId, imgLabel).catch(e =>
-          console.warn(`[fetch-label/img:${imgLabel}]`, e.message)
-        );
-      });
-    }
-
-    res.json({ ok: true });
-  } catch (e) {
-    console.error(`[Step2 v3] fetch-label "${box}/${label}" エラー:`, e.message);
-    res.status(500).json({ error: e.message });
+  if (box === 'entity') {
+    if (!role) throw new Error('role required for entity');
+    const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational } = await _fetchEntity(label, role);
+    const items = si.boxes.entity.items;
+    const i = items.findIndex(x => x.label === label);
+    const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational, fetchedAt: now };
+    if (i >= 0) items[i] = next; else items.push(next);
+  } else if (box === 'match') {
+    const data = await _fetchMatch(label);
+    const items = si.boxes.match.items;
+    const i = items.findIndex(x => x.label === label);
+    const next = { label, data, fetchedAt: now };
+    if (i >= 0) items[i] = next; else items.push(next);
+  } else if (box === 'search') {
+    const data = await fetchSerper(label).catch(e => ({ ok: false, error: e.message }));
+    const items = si.boxes.search.items;
+    const i = items.findIndex(x => x.label === label);
+    const next = { label, data, fetchedAt: now };
+    if (i >= 0) items[i] = next; else items.push(next);
+  } else {
+    throw new Error('不明な box: ' + box);
   }
+
+  fs.writeFileSync(siPath(postId), JSON.stringify(si, null, 2));
+
+  // 🆕 画像取得を fire-and-forget でバックグラウンド発火
+  if (box === 'entity' || box === 'match') {
+    const imgLabel = box === 'entity' ? `entity:${label}` : `match:${label}`;
+    setImmediate(() => {
+      fetchImagesForLabel(postId, imgLabel).catch(e =>
+        console.warn(`[fetch-label/img:${imgLabel}]`, e.message)
+      );
+    });
+  }
+  return { ok: true };
+}
+
+// ─── /v3/fetch-label : 1件取得（ジョブ化 / クライアント切断耐性）─
+router.post('/v3/fetch-label', (req, res) => {
+  const { postId, box, label } = req.body || {};
+  if (!postId || !box || !label) return res.status(400).json({ error: 'postId + box + label required' });
+  const jobId = createJob('fl', { postId, box, label, kind: 'fetch-label', step: 'init' });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      updateJob(jobId, { status: 'running', step: 'fetching' });
+      const result = await _runFetchLabel(req.body);
+      updateJob(jobId, { status: 'done', result });
+    } catch (e) {
+      console.error(`[Step2/fetch-label:${jobId}] "${box}/${label}"`, e.message);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
 });
 
-// ─── /v3/fetch-all : 未取得の全ラベルを並列取得 ─────────
-router.post('/v3/fetch-all', async (req, res) => {
-  const { postId, items } = req.body;  // items: [{box, label, role?}, ...]
-  if (!postId || !Array.isArray(items)) return res.status(400).json({ error: 'postId + items[] required' });
+// ─── /v3/fetch-label-status : ジョブ進捗（フロントポーリング）────
+router.get('/v3/fetch-label-status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
+});
+
+// ─── 内部: 全ラベル取得の本体（ジョブからもCLIからも呼べる）─────
+async function _runFetchAll({ postId, items }, onProgress) {
+  if (!postId || !Array.isArray(items)) throw new Error('postId + items[] required');
 
   let si = safeJson(siPath(postId), null);
   if (!si || si.version !== 'v3') si = emptySiData(postId);
 
   const now = new Date().toISOString();
-  console.log(`[Step2 v3] fetch-all 開始: ${items.length}件`);
+  const total = items.length;
+  console.log(`[Step2 v3] fetch-all 開始: ${total}件`);
 
   // 並列取得（サーバー負荷も考えて 4 並列まで）
   const results = [];
   const queue = items.slice();
+  let doneCount = 0;
+  function _tick() {
+    doneCount++;
+    if (typeof onProgress === 'function') {
+      try { onProgress({ progress: doneCount, total }); } catch (_) {}
+    }
+  }
   async function _worker() {
     while (queue.length) {
       const it = queue.shift();
@@ -506,6 +529,7 @@ router.post('/v3/fetch-all', async (req, res) => {
       } catch (e) {
         results.push({ ...it, error: e.message, fetchedAt: now });
       }
+      _tick();
     }
   }
   await Promise.all([_worker(), _worker(), _worker(), _worker()]);
@@ -599,7 +623,32 @@ router.post('/v3/fetch-all', async (req, res) => {
     }
   });
 
-  res.json({ ok: true, count: results.length, imageJobsKicked: imgKicked });
+  return { count: results.length, imageJobsKicked: imgKicked };
+}
+
+// ─── /v3/fetch-all : 未取得の全ラベルを並列取得（ジョブ化）─────
+router.post('/v3/fetch-all', (req, res) => {
+  const { postId, items } = req.body || {};
+  if (!postId || !Array.isArray(items)) return res.status(400).json({ error: 'postId + items[] required' });
+  const jobId = createJob('fa', { postId, total: items.length, kind: 'fetch-all', step: 'init' });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      updateJob(jobId, { status: 'running', step: 'fetching', progress: 0, total: items.length });
+      const result = await _runFetchAll(req.body, (p) => updateJob(jobId, p));
+      updateJob(jobId, { status: 'done', result });
+    } catch (e) {
+      console.error(`[Step2/fetch-all:${jobId}]`, e.message);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
+});
+
+// ─── /v3/fetch-all-status : ジョブ進捗（フロントポーリング）────
+router.get('/v3/fetch-all-status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 // curated 取得用キーワード組成
@@ -973,25 +1022,47 @@ function getUI() {
     _renderBoxes();
   };
 
-  /* ── 1件 (再)取得 ── */
+  /* ── 1件 (再)取得（ジョブ化）── */
   window.s2Refetch = async function(box, label, role) {
     const post = window.APP.selected;
     if (!post?.id) return;
     _msg('⏳ ' + label + ' 取得中...');
     try {
-      await fetchJson('/api/v3/fetch-label', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, box, label, role }),
+      await window.runJob({
+        startUrl:  '/api/v3/fetch-label',
+        statusUrl: '/api/v3/fetch-label-status',
+        body: { postId: post.id, box, label, role },
+        kind: 'fetch-label',
+        key:  's2_fetch_label:' + post.id + ':' + box + ':' + label,
       });
-      // 取得後、サーバから再読込してマージ
-      const si = await fetchJson('/api/si-data?postId=' + encodeURIComponent(post.id));
-      window.APP.s2.siData = si;
-      _renderBoxes();
+      // 取得後、サーバから再読込してマージ（最新案件を見てる時のみ）
+      if (window.APP.selected?.id === post.id) {
+        const si = await fetchJson('/api/si-data?postId=' + encodeURIComponent(post.id));
+        window.APP.s2.siData = si;
+        _renderBoxes();
+      }
       _msg('✅ ' + label);
     } catch (e) {
       _msg('❌ ' + e.message);
     }
   };
+  /* fetch-label の resumer */
+  if (window.registerJobResumer) {
+    window.registerJobResumer('fetch-label', async ({ key, meta }) => {
+      const postId = meta.body && meta.body.postId;
+      const label  = meta.body && meta.body.label;
+      if (!postId) return;
+      try {
+        await window.runJob({ startUrl: null, statusUrl: meta.statusUrl, kind: 'fetch-label', key });
+        if (window.APP.selected?.id === postId && window.APP.s2) {
+          const si = await fetchJson('/api/si-data?postId=' + encodeURIComponent(postId));
+          window.APP.s2.siData = si;
+          if (typeof _renderBoxes === 'function') _renderBoxes();
+          _msg('✅ ' + (label || '') + '（バックグラウンド完了）');
+        }
+      } catch (e) { console.warn('[resumer fetch-label]', e.message); }
+    });
+  }
 
   document.addEventListener('click', async function(e) {
     if (e.target.id === 's2BtnFetchAll') {
@@ -1009,21 +1080,47 @@ function getUI() {
         });
       });
       if (!items.length) { _msg('未取得なし'); return; }
-      _msg('⏳ ' + items.length + '件並列取得中...');
+      _msg('⏳ ' + items.length + '件並列取得中...（タブ閉じても継続）');
       try {
-        await fetchJson('/api/v3/fetch-all', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ postId: post.id, items }),
+        await window.runJob({
+          startUrl:  '/api/v3/fetch-all',
+          statusUrl: '/api/v3/fetch-all-status',
+          body: { postId: post.id, items },
+          kind: 'fetch-all',
+          key:  's2_fetch_all:' + post.id,
+          onProgress: (j) => {
+            if (j.progress != null && j.total) {
+              _msg('⏳ ' + j.progress + '/' + j.total + ' 取得中...');
+            }
+          },
         });
-        const fresh = await fetchJson('/api/si-data?postId=' + encodeURIComponent(post.id));
-        window.APP.s2.siData = fresh;
-        _renderBoxes();
+        if (window.APP.selected?.id === post.id) {
+          const fresh = await fetchJson('/api/si-data?postId=' + encodeURIComponent(post.id));
+          window.APP.s2.siData = fresh;
+          _renderBoxes();
+        }
         _msg('✅ ' + items.length + '件取得完了');
       } catch (e) {
         _msg('❌ ' + e.message);
       }
     }
   });
+  /* fetch-all の resumer（リロード復帰時に自動 polling 続行）*/
+  if (window.registerJobResumer) {
+    window.registerJobResumer('fetch-all', async ({ key, meta }) => {
+      const postId = meta.body && meta.body.postId;
+      if (!postId) return;
+      try {
+        await window.runJob({ startUrl: null, statusUrl: meta.statusUrl, kind: 'fetch-all', key });
+        if (window.APP.selected?.id === postId && window.APP.s2) {
+          const fresh = await fetchJson('/api/si-data?postId=' + encodeURIComponent(postId));
+          window.APP.s2.siData = fresh;
+          if (typeof _renderBoxes === 'function') _renderBoxes();
+          _msg('✅ バックグラウンド完了 → 再読込');
+        }
+      } catch (e) { console.warn('[resumer fetch-all]', e.message); }
+    });
+  }
 
   /* ── AI ラベル提案（ジョブ化対応・タブ閉じても継続）── */
   function _suggestJobKey(postId) { return 's2_suggest_' + postId; }

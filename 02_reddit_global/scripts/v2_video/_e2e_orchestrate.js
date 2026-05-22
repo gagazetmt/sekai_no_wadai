@@ -118,7 +118,9 @@ async function pollJob(statusPath, jobId, label, maxMin = 8) {
     ...si.boxes.search.items.map(x => ({ box: 'search', label: x.label })),
   ];
   const fa = await http_call('POST', '/api/v3/fetch-all', { postId: pick.id, items });
-  console.log(`  ✓ ${fa.body?.count || 0} 件処理 / 画像取得 ${fa.body?.imageJobsKicked || 0} ラベル`);
+  if (!fa.body || !fa.body.jobId) throw new Error('fetch-all jobId 受信失敗');
+  const faResult = await pollJob('/api/v3/fetch-all-status', fa.body.jobId, 'fetch-all', 10);
+  console.log(`\n  ✓ ${faResult?.count || 0} 件処理 / 画像取得 ${faResult?.imageJobsKicked || 0} ラベル`);
 
   // 5. propose-modules
   console.log('\n[Step3] 構成提案...');

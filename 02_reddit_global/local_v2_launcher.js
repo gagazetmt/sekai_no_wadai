@@ -322,6 +322,132 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
 </head>
 <body>
 
+<!-- ─── 早期ブートストラップ（ステップ IIFE が runJob/registerJobResumer を使うので最先頭）─── -->
+<script>
+/* ════════════════════════════════════════════════
+   非同期ジョブ実行ヘルパー（サーバー側 non-blocking job + クライアント polling）
+   モバイル Safari/Chrome のバックグラウンドタブ強制終了対策。
+   - サーバーで処理を完結 / クライアントは jobId で polling だけ
+   - 起動した jobId を localStorage に保存 → リロード後も resume 可能
+   - 完了/エラー時に localStorage から該当ジョブを削除
+   ════════════════════════════════════════════════ */
+(function() {
+  const KEY = 'v2_active_jobs_v1';
+  window._loadActiveJobs = function() {
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}'); }
+    catch (_) { return {}; }
+  };
+  window._saveActiveJobs = function(jobs) {
+    try { localStorage.setItem(KEY, JSON.stringify(jobs)); } catch (_) {}
+  };
+  window._addActiveJob = function(key, meta) {
+    const jobs = window._loadActiveJobs();
+    jobs[key] = Object.assign({}, meta, { savedAt: Date.now() });
+    window._saveActiveJobs(jobs);
+  };
+  window._removeActiveJob = function(key) {
+    const jobs = window._loadActiveJobs();
+    delete jobs[key];
+    window._saveActiveJobs(jobs);
+  };
+
+  window.JOB_RESUMERS = {};
+  window.registerJobResumer = function(kind, fn) { window.JOB_RESUMERS[kind] = fn; };
+
+  /* ジョブ起動 or 復帰 → 結果を返す Promise.
+     - opts.key で localStorage に既存ジョブが残ってればその jobId を polling して resume
+     - 無ければ opts.startUrl に POST、 jobId を localStorage に保存して polling
+     opts: { startUrl, statusUrl, body, kind, key?, intervalMs?, timeoutMs?, onProgress? } */
+  window.runJob = async function(opts) {
+    const startUrl  = opts.startUrl;
+    const statusUrl = opts.statusUrl;
+    const body      = opts.body || {};
+    const kind      = opts.kind || 'unknown';
+    const key       = opts.key  || kind;
+    const intervalMs = opts.intervalMs || 3000;
+    const timeoutMs  = opts.timeoutMs  || 20 * 60 * 1000;
+    const onProgress = opts.onProgress;
+
+    let jobId = null;
+    const stored = window._loadActiveJobs()[key];
+    if (stored && stored.jobId && stored.statusUrl === statusUrl) {
+      jobId = stored.jobId;
+      console.log('[runJob] resume', key, jobId.slice(-8));
+    }
+
+    if (!jobId) {
+      if (!startUrl) throw new Error('runJob: startUrl 必須 (resume も不可)');
+      const r = await fetch(startUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error('start ' + r.status + ': ' + t.slice(0, 200));
+      }
+      const d = await r.json();
+      if (!d.jobId) throw new Error('jobId not returned');
+      jobId = d.jobId;
+      window._addActiveJob(key, { jobId, kind, statusUrl, body });
+    }
+
+    const started = Date.now();
+    while (true) {
+      if (Date.now() - started > timeoutMs) {
+        window._removeActiveJob(key);
+        throw new Error('job timeout: ' + key);
+      }
+      await new Promise(r => setTimeout(r, intervalMs));
+      let r;
+      try {
+        r = await fetch(statusUrl + '?jobId=' + encodeURIComponent(jobId));
+      } catch (e) {
+        console.warn('[runJob] poll network error, retrying:', e.message);
+        continue;
+      }
+      if (r.status === 404) {
+        window._removeActiveJob(key);
+        throw new Error('job vanished: ' + jobId);
+      }
+      let job;
+      try { job = await r.json(); }
+      catch (e) {
+        console.warn('[runJob] parse error, retrying:', e.message);
+        continue;
+      }
+      if (typeof onProgress === 'function') {
+        try { onProgress(job); } catch (_) {}
+      }
+      if (job.status === 'error') {
+        window._removeActiveJob(key);
+        throw new Error(job.error || 'job error');
+      }
+      if (job.status === 'done') {
+        window._removeActiveJob(key);
+        return job.result;
+      }
+    }
+  };
+
+  /* 起動時に未完了ジョブをスキャン → resumer 登録済みなら自動再開 */
+  window.resumeStoredJobs = async function() {
+    const jobs = window._loadActiveJobs();
+    const entries = Object.entries(jobs);
+    if (!entries.length) return;
+    console.log('[runJob] stored jobs:', entries.map(([k, m]) => k + '=' + (m.jobId || '').slice(-8)).join(', '));
+    for (const [key, meta] of entries) {
+      const fn = window.JOB_RESUMERS[meta.kind];
+      if (!fn) {
+        console.log('[runJob] no resumer for kind=' + meta.kind + ', skip ' + key);
+        continue;
+      }
+      Promise.resolve().then(() => fn({ key, meta }))
+        .catch(e => console.warn('[resumer]', key, e.message));
+    }
+  };
+})();
+</script>
+
 <!-- ─── サイドバー（保存済み案件）─── -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar(false)"></div>
 <div class="sidebar" id="sidebar">
@@ -391,6 +517,7 @@ window.fetchJson = async function(url, opts) {
   }
   return res.json();
 };
+/* runJob / registerJobResumer / resumeStoredJobs は <body> 直下の早期ブートストラップで定義済 */
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
@@ -497,6 +624,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   window._restoreSelectedFromStorage();
   renderSidebar();
   goStep(1);  /* Step1 を表示 */
+  /* 各 Step の IIFE が読込時に registerJobResumer 済 (この時点で揃ってる)
+     未完了ジョブを resume → モバイル復帰時に「サーバー側で完了 → 戻ってきたら結果表示」が成立 */
+  window.resumeStoredJobs();
 });
 </script>
 
