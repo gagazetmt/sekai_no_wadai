@@ -421,6 +421,55 @@ async function _fetchMatch(label) {
   return await fetchSofaScoreMatch(parts[0], parts[1]);
 }
 
+// search ボックス: URL 直打ち対応
+//   label が http(s):// で始まる場合は Serper を叩かず、URL を直接 fetch して
+//   <title> / <meta description> を抽出し organic[0] に詰める（Serper 結果と同形）
+function _isUrl(s) { return /^https?:\/\//i.test(String(s || '').trim()); }
+function _metaContent(html, re) {
+  const m = html.match(re);
+  return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim() : '';
+}
+async function _fetchUrlAsArticle(url) {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15000),
+    });
+    const finalUrl = res.url || url;
+    if (!res.ok) {
+      return { ok: false, error: `HTTP ${res.status}`, query: url, directUrl: true,
+        organic: [{ title: url, snippet: '', link: finalUrl, date: null }] };
+    }
+    const html = (await res.text()).slice(0, 200000); // 200KB cap
+    const ogTitle = _metaContent(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i);
+    const ttlTag  = _metaContent(html, /<title[^>]*>([^<]+)<\/title>/i);
+    const ogDesc  = _metaContent(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i);
+    const mDesc   = _metaContent(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+    const title   = (ogTitle || ttlTag || url).slice(0, 240);
+    const snippet = (ogDesc || mDesc || '').slice(0, 600);
+    return {
+      ok: true,
+      query: url,
+      directUrl: true,
+      organic: [{ title, snippet, link: finalUrl, date: null }],
+      answerBox: null,
+      knowledgeGraph: null,
+      topStories: [],
+    };
+  } catch (e) {
+    return { ok: false, error: e.message, query: url, directUrl: true,
+      organic: [{ title: url, snippet: '', link: url, date: null }] };
+  }
+}
+async function _fetchSearchLabel(label) {
+  if (_isUrl(label)) return await _fetchUrlAsArticle(label.trim());
+  return await fetchSerper(label);
+}
+
 // ─── 内部: 1ラベル取得の本体（ジョブからも同期APIからも呼べる）───
 async function _runFetchLabel({ postId, box, label, role }) {
   if (!postId || !box || !label) throw new Error('postId + box + label required');
@@ -443,7 +492,7 @@ async function _runFetchLabel({ postId, box, label, role }) {
     const next = { label, data, fetchedAt: now };
     if (i >= 0) items[i] = next; else items.push(next);
   } else if (box === 'search') {
-    const data = await fetchSerper(label).catch(e => ({ ok: false, error: e.message }));
+    const data = await _fetchSearchLabel(label).catch(e => ({ ok: false, error: e.message }));
     const items = si.boxes.search.items;
     const i = items.findIndex(x => x.label === label);
     const next = { label, data, fetchedAt: now };
@@ -523,7 +572,7 @@ async function _runFetchAll({ postId, items }, onProgress) {
           const data = await _fetchMatch(it.label);
           results.push({ ...it, data, fetchedAt: now });
         } else if (it.box === 'search') {
-          const data = await fetchSerper(it.label).catch(e => ({ ok: false, error: e.message }));
+          const data = await _fetchSearchLabel(it.label).catch(e => ({ ok: false, error: e.message }));
           results.push({ ...it, data, fetchedAt: now });
         }
       } catch (e) {
@@ -751,7 +800,7 @@ function getUI() {
       <div style="font-size:12px;font-weight:bold;color:#0ea5e9;margin-bottom:8px">&#x1F50D; ニュース検索ワード</div>
       <div id="s2BoxSearch"></div>
       <div style="display:grid;grid-template-columns:1fr 28px;gap:4px;margin-top:6px;">
-        <input class="inp" id="s2NewSearchLabel" placeholder="例: Bellerin late equalizer" style="font-size:11px;padding:4px 6px;">
+        <input class="inp" id="s2NewSearchLabel" placeholder="キーワード or URL (https://…)" style="font-size:11px;padding:4px 6px;">
         <button class="btn btn-sm" id="s2BtnAddSearch" style="background:#0ea5e9;color:#fff;padding:4px 6px;">+</button>
       </div>
     </div>
