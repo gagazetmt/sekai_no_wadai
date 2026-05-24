@@ -174,7 +174,9 @@ JSONのみ:
 
   // 2026-05-24: mode に応じた provider を初期使用、 失敗時は fallbackProvider に落とす
   async function _askPhase1(provider) {
-    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 1500, messages: [{ role: 'user', content: phase1Prompt }] });
+    // 2026-05-24: max_tokens 1500 → 4000 (deepseek-v4-flash の reasoning が非決定的に
+    //   500〜1500 揺れる。 1500 だと上振れで content="" になり JSON parse 失敗。 4000 で reasoning 余裕を確保)
+    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 4000, messages: [{ role: 'user', content: phase1Prompt }] });
   }
   let phase1 = null;
   console.log(`[Step2 phase1] AI=${_resolved.label} (provider=${_initialProv}, model=${_modelFor(_initialProv)})`);
@@ -266,7 +268,8 @@ JSONのみ:
 
     // 2026-05-24: mode に応じた provider → 失敗時 fallbackProvider に落とす
     async function _askPhase2(provider) {
-      return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 1200, messages: [{ role: 'user', content: phase2Prompt }] });
+      // 2026-05-24: max_tokens 1200 → 4000 (phase1 と同じく reasoning 暴走対策)
+      return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 4000, messages: [{ role: 'user', content: phase2Prompt }] });
     }
     try {
       const raw = await _askPhase2(_initialProv);

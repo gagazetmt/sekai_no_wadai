@@ -121,7 +121,8 @@ JSON形式で返してください:
 { "titles": ["...", "...", "..."], "description": "...", "tags": ["...", "...", ...] }`;
 
   async function _ask(provider) {
-    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 2000, system: sys, messages: [{ role: 'user', content: prompt }] });
+    // 2026-05-24: max_tokens 2000 → 5000 (deepseek-v4-flash reasoning 余裕。 出力自体は titles+description+tags で ~1000 tokens)
+    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 5000, system: sys, messages: [{ role: 'user', content: prompt }] });
   }
   try {
     let text = '', parsed = null;
