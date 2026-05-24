@@ -384,7 +384,7 @@ function getUI() {
     btn.disabled = true; btn.textContent = '⏳ 生成中…';
     document.getElementById('s6-meta-status').textContent = 'AI にお願い中…';
     try {
-      const r = await window.fetchJson('/api/v6/gen-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: id, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }) });
+      const r = await window.fetchJson('/api/v6/gen-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: id, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false }) });
       const candEl = document.getElementById('s6-title-candidates');
       candEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">💡 タイトル候補（クリックで採用）</div>'
         + (r.titles || []).map((t,i) => '<div onclick="document.getElementById(\\'s6-title\\').value = this.dataset.t" data-t="'+_e(t)+'" style="cursor:pointer;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;font-size:12px;">'+(i+1)+'. '+_e(t)+'</div>').join('');

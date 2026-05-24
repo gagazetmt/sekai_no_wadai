@@ -2930,7 +2930,7 @@ function getUI() {
       const initRes = await fetchJson('/api/v2/ai-fill-slide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }),
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false }),
       });
       const jobId = initRes && initRes.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');
