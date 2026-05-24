@@ -133,4 +133,42 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
   }
 }
 
-module.exports = { callAI, PROVIDER };
+// 2026-05-24: sprint パラメータ (boolean | 'kimi' | 'deepseek' | 'sprint') から
+//   provider / model / fallback を解決する共通ヘルパ。
+//   step2/3/4/6 の各バックエンドが同じパターンで Kimi 経路を扱えるよう統一する。
+function resolveSprintMode(sprint) {
+  const mode = (typeof sprint === "string") ? sprint.toLowerCase() : (sprint ? "deepseek" : "sonnet");
+  if (mode === "kimi") {
+    return {
+      mode: "kimi",
+      provider: "kimi",
+      model: process.env.KIMI_MODEL || "moonshotai/kimi-k2.5",
+      fallbackProvider: "anthropic",
+      fallbackModel: "claude-sonnet-4-6",
+      label: "kimi",
+      fallbackLabel: "kimi-fallback-sonnet",
+    };
+  }
+  if (mode === "deepseek" || mode === "sprint") {
+    return {
+      mode: "deepseek",
+      provider: "deepseek",
+      model: "deepseek-v4-flash",
+      fallbackProvider: "anthropic",
+      fallbackModel: "claude-sonnet-4-6",
+      label: "v4flash-sprint",
+      fallbackLabel: "sonnet-fallback",
+    };
+  }
+  return {
+    mode: "sonnet",
+    provider: "anthropic",
+    model: "claude-sonnet-4-6",
+    fallbackProvider: "deepseek",
+    fallbackModel: "deepseek-v4-flash",
+    label: "sonnet",
+    fallbackLabel: "v4flash-fallback",
+  };
+}
+
+module.exports = { callAI, PROVIDER, resolveSprintMode };

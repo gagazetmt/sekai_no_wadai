@@ -28,7 +28,14 @@ const _sanitizePostId = (s) => (s || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_')
 const META_FILE    = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_step5.json');
 const MODULES_FILE = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_modules.json');
 
-const { callAI }       = require('../scripts/ai_client');
+const { callAI, resolveSprintMode } = require('../scripts/ai_client');
+
+// 2026-05-24: provider 名 → 既定 model 名のマッピング (step2/3 と同じ)。
+function _modelFor(provider) {
+  if (provider === 'deepseek') return 'deepseek-v4-flash';
+  if (provider === 'kimi')     return process.env.KIMI_MODEL || 'moonshotai/kimi-k2.5';
+  return 'claude-sonnet-4-6';
+}
 const youtubeUploader  = require('../scripts/youtube_uploader');
 
 // ─── 共通: メタ JSON 読み書き ────────────────────
@@ -75,9 +82,9 @@ router.post('/v6/save-meta', (req, res) => {
 router.post('/v6/gen-meta', async (req, res) => {
   const { postId, sprint } = req.body || {};
   if (!postId) return res.status(400).json({ error: 'postId required' });
-  // ⚡SPRINT モード: 最初から DeepSeek 直行
-  const _sprint = !!sprint;
-  const _initialProv = _sprint ? 'deepseek' : 'anthropic';
+  // ⚡SPRINT / 🆕Kimi モード: resolveSprintMode で provider/model/fallback を解決
+  const _resolved = resolveSprintMode(sprint);
+  const _initialProv = _resolved.provider;
 
   const mFile = MODULES_FILE(postId);
   if (!fs.existsSync(mFile)) return res.status(404).json({ error: 'modules.json not found' });
@@ -114,24 +121,26 @@ JSON形式で返してください:
 { "titles": ["...", "...", "..."], "description": "...", "tags": ["...", "...", ...] }`;
 
   async function _ask(provider) {
-    const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
-    return callAI({ forceProvider: provider, model, max_tokens: 2000, system: sys, messages: [{ role: 'user', content: prompt }] });
+    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 2000, system: sys, messages: [{ role: 'user', content: prompt }] });
   }
   try {
     let text = '', parsed = null;
+    let used = _resolved.label;
+    console.log(`[step6 meta-gen] AI=${used} (provider=${_initialProv}, model=${_modelFor(_initialProv)})`);
     try {
       text = await _ask(_initialProv);
       const m = text.match(/\{[\s\S]*\}/);
       if (m) parsed = JSON.parse(m[0]);
     } catch (e) { console.warn(`[step6 meta-gen] ${_initialProv} 例外:`, e.message); }
-    if (!parsed && _initialProv !== 'deepseek') {
-      console.warn('[step6 meta-gen] sonnet 失敗、deepseek にフォールバック');
-      text = await _ask('deepseek');
+    if (!parsed && _resolved.mode !== 'deepseek') {
+      console.warn(`[step6 meta-gen] ${_resolved.mode} (${_initialProv}) 失敗、 ${_resolved.fallbackProvider} にフォールバック`);
+      text = await _ask(_resolved.fallbackProvider);
       const m = text.match(/\{[\s\S]*\}/);
       if (m) parsed = JSON.parse(m[0]);
+      used = _resolved.fallbackLabel;
     }
     if (!parsed) return res.status(500).json({ error: 'AI 応答に JSON 含まれず', raw: text.slice(0, 300) });
-    res.json({ ok: true, ...parsed });
+    res.json({ ok: true, used, ...parsed });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -374,7 +383,7 @@ function getUI() {
     btn.disabled = true; btn.textContent = '⏳ 生成中…';
     document.getElementById('s6-meta-status').textContent = 'AI にお願い中…';
     try {
-      const r = await window.fetchJson('/api/v6/gen-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: id, sprint: localStorage.getItem('v2_sprint_mode') === '1' }) });
+      const r = await window.fetchJson('/api/v6/gen-meta', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: id, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }) });
       const candEl = document.getElementById('s6-title-candidates');
       candEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">💡 タイトル候補（クリックで採用）</div>'
         + (r.titles || []).map((t,i) => '<div onclick="document.getElementById(\\'s6-title\\').value = this.dataset.t" data-t="'+_e(t)+'" style="cursor:pointer;padding:6px 10px;background:var(--panel);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;font-size:12px;">'+(i+1)+'. '+_e(t)+'</div>').join('');

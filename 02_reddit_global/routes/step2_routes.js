@@ -12,7 +12,15 @@ const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
 
-const { callAI }                = require('../scripts/ai_client');
+const { callAI, resolveSprintMode } = require('../scripts/ai_client');
+
+// 2026-05-24: provider 名 → 既定 model 名のマッピング。
+//   step2/3/6 で callAI を呼ぶ際に統一して使う。 KIMI_MODEL は env で上書き可。
+function _modelFor(provider) {
+  if (provider === 'deepseek') return 'deepseek-v4-flash';
+  if (provider === 'kimi')     return process.env.KIMI_MODEL || 'moonshotai/kimi-k2.5';
+  return 'claude-sonnet-4-6';
+}
 const { fetchWikipediaSafe, fetchWikipediaWikitext, extractNationalCareerFromInfobox } = require('../scripts/modules/fetchers/wikipedia');
 const { fetchSofaScorePlayer }     = require('../scripts/modules/fetchers/sofascore_player');
 const { fetchSofaScoreTeam }       = require('../scripts/modules/fetchers/sofascore_team');
@@ -117,8 +125,9 @@ function _dedupeEntities(...lists) {
 
 // suggest-labels の実処理（ジョブ化のためバックグラウンド実行用）
 async function _runSuggestLabels(post, onProgress = () => {}, opts = {}) {
-  const _sprint = !!opts.sprint;
-  const _initialProv = _sprint ? 'deepseek' : 'anthropic';
+  // 2026-05-24: sprint は boolean / 'kimi' / 'deepseek' を受け付ける
+  const _resolved = resolveSprintMode(opts.sprint);
+  const _initialProv = _resolved.provider;
   const title    = post.titleOrig || post.title || '';
   const titleJa  = post.titleJa   || '';
   const selftext = (post.selftext || post.raw?.selftext || '').slice(0, 2000);
@@ -163,25 +172,25 @@ JSONのみ:
   "searches": ["..."]
 }`;
 
-  // Sonnet 既定（label 厳密性・JSON 安定性を優先） → JSON parse 失敗時 v4flash 保険
+  // 2026-05-24: mode に応じた provider を初期使用、 失敗時は fallbackProvider に落とす
   async function _askPhase1(provider) {
-    const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
-    return callAI({ forceProvider: provider, model, max_tokens: 1500, messages: [{ role: 'user', content: phase1Prompt }] });
+    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 1500, messages: [{ role: 'user', content: phase1Prompt }] });
   }
   let phase1 = null;
+  console.log(`[Step2 phase1] AI=${_resolved.label} (provider=${_initialProv}, model=${_modelFor(_initialProv)})`);
   try {
     const raw = await _askPhase1(_initialProv);
     phase1 = _parseEntities(raw);
     if (!phase1) console.warn(`[Step2 phase1] ${_initialProv} JSON parse 失敗 / raw=` + (raw||'').slice(0, 200));
   } catch (e) { console.warn(`[Step2 phase1] ${_initialProv} 例外:`, e.message); }
-  // sprint=true (initial=deepseek) なら fallback 不要、それ以外は deepseek にフォールバック
-  if (!phase1 && _initialProv !== 'deepseek') {
-    console.warn('[Step2 phase1] sonnet 失敗、v4flash にフォールバック');
+  // mode が 'deepseek' (SPRINT) なら fallback なし。 kimi/sonnet は fallbackProvider に落とす
+  if (!phase1 && _resolved.mode !== 'deepseek') {
+    console.warn(`[Step2 phase1] ${_resolved.mode} (${_initialProv}) 失敗、 ${_resolved.fallbackProvider} にフォールバック`);
     try {
-      const raw = await _askPhase1('deepseek');
+      const raw = await _askPhase1(_resolved.fallbackProvider);
       phase1 = _parseEntities(raw);
-      if (!phase1) console.warn('[Step2 phase1] v4flash も JSON parse 失敗 / raw=' + (raw||'').slice(0, 200));
-    } catch (e) { console.warn('[Step2 phase1] v4flash 例外:', e.message); }
+      if (!phase1) console.warn(`[Step2 phase1] ${_resolved.fallbackProvider} も JSON parse 失敗 / raw=` + (raw||'').slice(0, 200));
+    } catch (e) { console.warn(`[Step2 phase1] ${_resolved.fallbackProvider} 例外:`, e.message); }
   }
   if (!phase1) return { entities: [], matches: [], searches: [] };
 
@@ -254,10 +263,9 @@ ${newsContext}
 JSONのみ:
 {"entities": [{"name":"...","role":"..."}]}`;
 
-    // Sonnet 既定 → v4flash 保険
+    // 2026-05-24: mode に応じた provider → 失敗時 fallbackProvider に落とす
     async function _askPhase2(provider) {
-      const model = provider === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
-      return callAI({ forceProvider: provider, model, max_tokens: 1200, messages: [{ role: 'user', content: phase2Prompt }] });
+      return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 1200, messages: [{ role: 'user', content: phase2Prompt }] });
     }
     try {
       const raw = await _askPhase2(_initialProv);
@@ -265,13 +273,13 @@ JSONのみ:
       if (Array.isArray(p2?.entities)) {
         phase2Entities = p2.entities;
         console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (${_initialProv})`);
-      } else if (_initialProv !== 'deepseek') {
-        console.warn('[Step2 phase2-ai] sonnet JSON parse 失敗、v4flash にフォールバック');
-        const raw2 = await _askPhase2('deepseek');
+      } else if (_resolved.mode !== 'deepseek') {
+        console.warn(`[Step2 phase2-ai] ${_resolved.mode} (${_initialProv}) JSON parse 失敗、 ${_resolved.fallbackProvider} にフォールバック`);
+        const raw2 = await _askPhase2(_resolved.fallbackProvider);
         const p2b = _parseEntities(raw2);
         if (Array.isArray(p2b?.entities)) {
           phase2Entities = p2b.entities;
-          console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (v4flash fb)`);
+          console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (${_resolved.fallbackProvider} fb)`);
         }
       }
     } catch (e) { console.warn('[Step2 phase2-ai] 例外:', e.message); }
@@ -298,7 +306,7 @@ router.post('/v3/suggest-labels', (req, res) => {
   setImmediate(async () => {
     try {
       updateJob(jobId, { status: 'running', step: 'phase1' });
-      const result = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch), { sprint: !!sprint });
+      const result = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch), { sprint });
       updateJob(jobId, { status: 'done', step: 'merged', result });
     } catch (e) {
       console.error(`[Step2/suggest-labels:${jobId}]`, e);
@@ -1261,7 +1269,7 @@ function getUI() {
     try {
       const j = await fetchJson('/api/v3/suggest-labels', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post, sprint: localStorage.getItem('v2_sprint_mode') === '1' }),
+        body: JSON.stringify({ post, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }),
       });
       const jobId = j && j.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');

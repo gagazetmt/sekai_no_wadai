@@ -10,7 +10,7 @@ const fs      = require('fs');
 const path    = require('path');
 const { spawn } = require('child_process');
 
-const { callAI } = require('../scripts/ai_client');
+const { callAI, resolveSprintMode } = require('../scripts/ai_client');
 // 🆕 Curated RAG (si.curatedArticles に Step2 fetch 時に保存済みなら自動注入)
 const { formatForPrompt: formatCuratedForPrompt } = require('../scripts/modules/curated_articles');
 
@@ -403,14 +403,11 @@ async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, use
   //   true / 'deepseek' / 'sprint'  → DeepSeek V4-Flash (コスト最安)
   //   'kimi'                        → Moonshot Kimi (既定 k2.5 軽量・半額。 env KIMI_MODEL で上書き可)
   //   false / 未指定                → Claude Sonnet 4.6 (高品質)
-  const _mode = (typeof sprint === 'string') ? sprint.toLowerCase() : (sprint ? 'deepseek' : 'sonnet');
-  const _aiProv = _mode === 'kimi' ? 'kimi'
-                : (_mode === 'deepseek' || _mode === 'sprint') ? 'deepseek'
-                : 'anthropic';
-  const _aiModel = _aiProv === 'kimi' ? (process.env.KIMI_MODEL || 'moonshotai/kimi-k2.5')
-                 : _aiProv === 'deepseek' ? 'deepseek-v4-flash'
-                 : 'claude-sonnet-4-6';
-  const _sprint = _aiProv === 'deepseek';  // 既存ログ互換のため
+  // 2026-05-24: resolveSprintMode 共通ヘルパに切替 (step2/3/6 と統一)
+  const _resolved = resolveSprintMode(sprint);
+  const _aiProv  = _resolved.provider;
+  const _aiModel = _resolved.model;
+  const _sprint  = _aiProv === 'deepseek';  // 既存ログ互換のため
     const mp = modulesPath(postId);
     // 2026-05-17: _runAiFillSlide は async ジョブ関数で res を持たない → throw に変更
     if (!fs.existsSync(mp)) throw new Error('modules not found');
@@ -920,9 +917,10 @@ ${incrementalRule}
 
     // 既定: Sonnet（脚本品質優先） → JSON崩れ時 v4flash 保険
     // ⚡SPRINT モード: 最初から DeepSeek 直行（fallback なし）
-    let raw, parsed = null, used = _sprint ? 'v4flash-sprint' : 'sonnet';
+    // 🆕 Kimi モード: K2-0905 + Groq → 失敗時 Sonnet フォールバック
+    let raw, parsed = null, used = _resolved.label;
     // ⑧ 2026-05-18: SPRINT 効果検証用に AI 選択をログ明示（af_*.json.result.used とセット）
-    console.log(`[ai-fill-slide] AI=${used} (provider=${_aiProv}, model=${_aiModel}) で生成開始 / SPRINT=${_sprint ? 'ON' : 'OFF'}`);
+    console.log(`[ai-fill-slide] AI=${used} (provider=${_aiProv}, model=${_aiModel}) で生成開始 / mode=${_resolved.mode}`);
     // type 別に必要な payload キー: dataSlots / items / series のいずれか
     const _hasPayload = (p) => {
       if (!p?.type) return false;
@@ -940,17 +938,18 @@ ${incrementalRule}
       const m1 = raw && raw.match(/\{[\s\S]*\}/);
       if (m1) parsed = JSON.parse(m1[0]);
     } catch (e) { console.warn(`[ai-fill-slide] ${_aiProv} 例外:`, e.message); }
-    if (!_hasPayload(parsed) && !_sprint) {
-      console.warn('[ai-fill-slide] sonnet 失敗、v4flash にフォールバック');
+    // SPRINT (deepseek) は fallback なし。 kimi/sonnet は fallbackProvider に落とす
+    if (!_hasPayload(parsed) && _resolved.mode !== 'deepseek') {
+      console.warn(`[ai-fill-slide] ${_resolved.mode} (${_aiProv}) 失敗、 ${_resolved.fallbackProvider} にフォールバック`);
       try {
         raw = await callAI({
-          forceProvider: 'deepseek',
-          model: 'deepseek-v4-flash', max_tokens: 6000,
+          forceProvider: _resolved.fallbackProvider,
+          model: _resolved.fallbackModel, max_tokens: 6000,
           messages: [{ role: 'user', content: prompt }],
         });
         const m2 = raw && raw.match(/\{[\s\S]*\}/);
         if (m2) parsed = JSON.parse(m2[0]);
-        used = 'v4flash';
+        used = _resolved.fallbackLabel;
       } catch (_) {}
     }
     if (!_hasPayload(parsed)) {
@@ -2926,7 +2925,7 @@ function getUI() {
       const initRes = await fetchJson('/api/v2/ai-fill-slide', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt, sprint: localStorage.getItem('v2_sprint_mode') === '1' }),
+        body: JSON.stringify({ postId: post.id, moduleIdx: idx, userPrompt, incremental, useWebResearch, researchPrompt, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }),
       });
       const jobId = initRes && initRes.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');
