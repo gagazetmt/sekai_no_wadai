@@ -401,13 +401,13 @@ router.post('/v2/matchcard-lineup-overrides', express.json(), (req, res) => {
 async function _runAiFillSlide({ postId, moduleIdx, userPrompt, incremental, useWebResearch, researchPrompt, sprint }) {
   // 🆕 sprint は 3 値対応:
   //   true / 'deepseek' / 'sprint'  → DeepSeek V4-Flash (コスト最安)
-  //   'kimi'                        → Moonshot Kimi K2.6 via OpenRouter (中庸)
+  //   'kimi'                        → Moonshot Kimi (既定 k2.5 軽量・半額。 env KIMI_MODEL で上書き可)
   //   false / 未指定                → Claude Sonnet 4.6 (高品質)
   const _mode = (typeof sprint === 'string') ? sprint.toLowerCase() : (sprint ? 'deepseek' : 'sonnet');
   const _aiProv = _mode === 'kimi' ? 'kimi'
                 : (_mode === 'deepseek' || _mode === 'sprint') ? 'deepseek'
                 : 'anthropic';
-  const _aiModel = _aiProv === 'kimi' ? 'moonshotai/kimi-k2.6'
+  const _aiModel = _aiProv === 'kimi' ? (process.env.KIMI_MODEL || 'moonshotai/kimi-k2.5')
                  : _aiProv === 'deepseek' ? 'deepseek-v4-flash'
                  : 'claude-sonnet-4-6';
   const _sprint = _aiProv === 'deepseek';  // 既存ログ互換のため
