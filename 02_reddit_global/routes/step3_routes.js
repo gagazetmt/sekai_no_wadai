@@ -1733,7 +1733,7 @@ function getUI() {
   }
 
   function _buildTypeOptions(m) {
-    const TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard'];
+    const TYPES = ['insight','stats','profile','comparison','history','reaction','matchcard','ranking','timeline','picture'];
     const FIXED = { opening: 'opening', toc: 'toc', overview: 'insight', reaction: 'reaction', ending: 'ending' };
     let cur = m.type || '';
     if (FIXED[m.mainKey]) cur = FIXED[m.mainKey];
@@ -1906,7 +1906,7 @@ function getUI() {
       const r = await fetchJson('/api/v3/propose-modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id, count: 7, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }),
+        body: JSON.stringify({ postId: post.id, count: 7, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false }),
       });
       const jobId = r && r.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');
@@ -2010,7 +2010,7 @@ function getUI() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postId: post.id, modules: mods, post,
-          sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false,  // 2026-05-18: SPRINT 対応 (2026-05-24: kimi 値も)
+          sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false,  // 2026-05-18: SPRINT 対応
         }),
       });
       jobId = j.jobId;
