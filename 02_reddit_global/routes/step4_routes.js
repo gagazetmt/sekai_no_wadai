@@ -1047,9 +1047,13 @@ ${parsed.narration || ''}
 }`;
 
       // 2026-05-21: max_tokens 4000 → 6000 (監修 fix 出力余裕確保)
+      // 2026-05-24: Sprint モード (kimi / deepseek) では監修を DeepSeek に固定 (コスト最安・Kimi 自己監修は無意味)。
+      //   Sprint OFF (mode=sonnet) では従来通り Sonnet 監修。
+      const _reviewProv  = _resolved.mode === 'sonnet' ? 'anthropic' : 'deepseek';
+      const _reviewModel = _reviewProv === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
       const reviewRaw = await callAI({
-        forceProvider: _aiProv,
-        model: _aiModel, max_tokens: 6000,
+        forceProvider: _reviewProv,
+        model: _reviewModel, max_tokens: 6000,
         messages: [{ role: 'user', content: reviewPrompt }],
       });
       const rm = reviewRaw && reviewRaw.match(/\{[\s\S]*\}/);

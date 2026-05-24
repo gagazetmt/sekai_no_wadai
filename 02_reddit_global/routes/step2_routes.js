@@ -1269,7 +1269,7 @@ function getUI() {
     try {
       const j = await fetchJson('/api/v3/suggest-labels', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ post, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'kimi' : false }),
+        body: JSON.stringify({ post, sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false }),
       });
       const jobId = j && j.jobId;
       if (!jobId) throw new Error('jobId 受信失敗');

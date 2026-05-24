@@ -1456,9 +1456,14 @@ ${JSON.stringify(modSummaries, null, 2).slice(0, 8000)}
 }`;
 
       // 2026-05-21: max_tokens 8000 → 12000 (全カード fix 出力で枯渇可能性)
+      // 2026-05-24: Sprint モード (kimi / deepseek) では監修も DeepSeek に固定 (コスト最安)。
+      //   Sprint OFF (mode=sonnet) では従来通り Sonnet 監修で精度優先。
+      const _reviewProv  = _resolved.mode === 'sonnet' ? 'anthropic' : 'deepseek';
+      const _reviewModel = _reviewProv === 'deepseek' ? 'deepseek-v4-flash' : 'claude-sonnet-4-6';
+      console.log(`[Step3 v3] 自己監修: provider=${_reviewProv}, model=${_reviewModel}`);
       const reviewRaw = await callAI({
-        forceProvider: 'anthropic',
-        model: 'claude-sonnet-4-6', max_tokens: 12000,
+        forceProvider: _reviewProv,
+        model: _reviewModel, max_tokens: 12000,
         messages: [{ role: 'user', content: reviewPrompt }],
       });
       const rm = reviewRaw && reviewRaw.match(/\{[\s\S]*\}/);
