@@ -92,8 +92,11 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
     });
     return res.choices[0].message.content;
   } else if (provider === "kimi" || provider === "openrouter") {
-    // model 未指定 or claude/deepseek 系の指定が来たら kimi にフォールバック
-    const useModel = (model && /^moonshotai\//.test(model)) ? model : "moonshotai/kimi-k2.6";
+    // model 未指定 or claude/deepseek 系の指定が来たら .env の KIMI_MODEL を使う
+    //   2026-05-24: k2.6 は reasoning モデルで 1 スライド 150s かかるため、 既定を
+    //   軽量・半額の k2.5 にダウングレード。 必要なら .env で再上書き可能。
+    const defaultKimi = process.env.KIMI_MODEL || "moonshotai/kimi-k2.5";
+    const useModel = (model && /^moonshotai\//.test(model)) ? model : defaultKimi;
     const msgs = safeSystem
       ? [{ role: "system", content: safeSystem }, ...safeMessages]
       : safeMessages;
