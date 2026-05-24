@@ -100,11 +100,25 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
     const msgs = safeSystem
       ? [{ role: "system", content: safeSystem }, ...safeMessages]
       : safeMessages;
-    const res = await client.chat.completions.create({
+    const reqBody = {
       model:      useModel,
       max_tokens,
       messages:   msgs,
-    });
+    };
+    // 2026-05-24: OpenRouter Provider Routing を env で強制指定可能に。
+    //   KIMI_PROVIDER_ORDER=Groq → Groq の LPU で reasoning 抜きの k2-0905 が爆速 (2.8s/7k入力)
+    //   カンマ区切りで複数指定可。 KIMI_ALLOW_FALLBACKS=0 で他 provider への落ち禁止。
+    const orderEnv = process.env.KIMI_PROVIDER_ORDER;
+    if (orderEnv) {
+      const order = orderEnv.split(",").map(s => s.trim()).filter(Boolean);
+      if (order.length) {
+        reqBody.provider = {
+          order,
+          allow_fallbacks: process.env.KIMI_ALLOW_FALLBACKS !== "0",
+        };
+      }
+    }
+    const res = await client.chat.completions.create(reqBody);
     return res.choices[0].message.content;
   } else {
     // 2026-05-24: max_tokens 24000 で non-streaming だと
