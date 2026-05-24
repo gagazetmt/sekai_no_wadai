@@ -43,6 +43,33 @@ function getClient(provider) {
   return _clients[provider];
 }
 
+// 2026-05-24: 孤立サロゲート (lone surrogate) を除去。
+//   wiki 全文 / curated 記事を prompt に流し込む過程で UTF-16 ペアが片割れだけ
+//   残ることがあり、DeepSeek の JSON パーサが「unexpected end of hex escape」で
+//   400 を返す事象が発生。送信前に � へ置換する。
+function _sanitizeForJson(str) {
+  if (typeof str !== "string") return str;
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "�");
+}
+function _sanitizeMessages(messages) {
+  if (!Array.isArray(messages)) return messages;
+  return messages.map((m) => {
+    if (!m || typeof m !== "object") return m;
+    if (typeof m.content === "string") return { ...m, content: _sanitizeForJson(m.content) };
+    if (Array.isArray(m.content)) {
+      return {
+        ...m,
+        content: m.content.map((part) =>
+          part && typeof part === "object" && typeof part.text === "string"
+            ? { ...part, text: _sanitizeForJson(part.text) }
+            : part
+        ),
+      };
+    }
+    return m;
+  });
+}
+
 /**
  * AIにメッセージを送り、テキスト応答を返す
  * @param {{ model, max_tokens, messages, system?, forceProvider? }} opts
@@ -52,10 +79,12 @@ function getClient(provider) {
 async function callAI({ model, max_tokens, messages, system, forceProvider }) {
   const provider = (forceProvider || PROVIDER).toLowerCase();
   const client   = getClient(provider);
+  const safeMessages = _sanitizeMessages(messages);
+  const safeSystem   = _sanitizeForJson(system);
   if (provider === "deepseek") {
-    const msgs = system
-      ? [{ role: "system", content: system }, ...messages]
-      : messages;
+    const msgs = safeSystem
+      ? [{ role: "system", content: safeSystem }, ...safeMessages]
+      : safeMessages;
     const res = await client.chat.completions.create({
       model:      "deepseek-v4-flash",
       max_tokens,
@@ -65,9 +94,9 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
   } else if (provider === "kimi" || provider === "openrouter") {
     // model 未指定 or claude/deepseek 系の指定が来たら kimi にフォールバック
     const useModel = (model && /^moonshotai\//.test(model)) ? model : "moonshotai/kimi-k2.6";
-    const msgs = system
-      ? [{ role: "system", content: system }, ...messages]
-      : messages;
+    const msgs = safeSystem
+      ? [{ role: "system", content: safeSystem }, ...safeMessages]
+      : safeMessages;
     const res = await client.chat.completions.create({
       model:      useModel,
       max_tokens,
@@ -75,10 +104,15 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
     });
     return res.choices[0].message.content;
   } else {
-    const opts = { model, max_tokens, messages };
-    if (system) opts.system = system;
-    const res = await client.messages.create(opts);
-    return res.content[0].text;
+    // 2026-05-24: max_tokens 24000 で non-streaming だと
+    //   「Streaming is required for operations that may take longer than 10 minutes」
+    //   を 400 で返されるため、streaming で受けて全文を組み立てて返す。
+    const opts = { model, max_tokens, messages: safeMessages };
+    if (safeSystem) opts.system = safeSystem;
+    const stream = client.messages.stream(opts);
+    const finalMessage = await stream.finalMessage();
+    const firstText = (finalMessage.content || []).find((b) => b.type === "text");
+    return firstText ? firstText.text : "";
   }
 }
 
