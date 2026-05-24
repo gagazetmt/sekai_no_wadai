@@ -183,8 +183,9 @@ JSONのみ:
     phase1 = _parseEntities(raw);
     if (!phase1) console.warn(`[Step2 phase1] ${_initialProv} JSON parse 失敗 / raw=` + (raw||'').slice(0, 200));
   } catch (e) { console.warn(`[Step2 phase1] ${_initialProv} 例外:`, e.message); }
-  // mode が 'deepseek' (SPRINT) なら fallback なし。 kimi/sonnet は fallbackProvider に落とす
-  if (!phase1 && _resolved.mode !== 'deepseek') {
+  // 2026-05-24: mode に関係なく failback を有効化 (DeepSeek CloudFront 504 等の障害で
+  //   空結果になる事故を回避)。 SPRINT モードでも entity 取得を最優先。
+  if (!phase1) {
     console.warn(`[Step2 phase1] ${_resolved.mode} (${_initialProv}) 失敗、 ${_resolved.fallbackProvider} にフォールバック`);
     try {
       const raw = await _askPhase1(_resolved.fallbackProvider);
@@ -273,7 +274,8 @@ JSONのみ:
       if (Array.isArray(p2?.entities)) {
         phase2Entities = p2.entities;
         console.log(`  Phase2: 追加 entities ${phase2Entities.length}件 (${_initialProv})`);
-      } else if (_resolved.mode !== 'deepseek') {
+      } else {
+        // 2026-05-24: mode に関係なく fallback 有効化 (DeepSeek 504 等の障害対策)
         console.warn(`[Step2 phase2-ai] ${_resolved.mode} (${_initialProv}) JSON parse 失敗、 ${_resolved.fallbackProvider} にフォールバック`);
         const raw2 = await _askPhase2(_resolved.fallbackProvider);
         const p2b = _parseEntities(raw2);
