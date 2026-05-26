@@ -7,6 +7,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { createArgumentPlan } = require('./v3_story_architect');
+const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
@@ -46,6 +47,24 @@ app.post('/api/v3/argument-plan/save', (req, res) => {
     const filePath = path.join(DATA_DIR, `${id}.json`);
     fs.writeFileSync(filePath, JSON.stringify(plan, null, 2));
     res.json({ success: true, id, filePath });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/v3/research/topic', async (req, res) => {
+  try {
+    const result = await runTopicResearch(req.body || {});
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/v3/research/wiki-side-stories', async (req, res) => {
+  try {
+    const result = await fetchWikiSideStories(req.body || {});
+    res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -276,6 +295,8 @@ pre {
 ペドリとラウールの扱いに注意</textarea>
       <div class="btnrow">
         <button id="generateBtn" onclick="generatePlan()">設計する</button>
+        <button class="secondary" id="researchBtn" onclick="runResearch()">リサーチ</button>
+        <button class="secondary" id="wikiBtn" onclick="runWikiSideStories()">小話Wiki</button>
         <button class="secondary" onclick="savePlan()">保存</button>
       </div>
     </div>
@@ -301,6 +322,8 @@ pre {
 </main>
 <script>
 let currentPlan = null;
+let currentResearch = null;
+let currentWikiStories = null;
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -346,6 +369,59 @@ async function savePlan() {
   if (!data.success) return alert(data.error || '保存失敗');
   await loadSaved();
   alert('保存したよ: ' + data.id);
+}
+
+async function runResearch() {
+  const btn = document.getElementById('researchBtn');
+  btn.disabled = true;
+  btn.textContent = '検索中...';
+  try {
+    const res = await fetch('/api/v3/research/topic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: document.getElementById('title').value,
+        memo: document.getElementById('memo').value,
+        plan: currentPlan,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'failed');
+    currentResearch = data.result;
+    if (currentPlan) renderPlan(currentPlan);
+    else renderResearchOnly();
+  } catch (error) {
+    alert('リサーチ失敗: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'リサーチ';
+  }
+}
+
+async function runWikiSideStories() {
+  const btn = document.getElementById('wikiBtn');
+  btn.disabled = true;
+  btn.textContent = '取得中...';
+  try {
+    const res = await fetch('/api/v3/research/wiki-side-stories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: document.getElementById('title').value,
+        memo: document.getElementById('memo').value,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'failed');
+    currentWikiStories = data.result;
+    if (currentPlan) renderPlan(currentPlan);
+    else renderResearchOnly();
+  } catch (error) {
+    alert('Wiki小話取得失敗: ' + error.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '小話Wiki';
+  }
 }
 
 async function loadSaved() {
@@ -417,7 +493,39 @@ function renderPlan(plan) {
         editorialNotes: plan.editorialNotes,
       }, null, 2)) + '</pre>' +
     '</div>' +
+    renderResearchPanels() +
     '<div class="panel"><span class="label">raw JSON</span><pre>' + esc(JSON.stringify(plan, null, 2)) + '</pre></div>';
+}
+
+function renderResearchOnly() {
+  document.getElementById('output').innerHTML = renderResearchPanels() || '<div class="empty">まだリサーチ結果がない。</div>';
+}
+
+function renderResearchPanels() {
+  let html = '';
+  if (currentResearch) {
+    html += '<div class="panel"><span class="label">案件リサーチ: 3クエリ → 各3〜5件選抜 → 本文fetch</span>' +
+      '<div class="summary-grid">' +
+        '<div><h2>Serper推定消費</h2><p>' + esc(currentResearch.serperCreditsEstimated) + ' credits</p></div>' +
+        '<div><h2>選抜URL</h2><p>' + esc(currentResearch.summary.selectedUrlCount) + '件 / full text ' + esc(currentResearch.summary.fullTextCount) + '件</p></div>' +
+        '<div><h2>検索クエリ</h2><p>' + esc(currentResearch.queries.join(' / ')) + '</p></div>' +
+      '</div>' +
+      currentResearch.learningCorpus.map((item) => (
+        '<div class="research" style="margin-top:10px;">' +
+          '<b>[' + esc(item.index) + '] ' + esc(item.title) + '</b><br>' +
+          esc(item.host) + ' / score ' + esc(item.score) + ' / ' + esc(item.fetchStatus) + ' / ' + esc(item.usableFor.join(', ')) + '<br>' +
+          '<span style="color:var(--muted)">' + esc(item.url) + '</span><br>' +
+          esc(String(item.text || '').slice(0, 600)) +
+        '</div>'
+      )).join('') +
+    '</div>';
+  }
+  if (currentWikiStories) {
+    html += '<div class="panel"><span class="label">小話Wiki候補: 主要人物/クラブを最大4件だけ</span>' +
+      '<pre>' + esc(JSON.stringify(currentWikiStories, null, 2)) + '</pre>' +
+    '</div>';
+  }
+  return html;
 }
 
 loadSaved();
