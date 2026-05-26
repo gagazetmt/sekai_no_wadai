@@ -290,11 +290,26 @@ function buildPlanFromBeats({
         '小話は centralQuestion に貢献する場合だけ採用する',
       ],
     },
+    humanBrief: buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }),
     slidePlan,
     thumbnailPlan: buildThumbnailPlan({ centralQuestion, thesis, beats }),
     voicePlan: buildVoicePlan(beats),
     globalRiskChecks,
     editorialNotes,
+  };
+}
+
+function buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }) {
+  return {
+    core: centralQuestion,
+    answer: thesis,
+    structure: beats.map((beat, index) => ({
+      no: index + 1,
+      label: tocLabelForBeat(beat),
+      role: beat.role,
+      point: beat.claim,
+    })),
+    cautions: globalRiskChecks,
   };
 }
 

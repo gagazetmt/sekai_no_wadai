@@ -207,6 +207,42 @@ button:disabled { opacity: .55; cursor: wait; }
   padding: 8px 10px;
   font-size: 12px;
 }
+.human-brief {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.brief-card {
+  background: #0a0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+.brief-card.wide { grid-column: 1 / -1; }
+.brief-card h2 {
+  margin: 0 0 8px;
+  color: var(--gold);
+  font-size: 13px;
+}
+.brief-card p {
+  margin: 0;
+  color: #e5e7eb;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.chapter-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.chapter-seed {
+  border-left: 4px solid var(--blue);
+  background: #111827;
+  padding: 10px;
+  border-radius: 6px;
+}
+.chapter-seed b { color: var(--text); font-size: 13px; }
+.chapter-seed span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.45; }
 .beat {
   display: grid;
   grid-template-columns: 118px 1fr 340px;
@@ -272,6 +308,8 @@ pre {
   main { grid-template-columns: 1fr; height: auto; }
   aside { border-right: 0; border-bottom: 1px solid var(--line); }
   .summary-grid { grid-template-columns: 1fr; }
+  .human-brief { grid-template-columns: 1fr; }
+  .chapter-list { grid-template-columns: 1fr; }
   .beat { grid-template-columns: 1fr; }
 }
 </style>
@@ -474,6 +512,7 @@ function renderPlan(plan) {
   }).join('');
 
   document.getElementById('output').innerHTML =
+    renderHumanBrief(plan) +
     '<div class="panel summary">' +
       '<div class="summary-grid">' +
         '<div><h2>中心問い</h2><p>' + esc(plan.centralQuestion) + '</p></div>' +
@@ -495,6 +534,31 @@ function renderPlan(plan) {
     '</div>' +
     renderResearchPanels() +
     '<div class="panel"><span class="label">raw JSON</span><pre>' + esc(JSON.stringify(plan, null, 2)) + '</pre></div>';
+}
+
+function renderHumanBrief(plan) {
+  const brief = plan.humanBrief || {
+    core: plan.centralQuestion,
+    answer: plan.thesis,
+    structure: (plan.beats || []).map((beat, i) => ({ no: i + 1, label: beat.role, point: beat.claim })),
+    cautions: plan.globalRiskChecks || [],
+  };
+  return '<div class="panel">' +
+    '<span class="label">人間用ブリーフ: まずここだけ見れば判断できる</span>' +
+    '<div class="human-brief">' +
+      '<div class="brief-card"><h2>1. 話題になっている核心</h2><p>' + esc(brief.core) + '</p></div>' +
+      '<div class="brief-card"><h2>2. それに対する答え</h2><p>' + esc(brief.answer) + '</p></div>' +
+      '<div class="brief-card wide"><h2>3. 論理展開の構造</h2><div class="chapter-list">' +
+        (brief.structure || []).map((item) => (
+          '<div class="chapter-seed"><b>' + esc(item.no) + '. ' + esc(item.label) + '</b>' +
+          '<span>' + esc(item.point) + '</span></div>'
+        )).join('') +
+      '</div></div>' +
+      '<div class="brief-card wide"><h2>4. 留意すべき点</h2><div class="chips">' +
+        (brief.cautions || []).map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('') +
+      '</div></div>' +
+    '</div>' +
+  '</div>';
 }
 
 function renderResearchOnly() {
