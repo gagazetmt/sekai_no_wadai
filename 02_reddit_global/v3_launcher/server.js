@@ -11,11 +11,18 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
+const UI_VERSION = 'v3-ui-e08946f-plus';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+app.use((_, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 app.use(express.json({ limit: '5mb' }));
 
 function safeId(value) {
@@ -133,6 +140,16 @@ header {
 }
 h1 { font-size: 18px; margin: 0; color: var(--gold); }
 .tag { color: var(--muted); font-size: 12px; }
+.version-badge {
+  display: inline-flex;
+  margin-top: 6px;
+  color: #111827;
+  background: var(--gold);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 900;
+}
 main {
   display: grid;
   grid-template-columns: 360px 1fr;
@@ -213,6 +230,9 @@ button:disabled { opacity: .55; cursor: wait; }
   gap: 12px;
 }
 .mobile-brief {
+  display: none;
+}
+.mobile-inline-result {
   display: none;
 }
 .brief-card {
@@ -372,6 +392,9 @@ pre {
     border: 2px solid var(--gold);
     background: #111827;
   }
+  .mobile-inline-result {
+    display: block;
+  }
   .mobile-brief h2 {
     margin: 0 0 6px;
     color: var(--gold);
@@ -402,7 +425,10 @@ pre {
 </head>
 <body>
 <header>
-  <h1>V3 Story Architect</h1>
+  <div>
+    <h1>V3 Story Architect</h1>
+    <span class="version-badge">${UI_VERSION}</span>
+  </div>
   <div class="tag">V2 preserved / argumentPlan prototype / port ${PORT}</div>
 </header>
 <main>
@@ -424,6 +450,7 @@ pre {
         <button class="secondary" onclick="savePlan()">保存</button>
       </div>
     </div>
+    <div id="mobileInlineResult" class="mobile-inline-result"></div>
     <div class="panel">
       <span class="label">この段階で確認すること</span>
       <div class="chips">
@@ -474,7 +501,10 @@ async function generatePlan() {
     if (!data.success) throw new Error(data.error || 'failed');
     currentPlan = data.plan;
     renderPlan(currentPlan);
-    document.getElementById('resultTop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const inline = document.getElementById('mobileInlineResult');
+    if (inline) inline.innerHTML = renderHumanBrief(currentPlan, true);
+    const target = window.matchMedia('(max-width: 720px)').matches ? inline : document.getElementById('resultTop');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     document.getElementById('output').innerHTML = '<div class="empty">生成失敗: ' + esc(error.message) + '</div>';
   } finally {
@@ -623,7 +653,7 @@ function renderPlan(plan) {
     '<div class="panel"><span class="label">raw JSON</span><pre>' + esc(JSON.stringify(plan, null, 2)) + '</pre></div>';
 }
 
-function renderHumanBrief(plan) {
+function renderHumanBrief(plan, inline = false) {
   const brief = plan.humanBrief || {
     core: plan.centralQuestion,
     answer: plan.thesis,
@@ -633,12 +663,13 @@ function renderHumanBrief(plan) {
   const mobileStructure = (brief.structure || []).slice(0, 6).map((item) =>
     '<li>' + esc(item.label) + '</li>'
   ).join('');
+  const resultId = inline ? '' : ' id="resultTop"';
   return '<div class="panel mobile-brief">' +
       '<h2>案件の核心</h2><p>' + esc(brief.core) + '</p>' +
       '<h2>答え</h2><p>' + esc(brief.answer) + '</p>' +
       '<h2>流れ</h2><ol>' + mobileStructure + '</ol>' +
     '</div>' +
-    '<div class="panel" id="resultTop">' +
+    '<div class="panel"' + resultId + '>' +
     '<span class="label">人間用ブリーフ: まずここだけ見れば判断できる</span>' +
     '<div class="human-brief">' +
       '<div class="brief-card"><h2>1. 話題になっている核心</h2><p>' + esc(brief.core) + '</p></div>' +
