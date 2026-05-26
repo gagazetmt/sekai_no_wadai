@@ -235,6 +235,16 @@ button:disabled { opacity: .55; cursor: wait; }
 .mobile-inline-result {
   display: none;
 }
+.brief-editor {
+  display: grid;
+  gap: 10px;
+}
+.brief-editor textarea {
+  min-height: 72px;
+}
+.brief-editor .short {
+  min-height: 52px;
+}
 .brief-card {
   background: #0a0d12;
   border: 1px solid var(--line);
@@ -435,6 +445,19 @@ pre {
   <aside>
     <div id="mobileInlineResult" class="mobile-inline-result"></div>
     <div class="panel">
+      <span class="label">ブリーフ微調整</span>
+      <div class="brief-editor">
+        <label class="label" for="briefCore">核心</label>
+        <textarea id="briefCore" class="short"></textarea>
+        <label class="label" for="briefAnswer">答え</label>
+        <textarea id="briefAnswer" class="short"></textarea>
+        <label class="label" for="briefPoints">論点</label>
+        <textarea id="briefPoints"></textarea>
+        <label class="label" for="briefCautions">注意点</label>
+        <textarea id="briefCautions" class="short"></textarea>
+      </div>
+    </div>
+    <div class="panel">
       <label class="label" for="title">動画トピック</label>
       <input id="title" value="スペイン代表、レアル・マドリー所属選手0人">
       <label class="label" for="memo" style="margin-top:12px;">相棒メモ・入れたい小話</label>
@@ -484,6 +507,27 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+function readBriefEditor() {
+  return {
+    core: document.getElementById('briefCore')?.value || '',
+    answer: document.getElementById('briefAnswer')?.value || '',
+    points: document.getElementById('briefPoints')?.value || '',
+    cautions: document.getElementById('briefCautions')?.value || '',
+  };
+}
+
+function fillBriefEditor(plan) {
+  const brief = plan.humanBrief || {};
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && !el.value.trim()) el.value = value || '';
+  };
+  set('briefCore', brief.core || plan.centralQuestion || '');
+  set('briefAnswer', brief.answer || plan.thesis || '');
+  set('briefPoints', (brief.structure || []).map((x, i) => '論点' + (i + 1) + ': ' + (x.point || x.label || '')).join('\\n'));
+  set('briefCautions', (brief.cautions || plan.globalRiskChecks || []).join('\\n'));
+}
+
 async function generatePlan(opts = {}) {
   const shouldScroll = opts.scroll !== false;
   const btn = document.getElementById('generateBtn');
@@ -496,14 +540,16 @@ async function generatePlan(opts = {}) {
       body: JSON.stringify({
         title: document.getElementById('title').value,
         memo: document.getElementById('memo').value,
+        brief: readBriefEditor(),
       }),
     });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'failed');
     currentPlan = data.plan;
+    fillBriefEditor(currentPlan);
     renderPlan(currentPlan);
     const inline = document.getElementById('mobileInlineResult');
-    if (inline) inline.innerHTML = renderHumanBrief(currentPlan, true);
+    if (inline) inline.innerHTML = renderSimpleBrief(currentPlan, false);
     const target = window.matchMedia('(max-width: 720px)').matches ? inline : document.getElementById('resultTop');
     if (shouldScroll) target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
@@ -630,7 +676,7 @@ function renderPlan(plan) {
   }).join('');
 
   document.getElementById('output').innerHTML =
-    renderHumanBrief(plan) +
+    renderSimpleBrief(plan, true) +
     '<div class="panel summary">' +
       '<div class="summary-grid">' +
         '<div><h2>中心問い</h2><p>' + esc(plan.centralQuestion) + '</p></div>' +
@@ -652,6 +698,24 @@ function renderPlan(plan) {
     '</div>' +
     renderResearchPanels() +
     '<div class="panel"><span class="label">raw JSON</span><pre>' + esc(JSON.stringify(plan, null, 2)) + '</pre></div>';
+}
+
+function renderSimpleBrief(plan, includeId = true) {
+  const brief = plan.humanBrief || {};
+  return '<div class="panel"' + (includeId ? ' id="resultTop"' : '') + '>' +
+    '<span class="label">設計結果</span>' +
+    '<div class="brief-card"><h2>核心</h2><p>' + esc(brief.core || plan.centralQuestion || '') + '</p></div>' +
+    '<div class="brief-card" style="margin-top:10px;"><h2>答え</h2><p>' + esc(brief.answer || plan.thesis || '') + '</p></div>' +
+    '<div class="brief-card wide" style="margin-top:10px;"><h2>論点</h2><div class="argument-boxes">' +
+      ((brief.structure || []).map((item) => (
+        '<div class="argument-box"><span class="arg-label">論点' + esc(item.no) + '</span><h3>' +
+        esc(item.label) + '</h3><p>' + esc(item.point) + '</p></div>'
+      )).join('')) +
+    '</div></div>' +
+    '<div class="brief-card wide" style="margin-top:10px;"><h2>注意点</h2><div class="chips">' +
+      ((brief.cautions || []).map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('')) +
+    '</div></div>' +
+  '</div>';
 }
 
 function renderHumanBrief(plan, inline = false) {

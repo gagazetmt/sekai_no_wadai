@@ -36,6 +36,23 @@ function buildTopicInput({ title = '', memo = '', sourceComments = [] } = {}) {
   };
 }
 
+function parseEditableBrief(brief = {}) {
+  if (!brief || typeof brief !== 'object') return null;
+  const core = String(brief.core || '').trim();
+  const answer = String(brief.answer || '').trim();
+  const pointsText = String(brief.points || brief.structure || '').trim();
+  const cautionsText = String(brief.cautions || '').trim();
+  if (!core && !answer && !pointsText && !cautionsText) return null;
+
+  const points = normalizeLines(pointsText)
+    .map((line) => line.replace(/^論点\s*\d+[:：.\s]*/i, '').trim())
+    .filter(Boolean);
+  const cautions = normalizeLines(cautionsText)
+    .map((line) => line.replace(/^[-・*]\s*/, '').trim())
+    .filter(Boolean);
+  return { core, answer, points, cautions };
+}
+
 function makeResearchTask({ id, beatId, question, sourceType, queries, required = true, successCriteria }) {
   return {
     id,
@@ -75,6 +92,9 @@ function makeBeat({
 }
 
 function buildGenericPlan(input) {
+  const editable = parseEditableBrief(input.brief);
+  if (editable) return buildPlanFromEditableBrief(input, editable);
+
   const topic = input.title || input.notes[0] || '未設定トピック';
   const centralQuestion = topic.endsWith('？') || topic.endsWith('?')
     ? topic
@@ -141,6 +161,57 @@ function buildGenericPlan(input) {
       '出典が弱い情報を断定していないか',
       'サムネと本編の約束がズレていないか',
     ],
+    editorialNotes: input.notes,
+  });
+}
+
+function buildPlanFromEditableBrief(input, editable) {
+  const topic = input.title || editable.core || '未設定トピック';
+  const points = editable.points.length ? editable.points : ['まず事実を確認する', '背景を整理する', '答えを出す'];
+  const beats = [];
+
+  beats.push(makeBeat({
+    id: 'beat_01_hook',
+    role: 'hook',
+    claim: editable.core || `${topic}の核心を提示する`,
+    slideIntent: '冒頭で視聴者が見る理由を作る',
+    evidenceNeeded: ['話題の事実確認', '最新ニュース'],
+    riskChecks: ['事実確認前に断定しない'],
+    voiceStyle: 'fast_urgent',
+    thumbnailUse: true,
+  }));
+
+  points.forEach((point, idx) => {
+    beats.push(makeBeat({
+      id: `beat_${String(idx + 2).padStart(2, '0')}_point`,
+      role: idx === points.length - 1 ? 'evidence' : 'context',
+      claim: point,
+      slideIntent: 'ブリーフの論点を、必要なら複数スライドに展開する',
+      evidenceNeeded: [`${point}を支えるニュース/データ`, `${point}の反証または補足`],
+      riskChecks: editable.cautions,
+      voiceStyle: idx === points.length - 1 ? 'calm_precise' : 'clear_context',
+    }));
+  });
+
+  beats.push(makeBeat({
+    id: `beat_${String(points.length + 2).padStart(2, '0')}_answer`,
+    role: 'answer',
+    claim: editable.answer || '冒頭の問いに答える',
+    slideIntent: 'ブリーフの答えを、前段の論点から回収する',
+    evidenceNeeded: ['前段論点の要約', '答えを安全に言える根拠'],
+    riskChecks: editable.cautions,
+    voiceStyle: 'confident_close',
+    thumbnailUse: true,
+  }));
+
+  return buildPlanFromBeats({
+    topic,
+    centralQuestion: editable.core || `${topic}で何を見るべきか？`,
+    thesis: editable.answer || 'ブリーフ編集後に確定。',
+    viewerPromise: 'ブリーフの論点に沿って、話題の核心から答えまで整理する。',
+    angle: 'editable_brief',
+    beats,
+    globalRiskChecks: editable.cautions,
     editorialNotes: input.notes,
   });
 }
@@ -398,6 +469,8 @@ function voiceInstruction(style) {
 
 function createArgumentPlan(rawInput = {}) {
   const input = buildTopicInput(rawInput);
+  input.brief = rawInput.brief || null;
+  if (parseEditableBrief(input.brief)) return buildPlanFromEditableBrief(input, parseEditableBrief(input.brief));
   const haystack = `${input.title}\n${input.memo}\n${input.sourceComments.join('\n')}`;
   const matched = DEFAULT_TOPIC_PATTERNS.find((p) => p.test.test(haystack));
   return matched ? matched.build(input) : buildGenericPlan(input);
