@@ -212,6 +212,9 @@ button:disabled { opacity: .55; cursor: wait; }
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
+.mobile-brief {
+  display: none;
+}
 .brief-card {
   background: #0a0d12;
   border: 1px solid var(--line);
@@ -311,6 +314,49 @@ pre {
   .human-brief { grid-template-columns: 1fr; }
   .chapter-list { grid-template-columns: 1fr; }
   .beat { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  header {
+    height: auto;
+    align-items: flex-start;
+    gap: 6px;
+    flex-direction: column;
+    padding: 12px 14px;
+  }
+  h1 { font-size: 16px; }
+  .tag { font-size: 11px; }
+  main { min-height: 0; }
+  aside { padding: 10px; }
+  .workspace { padding: 10px; }
+  .panel { padding: 10px; margin-bottom: 10px; border-radius: 6px; }
+  textarea { min-height: 120px; }
+  .btnrow { grid-template-columns: 1fr 1fr; }
+  button { min-height: 42px; }
+  .mobile-brief {
+    display: block;
+    border: 2px solid var(--gold);
+    background: #111827;
+  }
+  .mobile-brief h2 {
+    margin: 0 0 6px;
+    color: var(--gold);
+    font-size: 13px;
+  }
+  .mobile-brief p {
+    margin: 0 0 10px;
+    line-height: 1.55;
+    font-size: 14px;
+  }
+  .mobile-brief ol {
+    margin: 0;
+    padding-left: 18px;
+    color: #dbeafe;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .brief-card p { font-size: 14px; }
+  .chapter-seed { padding: 8px; }
+  .beat { padding: 10px; gap: 8px; }
 }
 </style>
 </head>
@@ -543,7 +589,15 @@ function renderHumanBrief(plan) {
     structure: (plan.beats || []).map((beat, i) => ({ no: i + 1, label: beat.role, point: beat.claim })),
     cautions: plan.globalRiskChecks || [],
   };
-  return '<div class="panel">' +
+  const mobileStructure = (brief.structure || []).slice(0, 6).map((item) =>
+    '<li>' + esc(item.label) + '</li>'
+  ).join('');
+  return '<div class="panel mobile-brief">' +
+      '<h2>案件の核心</h2><p>' + esc(brief.core) + '</p>' +
+      '<h2>答え</h2><p>' + esc(brief.answer) + '</p>' +
+      '<h2>流れ</h2><ol>' + mobileStructure + '</ol>' +
+    '</div>' +
+    '<div class="panel">' +
     '<span class="label">人間用ブリーフ: まずここだけ見れば判断できる</span>' +
     '<div class="human-brief">' +
       '<div class="brief-card"><h2>1. 話題になっている核心</h2><p>' + esc(brief.core) + '</p></div>' +
