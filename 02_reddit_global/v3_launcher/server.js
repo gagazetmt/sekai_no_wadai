@@ -246,6 +246,41 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .chapter-seed b { color: var(--text); font-size: 13px; }
 .chapter-seed span { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.45; }
+.argument-boxes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.argument-box {
+  background: #0b1220;
+  border: 1px solid #334155;
+  border-left: 6px solid var(--blue);
+  border-radius: 8px;
+  padding: 12px;
+}
+.argument-box .arg-label {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(96, 165, 250, .18);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, .45);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+.argument-box h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+.argument-box p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .beat {
   display: grid;
   grid-template-columns: 118px 1fr 340px;
@@ -356,6 +391,11 @@ pre {
   }
   .brief-card p { font-size: 14px; }
   .chapter-seed { padding: 8px; }
+  .argument-boxes { grid-template-columns: 1fr; }
+  .argument-box { padding: 12px; border-left-width: 5px; }
+  .argument-box .arg-label { font-size: 12px; }
+  .argument-box h3 { font-size: 15px; }
+  .argument-box p { font-size: 13px; }
   .beat { padding: 10px; gap: 8px; }
 }
 </style>
@@ -434,6 +474,7 @@ async function generatePlan() {
     if (!data.success) throw new Error(data.error || 'failed');
     currentPlan = data.plan;
     renderPlan(currentPlan);
+    document.getElementById('resultTop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     document.getElementById('output').innerHTML = '<div class="empty">生成失敗: ' + esc(error.message) + '</div>';
   } finally {
@@ -597,15 +638,18 @@ function renderHumanBrief(plan) {
       '<h2>答え</h2><p>' + esc(brief.answer) + '</p>' +
       '<h2>流れ</h2><ol>' + mobileStructure + '</ol>' +
     '</div>' +
-    '<div class="panel">' +
+    '<div class="panel" id="resultTop">' +
     '<span class="label">人間用ブリーフ: まずここだけ見れば判断できる</span>' +
     '<div class="human-brief">' +
       '<div class="brief-card"><h2>1. 話題になっている核心</h2><p>' + esc(brief.core) + '</p></div>' +
       '<div class="brief-card"><h2>2. それに対する答え</h2><p>' + esc(brief.answer) + '</p></div>' +
-      '<div class="brief-card wide"><h2>3. 論理展開の構造</h2><div class="chapter-list">' +
+      '<div class="brief-card wide"><h2>3. 論理展開の構造</h2><div class="argument-boxes">' +
         (brief.structure || []).map((item) => (
-          '<div class="chapter-seed"><b>' + esc(item.no) + '. ' + esc(item.label) + '</b>' +
-          '<span>' + esc(item.point) + '</span></div>'
+          '<div class="argument-box">' +
+            '<span class="arg-label">論点' + esc(item.no) + '</span>' +
+            '<h3>' + esc(item.label) + '</h3>' +
+            '<p>' + esc(item.point) + '</p>' +
+          '</div>'
         )).join('') +
       '</div></div>' +
       '<div class="brief-card wide"><h2>4. 留意すべき点</h2><div class="chips">' +
