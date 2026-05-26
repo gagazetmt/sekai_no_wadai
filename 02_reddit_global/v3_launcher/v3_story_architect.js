@@ -168,6 +168,7 @@ function buildGenericPlan(input) {
 function buildPlanFromEditableBrief(input, editable) {
   const topic = input.title || editable.core || '未設定トピック';
   const points = editable.points.length ? editable.points : ['まず事実を確認する', '背景を整理する', '答えを出す'];
+  const chapters = groupPointsIntoChapters(points);
   const beats = [];
 
   beats.push(makeBeat({
@@ -181,20 +182,24 @@ function buildPlanFromEditableBrief(input, editable) {
     thumbnailUse: true,
   }));
 
-  points.forEach((point, idx) => {
+  chapters.forEach((chapter, idx) => {
+    const claim = chapter.points.join(' / ');
     beats.push(makeBeat({
       id: `beat_${String(idx + 2).padStart(2, '0')}_point`,
-      role: idx === points.length - 1 ? 'evidence' : 'context',
-      claim: point,
-      slideIntent: 'ブリーフの論点を、必要なら複数スライドに展開する',
-      evidenceNeeded: [`${point}を支えるニュース/データ`, `${point}の反証または補足`],
+      role: idx === chapters.length - 1 ? 'evidence' : 'context',
+      claim,
+      slideIntent: 'ブリーフの論点を章の材料としてまとめ、必要なら複数スライドへ分ける',
+      evidenceNeeded: chapter.points.flatMap((point) => [
+        `${point}を支えるニュース/データ`,
+        `${point}の反証または補足`,
+      ]),
       riskChecks: editable.cautions,
-      voiceStyle: idx === points.length - 1 ? 'calm_precise' : 'clear_context',
+      voiceStyle: idx === chapters.length - 1 ? 'calm_precise' : 'clear_context',
     }));
   });
 
   beats.push(makeBeat({
-    id: `beat_${String(points.length + 2).padStart(2, '0')}_answer`,
+    id: `beat_${String(chapters.length + 2).padStart(2, '0')}_answer`,
     role: 'answer',
     claim: editable.answer || '冒頭の問いに答える',
     slideIntent: 'ブリーフの答えを、前段の論点から回収する',
@@ -213,7 +218,33 @@ function buildPlanFromEditableBrief(input, editable) {
     beats,
     globalRiskChecks: editable.cautions,
     editorialNotes: input.notes,
+    humanBrief: buildHumanBriefFromEditable({ editable, centralQuestion: editable.core || `${topic}で何を見るべきか？`, thesis: editable.answer || 'ブリーフ編集後に確定。', chapters }),
   });
+}
+
+function groupPointsIntoChapters(points) {
+  if (points.length <= 4) return points.map((point) => ({ points: [point] }));
+
+  const chapterCount = Math.min(4, Math.ceil(points.length / 2));
+  const chapters = Array.from({ length: chapterCount }, () => ({ points: [] }));
+  points.forEach((point, index) => {
+    chapters[Math.floor(index * chapterCount / points.length)].points.push(point);
+  });
+  return chapters.filter((chapter) => chapter.points.length);
+}
+
+function buildHumanBriefFromEditable({ editable, centralQuestion, thesis, chapters }) {
+  return {
+    core: centralQuestion,
+    answer: thesis,
+    structure: chapters.map((chapter, index) => ({
+      no: index + 1,
+      label: chapter.points.length > 1 ? `論点${index + 1}: ${chapter.points[0]} ほか` : `論点${index + 1}`,
+      role: 'chapter_seed',
+      point: chapter.points.join(' / '),
+    })),
+    cautions: editable.cautions,
+  };
 }
 
 function buildMadridSpainZeroPlan(input) {
@@ -306,6 +337,7 @@ function buildPlanFromBeats({
   beats,
   globalRiskChecks = [],
   editorialNotes = [],
+  humanBrief = null,
 }) {
   const researchTasks = [];
   beats.forEach((beat, i) => {
@@ -361,7 +393,7 @@ function buildPlanFromBeats({
         '小話は centralQuestion に貢献する場合だけ採用する',
       ],
     },
-    humanBrief: buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }),
+    humanBrief: humanBrief || buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }),
     slidePlan,
     thumbnailPlan: buildThumbnailPlan({ centralQuestion, thesis, beats }),
     voicePlan: buildVoicePlan(beats),

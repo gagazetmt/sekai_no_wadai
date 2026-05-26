@@ -11,7 +11,7 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-e08946f-plus';
+const UI_VERSION = 'v3-ui-brief-to-beats';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -655,7 +655,7 @@ function renderPlan(plan) {
   const beatsHtml = plan.beats.map((beat, index) => {
     const tasks = tasksByBeat[beat.id] || [];
     return '<div class="beat">' +
-      '<div><div class="role">' + esc(beat.role) + '</div><div style="font-size:11px;color:var(--muted);margin-top:8px;">slide ' + (index + 1) + '</div></div>' +
+      '<div><div class="role">' + esc(beat.role) + '</div><div style="font-size:11px;color:var(--muted);margin-top:8px;">beat ' + (index + 1) + '</div></div>' +
       '<div>' +
         '<h3>' + esc(beat.claim) + '</h3>' +
         '<p>' + esc(beat.slideIntent) + '</p>' +
@@ -687,7 +687,7 @@ function renderPlan(plan) {
     '<div class="panel"><span class="label">TOC: 答えまでの道筋</span><div class="toc">' +
       plan.toc.map((item, i) => '<span>' + (i + 1) + '. ' + esc(item.label) + '</span>').join('') +
     '</div></div>' +
-    '<div class="panel"><span class="label">beats: 論旨上の一手 + 必要証拠 + 危険チェック</span>' + beatsHtml + '</div>' +
+    '<div class="panel"><span class="label">beats: 論旨上の一手。ここから必要に応じて複数スライド化</span>' + beatsHtml + '</div>' +
     '<div class="panel"><span class="label">サムネ / 声 / 全体リスク</span>' +
       '<pre>' + esc(JSON.stringify({
         thumbnailPlan: plan.thumbnailPlan,
