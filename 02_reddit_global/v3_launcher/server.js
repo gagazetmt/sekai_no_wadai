@@ -11,7 +11,7 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-step-tabs';
+const UI_VERSION = 'v3-ui-slide-data';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -379,6 +379,36 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .slide-row h3 { margin: 0 0 5px; font-size: 14px; }
 .slide-row p { margin: 0 0 7px; color: #cbd5e1; font-size: 12px; line-height: 1.45; }
+.slide-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+.meta-pill {
+  border: 1px solid var(--line);
+  background: #111827;
+  color: #dbeafe;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.meta-pill.new { color: #fde68a; border-color: rgba(242,184,75,.55); }
+.data-reqs {
+  display: grid;
+  gap: 6px;
+}
+.data-req {
+  border: 1px solid var(--line);
+  background: #111827;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.data-req b { color: var(--text); }
+.data-req span { display: block; color: var(--muted); margin-top: 3px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   border: 1px solid var(--line);
@@ -706,9 +736,17 @@ function renderPlan(plan) {
       '<div class="slide-no">' + (index + 1) + '</div>' +
       '<div>' +
         '<h3>' + esc(slide.headline) + '</h3>' +
+        '<div class="slide-meta">' +
+          '<span class="meta-pill' + (slide.templateStatus === 'v3_candidate' ? ' new' : '') + '">' + esc(slide.slideType) + '</span>' +
+          '<span class="meta-pill">' + esc(slide.templateStatus === 'v3_candidate' ? '追加候補' : '既存型') + '</span>' +
+        '</div>' +
         '<p>' + esc(slide.visualIntent) + '</p>' +
-        '<div class="chips">' +
-          (slide.dataSlots || []).map((slot) => '<span class="chip">' + esc(slot.label) + '</span>').join('') +
+        '<div class="data-reqs">' +
+          (slide.dataSlots || []).map((slot) => (
+            '<div class="data-req"><b>' + esc(slot.label) + '</b>' +
+            '<span>値: ' + esc(slot.expectedValue || '根拠') + '</span>' +
+            '<span>取得元: ' + esc(slot.sourceHint || slot.sourceType || '') + '</span></div>'
+          )).join('') +
         '</div>' +
       '</div>' +
     '</div>'

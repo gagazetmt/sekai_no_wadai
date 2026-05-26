@@ -399,21 +399,20 @@ function buildSlidePlanFromBeats(beats) {
 
     chunks.forEach((chunk, chunkIndex) => {
       const split = chunks.length > 1;
+      const template = chooseSlideTemplate(beat, chunk);
       slides.push({
         id: `slide_${String(slides.length + 1).padStart(2, '0')}`,
         beatId: beat.id,
         role: beat.role,
-        slideType: split ? `${slideTypeForRole(beat.role)}_part${chunkIndex + 1}` : slideTypeForRole(beat.role),
+        slideType: template.type,
+        templateStatus: template.status,
+        templateReason: template.reason,
         headline: split ? `${tocLabelForBeat(beat)} ${chunkIndex + 1}` : tocLabelForBeat(beat),
         claim: beat.claim,
         visualIntent: split
           ? `${beat.slideIntent}。このスライドでは材料${chunkIndex + 1}だけを見る`
           : beat.slideIntent,
-        dataSlots: chunk.map((need) => ({
-          label: need,
-          binding: '',
-          required: true,
-        })),
+        dataSlots: chunk.map((need) => buildDataRequirement(need)),
         ttsStyle: beat.voiceStyle,
         parentBeatRole: beat.role,
       });
@@ -421,6 +420,62 @@ function buildSlidePlanFromBeats(beats) {
   });
 
   return slides;
+}
+
+function chooseSlideTemplate(beat, evidence) {
+  const text = `${beat.role} ${beat.claim} ${evidence.join(' ')}`;
+  const existing = (type, reason) => ({ type, status: 'existing_v2', reason });
+  const candidate = (type, reason) => ({ type, status: 'v3_candidate', reason });
+
+  if (beat.role === 'hook') return existing('opening', '冒頭の違和感を強く出す既存opening型');
+  if (/2010|過去|昔|黄金期|年表|経緯|移籍/.test(text)) return existing('history', '時系列・来歴を並べる既存history型');
+  if (/比較|vs|VS|バルサ|マドリー|二大|左右|対比/.test(text)) return existing('comparison', 'クラブ/時代の対比は既存comparison型');
+  if (/人数|所属|国籍|勝点|成績|得点|市場価値|リスト|選手数/.test(text)) return existing('stats', '数字・一覧は既存stats型');
+  if (/経歴|プロフィール|人物|選手|監督/.test(text)) return existing('profile', '人物やクラブの基礎情報は既存profile型');
+  if (beat.role === 'answer') return existing('insight', '結論の短句を重ねる既存insight型');
+
+  return candidate('argument_map', '主張と根拠のつながりを1枚で見せる新規候補');
+}
+
+function buildDataRequirement(need) {
+  const source = inferDataSource(need);
+  return {
+    label: need,
+    expectedValue: expectedValueForNeed(need),
+    sourceType: source.type,
+    sourceHint: source.hint,
+    binding: '',
+    required: true,
+  };
+}
+
+function inferDataSource(need) {
+  const s = String(need || '');
+  if (/最新|ニュース|コメント|発言|監督|リスト|招集/.test(s)) {
+    return { type: 'serper_article', hint: 'Serper 3クエリ上位記事 + 本文fetch' };
+  }
+  if (/2010|W杯|代表|所属クラブ一覧|経歴|来歴|移籍/.test(s)) {
+    return { type: 'wiki_or_official', hint: 'Wikipedia / FIFA / UEFA / 公式プロフィール' };
+  }
+  if (/国籍|所属|市場価値|成績|得点|アシスト|順位|勝点|有望株/.test(s)) {
+    return { type: 'sofa_fotmob_tm', hint: 'SofaScore / FotMob / Transfermarkt系の構造化データ' };
+  }
+  if (/反証|補足|例外|別解釈|断定/.test(s)) {
+    return { type: 'cross_check', hint: '記事本文 + Wiki + 既存データの照合' };
+  }
+  return { type: 'web_research', hint: 'Serper上位記事 + 本文fetch' };
+}
+
+function expectedValueForNeed(need) {
+  const s = String(need || '');
+  if (/人数|選手数/.test(s)) return '数値または人数';
+  if (/一覧|リスト/.test(s)) return '名前リスト';
+  if (/コメント|発言/.test(s)) return '短い引用/要約';
+  if (/経歴|移籍|来歴/.test(s)) return '年・クラブ・移籍元/先';
+  if (/国籍|所属/.test(s)) return '国籍/所属クラブ';
+  if (/成績|得点|アシスト|勝点|順位/.test(s)) return '主要スタッツ';
+  if (/反証|補足|例外|別解釈/.test(s)) return '安全な言い換え材料';
+  return '根拠として使える事実';
 }
 
 function buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }) {
