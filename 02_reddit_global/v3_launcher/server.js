@@ -433,6 +433,7 @@ pre {
 </header>
 <main>
   <aside>
+    <div id="mobileInlineResult" class="mobile-inline-result"></div>
     <div class="panel">
       <label class="label" for="title">動画トピック</label>
       <input id="title" value="スペイン代表、レアル・マドリー所属選手0人">
@@ -450,7 +451,6 @@ pre {
         <button class="secondary" onclick="savePlan()">保存</button>
       </div>
     </div>
-    <div id="mobileInlineResult" class="mobile-inline-result"></div>
     <div class="panel">
       <span class="label">この段階で確認すること</span>
       <div class="chips">
@@ -484,7 +484,8 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
-async function generatePlan() {
+async function generatePlan(opts = {}) {
+  const shouldScroll = opts.scroll !== false;
   const btn = document.getElementById('generateBtn');
   btn.disabled = true;
   btn.textContent = '設計中...';
@@ -504,7 +505,7 @@ async function generatePlan() {
     const inline = document.getElementById('mobileInlineResult');
     if (inline) inline.innerHTML = renderHumanBrief(currentPlan, true);
     const target = window.matchMedia('(max-width: 720px)').matches ? inline : document.getElementById('resultTop');
-    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (shouldScroll) target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     document.getElementById('output').innerHTML = '<div class="empty">生成失敗: ' + esc(error.message) + '</div>';
   } finally {
@@ -722,6 +723,7 @@ function renderResearchPanels() {
 }
 
 loadSaved();
+generatePlan({ scroll: false });
 </script>
 </body>
 </html>`);
