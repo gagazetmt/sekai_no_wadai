@@ -11,7 +11,7 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-brief-to-beats';
+const UI_VERSION = 'v3-ui-simple-result';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -443,7 +443,6 @@ pre {
 </header>
 <main>
   <aside>
-    <div id="mobileInlineResult" class="mobile-inline-result"></div>
     <div class="panel">
       <span class="label">ブリーフ微調整</span>
       <div class="brief-editor">
@@ -548,9 +547,7 @@ async function generatePlan(opts = {}) {
     currentPlan = data.plan;
     fillBriefEditor(currentPlan);
     renderPlan(currentPlan);
-    const inline = document.getElementById('mobileInlineResult');
-    if (inline) inline.innerHTML = renderSimpleBrief(currentPlan, false);
-    const target = window.matchMedia('(max-width: 720px)').matches ? inline : document.getElementById('resultTop');
+    const target = document.getElementById('resultTop');
     if (shouldScroll) target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     document.getElementById('output').innerHTML = '<div class="empty">生成失敗: ' + esc(error.message) + '</div>';
@@ -677,27 +674,8 @@ function renderPlan(plan) {
 
   document.getElementById('output').innerHTML =
     renderSimpleBrief(plan, true) +
-    '<div class="panel summary">' +
-      '<div class="summary-grid">' +
-        '<div><h2>中心問い</h2><p>' + esc(plan.centralQuestion) + '</p></div>' +
-        '<div><h2>仮結論</h2><p>' + esc(plan.thesis) + '</p></div>' +
-        '<div><h2>視聴者への約束</h2><p>' + esc(plan.viewerPromise) + '</p></div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="panel"><span class="label">TOC: 答えまでの道筋</span><div class="toc">' +
-      plan.toc.map((item, i) => '<span>' + (i + 1) + '. ' + esc(item.label) + '</span>').join('') +
-    '</div></div>' +
     '<div class="panel"><span class="label">beats: 論旨上の一手。ここから必要に応じて複数スライド化</span>' + beatsHtml + '</div>' +
-    '<div class="panel"><span class="label">サムネ / 声 / 全体リスク</span>' +
-      '<pre>' + esc(JSON.stringify({
-        thumbnailPlan: plan.thumbnailPlan,
-        voicePlan: plan.voicePlan,
-        globalRiskChecks: plan.globalRiskChecks,
-        editorialNotes: plan.editorialNotes,
-      }, null, 2)) + '</pre>' +
-    '</div>' +
-    renderResearchPanels() +
-    '<div class="panel"><span class="label">raw JSON</span><pre>' + esc(JSON.stringify(plan, null, 2)) + '</pre></div>';
+    renderResearchPanels();
 }
 
 function renderSimpleBrief(plan, includeId = true) {
