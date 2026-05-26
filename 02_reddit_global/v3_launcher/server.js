@@ -11,7 +11,7 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-slide-plan';
+const UI_VERSION = 'v3-ui-step-tabs';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -263,6 +263,23 @@ button:disabled { opacity: .55; cursor: wait; }
   font-size: 15px;
   line-height: 1.55;
 }
+.view-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.view-tab {
+  background: #263142;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.view-tab.active {
+  background: var(--gold);
+  color: #111827;
+}
+.view-panel { display: none; }
+.view-panel.active { display: block; }
 .chapter-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -524,6 +541,7 @@ pre {
 let currentPlan = null;
 let currentResearch = null;
 let currentWikiStories = null;
+let activeView = 'brief';
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -697,28 +715,55 @@ function renderPlan(plan) {
   )).join('');
 
   document.getElementById('output').innerHTML =
-    renderSimpleBrief(plan, true) +
-    '<div class="panel"><span class="label">beats: 論旨上の一手。ここから必要に応じて複数スライド化</span>' + beatsHtml + '</div>' +
-    '<div class="panel"><span class="label">スライド案: beatを画面単位に分解</span><div class="slide-list">' + slidesHtml + '</div></div>' +
+    renderResultTabs(plan, beatsHtml, slidesHtml) +
     renderResearchPanels();
+  setResultView(activeView);
 }
 
-function renderSimpleBrief(plan, includeId = true) {
+function setResultView(view) {
+  activeView = view;
+  document.querySelectorAll('.view-tab').forEach((el) => {
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+  document.querySelectorAll('.view-panel').forEach((el) => {
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+}
+
+function renderResultTabs(plan, beatsHtml, slidesHtml) {
+  return '<div class="panel" id="resultTop">' +
+    '<div class="view-tabs">' +
+      '<button class="view-tab" data-view="brief" onclick="setResultView(\\'brief\\')">ブリーフ</button>' +
+      '<button class="view-tab" data-view="arguments" onclick="setResultView(\\'arguments\\')">論点</button>' +
+      '<button class="view-tab" data-view="beats" onclick="setResultView(\\'beats\\')">beat</button>' +
+      '<button class="view-tab" data-view="slides" onclick="setResultView(\\'slides\\')">スライド</button>' +
+    '</div>' +
+    '<div class="view-panel" data-view="brief">' + renderBriefView(plan) + '</div>' +
+    '<div class="view-panel" data-view="arguments">' + renderArgumentsView(plan) + '</div>' +
+    '<div class="view-panel" data-view="beats"><span class="label">論旨上の一手。ここから必要に応じて複数スライド化</span>' + beatsHtml + '</div>' +
+    '<div class="view-panel" data-view="slides"><span class="label">beatを画面単位に分解</span><div class="slide-list">' + slidesHtml + '</div></div>' +
+  '</div>';
+}
+
+function renderBriefView(plan) {
   const brief = plan.humanBrief || {};
-  return '<div class="panel"' + (includeId ? ' id="resultTop"' : '') + '>' +
-    '<span class="label">設計結果</span>' +
+  return '<span class="label">設計結果</span>' +
     '<div class="brief-card"><h2>核心</h2><p>' + esc(brief.core || plan.centralQuestion || '') + '</p></div>' +
     '<div class="brief-card" style="margin-top:10px;"><h2>答え</h2><p>' + esc(brief.answer || plan.thesis || '') + '</p></div>' +
-    '<div class="brief-card wide" style="margin-top:10px;"><h2>論点</h2><div class="argument-boxes">' +
+    '<div class="brief-card wide" style="margin-top:10px;"><h2>注意点</h2><div class="chips">' +
+      ((brief.cautions || []).map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('')) +
+    '</div></div>';
+}
+
+function renderArgumentsView(plan) {
+  const brief = plan.humanBrief || {};
+  return '<span class="label">論点</span>' +
+    '<div class="argument-boxes">' +
       ((brief.structure || []).map((item) => (
         '<div class="argument-box"><span class="arg-label">論点' + esc(item.no) + '</span><h3>' +
         esc(item.label) + '</h3><p>' + esc(item.point) + '</p></div>'
       )).join('')) +
-    '</div></div>' +
-    '<div class="brief-card wide" style="margin-top:10px;"><h2>注意点</h2><div class="chips">' +
-      ((brief.cautions || []).map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('')) +
-    '</div></div>' +
-  '</div>';
+    '</div>';
 }
 
 function renderHumanBrief(plan, inline = false) {
