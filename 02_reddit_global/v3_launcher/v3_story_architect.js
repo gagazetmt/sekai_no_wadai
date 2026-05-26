@@ -359,21 +359,7 @@ function buildPlanFromBeats({
     label: tocLabelForBeat(beat),
   }));
 
-  const slidePlan = beats.map((beat, index) => ({
-    id: `slide_${String(index + 1).padStart(2, '0')}`,
-    beatId: beat.id,
-    role: beat.role,
-    slideType: slideTypeForRole(beat.role),
-    headline: tocLabelForBeat(beat),
-    claim: beat.claim,
-    visualIntent: beat.slideIntent,
-    dataSlots: beat.evidenceNeeded.map((need) => ({
-      label: need,
-      binding: '',
-      required: true,
-    })),
-    ttsStyle: beat.voiceStyle,
-  }));
+  const slidePlan = buildSlidePlanFromBeats(beats);
 
   return {
     version: 'v3-argument-plan-prototype',
@@ -400,6 +386,41 @@ function buildPlanFromBeats({
     globalRiskChecks,
     editorialNotes,
   };
+}
+
+function buildSlidePlanFromBeats(beats) {
+  const slides = [];
+
+  beats.forEach((beat) => {
+    const evidence = [...new Set(beat.evidenceNeeded || [])];
+    const chunks = evidence.length > 4
+      ? [evidence.slice(0, Math.ceil(evidence.length / 2)), evidence.slice(Math.ceil(evidence.length / 2))]
+      : [evidence];
+
+    chunks.forEach((chunk, chunkIndex) => {
+      const split = chunks.length > 1;
+      slides.push({
+        id: `slide_${String(slides.length + 1).padStart(2, '0')}`,
+        beatId: beat.id,
+        role: beat.role,
+        slideType: split ? `${slideTypeForRole(beat.role)}_part${chunkIndex + 1}` : slideTypeForRole(beat.role),
+        headline: split ? `${tocLabelForBeat(beat)} ${chunkIndex + 1}` : tocLabelForBeat(beat),
+        claim: beat.claim,
+        visualIntent: split
+          ? `${beat.slideIntent}。このスライドでは材料${chunkIndex + 1}だけを見る`
+          : beat.slideIntent,
+        dataSlots: chunk.map((need) => ({
+          label: need,
+          binding: '',
+          required: true,
+        })),
+        ttsStyle: beat.voiceStyle,
+        parentBeatRole: beat.role,
+      });
+    });
+  });
+
+  return slides;
 }
 
 function buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }) {

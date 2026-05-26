@@ -11,7 +11,7 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-simple-beats';
+const UI_VERSION = 'v3-ui-slide-plan';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -335,6 +335,33 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .beat h3 { margin: 0 0 8px; font-size: 15px; }
 .beat p { margin: 0 0 8px; color: #cbd5e1; line-height: 1.5; font-size: 13px; }
+.slide-list {
+  display: grid;
+  gap: 8px;
+}
+.slide-row {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 10px;
+  align-items: start;
+  background: #0a0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+.slide-no {
+  color: #111827;
+  background: var(--gold);
+  border-radius: 5px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 900;
+}
+.slide-row h3 { margin: 0 0 5px; font-size: 14px; }
+.slide-row p { margin: 0 0 7px; color: #cbd5e1; font-size: 12px; line-height: 1.45; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   border: 1px solid var(--line);
@@ -656,10 +683,23 @@ function renderPlan(plan) {
       '</div>' +
     '</div>';
   }).join('');
+  const slidesHtml = (plan.slidePlan || []).map((slide, index) => (
+    '<div class="slide-row">' +
+      '<div class="slide-no">' + (index + 1) + '</div>' +
+      '<div>' +
+        '<h3>' + esc(slide.headline) + '</h3>' +
+        '<p>' + esc(slide.visualIntent) + '</p>' +
+        '<div class="chips">' +
+          (slide.dataSlots || []).map((slot) => '<span class="chip">' + esc(slot.label) + '</span>').join('') +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  )).join('');
 
   document.getElementById('output').innerHTML =
     renderSimpleBrief(plan, true) +
     '<div class="panel"><span class="label">beats: 論旨上の一手。ここから必要に応じて複数スライド化</span>' + beatsHtml + '</div>' +
+    '<div class="panel"><span class="label">スライド案: beatを画面単位に分解</span><div class="slide-list">' + slidesHtml + '</div></div>' +
     renderResearchPanels();
 }
 
