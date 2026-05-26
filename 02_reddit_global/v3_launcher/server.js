@@ -11,7 +11,7 @@ const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-simple-result';
+const UI_VERSION = 'v3-ui-simple-beats';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -313,7 +313,7 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .beat {
   display: grid;
-  grid-template-columns: 118px 1fr 340px;
+  grid-template-columns: 96px 1fr;
   gap: 12px;
   padding: 12px;
   background: var(--panel2);
@@ -643,31 +643,16 @@ async function loadSaved() {
 }
 
 function renderPlan(plan) {
-  const tasksByBeat = {};
-  for (const task of plan.evidencePlan.researchTasks) {
-    if (!tasksByBeat[task.beatId]) tasksByBeat[task.beatId] = [];
-    tasksByBeat[task.beatId].push(task);
-  }
-
   const beatsHtml = plan.beats.map((beat, index) => {
-    const tasks = tasksByBeat[beat.id] || [];
+    const evidence = [...new Set(beat.evidenceNeeded || [])].slice(0, 5);
     return '<div class="beat">' +
       '<div><div class="role">' + esc(beat.role) + '</div><div style="font-size:11px;color:var(--muted);margin-top:8px;">beat ' + (index + 1) + '</div></div>' +
       '<div>' +
         '<h3>' + esc(beat.claim) + '</h3>' +
         '<p>' + esc(beat.slideIntent) + '</p>' +
-        '<div class="chips">' +
-          beat.evidenceNeeded.map((x) => '<span class="chip">' + esc(x) + '</span>').join('') +
-        '</div>' +
         '<div class="chips" style="margin-top:8px;">' +
-          beat.riskChecks.map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('') +
+          evidence.map((x) => '<span class="chip">' + esc(x) + '</span>').join('') +
         '</div>' +
-      '</div>' +
-      '<div>' +
-        tasks.map((task) => '<div class="research"><b>' + esc(task.question) + '</b><br>' +
-          esc(task.queries.join(' / ')) + '<br>' +
-          '<span style="color:var(--muted)">source: ' + esc(task.sourceType) + ' / required: ' + task.required + '</span></div>'
-        ).join('') +
       '</div>' +
     '</div>';
   }).join('');
