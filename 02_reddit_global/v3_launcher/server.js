@@ -15,7 +15,7 @@ const { router: s4Router } = require('../routes/step4_routes');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-left-saved-sidebar';
+const UI_VERSION = 'v3-ui-hamburger-sidebar';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 const V2_DATA_DIR = path.join(__dirname, '..', 'data');
@@ -1142,20 +1142,55 @@ pre {
   .case-toolbar { grid-template-columns: 1fr 1fr; }
   .case-editor-grid { grid-template-columns: 1fr; }
 }
+/* hamburger + drawer */
+.hamburger-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  min-height: unset;
+  line-height: 1;
+}
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.55);
+  z-index: 199;
+}
+.sidebar-overlay.active { display: block; }
+
 @media (max-width: 720px) {
   body { height: auto; min-height: 100vh; overflow: auto; }
   header {
     height: auto;
-    align-items: flex-start;
-    gap: 6px;
-    flex-direction: column;
-    padding: 12px 14px;
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    gap: 4px;
   }
   h1 { font-size: 16px; }
   .tag { font-size: 11px; }
+  .hamburger-btn { display: inline-flex; }
   main { grid-template-columns: 1fr; height: auto; min-height: 0; }
-  aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 220px; }
-  main.full-workspace aside { display: none; }
+  aside {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 260px;
+    height: 100vh;
+    z-index: 200;
+    border-right: 1px solid var(--line);
+    transition: left 0.25s ease;
+    overflow: auto;
+  }
+  aside.drawer-open { left: 0; }
+  main.full-workspace aside { left: -280px !important; }
   .workspace { padding: 0; }
   .step-container { padding: 10px; }
   .panel { padding: 10px; margin-bottom: 10px; border-radius: 6px; }
@@ -1210,12 +1245,16 @@ pre {
 </head>
 <body>
 <header>
-  <div>
-    <h1>V3 Story Architect</h1>
-    <span class="version-badge">${UI_VERSION}</span>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="保存済み案件">☰</button>
+    <div>
+      <h1>V3 Story Architect</h1>
+      <span class="version-badge">${UI_VERSION}</span>
+    </div>
   </div>
   <div class="tag">V2 preserved / argumentPlan prototype / port ${PORT}</div>
 </header>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
 <nav class="view-tabs" id="stepTabs">
   <button class="view-tab" data-view="case" onclick="setResultView('case')">1 案件</button>
   <button class="view-tab" data-view="proposal" onclick="setResultView('proposal')">2 企画提案</button>
@@ -1367,6 +1406,15 @@ function toggleCustomCasePanel() {
   document.getElementById('customCasePanel')?.classList.toggle('open');
 }
 
+function toggleSidebar() {
+  const aside = document.querySelector('aside');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!aside || !overlay) return;
+  const isOpen = aside.classList.toggle('drawer-open');
+  overlay.classList.toggle('active', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
 async function persistSavedProjects() {
   const res = await fetch('/api/v3/saved-projects', {
     method: 'POST',
@@ -1472,6 +1520,14 @@ function selectSavedProject(index) {
   activeView = 'case';
   renderPlan(currentPlan);
   loadSaved();
+  // スマホのドロワーを自動で閉じる
+  const aside = document.querySelector('aside');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (aside?.classList.contains('drawer-open')) {
+    aside.classList.remove('drawer-open');
+    overlay?.classList.remove('active');
+    document.body.style.overflow = '';
+  }
 }
 
 async function goToProposalFromSidebar() {
