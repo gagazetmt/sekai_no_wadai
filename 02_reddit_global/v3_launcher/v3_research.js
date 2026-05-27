@@ -14,8 +14,10 @@ const {
 
 const DEFAULT_QUERY_LIMIT = 3;
 const DEFAULT_PICK_MIN = 3;
-const DEFAULT_PICK_MAX = 5;
-const ARTICLE_CHAR_LIMIT = 1800;
+const DEFAULT_PICK_MAX = 6;
+const ARTICLE_CHAR_LIMIT = 3200;
+const FULL_TEXT_TARGET = 5;
+const EXTRA_FETCH_LIMIT = 8;
 
 const TRUSTED_DOMAIN_HINTS = [
   'fifa.com',
@@ -155,7 +157,7 @@ async function enrichItemWithArticle(item) {
   const articleText = article.content.slice(0, ARTICLE_CHAR_LIMIT);
   return {
     ...item,
-    fetchStatus: 'full_text',
+    fetchStatus: article.method === 'jina_reader' ? 'full_text_reader' : 'full_text',
     articleText,
     learningText: `[${item.host}] ${item.title || ''}\n${item.snippet || ''}\n${articleText}`.trim(),
   };
@@ -196,7 +198,19 @@ async function runTopicResearch(input = {}) {
   }
 
   const allPicked = dedupeByUrl(queryResults.flatMap((r) => r.picked));
-  const enriched = await Promise.all(allPicked.map(enrichItemWithArticle));
+  let enriched = await Promise.all(allPicked.map(enrichItemWithArticle));
+  const fullTextCount = enriched.filter((x) => /^full_text/.test(x.fetchStatus)).length;
+  if (fullTextCount < FULL_TEXT_TARGET) {
+    const pickedUrls = new Set(allPicked.map((x) => x.link));
+    const extras = dedupeByUrl(queryResults.flatMap((r) => r.candidates || []))
+      .filter((item) => item.link && !pickedUrls.has(item.link))
+      .slice(0, EXTRA_FETCH_LIMIT);
+    const extraEnriched = await Promise.all(extras.map(enrichItemWithArticle));
+    const usefulExtras = extraEnriched
+      .filter((x) => /^full_text/.test(x.fetchStatus))
+      .slice(0, FULL_TEXT_TARGET - fullTextCount);
+    enriched = dedupeByUrl([...enriched, ...usefulExtras]);
+  }
   const learningItems = enriched.map((item) => ({
     ...item,
     usableFor: classifyUse(item),
@@ -222,8 +236,8 @@ async function runTopicResearch(input = {}) {
     summary: {
       queryCount: queries.length,
       selectedUrlCount: learningItems.length,
-      fullTextCount: learningItems.filter((x) => x.fetchStatus === 'full_text').length,
-      snippetOnlyCount: learningItems.filter((x) => x.fetchStatus !== 'full_text').length,
+      fullTextCount: learningItems.filter((x) => /^full_text/.test(x.fetchStatus)).length,
+      snippetOnlyCount: learningItems.filter((x) => !/^full_text/.test(x.fetchStatus)).length,
     },
   };
 }

@@ -105,6 +105,35 @@ html, body {
   color: ${PALETTE.text};
   overflow: hidden;
 }
+.slide::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 18;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255,255,255,0.035), transparent 34%),
+    radial-gradient(circle at 50% 50%, transparent 48%, rgba(0,0,0,0.42) 100%);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
+.slide::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 19;
+  background:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,158,11,0.025), transparent 34%, rgba(96,165,250,0.018) 70%, transparent);
+  background-size: 100% 5px, 220% 100%;
+  opacity: 0.22;
+  animation: v2AmbientShift 9s ease-in-out infinite alternate;
+}
+@keyframes v2AmbientShift {
+  from { background-position: 0 0, 0% 0; opacity: 0.16; }
+  to   { background-position: 0 6px, 100% 0; opacity: 0.25; }
+}
 ${extraStyles}
 </style>
 </head>
@@ -275,6 +304,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
   const maxLineLen = options.maxLineLen || 20;
   const leadPadSec = (options.leadPadMs ?? LEAD_PAD_SEC * 1000) / 1000;
   const tailPadSec = (options.tailPadMs ?? TAIL_PAD_SEC * 1000) / 1000;
+  const syncOffsetSec = Number(options.syncOffsetSec ?? process.env.SUBTITLE_SYNC_OFFSET_SEC ?? 0) || 0;
 
   // 🆕 単一 chunk + (words[] あり or 無し) → 原文ナレーションを字幕単位に分割
   //   words あり: 字幕タイミングを ASR の word timestamps で完全同期（2026-05-14）
@@ -353,6 +383,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
       .map(c => ({
         text: String(c?.text || '').trim(),
         durationSec: Number(c?.durationSec) || 0,
+        startSec: c?.startSec != null ? Number(c.startSec) : null,
       }))
       .filter(c => c.text);
     if (items.length === 0) return '';
@@ -363,7 +394,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     //   無ければ従来の累積方式 (durationSec を順に積み上げ)
     let cum = leadPadSec;
     const segs = items.map((c, i) => {
-      const start = c.startSec != null ? (leadPadSec + c.startSec) : cum;
+      const start = Math.max(0, (c.startSec != null ? (leadPadSec + c.startSec) : cum) + syncOffsetSec);
       cum = start + (Number(c.durationSec) || 0);
       const end = cum;
       const { lines } = splitSubtitle(c.text, maxLineLen);
@@ -377,7 +408,7 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     const maxLines = segs.reduce((m, s) => Math.max(m, s.lines.length), 1);
     const height   = Math.max(minHeight, _heightForLines(maxLines));
 
-    const FADE_SEC = 0.08;
+    const FADE_SEC = 0.12;
     const fadePct  = (FADE_SEC / totalSec * 100);
 
     const keyframes = segs.map(s => {
@@ -386,12 +417,12 @@ function buildSubtitleBar(textOrChunks, options = {}) {
       const sIn  = Math.min(sPct + fadePct, ePct);
       const eOut = Math.max(ePct - fadePct, sPct);
       return `@keyframes v2subc_${s.idx} {`
-        + `0%{opacity:0}`
-        + `${sPct.toFixed(3)}%{opacity:0}`
-        + `${sIn.toFixed(3)}%{opacity:1}`
-        + `${eOut.toFixed(3)}%{opacity:1}`
-        + `${ePct.toFixed(3)}%{opacity:0}`
-        + `100%{opacity:0}}`;
+        + `0%{opacity:0;transform:translateY(12px);filter:blur(2px)}`
+        + `${sPct.toFixed(3)}%{opacity:0;transform:translateY(12px);filter:blur(2px)}`
+        + `${sIn.toFixed(3)}%{opacity:1;transform:translateY(0);filter:blur(0)}`
+        + `${eOut.toFixed(3)}%{opacity:1;transform:translateY(0);filter:blur(0)}`
+        + `${ePct.toFixed(3)}%{opacity:0;transform:translateY(-8px);filter:blur(1px)}`
+        + `100%{opacity:0;transform:translateY(-8px);filter:blur(1px)}}`;
     }).join('\n');
 
     const chunkDivs = segs.map(s => {
@@ -401,9 +432,9 @@ function buildSubtitleBar(textOrChunks, options = {}) {
     }).join('');
 
     return `<style>${keyframes}
-      .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);z-index:20;}
+      .v2-sub-bar-wrapper{position:absolute;bottom:0;left:0;right:0;height:${height}px;background:linear-gradient(180deg,rgba(5,8,14,0.88),rgba(0,0,0,0.96));border-top:3px solid rgba(245,158,11,0.5);box-shadow:0 -18px 40px rgba(0,0,0,0.35);z-index:20;}
       .v2-sub-chunk{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding-top:8px;}
-      .v2-sub-text{color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;padding:0 70px;line-height:${SUB_LINE_HEIGHT};}
+      .v2-sub-text{color:#fff;font-size:${SUB_FONT_PX}px;font-weight:800;text-align:center;padding:0 70px;line-height:${SUB_LINE_HEIGHT};text-shadow:0 2px 14px rgba(0,0,0,0.9);}
       .v2-sub-text > div{white-space:nowrap;}
     </style><div class="v2-sub-bar-wrapper">${chunkDivs}</div>`;
   }
@@ -417,10 +448,10 @@ function buildSubtitleBar(textOrChunks, options = {}) {
   const linesHtml = lines.map(l => `<div style="white-space:nowrap">${esc(l)}</div>`).join('');
 
   return `<div class="v2-sub-bar" style="position:absolute;bottom:0;left:0;right:0;height:${height}px;`
-    + `background:rgba(0,0,0,0.92);border-top:3px solid rgba(245,158,11,0.5);`
+    + `background:linear-gradient(180deg,rgba(5,8,14,0.88),rgba(0,0,0,0.96));border-top:3px solid rgba(245,158,11,0.5);box-shadow:0 -18px 40px rgba(0,0,0,0.35);`
     + `display:flex;align-items:center;justify-content:center;padding-top:8px;z-index:20">`
     + `<div style="color:#fff;font-size:${fontSize}px;font-weight:800;text-align:center;`
-    + `padding:0 70px;line-height:${SUB_LINE_HEIGHT};">${linesHtml}</div></div>`;
+    + `padding:0 70px;line-height:${SUB_LINE_HEIGHT};text-shadow:0 2px 14px rgba(0,0,0,0.9);">${linesHtml}</div></div>`;
 }
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。

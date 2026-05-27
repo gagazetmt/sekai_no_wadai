@@ -37,6 +37,11 @@ function buildUniversalHTML(mod) {
   background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
   background-position: ${imgAdj.bgPosition};
   filter: brightness(0.28);
+  animation: universalKenBurns 13s ease-out forwards;
+}
+@keyframes universalKenBurns {
+  from { transform: scale(1.0) translate3d(0,0,0); }
+  to   { transform: scale(1.055) translate3d(-12px,-8px,0); }
 }
 .content-wrap {
   position: absolute; inset: 0;
@@ -55,6 +60,7 @@ function buildUniversalHTML(mod) {
   border-radius: 6px;
   align-self: flex-start;
   margin-bottom: 30px;
+  animation: uBadgeIn 0.45s ease-out 0.18s backwards;
 }
 .u-title {
   font-size: 84px;
@@ -64,6 +70,7 @@ function buildUniversalHTML(mod) {
   margin-bottom: 50px;
   line-height: 1.2;
   text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  animation: uTitleIn 0.55s ease-out 0.32s backwards;
 }
 .u-extras {
   display: flex; flex-direction: column; gap: 18px;
@@ -78,7 +85,18 @@ function buildUniversalHTML(mod) {
   font-size: 40px;
   font-weight: 700;
   color: ${PALETTE.text};
+  opacity: 0;
+  transform: translateX(-34px);
+  animation: uExtraIn 0.46s ease-out forwards;
 }
+.u-extra:nth-child(1) { animation-delay: 0.72s; }
+.u-extra:nth-child(2) { animation-delay: 0.88s; }
+.u-extra:nth-child(3) { animation-delay: 1.04s; }
+.u-extra:nth-child(4) { animation-delay: 1.20s; }
+.u-extra:nth-child(5) { animation-delay: 1.36s; }
+@keyframes uBadgeIn { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes uTitleIn { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes uExtraIn { to { opacity: 1; transform: translateX(0); } }
 .u-narr-bar {
   background: rgba(0,0,0,0.85);
   border-top: 3px solid rgba(245,158,11,0.5);

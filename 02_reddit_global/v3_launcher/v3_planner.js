@@ -45,15 +45,16 @@ function buildSystemPrompt() {
 
 【手順】
 1. 読んだ記事から確認できた事実を把握する
-2. このトピックで動画にできる切り口を2〜3案考え、各案の根拠・必要データ・リスクを整理する
+2. このトピックで動画にできる切り口を2案だけ考え、各案の根拠・必要データ・リスクを整理する
 3. 最もフックが強く、かつデータで支えられる1案を選ぶ
-4. 選んだ案でのブリーフ（動画の約束・論点4〜6個・注意事項）を固める
-5. スライド構成（6〜9枚）を設計し、各スライドのナレーション草稿を書く
+4. 選んだ案でのブリーフ（動画の約束・論点4個・注意事項）を固める
+5. スライド構成（6枚）を設計し、各スライドの短いナレーション草稿を書く
 
 【絶対ルール】
 - 確認できていない事実を断定しない
 - 選手名・クラブ名・年号は記事の根拠があるものだけ使う
 - 結論はJSON形式のみ。コードブロックや前置き文は不要
+- JSONを途中で切らない。長文よりも完結したJSONを優先する
 - narrationは日本語で書く（20代前半向けサッカー解説、隣で観てる親近感）`;
 }
 
@@ -78,8 +79,8 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
         "hookQuestion": "フックとなる問い",
         "answer": "仮の答え",
         "angle": "動画の切り口・約束",
-        "dataNeeds": ["必要なデータ1", "必要なデータ2"],
-        "risk": "この案のリスク"
+        "dataNeeds": ["必要なデータ1"],
+        "risk": "この案のリスクを短く"
       }
     ],
     "selected": 0,
@@ -92,7 +93,7 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
     "chapters": [
       {"no": 1, "role": "hook", "claim": "主張", "dataNeeds": ["必要データ"]}
     ],
-    "riskChecklist": ["確認すべき事実1", "言い過ぎてはいけないこと"]
+    "riskChecklist": ["確認すべき事実1"]
   },
   "scriptStructure": [
     {
@@ -109,7 +110,7 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
       "slideNo": 1,
       "title": "スライドタイトル",
       "role": "hook",
-      "narration": "ナレーション草稿（日本語・2〜4文）",
+      "narration": "ナレーション草稿（日本語・1〜2文）",
       "dataNeeds": ["必要データ"],
       "caution": "注意点（なければ空文字）"
     }
@@ -139,6 +140,86 @@ function extractJSON(raw) {
   return null;
 }
 
+function buildCompactRepairPrompt(topic, memo, raw) {
+  return `前回のJSONが途中で切れました。今度は必ず完結した短いJSONだけを返してください。
+
+topic: ${topic}
+memo: ${memo || 'なし'}
+
+前回出力の冒頭:
+${String(raw || '').slice(0, 1200)}
+
+必須条件:
+- candidatesは2件
+- scriptStructureとscriptDraftは6件
+- narrationは各1文
+- 文字数を抑える
+- JSON以外の文章は禁止
+
+{
+  "themeProposal": {"candidates": [], "selected": 0, "selectedReason": "", "rejectedReasons": []},
+  "briefing": {"purpose": "", "coreMessage": "", "chapters": [], "riskChecklist": []},
+  "scriptStructure": [],
+  "scriptDraft": [],
+  "missingData": [],
+  "publishGates": []
+}`;
+}
+
+function buildFallbackAIPlan(topic, researchSummary, reason) {
+  const core = `${topic}で、視聴者が本当に見るべきポイントは何か？`;
+  const answer = 'リサーチ材料を確認しながら、話題の違和感をデータで分解する。';
+  const slides = [
+    ['hook', '何が起きているのか', 'まず話題の違和感を一言で提示します。'],
+    ['context', 'なぜ今重要なのか', 'このニュースが今注目されている背景を整理します。'],
+    ['evidence', '確認すべきデータ', '記事と公式情報で確認できる数字だけを使います。'],
+    ['contrast', '過去との違い', '昔の状況と現在を比較して変化を見せます。'],
+    ['counterpoint', '言い切れない点', '反論や例外を先に処理して信頼感を作ります。'],
+    ['answer', '結論', '確認済みの範囲で、冒頭の問いに答えます。'],
+  ];
+  return {
+    ok: true,
+    aiGenerated: false,
+    fallback: true,
+    fallbackReason: reason,
+    topic,
+    articleCount: researchSummary.articleCount,
+    themeProposal: {
+      candidates: [
+        { hookQuestion: core, answer, angle: '違和感をデータで整理する', dataNeeds: ['一次情報または信頼できる記事'], risk: '未確認情報を断定しない' },
+        { hookQuestion: `${topic}の背景にある構造は何か？`, answer: '単発ニュースではなく構造変化として見る。', angle: '背景解説型', dataNeeds: ['時系列'], risk: '話を広げすぎない' },
+      ],
+      selected: 0,
+      selectedReason: 'AIのJSONが崩れたため、破綻しにくい安全な構成にフォールバック。',
+      rejectedReasons: ['背景解説型はフックが弱くなりやすい'],
+    },
+    briefing: {
+      purpose: '話題の違和感を、確認できる材料だけで整理する。',
+      coreMessage: answer,
+      chapters: slides.map((s, i) => ({ no: i + 1, role: s[0], claim: s[1], dataNeeds: ['確認ソース'] })),
+      riskChecklist: ['未確認の数字を断定しない', '出典日付を明記する'],
+    },
+    scriptStructure: slides.map((s, i) => ({
+      no: i + 1,
+      role: s[0],
+      headline: s[1],
+      point: s[2],
+      visualIntent: '既存V2テンプレートで見せる',
+      dataNeeds: ['確認ソース'],
+    })),
+    scriptDraft: slides.map((s, i) => ({
+      slideNo: i + 1,
+      title: s[1],
+      role: s[0],
+      narration: s[2],
+      dataNeeds: ['確認ソース'],
+      caution: '',
+    })),
+    missingData: ['AI分析JSONの再生成確認', ...(researchSummary.articleCount ? [] : ['リサーチ記事'])],
+    publishGates: ['強い数字はソースURL付きで確認する', 'AIフォールバック構成のため公開前に人間確認する'],
+  };
+}
+
 async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
   const researchSummary = buildResearchSummary(researchCorpus, wikiStories);
   const system = buildSystemPrompt();
@@ -147,11 +228,25 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
   const raw = await callAI({
     system,
     messages: [{ role: 'user', content: userContent }],
-    max_tokens: 4000,
+    max_tokens: 8000,
     forceProvider: 'deepseek',
   });
 
-  const parsed = extractJSON(raw);
+  let parsed = extractJSON(raw);
+  if (!parsed) {
+    console.warn(`[v3_planner] primary JSON parse failed, retrying compact repair. raw=${String(raw).slice(0, 180)}`);
+    const retryRaw = await callAI({
+      system: 'あなたはJSON修復専用AIです。必ず完結したJSONだけを返してください。',
+      messages: [{ role: 'user', content: buildCompactRepairPrompt(topic, memo, raw) }],
+      max_tokens: 3500,
+      forceProvider: 'deepseek',
+    });
+    parsed = extractJSON(retryRaw);
+    if (!parsed) {
+      console.warn(`[v3_planner] compact repair JSON parse failed. retryRaw=${String(retryRaw).slice(0, 180)}`);
+      return buildFallbackAIPlan(topic, researchSummary, 'AI JSON parse failed after compact retry');
+    }
+  }
   if (!parsed) {
     throw new Error(`AI応答のJSONパース失敗: ${String(raw).slice(0, 200)}`);
   }

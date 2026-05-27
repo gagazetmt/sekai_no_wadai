@@ -1793,13 +1793,19 @@ function getUI() {
     <!-- 右：プレビュー + 動画一覧 -->
     <div>
       <div class="panel" style="padding:10px;">
-        <div style="font-size:11px;color:#8a9aba;font-weight:bold;margin-bottom:6px;">🖼️ プレビュー（1920×1080 縮小表示）</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <div style="font-size:11px;color:#8a9aba;font-weight:bold;flex:1;">🖼️ スライドプレビュー（1920×1080 縮小表示）</div>
+          <button class="btn btn-sm" onclick="s4ReloadPreview()" style="padding:4px 9px;">更新</button>
+          <button class="btn btn-sm" onclick="s4OpenPreview()" style="padding:4px 9px;">別タブ</button>
+        </div>
         <div id="s4PreviewWrap" style="position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:1px solid #1a2540;border-radius:6px;background:#000;">
           <iframe id="s4PreviewFrame" scrolling="no" style="position:absolute;top:0;left:0;width:1920px;height:1080px;border:0;transform-origin:top left;"></iframe>
         </div>
       </div>
       <div class="panel" style="margin-top:12px;">
-        <div style="font-size:11px;color:#8a9aba;font-weight:bold;margin-bottom:6px;">📦 生成済み動画</div>
+        <div style="font-size:11px;color:#8a9aba;font-weight:bold;margin-bottom:6px;">▶ 生成済み動画プレビュー</div>
+        <div id="s4VideoPreview" style="margin-bottom:8px;color:#5a6a8a;font-size:11px;">動画生成後、ここで再生できます</div>
+        <div style="font-size:11px;color:#8a9aba;font-weight:bold;margin-bottom:6px;">📦 動画ファイル</div>
         <div id="s4VideoList" style="font-size:11px;color:#5a6a8a;">なし</div>
       </div>
       <div class="panel" style="margin-top:12px;">
@@ -3888,6 +3894,21 @@ function getUI() {
       if (_reloadAgainNeeded) { _reloadAgainNeeded = false; _reloadPreview(); }
     }
   }
+  window.s4ReloadPreview = function() {
+    _collectInputs();
+    _reloadPreview();
+  };
+  window.s4OpenPreview = function() {
+    _collectInputs();
+    if (_lastPreviewBlobUrl) {
+      window.open(_lastPreviewBlobUrl, '_blank');
+      return;
+    }
+    _reloadPreview();
+    setTimeout(function() {
+      if (_lastPreviewBlobUrl) window.open(_lastPreviewBlobUrl, '_blank');
+    }, 350);
+  };
   /* ── 動画一覧読み込み ── */
   async function _loadVideos() {
     const post = window.APP.selected;
@@ -3895,7 +3916,17 @@ function getUI() {
     try {
       const j = await fetchJson('/api/v2/videos?postId=' + encodeURIComponent(post.id));
       const el = document.getElementById('s4VideoList');
-      if (!j.videos?.length) { el.innerHTML = '<div style="color:#5a6a8a;">なし</div>'; return; }
+      const pv = document.getElementById('s4VideoPreview');
+      if (!j.videos?.length) {
+        el.innerHTML = '<div style="color:#5a6a8a;">なし</div>';
+        if (pv) pv.innerHTML = '<div style="color:#5a6a8a;">動画生成後、ここで再生できます</div>';
+        return;
+      }
+      if (pv) {
+        const latest = j.videos[0];
+        pv.innerHTML = '<video controls preload="metadata" src="' + _esc(latest.url) + '" style="width:100%;aspect-ratio:16/9;background:#000;border:1px solid #1a2540;border-radius:6px;"></video>'
+          + '<div style="margin-top:4px;color:#7dc8ff;">最新: ' + _esc(latest.file) + '</div>';
+      }
       el.innerHTML = j.videos.map(function(v) {
         return '<div style="margin-bottom:6px;">'
           + '<a href="' + v.url + '" target="_blank" style="color:#7dc8ff;">' + _esc(v.file) + '</a>'

@@ -360,6 +360,22 @@ function buildPlanFromBeats({
   }));
 
   const slidePlan = buildSlidePlanFromBeats(beats);
+  const researchDesign = buildResearchDesign({
+    topic,
+    centralQuestion,
+    slidePlan,
+    globalRiskChecks,
+  });
+  const autopilotPlan = buildAutopilotPlan({
+    topic,
+    centralQuestion,
+    thesis,
+    viewerPromise,
+    beats,
+    slidePlan,
+    researchDesign,
+    globalRiskChecks,
+  });
 
   return {
     version: 'v3-argument-plan-prototype',
@@ -381,6 +397,8 @@ function buildPlanFromBeats({
     },
     humanBrief: humanBrief || buildHumanBrief({ centralQuestion, thesis, beats, globalRiskChecks }),
     slidePlan,
+    researchDesign,
+    autopilotPlan,
     thumbnailPlan: buildThumbnailPlan({ centralQuestion, thesis, beats }),
     voicePlan: buildVoicePlan(beats),
     globalRiskChecks,
@@ -420,6 +438,255 @@ function buildSlidePlanFromBeats(beats) {
   });
 
   return slides;
+}
+
+function buildResearchDesign({ topic, centralQuestion, slidePlan, globalRiskChecks = [] }) {
+  const tasks = [];
+  (slidePlan || []).forEach((slide, slideIndex) => {
+    (slide.dataSlots || []).forEach((slot, slotIndex) => {
+      const rule = researchRuleForSlot(slot, { topic, centralQuestion, slide });
+      tasks.push({
+        id: `rd_${String(slideIndex + 1).padStart(2, '0')}_${String(slotIndex + 1).padStart(2, '0')}`,
+        slideId: slide.id,
+        beatId: slide.beatId,
+        slideHeadline: slide.headline,
+        need: slot.label,
+        proves: buildProofQuestion(slot, slide),
+        method: rule.method,
+        query: rule.query,
+        expectedOutput: rule.expectedOutput,
+        sourcePriority: rule.sourcePriority,
+        verification: rule.verification,
+        risk: rule.risk,
+        unsafeClaims: rule.unsafeClaims,
+        bindingTarget: {
+          expectedValue: slot.expectedValue,
+          sourceType: slot.sourceType,
+          sourceHint: slot.sourceHint,
+        },
+        valueCandidate: '',
+        sourceUrl: '',
+        confidence: 'planned',
+        status: 'research_design',
+      });
+    });
+  });
+
+  return {
+    version: 'v3-research-design-prototype',
+    stance: 'prove-the-claim-before-writing',
+    coreQuestion: centralQuestion,
+    taskCount: tasks.length,
+    tasks,
+    gateRules: [
+      'Bind a value only when the exact list/date/source is known.',
+      'Prefer official or table-like sources before commentary articles.',
+      'If sources disagree, show the date and downgrade the claim.',
+      'Do not turn a club pipeline pattern into a moral verdict.',
+      ...globalRiskChecks,
+    ],
+  };
+}
+
+function buildAutopilotPlan({
+  topic,
+  centralQuestion,
+  thesis,
+  viewerPromise,
+  beats,
+  slidePlan,
+  researchDesign,
+  globalRiskChecks = [],
+}) {
+  const mustCheck = (researchDesign.tasks || [])
+    .filter((task) => /2010|latest|最新|リスト|Real Madrid|Barcelona/.test(`${task.need} ${task.query}`))
+    .slice(0, 5);
+  const fallbackChecks = (researchDesign.tasks || []).slice(0, 5);
+  const checks = mustCheck.length ? mustCheck : fallbackChecks;
+  const scriptDraft = buildScriptDraft({ slidePlan, beats });
+  const dataPlan = buildSimpleDataPlan(checks);
+  const argumentPath = (beats || []).map((beat, index) => ({
+    no: index + 1,
+    role: beat.role,
+    claim: beat.claim,
+    dataNeeds: (beat.evidenceNeeded || []).slice(0, 3),
+  }));
+
+  return {
+    version: 'v3-autopilot-outline',
+    status: 'draft_until_research_bound',
+    title: topic,
+    oneLine: thesis,
+    viewerPromise,
+    coreQuestion: centralQuestion,
+    themeProposal: {
+      hookQuestion: centralQuestion,
+      answer: thesis,
+      angle: viewerPromise,
+      argumentPath,
+      dataPlan,
+      editorNote: 'この段階で論点と必要データを先に固定し、ブリーフィング後の手戻りを減らす。',
+    },
+    briefing: {
+      purpose: viewerPromise,
+      coreMessage: thesis,
+      chapters: argumentPath,
+      dataPlan,
+      riskChecklist: globalRiskChecks,
+    },
+    scriptStructure: buildScriptStructure({ slidePlan, beats }),
+    simpleFlow: (beats || []).map((beat, index) => ({
+      no: index + 1,
+      role: beat.role,
+      point: beat.claim,
+    })),
+    mustCheck: checks.map((task) => ({
+      need: task.need,
+      query: task.query,
+      sourcePriority: task.sourcePriority,
+      risk: task.risk,
+    })),
+    scriptDraft,
+    publishGates: [
+      '最新代表リストの日付を明記する',
+      '2010年比較は代表メンバー表の所属クラブ列だけで数える',
+      'ゼロ人など強い数字はソースURL付きで確定してから使う',
+      'クラブ批判は断定せず、戦略や人材供給ルートの違いとして語る',
+      ...globalRiskChecks,
+    ].slice(0, 8),
+  };
+}
+
+function buildSimpleDataPlan(tasks) {
+  return (tasks || []).slice(0, 6).map((task, index) => ({
+    no: index + 1,
+    need: task.need,
+    proves: task.proves,
+    expectedOutput: task.expectedOutput,
+    query: task.query,
+    sources: task.sourcePriority || [],
+    risk: task.risk,
+  }));
+}
+
+function buildScriptStructure({ slidePlan, beats }) {
+  const beatMap = new Map((beats || []).map((beat) => [beat.id, beat]));
+  return (slidePlan || []).map((slide, index) => {
+    const beat = beatMap.get(slide.beatId) || {};
+    return {
+      no: index + 1,
+      role: slide.role,
+      headline: slide.headline,
+      point: slide.claim,
+      visualIntent: slide.visualIntent,
+      dataNeeds: (slide.dataSlots || []).map((slot) => slot.label).slice(0, 4),
+      caution: (beat.riskChecks || [])[0] || '',
+    };
+  });
+}
+
+function buildScriptDraft({ slidePlan, beats }) {
+  const beatMap = new Map((beats || []).map((beat) => [beat.id, beat]));
+  return (slidePlan || []).map((slide, index) => {
+    const beat = beatMap.get(slide.beatId) || {};
+    const dataNeeds = (slide.dataSlots || []).map((slot) => slot.label).slice(0, 3);
+    return {
+      slideNo: index + 1,
+      slideId: slide.id,
+      title: slide.headline,
+      role: slide.role,
+      visual: slide.visualIntent,
+      narration: draftNarrationForSlide(slide, beat, dataNeeds),
+      dataNeeds,
+      caution: (beat.riskChecks || [])[0] || '',
+    };
+  });
+}
+
+function draftNarrationForSlide(slide, beat, dataNeeds) {
+  const needText = dataNeeds.length ? `ここで確認するのは「${dataNeeds[0]}」。` : '';
+  if (slide.role === 'hook') {
+    return `まず視聴者に投げる問いはこれです。${beat.claim || slide.claim} ${needText}数字が固まったら、冒頭で一気に引き込みます。`;
+  }
+  if (slide.role === 'counterpoint') {
+    return `ただし、ここは一度ブレーキを踏みます。${beat.claim || slide.claim} 強く言い切る前に、別解釈を入れて信頼感を作ります。`;
+  }
+  if (slide.role === 'answer') {
+    return `結論です。${beat.claim || slide.claim} ここまでの確認済みデータだけで、言える範囲に絞って締めます。`;
+  }
+  return `${beat.claim || slide.claim} ${needText}このスライドでは、話の熱量を数字や出典で支える形にします。`;
+}
+
+function buildProofQuestion(slot, slide) {
+  const need = String(slot?.label || '');
+  if (/2010/.test(need)) return 'Does the 2010 squad table support this contrast?';
+  if (/最新|latest|リスト/.test(need)) return 'Which exact latest squad/list is being used?';
+  if (/バルサ|マドリー|Barcelona|Real Madrid/.test(need)) return 'How many players in this specific list belong to each club?';
+  return `What evidence makes slide ${slide?.id || ''} safe to say?`;
+}
+
+function researchRuleForSlot(slot, context) {
+  const need = String(slot?.label || '');
+  const topic = String(context?.topic || '');
+  const sourceType = String(slot?.sourceType || '');
+
+  if (/2010|W杯/.test(need)) {
+    return {
+      method: 'Parse the historical squad table and count the club column inside that squad only.',
+      query: 'Spain 2010 World Cup squad club Barcelona Real Madrid',
+      expectedOutput: 'player name, club at tournament, Barcelona count, Real Madrid count, source date/context',
+      sourcePriority: ['Wikipedia squad table', 'FIFA', 'worldfootball.net'],
+      verification: 'Cross-check the same squad list in at least two sources; count only the listed national squad.',
+      risk: 'Do not say the squad was exactly half Barca and half Madrid unless the count proves it.',
+      unsafeClaims: ['exact half-and-half without count', 'academy/product claims from club column alone'],
+    };
+  }
+
+  if (/最新|latest|リスト|serper_article/.test(`${need} ${sourceType}`)) {
+    return {
+      method: 'Find the latest official squad or the most recent reliable call-up article, then freeze the list date.',
+      query: `${topic} Spain latest squad Real Madrid players Barcelona players RFEF`,
+      expectedOutput: 'squad/list date, player names, current clubs, Barcelona count, Real Madrid count',
+      sourcePriority: ['RFEF official', 'FIFA/UEFA match page', 'Reuters/AP/BBC/ESPN', 'SofaScore/FotMob'],
+      verification: 'Resolve each player current club against a second source before counting.',
+      risk: 'Do not mix different call-up windows or tournament squads.',
+      unsafeClaims: ['current squad without date', 'zero players without list source'],
+    };
+  }
+
+  if (/経歴|移籍|プロフィール|sofa_fotmob_tm/.test(`${need} ${sourceType}`)) {
+    return {
+      method: 'Resolve player background from structured profile pages, then separate academy, transfer, and current club facts.',
+      query: `${need} player profile transfer history club career`,
+      expectedOutput: 'player, nationality, academy/development note if sourced, transfer/current club timeline',
+      sourcePriority: ['Transfermarkt', 'club official profile', 'Wikipedia profile', 'SofaScore/FotMob'],
+      verification: 'Use transfer/profile pages for career facts; do not infer development route from current club.',
+      risk: 'Pedri should not be treated as a Barca academy product without explicit source support.',
+      unsafeClaims: ['bought gem labels without transfer evidence', 'academy product inferred from senior club'],
+    };
+  }
+
+  if (/反証|別解釈|例外|counter|cross_check/.test(`${need} ${sourceType}`)) {
+    return {
+      method: 'Search for counterexamples and alternative explanations before writing the final claim.',
+      query: `${topic} counter argument alternative explanation Spain Real Madrid Barcelona`,
+      expectedOutput: 'counterpoint, supporting source, how it limits or softens the claim',
+      sourcePriority: ['official standings/results', 'credible analysis', 'news article', 'Wikipedia background'],
+      verification: 'If a counterpoint is strong, rewrite the slide claim as a narrower safe claim.',
+      risk: 'Do not conclude Madrid failed at development too strongly.',
+      unsafeClaims: ['single-cause conclusion', 'club criticism beyond evidence'],
+    };
+  }
+
+  return {
+    method: 'Search broadly, then convert the best source into a concrete value or a safe wording constraint.',
+    query: `${topic} ${need}`,
+    expectedOutput: slot?.expectedValue || 'source-backed fact or safe wording',
+    sourcePriority: ['official source', 'credible news', 'structured database', 'Wikipedia for orientation'],
+    verification: 'Use one source for discovery and another source for confirmation when the claim matters.',
+    risk: 'Avoid using weak commentary as hard factual proof.',
+    unsafeClaims: ['unsourced number', 'overstated causality'],
+  };
 }
 
 function chooseSlideTemplate(beat, evidence) {

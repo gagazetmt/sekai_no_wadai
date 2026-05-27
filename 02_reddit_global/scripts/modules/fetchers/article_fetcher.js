@@ -4,8 +4,8 @@
 
 const axios = require('axios');
 
-const FETCH_TIMEOUT = 5000;  // 1記事あたり5秒でタイムアウト
-const MAX_CHARS     = 1500;  // 1記事あたりの最大文字数
+const FETCH_TIMEOUT = 9000;  // 1記事あたり9秒でタイムアウト
+const MAX_CHARS     = 4000;  // 1記事あたりの最大文字数
 
 const HEADERS = {
   'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -29,6 +29,29 @@ function extractText(html) {
     .trim();
 }
 
+function normalizeArticleText(text) {
+  return String(text || '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/(Share|Subscribe|Advertisement|Related Articles)\s+/gi, '')
+    .trim();
+}
+
+async function fetchViaJinaReader(url) {
+  try {
+    const res = await axios.get(`https://r.jina.ai/http://${url.replace(/^https?:\/\//, '')}`, {
+      headers: HEADERS,
+      timeout: FETCH_TIMEOUT,
+      maxRedirects: 3,
+      responseType: 'text',
+    });
+    const text = normalizeArticleText(String(res.data));
+    if (text.length < 160) return { ok: false, url, method: 'jina_reader' };
+    return { ok: true, url, content: text.slice(0, MAX_CHARS), method: 'jina_reader' };
+  } catch (_) {
+    return { ok: false, url, method: 'jina_reader' };
+  }
+}
+
 // 単一URLから記事本文を取得
 async function fetchArticleContent(url) {
   if (!url) return { ok: false };
@@ -39,12 +62,12 @@ async function fetchArticleContent(url) {
       maxRedirects: 3,
       responseType: 'text',
     });
-    const text = extractText(String(res.data));
-    if (text.length < 100) return { ok: false, url };  // 中身がほぼないページはスキップ
-    return { ok: true, url, content: text.slice(0, MAX_CHARS) };
+    const text = normalizeArticleText(extractText(String(res.data)));
+    if (text.length >= 160) return { ok: true, url, content: text.slice(0, MAX_CHARS), method: 'direct' };
   } catch (_) {
-    return { ok: false, url };
+    // fall through to reader fallback
   }
+  return await fetchViaJinaReader(url);
 }
 
 // Serper結果のURL上位topN件から記事本文を並列取得してserperResultに付加
