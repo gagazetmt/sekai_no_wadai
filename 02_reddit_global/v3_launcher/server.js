@@ -8,10 +8,11 @@ const fs = require('fs');
 const path = require('path');
 const { createArgumentPlan } = require('./v3_story_architect');
 const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
+const { generateAIPlan } = require('./v3_planner');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-slide-data';
+const UI_VERSION = 'v3-ui-human-pipeline';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 
@@ -71,6 +72,16 @@ app.post('/api/v3/research/topic', async (req, res) => {
 app.post('/api/v3/research/wiki-side-stories', async (req, res) => {
   try {
     const result = await fetchWikiSideStories(req.body || {});
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/v3/analyze', async (req, res) => {
+  try {
+    const { topic, memo, researchCorpus, wikiStories } = req.body || {};
+    const result = await generateAIPlan(topic, memo, researchCorpus, wikiStories);
     res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -265,7 +276,7 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .view-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -409,6 +420,89 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .data-req b { color: var(--text); }
 .data-req span { display: block; color: var(--muted); margin-top: 3px; }
+.autopilot-grid {
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: 10px;
+}
+.autopilot-card {
+  background: #0a0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+.autopilot-card h2 {
+  margin: 0 0 8px;
+  color: var(--gold);
+  font-size: 13px;
+}
+.autopilot-card p {
+  margin: 0;
+  color: #e5e7eb;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.script-list {
+  display: grid;
+  gap: 10px;
+}
+.script-card {
+  background: #0a0d12;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--gold);
+  border-radius: 8px;
+  padding: 12px;
+}
+.script-card h3 {
+  margin: 0 0 7px;
+  font-size: 14px;
+}
+.script-card p {
+  margin: 0 0 7px;
+  color: #dbeafe;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.pipeline-steps {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.pipeline-step {
+  background: #0a0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+.pipeline-step b {
+  display: block;
+  color: var(--gold);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.pipeline-step span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.flow-list {
+  display: grid;
+  gap: 8px;
+}
+.flow-item {
+  background: #0a0d12;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+}
+.flow-item b { color: var(--gold); }
+.flow-item p {
+  margin: 5px 0 0;
+  color: #dbeafe;
+  font-size: 13px;
+  line-height: 1.5;
+}
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   border: 1px solid var(--line);
@@ -504,6 +598,9 @@ pre {
   .argument-box h3 { font-size: 15px; }
   .argument-box p { font-size: 13px; }
   .beat { padding: 10px; gap: 8px; }
+  .view-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .autopilot-grid { grid-template-columns: 1fr; }
+  .pipeline-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
 </head>
@@ -541,9 +638,9 @@ pre {
 ただし育成失敗とは断定しない
 ペドリとラウールの扱いに注意</textarea>
       <div class="btnrow">
-        <button id="generateBtn" onclick="generatePlan()">設計する</button>
+        <button id="generateBtn" onclick="generatePlan()">案件を整理</button>
         <button class="secondary" id="researchBtn" onclick="runResearch()">リサーチ</button>
-        <button class="secondary" id="wikiBtn" onclick="runWikiSideStories()">小話Wiki</button>
+        <button class="secondary" id="analyzeBtn" onclick="runAnalysis()">AIで分析</button>
         <button class="secondary" onclick="savePlan()">保存</button>
       </div>
     </div>
@@ -571,7 +668,8 @@ pre {
 let currentPlan = null;
 let currentResearch = null;
 let currentWikiStories = null;
-let activeView = 'brief';
+let currentAIPlan = null;
+let activeView = 'case';
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -648,28 +746,107 @@ async function savePlan() {
 async function runResearch() {
   const btn = document.getElementById('researchBtn');
   btn.disabled = true;
-  btn.textContent = '検索中...';
+  btn.textContent = 'リサーチ中...';
   try {
-    const res = await fetch('/api/v3/research/topic', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        topic: document.getElementById('title').value,
-        memo: document.getElementById('memo').value,
-        plan: currentPlan,
+    if (!currentPlan) await generatePlan({ scroll: false });
+    const baseBody = {
+      topic: document.getElementById('title').value,
+      memo: document.getElementById('memo').value,
+      plan: currentPlan,
+    };
+    const [topicRes, wikiRes] = await Promise.all([
+      fetch('/api/v3/research/topic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(baseBody),
       }),
-    });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'failed');
-    currentResearch = data.result;
+      fetch('/api/v3/research/wiki-side-stories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(baseBody),
+      }),
+    ]);
+    const topicData = await topicRes.json();
+    const wikiData = await wikiRes.json();
+    if (!topicData.success) throw new Error(topicData.error || 'topic research failed');
+    if (!wikiData.success) throw new Error(wikiData.error || 'wiki research failed');
+    currentResearch = topicData.result;
+    currentWikiStories = wikiData.result;
     if (currentPlan) renderPlan(currentPlan);
     else renderResearchOnly();
+    // Auto-trigger AI analysis after research completes
+    await runAnalysis();
   } catch (error) {
     alert('リサーチ失敗: ' + error.message);
   } finally {
     btn.disabled = false;
     btn.textContent = 'リサーチ';
   }
+}
+
+async function runAnalysis() {
+  const btn = document.getElementById('analyzeBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'AI分析中...'; }
+  try {
+    const res = await fetch('/api/v3/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: document.getElementById('title').value,
+        memo: document.getElementById('memo').value,
+        researchCorpus: currentResearch,
+        wikiStories: currentWikiStories,
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'AI analysis failed');
+    currentAIPlan = data.result;
+    if (currentPlan) {
+      currentPlan.autopilotPlan = buildMergedAutopilotPlan(currentPlan.autopilotPlan, currentAIPlan);
+    }
+    activeView = 'theme';
+    if (currentPlan) renderPlan(currentPlan);
+  } catch (error) {
+    alert('AI分析失敗: ' + error.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'AIで再分析'; }
+  }
+}
+
+function buildMergedAutopilotPlan(base, aiPlan) {
+  if (!aiPlan) return base;
+  const selectedIdx = aiPlan.themeProposal?.selected || 0;
+  const selectedCandidate = (aiPlan.themeProposal?.candidates || [])[selectedIdx] || {};
+  return {
+    ...base,
+    aiGenerated: true,
+    articleCount: aiPlan.articleCount || 0,
+    themeProposal: {
+      ...base?.themeProposal,
+      hookQuestion: selectedCandidate.hookQuestion || '',
+      answer: selectedCandidate.answer || '',
+      angle: selectedCandidate.angle || '',
+      candidates: aiPlan.themeProposal?.candidates || [],
+      selected: selectedIdx,
+      selectedReason: aiPlan.themeProposal?.selectedReason || '',
+      rejectedReasons: aiPlan.themeProposal?.rejectedReasons || [],
+      dataPlan: (selectedCandidate.dataNeeds || []).map((need, i) => ({ no: i + 1, need })),
+    },
+    briefing: {
+      ...base?.briefing,
+      purpose: aiPlan.briefing?.purpose || '',
+      coreMessage: aiPlan.briefing?.coreMessage || '',
+      chapters: aiPlan.briefing?.chapters || [],
+      dataPlan: (aiPlan.briefing?.chapters || [])
+        .flatMap((ch) => (ch.dataNeeds || []).map((need) => ({ need })))
+        .slice(0, 8),
+      riskChecklist: aiPlan.briefing?.riskChecklist || [],
+    },
+    scriptStructure: aiPlan.scriptStructure?.length ? aiPlan.scriptStructure : (base?.scriptStructure || []),
+    scriptDraft: aiPlan.scriptDraft?.length ? aiPlan.scriptDraft : (base?.scriptDraft || []),
+    mustCheck: (aiPlan.missingData || []).map((need) => ({ need, query: '', sourcePriority: [] })),
+    publishGates: aiPlan.publishGates?.length ? aiPlan.publishGates : (base?.publishGates || []),
+  };
 }
 
 async function runWikiSideStories() {
@@ -718,43 +895,7 @@ async function loadSaved() {
 }
 
 function renderPlan(plan) {
-  const beatsHtml = plan.beats.map((beat, index) => {
-    const evidence = [...new Set(beat.evidenceNeeded || [])].slice(0, 5);
-    return '<div class="beat">' +
-      '<div><div class="role">' + esc(beat.role) + '</div><div style="font-size:11px;color:var(--muted);margin-top:8px;">beat ' + (index + 1) + '</div></div>' +
-      '<div>' +
-        '<h3>' + esc(beat.claim) + '</h3>' +
-        '<p>' + esc(beat.slideIntent) + '</p>' +
-        '<div class="chips" style="margin-top:8px;">' +
-          evidence.map((x) => '<span class="chip">' + esc(x) + '</span>').join('') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-  const slidesHtml = (plan.slidePlan || []).map((slide, index) => (
-    '<div class="slide-row">' +
-      '<div class="slide-no">' + (index + 1) + '</div>' +
-      '<div>' +
-        '<h3>' + esc(slide.headline) + '</h3>' +
-        '<div class="slide-meta">' +
-          '<span class="meta-pill' + (slide.templateStatus === 'v3_candidate' ? ' new' : '') + '">' + esc(slide.slideType) + '</span>' +
-          '<span class="meta-pill">' + esc(slide.templateStatus === 'v3_candidate' ? '追加候補' : '既存型') + '</span>' +
-        '</div>' +
-        '<p>' + esc(slide.visualIntent) + '</p>' +
-        '<div class="data-reqs">' +
-          (slide.dataSlots || []).map((slot) => (
-            '<div class="data-req"><b>' + esc(slot.label) + '</b>' +
-            '<span>値: ' + esc(slot.expectedValue || '根拠') + '</span>' +
-            '<span>取得元: ' + esc(slot.sourceHint || slot.sourceType || '') + '</span></div>'
-          )).join('') +
-        '</div>' +
-      '</div>' +
-    '</div>'
-  )).join('');
-
-  document.getElementById('output').innerHTML =
-    renderResultTabs(plan, beatsHtml, slidesHtml) +
-    renderResearchPanels();
+  document.getElementById('output').innerHTML = renderResultTabs(plan);
   setResultView(activeView);
 }
 
@@ -768,77 +909,50 @@ function setResultView(view) {
   });
 }
 
-function renderResultTabs(plan, beatsHtml, slidesHtml) {
-  return '<div class="panel" id="resultTop">' +
-    '<div class="view-tabs">' +
-      '<button class="view-tab" data-view="brief" onclick="setResultView(\\'brief\\')">ブリーフ</button>' +
-      '<button class="view-tab" data-view="arguments" onclick="setResultView(\\'arguments\\')">論点</button>' +
-      '<button class="view-tab" data-view="beats" onclick="setResultView(\\'beats\\')">beat</button>' +
-      '<button class="view-tab" data-view="slides" onclick="setResultView(\\'slides\\')">スライド</button>' +
-    '</div>' +
-    '<div class="view-panel" data-view="brief">' + renderBriefView(plan) + '</div>' +
-    '<div class="view-panel" data-view="arguments">' + renderArgumentsView(plan) + '</div>' +
-    '<div class="view-panel" data-view="beats"><span class="label">論旨上の一手。ここから必要に応じて複数スライド化</span>' + beatsHtml + '</div>' +
-    '<div class="view-panel" data-view="slides"><span class="label">beatを画面単位に分解</span><div class="slide-list">' + slidesHtml + '</div></div>' +
-  '</div>';
-}
-
-function renderBriefView(plan) {
-  const brief = plan.humanBrief || {};
-  return '<span class="label">設計結果</span>' +
-    '<div class="brief-card"><h2>核心</h2><p>' + esc(brief.core || plan.centralQuestion || '') + '</p></div>' +
-    '<div class="brief-card" style="margin-top:10px;"><h2>答え</h2><p>' + esc(brief.answer || plan.thesis || '') + '</p></div>' +
-    '<div class="brief-card wide" style="margin-top:10px;"><h2>注意点</h2><div class="chips">' +
-      ((brief.cautions || []).map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('')) +
-    '</div></div>';
-}
-
-function renderArgumentsView(plan) {
-  const brief = plan.humanBrief || {};
-  return '<span class="label">論点</span>' +
-    '<div class="argument-boxes">' +
-      ((brief.structure || []).map((item) => (
-        '<div class="argument-box"><span class="arg-label">論点' + esc(item.no) + '</span><h3>' +
-        esc(item.label) + '</h3><p>' + esc(item.point) + '</p></div>'
-      )).join('')) +
+function renderScriptView(plan) {
+  const auto = plan.autopilotPlan || {};
+  const script = auto.scriptDraft || [];
+  if (!script.length) return '<div class="empty">脚本たたき台はまだありません。</div>';
+  return '<span class="label">脚本たたき台。未検証データはあとで差し替える前提</span>' +
+    '<div class="script-list">' +
+      script.map((item) => (
+        '<div class="script-card">' +
+          '<div class="slide-meta"><span class="meta-pill">slide ' + esc(item.slideNo) + '</span><span class="meta-pill">' + esc(item.role) + '</span></div>' +
+          '<h3>' + esc(item.title) + '</h3>' +
+          '<p>' + esc(item.narration) + '</p>' +
+          '<div class="chips">' +
+            (item.dataNeeds || []).map((x) => '<span class="chip">' + esc(x) + '</span>').join('') +
+          '</div>' +
+          (item.caution ? '<p style="color:#fecaca;margin-top:8px;">注意: ' + esc(item.caution) + '</p>' : '') +
+        '</div>'
+      )).join('') +
     '</div>';
 }
 
-function renderHumanBrief(plan, inline = false) {
-  const brief = plan.humanBrief || {
-    core: plan.centralQuestion,
-    answer: plan.thesis,
-    structure: (plan.beats || []).map((beat, i) => ({ no: i + 1, label: beat.role, point: beat.claim })),
-    cautions: plan.globalRiskChecks || [],
-  };
-  const mobileStructure = (brief.structure || []).slice(0, 6).map((item) =>
-    '<li>' + esc(item.label) + '</li>'
-  ).join('');
-  const resultId = inline ? '' : ' id="resultTop"';
-  return '<div class="panel mobile-brief">' +
-      '<h2>案件の核心</h2><p>' + esc(brief.core) + '</p>' +
-      '<h2>答え</h2><p>' + esc(brief.answer) + '</p>' +
-      '<h2>流れ</h2><ol>' + mobileStructure + '</ol>' +
-    '</div>' +
-    '<div class="panel"' + resultId + '>' +
-    '<span class="label">人間用ブリーフ: まずここだけ見れば判断できる</span>' +
-    '<div class="human-brief">' +
-      '<div class="brief-card"><h2>1. 話題になっている核心</h2><p>' + esc(brief.core) + '</p></div>' +
-      '<div class="brief-card"><h2>2. それに対する答え</h2><p>' + esc(brief.answer) + '</p></div>' +
-      '<div class="brief-card wide"><h2>3. 論理展開の構造</h2><div class="argument-boxes">' +
-        (brief.structure || []).map((item) => (
-          '<div class="argument-box">' +
-            '<span class="arg-label">論点' + esc(item.no) + '</span>' +
-            '<h3>' + esc(item.label) + '</h3>' +
-            '<p>' + esc(item.point) + '</p>' +
-          '</div>'
-        )).join('') +
-      '</div></div>' +
-      '<div class="brief-card wide"><h2>4. 留意すべき点</h2><div class="chips">' +
-        (brief.cautions || []).map((x) => '<span class="chip risk">' + esc(x) + '</span>').join('') +
-      '</div></div>' +
-    '</div>' +
-  '</div>';
+function renderPipelineSteps() {
+  const steps = [
+    ['1', '案件', '入力または保存案件を選ぶ'],
+    ['2', 'リサーチ', 'Web / SofaScore系 / Wiki候補を集める'],
+    ['3', 'テーマ提案', '問い・答え・使うデータを先に決める'],
+    ['4', 'ブリーフ', '動画の約束と論点を固定'],
+    ['5', '構成', 'スライド順に展開'],
+    ['6', '脚本', 'TTS前のたたき台'],
+  ];
+  return '<div class="pipeline-steps">' + steps.map((s) =>
+    '<div class="pipeline-step"><b>' + esc(s[0] + '. ' + s[1]) + '</b><span>' + esc(s[2]) + '</span></div>'
+  ).join('') + '</div>';
+}
+
+function renderStructureView(plan) {
+  const structure = plan.autopilotPlan?.scriptStructure || [];
+  return '<span class="label">脚本構成。各スライドで何を見せ、どのデータで支えるか</span>' +
+    '<div class="flow-list">' +
+      structure.map((item) => (
+        '<div class="flow-item"><b>' + esc(item.no + '. ' + item.headline) + '</b><p>' + esc(item.point) + '</p><div class="chips">' +
+          (item.dataNeeds || []).map((x) => '<span class="chip">' + esc(x) + '</span>').join('') +
+        '</div></div>'
+      )).join('') +
+    '</div>';
 }
 
 function renderResearchOnly() {
@@ -872,6 +986,173 @@ function renderResearchPanels() {
   return html;
 }
 
+function researchStatusLabel() {
+  if (currentResearch && currentWikiStories) return '完了: Web / Wiki / side story候補まで取得';
+  if (currentResearch) return 'Webリサーチ済み。Wiki候補は未取得';
+  return '未実行。まず案件を選んでリサーチ';
+}
+
+function researchReadSummary() {
+  return {
+    webCount: currentResearch?.summary?.selectedUrlCount || 0,
+    fullTextCount: currentResearch?.summary?.fullTextCount || 0,
+    queries: currentResearch?.queries || [],
+    wikiCount: currentWikiStories?.entityCount || 0,
+  };
+}
+
+function renderSourceSamples() {
+  const articles = currentResearch?.learningCorpus || [];
+  const wiki = currentWikiStories?.results || [];
+  if (!articles.length && !wiki.length) {
+    return '<div class="empty">まだ読んだ材料はありません。左の「リサーチ」を押すと、ニュース記事とWiki小話候補をまとめて読みます。</div>';
+  }
+  return '<div class="flow-list">' +
+    articles.slice(0, 6).map((item) => (
+      '<div class="flow-item"><b>' + esc(item.title || item.host || 'article') + '</b>' +
+      '<p>' + esc((item.host || '') + ' / ' + (item.fetchStatus || '') + ' / score ' + (item.score || '')) + '</p>' +
+      '<p>' + esc(String(item.text || '').slice(0, 220)) + '</p></div>'
+    )).join('') +
+    wiki.slice(0, 4).map((item) => (
+      '<div class="flow-item"><b>Wiki: ' + esc(item.entity) + '</b>' +
+      '<p>' + esc((item.sideStoryCandidates || []).map((x) => x.text).join(' ').slice(0, 260)) + '</p></div>'
+    )).join('') +
+  '</div>';
+}
+
+function renderCaseView(plan) {
+  return renderPipelineSteps() +
+    '<div class="autopilot-grid">' +
+      '<div class="autopilot-card"><h2>案件入口</h2><p>Redditスレ、5chスレ、またはカスタム入力のどれかを左に貼ります。</p></div>' +
+      '<div class="autopilot-card"><h2>手持ち情報</h2><p>スレタイトルとコメント、または相棒が気になった出来事のメモだけで開始します。</p></div>' +
+      '<div class="autopilot-card"><h2>選択中の案件</h2><p>' + esc(document.getElementById('title')?.value || plan.topic || '') + '</p></div>' +
+      '<div class="autopilot-card"><h2>現在地</h2><p>' + esc(researchStatusLabel()) + '</p></div>' +
+    '</div>';
+}
+
+function renderResearchWorkflowView(plan) {
+  const auto = plan.autopilotPlan || {};
+  const summary = researchReadSummary();
+  const missingData = auto.mustCheck || [];
+  const isAI = !!auto.aiGenerated;
+
+  let html = '<span class="label">ニュース記事やデータを読んだ量と、次の試行に使う材料</span>';
+  html += '<div class="autopilot-grid">';
+  html += '<div class="autopilot-card"><h2>読んだ材料</h2><p>Web記事: ' + esc(summary.webCount) + '件 / 本文取得: ' + esc(summary.fullTextCount) + '件 / Wiki: ' + esc(summary.wikiCount) + '件</p></div>';
+  html += '<div class="autopilot-card"><h2>検索クエリ</h2><p>' + esc(summary.queries.join(' / ') || '未実行') + '</p></div>';
+
+  if (isAI && missingData.length > 0) {
+    html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>AI分析で不足と判定されたデータ</h2>' +
+      missingData.map(function(item) {
+        return '<p style="color:#fecaca;font-size:13px;">• ' + esc(item.need || item) + '</p>';
+      }).join('') +
+      '</div>';
+  }
+  html += '</div>';
+  html += '<div style="margin-top:10px;">' + renderSourceSamples() + '</div>';
+  return html;
+}
+
+function renderThemeProposalView(plan) {
+  const auto = plan.autopilotPlan || {};
+  const proposal = auto.themeProposal || {};
+  const candidates = proposal.candidates || [];
+  const selectedIdx = proposal.selected || 0;
+  const isAI = !!auto.aiGenerated;
+  const summary = researchReadSummary();
+
+  let basisText;
+  if (isAI) {
+    basisText = 'AI分析済み: Web ' + summary.webCount + '件・本文 ' + summary.fullTextCount + '件・Wiki ' + summary.wikiCount + '件を読んで生成';
+  } else if (currentResearch) {
+    basisText = 'Web ' + summary.webCount + '件を取得済み。「AIで分析」で切り口を生成できます。';
+  } else {
+    basisText = 'リサーチ前の仮案。左の「リサーチ」→ AI分析で実際の記事に基づく提案になります。';
+  }
+
+  let html = '<span class="label">テーマ提案。どの切り口で動画にするかを決める段階</span>';
+  html += '<div class="autopilot-grid">';
+  html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>試行結果</h2><p>' + esc(basisText) + '</p></div>';
+
+  if (candidates.length > 0) {
+    candidates.forEach(function(c, i) {
+      const isSelected = i === selectedIdx;
+      const borderStyle = isSelected
+        ? 'border: 2px solid var(--green);'
+        : 'border: 1px solid var(--line);';
+      html += '<div class="autopilot-card" style="' + borderStyle + '">' +
+        '<h2>' + (isSelected ? '✓ ' : '') + '案' + (i + 1) + '. ' + esc(c.angle || c.hookQuestion || '') + '</h2>' +
+        '<p><b>問い:</b> ' + esc(c.hookQuestion || '') + '</p>' +
+        '<p><b>仮の答え:</b> ' + esc(c.answer || '') + '</p>' +
+        '<div class="chips">' + (c.dataNeeds || []).map(function(d) { return '<span class="chip">' + esc(d) + '</span>'; }).join('') + '</div>' +
+        (c.risk ? '<p style="color:#fecaca;margin-top:6px;font-size:11px;">リスク: ' + esc(c.risk) + '</p>' : '') +
+        '</div>';
+    });
+    if (proposal.selectedReason) {
+      html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>採用理由</h2><p>' + esc(proposal.selectedReason) + '</p></div>';
+    }
+    if ((proposal.rejectedReasons || []).length > 0) {
+      html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>棄却理由</h2>' +
+        proposal.rejectedReasons.map(function(r) { return '<p style="color:var(--muted);font-size:13px;">• ' + esc(r) + '</p>'; }).join('') +
+        '</div>';
+    }
+  } else {
+    html += '<div class="autopilot-card"><h2>フックとなる問題提起</h2><p>' + esc(proposal.hookQuestion || plan.centralQuestion || '') + '</p></div>' +
+      '<div class="autopilot-card"><h2>仮の答え</h2><p>' + esc(proposal.answer || plan.thesis || '') + '</p></div>' +
+      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>この切り口で使う想定データ</h2><div class="flow-list">' +
+        (proposal.dataPlan || []).slice(0, 6).map(function(item) {
+          return '<div class="flow-item"><b>' + esc(item.need) + '</b><p>検索: ' + esc(item.query || '') + '</p></div>';
+        }).join('') +
+      '</div></div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderBriefingPipelineView(plan) {
+  const briefing = plan.autopilotPlan?.briefing || {};
+  const chapters = briefing.chapters || [];
+  return '<span class="label">動画ブリーフ。採用テーマで、全体の流れを制作指示にまとめる段階</span>' +
+    '<div class="autopilot-grid">' +
+      '<div class="autopilot-card"><h2>動画の約束</h2><p>' + esc(briefing.purpose || plan.viewerPromise || '') + '</p></div>' +
+      '<div class="autopilot-card"><h2>中心メッセージ</h2><p>' + esc(briefing.coreMessage || plan.thesis || '') + '</p></div>' +
+      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>全体の流れ</h2><div class="flow-list">' +
+        chapters.slice(0, 7).map((item) => '<div class="flow-item"><b>' + esc(item.no + '. ' + item.role) + '</b><p>' + esc(item.claim) + '</p></div>').join('') +
+      '</div></div>' +
+      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>使うデータ</h2><div class="chips">' +
+        (briefing.dataPlan || []).slice(0, 8).map((x) => '<span class="chip">' + esc(x.need) + '</span>').join('') +
+      '</div></div>' +
+    '</div>';
+}
+
+function renderResultTabs(plan) {
+  return '<div class="panel" id="resultTop">' +
+    '<div class="view-tabs">' +
+      '<button class="view-tab" data-view="case" onclick="setResultView(\\'case\\')">1 案件</button>' +
+      '<button class="view-tab" data-view="research" onclick="setResultView(\\'research\\')">2 リサーチ</button>' +
+      '<button class="view-tab" data-view="theme" onclick="setResultView(\\'theme\\')">3 テーマ提案</button>' +
+      '<button class="view-tab" data-view="briefing" onclick="setResultView(\\'briefing\\')">4 ブリーフ</button>' +
+      '<button class="view-tab" data-view="structure" onclick="setResultView(\\'structure\\')">5 脚本構成</button>' +
+      '<button class="view-tab" data-view="script" onclick="setResultView(\\'script\\')">6 脚本</button>' +
+    '</div>' +
+    '<div class="view-panel" data-view="case">' + renderCaseView(plan) + '</div>' +
+    '<div class="view-panel" data-view="research">' + renderResearchWorkflowView(plan) + '</div>' +
+    '<div class="view-panel" data-view="theme">' + renderThemeProposalView(plan) + '</div>' +
+    '<div class="view-panel" data-view="briefing">' + renderBriefingPipelineView(plan) + '</div>' +
+    '<div class="view-panel" data-view="structure">' + renderStructureView(plan) + '</div>' +
+    '<div class="view-panel" data-view="script">' + renderScriptView(plan) + '</div>' +
+  '</div>';
+}
+
+function tidyControls() {
+  const briefPanel = document.querySelector('.brief-editor')?.closest('.panel');
+  if (briefPanel) briefPanel.style.display = 'none';
+  document.querySelector('label[for="title"]').textContent = '案件タイトル（Reddit / 5ch / カスタム）';
+  document.querySelector('label[for="memo"]').textContent = 'コメント・本文メモ（スレコメントや出来事を貼る）';
+}
+
+tidyControls();
 loadSaved();
 generatePlan({ scroll: false });
 </script>
