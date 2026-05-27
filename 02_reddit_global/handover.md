@@ -266,3 +266,123 @@ ssh -i /tmp/web_claude_vps -o BatchMode=yes root@37.60.224.54 \
 
 Do not restart `soccer-yt-v2` for V3 work.
 
+---
+
+## 2026-05-27 JST Update - V3 Human Pipeline UI
+
+Today V3 was moved from a raw "show all thinking layers" prototype toward a human-facing production workflow.
+
+Deployed URL:
+
+`http://37.60.224.54:3010`
+
+Deployed PM2 target:
+
+- Restarted only `soccer-yt-v3`.
+- Did not restart or edit `soccer-yt-v2`.
+
+Changed local/VPS files:
+
+- `v3_launcher/server.js`
+- `v3_launcher/v3_story_architect.js`
+
+Current V3 UI flow:
+
+1. `案件`
+2. `リサーチ`
+3. `テーマ提案`
+4. `ブリーフ`
+5. `脚本構成`
+6. `脚本`
+
+Important UX clarification from user:
+
+- The starting "案件" has only one of these source shapes:
+  - Reddit thread title + comments
+  - 5ch thread title + comments
+  - custom free-text event/memo from the user
+- At the案件 stage, do not assume structured research data already exists.
+- The user wants the system to read a lot of news/data first, then show the trial result.
+
+Current conceptual separation:
+
+- `テーマ提案`
+  - Choose the video angle/cut.
+  - Show the hook question, tentative answer, and data expected for that cut.
+  - This is not the full briefing.
+- `ブリーフ`
+  - After choosing the theme, summarize the whole video flow.
+  - It should become the production instruction before script structure.
+- `脚本構成`
+  - Slide/order level outline.
+- `脚本`
+  - Draft narration generated from the current structure.
+
+Current data objects added by `v3_story_architect.js`:
+
+- `researchDesign`
+  - Generated from `slidePlan.dataSlots`.
+  - Contains task-level research methods, queries, expected output, source priority, verification, risk.
+- `autopilotPlan`
+  - Contains:
+    - `themeProposal`
+    - `briefing`
+    - `scriptStructure`
+    - `scriptDraft`
+    - `mustCheck`
+    - `publishGates`
+
+Current research button behavior:
+
+- `runResearch()` now attempts to run both:
+  - `/api/v3/research/topic`
+  - `/api/v3/research/wiki-side-stories`
+- The UI can show read material counts:
+  - selected Web article count
+  - full text count
+  - Wiki candidate count
+  - article sample snippets
+
+Important caveat:
+
+- The UI file currently has some legacy duplicated render functions from iterative patching. Later definitions override earlier ones, so the page works, but a cleanup pass should remove old duplicate functions and mojibake text.
+- The current implementation is still mostly heuristic. It does not yet truly bind extracted values into `valueCandidate/sourceUrl/confidence`.
+
+## 2026-05-27 JST Second Update - AI Analysis Layer
+
+Commit: `4d1c97e feat(v3): add AI analysis layer via DeepSeek`
+
+New file: `v3_launcher/v3_planner.js`
+
+- `generateAIPlan(topic, memo, researchCorpus, wikiStories)`
+- Calls DeepSeek with the full research corpus (up to 6 articles × 1200 chars + 3 Wiki)
+- Returns: themeProposal (2-3 candidates), briefing, scriptStructure, scriptDraft, missingData, publishGates
+
+New endpoint: `POST /api/v3/analyze`
+
+UI changes in `server.js`:
+- `runResearch()` now auto-triggers `runAnalysis()` after Serper + Wiki fetch
+- `runAnalysis()` calls `/api/v3/analyze`, merges result into `currentPlan.autopilotPlan`
+- `buildMergedAutopilotPlan()` maps AI response shape to existing render function shape
+- `renderThemeProposalView()` now shows 2-3 AI candidate cards with selected (green border) + reason + rejected reasons
+- `renderResearchWorkflowView()` shows AI-identified missing data gaps
+- Sidebar button row: 案件を整理 / リサーチ / AIで分析 / 保存
+
+Current flow when user clicks "リサーチ":
+1. Fetch Serper (3 queries)
+2. Fetch Wiki side stories
+3. Auto-call `/api/v3/analyze` with corpus
+4. DeepSeek reads articles → generates theme candidates + briefing + script draft
+5. テーマ提案 tab shows candidates
+
+Next recommended implementation step:
+
+1. Make案件 input explicit with a source type selector:
+   - Reddit
+   - 5ch
+   - カスタム
+2. Bind research values into data slots properly:
+   - `slide.dataSlots[] -> valueCandidate -> sourceUrl -> confidence`
+   - Currently AI generates narration with placeholder data markers; need a second pass to fill real values
+3. "AIで再分析" button after editing topic/memo should re-run without re-fetching Serper (cache research)
+4. Export the generated script draft to V2 pipeline (Step2 or new V3 handoff endpoint)
