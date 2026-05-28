@@ -338,8 +338,10 @@ function _parseLabelsToSlots(labels, type) {
       if ((m = lbl.match(/^G(\d+)$/)))        { result.push({ label: 'ゴール',   value: m[1] }); continue; }
       if ((m = lbl.match(/^A(\d+)$/)))        { result.push({ label: 'アシスト', value: m[1] }); continue; }
       if ((m = lbl.match(/^評(\d+\.?\d*)$/))) { result.push({ label: '評価',     value: m[1] }); continue; }
+      if ((m = lbl.match(/^出(\d+)$/)))       { result.push({ label: '出場',     value: m[1] }); continue; }
       if ((m = lbl.match(/^@(.+)$/)))         { result.push({ label: 'クラブ',   value: m[1] }); continue; }
       if ((m = lbl.match(/^(\d+)歳$/)))       { result.push({ label: '年齢',     value: lbl  }); continue; }
+      if ((m = lbl.match(/^\$(.+)$/)))        { result.push({ label: '評価額',   value: m[1] }); continue; }
       if (/^負傷/.test(lbl)) {
         const inner = lbl.replace(/^負傷(中|歴)[:：]?/, '')
           .replace(/\((\d{4})-(\d{2})-(\d{2})迄\)/, (_, _y, mo, d) => `${parseInt(mo)}/${d}迄`);
@@ -350,6 +352,9 @@ function _parseLabelsToSlots(labels, type) {
       if ((m = lbl.match(/^(\d+)W$/))) { result.push({ label: '勝',   value: m[1] }); continue; }
       if ((m = lbl.match(/^(\d+)D$/))) { result.push({ label: '分',   value: m[1] }); continue; }
       if ((m = lbl.match(/^(\d+)L$/))) { result.push({ label: '負',   value: m[1] }); continue; }
+      if ((m = lbl.match(/^得(\d+)$/)))  { result.push({ label: '得点', value: m[1] }); continue; }
+      if ((m = lbl.match(/^失(\d+)$/)))  { result.push({ label: '失点', value: m[1] }); continue; }
+      if ((m = lbl.match(/^(\d+)pt$/)))  { result.push({ label: '勝点', value: m[1] }); continue; }
     }
     result.push({ label: lbl, value: '-' });
   }
@@ -375,18 +380,23 @@ function buildDataLabelsV3(prefetched, tmMap = {}) {
     const labels = [];
     if (e.type === 'player') {
       const ss = e.data.seasonStats || {};
-      if (ss.goals != null)   labels.push('G' + ss.goals);
-      if (ss.assists != null) labels.push('A' + ss.assists);
-      if (ss.rating != null)  labels.push('評' + ss.rating);
-      if (e.data.team)        labels.push('@' + e.data.team);
-      if (e.data.age)         labels.push(e.data.age + '歳');
+      if (ss.goals != null)        labels.push('G' + ss.goals);
+      if (ss.assists != null)      labels.push('A' + ss.assists);
+      if (ss.rating != null)       labels.push('評' + ss.rating);
+      if (ss.appearances != null)  labels.push('出' + ss.appearances);
+      if (e.data.team)             labels.push('@' + e.data.team);
+      if (e.data.age)              labels.push(e.data.age + '歳');
+      if (e.data.marketValue)      labels.push('$' + e.data.marketValue);
       labels.push(...tmLabels);
     } else {
       const st = e.data.standing || {};
-      if (st.position != null) labels.push(st.position + '位');
-      if (st.wins != null)     labels.push(st.wins + 'W');
-      if (st.draws != null)    labels.push(st.draws + 'D');
-      if (st.losses != null)   labels.push(st.losses + 'L');
+      if (st.position != null)     labels.push(st.position + '位');
+      if (st.wins != null)         labels.push(st.wins + 'W');
+      if (st.draws != null)        labels.push(st.draws + 'D');
+      if (st.losses != null)       labels.push(st.losses + 'L');
+      if (st.points != null)       labels.push(st.points + 'pt');
+      if (st.goalsFor != null)     labels.push('得' + st.goalsFor);
+      if (st.goalsAgainst != null) labels.push('失' + st.goalsAgainst);
     }
     const slots = _parseLabelsToSlots(labels, e.type);
     return { type: e.type, nameEn: e.nameEn, ok: true, summary: labels.join(' / ') || '取得OK', labels, slots };
