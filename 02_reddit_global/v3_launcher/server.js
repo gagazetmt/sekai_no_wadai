@@ -7,7 +7,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { createArgumentPlan } = require('./v3_story_architect');
-const { runTopicResearch, fetchWikiSideStories } = require('./v3_research');
+const { runTopicResearch, fetchWikiSideStories, aiExpandResearch } = require('./v3_research');
 const { generateAIPlan } = require('./v3_planner');
 const { router: s3Router } = require('../routes/step3_routes');
 const { router: s35Router } = require('../routes/step35_routes');
@@ -184,8 +184,45 @@ app.post('/api/v3/argument-plan/save', (req, res) => {
 
 app.post('/api/v3/research/topic', async (req, res) => {
   try {
+    const { topic, memo } = req.body || {};
     const result = await runTopicResearch(req.body || {});
-    res.json({ success: true, result });
+
+    // AI reads initial articles → generates follow-up queries + identifies entities
+    const expanded = await aiExpandResearch(topic, memo, result.learningCorpus).catch((e) => {
+      console.warn('[research/topic] aiExpandResearch error:', e.message);
+      return { followUpQueries: [], entities: [] };
+    });
+
+    // Run follow-up queries as snippet-only entries (no full article fetch — saves Jina credits)
+    if (expanded.followUpQueries.length) {
+      const { fetchSerper } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'serper_module'));
+      const startIdx = result.learningCorpus.length + 1;
+      for (let qi = 0; qi < expanded.followUpQueries.length; qi++) {
+        const q = expanded.followUpQueries[qi];
+        try {
+          const serper = await fetchSerper(q, 'v3_followup', 'en', null);
+          (serper.organic || []).slice(0, 3).forEach((item, j) => {
+            const snippet = `${item.title || ''}\n${item.snippet || ''}`.trim();
+            if (!snippet) return;
+            result.learningCorpus.push({
+              index: startIdx + qi * 3 + j,
+              title: item.title || '',
+              url: item.link || '',
+              host: (() => { try { return new URL(item.link).hostname.replace(/^www\./, ''); } catch (_) { return ''; } })(),
+              fetchStatus: 'followup_snippet',
+              score: 0.6,
+              usableFor: ['fact_check', 'rule_check'],
+              text: snippet.slice(0, 400),
+            });
+          });
+          console.log(`[research/topic] follow-up "${q}" → ${(serper.organic || []).length} results`);
+        } catch (qe) {
+          console.warn('[research/topic] follow-up query failed:', qe.message);
+        }
+      }
+    }
+
+    res.json({ success: true, result, aiEntities: expanded.entities, followUpQueries: expanded.followUpQueries });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -274,11 +311,19 @@ function buildDataLabelsV3(prefetched, tmMap = {}) {
 
 app.post('/api/v3/auto-prefetch', async (req, res) => {
   try {
-    const { topic = '', memo = '', learningCorpus = [], wikiResults = [] } = req.body || {};
+    const { topic = '', memo = '', learningCorpus = [], wikiResults = [], aiEntities = [] } = req.body || {};
     const { prefetchEntities } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'entity_prefetcher'));
     const { searchTransfermarktPlayer } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_games'));
     const { fetchPlayerInjuries } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_injuries'));
-    const entities = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
+
+    // AI-selected entities (higher accuracy) take priority, then regex-extracted as supplement
+    const aiMapped = (Array.isArray(aiEntities) ? aiEntities : [])
+      .filter((e) => e && e.nameEn)
+      .map((e) => ({ type: e.type || 'player', nameEn: String(e.nameEn).trim() }));
+    const regexExtracted = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
+    const seen = new Set(aiMapped.map((e) => e.nameEn.toLowerCase()));
+    const merged = [...aiMapped, ...regexExtracted.filter((e) => !seen.has(e.nameEn.toLowerCase()))];
+    const entities = merged.slice(0, 6);
     if (!entities.length) return res.json({ success: true, entities: [], labels: [], note: 'no entities found' });
     // SofaScore と TransferMarkt を並列取得
     const [prefetched, tmMap] = await Promise.all([
@@ -2030,17 +2075,16 @@ async function runProposal() {
   const btn = document.getElementById('proposalStepBtn');
   const status = document.getElementById('proposalRunStatus');
   if (btn) { btn.disabled = true; btn.textContent = '調査中...'; }
-  if (status) status.textContent = '1/4 検索クエリを作成しています...';
+  if (status) status.textContent = '1/5 英語クエリを生成してWebリサーチ中...';
   try {
     if (!currentPlan) await generatePlan({ scroll: false });
-    if (status) status.textContent = '2/4 Webリサーチ中です...';
     const searchTopic = compactSearchTopic(document.getElementById('title').value, document.getElementById('memo').value);
     const baseBody = {
       topic: searchTopic,
       memo: document.getElementById('memo').value,
       plan: currentPlan,
     };
-    // Web リサーチを先に完了させ、取得記事を Wiki エンティティ抽出に渡す
+    // ① + ② + ③: Web リサーチ → AIが記事を読んでフォローアップクエリ＆エンティティを選定
     const topicRes = await fetch('/api/v3/research/topic', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2049,6 +2093,15 @@ async function runProposal() {
     const topicData = await topicRes.json();
     if (!topicData.success) throw new Error(topicData.error || 'topic research failed');
     currentResearch = topicData.result;
+    var _aiEntities = topicData.aiEntities || [];
+    var _followUpQueries = topicData.followUpQueries || [];
+    if (_followUpQueries.length) {
+      var s1 = document.getElementById('proposalRunStatus');
+      if (s1) s1.textContent = '2/5 フォローアップ検索完了（' + _followUpQueries.length + '件追加）。Wikiデータ取得中...';
+    } else {
+      var s1b = document.getElementById('proposalRunStatus');
+      if (s1b) s1b.textContent = '2/5 Wikiデータを取得中...';
+    }
     const wikiRes = await fetch('/api/v3/research/wiki-side-stories', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2061,10 +2114,10 @@ async function runProposal() {
     currentAcquiredData = buildAcquiredDataSummary();
     activeView = 'proposal';
     renderPlan(currentPlan);
-    const nextStatus = document.getElementById('proposalRunStatus');
-    if (nextStatus) nextStatus.textContent = '3/4 記事からエンティティを抽出し、SofaScoreからデータを自動取得中...';
+    var s2 = document.getElementById('proposalRunStatus');
+    if (s2) s2.textContent = '3/5 AIが選定したエンティティ（' + _aiEntities.map(function(e){return e.nameEn;}).join('、') + '）のデータを取得中...';
 
-    // Auto-prefetch: 記事テキストから選手/チームを抽出→SofaScore叩く
+    // ④: SofaScore + TM データ取得（AI選定エンティティを優先）
     try {
       const prefetchRes = await fetch('/api/v3/auto-prefetch', {
         method: 'POST',
@@ -2074,6 +2127,7 @@ async function runProposal() {
           memo: document.getElementById('memo').value,
           learningCorpus: currentResearch?.learningCorpus || [],
           wikiResults: currentWikiStories?.results || [],
+          aiEntities: _aiEntities,
         }),
       });
       const prefetchData = await prefetchRes.json();
@@ -2084,7 +2138,8 @@ async function runProposal() {
     }
     currentAcquiredData = buildAcquiredDataSummary();
     renderPlan(currentPlan);
-    if (nextStatus) nextStatus.textContent = '4/4 データ取得完了。AI企画書を作成中...';
+    var s3 = document.getElementById('proposalRunStatus');
+    if (s3) s3.textContent = '4/5 データ取得完了。AI企画書を作成中...';
 
     try {
       const fetchedSummary = (currentFetchedData || []).filter(d => d.ok)
@@ -2113,7 +2168,7 @@ async function runProposal() {
     activeView = 'proposal';
     renderPlan(currentPlan);
     const doneStatus = document.getElementById('proposalRunStatus');
-    if (doneStatus) doneStatus.textContent = '4/4 調査完了。取得材料と企画書案を表示しました。';
+    if (doneStatus) doneStatus.textContent = '5/5 完了。記事 ' + (currentResearch?.learningCorpus?.length || 0) + '件＋データ ' + (currentFetchedData || []).filter(function(d){return d.ok;}).length + '件で企画書を生成しました。';
     await saveResearchToProject();
   } catch (error) {
     alert('企画提案失敗: ' + error.message);

@@ -376,9 +376,57 @@ function buildSideStoryCandidates(entity, summary, events) {
   return out.slice(0, 6);
 }
 
+// AI reads initial articles → decides follow-up search queries + which entities need stats data.
+// Returns { followUpQueries: string[], entities: {type, nameEn}[] }
+async function aiExpandResearch(topic, memo, learningCorpus) {
+  const articles = (learningCorpus || []).slice(0, 5);
+  if (!articles.length) return { followUpQueries: [], entities: [] };
+
+  const summaries = articles
+    .map((a, i) => `[${i + 1}] ${a.title} (${a.host})\n${String(a.text || '').slice(0, 200)}`)
+    .join('\n\n');
+
+  const prompt = `Topic: ${topic}
+${memo ? `Context: ${memo}` : ''}
+
+Articles found:
+${summaries}
+
+Based on these articles, identify:
+1. Up to 2 follow-up English search queries for specific factual gaps (regulations, official rules, key dates, stats not yet found). Example: "FIFA World Cup 2026 squad replacement deadline"
+2. Up to 3 soccer player or club names that need live stats data (goals, assists, standings etc.)
+
+Output JSON only:
+{"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Name"},{"type":"team","nameEn":"Club"}]}`;
+
+  try {
+    const raw = await callAI({
+      system: 'Soccer research assistant. Output valid JSON only. No markdown.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 250,
+      forceProvider: 'deepseek',
+    });
+    const cleaned = String(raw || '').trim()
+      .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    const followUpQueries = Array.isArray(parsed.followUpQueries)
+      ? parsed.followUpQueries.map((q) => String(q).trim()).filter(Boolean).slice(0, 2)
+      : [];
+    const entities = Array.isArray(parsed.entities)
+      ? parsed.entities.filter((e) => e && e.nameEn).slice(0, 3)
+      : [];
+    console.log('[v3_research] aiExpandResearch → queries:', followUpQueries, 'entities:', entities.map(e => e.nameEn));
+    return { followUpQueries, entities };
+  } catch (e) {
+    console.warn('[v3_research] aiExpandResearch failed:', e.message);
+    return { followUpQueries: [], entities: [] };
+  }
+}
+
 module.exports = {
   runTopicResearch,
   fetchWikiSideStories,
+  aiExpandResearch,
   pickQueries,
   scoreSearchItem,
 };
