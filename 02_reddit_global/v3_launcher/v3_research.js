@@ -4,6 +4,7 @@
 // Reuses V2 fetchers, but keeps V3 selection/scoring separate:
 // 3 queries -> pick 3-5 useful URLs per query -> fetch article text -> build learning corpus.
 
+const path = require('path');
 const { fetchSerper } = require('../scripts/modules/fetchers/serper_module');
 const { fetchArticleContent } = require('../scripts/modules/fetchers/article_fetcher');
 const {
@@ -11,6 +12,7 @@ const {
   fetchPlayerCareerEvents,
   fetchTeamHonoursEvents,
 } = require('../scripts/modules/fetchers/wikipedia');
+const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
 
 const DEFAULT_QUERY_LIMIT = 3;
 const DEFAULT_PICK_MIN = 3;
@@ -113,6 +115,17 @@ function fallbackQueries(topic, memo = '') {
       'Spain 2010 World Cup squad Barcelona Real Madrid players',
     ];
   }
+  // Extract Latin/accented names from mixed Japanese+English title (e.g. "ジョアン・ペドロ João Pedro")
+  const latinNames = (topic.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+)*/g) || [])
+    .filter((w) => w.length >= 3 && !/^(the|and|for|with|news|latest|transfer|about|from|that|this)$/i.test(w));
+  if (latinNames.length >= 1) {
+    const nameStr = latinNames.slice(0, 2).join(' ');
+    return [
+      `${nameStr} 2026 news`,
+      `${nameStr} transfer latest`,
+      `${nameStr} stats season`,
+    ];
+  }
   return [
     topic,
     `${topic} latest news`,
@@ -174,10 +187,51 @@ function classifyUse(item) {
   return tags;
 }
 
+// Use DeepSeek to convert a Japanese soccer topic into 3 targeted English search queries.
+// Returns array of strings, or null if topic is already English or AI call fails.
+async function generateEnglishQueries(topic, memo = '') {
+  if (!/[぀-ヿ一-鿿]/.test(topic)) return null; // already Latin, skip
+  const prompt = `Convert this Japanese soccer topic into 3 targeted English search queries for Google/Serper.
+
+Topic: ${topic}
+${memo ? `Context: ${memo}` : ''}
+
+Rules:
+- Translate Japanese names to proper English (ジョアン・ペドロ→João Pedro, マドリー→Real Madrid, ハーランド→Haaland, バルサ→Barcelona, etc.)
+- Query 1: Specific news/event (5-8 words)
+- Query 2: Squad/transfer/injury context (5-8 words)
+- Query 3: Player or club stats/career (5-8 words)
+- Output ONLY a valid JSON array: ["query1","query2","query3"]`;
+  try {
+    const raw = await callAI({
+      system: 'Output a JSON array of 3 English search queries only. No explanation, no markdown.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 150,
+      forceProvider: 'deepseek',
+    });
+    const cleaned = String(raw || '').trim()
+      .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed) && parsed.filter(Boolean).length >= 2) {
+      const qs = parsed.map((q) => String(q).trim()).filter(Boolean).slice(0, 3);
+      console.log('[v3_research] AI English queries:', qs);
+      return qs;
+    }
+  } catch (e) {
+    console.warn('[v3_research] generateEnglishQueries failed:', e.message);
+  }
+  return null;
+}
+
 async function runTopicResearch(input = {}) {
   const topic = String(input.topic || input.title || '').trim();
   const memo = String(input.memo || '').trim();
-  const queries = pickQueries({ topic, memo, plan: input.plan, queries: input.queries || [] });
+  // AI-translate Japanese topic to English before building query list
+  const aiQueries = await generateEnglishQueries(topic, memo);
+  const queries = pickQueries({
+    topic, memo, plan: input.plan,
+    queries: [...(aiQueries || []), ...(input.queries || [])],
+  });
   const pickMin = Number(input.pickMin || DEFAULT_PICK_MIN);
   const pickMax = Number(input.pickMax || DEFAULT_PICK_MAX);
 
@@ -251,7 +305,7 @@ function pickWikiEntities({ topic = '', memo = '', entities = [], learningCorpus
   const STOP = new Set(['World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Reddit','Transfer','News']);
   const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ajax|dortmund|psv|ac milan|as roma)\b/i;
   const corpusNames = [];
-  (corpusText.match(/[A-Z][A-Za-z'.-]{1,}(?:\s+[A-Z][A-Za-z'.-]{1,}){0,2}/g) || []).forEach(name => {
+  (corpusText.match(/[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-ÿ'.-]{1,}(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-ÿ'.-]{1,}){0,2}/g) || []).forEach(name => {
     if (name.length < 3 || STOP.has(name.split(' ')[0])) return;
     corpusNames.push(TEAM_RE.test(name) ? name : name);
   });

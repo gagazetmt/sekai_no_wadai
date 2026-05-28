@@ -228,7 +228,7 @@ function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
     add(isTeam ? 'team' : 'player', w.entity);
   });
   const allText = [topic, memo, ...(learningCorpus || []).slice(0, 6).map(x => x.title || '')].join(' ');
-  const propNouns = allText.match(/[A-Z][A-Za-z'.-]{1,}(?:\s+[A-Z][A-Za-z'.-]{1,}){0,2}/g) || [];
+  const propNouns = allText.match(/[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-þ'.-]{1,}(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-þ'.-]{1,}){0,2}/g) || [];
   propNouns.forEach(name => {
     if (name.length < 3 || STOP.has(name.split(' ')[0])) return;
     add(TEAM_RE.test(name) ? 'team' : 'player', name);
@@ -2556,7 +2556,16 @@ function renderStructureView(plan) {
   )).join('');
   const pool = Object.values(imageSelections || {}).flat();
   const selectedImgs = Array.isArray(m.images) ? m.images : [];
-  return '<span class="label">脚本構成。使うスライド、使うデータとソース、画像、プレビューをここで編集</span>' +
+  const strFetchedOk = (currentFetchedData || []).filter(function(d) { return d.ok; });
+  const fetchedBanner = strFetchedOk.length
+    ? '<div class="panel" style="margin-bottom:8px;padding:8px 10px;">' +
+        '<span class="label" style="font-size:11px;">取得済みデータ（SofaScore / TM）— スロット値に参照</span>' +
+        '<div class="chips" style="margin-top:4px;">' +
+          strFetchedOk.map(function(d) { return '<span class="chip" style="background:#0f2a1a;border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn) + ': ' + esc(d.summary) + '</span>'; }).join('') +
+        '</div>' +
+      '</div>'
+    : '';
+  return fetchedBanner + '<span class="label">脚本構成。使うスライド、使うデータとソース、画像、プレビューをここで編集</span>' +
     '<div class="slide-tabs">' + modules.map((item, i) => (
       '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3Slide(' + i + ')">' + esc((i + 1) + ' ' + (item.type || 'slide')) + '</button>'
     )).join('') + '</div>' +
@@ -3305,6 +3314,20 @@ function makeModulesFromCurrentPlan() {
   return rows.map((item, index) => {
     const needs = Array.isArray(item.dataNeeds) ? item.dataNeeds : [];
     const type = index === 0 ? 'opening' : (index === total - 1 ? 'ending' : (item.slideType || item.type || (needs.length ? 'stats' : 'insight')));
+    const title = item.title || item.headline || 'Slide ' + (index + 1);
+    const narration = item.narration || item.point || item.claim || '';
+    const dataSlots = needs.slice(0, 6).map((need) => {
+      const task = sourceTasks.find((t) => [t.need, t.expectedOutput, t.query].join(' ').includes(need));
+      const value = resolveFetchedValue(need, title, narration);
+      return { label: need, value, sourceUrl: task?.sourceUrl || '', sourceTitle: task?.sourceTitle || '' };
+    });
+    // If no slot matched, inject fetched entities as reference data for all non-opening/ending slides
+    const fetchedOk = (currentFetchedData || []).filter((d) => d.ok);
+    if (fetchedOk.length && index > 0 && index < total - 1 && !dataSlots.some((s) => s.value)) {
+      fetchedOk.slice(0, 2).forEach((d) => {
+        dataSlots.push({ label: d.nameEn, value: d.summary, sourceUrl: '', sourceTitle: 'SofaScore/TM' });
+      });
+    }
     return {
       mainKey: index === 0 ? 'opening' : (index === total - 1 ? 'ending' : 'v3:slide' + (index + 1)),
       subSource: 'v3',
@@ -3312,12 +3335,9 @@ function makeModulesFromCurrentPlan() {
       secondary: null,
       type,
       scriptDir: item.point || item.claim || '',
-      title: item.title || item.headline || 'Slide ' + (index + 1),
-      narration: item.narration || item.point || item.claim || '',
-      dataSlots: needs.slice(0, 6).map((need) => {
-        const task = sourceTasks.find((t) => [t.need, t.expectedOutput, t.query].join(' ').includes(need));
-        return { label: need, value: '', sourceUrl: task?.sourceUrl || '', sourceTitle: task?.sourceTitle || '' };
-      }),
+      title,
+      narration,
+      dataSlots,
       images: [],
       catchphrases: [],
       comments: [],
@@ -3346,8 +3366,29 @@ function buildStructureFromBriefing() {
   setTimeout(() => reloadV3Preview(), 50);
 }
 
+function asciiNorm(s) {
+  return String(s || '').toLowerCase()
+    .replace(/[à-åæ]/g, 'a').replace(/[è-ë]/g, 'e')
+    .replace(/[ì-ï]/g, 'i').replace(/[ò-ö]/g, 'o')
+    .replace(/[ù-ü]/g, 'u').replace(/ñ/g, 'n').replace(/ç/g, 'c');
+}
+function resolveFetchedValue(label, title, narration) {
+  var hay = asciiNorm([label, title, narration].join(' '));
+  for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
+    var d = currentFetchedData[_i];
+    if (!d.ok) continue;
+    var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
+    if (parts.some(function(p) { return hay.includes(p); })) return d.summary;
+  }
+  return '';
+}
 function dataStatusChip(need) {
-  const hit = (currentFetchedData || []).some(d => d.ok && d.nameEn.toLowerCase().split(' ').some(p => p.length >= 3 && String(need).toLowerCase().includes(p)));
+  var hay = asciiNorm(String(need || ''));
+  var hit = (currentFetchedData || []).some(function(d) {
+    if (!d.ok) return false;
+    return asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; })
+      .some(function(p) { return hay.includes(p); });
+  });
   return '<span class="chip" style="' + (hit ? 'border-color:#22c55e;color:#bbf7d0;' : 'border-color:#ef4444;color:#fca5a5;') + '">' + (hit ? '✅ ' : '❓ ') + esc(need) + '</span>';
 }
 
@@ -3357,7 +3398,7 @@ function renderBriefingPipelineView(plan) {
   const fetchedOk = (currentFetchedData || []).filter(d => d.ok);
   const fetchedPanel = fetchedOk.length
     ? '<div class="panel" style="margin-bottom:10px;">' +
-        '<span class="label">取得済みデータ（SofaScore）</span>' +
+        '<span class="label">取得済みデータ（SofaScore / TM）</span>' +
         '<div class="chips" style="margin-top:6px;">' +
           fetchedOk.map(d => '<span class="chip" style="background:#0f2a1a;border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn) + ': ' + esc(d.summary) + '</span>').join('') +
         '</div>' +
