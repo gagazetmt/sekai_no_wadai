@@ -1182,6 +1182,11 @@ pre {
 .topic-panel-grid select,
 .topic-panel-grid input { margin: 0; }
 
+/* hamburger + drawer - keyframes must be outside @media for older mobile browsers */
+@keyframes drawerSlideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
 /* hamburger + drawer */
 .hamburger-btn {
   display: none;
@@ -1231,10 +1236,6 @@ pre {
     flex-direction: column;
     border-right: 1px solid var(--line);
     overflow: hidden auto;
-  }
-  @keyframes drawerSlideIn {
-    from { transform: translateX(-100%); }
-    to   { transform: translateX(0); }
   }
   aside.drawer-open {
     display: flex;
