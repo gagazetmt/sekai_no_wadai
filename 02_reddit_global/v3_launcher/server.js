@@ -236,9 +236,19 @@ function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
   return entities.slice(0, 5);
 }
 
-function buildDataLabelsV3(prefetched) {
+function buildDataLabelsV3(prefetched, tmMap = {}) {
   return Object.values(prefetched || {}).map(e => {
-    if (!e.data) return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [] };
+    const tm = e.type === 'player' ? (tmMap[e.nameEn.toLowerCase()] || null) : null;
+    const tmLabels = [];
+    if (tm?.injuries?.length) {
+      const ongoing = tm.injuries.find(i => i.isOngoing);
+      if (ongoing) tmLabels.push('負傷中:' + (ongoing.injury || '不明') + (ongoing.untilDate ? '(' + ongoing.untilDate + '迄)' : ''));
+      else tmLabels.push('負傷歴' + tm.injuries.length + '件');
+    }
+    if (!e.data) {
+      if (tmLabels.length) return { type: e.type, nameEn: e.nameEn, ok: true, summary: tmLabels.join(' / '), labels: tmLabels };
+      return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [] };
+    }
     const labels = [];
     if (e.type === 'player') {
       const ss = e.data.seasonStats || {};
@@ -247,6 +257,7 @@ function buildDataLabelsV3(prefetched) {
       if (ss.rating != null)  labels.push('評' + ss.rating);
       if (e.data.team)        labels.push('@' + e.data.team);
       if (e.data.age)         labels.push(e.data.age + '歳');
+      labels.push(...tmLabels);
     } else {
       const st = e.data.standing || {};
       if (st.position != null) labels.push(st.position + '位');
@@ -262,10 +273,27 @@ app.post('/api/v3/auto-prefetch', async (req, res) => {
   try {
     const { topic = '', memo = '', learningCorpus = [], wikiResults = [] } = req.body || {};
     const { prefetchEntities } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'entity_prefetcher'));
+    const { searchTransfermarktPlayer } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_games'));
+    const { fetchPlayerInjuries } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_injuries'));
     const entities = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
     if (!entities.length) return res.json({ success: true, entities: [], labels: [], note: 'no entities found' });
-    const prefetched = await prefetchEntities(entities);
-    const labels = buildDataLabelsV3(prefetched);
+    // SofaScore と TransferMarkt を並列取得
+    const [prefetched, tmMap] = await Promise.all([
+      prefetchEntities(entities),
+      (async () => {
+        const map = {};
+        await Promise.all(entities.filter(e => e.type === 'player').map(async e => {
+          try {
+            const hit = await searchTransfermarktPlayer(e.nameEn);
+            if (!hit) return;
+            const result = await fetchPlayerInjuries(hit.id, hit.slug);
+            if (result.ok) map[e.nameEn.toLowerCase()] = result;
+          } catch (_) {}
+        }));
+        return map;
+      })(),
+    ]);
+    const labels = buildDataLabelsV3(prefetched, tmMap);
     res.json({ success: true, entities, labels });
   } catch (error) {
     console.error('[v3/auto-prefetch]', error);
@@ -3030,8 +3058,13 @@ function renderProposalPapers(plan) {
         if (!isSelected) {
           return '<div class="briefing-paper briefing-paper--compact">' +
             '<h2>企画書' + letter + '</h2>' +
-            '<p><b>切り口:</b> ' + esc(angle) + '</p>' +
-            '<p><b>フック:</b> ' + esc(hook) + '</p>' +
+            '<p class="proposal-hook-text">' + esc(hook) + '</p>' +
+            '<hr class="proposal-divider">' +
+            '<div class="proposal-meta-grid">' +
+              '<div><span class="label">切り口</span><p>' + esc(angle) + '</p></div>' +
+              '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
+            '</div>' +
+            (c.risk ? '<p style="color:#fca5a5;font-size:12px;margin-top:6px;">⚠ ' + esc(c.risk) + '</p>' : '') +
             '<div class="task-actions"><button onclick="selectThemeCandidate(' + i + ')">この企画書を採用</button></div>' +
           '</div>';
         }
