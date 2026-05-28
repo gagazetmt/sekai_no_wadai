@@ -397,7 +397,7 @@ Tasks:
    Example: "FIFA World Cup 2026 squad replacement deadline"
 2. Up to 4 soccer player or club names that need live stats data. IMPORTANT: translate Japanese names to English.
    Examples: ジョアン・ペドロ→João Pedro, ネイマール→Neymar, アンチェロッティ→Carlo Ancelotti,
-   ブラジル代表→Brazil national football team, ヴィニシウス→Vinicius Junior, ムバッペ→Kylian Mbappe
+   ブラジル代表→Brazil, スペイン代表→Spain, 日本代表→Japan, ヴィニシウス→Vinicius Junior, ムバッペ→Kylian Mbappe
 
 Output JSON only (no markdown, no explanation):
 {"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Name"},{"type":"team","nameEn":"Club"}]}`;

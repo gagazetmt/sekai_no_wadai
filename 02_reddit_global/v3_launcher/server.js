@@ -286,15 +286,15 @@ const JP_ENTITY_MAP = [
   ['ユベントス', 'team', 'Juventus'], ['インテル', 'team', 'Inter Milan'],
   ['ミラン', 'team', 'AC Milan'], ['ナポリ', 'team', 'Napoli'],
   ['ブライトン', 'team', 'Brighton'], ['アストン', 'team', 'Aston Villa'],
-  ['スペイン代表', 'team', 'Spain national football team'],
-  ['ブラジル代表', 'team', 'Brazil national football team'],
-  ['フランス代表', 'team', 'France national football team'],
-  ['ドイツ代表', 'team', 'Germany national football team'],
-  ['イングランド代表', 'team', 'England national football team'],
-  ['アルゼンチン代表', 'team', 'Argentina national football team'],
-  ['日本代表', 'team', 'Japan national football team'],
-  ['オランダ代表', 'team', 'Netherlands national football team'],
-  ['ポルトガル代表', 'team', 'Portugal national football team'],
+  ['スペイン代表', 'team', 'Spain'],
+  ['ブラジル代表', 'team', 'Brazil'],
+  ['フランス代表', 'team', 'France'],
+  ['ドイツ代表', 'team', 'Germany'],
+  ['イングランド代表', 'team', 'England'],
+  ['アルゼンチン代表', 'team', 'Argentina'],
+  ['日本代表', 'team', 'Japan'],
+  ['オランダ代表', 'team', 'Netherlands'],
+  ['ポルトガル代表', 'team', 'Portugal'],
 ];
 
 function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
@@ -400,10 +400,16 @@ app.post('/api/v3/auto-prefetch', async (req, res) => {
     const { searchTransfermarktPlayer } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_games'));
     const { fetchPlayerInjuries } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_injuries'));
 
+    // Normalize team names: strip "national football team" suffix (SofaScore searches better with just country name)
+    const normalizeEntityName = (e) => {
+      let name = String(e.nameEn || '').trim();
+      name = name.replace(/\s+national(?:\s+football)?\s+team$/i, '').trim();
+      return { type: e.type || 'player', nameEn: name };
+    };
     // AI-selected entities (higher accuracy) take priority, then regex-extracted as supplement
     const aiMapped = (Array.isArray(aiEntities) ? aiEntities : [])
       .filter((e) => e && e.nameEn)
-      .map((e) => ({ type: e.type || 'player', nameEn: String(e.nameEn).trim() }));
+      .map(normalizeEntityName);
     const regexExtracted = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
     const seen = new Set(aiMapped.map((e) => e.nameEn.toLowerCase()));
     const merged = [...aiMapped, ...regexExtracted.filter((e) => !seen.has(e.nameEn.toLowerCase()))];
@@ -3459,7 +3465,7 @@ function makeModulesFromCurrentPlan() {
     const title = item.title || item.headline || 'Slide ' + (index + 1);
     const narration = item.narration || item.point || item.claim || '';
     // For stats/profile slides: try to resolve structured {label,value} slots from SofaScore data first
-    var resolvedSlots = (type === 'stats' || type === 'profile') ? resolveStatsSlots(title, narration) : null;
+    var resolvedSlots = (type === 'stats' || type === 'profile') ? resolveStatsSlots(title, narration, needs) : null;
     var dataSlots;
     if (resolvedSlots) {
       dataSlots = resolvedSlots.map(function(s) { return { label: s.label, value: s.value, sourceUrl: '', sourceTitle: 'SofaScore/TM' }; });
@@ -3535,14 +3541,18 @@ function resolveFetchedValue(label, title, narration) {
   }
   return '';
 }
-function resolveStatsSlots(title, narration) {
-  var hay = asciiNorm([title, narration].join(' '));
+function resolveStatsSlots(title, narration, needs) {
+  var hayArr = [title, narration].concat(Array.isArray(needs) ? needs : []);
+  var hay = asciiNorm(hayArr.join(' '));
   for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
     var d = currentFetchedData[_i];
     if (!d.ok || !Array.isArray(d.slots) || !d.slots.length) continue;
     var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
     if (parts.some(function(p) { return hay.includes(p); })) return d.slots;
   }
+  // If exactly one player entity with slots and slide is stats type, use it
+  var playerSlots = (currentFetchedData || []).filter(function(d) { return d.ok && d.type === 'player' && Array.isArray(d.slots) && d.slots.length; });
+  if (playerSlots.length === 1) return playerSlots[0].slots;
   return null;
 }
 function dataStatusChip(need) {
