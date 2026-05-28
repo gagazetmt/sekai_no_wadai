@@ -1529,12 +1529,13 @@ body.drawer-is-open #sidebarOverlay {
 </header>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <nav class="view-tabs" id="stepTabs">
-  <button class="view-tab" type="button" data-view="case" onclick="setResultView('case')">0 案件</button>
-  <button class="view-tab" type="button" data-view="proposal" onclick="setResultView('proposal')">1 企画提案</button>
-  <button class="view-tab" type="button" data-view="briefing" onclick="setResultView('briefing')">3 企画書</button>
-  <button class="view-tab" type="button" data-view="structure" onclick="setResultView('structure')">4 脚本構成</button>
-  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">5 脚本</button>
-  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">6 V2</button>
+  <button class="view-tab" type="button" data-view="case" onclick="setResultView('case')">1 案件取得</button>
+  <button class="view-tab" type="button" data-view="saved" onclick="setResultView('saved')">2 保存済み</button>
+  <button class="view-tab" type="button" data-view="proposal" onclick="setResultView('proposal')">3 企画提案</button>
+  <button class="view-tab" type="button" data-view="briefing" onclick="setResultView('briefing')">4 企画書</button>
+  <button class="view-tab" type="button" data-view="structure" onclick="setResultView('structure')">5 脚本構成</button>
+  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">6 脚本</button>
+  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">7 V2</button>
 </nav>
 <main>
   <aside id="savedDrawer" aria-hidden="true">
@@ -1546,8 +1547,8 @@ body.drawer-is-open #sidebarOverlay {
       <div id="savedPlans" class="empty">未読込</div>
     </div>
     <div class="sidebar-footer">
-      <button onclick="goToProposalFromSidebar()">Step2 / 企画提案</button>
-      <div class="sidebar-hint">保存済み案件を1つ選んでから、企画提案へ進みます。</div>
+      <button onclick="setResultView('saved')">2 保存済み案件</button>
+      <div class="sidebar-hint">案件を選んで「2 保存済み」タブから企画提案へ進みます。</div>
     </div>
   </aside>
   <section class="workspace">
@@ -1586,6 +1587,7 @@ let activeView = 'case';
 const V3_STATE_KEY = 'v3_launcher_working_state';
 let stepStatus = {
   case: false,
+  saved: false,
   proposal: false,
   briefing: false,
   structure: false,
@@ -1760,7 +1762,7 @@ async function saveCustomCase() {
     selectedProject = item;
     document.getElementById('customCaseTitle').value = '';
     document.getElementById('customCaseMemo').value = '';
-    document.getElementById('customCasePanel')?.classList.remove('open');
+    activeView = 'saved';
     await loadSaved();
     renderPlan(currentPlan);
   } catch (error) {
@@ -1815,7 +1817,7 @@ async function saveSelectedCases() {
   currentWikiStories = null;
   currentAIPlan = null;
   currentAcquiredData = null;
-  activeView = 'case';
+  activeView = 'saved';
   await loadSaved();
   renderPlan(currentPlan);
 }
@@ -1829,17 +1831,9 @@ function selectSavedProject(index) {
   currentWikiStories = null;
   currentAIPlan = null;
   currentAcquiredData = null;
-  activeView = 'case';
   renderPlan(currentPlan);
   loadSaved();
-  // スマホのドロワーを自動で閉じる
-  const aside = document.querySelector('aside');
-  const overlay = document.getElementById('sidebarOverlay');
-  if (aside?.classList.contains('drawer-open')) {
-    aside.classList.remove('drawer-open');
-    overlay?.classList.remove('active');
-    document.body.style.overflow = '';
-  }
+  closeSidebar();
 }
 
 async function goToProposalFromSidebar() {
@@ -2385,23 +2379,26 @@ async function runWikiSideStories() {
 async function loadSaved() {
   const res = await fetch('/api/v3/saved-projects');
   const data = await res.json();
-  const box = document.getElementById('savedPlans');
   savedProjects = Array.isArray(data) ? data : [];
-  if (!savedProjects.length) {
-    box.className = 'empty';
-    box.textContent = '保存済みなし';
-    return;
+  const box = document.getElementById('savedPlans');
+  if (box) {
+    if (!savedProjects.length) {
+      box.className = 'empty';
+      box.textContent = '保存済みなし';
+    } else {
+      box.className = 'saved-list';
+      box.innerHTML = savedProjects.slice().reverse().slice(0, 30).map((item, revIndex) => {
+        const index = savedProjects.length - 1 - revIndex;
+        const active = selectedProject?.id && selectedProject.id === item.id;
+        return '<div class="saved-lead-item' + (active ? ' active' : '') + '" onclick="selectSavedProject(' + index + ')">' +
+        '<b>' + esc(item.title || item.titleJa || item.id) + '</b><br>' +
+        '<span>' + esc(item.source || '') + ' / score ' + esc(item.score || 0) + '</span>' +
+        '<span>' + esc(item.addedAt || '') + '</span>' +
+        '</div>';
+      }).join('');
+    }
   }
-  box.className = 'saved-list';
-  box.innerHTML = savedProjects.slice().reverse().slice(0, 30).map((item, revIndex) => {
-    const index = savedProjects.length - 1 - revIndex;
-    const active = selectedProject?.id && selectedProject.id === item.id;
-    return '<div class="saved-lead-item' + (active ? ' active' : '') + '" onclick="selectSavedProject(' + index + ')">' +
-    '<b>' + esc(item.title || item.titleJa || item.id) + '</b><br>' +
-    '<span>' + esc(item.source || '') + ' / score ' + esc(item.score || 0) + '</span>' +
-    '<span>' + esc(item.addedAt || '') + '</span>' +
-    '</div>'
-  }).join('');
+  if (activeView === 'saved') renderPlan(currentPlan);
 }
 
 function renderPlan(plan) {
@@ -2452,6 +2449,7 @@ function setResultView(view) {
   closeSidebar();
   activeView = view;
   renderPlan(currentPlan);
+  if (view === 'saved') loadSaved();
 }
 
 function renderScriptView(plan) {
@@ -2752,6 +2750,60 @@ function renderCasePickerPanel() {
     '</div>';
 }
 
+function goToProposal() {
+  if (!selectedProject && !document.getElementById('title')?.value) return alert('先に案件を選んでください');
+  activeView = 'proposal';
+  renderPlan(currentPlan);
+}
+
+function renderSavedView(plan) {
+  plan = plan || {};
+  const selectedTitle = document.getElementById('title')?.value || selectedProject?.title || '';
+  const selectedSource = document.getElementById('sourceType')?.value || selectedProject?.source || 'custom';
+
+  if (!savedProjects.length) {
+    return '<div class="panel">' +
+      '<span class="label">保存済み案件</span>' +
+      '<div class="empty">保存済み案件がありません。Step1で案件を取得・保存してください。</div>' +
+      '<div class="task-actions"><button class="secondary" onclick="setResultView(\'case\')">← 1 案件取得へ</button></div>' +
+    '</div>';
+  }
+
+  const listHtml = savedProjects.slice().reverse().slice(0, 50).map(function(item, revIndex) {
+    const index = savedProjects.length - 1 - revIndex;
+    const active = selectedProject?.id && selectedProject.id === item.id;
+    const source = String(item.source || 'custom').toLowerCase();
+    const badgeClass = source === '5ch' ? 'badge-5ch' : (source === 'reddit' ? 'badge-reddit' : 'badge-custom');
+    const badgeLabel = source === '5ch' ? '5ch' : (source === 'reddit' ? 'Reddit' : 'カスタム');
+    const dateStr = (item.addedAt || '').slice(0, 10);
+    return '<div class="case-row' + (active ? ' selected' : '') + '" onclick="selectSavedProject(' + index + ')">' +
+      '<span class="src-badge ' + badgeClass + '">' + esc(badgeLabel) + '</span>' +
+      '<span class="case-title">' + esc(item.title || item.id) + '</span>' +
+      '<span style="color:var(--muted);font-size:11px;flex-shrink:0;">' + esc(dateStr) + '</span>' +
+    '</div>';
+  }).join('');
+
+  const selectedBlock = selectedTitle
+    ? '<div class="selected-case-box" style="margin-top:12px;">' +
+        '<span class="label">選択中</span>' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">' +
+          '<span class="src-badge ' + (selectedSource === '5ch' ? 'badge-5ch' : selectedSource === 'reddit' ? 'badge-reddit' : 'badge-custom') + '">' + esc(selectedSource === '5ch' ? '5ch' : selectedSource === 'reddit' ? 'Reddit' : 'カスタム') + '</span>' +
+          '<b style="font-size:15px;">' + esc(selectedTitle) + '</b>' +
+        '</div>' +
+      '</div>'
+    : '<div class="task-status" style="margin-top:12px;">上のリストから案件を1つ選んでください。</div>';
+
+  return '<div class="panel">' +
+    '<span class="label">保存済み案件 — ' + savedProjects.length + '件</span>' +
+    '<div class="case-list" style="max-height:calc(100vh - 430px);min-height:180px;">' + listHtml + '</div>' +
+    selectedBlock +
+    '<div class="task-actions" style="margin-top:12px;">' +
+      '<button ' + (!selectedTitle ? 'disabled ' : '') + 'onclick="goToProposal()">3 企画提案へ進む →</button>' +
+      '<button class="secondary" onclick="setResultView(\'case\')">← 1 案件取得</button>' +
+    '</div>' +
+  '</div>';
+}
+
 function renderCaseFetchView() {
   return '<div class="panel">' +
       '<span class="label">Step0 案件取得画面</span>' +
@@ -2768,7 +2820,10 @@ function renderCaseView(plan) {
       '<input id="customCaseTitle" placeholder="例: 久保建英、移籍報道の温度感" style="margin-bottom:8px;">' +
       '<label class="label" style="margin-top:8px;">概要・気になる点</label>' +
       '<textarea id="customCaseMemo" style="min-height:72px;" placeholder="記事URL、相棒メモ、見たい切り口を短く書く"></textarea>' +
-      '<div class="task-actions"><button onclick="saveCustomCase()">保存</button></div>' +
+      '<div class="task-actions">' +
+        '<button onclick="saveCustomCase()">保存</button>' +
+        '<button class="secondary" onclick="setResultView(\'saved\')">2 保存済み →</button>' +
+      '</div>' +
     '</div>';
 }
 
@@ -3262,6 +3317,7 @@ function renderResultTabs(plan) {
   plan = plan || {};
   const panels = {
     case: renderCaseView,
+    saved: renderSavedView,
     proposal: renderProposalView,
     briefing: renderBriefingPipelineView,
     structure: renderStructureView,
