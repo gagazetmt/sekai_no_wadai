@@ -330,6 +330,32 @@ function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
   return entities.slice(0, 6);
 }
 
+function _parseLabelsToSlots(labels, type) {
+  const result = [];
+  for (const lbl of labels) {
+    let m;
+    if (type === 'player') {
+      if ((m = lbl.match(/^G(\d+)$/)))        { result.push({ label: 'ゴール',   value: m[1] }); continue; }
+      if ((m = lbl.match(/^A(\d+)$/)))        { result.push({ label: 'アシスト', value: m[1] }); continue; }
+      if ((m = lbl.match(/^評(\d+\.?\d*)$/))) { result.push({ label: '評価',     value: m[1] }); continue; }
+      if ((m = lbl.match(/^@(.+)$/)))         { result.push({ label: 'クラブ',   value: m[1] }); continue; }
+      if ((m = lbl.match(/^(\d+)歳$/)))       { result.push({ label: '年齢',     value: lbl  }); continue; }
+      if (/^負傷/.test(lbl)) {
+        const inner = lbl.replace(/^負傷(中|歴)[:：]?/, '')
+          .replace(/\((\d{4})-(\d{2})-(\d{2})迄\)/, (_, _y, mo, d) => `${parseInt(mo)}/${d}迄`);
+        result.push({ label: '状態', value: inner || lbl }); continue;
+      }
+    } else {
+      if ((m = lbl.match(/^(\d+)位$/))) { result.push({ label: '順位', value: lbl  }); continue; }
+      if ((m = lbl.match(/^(\d+)W$/))) { result.push({ label: '勝',   value: m[1] }); continue; }
+      if ((m = lbl.match(/^(\d+)D$/))) { result.push({ label: '分',   value: m[1] }); continue; }
+      if ((m = lbl.match(/^(\d+)L$/))) { result.push({ label: '負',   value: m[1] }); continue; }
+    }
+    result.push({ label: lbl, value: '-' });
+  }
+  return result;
+}
+
 function buildDataLabelsV3(prefetched, tmMap = {}) {
   return Object.values(prefetched || {}).map(e => {
     const tm = e.type === 'player' ? (tmMap[e.nameEn.toLowerCase()] || null) : null;
@@ -340,8 +366,11 @@ function buildDataLabelsV3(prefetched, tmMap = {}) {
       else tmLabels.push('負傷歴' + tm.injuries.length + '件');
     }
     if (!e.data) {
-      if (tmLabels.length) return { type: e.type, nameEn: e.nameEn, ok: true, summary: tmLabels.join(' / '), labels: tmLabels };
-      return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [] };
+      if (tmLabels.length) {
+        const slots = _parseLabelsToSlots(tmLabels, e.type);
+        return { type: e.type, nameEn: e.nameEn, ok: true, summary: tmLabels.join(' / '), labels: tmLabels, slots };
+      }
+      return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [], slots: [] };
     }
     const labels = [];
     if (e.type === 'player') {
@@ -359,7 +388,8 @@ function buildDataLabelsV3(prefetched, tmMap = {}) {
       if (st.draws != null)    labels.push(st.draws + 'D');
       if (st.losses != null)   labels.push(st.losses + 'L');
     }
-    return { type: e.type, nameEn: e.nameEn, ok: true, summary: labels.join(' / ') || '取得OK', labels };
+    const slots = _parseLabelsToSlots(labels, e.type);
+    return { type: e.type, nameEn: e.nameEn, ok: true, summary: labels.join(' / ') || '取得OK', labels, slots };
   });
 }
 
@@ -3428,16 +3458,27 @@ function makeModulesFromCurrentPlan() {
     const type = index === 0 ? 'opening' : (index === total - 1 ? 'ending' : (item.slideType || item.type || (needs.length ? 'stats' : 'insight')));
     const title = item.title || item.headline || 'Slide ' + (index + 1);
     const narration = item.narration || item.point || item.claim || '';
-    const dataSlots = needs.slice(0, 6).map((need) => {
-      const task = sourceTasks.find((t) => [t.need, t.expectedOutput, t.query].join(' ').includes(need));
-      const value = resolveFetchedValue(need, title, narration);
-      return { label: need, value, sourceUrl: task?.sourceUrl || '', sourceTitle: task?.sourceTitle || '' };
-    });
-    // If no slot matched, inject fetched entities as reference data for all non-opening/ending slides
+    // For stats/profile slides: try to resolve structured {label,value} slots from SofaScore data first
+    var resolvedSlots = (type === 'stats' || type === 'profile') ? resolveStatsSlots(title, narration) : null;
+    var dataSlots;
+    if (resolvedSlots) {
+      dataSlots = resolvedSlots.map(function(s) { return { label: s.label, value: s.value, sourceUrl: '', sourceTitle: 'SofaScore/TM' }; });
+    } else {
+      dataSlots = needs.slice(0, 6).map((need) => {
+        const task = sourceTasks.find((t) => [t.need, t.expectedOutput, t.query].join(' ').includes(need));
+        const value = resolveFetchedValue(need, title, narration);
+        return { label: need, value, sourceUrl: task?.sourceUrl || '', sourceTitle: task?.sourceTitle || '' };
+      });
+    }
+    // If still no slot matched, inject fetched entities as reference data for non-opening/ending slides
     const fetchedOk = (currentFetchedData || []).filter((d) => d.ok);
     if (fetchedOk.length && index > 0 && index < total - 1 && !dataSlots.some((s) => s.value)) {
       fetchedOk.slice(0, 2).forEach((d) => {
-        dataSlots.push({ label: d.nameEn, value: d.summary, sourceUrl: '', sourceTitle: 'SofaScore/TM' });
+        if (Array.isArray(d.slots) && d.slots.length) {
+          d.slots.slice(0, 3).forEach(function(s) { dataSlots.push({ label: s.label, value: s.value, sourceUrl: '', sourceTitle: 'SofaScore/TM' }); });
+        } else {
+          dataSlots.push({ label: d.nameEn, value: d.summary, sourceUrl: '', sourceTitle: 'SofaScore/TM' });
+        }
       });
     }
     return {
@@ -3493,6 +3534,16 @@ function resolveFetchedValue(label, title, narration) {
     if (parts.some(function(p) { return hay.includes(p); })) return d.summary;
   }
   return '';
+}
+function resolveStatsSlots(title, narration) {
+  var hay = asciiNorm([title, narration].join(' '));
+  for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
+    var d = currentFetchedData[_i];
+    if (!d.ok || !Array.isArray(d.slots) || !d.slots.length) continue;
+    var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
+    if (parts.some(function(p) { return hay.includes(p); })) return d.slots;
+  }
+  return null;
 }
 function dataStatusChip(need) {
   var hay = asciiNorm(String(need || ''));
