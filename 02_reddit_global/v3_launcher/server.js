@@ -1826,14 +1826,47 @@ function selectSavedProject(index) {
   const project = savedProjects[index];
   if (!project) return;
   applyProjectToInputs(project);
-  currentPlan = null;
-  currentResearch = null;
-  currentWikiStories = null;
-  currentAIPlan = null;
-  currentAcquiredData = null;
+  // 調査済みデータがあれば復元、なければクリア
+  const r = project.researchData || {};
+  currentPlan = r.plan || null;
+  currentResearch = r.research || null;
+  currentWikiStories = r.wikiStories || null;
+  currentAIPlan = r.aiPlan || null;
+  currentAcquiredData = r.acquiredData || null;
+  currentFetchedData = r.fetchedData || null;
   renderPlan(currentPlan);
   loadSaved();
   closeSidebar();
+}
+
+async function saveResearchToProject() {
+  if (!selectedProject) return;
+  const idx = savedProjects.findIndex(function(p) { return p.id === selectedProject.id; });
+  if (idx < 0) return;
+  // learningCorpus は記事本文が重いので先頭300文字に圧縮して保存
+  const compactResearch = currentResearch ? {
+    ok: currentResearch.ok,
+    topic: currentResearch.topic,
+    queries: currentResearch.queries,
+    summary: currentResearch.summary,
+    learningCorpus: (currentResearch.learningCorpus || []).map(function(c) {
+      return { index: c.index, title: c.title, url: c.url, host: c.host,
+               fetchStatus: c.fetchStatus, score: c.score, usableFor: c.usableFor,
+               text: (c.text || '').slice(0, 300) };
+    }),
+  } : null;
+  savedProjects[idx] = Object.assign({}, savedProjects[idx], {
+    researchData: {
+      plan: currentPlan,
+      research: compactResearch,
+      wikiStories: currentWikiStories,
+      aiPlan: currentAIPlan,
+      acquiredData: currentAcquiredData,
+      fetchedData: currentFetchedData,
+    },
+  });
+  selectedProject = savedProjects[idx];
+  try { await persistSavedProjects(); } catch (_) {}
 }
 
 async function goToProposalFromSidebar() {
@@ -2050,6 +2083,7 @@ async function runProposal() {
     renderPlan(currentPlan);
     const doneStatus = document.getElementById('proposalRunStatus');
     if (doneStatus) doneStatus.textContent = '4/4 調査完了。取得材料と企画書案を表示しました。';
+    await saveResearchToProject();
   } catch (error) {
     alert('企画提案失敗: ' + error.message);
   } finally {
