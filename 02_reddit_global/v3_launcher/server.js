@@ -1198,14 +1198,14 @@ pre {
   min-height: unset;
   line-height: 1;
 }
-.sidebar-overlay {
-  display: none;
+.sidebar-overlay { display: none; }
+.sidebar-overlay.active {
+  display: block;
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,.55);
   z-index: 199;
 }
-.sidebar-overlay.active { display: block; }
 
 @media (max-width: 720px) {
   body { height: auto; min-height: 100vh; overflow: auto; }
@@ -1221,26 +1221,25 @@ pre {
   h1 { font-size: 16px; }
   .tag { font-size: 11px; }
   .hamburger-btn { display: inline-flex; }
-  main { grid-template-columns: 1fr; height: auto; min-height: 0; }
-  aside {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 280px;
-    max-width: 85vw;
-    height: 100%;
-    height: 100dvh;
-    z-index: 200;
-    flex-direction: column;
-    border-right: 1px solid var(--line);
-    overflow: hidden auto;
-  }
+  main { display: block; height: auto; }
+  aside { display: none; }
   aside.drawer-open {
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0;
+    width: 85vw;
+    max-width: 300px;
+    height: 100%;
+    z-index: 200;
+    background: #0d1220;
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     animation: drawerSlideIn 0.22s ease;
   }
-  main.full-workspace aside { display: none !important; }
   .workspace { padding: 0; }
   .step-container { padding: 10px; }
   .panel { padding: 10px; margin-bottom: 10px; border-radius: 6px; }
