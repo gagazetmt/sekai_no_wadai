@@ -15,7 +15,7 @@ const { router: s4Router } = require('../routes/step4_routes');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-simplified';
+const UI_VERSION = 'v3-ui-client-js-fixed-yellow';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 const V2_DATA_DIR = path.join(__dirname, '..', 'data');
@@ -211,6 +211,68 @@ app.post('/api/v3/analyze', async (req, res) => {
   }
 });
 
+// ── auto-prefetch: 記事から entity 抽出 → SofaScore で構造化データを自動取得 ──
+function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
+  const entities = [];
+  const seen = new Set();
+  const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ac milan|as roma|psv|ajax|dortmund)\b/i;
+  const STOP = new Set(['Reddit','World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Players']);
+  function add(type, nameEn) {
+    const k = nameEn.toLowerCase().trim();
+    if (!k || k.length < 3 || seen.has(k)) return;
+    seen.add(k);
+    entities.push({ type, nameEn: nameEn.trim() });
+  }
+  (wikiResults || []).forEach(w => {
+    const isTeam = TEAM_RE.test(w.entity) || /national football team|fc |cf |sc /i.test(w.entity);
+    add(isTeam ? 'team' : 'player', w.entity);
+  });
+  const allText = [topic, memo, ...(learningCorpus || []).slice(0, 6).map(x => x.title || '')].join(' ');
+  const propNouns = allText.match(/[A-Z][A-Za-z'.-]{1,}(?:\s+[A-Z][A-Za-z'.-]{1,}){0,2}/g) || [];
+  propNouns.forEach(name => {
+    if (name.length < 3 || STOP.has(name.split(' ')[0])) return;
+    add(TEAM_RE.test(name) ? 'team' : 'player', name);
+  });
+  return entities.slice(0, 5);
+}
+
+function buildDataLabelsV3(prefetched) {
+  return Object.values(prefetched || {}).map(e => {
+    if (!e.data) return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [] };
+    const labels = [];
+    if (e.type === 'player') {
+      const ss = e.data.seasonStats || {};
+      if (ss.goals != null)   labels.push('G' + ss.goals);
+      if (ss.assists != null) labels.push('A' + ss.assists);
+      if (ss.rating != null)  labels.push('評' + ss.rating);
+      if (e.data.team)        labels.push('@' + e.data.team);
+      if (e.data.age)         labels.push(e.data.age + '歳');
+    } else {
+      const st = e.data.standing || {};
+      if (st.position != null) labels.push(st.position + '位');
+      if (st.wins != null)     labels.push(st.wins + 'W');
+      if (st.draws != null)    labels.push(st.draws + 'D');
+      if (st.losses != null)   labels.push(st.losses + 'L');
+    }
+    return { type: e.type, nameEn: e.nameEn, ok: true, summary: labels.join(' / ') || '取得OK', labels };
+  });
+}
+
+app.post('/api/v3/auto-prefetch', async (req, res) => {
+  try {
+    const { topic = '', memo = '', learningCorpus = [], wikiResults = [] } = req.body || {};
+    const { prefetchEntities } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'entity_prefetcher'));
+    const entities = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
+    if (!entities.length) return res.json({ success: true, entities: [], labels: [], note: 'no entities found' });
+    const prefetched = await prefetchEntities(entities);
+    const labels = buildDataLabelsV3(prefetched);
+    res.json({ success: true, entities, labels });
+  } catch (error) {
+    console.error('[v3/auto-prefetch]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.post('/api/v3/export-v2', (req, res) => {
   try {
     const { plan, sourceType = 'custom', memo = '' } = req.body || {};
@@ -295,6 +357,76 @@ app.get('/api/v3/argument-plans', (_, res) => {
       }
     });
   res.json({ items });
+});
+
+app.get('/case-fetch', (_, res) => {
+  res.type('html').send(`<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V3 案件取得</title>
+<style>
+body { margin:0; background:#0b0d12; color:#eef2f7; font-family:"Yu Gothic","Noto Sans JP",sans-serif; }
+header { padding:14px 16px; border-bottom:4px solid #f2b84b; background:#111827; }
+h1 { margin:0; color:#f2b84b; font-size:18px; }
+.badge { display:inline-block; margin-top:6px; padding:3px 8px; background:#f2b84b; color:#111827; border-radius:999px; font-size:11px; font-weight:900; }
+main { padding:12px; }
+.panel { border:1px solid #303846; background:#151922; border-radius:8px; padding:12px; margin-bottom:12px; }
+.row { display:grid; grid-template-columns:1fr auto; gap:8px; }
+input, button { min-height:42px; border-radius:6px; border:1px solid #303846; font:inherit; }
+input { background:#0a0d12; color:#eef2f7; padding:0 10px; }
+button { background:#f2b84b; color:#111827; font-weight:900; padding:0 12px; }
+.item { padding:10px; border:1px solid #303846; border-radius:6px; margin-top:8px; background:#0a0d12; line-height:1.45; }
+.item b { color:#f2b84b; }
+.muted { color:#94a3b8; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>V3 案件取得</h1>
+  <span class="badge">standalone-case-fetch-yellow</span>
+</header>
+<main>
+  <div class="panel">
+    <div class="row">
+      <input id="date" type="date">
+      <button id="loadBtn" type="button">案件取得</button>
+    </div>
+    <p class="muted">既存V3トップ画面から完全に切り離した確認用ページです。</p>
+  </div>
+  <div id="list" class="panel">日付を選んで案件取得を押してください。</div>
+</main>
+<script>
+function today() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];
+  });
+}
+document.getElementById('date').value = today();
+document.getElementById('loadBtn').addEventListener('click', async function() {
+  const box = document.getElementById('list');
+  box.textContent = '読込中...';
+  try {
+    const d = document.getElementById('date').value;
+    const res = await fetch('/api/v3/content?date=' + encodeURIComponent(d));
+    const data = await res.json();
+    const posts = data.posts || [];
+    box.innerHTML = '<b>取得 ' + posts.length + '件</b>' + (posts.length ? posts.map(function(p) {
+      return '<div class="item"><b>' + esc(p.title) + '</b><div class="muted">' + esc((p.source || '') + ' / score ' + (p.score || 0) + ' / ' + (p.addedAt || '')) + '</div></div>';
+    }).join('') : '<p class="muted">この日付の案件はありません。</p>');
+  } catch (error) {
+    box.innerHTML = '<b>取得失敗</b><p>' + esc(error.message || error) + '</p>';
+  }
+});
+</script>
+</body>
+</html>`);
 });
 
 app.get('/', (_, res) => {
@@ -553,6 +685,8 @@ button:disabled { opacity: .55; cursor: wait; }
   background: #0d1220;
   border-bottom: 1px solid var(--line);
   height: 44px;
+  position: relative;
+  z-index: 20;
 }
 .view-tab {
   flex: 1;
@@ -563,6 +697,8 @@ button:disabled { opacity: .55; cursor: wait; }
   border-radius: 0;
   min-height: 44px;
   font-size: 12px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(242,184,75,.22);
 }
 .view-tab.active {
   background: var(--panel);
@@ -588,6 +724,29 @@ button:disabled { opacity: .55; cursor: wait; }
   padding: 14px;
   margin-bottom: 12px;
 }
+.proposal-hook-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: #facc15;
+  margin: 6px 0 4px;
+  line-height: 1.45;
+}
+.proposal-hook-text::before { content: '\300C'; }
+.proposal-hook-text::after  { content: '\300D'; }
+.proposal-divider {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 10px 0;
+}
+.proposal-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.proposal-meta-grid .label { font-size: 10px; }
+.proposal-meta-grid p { margin: 2px 0 0; font-size: 13px; line-height: 1.4; }
+@media (max-width: 720px) { .proposal-meta-grid { grid-template-columns: 1fr; } }
 .selected-case-box h2 {
   margin: 0 0 8px;
   color: var(--gold);
@@ -1201,6 +1360,33 @@ pre {
   background: rgba(0,0,0,.55);
   z-index: 199;
 }
+body.drawer-is-open #savedDrawer {
+  display: flex !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 85vw !important;
+  max-width: 320px !important;
+  height: 100dvh !important;
+  z-index: 10000 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: translateX(0) !important;
+  -webkit-transform: translateX(0) !important;
+  pointer-events: auto !important;
+}
+body.drawer-is-open #sidebarOverlay {
+  display: block !important;
+  z-index: 9999 !important;
+}
+.drawer-close {
+  display: none;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+  min-height: 34px;
+  padding: 6px 9px;
+}
 
 @media (max-width: 720px) {
   body { height: auto; min-height: 100vh; overflow: auto; }
@@ -1215,7 +1401,16 @@ pre {
   }
   h1 { font-size: 16px; }
   .tag { font-size: 11px; }
-  .hamburger-btn { display: inline-flex; }
+  .hamburger-btn {
+    display: inline-flex;
+    position: relative;
+    z-index: 220;
+    min-width: 42px;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+  }
   main { display: block; height: auto; }
   /* iOS Safari fix: never use display:none on aside — textarea inside kills all touch events.
      Use transform off-screen + pointer-events:none instead. */
@@ -1242,8 +1437,16 @@ pre {
   }
   aside.drawer-open {
     -webkit-transform: translateX(0);
-    transform: translateX(0);
-    pointer-events: auto;
+    transform: translateX(0) !important;
+    pointer-events: auto !important;
+    box-shadow: 10px 0 28px rgba(0,0,0,.42);
+  }
+  .drawer-close { display: inline-flex; }
+  .sidebar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
   }
   .workspace { padding: 0; }
   .step-container { padding: 10px; }
@@ -1284,8 +1487,24 @@ pre {
   .argument-box h3 { font-size: 15px; }
   .argument-box p { font-size: 13px; }
   .beat { padding: 10px; gap: 8px; }
-  .view-tabs { overflow-x: auto; }
-  .view-tab { flex: 0 0 118px; }
+  .view-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 180;
+    height: 48px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    touch-action: auto;
+    pointer-events: auto;
+  }
+  .view-tab {
+    flex: 0 0 118px;
+    min-height: 48px;
+    scroll-snap-align: start;
+    pointer-events: auto;
+  }
   .autopilot-grid { grid-template-columns: 1fr; }
   .proposal-paper-grid { grid-template-columns: 1fr; }
   .research-flow { grid-template-columns: 1fr; }
@@ -1300,7 +1519,7 @@ pre {
 <body>
 <header>
   <div style="display:flex;align-items:center;gap:10px;">
-    <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="保存済み案件">☰</button>
+    <button id="hamburgerBtn" class="hamburger-btn" type="button" onclick="openSidebar()" aria-label="保存済み案件">☰</button>
     <div>
       <h1>V3 Story Architect</h1>
       <span class="version-badge">${UI_VERSION}</span>
@@ -1308,18 +1527,18 @@ pre {
   </div>
   <div class="tag">V2 preserved / argumentPlan prototype / port ${PORT}</div>
 </header>
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <nav class="view-tabs" id="stepTabs">
-  <button class="view-tab" data-view="case" onclick="setResultView('case')">1 案件</button>
-  <button class="view-tab" data-view="proposal" onclick="setResultView('proposal')">2 企画提案</button>
-  <button class="view-tab" data-view="briefing" onclick="setResultView('briefing')">3 企画書</button>
-  <button class="view-tab" data-view="structure" onclick="setResultView('structure')">4 脚本構成</button>
-  <button class="view-tab" data-view="script" onclick="setResultView('script')">5 脚本</button>
-  <button class="view-tab" data-view="export" onclick="setResultView('export')">6 V2</button>
+  <button class="view-tab" type="button" data-view="case" onclick="setResultView('case')">0 案件</button>
+  <button class="view-tab" type="button" data-view="proposal" onclick="setResultView('proposal')">1 企画提案</button>
+  <button class="view-tab" type="button" data-view="briefing" onclick="setResultView('briefing')">3 企画書</button>
+  <button class="view-tab" type="button" data-view="structure" onclick="setResultView('structure')">4 脚本構成</button>
+  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">5 脚本</button>
+  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">6 V2</button>
 </nav>
 <main>
-  <aside>
-    <div class="sidebar-head">保存済み案件</div>
+  <aside id="savedDrawer" aria-hidden="true">
+    <div class="sidebar-head"><span>保存済み案件</span><button class="drawer-close" type="button" onclick="closeSidebar()">閉じる</button></div>
     <div class="sidebar-body">
       <button class="secondary" onclick="toggleCustomCasePanel()">カスタム案件</button>
       <div id="customCasePanel" class="panel custom-case-panel">
@@ -1340,15 +1559,31 @@ pre {
     </div>
   </aside>
   <section class="workspace">
-    <div id="output" class="empty">左の「設計する」で、V3用 argumentPlan を生成する。</div>
+    <div id="output">
+      <div class="step-container">
+        <div class="panel">
+          <span class="label">案件取得</span>
+          <div class="task-status">画面初期化中。表示が切り替わらない場合も、この画面が見えていればV3本体は配信されています。</div>
+        </div>
+      </div>
+    </div>
   </section>
 </main>
 <script>
+window.addEventListener('error', function(event) {
+  var box = document.getElementById('output');
+  if (!box) return;
+  box.innerHTML = '<div class="step-container"><div class="panel" style="border:2px solid #ef4444;"><span class="label">画面エラー</span><pre>' +
+    String((event && (event.message || event.error)) || 'unknown error').replace(/[&<>"]/g, function(c) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];
+    }) + '</pre></div></div>';
+});
 let currentPlan = null;
 let currentResearch = null;
 let currentWikiStories = null;
 let currentAIPlan = null;
 let currentAcquiredData = null;
+let currentFetchedData = null;
 let savedProjects = [];
 let loadedCases = [];
 let selectedProject = null;
@@ -1374,6 +1609,7 @@ function persistV3State() {
       currentWikiStories,
       currentAIPlan,
       currentAcquiredData,
+      currentFetchedData,
       selectedProject,
       activeView,
       activeSlideIdx,
@@ -1394,6 +1630,7 @@ function restoreV3State() {
     currentWikiStories = state.currentWikiStories || null;
     currentAIPlan = state.currentAIPlan || null;
     currentAcquiredData = state.currentAcquiredData || null;
+    currentFetchedData = state.currentFetchedData || null;
     selectedProject = state.selectedProject || null;
     activeView = state.activeView || 'case';
     activeSlideIdx = state.activeSlideIdx || 0;
@@ -1446,14 +1683,57 @@ function toggleCustomCasePanel() {
   document.getElementById('customCasePanel')?.classList.toggle('open');
 }
 
-function toggleSidebar() {
-  const aside = document.querySelector('aside');
+function setSidebarOpen(isOpen) {
+  const aside = document.getElementById('savedDrawer') || document.querySelector('aside');
   const overlay = document.getElementById('sidebarOverlay');
   if (!aside || !overlay) return;
-  const isOpen = aside.classList.toggle('drawer-open');
+  document.body.classList.toggle('drawer-is-open', isOpen);
+  aside.classList.toggle('drawer-open', isOpen);
+  aside.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  aside.style.display = 'flex';
+  aside.style.transform = isOpen ? 'translateX(0)' : 'translateX(-110%)';
+  aside.style.webkitTransform = isOpen ? 'translateX(0)' : 'translateX(-110%)';
+  aside.style.pointerEvents = isOpen ? 'auto' : 'none';
+  aside.style.position = 'fixed';
+  aside.style.zIndex = isOpen ? '10000' : '';
+  aside.style.visibility = isOpen ? 'visible' : '';
+  aside.style.opacity = isOpen ? '1' : '';
   overlay.classList.toggle('active', isOpen);
   document.body.style.overflow = isOpen ? 'hidden' : '';
 }
+
+function openSidebar() {
+  setSidebarOpen(true);
+}
+
+function closeSidebar() {
+  setSidebarOpen(false);
+}
+
+function toggleSidebar() {
+  const aside = document.getElementById('savedDrawer') || document.querySelector('aside');
+  setSidebarOpen(!aside?.classList.contains('drawer-open'));
+}
+
+function bindHamburgerMenu() {
+  const btn = document.getElementById('hamburgerBtn');
+  if (!btn || btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSidebar();
+  }, { passive: false });
+  btn.addEventListener('touchend', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSidebar();
+  }, { passive: false });
+}
+
+window.openSidebar = openSidebar;
+window.closeSidebar = closeSidebar;
+window.toggleSidebar = toggleSidebar;
 
 async function persistSavedProjects() {
   const res = await fetch('/api/v3/saved-projects', {
@@ -1735,15 +2015,41 @@ async function runProposal() {
     activeView = 'proposal';
     renderPlan(currentPlan);
     const nextStatus = document.getElementById('proposalRunStatus');
-    if (nextStatus) nextStatus.textContent = '3/4 記事から人物・チーム・取得データ候補を整理しました。AI企画書を作成中です...';
+    if (nextStatus) nextStatus.textContent = '3/4 記事からエンティティを抽出し、SofaScoreからデータを自動取得中...';
 
+    // Auto-prefetch: 記事テキストから選手/チームを抽出→SofaScore叩く
     try {
-      const analyzeRes = await fetch('/api/v3/analyze', {
+      const prefetchRes = await fetch('/api/v3/auto-prefetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic: document.getElementById('title').value,
           memo: document.getElementById('memo').value,
+          learningCorpus: currentResearch?.learningCorpus || [],
+          wikiResults: currentWikiStories?.results || [],
+        }),
+      });
+      const prefetchData = await prefetchRes.json();
+      currentFetchedData = prefetchData.success ? (prefetchData.labels || []) : [];
+    } catch (prefetchErr) {
+      console.warn('[auto-prefetch] failed:', prefetchErr.message);
+      currentFetchedData = [];
+    }
+    currentAcquiredData = buildAcquiredDataSummary();
+    renderPlan(currentPlan);
+    if (nextStatus) nextStatus.textContent = '4/4 データ取得完了。AI企画書を作成中...';
+
+    try {
+      const fetchedSummary = (currentFetchedData || []).filter(d => d.ok)
+        .map(d => d.nameEn + ': ' + d.summary).join('\n');
+      const enrichedMemo = document.getElementById('memo').value +
+        (fetchedSummary ? '\n\n[SofaScore自動取得データ]\n' + fetchedSummary : '');
+      const analyzeRes = await fetch('/api/v3/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: document.getElementById('title').value,
+          memo: enrichedMemo,
           researchCorpus: currentResearch,
           wikiStories: currentWikiStories,
         }),
@@ -2129,6 +2435,21 @@ function syncProxyInputs() {
   if (ps) ps.value = sourceType;
 }
 
+function syncProxySourceType(el) {
+  const target = document.getElementById('sourceType');
+  if (target) target.value = el?.value || 'custom';
+}
+
+function syncProxyTitle(el) {
+  const target = document.getElementById('title');
+  if (target) target.value = el?.value || '';
+}
+
+function syncProxyMemo(el) {
+  const target = document.getElementById('memo');
+  if (target) target.value = el?.value || '';
+}
+
 function updateWorkspaceChrome() {
   document.querySelector('main')?.classList.toggle('full-workspace', activeView !== 'case');
 }
@@ -2136,6 +2457,7 @@ function updateWorkspaceChrome() {
 function setResultView(view) {
   if (activeView === 'structure' && view !== 'structure') collectV3SlideInputs();
   if (activeView === 'briefing' && view !== 'briefing') updateBriefingFromEditor();
+  closeSidebar();
   activeView = view;
   renderPlan(currentPlan);
 }
@@ -2396,9 +2718,7 @@ function renderSourceSamples() {
   '</div>';
 }
 
-function renderCaseView(plan) {
-  plan = plan || {};
-  const sourceType = document.getElementById('sourceType')?.value || 'custom';
+function renderCasePickerPanel() {
   const today = document.getElementById('caseDate')?.value || todayLocalDate();
   const groups = {};
   loadedCases.forEach((p, i) => {
@@ -2421,35 +2741,50 @@ function renderCaseView(plan) {
         '<span class="case-title">' + esc(p.title || '') + '</span>' +
       '</div>';
     }).join('');
-    return '<div class="time-group">' +
+    return '<div class="time-group open">' +
       '<div class="time-summary" onclick="toggleCaseGroup(this)">' + esc(t) + ' 取得分 (' + groups[t].length + '件)</div>' +
       '<div class="time-content">' + rows + '</div>' +
     '</div>';
-  }).join('') : '<div class="empty">日付を選んで案件読込。保存するとこのV3にセットされます。</div>';
+  }).join('') : '<div class="empty">日付を選んで「案件取得」を押してください。</div>';
+
   return '<div class="panel">' +
-      '<span class="label">動画トピック</span>' +
-      '<div class="topic-panel-grid">' +
-        '<label>タイプ</label>' +
-        '<select id="proxySourceType" onchange="document.getElementById(\'sourceType\').value=this.value">' +
-          '<option value="reddit">Reddit</option><option value="5ch">5ch</option><option value="custom">カスタム</option>' +
-        '</select>' +
-        '<label>タイトル</label>' +
-        '<input id="proxyTitle" placeholder="動画トピックを入力" oninput="document.getElementById(\'title\').value=this.value">' +
-      '</div>' +
-      '<label class="label" style="margin-top:10px;">相棒メモ</label>' +
-      '<textarea id="proxyMemo" rows="4" style="min-height:80px;" oninput="document.getElementById(\'memo\').value=this.value" placeholder="切り口・注意点・入れたい小話"></textarea>' +
-    '</div>' +
-    '<div class="panel">' +
-      '<span class="label">案件選択</span>' +
+      '<span class="label">案件取得</span>' +
       '<div class="case-toolbar">' +
         '<input id="caseDate" type="date" value="' + esc(today) + '">' +
-        '<button onclick="loadCases()">案件読込</button>' +
-        '<button class="secondary" onclick="saveSelectedCases()">選択を保存</button>' +
+        '<button type="button" onclick="loadCases()">案件取得</button>' +
+        '<button class="secondary" type="button" onclick="saveSelectedCases()">選択を保存</button>' +
         '<span class="case-spacer"></span>' +
         '<span class="case-count">' + esc(loadedCases.length) + '件 / 選択 ' + esc(selectedCaseIds.size) + '件</span>' +
       '</div>' +
       '<div id="caseList" class="case-list">' + caseRows + '</div>' +
     '</div>';
+}
+
+function renderCaseFetchView() {
+  return '<div class="panel">' +
+      '<span class="label">Step0 案件取得画面</span>' +
+      '<div class="task-status">Reddit / 5ch の取得済み候補を日付で読み込み、使う案件を保存します。</div>' +
+    '</div>' +
+    renderCasePickerPanel();
+}
+
+function renderCaseView(plan) {
+  plan = plan || {};
+  const sourceType = document.getElementById('sourceType')?.value || 'custom';
+  return '<div class="panel">' +
+      '<span class="label">動画トピック</span>' +
+      '<div class="topic-panel-grid">' +
+        '<label>タイプ</label>' +
+        '<select id="proxySourceType" onchange="syncProxySourceType(this)">' +
+          '<option value="reddit">Reddit</option><option value="5ch">5ch</option><option value="custom">カスタム</option>' +
+        '</select>' +
+        '<label>タイトル</label>' +
+        '<input id="proxyTitle" placeholder="動画トピックを入力" oninput="syncProxyTitle(this)">' +
+      '</div>' +
+      '<label class="label" style="margin-top:10px;">相棒メモ</label>' +
+      '<textarea id="proxyMemo" rows="4" style="min-height:80px;" oninput="syncProxyMemo(this)" placeholder="切り口・注意点・入れたい小話"></textarea>' +
+    '</div>' +
+    renderCasePickerPanel();
 }
 
 function renderSelectedCaseBox() {
@@ -2480,8 +2815,28 @@ function renderAcquiredDataView() {
   if (!hasAny) {
     return '<div class="panel evidence-section"><span class="label">調査で得た材料</span><div class="empty">まだ調査していません。「調査」を押すと、検索クエリ・Web記事・取得データ候補をここに明示します。</div></div>';
   }
+  const fetchedOk = (currentFetchedData || []).filter(d => d.ok);
+  const fetchedFail = (currentFetchedData || []).filter(d => !d.ok);
+  const fetchedBlock = currentFetchedData
+    ? '<div class="panel" style="margin-bottom:10px;">' +
+        '<span class="label">SofaScore取得済みデータ</span>' +
+        (fetchedOk.length
+          ? '<div class="chips" style="margin-top:6px;">' +
+              fetchedOk.map(d => '<span class="chip" style="background:#0f2a1a;border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn) + ': ' + esc(d.summary) + '</span>').join('') +
+            '</div>'
+          : '') +
+        (fetchedFail.length
+          ? '<div class="chips" style="margin-top:4px;">' +
+              fetchedFail.map(d => '<span class="chip" style="background:#2a0f0f;border-color:#ef4444;color:#fca5a5;">' + esc(d.nameEn) + ' 取得失敗</span>').join('') +
+            '</div>'
+          : '') +
+        (fetchedOk.length === 0 && fetchedFail.length === 0
+          ? '<div class="task-status">SofaScore対象エンティティが検出されませんでした。</div>'
+          : '') +
+      '</div>'
+    : '';
   const summary = 'Web ' + (data.webSources || []).length + '件 / 本文取得 ' + (data.webSources || []).filter((s) => s.fetchStatus === 'full_text' || s.fetchStatus === 'full_text_reader').length + '件 / 関連候補 ' + (data.entities || []).length + '件';
-  return '<div class="panel evidence-section">' +
+  return fetchedBlock + '<div class="panel evidence-section">' +
     '<details>' +
     '<summary class="label" style="cursor:pointer;user-select:none;">調査で得た材料 — ' + esc(summary) + '</summary>' +
     '<h3 class="research-heading">1. 検索クエリ作成</h3>' +
@@ -2602,14 +2957,26 @@ function renderProposalPapers(plan) {
           '</div>';
         }
         return '<div class="briefing-paper selected">' +
-          '<h2>採用中: 企画書' + letter + '</h2>' +
-          '<h3>切り口</h3><p>' + esc(angle) + '</p>' +
-          '<h3>フック質問</h3><p>' + esc(hook) + '</p>' +
-          '<h3>仮の答え</h3><p>' + esc(answer) + '</p>' +
-          '<h3>動画の約束</h3><p>' + esc(fallbackPurpose) + '</p>' +
-          '<h3>構成案</h3><ol>' + fallbackChapters.slice(0, 5).map((item) => '<li>' + esc((item.role || '') + ' - ' + (item.claim || '')) + '</li>').join('') + '</ol>' +
-          '<h3>必要データ</h3><div class="chips">' + dataNeeds.slice(0, 8).map((x) => '<span class="chip">' + esc(x.need || x) + '</span>').join('') + '</div>' +
-          (c.risk ? '<h3>注意点</h3><p style="color:#fecaca;">' + esc(c.risk) + '</p>' : '') +
+          '<span class="label" style="font-size:10px;color:var(--muted);">採用中: 企画書' + letter + '</span>' +
+          '<p class="proposal-hook-text">' + esc(hook) + '</p>' +
+          '<hr class="proposal-divider">' +
+          '<div class="proposal-meta-grid">' +
+            '<div><span class="label">切り口</span><p>' + esc(angle) + '</p></div>' +
+            '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
+          '</div>' +
+          '<hr class="proposal-divider">' +
+          '<span class="label">動画の約束</span><p style="margin:4px 0 10px;font-size:13px;">' + esc(fallbackPurpose) + '</p>' +
+          '<span class="label">構成案</span><ol style="margin:4px 0 10px;padding-left:18px;">' +
+            fallbackChapters.slice(0, 5).map((item) => '<li style="font-size:13px;line-height:1.5;">' + esc((item.role || '') + ' — ' + (item.claim || '')) + '</li>').join('') +
+          '</ol>' +
+          '<span class="label">必要データ</span><div class="chips" style="margin:4px 0 10px;">' +
+            dataNeeds.slice(0, 8).map((x) => {
+              const need = x.need || x;
+              const hit = (currentFetchedData || []).some(d => d.ok && d.nameEn.toLowerCase().split(' ').some(p => String(need).toLowerCase().includes(p)));
+              return '<span class="chip" style="' + (hit ? 'border-color:#22c55e;color:#bbf7d0;' : '') + '">' + (hit ? '✅ ' : '❓ ') + esc(need) + '</span>';
+            }).join('') +
+          '</div>' +
+          (c.risk ? '<span class="label" style="color:#f87171;">注意点</span><p style="color:#fecaca;margin:4px 0 10px;font-size:13px;">' + esc(c.risk) + '</p>' : '') +
           '<div class="task-actions"><button disabled>採用中</button></div>' +
         '</div>';
       }).join('') +
@@ -2622,8 +2989,8 @@ function renderProposalView(plan) {
   plan = plan || {};
   let html = renderSelectedCaseBox();
   html += renderResearchActionPanel();
-  html += renderProposalPapers(plan);
   html += renderAcquiredDataView();
+  html += renderProposalPapers(plan);
   html += '<div class="task-actions"><button class="secondary" onclick="setResultView(\\'briefing\\')">採用案で企画書へ</button></div>';
   return html;
 }
@@ -2867,20 +3234,41 @@ function buildStructureFromBriefing() {
   setTimeout(() => reloadV3Preview(), 50);
 }
 
+function dataStatusChip(need) {
+  const hit = (currentFetchedData || []).some(d => d.ok && d.nameEn.toLowerCase().split(' ').some(p => p.length >= 3 && String(need).toLowerCase().includes(p)));
+  return '<span class="chip" style="' + (hit ? 'border-color:#22c55e;color:#bbf7d0;' : 'border-color:#ef4444;color:#fca5a5;') + '">' + (hit ? '✅ ' : '❓ ') + esc(need) + '</span>';
+}
+
 function renderBriefingPipelineView(plan) {
   const briefing = plan.autopilotPlan?.briefing || {};
   const chapters = briefing.chapters || [];
-  return '<span class="label">企画書。採用テーマをもとに、動画のブリーフィングを作る段階</span>' +
+  const fetchedOk = (currentFetchedData || []).filter(d => d.ok);
+  const fetchedPanel = fetchedOk.length
+    ? '<div class="panel" style="margin-bottom:10px;">' +
+        '<span class="label">取得済みデータ（SofaScore）</span>' +
+        '<div class="chips" style="margin-top:6px;">' +
+          fetchedOk.map(d => '<span class="chip" style="background:#0f2a1a;border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn) + ': ' + esc(d.summary) + '</span>').join('') +
+        '</div>' +
+      '</div>'
+    : '';
+  return fetchedPanel +
+    '<span class="label">企画書。採用テーマをもとに、動画のブリーフィングを作る段階</span>' +
     '<textarea id="briefingText" class="brief-textarea" oninput="updateBriefingFromEditor()">' + esc(formatBriefingText(plan)) + '</textarea>' +
     '<div class="task-actions"><button onclick="buildStructureFromBriefing()">企画書の内容で脚本構成</button><button class="secondary" onclick="updateBriefingFromEditor();renderPlan(currentPlan)">企画書を反映</button></div>' +
     '<div class="autopilot-grid">' +
       '<div class="autopilot-card"><h2>動画の約束</h2><p>' + esc(briefing.purpose || plan.viewerPromise || '') + '</p></div>' +
       '<div class="autopilot-card"><h2>中心メッセージ</h2><p>' + esc(briefing.coreMessage || plan.thesis || '') + '</p></div>' +
       '<div class="autopilot-card" style="grid-column:1/-1;"><h2>全体の流れ</h2><div class="flow-list">' +
-        chapters.slice(0, 7).map((item) => '<div class="flow-item"><b>' + esc(item.no + '. ' + item.role) + '</b><p>' + esc(item.claim) + '</p></div>').join('') +
+        chapters.slice(0, 7).map((item) => {
+          const needs = Array.isArray(item.dataNeeds) ? item.dataNeeds : [];
+          const needsHtml = needs.length
+            ? '<div class="chips" style="margin-top:4px;">' + needs.map(dataStatusChip).join('') + '</div>'
+            : '';
+          return '<div class="flow-item"><b>' + esc((item.no || '') + '. ' + (item.role || '')) + '</b><p>' + esc(item.claim) + '</p>' + needsHtml + '</div>';
+        }).join('') +
       '</div></div>' +
-      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>使うデータ</h2><div class="chips">' +
-        (briefing.dataPlan || []).slice(0, 8).map((x) => '<span class="chip">' + esc(x.need) + '</span>').join('') +
+      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>使うデータ <span style="font-size:11px;font-weight:400;color:var(--muted);">✅取得済 ❓未確認</span></h2><div class="chips">' +
+        (briefing.dataPlan || []).slice(0, 10).map((x) => dataStatusChip(x.need || x)).join('') +
       '</div></div>' +
     '</div>';
 }
@@ -2920,10 +3308,16 @@ function tidyControls() {
   if (legacy) legacy.style.display = 'none';
 }
 
-tidyControls();
-loadSaved();
-restoreV3State();
-renderPlan(currentPlan);
+try {
+  tidyControls();
+  loadSaved();
+  restoreV3State();
+  activeView = 'case';
+  renderPlan(currentPlan);
+  bindHamburgerMenu();
+} catch (error) {
+  window.dispatchEvent(new ErrorEvent('error', { message: error.message || String(error), error: error }));
+}
 </script>
 </body>
 </html>`);
