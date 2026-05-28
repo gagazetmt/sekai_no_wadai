@@ -1181,11 +1181,6 @@ pre {
 .topic-panel-grid select,
 .topic-panel-grid input { margin: 0; }
 
-/* hamburger + drawer - keyframes must be outside @media for older mobile browsers */
-@keyframes drawerSlideIn {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(0); }
-}
 /* hamburger + drawer */
 .hamburger-btn {
   display: none;
@@ -1222,23 +1217,33 @@ pre {
   .tag { font-size: 11px; }
   .hamburger-btn { display: inline-flex; }
   main { display: block; height: auto; }
-  aside { display: none; }
-  aside.drawer-open {
+  /* iOS Safari fix: never use display:none on aside — textarea inside kills all touch events.
+     Use transform off-screen + pointer-events:none instead. */
+  main.full-workspace aside { display: -webkit-flex; display: flex; }
+  aside {
     display: -webkit-flex;
     display: flex;
     -webkit-flex-direction: column;
     flex-direction: column;
     position: fixed;
     top: 0; left: 0;
-    width: 85vw;
-    max-width: 300px;
+    width: 85vw; max-width: 300px;
     height: 100%;
     z-index: 200;
     background: #0d1220;
     border-right: 1px solid var(--line);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    animation: drawerSlideIn 0.22s ease;
+    -webkit-transform: translateX(-110%);
+    transform: translateX(-110%);
+    pointer-events: none;
+    -webkit-transition: -webkit-transform 0.22s ease;
+    transition: transform 0.22s ease;
+  }
+  aside.drawer-open {
+    -webkit-transform: translateX(0);
+    transform: translateX(0);
+    pointer-events: auto;
   }
   .workspace { padding: 0; }
   .step-container { padding: 10px; }
