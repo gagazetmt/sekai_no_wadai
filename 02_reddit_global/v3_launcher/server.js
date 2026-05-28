@@ -2440,7 +2440,7 @@ function syncProxyMemo(el) {
 }
 
 function updateWorkspaceChrome() {
-  document.querySelector('main')?.classList.toggle('full-workspace', activeView !== 'case');
+  document.querySelector('main')?.classList.add('full-workspace');
 }
 
 function setResultView(view) {
@@ -2750,6 +2750,25 @@ function renderCasePickerPanel() {
     '</div>';
 }
 
+async function deleteSavedProject(index) {
+  const item = savedProjects[index];
+  if (!item) return;
+  if (!confirm('"' + (item.title || item.id) + '" を削除しますか？')) return;
+  savedProjects = savedProjects.filter(function(_, i) { return i !== index; });
+  if (selectedProject?.id === item.id) {
+    selectedProject = null;
+    const t = document.getElementById('title');
+    const m = document.getElementById('memo');
+    const s = document.getElementById('sourceType');
+    if (t) t.value = '';
+    if (m) m.value = '';
+    if (s) s.value = 'custom';
+  }
+  await persistSavedProjects();
+  await loadSaved();
+  renderPlan(currentPlan);
+}
+
 function goToProposal() {
   if (!selectedProject && !document.getElementById('title')?.value) return alert('先に案件を選んでください');
   activeView = 'proposal';
@@ -2776,10 +2795,11 @@ function renderSavedView(plan) {
     const badgeClass = source === '5ch' ? 'badge-5ch' : (source === 'reddit' ? 'badge-reddit' : 'badge-custom');
     const badgeLabel = source === '5ch' ? '5ch' : (source === 'reddit' ? 'Reddit' : 'カスタム');
     const dateStr = (item.addedAt || '').slice(0, 10);
-    return '<div class="case-row' + (active ? ' selected' : '') + '" onclick="selectSavedProject(' + index + ')">' +
-      '<span class="src-badge ' + badgeClass + '">' + esc(badgeLabel) + '</span>' +
-      '<span class="case-title">' + esc(item.title || item.id) + '</span>' +
-      '<span style="color:var(--muted);font-size:11px;flex-shrink:0;">' + esc(dateStr) + '</span>' +
+    return '<div class="case-row' + (active ? ' selected' : '') + '" style="align-items:center;">' +
+      '<span class="src-badge ' + badgeClass + '" style="flex-shrink:0;cursor:pointer;" onclick="selectSavedProject(' + index + ')">' + esc(badgeLabel) + '</span>' +
+      '<span class="case-title" style="cursor:pointer;" onclick="selectSavedProject(' + index + ')">' + esc(item.title || item.id) + '</span>' +
+      '<span style="color:var(--muted);font-size:11px;flex-shrink:0;cursor:pointer;" onclick="selectSavedProject(' + index + ')">' + esc(dateStr) + '</span>' +
+      '<button class="secondary" style="flex-shrink:0;min-height:26px;padding:0 7px;font-size:11px;margin-left:4px;" onclick="event.stopPropagation();deleteSavedProject(' + index + ')">削除</button>' +
     '</div>';
   }).join('');
 
