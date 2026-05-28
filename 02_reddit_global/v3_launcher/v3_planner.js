@@ -92,7 +92,7 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
     "purpose": "この動画で視聴者に届ける約束（一文）",
     "coreMessage": "一文で言える結論",
     "chapters": [
-      {"no": 1, "role": "hook", "claim": "主張", "dataNeeds": ["必要データ"]}
+      {"no": 1, "role": "hook", "claim": "主張", "dataNeeds": ["選手名 のゴール数など取得済みラベル名"]}
     ],
     "riskChecklist": ["確認すべき事実1"]
   },
@@ -103,7 +103,7 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
       "headline": "スライドタイトル",
       "point": "このスライドで言うこと",
       "visualIntent": "見せ方の意図",
-      "dataNeeds": ["必要データ"]
+      "dataNeeds": ["選手名 のゴール", "選手名 のアシスト", "選手名 の評価", "選手名 のクラブ", "選手名 の年齢"]
     }
   ],
   "scriptDraft": [
@@ -112,7 +112,7 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
       "title": "スライドタイトル",
       "role": "hook",
       "narration": "ナレーション草稿（日本語・1〜2文）",
-      "dataNeeds": ["必要データ"],
+      "dataNeeds": ["選手名 のゴール", "選手名 のアシスト", "選手名 の評価", "選手名 のクラブ", "選手名 の年齢"],
       "caution": "注意点（なければ空文字）"
     }
   ],
