@@ -2911,9 +2911,6 @@ function tidyControls() {
   if (briefPanel) briefPanel.style.display = 'none';
   const legacy = document.querySelector('.legacy-actions');
   if (legacy) legacy.style.display = 'none';
-  document.querySelector('label[for="sourceType"]').textContent = '案件タイプ';
-  document.querySelector('label[for="title"]').textContent = '案件タイトル（Reddit / 5ch / カスタム）';
-  document.querySelector('label[for="memo"]').textContent = 'コメント・本文メモ（スレコメントや出来事を貼る）';
 }
 
 tidyControls();
