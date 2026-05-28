@@ -731,8 +731,8 @@ button:disabled { opacity: .55; cursor: wait; }
   margin: 6px 0 4px;
   line-height: 1.45;
 }
-.proposal-hook-text::before { content: '\300C'; }
-.proposal-hook-text::after  { content: '\300D'; }
+.proposal-hook-text::before { content: '「'; }
+.proposal-hook-text::after  { content: '」'; }
 .proposal-divider {
   border: none;
   border-top: 1px solid var(--line);
