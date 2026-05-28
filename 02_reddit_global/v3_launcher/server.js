@@ -1219,18 +1219,28 @@ pre {
   .hamburger-btn { display: inline-flex; }
   main { grid-template-columns: 1fr; height: auto; min-height: 0; }
   aside {
+    display: none;
     position: fixed;
     top: 0;
-    left: -280px;
-    width: 260px;
-    height: 100vh;
+    left: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100%;
+    height: 100dvh;
     z-index: 200;
+    flex-direction: column;
     border-right: 1px solid var(--line);
-    transition: left 0.25s ease;
-    overflow: auto;
+    overflow: hidden auto;
   }
-  aside.drawer-open { left: 0; }
-  main.full-workspace aside { left: -280px !important; }
+  @keyframes drawerSlideIn {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(0); }
+  }
+  aside.drawer-open {
+    display: flex;
+    animation: drawerSlideIn 0.22s ease;
+  }
+  main.full-workspace aside { display: none !important; }
   .workspace { padding: 0; }
   .step-container { padding: 10px; }
   .panel { padding: 10px; margin-bottom: 10px; border-radius: 6px; }
