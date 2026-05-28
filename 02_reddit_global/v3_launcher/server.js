@@ -15,7 +15,7 @@ const { router: s4Router } = require('../routes/step4_routes');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
-const UI_VERSION = 'v3-ui-hamburger-sidebar';
+const UI_VERSION = 'v3-ui-simplified';
 // Keep prototype output inside v3_launcher so V2 data directories stay untouched.
 const DATA_DIR = path.join(__dirname, 'data', 'argument_plans');
 const V2_DATA_DIR = path.join(__dirname, '..', 'data');
@@ -1142,6 +1142,46 @@ pre {
   .case-toolbar { grid-template-columns: 1fr 1fr; }
   .case-editor-grid { grid-template-columns: 1fr; }
 }
+/* hidden state storage */
+.hidden-state { display: none !important; }
+
+/* compact selected-case badge on step2+ */
+.case-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #111827;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  min-height: 0;
+  flex-shrink: 0;
+}
+.case-badge b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.case-badge.empty-badge { color: var(--muted); font-style: italic; }
+
+/* collapsed proposal card (unselected) */
+.briefing-paper--compact {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.briefing-paper--compact h2 { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
+.briefing-paper--compact p { margin: 0; font-size: 13px; line-height: 1.4; }
+.briefing-paper--compact .task-actions { margin-top: 10px; }
+
+/* topic panel in step1 workspace */
+.topic-panel-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  align-items: center;
+}
+.topic-panel-grid label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.topic-panel-grid select,
+.topic-panel-grid input { margin: 0; }
+
 /* hamburger + drawer */
 .hamburger-btn {
   display: none;
@@ -1275,16 +1315,9 @@ pre {
         <textarea id="customCaseMemo" placeholder="記事URL、相棒メモ、見たい切り口を短く書く"></textarea>
         <div class="task-actions"><button onclick="saveCustomCase()">保存</button></div>
       </div>
-    <div class="panel case-input-side-panel">
-      <label class="label" for="sourceType">案件タイプ</label>
-      <select id="sourceType">
-        <option value="reddit">Reddit</option>
-        <option value="5ch">5ch</option>
-        <option value="custom" selected>カスタム</option>
-      </select>
-      <label class="label" for="title">動画トピック</label>
+    <div class="hidden-state">
+      <select id="sourceType"><option value="reddit">Reddit</option><option value="5ch">5ch</option><option value="custom" selected>カスタム</option></select>
       <input id="title" value="スペイン代表、レアル・マドリー所属選手0人">
-      <label class="label" for="memo" style="margin-top:12px;">相棒メモ・入れたい小話</label>
       <textarea id="memo">なぜ？
 2010年は二大クラブが代表の背骨だった
 バルサは若いスペイン代表の顔を抱えている
@@ -2072,8 +2105,21 @@ function renderPlan(plan) {
   document.querySelectorAll('.view-tab').forEach((el) => {
     el.classList.toggle('active', el.dataset.view === activeView);
   });
+  syncProxyInputs();
   persistV3State();
   if (activeView === 'structure') setTimeout(() => reloadV3Preview(), 50);
+}
+
+function syncProxyInputs() {
+  const title = document.getElementById('title')?.value || '';
+  const memo = document.getElementById('memo')?.value || '';
+  const sourceType = document.getElementById('sourceType')?.value || 'custom';
+  const pt = document.getElementById('proxyTitle');
+  const pm = document.getElementById('proxyMemo');
+  const ps = document.getElementById('proxySourceType');
+  if (pt) pt.value = title;
+  if (pm) pm.value = memo;
+  if (ps) ps.value = sourceType;
 }
 
 function updateWorkspaceChrome() {
@@ -2374,6 +2420,19 @@ function renderCaseView(plan) {
     '</div>';
   }).join('') : '<div class="empty">日付を選んで案件読込。保存するとこのV3にセットされます。</div>';
   return '<div class="panel">' +
+      '<span class="label">動画トピック</span>' +
+      '<div class="topic-panel-grid">' +
+        '<label>タイプ</label>' +
+        '<select id="proxySourceType" onchange="document.getElementById(\'sourceType\').value=this.value">' +
+          '<option value="reddit">Reddit</option><option value="5ch">5ch</option><option value="custom">カスタム</option>' +
+        '</select>' +
+        '<label>タイトル</label>' +
+        '<input id="proxyTitle" placeholder="動画トピックを入力" oninput="document.getElementById(\'title\').value=this.value">' +
+      '</div>' +
+      '<label class="label" style="margin-top:10px;">相棒メモ</label>' +
+      '<textarea id="proxyMemo" rows="4" style="min-height:80px;" oninput="document.getElementById(\'memo\').value=this.value" placeholder="切り口・注意点・入れたい小話"></textarea>' +
+    '</div>' +
+    '<div class="panel">' +
       '<span class="label">案件選択</span>' +
       '<div class="case-toolbar">' +
         '<input id="caseDate" type="date" value="' + esc(today) + '">' +
@@ -2388,17 +2447,13 @@ function renderCaseView(plan) {
 
 function renderSelectedCaseBox() {
   const title = document.getElementById('title')?.value || selectedProject?.title || selectedProject?.titleJa || '';
-  const memo = document.getElementById('memo')?.value || projectMemoText(selectedProject);
   const source = document.getElementById('sourceType')?.value || selectedProject?.source || '';
-  if (!title && !memo) {
-    return '<div class="selected-case-box"><h2>選択案件なし</h2><p>Step1で保存済み案件を選んでから、調査へ進みます。</p></div>';
+  if (!title) {
+    return '<div class="case-badge empty-badge">案件未選択 — Step1で案件を選んでください</div>';
   }
-  const memoShort = memo && memo.length > 200 ? memo.slice(0, 200) + '…' : (memo || '付帯テキストなし');
-  return '<div class="selected-case-box">' +
-    '<span class="label">選択した案件</span>' +
-    '<h2>' + esc(title || '無題案件') + '</h2>' +
-    '<div class="chips"><span class="chip">' + esc(source || 'source') + '</span><span class="chip">' + esc(selectedProject?.addedAt || '') + '</span></div>' +
-    '<pre style="max-height:80px;overflow:hidden;">' + esc(memoShort) + '</pre>' +
+  return '<div class="case-badge">' +
+    '<span class="chip">' + esc(source || 'custom') + '</span>' +
+    '<b>' + esc(title) + '</b>' +
   '</div>';
 }
 
@@ -2531,8 +2586,16 @@ function renderProposalPapers(plan) {
         const angle = c.angle || c.title || c.hookQuestion || plan.angle || plan.topic || '調査結果から切り口を作る';
         const hook = c.hookQuestion || c.hook || plan.centralQuestion || plan.topic || 'この話題の本質は何か？';
         const answer = c.answer || briefing.coreMessage || plan.thesis || '取得データをもとに仮説を検証する。';
-        return '<div class="briefing-paper' + (isSelected ? ' selected' : '') + '">' +
-          '<h2>' + (isSelected ? '採用中: ' : '') + '企画書' + letter + '</h2>' +
+        if (!isSelected) {
+          return '<div class="briefing-paper briefing-paper--compact">' +
+            '<h2>企画書' + letter + '</h2>' +
+            '<p><b>切り口:</b> ' + esc(angle) + '</p>' +
+            '<p><b>フック:</b> ' + esc(hook) + '</p>' +
+            '<div class="task-actions"><button onclick="selectThemeCandidate(' + i + ')">この企画書を採用</button></div>' +
+          '</div>';
+        }
+        return '<div class="briefing-paper selected">' +
+          '<h2>採用中: 企画書' + letter + '</h2>' +
           '<h3>切り口</h3><p>' + esc(angle) + '</p>' +
           '<h3>フック質問</h3><p>' + esc(hook) + '</p>' +
           '<h3>仮の答え</h3><p>' + esc(answer) + '</p>' +
@@ -2540,7 +2603,7 @@ function renderProposalPapers(plan) {
           '<h3>構成案</h3><ol>' + fallbackChapters.slice(0, 5).map((item) => '<li>' + esc((item.role || '') + ' - ' + (item.claim || '')) + '</li>').join('') + '</ol>' +
           '<h3>必要データ</h3><div class="chips">' + dataNeeds.slice(0, 8).map((x) => '<span class="chip">' + esc(x.need || x) + '</span>').join('') + '</div>' +
           (c.risk ? '<h3>注意点</h3><p style="color:#fecaca;">' + esc(c.risk) + '</p>' : '') +
-          '<div class="task-actions"><button ' + (isSelected ? 'disabled ' : '') + 'onclick="selectThemeCandidate(' + i + ')">' + (isSelected ? '採用中' : 'この企画書を採用') + '</button></div>' +
+          '<div class="task-actions"><button disabled>採用中</button></div>' +
         '</div>';
       }).join('') +
     '</div>' +
