@@ -206,12 +206,14 @@ Rules:
     const raw = await callAI({
       system: 'Output a JSON array of 3 English search queries only. No explanation, no markdown.',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 150,
+      max_tokens: 250,
       forceProvider: 'deepseek',
     });
     const cleaned = String(raw || '').trim()
       .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+    // Recover partial array if truncated
+    const safe = cleaned.endsWith(']') ? cleaned : (cleaned + '"]').replace(/,\s*"[^"]*$/, ']');
+    const parsed = JSON.parse(safe);
     if (Array.isArray(parsed) && parsed.filter(Boolean).length >= 2) {
       const qs = parsed.map((q) => String(q).trim()).filter(Boolean).slice(0, 3);
       console.log('[v3_research] AI English queries:', qs);
@@ -406,7 +408,7 @@ Output JSON only (no markdown, no explanation):
     const raw = await callAI({
       system: 'Soccer research assistant. Output valid JSON only. No markdown.',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 250,
+      max_tokens: 450,
       forceProvider: 'deepseek',
     });
     const cleaned = String(raw || '').trim()

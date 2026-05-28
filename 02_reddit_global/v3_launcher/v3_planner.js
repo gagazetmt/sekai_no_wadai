@@ -55,7 +55,8 @@ function buildSystemPrompt() {
 - 選手名・クラブ名・年号は記事の根拠があるものだけ使う
 - 結論はJSON形式のみ。コードブロックや前置き文は不要
 - JSONを途中で切らない。長文よりも完結したJSONを優先する
-- narrationは日本語で書く（20代前半向けサッカー解説、隣で観てる親近感）`;
+- narrationは日本語で書く（20代前半向けサッカー解説、隣で観てる親近感）
+- 相棒メモに「取得済みデータ」がある場合、そのラベル名（ゴール/アシスト/評価/クラブ/年齢等）をdataNeeds に使うこと`;
 }
 
 function buildUserPrompt(topic, memo, researchSummary) {

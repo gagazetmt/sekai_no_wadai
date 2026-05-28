@@ -2232,10 +2232,15 @@ async function runProposal() {
     if (s3) s3.textContent = '4/5 データ取得完了。AI企画書を作成中...';
 
     try {
-      const fetchedSummary = (currentFetchedData || []).filter(d => d.ok)
-        .map(d => d.nameEn + ': ' + d.summary).join('\\n');
+      const fetchedSummary = (currentFetchedData || []).filter(function(d) { return d.ok; })
+        .map(function(d) {
+          var slotStr = (Array.isArray(d.slots) && d.slots.length)
+            ? d.slots.map(function(s) { return s.label + ': ' + s.value; }).join(' / ')
+            : d.summary;
+          return d.nameEn + ' (' + (d.type || 'player') + '): ' + slotStr;
+        }).join('\\n');
       const enrichedMemo = document.getElementById('memo').value +
-        (fetchedSummary ? '\\n\\n[SofaScore自動取得データ]\\n' + fetchedSummary : '');
+        (fetchedSummary ? '\\n\\n[取得済みデータ（stats スライドで使用可能）]\\n' + fetchedSummary : '');
       const analyzeRes = await fetch('/api/v3/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
