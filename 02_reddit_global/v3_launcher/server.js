@@ -1142,8 +1142,7 @@ pre {
   .case-toolbar { grid-template-columns: 1fr 1fr; }
   .case-editor-grid { grid-template-columns: 1fr; }
 }
-/* hidden state storage */
-.hidden-state { display: none !important; }
+/* hidden state storage — input[type=hidden] なので追加CSSは不要 */
 
 /* compact selected-case badge on step2+ */
 .case-badge {
@@ -1202,7 +1201,7 @@ pre {
 .sidebar-overlay {
   display: none;
   position: fixed;
-  inset: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,.55);
   z-index: 199;
 }
@@ -1326,16 +1325,9 @@ pre {
         <textarea id="customCaseMemo" placeholder="記事URL、相棒メモ、見たい切り口を短く書く"></textarea>
         <div class="task-actions"><button onclick="saveCustomCase()">保存</button></div>
       </div>
-    <div class="hidden-state">
-      <select id="sourceType"><option value="reddit">Reddit</option><option value="5ch">5ch</option><option value="custom" selected>カスタム</option></select>
-      <input id="title" value="スペイン代表、レアル・マドリー所属選手0人">
-      <textarea id="memo">なぜ？
-2010年は二大クラブが代表の背骨だった
-バルサは若いスペイン代表の顔を抱えている
-マドリーは世界最高級の完成済みタレントを外から集めている
-ただし育成失敗とは断定しない
-ペドリとラウールの扱いに注意</textarea>
-    </div>
+    <input type="hidden" id="sourceType" value="custom">
+    <input type="hidden" id="title" value="">
+    <input type="hidden" id="memo" value="">
       <div id="savedPlans" class="empty">未読込</div>
     </div>
     <div class="sidebar-footer">
