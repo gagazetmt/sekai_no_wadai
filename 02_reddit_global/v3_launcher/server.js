@@ -1540,14 +1540,6 @@ body.drawer-is-open #sidebarOverlay {
   <aside id="savedDrawer" aria-hidden="true">
     <div class="sidebar-head"><span>保存済み案件</span><button class="drawer-close" type="button" onclick="closeSidebar()">閉じる</button></div>
     <div class="sidebar-body">
-      <button class="secondary" onclick="toggleCustomCasePanel()">カスタム案件</button>
-      <div id="customCasePanel" class="panel custom-case-panel">
-        <label class="label" for="customCaseTitle">カスタム案件名</label>
-        <input id="customCaseTitle" placeholder="例: 久保建英、移籍報道の温度感">
-        <label class="label" for="customCaseMemo" style="margin-top:10px;">概要・気になる点</label>
-        <textarea id="customCaseMemo" placeholder="記事URL、相棒メモ、見たい切り口を短く書く"></textarea>
-        <div class="task-actions"><button onclick="saveCustomCase()">保存</button></div>
-      </div>
     <input type="hidden" id="sourceType" value="custom">
     <input type="hidden" id="title" value="">
     <input type="hidden" id="memo" value="">
@@ -2770,21 +2762,14 @@ function renderCaseFetchView() {
 
 function renderCaseView(plan) {
   plan = plan || {};
-  const sourceType = document.getElementById('sourceType')?.value || 'custom';
-  return '<div class="panel">' +
-      '<span class="label">動画トピック</span>' +
-      '<div class="topic-panel-grid">' +
-        '<label>タイプ</label>' +
-        '<select id="proxySourceType" onchange="syncProxySourceType(this)">' +
-          '<option value="reddit">Reddit</option><option value="5ch">5ch</option><option value="custom">カスタム</option>' +
-        '</select>' +
-        '<label>タイトル</label>' +
-        '<input id="proxyTitle" placeholder="動画トピックを入力" oninput="syncProxyTitle(this)">' +
-      '</div>' +
-      '<label class="label" style="margin-top:10px;">相棒メモ</label>' +
-      '<textarea id="proxyMemo" rows="4" style="min-height:80px;" oninput="syncProxyMemo(this)" placeholder="切り口・注意点・入れたい小話"></textarea>' +
-    '</div>' +
-    renderCasePickerPanel();
+  return renderCasePickerPanel() +
+    '<div class="panel">' +
+      '<span class="label">カスタム案件入力</span>' +
+      '<input id="customCaseTitle" placeholder="例: 久保建英、移籍報道の温度感" style="margin-bottom:8px;">' +
+      '<label class="label" style="margin-top:8px;">概要・気になる点</label>' +
+      '<textarea id="customCaseMemo" style="min-height:72px;" placeholder="記事URL、相棒メモ、見たい切り口を短く書く"></textarea>' +
+      '<div class="task-actions"><button onclick="saveCustomCase()">保存</button></div>' +
+    '</div>';
 }
 
 function renderSelectedCaseBox() {
