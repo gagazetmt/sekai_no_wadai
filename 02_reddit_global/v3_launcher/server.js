@@ -2041,9 +2041,9 @@ async function runProposal() {
 
     try {
       const fetchedSummary = (currentFetchedData || []).filter(d => d.ok)
-        .map(d => d.nameEn + ': ' + d.summary).join('\n');
+        .map(d => d.nameEn + ': ' + d.summary).join('\\n');
       const enrichedMemo = document.getElementById('memo').value +
-        (fetchedSummary ? '\n\n[SofaScore自動取得データ]\n' + fetchedSummary : '');
+        (fetchedSummary ? '\\n\\n[SofaScore自動取得データ]\\n' + fetchedSummary : '');
       const analyzeRes = await fetch('/api/v3/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
