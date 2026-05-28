@@ -242,19 +242,34 @@ async function runTopicResearch(input = {}) {
   };
 }
 
-function pickWikiEntities({ topic = '', memo = '', entities = [] } = {}) {
+function pickWikiEntities({ topic = '', memo = '', entities = [], learningCorpus = [] } = {}) {
   const manual = Array.isArray(entities) ? entities : [];
   const joined = `${topic}\n${memo}`;
+
+  // Step1: corpus から固有名詞を抽出（ウェブリサーチ後）
+  const corpusText = (learningCorpus || []).slice(0, 8).map(x => x.title || '').join(' ');
+  const STOP = new Set(['World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Reddit','Transfer','News']);
+  const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ajax|dortmund|psv|ac milan|as roma)\b/i;
+  const corpusNames = [];
+  (corpusText.match(/[A-Z][A-Za-z'.-]{1,}(?:\s+[A-Z][A-Za-z'.-]{1,}){0,2}/g) || []).forEach(name => {
+    if (name.length < 3 || STOP.has(name.split(' ')[0])) return;
+    corpusNames.push(TEAM_RE.test(name) ? name : name);
+  });
+
+  // Step2: topic/memo のキーワードマッチ（フォールバック）
   const known = [
     ['Real Madrid', /(マドリー|レアル|Real Madrid)/i],
     ['Spain national football team', /(スペイン代表|Spain national)/i],
     ['FC Barcelona', /(バルサ|Barcelona|バルセロナ)/i],
     ['Lamine Yamal', /(ヤマル|Yamal)/i],
     ['Pedri', /(ペドリ|Pedri)/i],
-    ['Raul', /(ラウール|Ra[uú]l)/i],
+    ['Kylian Mbappe', /(ムバッペ|Mbappe)/i],
+    ['Erling Haaland', /(ハーランド|Haaland)/i],
+    ['Jude Bellingham', /(ベリンガム|Bellingham)/i],
   ];
   const inferred = known.filter(([, re]) => re.test(joined)).map(([name]) => name);
-  return uniq([...manual, ...inferred]).slice(0, 4);
+
+  return uniq([...manual, ...corpusNames.slice(0, 3), ...inferred]).slice(0, 4);
 }
 
 async function fetchWikiSideStories(input = {}) {

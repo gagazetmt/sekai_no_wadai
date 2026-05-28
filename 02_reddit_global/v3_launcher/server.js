@@ -1932,23 +1932,21 @@ async function runResearch() {
       memo: document.getElementById('memo').value,
       plan: currentPlan,
     };
-    const [topicRes, wikiRes] = await Promise.all([
-      fetch('/api/v3/research/topic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(baseBody),
-      }),
-      fetch('/api/v3/research/wiki-side-stories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(baseBody),
-      }),
-    ]);
+    const topicRes = await fetch('/api/v3/research/topic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(baseBody),
+    });
     const topicData = await topicRes.json();
-    const wikiData = await wikiRes.json();
     if (!topicData.success) throw new Error(topicData.error || 'topic research failed');
-    if (!wikiData.success) throw new Error(wikiData.error || 'wiki research failed');
     currentResearch = topicData.result;
+    const wikiRes = await fetch('/api/v3/research/wiki-side-stories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...baseBody, learningCorpus: currentResearch.learningCorpus || [] }),
+    });
+    const wikiData = await wikiRes.json();
+    if (!wikiData.success) throw new Error(wikiData.error || 'wiki research failed');
     currentWikiStories = wikiData.result;
     bindResearchCandidates();
     markStepDone('research');
@@ -1978,23 +1976,22 @@ async function runProposal() {
       memo: document.getElementById('memo').value,
       plan: currentPlan,
     };
-    const [topicRes, wikiRes] = await Promise.all([
-      fetch('/api/v3/research/topic', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(baseBody),
-      }),
-      fetch('/api/v3/research/wiki-side-stories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(baseBody),
-      }),
-    ]);
+    // Web リサーチを先に完了させ、取得記事を Wiki エンティティ抽出に渡す
+    const topicRes = await fetch('/api/v3/research/topic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(baseBody),
+    });
     const topicData = await topicRes.json();
-    const wikiData = await wikiRes.json();
     if (!topicData.success) throw new Error(topicData.error || 'topic research failed');
-    if (!wikiData.success) throw new Error(wikiData.error || 'wiki research failed');
     currentResearch = topicData.result;
+    const wikiRes = await fetch('/api/v3/research/wiki-side-stories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...baseBody, learningCorpus: currentResearch.learningCorpus || [] }),
+    });
+    const wikiData = await wikiRes.json();
+    if (!wikiData.success) throw new Error(wikiData.error || 'wiki research failed');
     currentWikiStories = wikiData.result;
     bindResearchCandidates();
     currentAcquiredData = buildAcquiredDataSummary();
@@ -2109,11 +2106,6 @@ function inferEntityLabels() {
 
 function compactSearchTopic(title, memo) {
   const s = String(title || memo || '').trim();
-  const seeds = [];
-  if (/キュラソー|Cura[cç]ao|Curacao/i.test(s)) seeds.push('Curacao national football team World Cup qualification');
-  if (/北米予選|CONCACAF|北中米/i.test(s)) seeds.push('CONCACAF World Cup qualifying Curacao');
-  if (/人口|15万|小さい|種子島/.test(s)) seeds.push('Curacao population football World Cup smallest country');
-  if (seeds.length) return seeds.join(' / ');
   return s
     .replace(/[、。！？!?].*$/, '')
     .split(/\s+/)
@@ -2141,10 +2133,10 @@ function buildArticleDigest(articles) {
   const merged = pool.map((item) => [item.title, item.text].join('。')).join(' ');
   return {
     bullets: [
-      { label: '出来事の概要', text: sentencePick(merged, [/qualif|予選|World Cup|W杯|出場|Cura[cç]ao|キュラソー/i], 'キュラソーのW杯予選突破と、その背景を確認する流れ。') },
-      { label: '主な論点', text: sentencePick(merged, [/population|人口|small|小さ|diaspora|Netherlands|オランダ|CONCACAF|北中米/i], '人口規模、北中米予選の構造、海外育成選手の活用が主な論点。') },
-      { label: '裏話・人物', text: sentencePick(merged, [/coach|manager|player|選手|監督|comment|said|コメント/i], '関係者コメントや主要選手の裏取りは、本文取得できた記事と構造化データで追加確認する。') },
-      { label: '企画化の材料', text: sentencePick(merged, [/historic|history|first|初|smallest|快挙|record|記録/i], '奇跡の一言に絞らず、制度・人材供給・チーム作りを別々の企画切り口にできる。') },
+      { label: '出来事の概要', text: sentencePick(merged, [/qualif|予選|World Cup|W杯|出場|result|結果|score/i], '') },
+      { label: '主な論点', text: sentencePick(merged, [/transfer|移籍|contract|契約|manager|監督|squad|代表|lineup/i], '') },
+      { label: '裏話・人物', text: sentencePick(merged, [/coach|manager|player|選手|監督|comment|said|コメント/i], '') },
+      { label: '企画化の材料', text: sentencePick(merged, [/historic|history|first|初|record|記録|upset|快挙/i], '') },
     ],
     fullTextCount: full.length,
     articleCount: articles.length,
@@ -2285,25 +2277,25 @@ function buildFallbackAutopilotPlan(base, reason) {
   const queries = currentResearch?.queries || [];
   const candidates = [
     {
-      angle: '小国がW杯へ届いた理由を分解する',
-      hookQuestion: 'なぜ人口15万人規模のキュラソーが北米予選を勝ち上がれたのか？',
-      answer: '偶然の快進撃ではなく、選手供給ルート、予選構造、チーム作りの噛み合わせを検証する。',
+      angle: topic + ' の背景を分解する',
+      hookQuestion: topic + ' の本質は何か？',
+      answer: '取得データをもとに、表面的な見方を超えた背景と構造を説明する。',
       dataNeeds,
-      risk: '出場確定日、予選方式、人口などの数字は必ず出典付きで固定する。',
+      risk: '事実確認・数字の出典を固定する。',
     },
     {
-      angle: '人口規模の異常値から見るサッカー代表の作り方',
-      hookQuestion: '種子島より小さい国が、なぜ大国を押しのけられたのか？',
-      answer: '国の規模だけでなく、ディアスポラ、二重国籍、海外育成選手の活用が競争力を作る。',
+      angle: 'データで見る ' + topic,
+      hookQuestion: topic + '、数字は何を示しているか？',
+      answer: 'スタッツと文脈を組み合わせ、なぜこの結果が起きたかを具体的に示す。',
       dataNeeds,
-      risk: '国籍・ルーツの説明は断定しすぎず、公式登録と報道で確認する。',
+      risk: '統計の前提・対象期間を明示する。',
     },
     {
-      angle: '北中米予選の構造が生んだ歴史的チャンス',
-      hookQuestion: '今回のW杯予選は、なぜキュラソーに追い風だったのか？',
-      answer: '開催国枠や予選フォーマットの変化、地域内の力関係を背景として整理する。',
+      angle: topic + ' の今後を読む',
+      hookQuestion: topic + ' から、何が変わるのか？',
+      answer: '過去のデータと現状分析を軸に、今後への影響を視聴者に分かりやすく伝える。',
       dataNeeds: queries.length ? queries : dataNeeds,
-      risk: '予選制度の説明はFIFA/CONCACAF公式を優先する。',
+      risk: '将来予測は推測と明示する。',
     },
   ];
   return {
@@ -2320,16 +2312,16 @@ function buildFallbackAutopilotPlan(base, reason) {
     },
     briefing: {
       ...(base?.briefing || {}),
-      purpose: topic + 'を、人口規模・選手供給・予選構造の3点から検証する。',
-      coreMessage: '小国の奇跡として消費せず、勝ち上がりの背景をデータで説明する。',
+      purpose: topic + 'を、事実とデータで説明する。',
+      coreMessage: 'この話題の違和感を、取得データで裏付けながら視聴者に届ける。',
       chapters: [
-        { no: 1, role: 'hook', claim: '人口15万人規模という異常値を提示する。' },
-        { no: 2, role: 'context', claim: 'キュラソーがどの予選ルートで勝ち上がったかを整理する。' },
-        { no: 3, role: 'data', claim: '代表メンバーの所属先・ルーツ・主要選手を確認する。' },
-        { no: 4, role: 'answer', claim: '小国でも戦える構造的理由をまとめる。' },
+        { no: 1, role: 'hook', claim: 'まず何が起きているかを提示する。' },
+        { no: 2, role: 'context', claim: 'ニュースの背景と前提条件を整理する。' },
+        { no: 3, role: 'data', claim: '確認できた記事・数字・関係者情報を並べる。' },
+        { no: 4, role: 'answer', claim: '視聴者が納得できる答えにまとめる。' },
       ],
       dataPlan: dataNeeds.map((need) => ({ need })),
-      riskChecklist: ['出場確定日を固定する', '人口・面積比較に出典を付ける', '国籍やルーツを雑に断定しない'],
+      riskChecklist: ['事実と推測を明確に区別する', '数字・日付は出典付きで固定する', '断定は裏付けのある情報のみ'],
     },
     mustCheck: dataNeeds.map((need) => ({ need, query: '', sourcePriority: [] })),
   };
@@ -2803,20 +2795,9 @@ function renderSavedView(plan) {
     '</div>';
   }).join('');
 
-  const selectedBlock = selectedTitle
-    ? '<div class="selected-case-box" style="margin-top:12px;">' +
-        '<span class="label">選択中</span>' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-top:4px;">' +
-          '<span class="src-badge ' + (selectedSource === '5ch' ? 'badge-5ch' : selectedSource === 'reddit' ? 'badge-reddit' : 'badge-custom') + '">' + esc(selectedSource === '5ch' ? '5ch' : selectedSource === 'reddit' ? 'Reddit' : 'カスタム') + '</span>' +
-          '<b style="font-size:15px;">' + esc(selectedTitle) + '</b>' +
-        '</div>' +
-      '</div>'
-    : '<div class="task-status" style="margin-top:12px;">上のリストから案件を1つ選んでください。</div>';
-
   return '<div class="panel">' +
     '<span class="label">保存済み案件 — ' + savedProjects.length + '件</span>' +
-    '<div class="case-list" style="max-height:calc(100vh - 430px);min-height:180px;">' + listHtml + '</div>' +
-    selectedBlock +
+    '<div class="case-list" style="max-height:calc(100vh - 360px);min-height:180px;">' + listHtml + '</div>' +
     '<div class="task-actions" style="margin-top:12px;">' +
       '<button ' + (!selectedTitle ? 'disabled ' : '') + 'onclick="goToProposal()">3 企画提案へ進む →</button>' +
       '<button class="secondary" onclick="setResultView(\\'case\\')">← 1 案件取得</button>' +
@@ -2945,31 +2926,35 @@ function fallbackProposalCandidates(plan, defaultNeeds) {
   const topic = plan.topic || document.getElementById('title')?.value || 'この案件';
   return [
     {
-      angle: '小国がW杯に届いた構造を分解する',
-      hookQuestion: 'なぜ人口規模の小さいキュラソーがW杯予選を勝ち上がれたのか？',
-      answer: '人口だけでは説明できず、選手供給ルート、予選構造、チーム作りの組み合わせを検証する。',
+      angle: topic + ' の背景を分解する',
+      hookQuestion: topic + ' の本質は何か？',
+      answer: '取得データをもとに、表面的な見方を超えた背景と構造を説明する。',
       dataNeeds: defaultNeeds,
-      risk: '出場確定日、予選方式、人口・面積比較は出典付きで固定する。',
+      risk: '事実確認・数字の出典を固定する。',
     },
     {
-      angle: 'ディアスポラと海外育成が代表を強くする話',
-      hookQuestion: '小国代表は、どうやって国の規模を超える戦力を作ったのか？',
-      answer: 'オランダ圏とのつながりや海外育成選手の活用を軸に、代表強化の仕組みとして見せる。',
+      angle: 'データで見る ' + topic,
+      hookQuestion: topic + '、数字は何を示しているか？',
+      answer: 'スタッツと文脈を組み合わせ、なぜこの結果が起きたかを具体的に示す。',
       dataNeeds: defaultNeeds,
-      risk: '選手のルーツや国籍条件を推測で断定しない。',
+      risk: '統計の前提・対象期間を明示する。',
     },
     {
-      angle: '北中米予選の制度が生んだ歴史的チャンス',
-      hookQuestion: '今回の予選フォーマットはキュラソーにどんな追い風を作ったのか？',
-      answer: '開催国枠や地域予選の構造を整理し、歴史的出場の条件を説明する。',
+      angle: topic + ' の今後を読む',
+      hookQuestion: topic + ' から、何が変わるのか？',
+      answer: '過去のデータと現状分析を軸に、今後への影響を視聴者に分かりやすく伝える。',
       dataNeeds: defaultNeeds,
-      risk: 'CONCACAF/FIFA公式情報で予選制度を確認する。',
+      risk: '将来予測は推測と明示する。',
     },
   ].map((item) => ({ ...item, title: topic }));
 }
 
 function renderProposalPapers(plan) {
   const auto = plan.autopilotPlan || {};
+  if (!auto.aiGenerated && !auto.aiFallback) {
+    return '<div class="panel"><span class="label">4. 企画書A / B / C生成</span>' +
+      '<div class="task-status">「調査」ボタンを押すと、企画書A / B / C が表示されます。</div></div>';
+  }
   const proposal = auto.themeProposal || {};
   let candidates = proposal.candidates || [];
   const selectedIdx = proposal.selected || 0;
