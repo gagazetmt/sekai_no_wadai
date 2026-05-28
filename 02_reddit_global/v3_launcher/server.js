@@ -2731,7 +2731,7 @@ function renderCasePickerPanel() {
         '<span class="case-title">' + esc(p.title || '') + '</span>' +
       '</div>';
     }).join('');
-    return '<div class="time-group open">' +
+    return '<div class="time-group">' +
       '<div class="time-summary" onclick="toggleCaseGroup(this)">' + esc(t) + ' 取得分 (' + groups[t].length + '件)</div>' +
       '<div class="time-content">' + rows + '</div>' +
     '</div>';
