@@ -2765,7 +2765,7 @@ function renderSavedView(plan) {
     return '<div class="panel">' +
       '<span class="label">保存済み案件</span>' +
       '<div class="empty">保存済み案件がありません。Step1で案件を取得・保存してください。</div>' +
-      '<div class="task-actions"><button class="secondary" onclick="setResultView(\'case\')">← 1 案件取得へ</button></div>' +
+      '<div class="task-actions"><button class="secondary" onclick="setResultView(\\'case\\')">← 1 案件取得へ</button></div>' +
     '</div>';
   }
 
@@ -2799,7 +2799,7 @@ function renderSavedView(plan) {
     selectedBlock +
     '<div class="task-actions" style="margin-top:12px;">' +
       '<button ' + (!selectedTitle ? 'disabled ' : '') + 'onclick="goToProposal()">3 企画提案へ進む →</button>' +
-      '<button class="secondary" onclick="setResultView(\'case\')">← 1 案件取得</button>' +
+      '<button class="secondary" onclick="setResultView(\\'case\\')">← 1 案件取得</button>' +
     '</div>' +
   '</div>';
 }
@@ -2822,7 +2822,7 @@ function renderCaseView(plan) {
       '<textarea id="customCaseMemo" style="min-height:72px;" placeholder="記事URL、相棒メモ、見たい切り口を短く書く"></textarea>' +
       '<div class="task-actions">' +
         '<button onclick="saveCustomCase()">保存</button>' +
-        '<button class="secondary" onclick="setResultView(\'saved\')">2 保存済み →</button>' +
+        '<button class="secondary" onclick="setResultView(\\'saved\\')">2 保存済み →</button>' +
       '</div>' +
     '</div>';
 }
