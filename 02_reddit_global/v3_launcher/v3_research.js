@@ -302,12 +302,15 @@ function pickWikiEntities({ topic = '', memo = '', entities = [], learningCorpus
 
   // Step1: corpus から固有名詞を抽出（ウェブリサーチ後）
   const corpusText = (learningCorpus || []).slice(0, 8).map(x => x.title || '').join(' ');
-  const STOP = new Set(['World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Reddit','Transfer','News']);
+  const STOP = new Set(['World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Reddit','Transfer','News',
+    'MVP','VAR','SNS','TV','BBC','ESPN','Sky','God','His','Her','The','This','That','Also','After','Before','More','Most','All']);
   const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ajax|dortmund|psv|ac milan|as roma)\b/i;
   const corpusNames = [];
   (corpusText.match(/[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-ÿ'.-]{1,}(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-ÿ'.-]{1,}){0,2}/g) || []).forEach(name => {
     if (name.length < 3 || STOP.has(name.split(' ')[0])) return;
-    corpusNames.push(TEAM_RE.test(name) ? name : name);
+    // skip all-caps abbreviations (MVP, VAR, SNS etc.)
+    if (/^[A-Z]{2,5}$/.test(name.split(' ')[0])) return;
+    corpusNames.push(name);
   });
 
   // Step2: topic/memo のキーワードマッチ（フォールバック）

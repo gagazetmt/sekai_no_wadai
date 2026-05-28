@@ -216,10 +216,13 @@ function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
   const entities = [];
   const seen = new Set();
   const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ac milan|as roma|psv|ajax|dortmund)\b/i;
-  const STOP = new Set(['Reddit','World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Players']);
+  const STOP = new Set(['Reddit','World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Players',
+    'MVP','VAR','SNS','TV','BBC','ESPN','Sky','God','His','Her','The','This','That','News','Also','After','Before','More','Most','All']);
   function add(type, nameEn) {
     const k = nameEn.toLowerCase().trim();
     if (!k || k.length < 3 || seen.has(k)) return;
+    // skip all-caps abbreviations like MVP, VAR, SNS, GIF
+    if (/^[A-Z]{2,5}$/.test(nameEn.split(' ')[0])) return;
     seen.add(k);
     entities.push({ type, nameEn: nameEn.trim() });
   }
