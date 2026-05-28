@@ -249,31 +249,85 @@ app.post('/api/v3/analyze', async (req, res) => {
 });
 
 // ── auto-prefetch: 記事から entity 抽出 → SofaScore で構造化データを自動取得 ──
+// Japanese katakana/kanji → English lookup for common soccer figures
+const JP_ENTITY_MAP = [
+  // Players
+  ['ジョアン', 'player', 'João Pedro'], ['ネイマール', 'player', 'Neymar'],
+  ['ヴィニシウス', 'player', 'Vinicius Junior'], ['ヴィニ', 'player', 'Vinicius Junior'],
+  ['ロドリゴ', 'player', 'Rodrygo'], ['ムバッペ', 'player', 'Kylian Mbappe'], ['エムバペ', 'player', 'Kylian Mbappe'],
+  ['ハーランド', 'player', 'Erling Haaland'], ['ベリンガム', 'player', 'Jude Bellingham'],
+  ['ヤマル', 'player', 'Lamine Yamal'], ['ペドリ', 'player', 'Pedri'], ['フェルミン', 'player', 'Fermin Lopez'],
+  ['サラー', 'player', 'Mohamed Salah'], ['ヌニェス', 'player', 'Darwin Nunez'],
+  ['デブライネ', 'player', 'Kevin De Bruyne'], ['ロドリ', 'player', 'Rodri'],
+  ['モドリッチ', 'player', 'Luka Modric'], ['クロース', 'player', 'Toni Kroos'],
+  ['ケイン', 'player', 'Harry Kane'], ['サカ', 'player', 'Bukayo Saka'],
+  ['ラッシュフォード', 'player', 'Marcus Rashford'], ['フォーデン', 'player', 'Phil Foden'],
+  ['グリーズマン', 'player', 'Antoine Griezmann'], ['ジルー', 'player', 'Olivier Giroud'],
+  ['デンベレ', 'player', 'Ousmane Dembele'], ['テュラム', 'player', 'Marcus Thuram'],
+  ['ラウタロ', 'player', 'Lautaro Martinez'], ['ルカク', 'player', 'Romelu Lukaku'],
+  ['ディバラ', 'player', 'Paulo Dybala'], ['メッシ', 'player', 'Lionel Messi'],
+  ['ロナウド', 'player', 'Cristiano Ronaldo'], ['レバンドフスキ', 'player', 'Robert Lewandowski'],
+  ['フィルミーノ', 'player', 'Roberto Firmino'], ['ガクポ', 'player', 'Cody Gakpo'],
+  ['守田', 'player', 'Daichi Kamada'], ['鎌田', 'player', 'Daichi Kamada'],
+  ['久保', 'player', 'Takefusa Kubo'], ['三笘', 'player', 'Kaoru Mitoma'],
+  ['遠藤', 'player', 'Wataru Endo'], ['南野', 'player', 'Takumi Minamino'],
+  // Managers
+  ['アンチェロッティ', 'player', 'Carlo Ancelotti'], ['グアルディオラ', 'player', 'Pep Guardiola'],
+  ['クロップ', 'player', 'Jurgen Klopp'], ['モウリーニョ', 'player', 'Jose Mourinho'],
+  ['アロンソ', 'player', 'Xabi Alonso'], ['デラフエンテ', 'player', 'Luis de la Fuente'],
+  ['エンリケ', 'player', 'Luis Enrique'], ['テンハグ', 'player', 'Erik ten Hag'],
+  // Teams
+  ['マドリー', 'team', 'Real Madrid'], ['レアル', 'team', 'Real Madrid'],
+  ['バルサ', 'team', 'FC Barcelona'], ['バルセロナ', 'team', 'FC Barcelona'],
+  ['バイエルン', 'team', 'Bayern Munich'], ['ドルトムント', 'team', 'Borussia Dortmund'],
+  ['チェルシー', 'team', 'Chelsea'], ['アーセナル', 'team', 'Arsenal'],
+  ['リバプール', 'team', 'Liverpool'], ['マンチェスター', 'team', 'Manchester City'],
+  ['トッテナム', 'team', 'Tottenham Hotspur'], ['ニューカッスル', 'team', 'Newcastle United'],
+  ['ユベントス', 'team', 'Juventus'], ['インテル', 'team', 'Inter Milan'],
+  ['ミラン', 'team', 'AC Milan'], ['ナポリ', 'team', 'Napoli'],
+  ['ブライトン', 'team', 'Brighton'], ['アストン', 'team', 'Aston Villa'],
+  ['スペイン代表', 'team', 'Spain national football team'],
+  ['ブラジル代表', 'team', 'Brazil national football team'],
+  ['フランス代表', 'team', 'France national football team'],
+  ['ドイツ代表', 'team', 'Germany national football team'],
+  ['イングランド代表', 'team', 'England national football team'],
+  ['アルゼンチン代表', 'team', 'Argentina national football team'],
+  ['日本代表', 'team', 'Japan national football team'],
+  ['オランダ代表', 'team', 'Netherlands national football team'],
+  ['ポルトガル代表', 'team', 'Portugal national football team'],
+];
+
 function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
   const entities = [];
   const seen = new Set();
   const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ac milan|as roma|psv|ajax|dortmund)\b/i;
   const STOP = new Set(['Reddit','World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Players',
     'MVP','VAR','SNS','TV','BBC','ESPN','Sky','God','His','Her','The','This','That','News','Also','After','Before','More','Most','All']);
+  const jpText = `${topic || ''} ${memo || ''}`;
   function add(type, nameEn) {
     const k = nameEn.toLowerCase().trim();
     if (!k || k.length < 3 || seen.has(k)) return;
-    // skip all-caps abbreviations like MVP, VAR, SNS, GIF
     if (/^[A-Z]{2,5}$/.test(nameEn.split(' ')[0])) return;
     seen.add(k);
     entities.push({ type, nameEn: nameEn.trim() });
   }
+  // Japanese katakana/kanji → English (highest priority, covers topic/memo)
+  JP_ENTITY_MAP.forEach(([jp, type, en]) => {
+    if (jpText.includes(jp)) add(type, en);
+  });
+  // Wiki entity results (e.g. from pickWikiEntities post-research)
   (wikiResults || []).forEach(w => {
     const isTeam = TEAM_RE.test(w.entity) || /national football team|fc |cf |sc /i.test(w.entity);
     add(isTeam ? 'team' : 'player', w.entity);
   });
+  // Latin proper nouns from article titles / topic / memo
   const allText = [topic, memo, ...(learningCorpus || []).slice(0, 6).map(x => x.title || '')].join(' ');
   const propNouns = allText.match(/[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-þ'.-]{1,}(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-Þà-öø-þ'.-]{1,}){0,2}/g) || [];
   propNouns.forEach(name => {
     if (name.length < 3 || STOP.has(name.split(' ')[0])) return;
     add(TEAM_RE.test(name) ? 'team' : 'player', name);
   });
-  return entities.slice(0, 5);
+  return entities.slice(0, 6);
 }
 
 function buildDataLabelsV3(prefetched, tmMap = {}) {

@@ -376,27 +376,30 @@ function buildSideStoryCandidates(entity, summary, events) {
   return out.slice(0, 6);
 }
 
-// AI reads initial articles → decides follow-up search queries + which entities need stats data.
+// AI reads topic/memo/articles → decides follow-up search queries + which entities need stats data.
 // Returns { followUpQueries: string[], entities: {type, nameEn}[] }
+// Note: works even with empty learningCorpus — extracts from topic/memo alone.
 async function aiExpandResearch(topic, memo, learningCorpus) {
   const articles = (learningCorpus || []).slice(0, 5);
-  if (!articles.length) return { followUpQueries: [], entities: [] };
+  const summaries = articles.length
+    ? '\nArticles found:\n' + articles
+        .map((a, i) => `[${i + 1}] ${a.title} (${a.host})\n${String(a.text || '').slice(0, 200)}`)
+        .join('\n\n')
+    : '';
 
-  const summaries = articles
-    .map((a, i) => `[${i + 1}] ${a.title} (${a.host})\n${String(a.text || '').slice(0, 200)}`)
-    .join('\n\n');
+  const prompt = `You are a soccer research assistant. Analyze the topic, context, and articles below.
 
-  const prompt = `Topic: ${topic}
-${memo ? `Context: ${memo}` : ''}
+Topic: ${topic}
+${memo ? `Context: ${memo}` : ''}${summaries}
 
-Articles found:
-${summaries}
+Tasks:
+1. Up to 2 follow-up English search queries for specific factual gaps (regulations, official rules, key dates).
+   Example: "FIFA World Cup 2026 squad replacement deadline"
+2. Up to 4 soccer player or club names that need live stats data. IMPORTANT: translate Japanese names to English.
+   Examples: ジョアン・ペドロ→João Pedro, ネイマール→Neymar, アンチェロッティ→Carlo Ancelotti,
+   ブラジル代表→Brazil national football team, ヴィニシウス→Vinicius Junior, ムバッペ→Kylian Mbappe
 
-Based on these articles, identify:
-1. Up to 2 follow-up English search queries for specific factual gaps (regulations, official rules, key dates, stats not yet found). Example: "FIFA World Cup 2026 squad replacement deadline"
-2. Up to 3 soccer player or club names that need live stats data (goals, assists, standings etc.)
-
-Output JSON only:
+Output JSON only (no markdown, no explanation):
 {"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Name"},{"type":"team","nameEn":"Club"}]}`;
 
   try {
