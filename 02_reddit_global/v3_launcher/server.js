@@ -1198,7 +1198,7 @@ pre {
 }
 .case-row:hover { background: #111827; }
 .case-row.selected { background: #1b2230; }
-.case-row input[type="checkbox"] { flex-shrink: 0; }
+.case-row input[type="checkbox"] { flex-shrink: 0; width: auto; height: auto; }
 .case-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .time-group {
   margin-bottom: 10px;
