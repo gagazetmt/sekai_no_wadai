@@ -923,7 +923,7 @@ app.post('/api/v3/generate-script', async (req, res) => {
 出力は純粋なJSONのみ。コードブロック不要。
 
 【ルール】
-- 各スライドのnarrationは100〜200文字の日本語ナレーション
+- 各スライドのnarrationは250〜350文字の日本語ナレーション（目安30〜50秒。openingは150字以上、endingは200字以上）
 - 口語・話し言葉で書く（「です・ます」調）
 - 確認済みデータ（取得済みデータ）は積極的に使う
 - 推測・未確認情報は断定しない
@@ -2734,6 +2734,59 @@ function saveDataSlotDirect(slotIdx, value) {
   persistV3State();
 }
 
+// ① スライド型・タイトル保存
+function saveV3SlideType(type) {
+  const m = currentPlan?.v3Modules?.[activeSlideIdx];
+  if (!m) return;
+  m.type = type;
+  persistV3State();
+  setTimeout(() => reloadV3Preview(), 100);
+}
+function saveV3SlideTitle(val) {
+  const m = currentPlan?.v3Modules?.[activeSlideIdx];
+  if (!m) return;
+  m.title = val;
+  const s = currentPlan?.autopilotPlan?.scriptDraft?.[activeSlideIdx];
+  if (s) s.title = val;
+  persistV3State();
+}
+
+// ③ TTS ボイス一覧を読み込んで select を更新
+async function loadV3TtsVoices() {
+  try {
+    const data = await fetch('/api/v2/tts-presets').then((r) => r.json());
+    const provider = document.getElementById('v3TtsProvider')?.value || 'gemini';
+    const voiceSel = document.getElementById('v3TtsVoice');
+    const modelEl  = document.getElementById('v3TtsModel');
+    if (voiceSel && data.voices) {
+      voiceSel.innerHTML = data.voices.map((v) => '<option value="' + v.id + '">' + v.label + '</option>').join('');
+    }
+    if (modelEl) {
+      const modelLabel = data.models?.[0]?.id || data.model || provider;
+      modelEl.textContent = 'model: ' + modelLabel + ' / voice: ' + (data.voices?.[0]?.id || '—');
+    }
+  } catch (_) {}
+}
+
+// ④ 取得済みデータをスロットに自動バインド
+function autoFillV3DataSlots(entityName) {
+  const m = currentPlan?.v3Modules?.[activeSlideIdx];
+  if (!m?.dataSlots?.length || !(currentFetchedData || []).length) return;
+  const sources = entityName
+    ? (currentFetchedData || []).filter((d) => d.ok && d.nameEn === entityName)
+    : (currentFetchedData || []).filter((d) => d.ok);
+  m.dataSlots.forEach((slot) => {
+    if (slot.value) return;
+    const label = String(slot.label || '').toLowerCase();
+    for (const entity of sources) {
+      const hit = (entity.slots || []).find((s) => String(s.label || '').toLowerCase() === label && s.value);
+      if (hit) { slot.value = String(hit.value); break; }
+    }
+  });
+  persistV3State();
+  renderPlan(currentPlan);
+}
+
 // ④ TTS試聴
 async function runV3TTSPreview() {
   const narration = document.getElementById('v3ScriptNarration')?.value?.trim();
@@ -3399,6 +3452,12 @@ function setResultView(view) {
   activeView = view;
   renderPlan(currentPlan);
   if (view === 'saved') loadSaved();
+  if (view === 'script') {
+    // ③ TTS ボイス一覧読み込み
+    setTimeout(loadV3TtsVoices, 100);
+    // ⑤ 画像ギャラリー自動検索
+    setTimeout(() => { const inp = document.getElementById('v3ImgSearchInput'); if (inp?.value) searchV3StockImages(); }, 200);
+  }
 }
 
 function renderScriptView(plan) {
@@ -3432,9 +3491,16 @@ function renderScriptView(plan) {
   const narration = m.narration || s.narration || '';
   const title = m.title || s.title || '';
   const slideType = m.type || s.role || 'insight';
+  const ALL_TYPES = ['opening','insight','stats','profile','comparison','history','reaction','ranking','timeline','matchcard','picture','ending'];
 
-  const typeColors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
-  const typeBadge = '<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (typeColors[slideType] || '#374151') + ';color:#fff;margin-right:6px;">' + esc(slideType) + '</span>';
+  // ① スライドタブ
+  const tabBar = '<div class="slide-tabs" style="margin:8px 0;">' +
+    slides.map((sl, i) =>
+      '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3ScriptSlide(' + i + ')">' +
+        esc((i + 1) + ' ' + (sl.type || 'slide')) +
+      '</button>'
+    ).join('') +
+  '</div>';
 
   // ③ データスロット
   const slots = m.dataSlots || [];
@@ -3445,24 +3511,30 @@ function renderScriptView(plan) {
           '<input style="font-size:12px;padding:5px 8px;" placeholder="値" value="' + esc(slot.value || '') + '" oninput="saveDataSlotDirect(' + i + ', this.value)">' +
         '</div>'
       ).join('')
-    : '<span style="color:var(--muted);font-size:12px;">データなし</span>';
+    : '<span style="color:var(--muted);font-size:12px;">データスロットなし</span>';
+
+  // ④ 取得済みデータ表示（バインド用）
+  const fetchedOk = (currentFetchedData || []).filter((d) => d.ok);
+  const fetchedBanner = fetchedOk.length
+    ? '<div style="margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+          '<span style="font-size:11px;color:var(--muted);">取得済みデータ（クリックで自動入力）</span>' +
+          '<button class="secondary" onclick="autoFillV3DataSlots()" style="font-size:11px;padding:3px 8px;">一括バインド</button>' +
+        '</div>' +
+        fetchedOk.map((d) => {
+          const slots2 = (d.slots || []).map((sl) => sl.label + ': ' + sl.value).join(' / ');
+          return '<span class="chip" style="cursor:pointer;font-size:11px;background:#0f2a1a;border-color:#22c55e;color:#bbf7d0;" onclick="autoFillV3DataSlots(\\'' + esc(d.nameEn).replace(/'/g,'&#39;') + '\\')" title="' + esc(slots2) + '">' + esc(d.nameEn) + '</span>';
+        }).join('') +
+      '</div>'
+    : '';
 
   // 選択済み画像
   const selectedImgs = Array.isArray(m.images) ? m.images : [];
   const selectedImgHtml = selectedImgs.length
-    ? selectedImgs.map((src) => '<img src="' + esc(src) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px;border:2px solid var(--gold);" title="' + esc(src) + '">').join('')
+    ? selectedImgs.map((src) => '<img src="' + esc(src) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px;border:2px solid var(--gold);" onclick="toggleV3Image(\\'' + esc(src).replace(/'/g,'&#39;') + '\\')" title="クリックで解除">').join('')
     : '';
 
   const initQ = esc((plan.topic || title || '').split(/[\s「」【】]/)[0] || '');
-
-  // ① スライドタブ
-  const tabBar = '<div class="slide-tabs" style="margin:8px 0;">' +
-    slides.map((sl, i) =>
-      '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3ScriptSlide(' + i + ')">' +
-        esc((i + 1) + ' ' + (sl.type || 'slide')) +
-      '</button>'
-    ).join('') +
-  '</div>';
 
   return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
       '<span class="label" style="margin:0;">スライド編集 — ' + (active + 1) + ' / ' + total + '</span>' +
@@ -3477,59 +3549,76 @@ function renderScriptView(plan) {
 
     '<div class="step5-layout">' +
 
-    // ── 左カラム: ②ナレーション + ④TTS + ③データ ──
+    // ── 左カラム ──
     '<div class="step5-left">' +
+
+      // ① スライド型セレクト + タイトル
+      '<div class="panel" style="padding:10px 12px;">' +
+        '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center;">' +
+          '<select id="v3Step5SlideType" style="font-size:12px;padding:5px 8px;" onchange="saveV3SlideType(this.value)">' +
+            ALL_TYPES.map((t) => '<option value="' + t + '"' + (t === slideType ? ' selected' : '') + '>' + t + '</option>').join('') +
+          '</select>' +
+          '<input id="v3Step5Title" style="font-size:13px;font-weight:700;padding:5px 8px;" value="' + esc(title) + '" oninput="saveV3SlideTitle(this.value)" placeholder="スライドタイトル">' +
+        '</div>' +
+      '</div>' +
+
+      // ② ナレーション編集
       '<div class="panel">' +
-        '<div style="margin-bottom:6px;">' + typeBadge + '<span style="font-weight:700;font-size:13px;">' + esc(title) + '</span></div>' +
-
-        // ② ナレーション編集
-        '<label class="label" style="margin-bottom:4px;">② ナレーション</label>' +
-        '<textarea id="v3ScriptNarration" style="min-height:110px;line-height:1.65;font-size:13px;" oninput="saveScriptNarration(' + active + ')">' + esc(narration) + '</textarea>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+          '<label class="label" style="margin:0;">② ナレーション</label>' +
+          '<span style="font-size:11px;color:var(--muted);" id="v3NarrationCount">' + narration.length + '字</span>' +
+        '</div>' +
+        '<textarea id="v3ScriptNarration" style="min-height:140px;line-height:1.65;font-size:13px;" oninput="saveScriptNarration(' + active + ');document.getElementById(\\'v3NarrationCount\\').textContent=this.value.length+\\'字\\'">' + esc(narration) + '</textarea>' +
         (s.caution ? '<p style="color:#fecaca;font-size:12px;margin-top:4px;">⚠ ' + esc(s.caution) + '</p>' : '') +
+      '</div>' +
 
-        // ④ TTS試聴
-        '<label class="label" style="margin-top:10px;margin-bottom:4px;">④ TTS試聴</label>' +
-        '<div class="tts-row">' +
-          '<select id="v3TtsProvider" style="font-size:12px;padding:5px 6px;">' +
+      // ④ TTS試聴
+      '<div class="panel">' +
+        '<label class="label" style="margin-bottom:6px;">④ TTS試聴</label>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:center;">' +
+          '<select id="v3TtsProvider" style="font-size:12px;padding:5px 6px;" onchange="loadV3TtsVoices()">' +
             '<option value="gemini">Gemini</option>' +
             '<option value="minimax">MiniMax</option>' +
           '</select>' +
-          '<input id="v3TtsSpeed" type="number" min="0.5" max="2.0" step="0.1" value="1.0" style="width:64px;font-size:12px;padding:5px 6px;" title="速度">' +
-          '<button onclick="runV3TTSPreview()" style="padding:5px 10px;">▶ 試聴</button>' +
+          '<select id="v3TtsVoice" style="font-size:12px;padding:5px 6px;"></select>' +
+          '<input id="v3TtsSpeed" type="number" min="0.5" max="2.0" step="0.1" value="1.0" style="width:56px;font-size:12px;padding:5px 4px;" title="速度">' +
+          '<button onclick="runV3TTSPreview()" style="padding:5px 10px;white-space:nowrap;">▶ 試聴</button>' +
         '</div>' +
+        '<span id="v3TtsModel" style="font-size:10px;color:var(--muted);display:block;margin-top:3px;">読込中...</span>' +
         '<span id="v3TtsStatus" style="font-size:12px;color:var(--muted);display:block;margin-top:4px;"></span>' +
         '<audio id="v3TtsAudio" controls style="width:100%;margin-top:6px;display:none;height:32px;"></audio>' +
       '</div>' +
 
-      // ③ データセット
+      // ③ データバインド
       '<div class="panel">' +
-        '<label class="label" style="margin-bottom:6px;">③ データセット</label>' +
+        '<label class="label" style="margin-bottom:6px;">③ データバインド</label>' +
+        fetchedBanner +
         '<div id="v3Step5DataSlots">' + slotRows + '</div>' +
       '</div>' +
     '</div>' +
 
-    // ── 右カラム: ⑤プレビュー + 画像ギャラリー ──
+    // ── 右カラム: ⑤プレビュー + ⑤画像ギャラリー ──
     '<div class="step5-right">' +
       '<div class="panel">' +
-        '<label class="label" style="margin-bottom:6px;">⑤ プレビュー</label>' +
-        '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">' +
-          '<button class="secondary" onclick="reloadV3Preview()" style="font-size:12px;padding:5px 10px;">更新</button>' +
-          '<span style="color:var(--muted);font-size:11px;">' + esc(slideType) + ' | スライド ' + (active + 1) + '/' + total + '</span>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+          '<label class="label" style="margin:0;">⑤ プレビュー</label>' +
+          '<button class="secondary" onclick="reloadV3Preview()" style="font-size:11px;padding:3px 8px;">更新</button>' +
         '</div>' +
+        '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
+        '<span style="color:var(--muted);font-size:11px;display:block;margin-top:4px;">' + esc(slideType) + ' | ' + (active + 1) + '/' + total + '枚</span>' +
       '</div>' +
 
       '<div class="panel">' +
-        '<label class="label" style="margin-bottom:6px;">画像ギャラリー</label>' +
+        '<label class="label" style="margin-bottom:6px;">⑤ 画像ギャラリー</label>' +
         '<div class="gallery-search-row">' +
-          '<input id="v3ImgSearchInput" placeholder="選手名・チーム名" value="' + initQ + '">' +
+          '<input id="v3ImgSearchInput" placeholder="選手名・チーム名" value="' + initQ + '" onkeydown="if(event.key===\\'Enter\\')searchV3StockImages()">' +
           '<select id="v3ImgTypeSelect" style="padding:5px 6px;font-size:12px;">' +
             ['player','team','manager'].map((t) => '<option value="' + t + '">' + t + '</option>').join('') +
           '</select>' +
           '<button class="secondary" onclick="searchV3StockImages()" style="padding:5px 8px;">検索</button>' +
         '</div>' +
-        '<div id="v3StockImgGrid" class="stock-img-grid"><span style="color:var(--muted);font-size:12px;">検索してください</span></div>' +
-        (selectedImgHtml ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">' + selectedImgHtml + '</div>' : '') +
+        '<div id="v3StockImgGrid" class="stock-img-grid"><span style="color:var(--muted);font-size:12px;">検索中...</span></div>' +
+        (selectedImgHtml ? '<label class="label" style="margin-top:8px;margin-bottom:4px;">選択中（クリックで解除）</label><div style="display:flex;gap:5px;flex-wrap:wrap;">' + selectedImgHtml + '</div>' : '') +
       '</div>' +
     '</div>' +
 
@@ -3650,7 +3739,11 @@ function switchV3ScriptSlide(index) {
   activeSlideIdx = index;
   activeView = 'script';
   renderPlan(currentPlan);
-  // renderPlan already triggers reloadV3Preview via the activeView === 'script' check
+  // ⑤ 画像ギャラリー自動検索
+  setTimeout(() => {
+    const inp = document.getElementById('v3ImgSearchInput');
+    if (inp?.value) searchV3StockImages();
+  }, 80);
 }
 
 function addV3DataSlot() {
@@ -3710,7 +3803,12 @@ function scheduleV3Preview() {
 
 async function reloadV3Preview() {
   collectV3SlideInputs();
-  const m = currentPlan?.v3Modules?.[activeSlideIdx];
+  let m = currentPlan?.v3Modules?.[activeSlideIdx];
+  // ⑥ v3Modules がなければ scriptDraft から仮モジュールを作る
+  if (!m) {
+    const s = currentPlan?.autopilotPlan?.scriptDraft?.[activeSlideIdx];
+    if (s) m = { type: s.role || 'insight', title: s.title || '', narration: s.narration || '', dataSlots: [], images: [] };
+  }
   const frame = document.getElementById('v3PreviewFrame');
   const wrap = document.getElementById('v3PreviewWrap');
   if (!m || !frame || !wrap) return;
