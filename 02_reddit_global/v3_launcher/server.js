@@ -92,6 +92,30 @@ const V3_RECIPE_DEFAULTS = [
   { category: '選手', id: 'PLAYER_ALL_CLUB_TOTAL', title: '全クラブ通算成績', slideType: 'stats', dataSlots: ['sofascore.player.apps', 'sofascore.player.goals', 'sofascore.player.assists', 'transfermarkt.player.club', 'transfermarkt.player.marketValuePeak', 'wiki.person.nationality', '', ''], note: 'キャリア全体の重みを一枚で示す', priority: '中', status: '採用候補' },
   { category: '選手', id: 'PLAYER_COMPARE_CURRENT_PREVIOUS', title: '比較-今季VS前期', slideType: 'comparison', dataSlots: ['sofascore.player.apps', 'sofascore.player.goals', 'sofascore.player.assists', 'sofascore.player.rating', 'sofascore.player.chancesCreated', 'sofascore.player.successfulDribbles', '', ''], note: '成長/低下を視覚的に比較する', priority: '高', status: '採用候補' },
   { category: '選手', id: 'PLAYER_COMPARE_CURRENT_CAREER_HIGH', title: '比較-今季VSキャリアハイ', slideType: 'comparison', dataSlots: ['sofascore.player.goals', 'sofascore.player.assists', 'sofascore.player.rating', 'transfermarkt.player.marketValue', 'transfermarkt.player.marketValuePeak', '', '', ''], note: '今がピーク級か復活途上かを見せる', priority: '高', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_PROFILE_BASIC', title: '基本情報', slideType: 'profile', dataSlots: ['wiki.person.age', 'wiki.person.birthPlace', 'wiki.person.nationality', 'wiki.player.foot', 'transfermarkt.player.marketValue', 'transfermarkt.player.number', 'transfermarkt.player.position', 'transfermarkt.player.club'], note: 'プロフィールの基本情報を一枚で整理する', priority: '高', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_CONTRACT_STATUS', title: '契約状況', slideType: 'profile', dataSlots: ['transfermarkt.player.contractUntil', 'transfermarkt.player.agent', 'transfermarkt.player.marketValue', 'transfermarkt.player.club', 'transfermarkt.player.position', '', '', ''], note: '移籍話題や更新交渉の前提を整理する', priority: '中', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_ATTACK_OUTPUT', title: '攻撃貢献', slideType: 'stats', dataSlots: ['sofascore.player.goals', 'sofascore.player.assists', 'sofascore.player.chancesCreated', 'sofascore.player.keyPasses', 'sofascore.player.shotsOnTarget', 'sofascore.player.bigChancesCreated', '', ''], note: 'ゴール以外の攻撃関与まで見せる', priority: '高', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_CREATION_PROFILE', title: 'チャンスメイク型', slideType: 'stats', dataSlots: ['sofascore.player.chancesCreated', 'sofascore.player.bigChancesCreated', 'sofascore.player.keyPasses', 'sofascore.player.assists', 'sofascore.player.rating', '', '', ''], note: '創造性やラストパスを主役にする', priority: '中', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_DRIBBLE_PROFILE', title: 'ドリブル突破力', slideType: 'stats', dataSlots: ['sofascore.player.successfulDribbles', 'sofascore.player.rating', 'sofascore.player.chancesCreated', 'sofascore.player.goals', 'sofascore.player.assists', '', '', ''], note: '突破力がテーマの選手用', priority: '中', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_DEFENSIVE_WORK', title: '守備貢献', slideType: 'stats', dataSlots: ['sofascore.player.tackles', 'sofascore.player.interceptions', 'sofascore.player.rating', 'sofascore.player.minutes', 'transfermarkt.player.position', '', '', ''], note: '守備やハードワークを見せる', priority: '中', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_PLAYTIME_TREND', title: '出場時間推移', slideType: 'timeline', dataSlots: ['sofascore.player.apps', 'sofascore.player.minutes', 'sofascore.player.rating', 'transfermarkt.player.club', 'transfermarkt.player.position', '', '', ''], note: '序列の上昇/低下を扱う', priority: '中', status: '採用候補' },
+  { category: '選手', id: 'PLAYER_VALUE_VS_OUTPUT', title: '市場価値VS成績', slideType: 'comparison', dataSlots: ['transfermarkt.player.marketValue', 'transfermarkt.player.marketValueChange', 'sofascore.player.goals', 'sofascore.player.assists', 'sofascore.player.rating', 'sofascore.player.apps', '', ''], note: '価格と実績が釣り合うかを見せる', priority: '高', status: '採用候補' },
+  { category: 'チーム', id: 'TEAM_LEAGUE_STANDING', title: 'リーグ順位', slideType: 'stats', dataSlots: ['sofascore.team.position', 'sofascore.team.points', 'sofascore.team.wins', 'sofascore.team.draws', 'sofascore.team.losses', 'sofascore.team.goalsFor', 'sofascore.team.goalsAgainst', 'wiki.club.manager'], note: 'チーム企画の基本順位スライド', priority: '高', status: '採用候補' },
+  { category: 'チーム', id: 'TEAM_ATTACK_DEFENSE_BALANCE', title: '得点と失点', slideType: 'comparison', dataSlots: ['sofascore.team.goalsFor', 'sofascore.team.goalsAgainst', 'sofascore.team.position', 'sofascore.team.points', 'sofascore.team.wins', 'sofascore.team.losses', '', ''], note: '攻守バランスの説明に使う', priority: '高', status: '採用候補' },
+  { category: 'チーム', id: 'TEAM_FORM_BASIC', title: '今季の勝敗', slideType: 'stats', dataSlots: ['sofascore.team.wins', 'sofascore.team.draws', 'sofascore.team.losses', 'sofascore.team.points', 'sofascore.team.position', 'sofascore.team.goalsFor', 'sofascore.team.goalsAgainst', ''], note: '好調/不調の根拠を見せる', priority: '高', status: '採用候補' },
+  { category: 'チーム', id: 'TEAM_PROFILE_BASIC', title: 'クラブ基本情報', slideType: 'profile', dataSlots: ['wiki.club.founded', 'wiki.club.stadium', 'wiki.club.manager', 'sofascore.team.position', 'sofascore.team.points', '', '', ''], note: 'クラブ紹介の基本情報', priority: '中', status: '採用候補' },
+  { category: 'チーム', id: 'TEAM_MANAGER_CONTEXT', title: '監督体制', slideType: 'profile', dataSlots: ['wiki.club.manager', 'wiki.manager.career', 'wiki.manager.currentTeam', 'sofascore.team.position', 'sofascore.team.points', '', '', ''], note: '監督交代や体制評価の前提', priority: '中', status: '採用候補' },
+  { category: 'チーム', id: 'TEAM_HISTORICAL_CONTEXT', title: 'クラブの背景', slideType: 'history', dataSlots: ['wiki.club.founded', 'wiki.club.stadium', 'wiki.club.manager', '', '', '', '', ''], note: '歴史や背景を数字少なめで扱う', priority: '低', status: '採用候補' },
+  { category: '監督', id: 'MANAGER_PROFILE_BASIC', title: '監督プロフィール', slideType: 'profile', dataSlots: ['wiki.person.age', 'wiki.person.nationality', 'wiki.manager.currentTeam', 'wiki.manager.career', 'wiki.club.manager', '', '', ''], note: '監督紹介の基本', priority: '高', status: '採用候補' },
+  { category: '監督', id: 'MANAGER_CURRENT_TEAM_RECORD', title: '現チーム成績', slideType: 'stats', dataSlots: ['wiki.manager.currentTeam', 'sofascore.team.position', 'sofascore.team.points', 'sofascore.team.wins', 'sofascore.team.draws', 'sofascore.team.losses', 'sofascore.team.goalsFor', 'sofascore.team.goalsAgainst'], note: '現体制の結果を見る', priority: '高', status: '採用候補' },
+  { category: '監督', id: 'MANAGER_TACTICAL_EFFECT', title: '攻守改善', slideType: 'comparison', dataSlots: ['sofascore.team.goalsFor', 'sofascore.team.goalsAgainst', 'sofascore.team.position', 'sofascore.team.points', 'wiki.manager.currentTeam', '', '', ''], note: '就任後の変化や戦術効果を扱う', priority: '中', status: '採用候補' },
+  { category: '監督', id: 'MANAGER_CAREER_PATH', title: '監督キャリア', slideType: 'timeline', dataSlots: ['wiki.manager.career', 'wiki.manager.currentTeam', 'wiki.person.nationality', 'wiki.person.age', '', '', '', ''], note: 'キャリアの流れを説明する', priority: '中', status: '採用候補' },
+  { category: '試合', id: 'MATCH_CARD_BASIC', title: 'マッチカード', slideType: 'matchcard', dataSlots: ['sofascore.match.homeTeam', 'sofascore.match.awayTeam', 'sofascore.match.date', 'sofascore.match.venue', 'sofascore.match.score', '', '', ''], note: '試合企画の基本カード', priority: '高', status: '採用候補' },
+  { category: '試合', id: 'MATCH_RESULT_CARD', title: '試合結果', slideType: 'matchcard', dataSlots: ['sofascore.match.homeTeam', 'sofascore.match.awayTeam', 'sofascore.match.score', 'sofascore.match.date', 'sofascore.match.venue', '', '', ''], note: '結果速報や試合後動画用', priority: '高', status: '採用候補' },
+  { category: '試合', id: 'MATCH_TEAM_CONTEXT', title: '試合前の順位状況', slideType: 'comparison', dataSlots: ['sofascore.match.homeTeam', 'sofascore.match.awayTeam', 'sofascore.team.position', 'sofascore.team.points', 'sofascore.team.goalsFor', 'sofascore.team.goalsAgainst', '', ''], note: '対戦前の立ち位置を見せる', priority: '中', status: '採用候補' },
+  { category: '移籍', id: 'TRANSFER_PROFILE', title: '移籍プロフィール', slideType: 'profile', dataSlots: ['transfermarkt.transfer.fromClub', 'transfermarkt.transfer.toClub', 'transfermarkt.transfer.fee', 'transfermarkt.player.marketValue', 'transfermarkt.player.contractUntil', 'transfermarkt.player.position', 'wiki.person.age', 'wiki.person.nationality'], note: '移籍ニュースの基本情報', priority: '高', status: '採用候補' },
+  { category: '移籍', id: 'TRANSFER_VALUE_CHECK', title: '移籍金と市場価値', slideType: 'comparison', dataSlots: ['transfermarkt.transfer.fee', 'transfermarkt.player.marketValue', 'transfermarkt.player.marketValuePeak', 'transfermarkt.player.marketValueChange', 'sofascore.player.rating', '', '', ''], note: '高い/安いの判断材料', priority: '高', status: '採用候補' },
+  { category: '移籍', id: 'TRANSFER_FIT_CURRENT_CLUB', title: '移籍先フィット', slideType: 'insight', dataSlots: ['transfermarkt.transfer.toClub', 'transfermarkt.player.position', 'sofascore.player.goals', 'sofascore.player.assists', 'sofascore.player.rating', 'wiki.person.age', '', ''], note: '移籍先で何が期待されるかを説明する', priority: '中', status: '採用候補' },
 ];
 
 app.use((_, res, next) => {
@@ -1347,6 +1371,7 @@ app.get('/recipes', (_, res) => {
   --red: #ef4444;
 }
 * { box-sizing: border-box; }
+html, body { max-width: 100%; overflow-x: hidden; }
 body {
   margin: 0;
   background: var(--bg);
@@ -1366,18 +1391,30 @@ header {
   border-bottom: 3px solid var(--gold);
 }
 h1 { margin: 0; color: var(--gold); font-size: 18px; }
-.tag { color: var(--muted); font-size: 12px; }
-a { color: var(--gold); font-weight: 800; text-decoration: none; }
-main { padding: 14px; }
-.toolbar {
+.tag { color: var(--muted); font-size: 12px; line-height: 1.4; }
+a { color: var(--gold); font-weight: 800; text-decoration: none; white-space: nowrap; }
+main {
+  display: grid;
+  grid-template-columns: minmax(240px, 34%) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+}
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px;
+  min-width: 0;
+}
+.toolbar, .editor-actions, .list-actions, .meta-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  margin-bottom: 12px;
 }
+.toolbar { margin-bottom: 10px; }
 button {
-  min-height: 38px;
+  min-height: 40px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--gold);
@@ -1400,12 +1437,7 @@ button:disabled { opacity: .55; cursor: wait; }
   border-radius: 6px;
   background: #0a0d12;
   font-size: 12px;
-}
-.panel {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  padding: 12px;
+  line-height: 1.4;
 }
 .hint {
   margin: 0 0 10px;
@@ -1413,74 +1445,149 @@ button:disabled { opacity: .55; cursor: wait; }
   font-size: 12px;
   line-height: 1.55;
 }
-.table-wrap {
+.saved-list {
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 190px);
   overflow: auto;
+  padding-right: 2px;
+}
+.saved-card {
+  width: 100%;
+  min-height: 0;
+  display: block;
+  text-align: left;
+  background: #0a0d12;
+  color: var(--text);
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #0a0d12;
+  padding: 10px;
 }
-table {
-  width: max-content;
-  min-width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+.saved-card.active {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px rgba(242,184,75,.28) inset;
 }
-th, td {
-  border-right: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  padding: 6px;
-  vertical-align: top;
+.saved-card strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
-th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #1f2937;
-  color: #f8fafc;
+.saved-card small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #0f172a;
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 800;
+}
+.category-pills {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.category-pills button {
+  width: 100%;
+  padding: 0 4px;
+  background: #0f172a;
+  color: var(--text);
+  border-color: #334155;
+  font-size: 13px;
+}
+.category-pills button.active {
+  background: var(--gold);
+  color: #111827;
+  border-color: var(--gold);
+}
+label {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: #dbeafe;
   font-size: 12px;
-  text-align: left;
-}
-td:first-child, th:first-child {
-  position: sticky;
-  left: 0;
-  z-index: 3;
-  background: #111827;
+  font-weight: 900;
 }
 input, select, textarea {
   width: 100%;
-  min-height: 34px;
+  min-height: 42px;
   border: 1px solid #334155;
-  border-radius: 5px;
+  border-radius: 6px;
   background: #0f172a;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
-  padding: 6px 8px;
+  font-size: 15px;
+  padding: 9px 10px;
 }
-textarea { min-height: 52px; resize: vertical; }
-.col-category { width: 86px; }
-.col-id { width: 210px; }
-.col-title { width: 180px; }
-.col-type { width: 112px; }
-.col-slot { width: 210px; }
-.col-note { width: 250px; }
-.col-small { width: 92px; }
-.col-action { width: 76px; }
+textarea { min-height: 72px; resize: vertical; line-height: 1.5; }
+.slot-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.slot-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #0a0d12;
+}
+.slot-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 42px;
+  border-radius: 6px;
+  background: #111827;
+  color: var(--gold);
+  font-weight: 900;
+}
 .source {
   display: inline-flex;
-  margin-top: 4px;
-  padding: 2px 6px;
+  margin-top: 5px;
+  padding: 2px 7px;
   border-radius: 999px;
   background: #0b1220;
   color: var(--blue);
   font-size: 10px;
   border: 1px solid #1e3a8a;
 }
-@media (max-width: 720px) {
-  header { align-items: flex-start; flex-direction: column; }
-  main { padding: 10px; }
-  .toolbar { align-items: stretch; }
-  button, .status { width: 100%; justify-content: center; }
+.editor-empty {
+  border: 1px dashed #475569;
+  border-radius: 8px;
+  padding: 18px;
+  color: var(--muted);
+  line-height: 1.6;
+  background: #0a0d12;
+}
+.meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+}
+@media (max-width: 860px) {
+  header { align-items: flex-start; flex-direction: column; padding: 12px; }
+  main { grid-template-columns: 1fr; padding: 10px; }
+  .toolbar, .editor-actions, .list-actions { align-items: stretch; }
+  .toolbar button, .toolbar .status, .editor-actions button, .list-actions button { width: 100%; justify-content: center; }
+  .saved-list { max-height: 260px; }
+  .category-pills { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .meta-row { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -1488,49 +1595,33 @@ textarea { min-height: 52px; resize: vertical; }
 <header>
   <div>
     <h1>V3 Recipe Launcher</h1>
-    <div class="tag">スライド型とデータスロットを編集してV3に渡すページ</div>
+    <div class="tag">保存済みから選んで、スマホで縦に編集するページ</div>
   </div>
   <a href="/">V3本体へ戻る</a>
 </header>
 <main>
-  <div class="toolbar">
-    <button type="button" onclick="addRecipe()">行を追加</button>
-    <button class="secondary" type="button" onclick="reloadRecipes()">再読み込み</button>
-    <button id="saveBtn" type="button" onclick="saveRecipes()">送信して保存</button>
-    <span class="status" id="status">読み込み中...</span>
-  </div>
   <section class="panel">
-    <p class="hint">データスロットは SofaScore / Transfermarkt / Wiki から取れる想定の項目だけに絞ってあるよ。空欄にしたい場所は「未設定」を選んでね。</p>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th class="col-category">カテゴリ</th>
-            <th class="col-id">レシピID</th>
-            <th class="col-title">タイトル</th>
-            <th class="col-type">スライド型</th>
-            <th class="col-slot">データスロット1</th>
-            <th class="col-slot">データスロット2</th>
-            <th class="col-slot">データスロット3</th>
-            <th class="col-slot">データスロット4</th>
-            <th class="col-slot">データスロット5</th>
-            <th class="col-slot">データスロット6</th>
-            <th class="col-slot">データスロット7</th>
-            <th class="col-slot">データスロット8</th>
-            <th class="col-note">用途メモ</th>
-            <th class="col-small">優先度</th>
-            <th class="col-small">ステータス</th>
-            <th class="col-action">操作</th>
-          </tr>
-        </thead>
-        <tbody id="recipeRows"></tbody>
-      </table>
+    <div class="toolbar">
+      <button type="button" onclick="newRecipe()">新規作成</button>
+      <button class="secondary" type="button" onclick="reloadRecipes()">再読み込み</button>
+      <span class="status" id="status">読み込み中...</span>
     </div>
+    <p class="hint">保存済み一覧。選ぶと右/下の編集フォームに開くよ。</p>
+    <div class="saved-list" id="recipeList"></div>
+  </section>
+  <section class="panel">
+    <div class="editor-actions">
+      <button id="saveBtn" type="button" onclick="saveRecipes()">送信して保存</button>
+      <button class="secondary" type="button" onclick="duplicateRecipe()">複製</button>
+      <button class="danger" type="button" onclick="deleteActiveRecipe()">削除</button>
+    </div>
+    <div id="editor"></div>
   </section>
 </main>
 <script>
 var slotOptions = [];
 var recipes = [];
+var activeIndex = -1;
 var categories = ['選手', 'チーム', '監督', '試合', '移籍'];
 var slideTypes = ['opening', 'stats', 'profile', 'comparison', 'history', 'timeline', 'ranking', 'reaction', 'matchcard', 'picture', 'insight', 'ending'];
 var priorities = ['高', '中', '低'];
@@ -1564,6 +1655,7 @@ function slotSource(key) {
   return hit && hit.source ? hit.source : '';
 }
 function normalizeRecipe(recipe) {
+  recipe = recipe || {};
   var slots = Array.isArray(recipe.dataSlots) ? recipe.dataSlots : [];
   return {
     category: recipe.category || '選手',
@@ -1576,43 +1668,88 @@ function normalizeRecipe(recipe) {
     status: recipe.status || '採用候補'
   };
 }
-function renderRows() {
-  var body = document.getElementById('recipeRows');
-  body.innerHTML = recipes.map(function(recipe, index) {
-    var r = normalizeRecipe(recipe);
-    var slotCells = r.dataSlots.map(function(slot, slotIndex) {
-      var source = slotSource(slot);
-      return '<td><select data-row="' + index + '" data-field="slot" data-slot="' + slotIndex + '" onchange="updateRecipe(this)">' + slotOptionHtml(slot) + '</select>' +
-        (source ? '<span class="source">' + esc(source) + '</span>' : '') + '</td>';
-    }).join('');
-    return '<tr>' +
-      '<td><select data-row="' + index + '" data-field="category" onchange="updateRecipe(this)">' + optionHtml(categories, r.category) + '</select></td>' +
-      '<td><input data-row="' + index + '" data-field="id" value="' + esc(r.id) + '" oninput="updateRecipe(this)"></td>' +
-      '<td><input data-row="' + index + '" data-field="title" value="' + esc(r.title) + '" oninput="updateRecipe(this)"></td>' +
-      '<td><select data-row="' + index + '" data-field="slideType" onchange="updateRecipe(this)">' + optionHtml(slideTypes, r.slideType) + '</select></td>' +
-      slotCells +
-      '<td><textarea data-row="' + index + '" data-field="note" oninput="updateRecipe(this)">' + esc(r.note) + '</textarea></td>' +
-      '<td><select data-row="' + index + '" data-field="priority" onchange="updateRecipe(this)">' + optionHtml(priorities, r.priority) + '</select></td>' +
-      '<td><select data-row="' + index + '" data-field="status" onchange="updateRecipe(this)">' + optionHtml(statuses, r.status) + '</select></td>' +
-      '<td><button class="danger" type="button" onclick="deleteRecipe(' + index + ')">削除</button></td>' +
-      '</tr>';
-  }).join('');
+function currentRecipe() {
+  if (activeIndex < 0 || !recipes[activeIndex]) return null;
+  recipes[activeIndex] = normalizeRecipe(recipes[activeIndex]);
+  return recipes[activeIndex];
 }
-function updateRecipe(el) {
-  var index = Number(el.dataset.row);
-  var field = el.dataset.field;
-  if (!recipes[index]) return;
-  if (field === 'slot') {
-    var slotIndex = Number(el.dataset.slot);
-    recipes[index].dataSlots = Array.isArray(recipes[index].dataSlots) ? recipes[index].dataSlots : Array(8).fill('');
-    recipes[index].dataSlots[slotIndex] = el.value;
-    renderRows();
+function selectRecipe(index) {
+  activeIndex = index;
+  renderAll();
+}
+function renderList() {
+  var list = document.getElementById('recipeList');
+  if (!recipes.length) {
+    list.innerHTML = '<div class="editor-empty">保存済みレシピはまだないよ。新規作成から始めてね。</div>';
     return;
   }
-  recipes[index][field] = el.value;
+  list.innerHTML = recipes.map(function(recipe, index) {
+    var r = normalizeRecipe(recipe);
+    var title = r.title || '(無題レシピ)';
+    return '<button type="button" class="saved-card' + (index === activeIndex ? ' active' : '') + '" onclick="selectRecipe(' + index + ')">' +
+      '<span class="pill">' + esc(r.category) + '</span> <span class="pill">' + esc(r.slideType) + '</span>' +
+      '<strong>' + esc(title) + '</strong>' +
+      '<small>' + esc(r.id || 'ID未設定') + ' / ' + esc(r.status || '') + '</small>' +
+      '</button>';
+  }).join('');
 }
-function addRecipe() {
-  recipes.push(normalizeRecipe({
+function renderEditor() {
+  var editor = document.getElementById('editor');
+  var r = currentRecipe();
+  if (!r) {
+    editor.innerHTML = '<div class="editor-empty">保存済み一覧から選ぶか、新規作成を押してね。</div>';
+    return;
+  }
+  var categoryButtons = categories.map(function(category) {
+    return '<button type="button" class="' + (r.category === category ? 'active' : '') + '" onclick="setCategory(\\'' + esc(category) + '\\')">' + esc(category) + '</button>';
+  }).join('');
+  var slotRows = r.dataSlots.map(function(slot, i) {
+    var source = slotSource(slot);
+    return '<div class="slot-row">' +
+      '<div class="slot-no">' + (i + 1) + '</div>' +
+      '<div><select data-slot="' + i + '" onchange="setSlot(this)">' + slotOptionHtml(slot) + '</select>' +
+      (source ? '<span class="source">' + esc(source) + '</span>' : '') + '</div>' +
+      '</div>';
+  }).join('');
+  editor.innerHTML =
+    '<label>カテゴリ</label>' +
+    '<div class="category-pills">' + categoryButtons + '</div>' +
+    '<label>タイトル<input value="' + esc(r.title) + '" oninput="setField(\\'title\\', this.value)" placeholder="例: 今期成績"></label>' +
+    '<label>スライド型<select onchange="setField(\\'slideType\\', this.value)">' + optionHtml(slideTypes, r.slideType) + '</select></label>' +
+    '<label>データスロット</label>' +
+    '<div class="slot-list">' + slotRows + '</div>' +
+    '<div class="meta-row">' +
+      '<label>レシピID<input value="' + esc(r.id) + '" oninput="setField(\\'id\\', this.value)" placeholder="PLAYER_SEASON_CURRENT"></label>' +
+      '<label>優先度<select onchange="setField(\\'priority\\', this.value)">' + optionHtml(priorities, r.priority) + '</select></label>' +
+      '<label>ステータス<select onchange="setField(\\'status\\', this.value)">' + optionHtml(statuses, r.status) + '</select></label>' +
+    '</div>' +
+    '<label>用途メモ<textarea oninput="setField(\\'note\\', this.value)" placeholder="このレシピを使う場面">' + esc(r.note) + '</textarea></label>';
+}
+function renderAll() {
+  renderList();
+  renderEditor();
+}
+function setCategory(category) {
+  var r = currentRecipe();
+  if (!r) return;
+  r.category = category;
+  renderAll();
+}
+function setField(field, value) {
+  var r = currentRecipe();
+  if (!r) return;
+  r[field] = value;
+  renderList();
+}
+function setSlot(el) {
+  var r = currentRecipe();
+  if (!r) return;
+  var slotIndex = Number(el.dataset.slot);
+  r.dataSlots[slotIndex] = el.value;
+  renderEditor();
+}
+function newRecipe() {
+  recipes.unshift(normalizeRecipe({
     category: '選手',
     id: '',
     title: '',
@@ -1621,13 +1758,27 @@ function addRecipe() {
     priority: '中',
     status: '採用候補'
   }));
-  renderRows();
-  setStatus('新しい行を追加したよ', true);
+  activeIndex = 0;
+  renderAll();
+  setStatus('新規レシピを開いたよ。保存すると保存済みに入るよ', true);
 }
-function deleteRecipe(index) {
-  recipes.splice(index, 1);
-  renderRows();
-  setStatus('行を削除したよ。保存すると反映されるよ', null);
+function duplicateRecipe() {
+  var r = currentRecipe();
+  if (!r) return;
+  var copy = normalizeRecipe(JSON.parse(JSON.stringify(r)));
+  copy.id = copy.id ? copy.id + '_COPY' : '';
+  copy.title = copy.title ? copy.title + ' コピー' : '';
+  recipes.splice(activeIndex + 1, 0, copy);
+  activeIndex += 1;
+  renderAll();
+  setStatus('複製したよ。保存すると反映されるよ', true);
+}
+function deleteActiveRecipe() {
+  if (activeIndex < 0 || !recipes[activeIndex]) return;
+  recipes.splice(activeIndex, 1);
+  if (activeIndex >= recipes.length) activeIndex = recipes.length - 1;
+  renderAll();
+  setStatus('削除したよ。保存すると反映されるよ', null);
 }
 async function reloadRecipes() {
   setStatus('読み込み中...', null);
@@ -1638,8 +1789,9 @@ async function reloadRecipes() {
     var recipeRes = await fetch('/api/v3/recipes');
     var recipeData = await recipeRes.json();
     recipes = (recipeData.recipes || []).map(normalizeRecipe);
-    renderRows();
-    setStatus('読み込み完了: ' + recipes.length + '件', true);
+    activeIndex = recipes.length ? 0 : -1;
+    renderAll();
+    setStatus('読み込み完了: 保存済み ' + recipes.length + '件', true);
   } catch (error) {
     setStatus('読み込み失敗: ' + (error.message || error), false);
   }
@@ -1652,11 +1804,14 @@ async function saveRecipes() {
     var payload = { recipes: recipes.map(normalizeRecipe).filter(function(r) { return r.title || r.id; }) };
     var res = await fetch('/api/v3/recipes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(payload)
     });
     var data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || '保存に失敗した');
+    recipes = payload.recipes;
+    if (activeIndex >= recipes.length) activeIndex = recipes.length - 1;
+    renderAll();
     setStatus('保存完了: ' + data.count + '件 / ' + data.updatedAt, true);
   } catch (error) {
     setStatus('保存失敗: ' + (error.message || error), false);
