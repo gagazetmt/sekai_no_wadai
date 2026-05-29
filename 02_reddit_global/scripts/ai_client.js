@@ -8,11 +8,12 @@
 //
 // 使い方:
 //   const { callAI } = require("./ai_client");
-//   const text = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 500, messages: [...] });
+//   const text = await callAI({ model: "claude-haiku-4-5-20251001", max_tokens: 500, messages: [...], label: "step名" });
 
 require("dotenv").config({ path: require("path").join(__dirname, "..", ".env"), quiet: true });
 
 const PROVIDER = (process.env.AI_PROVIDER || "anthropic").toLowerCase();
+const costTracker = require("./cost_tracker");
 
 const _clients = {};  // provider → client インスタンス
 
@@ -49,7 +50,7 @@ function getClient(provider) {
 //   400 を返す事象が発生。送信前に � へ置換する。
 function _sanitizeForJson(str) {
   if (typeof str !== "string") return str;
-  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "�");
+  return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 }
 function _sanitizeMessages(messages) {
   if (!Array.isArray(messages)) return messages;
@@ -72,15 +73,17 @@ function _sanitizeMessages(messages) {
 
 /**
  * AIにメッセージを送り、テキスト応答を返す
- * @param {{ model, max_tokens, messages, system?, forceProvider? }} opts
- *   forceProvider: "deepseek" | "anthropic" | "kimi" — env無視して特定providerを使う
+ * @param {{ model, max_tokens, messages, system?, forceProvider?, label? }} opts
+ *   forceProvider: "deepseek" | "anthropic" | "kimi" | "gemini" — env無視して特定providerを使う
+ *   label: コスト計測ログに表示するラベル（例: "①query_gen", "③entity_expand"）
  * @returns {Promise<string>}
  */
-async function callAI({ model, max_tokens, messages, system, forceProvider }) {
+async function callAI({ model, max_tokens, messages, system, forceProvider, label }) {
   const provider = (forceProvider || PROVIDER).toLowerCase();
   const client   = getClient(provider);
   const safeMessages = _sanitizeMessages(messages);
   const safeSystem   = _sanitizeForJson(system);
+
   if (provider === "deepseek") {
     const msgs = safeSystem
       ? [{ role: "system", content: safeSystem }, ...safeMessages]
@@ -90,7 +93,34 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
       max_tokens,
       messages:   msgs,
     });
+    costTracker.record({
+      label: label || "deepseek",
+      provider: "deepseek",
+      inputTokens:  res.usage?.prompt_tokens     || 0,
+      outputTokens: res.usage?.completion_tokens || 0,
+    });
     return res.choices[0].message.content;
+
+  } else if (provider === "gemini") {
+    // Google Generative Language API 直叩き (OpenRouter マージンなし)
+    const axios = require("axios");
+    const useModel = (model && /^gemini-/.test(model)) ? model : (process.env.GEMINI_CHAT_MODEL || "gemini-2.5-flash");
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const contents = safeMessages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: typeof m.content === "string" ? m.content : (m.content?.[0]?.text || "") }],
+    }));
+    const body = { contents, generationConfig: { maxOutputTokens: max_tokens } };
+    if (safeSystem) body.system_instruction = { parts: [{ text: safeSystem }] };
+    const res = await axios.post(url, body, { headers: { "Content-Type": "application/json" } });
+    costTracker.record({
+      label: label || "gemini",
+      provider: "gemini",
+      inputTokens:  res.data?.usageMetadata?.promptTokenCount     || 0,
+      outputTokens: res.data?.usageMetadata?.candidatesTokenCount || 0,
+    });
+    return res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
   } else if (provider === "kimi" || provider === "openrouter") {
     // model 未指定 or claude/deepseek 系の指定が来たら .env の KIMI_MODEL を使う
     //   2026-05-24: k2.6 は reasoning モデルで 1 スライド 150s かかるため、 既定を
@@ -119,7 +149,14 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
       }
     }
     const res = await client.chat.completions.create(reqBody);
+    costTracker.record({
+      label: label || "kimi",
+      provider: "kimi",
+      inputTokens:  res.usage?.prompt_tokens     || 0,
+      outputTokens: res.usage?.completion_tokens || 0,
+    });
     return res.choices[0].message.content;
+
   } else {
     // 2026-05-24: max_tokens 24000 で non-streaming だと
     //   「Streaming is required for operations that may take longer than 10 minutes」
@@ -128,6 +165,12 @@ async function callAI({ model, max_tokens, messages, system, forceProvider }) {
     if (safeSystem) opts.system = safeSystem;
     const stream = client.messages.stream(opts);
     const finalMessage = await stream.finalMessage();
+    costTracker.record({
+      label: label || "anthropic",
+      provider: "anthropic",
+      inputTokens:  finalMessage.usage?.input_tokens  || 0,
+      outputTokens: finalMessage.usage?.output_tokens || 0,
+    });
     const firstText = (finalMessage.content || []).find((b) => b.type === "text");
     return firstText ? firstText.text : "";
   }

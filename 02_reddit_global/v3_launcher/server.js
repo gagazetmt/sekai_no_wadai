@@ -9,7 +9,10 @@ const path = require('path');
 const { createArgumentPlan } = require('./v3_story_architect');
 const { runTopicResearch, fetchWikiSideStories, aiExpandResearch } = require('./v3_research');
 const { generateAIPlan } = require('./v3_planner');
+const { factCheckAIPlan, factCheckScript } = require('./v3_fact_checker');
+const { synthesizeStepData } = require('./v3_synthesizer');
 const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
+const costTracker = require(path.join(__dirname, '..', 'scripts', 'cost_tracker'));
 const { router: s3Router } = require('../routes/step3_routes');
 const { router: s35Router } = require('../routes/step35_routes');
 const { router: s4Router } = require('../routes/step4_routes');
@@ -551,6 +554,7 @@ async function runProposalJob(jobId, input) {
     Object.assign(job, { stage, message, updatedAt: new Date().toISOString(), ...partial });
     saveProposalResultToProject(input.selectedProjectId, { ...partial, jobId }, stage);
   };
+  costTracker.reset();
   try {
     let plan = input.plan || createArgumentPlan({ topic: input.title, memo: input.memo, sourceType: input.sourceType });
     const searchTopic = compactSearchTopicServer(input.title, input.memo);
@@ -596,10 +600,24 @@ async function runProposalJob(jobId, input) {
     });
 
     const memoBlock = buildFetchedMemoBlock(fetchedData);
-    const enrichedMemo = [input.memo || '', memoBlock].filter(Boolean).join('\n\n');
+    const rawMemo = [input.memo || '', memoBlock].filter(Boolean).join('\n\n');
+    const { enrichedMemo } = await synthesizeStepData({
+      topic: input.title,
+      rawMemo,
+      research,
+      wikiStories,
+      fetchedData: (fetchedData || []).filter((d) => d.ok),
+    }).catch((e) => {
+      console.warn('[proposal-job] synthesize skipped:', e.message);
+      return { enrichedMemo: rawMemo };
+    });
     let aiPlan;
     try {
       aiPlan = await generateAIPlan(input.title, enrichedMemo, research, wikiStories);
+      aiPlan = await factCheckAIPlan(aiPlan).catch((e) => {
+        console.warn('[proposal-job] factCheck skipped:', e.message);
+        return aiPlan;
+      });
       plan = { ...plan, autopilotPlan: mergeAutopilotPlanServer(plan.autopilotPlan, aiPlan) };
     } catch (error) {
       aiPlan = {
@@ -621,7 +639,9 @@ async function runProposalJob(jobId, input) {
         },
       };
     }
-    const result = { plan, research, wikiStories, aiPlan, fetchedData, acquiredData, prefetchWarnings: prefetch.warnings || [] };
+    const costSummary = costTracker.getSummary();
+    console.log(`[cost] ━━ ジョブ合計: ${costSummary.calls}コール | $${costSummary.totalUsd} (¥${costSummary.totalJpy}) ━━`);
+    const result = { plan, research, wikiStories, aiPlan, fetchedData, acquiredData, prefetchWarnings: prefetch.warnings || [], costSummary };
     Object.assign(job, {
       status: 'done',
       stage: 'done',
@@ -937,7 +957,8 @@ app.post('/api/v3/generate-script', async (req, res) => {
     if (!parsed?.slides) {
       return res.json({ success: false, error: 'AI応答のJSONパース失敗', raw: String(raw || '').slice(0, 300) });
     }
-    res.json({ success: true, slides: parsed.slides });
+    const { slides: checkedSlides, flags: scriptFlags } = await factCheckScript(parsed.slides).catch(() => ({ slides: parsed.slides, flags: [] }));
+    res.json({ success: true, slides: checkedSlides, factCheckFlags: scriptFlags });
   } catch (error) {
     console.error('[v3/generate-script]', error);
     res.status(500).json({ success: false, error: error.message });

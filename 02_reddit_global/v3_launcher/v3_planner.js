@@ -208,6 +208,7 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
     messages: [{ role: 'user', content: userContent }],
     max_tokens: 8000,
     forceProvider: 'deepseek',
+    label: '④plan_generate',
   });
 
   let parsed = extractJSON(raw);
@@ -218,6 +219,7 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
       messages: [{ role: 'user', content: buildCompactRepairPrompt(topic, memo, raw) }],
       max_tokens: 3500,
       forceProvider: 'deepseek',
+      label: '④plan_repair',
     });
     parsed = extractJSON(retryRaw);
     if (!parsed) {

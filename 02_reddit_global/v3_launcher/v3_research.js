@@ -52,6 +52,50 @@ function uniq(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function compactSearchQuery(query) {
+  const raw = String(query || '')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[\[\]【】「」『』"“”]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!raw) return '';
+
+  const firstClause = raw.split(/[。！？!?]|(?:\s+-\s+)|(?:\s+｜\s+)|(?:\s+\|\s+)/)[0].trim();
+  const base = firstClause || raw;
+  if (/[぀-ヿ一-鿿]/.test(base)) {
+    return base.slice(0, 72);
+  }
+  return base
+    .split(/\s+/)
+    .filter((w) => !/^(reddit|thread|comments?|video|youtube)$/i.test(w))
+    .slice(0, 10)
+    .join(' ')
+    .slice(0, 96);
+}
+
+function parseLooseJson(raw) {
+  const s = String(raw || '').trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  try {
+    return JSON.parse(s);
+  } catch (_) {}
+  const obj = s.match(/\{[\s\S]*\}/);
+  if (obj) {
+    try {
+      return JSON.parse(obj[0]);
+    } catch (_) {}
+  }
+  const arr = s.match(/\[[\s\S]*\]/);
+  if (arr) {
+    try {
+      return JSON.parse(arr[0]);
+    } catch (_) {}
+  }
+  return null;
+}
+
 function hostOf(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');
@@ -126,10 +170,14 @@ function fallbackQueries(topic, memo = '') {
       `${nameStr} stats season`,
     ];
   }
+  const compactTopic = compactSearchQuery(topic);
+  if (!compactTopic) {
+    return ['football latest news', 'football transfer news', 'football stats'];
+  }
   return [
-    topic,
-    `${topic} latest news`,
-    `${topic} background analysis`,
+    compactTopic,
+    `${compactTopic} football latest news`,
+    `${compactTopic} football background analysis`,
   ];
 }
 
@@ -140,9 +188,9 @@ function pickQueries({ topic, memo = '', plan = null, queries = [] }) {
       for (const q of task.queries || []) fromPlan.push(q);
     }
   }
-  return uniq([...queries, ...fromPlan, ...fallbackQueries(topic, memo)])
-    .map((q) => String(q).trim())
-    .filter(Boolean)
+  return uniq(uniq([...queries, ...fromPlan, ...fallbackQueries(topic, memo)])
+    .map(compactSearchQuery)
+    .filter(Boolean))
     .slice(0, DEFAULT_QUERY_LIMIT);
 }
 
@@ -207,13 +255,10 @@ Rules:
       system: 'Output a JSON array of 3 English search queries only. No explanation, no markdown.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 250,
-      forceProvider: 'deepseek',
+      forceProvider: 'gemini',
+      label: '①query_gen',
     });
-    const cleaned = String(raw || '').trim()
-      .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    // Recover partial array if truncated
-    const safe = cleaned.endsWith(']') ? cleaned : (cleaned + '"]').replace(/,\s*"[^"]*$/, ']');
-    const parsed = JSON.parse(safe);
+    const parsed = parseLooseJson(raw);
     if (Array.isArray(parsed) && parsed.filter(Boolean).length >= 2) {
       const qs = parsed.map((q) => String(q).trim()).filter(Boolean).slice(0, 3);
       console.log('[v3_research] AI English queries:', qs);
@@ -335,7 +380,11 @@ async function fetchWikiSideStories(input = {}) {
   const entities = pickWikiEntities(input);
   const results = [];
   for (const entity of entities) {
-    const summary = await fetchWikipediaSafe([entity, `${entity} football`]);
+    const summary = await fetchWikipediaSafe([entity, `${entity} football`]).catch((e) => ({
+      ok: false,
+      error: e.message,
+      extract: '',
+    }));
     let events = null;
     if (/Real Madrid|Barcelona|Spain national/i.test(entity)) {
       events = await fetchTeamHonoursEvents(entity).catch((e) => ({ ok: false, error: e.message }));
@@ -409,11 +458,11 @@ Output JSON only (no markdown, no explanation):
       system: 'Soccer research assistant. Output valid JSON only. No markdown.',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: 450,
-      forceProvider: 'deepseek',
+      forceProvider: 'gemini',
+      label: '③entity_expand',
     });
-    const cleaned = String(raw || '').trim()
-      .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseLooseJson(raw);
+    if (!parsed || typeof parsed !== 'object') throw new Error('AI expansion JSON parse failed');
     const followUpQueries = Array.isArray(parsed.followUpQueries)
       ? parsed.followUpQueries.map((q) => String(q).trim()).filter(Boolean).slice(0, 2)
       : [];
