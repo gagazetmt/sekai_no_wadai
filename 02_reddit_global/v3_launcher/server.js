@@ -2718,12 +2718,12 @@ async function runResearch() {
 }
 
 function saveScriptNarration(slideIdx) {
-  if (!currentPlan?.autopilotPlan?.scriptDraft) return;
   const el = document.getElementById('v3ScriptNarration');
   if (!el) return;
-  const draft = currentPlan.autopilotPlan.scriptDraft;
-  if (draft[slideIdx]) draft[slideIdx].narration = el.value;
-  if (currentPlan.v3Modules?.[slideIdx]) currentPlan.v3Modules[slideIdx].narration = el.value;
+  const val = el.value;
+  const draft = currentPlan?.autopilotPlan?.scriptDraft;
+  if (draft?.[slideIdx]) draft[slideIdx].narration = val;
+  if (currentPlan?.v3Modules?.[slideIdx]) currentPlan.v3Modules[slideIdx].narration = val;
   persistV3State();
 }
 
