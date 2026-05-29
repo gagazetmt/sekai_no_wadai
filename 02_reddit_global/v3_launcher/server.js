@@ -3524,9 +3524,22 @@ function renderScriptView(plan) {
     dataSlots: (s.dataNeeds || []).map((l) => ({ label: l, value: '' })), images: [],
   }));
 
+  const caseTitle = selectedProject?.title || selectedProject?.titleJa || plan.topic || document.getElementById('title')?.value || '未選択';
+  const caseSource = selectedProject?.source || document.getElementById('sourceType')?.value || 'custom';
+  const caseId = selectedProject?.id || selectedProject?.raw?.id || '';
+  const caseBanner = '<div class="panel" style="padding:10px 12px;margin-bottom:10px;border-color:var(--gold);background:#14110a;">' +
+    '<div style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">' +
+      '<span style="background:var(--gold);color:#111827;font-weight:900;font-size:11px;padding:3px 8px;border-radius:4px;flex-shrink:0;">編集中の案件</span>' +
+      '<b style="font-size:14px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1 1 240px;">' + esc(caseTitle) + '</b>' +
+      '<span style="font-size:11px;color:var(--muted);flex-shrink:0;">' + esc(caseSource) + (caseId ? ' / ' + esc(caseId) : '') + '</span>' +
+      '<button class="secondary" style="margin-left:auto;flex-shrink:0;font-size:11px;min-height:28px;padding:0 8px;" onclick="setResultView(\\'saved\\')">案件を確認</button>' +
+    '</div>' +
+  '</div>';
+
   if (!slides.length) {
     const slideCount = (auto.briefing?.slideOutline || auto.briefing?.chapters || []).length || 0;
     return '<span class="label">5 スライド編集</span>' +
+      caseBanner +
       '<div class="panel" style="text-align:center;padding:24px 16px;">' +
         '<div style="font-size:15px;font-weight:700;margin-bottom:8px;">まず企画書からスライドを生成します（' + (slideCount || '?') + '枚）</div>' +
         '<div style="color:var(--muted);font-size:13px;margin-bottom:18px;">AI脚本生成を押すとナレーション・データ・画像が編集できるようになります</div>' +
@@ -3590,7 +3603,8 @@ function renderScriptView(plan) {
 
   const initQ = esc((plan.topic || title || '').split(/[\s「」【】]/)[0] || '');
 
-  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+  return caseBanner +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
       '<span class="label" style="margin:0;">スライド編集 — ' + (active + 1) + ' / ' + total + '</span>' +
       '<div style="display:flex;gap:6px;">' +
         '<button id="aiScriptBtn" class="secondary" onclick="runAIScriptGeneration()" style="font-size:12px;padding:5px 10px;">AI脚本再生成</button>' +
