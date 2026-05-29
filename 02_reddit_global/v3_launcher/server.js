@@ -209,7 +209,7 @@ function mergeAutopilotPlanServer(base, aiPlan) {
 }
 
 function attachSelectedDataToPlan(plan, fetchedData) {
-  const selected = (fetchedData || []).filter((d) => d.ok && d.selected);
+  const selected = (fetchedData || []).filter((d) => d.ok);
   const draft = plan?.autopilotPlan?.scriptDraft;
   if (!selected.length || !Array.isArray(draft) || !draft.length) return plan;
   const dataItems = [];
@@ -274,6 +274,19 @@ function attachSelectedDataToPlan(plan, fetchedData) {
       ...(draft[targetIndex].selectedData || []),
       data,
     ].slice(0, 6);
+  });
+  const structure = plan?.autopilotPlan?.scriptStructure;
+  const outline = plan?.autopilotPlan?.briefing?.slideOutline;
+  [structure, outline].forEach((rows) => {
+    if (!Array.isArray(rows)) return;
+    rows.forEach((row, index) => {
+      const source = draft[index]?.selectedData || [];
+      if (!source.length) return;
+      row.selectedData = [
+        ...(Array.isArray(row.selectedData) ? row.selectedData : []),
+        ...source,
+      ].slice(0, 6);
+    });
   });
   return plan;
 }
@@ -619,6 +632,7 @@ async function runProposalJob(jobId, input) {
         return aiPlan;
       });
       plan = { ...plan, autopilotPlan: mergeAutopilotPlanServer(plan.autopilotPlan, aiPlan) };
+      plan = attachSelectedDataToPlan(plan, fetchedData);
     } catch (error) {
       aiPlan = {
         ok: false,
@@ -4456,7 +4470,7 @@ function makeModulesFromCurrentPlan() {
     point: item.point || item.claim || '',
     narration: '',
     dataNeeds: item.dataNeeds || [],
-    selectedData: item.selectedData || [],
+    selectedData: item.selectedData || auto.scriptDraft?.[index]?.selectedData || [],
     slideType: item.slideType || item.type || '',
   }));
   if (!rows.length) {
@@ -4642,7 +4656,7 @@ function resolveFetchedValue(label, title, narration) {
   var hay = asciiNorm([label, title, narration].join(' '));
   for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
     var d = currentFetchedData[_i];
-    if (!d.ok || !d.selected) continue;
+    if (!d.ok) continue;
     var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
     if (parts.some(function(p) { return hay.includes(p); })) return d.summary;
   }
@@ -4653,7 +4667,7 @@ function resolveStatsSlots(title, narration, needs) {
   var hay = asciiNorm(hayArr.join(' '));
   for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
     var d = currentFetchedData[_i];
-    if (!d.ok || !d.selected || !Array.isArray(d.slots) || !d.slots.length) continue;
+    if (!d.ok || !Array.isArray(d.slots) || !d.slots.length) continue;
     var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
     if (parts.some(function(p) { return hay.includes(p); })) {
       return d.slots.map(function(s) { return { ...s, sourceName: d.nameEn, sourceTitle: d.sourceTitle || 'SofaScore/TM', sourceUrl: d.sourceUrl || '' }; });
