@@ -2751,7 +2751,7 @@ function renderV3StockGallery(images) {
   if (!images.length) { grid.innerHTML = '<span style="color:var(--muted);font-size:12px;">画像なし</span>'; return; }
   const selectedImgs = Array.isArray(currentPlan?.v3Modules?.[activeSlideIdx]?.images) ? currentPlan.v3Modules[activeSlideIdx].images : [];
   grid.innerHTML = images.map((img) =>
-    '<img class="stock-img-thumb' + (selectedImgs.includes(img.url) ? ' selected' : '') + '" src="' + esc(img.url) + '" title="' + esc((img.name || img.role || '') + ' (' + (img.score || 0) + ')') + '" onclick="toggleV3Image(\'' + esc(img.url).replace(/'/g, '&#39;') + '\')" loading="lazy">'
+    '<img class="stock-img-thumb' + (selectedImgs.includes(img.url) ? ' selected' : '') + '" src="' + esc(img.url) + '" title="' + esc((img.name || img.role || '') + ' (' + (img.score || 0) + ')') + '" onclick="toggleV3Image(\\'' + esc(img.url).replace(/'/g, '&#39;') + '\\')" loading="lazy">'
   ).join('');
 }
 
