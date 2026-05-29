@@ -906,37 +906,63 @@ app.post('/api/v3/auto-prefetch', async (req, res) => {
 
 app.post('/api/v3/generate-script', async (req, res) => {
   try {
-    const { topic, briefingText, slideOutline, fetchedData, memo } = req.body || {};
-    if (!topic && !briefingText) return res.status(400).json({ success: false, error: 'topic or briefingText is required' });
+    const { topic, aiBriefing, slideOutline, fetchedData, researchSnippets, wikiSnippets, publishGates, factCheckFlags } = req.body || {};
+    if (!topic) return res.status(400).json({ success: false, error: 'topic is required' });
 
     const slideCount = (slideOutline || []).length || 6;
-    const dataBlock = (fetchedData || []).filter(d => d.ok && d.summary).slice(0, 6)
-      .map(d => `${d.nameEn}: ${d.summary}`).join('\n') || 'なし';
 
-    const slideList = (slideOutline || []).slice(0, 10).map((item, i) => {
+    // スライド構成リスト
+    const slideList = (slideOutline || []).slice(0, 12).map((item, i) => {
       const needs = (item.dataNeeds || []).join('、') || 'なし';
       return `${item.no || i + 1}. [${item.slideType || 'insight'}] ${item.headline || ''} — ${item.point || ''} (データ: ${needs})`;
-    }).join('\n') || briefingText || '';
+    }).join('\n');
+
+    // SofaScore/TM 数値データ（具体的なスロット値まで展開）
+    const dataBlock = (fetchedData || []).filter((d) => d.ok).slice(0, 6).map((d) => {
+      const slots = (d.slots || []).filter((s) => s.value).map((s) => `${s.label}: ${s.value}`).join(' / ');
+      return `${d.nameEn}(${d.type}): ${slots || d.summary || ''}`;
+    }).join('\n') || 'なし';
+
+    // 断定禁止・要確認リスト
+    const warningLines = [
+      ...((publishGates || []).slice(0, 5)),
+      ...((factCheckFlags || []).slice(0, 3).map((f) => `[要確認 ${f.source || ''}] ${f.issue || ''}`)),
+    ];
+    const warningBlock = warningLines.length ? warningLines.join('\n') : 'なし';
 
     const systemPrompt = `あなたはサッカーYouTube動画の脚本ライターです。
-各スライドのナレーション（視聴者に語りかける本番テキスト）を生成してください。
+調査記事・取得データ・企画書の内容を最大限に活かして、各スライドのナレーション本文を生成してください。
 出力は純粋なJSONのみ。コードブロック不要。
 
-【ルール】
-- 各スライドのnarrationは250〜350文字の日本語ナレーション（目安30〜50秒。openingは150字以上、endingは200字以上）
-- 口語・話し言葉で書く（「です・ます」調）
-- 確認済みデータ（取得済みデータ）は積極的に使う
-- 推測・未確認情報は断定しない
-- opening は視聴者の興味を引くフック文
-- ending は「まとめ・視聴者への問いかけ」で締める`;
+【絶対ルール】
+- narrationは各スライド250〜350文字（目安30〜50秒。openingは200字以上のフック文、endingは200字以上のまとめ）
+- 口語・話し言葉（「です・ます」調）
+- 取得済みデータの数値（ゴール数・試合数・順位等）を必ず使う
+- 調査記事の具体的な情報（発言・経緯・背景）を積極的に引用
+- 断定禁止リストの内容は断定せず「〜とも言われています」「〜の可能性があります」表現にする
+- 推測・未確認情報を断定しない`;
 
-    const userPrompt = `## トピック\n${topic || ''}
+    const userPrompt = `## トピック
+${topic}
 
-## 企画書メモ\n${memo || 'なし'}
+## 動画の約束・核心メッセージ
+${aiBriefing?.purpose || 'なし'}
+${aiBriefing?.coreMessage ? '結論: ' + aiBriefing.coreMessage : ''}
 
-## スライド構成（${slideCount}枚）\n${slideList}
+## スライド構成（${slideCount}枚）
+${slideList}
 
-## 取得済みデータ\n${dataBlock}
+## 取得済みデータ（SofaScore / Transfermarkt — 数値は積極的に使う）
+${dataBlock}
+
+## 調査記事（事実の根拠として使う）
+${researchSnippets || 'なし'}
+
+## Wikiデータ（背景・経歴・小話）
+${wikiSnippets || 'なし'}
+
+## 断定禁止・要確認事項
+${warningBlock}
 
 ## 出力JSON
 {"slides": [{"slideNo": 1, "narration": "ナレーション本文"}]}`;
@@ -2948,17 +2974,31 @@ async function runAIScriptGeneration() {
     if (!currentPlan.v3Modules?.length) {
       currentPlan.v3Modules = makeModulesFromCurrentPlan();
     }
-    const briefing = currentPlan.autopilotPlan?.briefing || {};
-    const slideOutline = briefing.slideOutline || buildBriefingSlideOutline(currentPlan);
+    const aiBriefing = currentPlan.autopilotPlan?.briefing || {};
+    const slideOutline = aiBriefing.slideOutline || buildBriefingSlideOutline(currentPlan);
+
+    // 記事コーパス（上位6件・各400字）
+    const researchSnippets = (currentResearch?.learningCorpus || []).slice(0, 6)
+      .map((a, i) => '[記事' + (i + 1) + '] ' + (a.title || '') + ' (' + (a.host || '') + ')\n' + String(a.text || '').slice(0, 400))
+      .join('\n---\n');
+
+    // Wiki 小話候補
+    const wikiSnippets = (currentWikiStories?.results || []).slice(0, 3)
+      .map((w) => '[Wiki: ' + w.entity + '] ' + (w.sideStoryCandidates || []).map((c) => c.text || '').join(' ').slice(0, 200))
+      .join('\n');
+
     const res = await fetch('/api/v3/generate-script', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        topic: document.getElementById('title')?.value || currentPlan.topic || '',
-        memo: document.getElementById('memo')?.value || '',
-        briefingText: document.getElementById('briefingText')?.value || '',
+        topic: currentPlan.topic || document.getElementById('title')?.value || '',
+        aiBriefing,
         slideOutline,
         fetchedData: currentFetchedData || [],
+        researchSnippets,
+        wikiSnippets,
+        publishGates: currentPlan.autopilotPlan?.publishGates || [],
+        factCheckFlags: currentPlan.autopilotPlan?.factCheckFlags || [],
       }),
     });
     const data = await res.json();
