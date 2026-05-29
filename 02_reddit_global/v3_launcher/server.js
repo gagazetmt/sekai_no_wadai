@@ -928,8 +928,20 @@ app.post('/api/v3/generate-script', async (req, res) => {
     // スライド構成リスト
     const slideList = (slideOutline || []).slice(0, 12).map((item, i) => {
       const needs = (item.dataNeeds || []).join('、') || 'なし';
-      return `${item.no || i + 1}. [${item.slideType || 'insight'}] ${item.headline || ''} — ${item.point || ''} (データ: ${needs})`;
+      const selected = (item.selectedData || [])
+        .filter((d) => d.value || d.sourceUrl)
+        .map((d) => `${d.label || 'data'}: ${d.value || d.sourceUrl}`)
+        .join(' / ');
+      return `${item.no || i + 1}. [${item.slideType || 'insight'}] ${item.headline || ''} — ${item.point || ''} (必要データ: ${needs}${selected ? ` / 割当済み: ${selected}` : ''})`;
     }).join('\n');
+
+    const perSlideDataBlock = (slideOutline || []).slice(0, 12).map((item, i) => {
+      const data = (item.selectedData || [])
+        .filter((d) => d.value || d.sourceUrl)
+        .map((d) => `- ${d.label || 'data'}: ${d.value || d.sourceUrl}${d.sourceTitle ? ` (${d.sourceTitle})` : ''}`)
+        .join('\n');
+      return `Slide ${item.no || i + 1}: ${item.headline || ''}\n${data || '- 割当済みデータなし'}`;
+    }).join('\n\n');
 
     // SofaScore/TM 数値データ（具体的なスロット値まで展開）
     const dataBlock = (fetchedData || []).filter((d) => d.ok).slice(0, 6).map((d) => {
@@ -952,6 +964,10 @@ app.post('/api/v3/generate-script', async (req, res) => {
 - narrationは各スライド250〜350文字（目安30〜50秒。openingは200字以上のフック文、endingは200字以上のまとめ）
 - 口語・話し言葉（「です・ます」調）
 - 取得済みデータの数値（ゴール数・試合数・順位等）を必ず使う
+- スライド構成の「割当済み」データを、その同じスライドのナレーションへ必ず入れる
+- 割当済みデータがあるスライドでは、最低1つの具体値を本文に入れる
+- 割当済みデータがないスライドでは、取得済みデータ一覧から無関係な数字を混ぜない
+- 企画書のheadline/pointから外れた別テーマの脚本にしない
 - 調査記事の具体的な情報（発言・経緯・背景）を積極的に引用
 - 断定禁止リストの内容は断定せず「〜とも言われています」「〜の可能性があります」表現にする
 - 推測・未確認情報を断定しない`;
@@ -962,9 +978,14 @@ ${topic}
 ## 動画の約束・核心メッセージ
 ${aiBriefing?.purpose || 'なし'}
 ${aiBriefing?.coreMessage ? '結論: ' + aiBriefing.coreMessage : ''}
+${aiBriefing?.rawText ? '\n## 企画書本文（この内容を最優先で反映）\n' + String(aiBriefing.rawText).slice(0, 6000) : ''}
+${aiBriefing?.scriptInstructions ? '\n## 脚本指示\n' + aiBriefing.scriptInstructions : ''}
 
 ## スライド構成（${slideCount}枚）
 ${slideList}
+
+## スライド別の割当済みデータ（同じSlide番号のnarration内で使う）
+${perSlideDataBlock}
 
 ## 取得済みデータ（SofaScore / Transfermarkt — 数値は積極的に使う）
 ${dataBlock}
@@ -2983,13 +3004,11 @@ async function runAIScriptGeneration() {
   if (btn) { btn.disabled = true; btn.textContent = 'AI生成中...'; }
   if (status) status.textContent = 'DeepSeekが脚本を生成中です...';
   try {
-    updateBriefingFromEditor();
     if (!currentPlan) { if (status) status.textContent = '先に企画書を作ってください'; return; }
-    if (!currentPlan.v3Modules?.length) {
-      currentPlan.v3Modules = makeModulesFromCurrentPlan();
-    }
+    rebuildV3ModulesFromBriefing();
+    bindFetchedDataToV3Modules();
     const aiBriefing = currentPlan.autopilotPlan?.briefing || {};
-    const slideOutline = aiBriefing.slideOutline || buildBriefingSlideOutline(currentPlan);
+    const slideOutline = buildAISlideOutlineFromModules(currentPlan.v3Modules);
 
     // 記事コーパス（上位6件・各400字）
     const researchSnippets = (currentResearch?.learningCorpus || []).slice(0, 6)
@@ -4708,6 +4727,209 @@ function dataStatusChip(need) {
       .some(function(p) { return hay.includes(p); });
   });
   return '<span class="chip" style="' + (hit ? 'border-color:#22c55e;color:#bbf7d0;' : 'border-color:#ef4444;color:#fca5a5;') + '">' + (hit ? '✅ ' : '❓ ') + esc(need) + '</span>';
+}
+
+function v3Tokens(text) {
+  const stop = new Set(['the','and','for','with','from','that','this','about','news','latest','reddit','thread','video','slide']);
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{Letter}\p{Number}\s]/gu, ' ')
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && !stop.has(w))
+    .slice(0, 80);
+}
+
+function makeFetchedDataItems() {
+  const items = [];
+  (currentFetchedData || []).filter((d) => d && d.ok).forEach((d) => {
+    const base = {
+      entity: d.nameEn || '',
+      type: d.type || '',
+      sourceTitle: d.sourceTitle || 'SofaScore/TM',
+      sourceUrl: d.sourceUrl || '',
+      summary: d.summary || '',
+      confidence: d.confidence || (d.relevanceScore >= 6 ? 'medium' : 'low'),
+    };
+    if (Array.isArray(d.slots) && d.slots.length) {
+      d.slots.filter((s) => s.value).forEach((slot) => {
+        items.push({
+          ...base,
+          label: [d.nameEn, slot.label].filter(Boolean).join(' '),
+          value: String(slot.value || ''),
+          matchText: [d.nameEn, d.type, slot.label, slot.value, d.summary, ...(d.labels || [])].join(' '),
+        });
+      });
+    } else if (d.summary) {
+      items.push({
+        ...base,
+        label: d.nameEn || d.type || 'data',
+        value: d.summary,
+        matchText: [d.nameEn, d.type, d.summary, ...(d.labels || [])].join(' '),
+      });
+    }
+  });
+  return items;
+}
+
+function scoreDataForModule(data, module, index, total) {
+  const moduleText = [
+    module.type,
+    module.subValue,
+    module.title,
+    module.scriptDir,
+    module.narration,
+    module.v3Meta?.role,
+    ...(module.dataSlots || []).map((s) => s.label || ''),
+  ].join(' ');
+  const moduleTextLower = moduleText.toLowerCase();
+  const dataTextLower = [data.entity, data.label, data.value, data.summary, data.matchText].join(' ').toLowerCase();
+  const moduleTokens = new Set(v3Tokens(moduleText));
+  const entityTokens = v3Tokens(data.entity);
+  const labelTokens = v3Tokens(data.label);
+  let score = 0;
+  entityTokens.forEach((t) => { if (moduleTokens.has(t)) score += 5; });
+  labelTokens.forEach((t) => { if (moduleTokens.has(t)) score += 2; });
+  [data.entity, data.label].filter((x) => String(x || '').length >= 2).forEach((x) => {
+    const needle = String(x).toLowerCase();
+    if (moduleTextLower.includes(needle)) score += 4;
+  });
+  (module.dataSlots || []).forEach((slot) => {
+    const label = String(slot.label || '').toLowerCase();
+    if (label.length >= 2 && dataTextLower.includes(label)) score += 4;
+  });
+  if (/goal|goals|assist|rating|appearance|market|順位|勝点|ゴール|アシスト|評価|出場/i.test(moduleText + ' ' + dataTextLower)) {
+    score += 1;
+  }
+  if (/stats|profile|comparison|ranking|matchcard/i.test(module.type || '')) score += 1;
+  if ((index === 0 || index === total - 1) && score < 5) score -= 3;
+  return score;
+}
+
+function bindFetchedDataToV3Modules() {
+  if (!currentPlan) return [];
+  if (!Array.isArray(currentPlan.v3Modules) || !currentPlan.v3Modules.length) {
+    currentPlan.v3Modules = makeModulesFromCurrentPlan();
+  }
+  const dataItems = makeFetchedDataItems();
+  if (!dataItems.length) return currentPlan.v3Modules || [];
+  const total = currentPlan.v3Modules.length;
+  currentPlan.v3Modules = currentPlan.v3Modules.map((module, index) => {
+    const slots = Array.isArray(module.dataSlots) ? module.dataSlots.map((s) => ({ ...s })) : [];
+    const picked = [];
+
+    slots.forEach((slot) => {
+      if (slot.value) {
+        picked.push({ label: slot.label || '', value: slot.value || '', sourceTitle: slot.sourceTitle || '', sourceUrl: slot.sourceUrl || '', confidence: slot.confidence || 'manual' });
+        return;
+      }
+      const slotProbe = { ...module, dataSlots: [{ label: slot.label || '' }] };
+      const best = dataItems
+        .map((data) => ({ data, score: scoreDataForModule(data, slotProbe, index, total) }))
+        .sort((a, b) => b.score - a.score)[0];
+      if (best && best.score >= 4) {
+        slot.label = slot.label || best.data.label;
+        slot.value = best.data.value;
+        slot.sourceTitle = best.data.sourceTitle;
+        slot.sourceUrl = best.data.sourceUrl;
+        slot.confidence = best.data.confidence;
+        picked.push({ label: slot.label, value: slot.value, sourceTitle: slot.sourceTitle, sourceUrl: slot.sourceUrl, confidence: slot.confidence });
+      }
+    });
+
+    const existingKeys = new Set(slots.map((s) => [s.label, s.value].join('::')));
+    dataItems
+      .map((data) => ({ data, score: scoreDataForModule(data, module, index, total) }))
+      .filter((x) => x.score >= 5)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .forEach(({ data }) => {
+        const key = [data.label, data.value].join('::');
+        if (existingKeys.has(key) || slots.length >= 6) return;
+        existingKeys.add(key);
+        const slot = {
+          label: data.label,
+          value: data.value,
+          sourceTitle: data.sourceTitle,
+          sourceUrl: data.sourceUrl,
+          confidence: data.confidence,
+        };
+        slots.push(slot);
+        picked.push(slot);
+      });
+
+    return {
+      ...module,
+      dataSlots: slots,
+      v3Meta: {
+        ...(module.v3Meta || {}),
+        selectedData: picked.slice(0, 6),
+      },
+    };
+  });
+  return currentPlan.v3Modules;
+}
+
+function buildAISlideOutlineFromModules(modules) {
+  return (modules || []).map((m, i) => ({
+    no: i + 1,
+    slideType: m.type || 'insight',
+    headline: m.title || ('Slide ' + (i + 1)),
+    point: m.scriptDir || m.narration || '',
+    dataNeeds: (m.dataSlots || []).map((s) => s.label).filter(Boolean),
+    selectedData: (m.dataSlots || []).filter((s) => s.value || s.sourceUrl).map((s) => ({
+      label: s.label || '',
+      value: s.value || '',
+      sourceTitle: s.sourceTitle || '',
+      sourceUrl: s.sourceUrl || '',
+      confidence: s.confidence || '',
+    })),
+  }));
+}
+
+function rebuildV3ModulesFromBriefing() {
+  if (!currentPlan) return [];
+  updateBriefingFromEditor();
+  currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+  currentPlan.autopilotPlan.scriptStructure = [];
+  currentPlan.autopilotPlan.scriptDraft = [];
+  const previous = Array.isArray(currentPlan.v3Modules) ? currentPlan.v3Modules : [];
+  const previousByNo = new Map(previous.map((m, i) => [String(i + 1), m]));
+  const previousByTitle = new Map(previous.map((m) => [String(m.title || '').trim().toLowerCase(), m]).filter(([k]) => k));
+  const next = makeModulesFromCurrentPlan();
+  currentPlan.v3Modules = next.map((module, index) => {
+    const prev = previousByNo.get(String(index + 1)) || previousByTitle.get(String(module.title || '').trim().toLowerCase()) || {};
+    const prevSlots = Array.isArray(prev.dataSlots) ? prev.dataSlots : [];
+    const prevByLabel = new Map(prevSlots.map((slot) => [String(slot.label || '').trim().toLowerCase(), slot]).filter(([k]) => k));
+    const moduleSlots = Array.isArray(module.dataSlots) ? module.dataSlots : [];
+    const sameTitle = String(prev.title || '').trim().toLowerCase() === String(module.title || '').trim().toLowerCase();
+    const mergedSlots = moduleSlots.length
+      ? moduleSlots.map((slot) => {
+        const prevSlot = prevByLabel.get(String(slot.label || '').trim().toLowerCase()) || {};
+        return {
+          ...prevSlot,
+          ...slot,
+          value: slot.value || prevSlot.value || '',
+          sourceTitle: slot.sourceTitle || prevSlot.sourceTitle || '',
+          sourceUrl: slot.sourceUrl || prevSlot.sourceUrl || '',
+          confidence: slot.confidence || prevSlot.confidence || '',
+        };
+      })
+      : (sameTitle ? prevSlots : []);
+    return {
+      ...prev,
+      ...module,
+      images: Array.isArray(prev.images) ? prev.images : (module.images || []),
+      narration: '',
+      dataSlots: mergedSlots,
+      v3Meta: {
+        ...(prev.v3Meta || {}),
+        ...(module.v3Meta || {}),
+      },
+    };
+  });
+  return currentPlan.v3Modules;
 }
 
 function renderBriefingPipelineView(plan) {
