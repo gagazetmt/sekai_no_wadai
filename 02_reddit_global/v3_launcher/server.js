@@ -1721,15 +1721,19 @@ button:disabled { opacity: .55; cursor: wait; }
   font-size: 13px;
   line-height: 1.55;
 }
-.step5-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.step5-layout { display: grid; grid-template-columns: 55fr 45fr; gap: 12px; margin-top: 8px; }
+.step5-left { display: flex; flex-direction: column; gap: 10px; }
 .step5-right { display: flex; flex-direction: column; gap: 10px; }
 .slot-edit-row { display: grid; grid-template-columns: 1fr 1.6fr; gap: 6px; align-items: center; margin-bottom: 5px; }
 .slot-edit-label { font-size: 12px; color: var(--muted); padding: 5px 8px; background: #0a0d12; border: 1px solid var(--line); border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gallery-search-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-bottom: 8px; }
-.stock-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 5px; max-height: 160px; overflow-y: auto; }
+.stock-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 5px; max-height: 140px; overflow-y: auto; }
 .stock-img-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: #0a0d12; }
 .stock-img-thumb:hover { border-color: var(--muted); }
 .stock-img-thumb.selected { border-color: var(--gold); }
+.tts-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; margin-top: 8px; }
+.video-progress-bar { height: 8px; background: #1d2430; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+.video-progress-fill { height: 100%; background: var(--gold); border-radius: 4px; transition: width 0.4s; }
 @media (max-width: 720px) { .step5-layout { grid-template-columns: 1fr; } }
 .pipeline-steps {
   display: grid;
@@ -2248,8 +2252,8 @@ body.drawer-is-open #sidebarOverlay {
   <button class="view-tab" type="button" data-view="saved" onclick="setResultView('saved')">2 保存済み</button>
   <button class="view-tab" type="button" data-view="proposal" onclick="setResultView('proposal')">3 企画提案</button>
   <button class="view-tab" type="button" data-view="briefing" onclick="setResultView('briefing')">4 企画書</button>
-  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">5 脚本生成</button>
-  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">6 V2</button>
+  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">5 スライド編集</button>
+  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">6 動画生成</button>
 </nav>
 <main>
   <aside id="savedDrawer" aria-hidden="true">
@@ -2728,6 +2732,131 @@ function saveDataSlotDirect(slotIdx, value) {
   if (!m?.dataSlots?.[slotIdx]) return;
   m.dataSlots[slotIdx].value = value;
   persistV3State();
+}
+
+// ④ TTS試聴
+async function runV3TTSPreview() {
+  const narration = document.getElementById('v3ScriptNarration')?.value?.trim();
+  const statusEl = document.getElementById('v3TtsStatus');
+  const audioEl = document.getElementById('v3TtsAudio');
+  if (!narration) { if (statusEl) statusEl.textContent = 'ナレーションを入力してください'; return; }
+  if (statusEl) statusEl.textContent = '生成中...';
+  if (audioEl) audioEl.style.display = 'none';
+  try {
+    const res = await fetch('/api/v2/tts-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: narration,
+        provider: document.getElementById('v3TtsProvider')?.value || 'gemini',
+        speed: parseFloat(document.getElementById('v3TtsSpeed')?.value || '1.0'),
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok && !data.jobId) throw new Error(data.error || 'TTS失敗');
+    // ポーリング
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const st = await fetch('/api/v2/tts-preview-status?jobId=' + encodeURIComponent(data.jobId)).then((r) => r.json());
+      if (st.status === 'done' && st.result?.base64) {
+        const binary = atob(st.result.base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+        const blob = new Blob([bytes], { type: st.result.mime || 'audio/mpeg' });
+        if (audioEl) { audioEl.src = URL.createObjectURL(blob); audioEl.style.display = ''; audioEl.play().catch(() => {}); }
+        if (statusEl) statusEl.textContent = '再生中';
+        return;
+      }
+      if (st.status === 'error') throw new Error(st.error || 'TTS生成エラー');
+      if (statusEl) statusEl.textContent = '生成中... (' + (i + 1) + ')';
+    }
+    throw new Error('TTS タイムアウト');
+  } catch (e) {
+    if (statusEl) statusEl.textContent = '失敗: ' + e.message;
+  }
+}
+
+// 動画生成
+let _v3VideoJobId = null;
+let _v3VideoPoller = null;
+
+async function startV3VideoGeneration() {
+  const btn = document.getElementById('v3GenVideoBtn');
+  const status = document.getElementById('v3GenVideoStatus');
+  const bar = document.getElementById('v3ProgressBar');
+  const fill = document.getElementById('v3ProgressFill');
+  if (!currentPlan) { if (status) status.textContent = 'プランがありません'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = '準備中...'; }
+  if (bar) bar.style.display = '';
+  if (fill) fill.style.width = '5%';
+  try {
+    // まず export-v2 で postId + modules.json を作成
+    if (status) status.textContent = 'スライドデータを保存中...';
+    const expRes = await fetch('/api/v3/export-v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: currentPlan, memo: '' }),
+    });
+    const expData = await expRes.json();
+    if (!expData.success) throw new Error(expData.error || 'export失敗');
+    const postId = expData.postId;
+    if (fill) fill.style.width = '15%';
+    // 動画生成ジョブ起動
+    if (status) status.textContent = '動画生成ジョブを起動中...';
+    const genRes = await fetch('/api/v2/generate-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId, modules: currentPlan.v3Modules || [] }),
+    });
+    const genData = await genRes.json();
+    if (!genData.ok) throw new Error(genData.error || '動画生成起動失敗');
+    _v3VideoJobId = genData.jobId;
+    if (fill) fill.style.width = '20%';
+    if (status) status.textContent = 'レンダリング中... (jobId: ' + genData.jobId + ')';
+    // ポーリング開始
+    if (_v3VideoPoller) clearInterval(_v3VideoPoller);
+    _v3VideoPoller = setInterval(() => pollV3VideoStatus(postId), 3000);
+  } catch (e) {
+    if (status) status.textContent = '失敗: ' + e.message;
+    if (btn) { btn.disabled = false; btn.textContent = '動画生成スタート'; }
+  }
+}
+
+async function pollV3VideoStatus(postId) {
+  if (!_v3VideoJobId) return;
+  try {
+    const st = await fetch('/api/v2/video-status?jobId=' + encodeURIComponent(_v3VideoJobId)).then((r) => r.json());
+    const fill = document.getElementById('v3ProgressFill');
+    const status = document.getElementById('v3GenVideoStatus');
+    const btn = document.getElementById('v3GenVideoBtn');
+    const progress = st.progress || 0;
+    if (fill) fill.style.width = Math.max(20, Math.round(progress * 100)) + '%';
+    if (st.status === 'done') {
+      clearInterval(_v3VideoPoller);
+      if (fill) fill.style.width = '100%';
+      if (status) status.textContent = '動画生成完了！';
+      if (btn) { btn.disabled = false; btn.textContent = '再生成'; }
+      // 動画プレイヤー表示
+      const resultEl = document.getElementById('v3VideoResult');
+      if (resultEl) {
+        const videoUrl = '/v2_videos/' + encodeURIComponent(postId) + '.mp4';
+        resultEl.innerHTML =
+          '<div class="panel">' +
+            '<label class="label" style="margin-bottom:8px;">完成動画</label>' +
+            '<video controls style="width:100%;border-radius:6px;background:#000;" src="' + esc(videoUrl) + '"></video>' +
+            '<div class="task-actions" style="margin-top:8px;">' +
+              '<a href="' + esc(videoUrl) + '" download class="button" style="display:inline-flex;align-items:center;padding:8px 14px;background:var(--gold);color:#111827;border-radius:6px;font-weight:900;text-decoration:none;">ダウンロード</a>' +
+            '</div>' +
+          '</div>';
+      }
+    } else if (st.status === 'error') {
+      clearInterval(_v3VideoPoller);
+      if (status) status.textContent = 'エラー: ' + (st.error || '不明');
+      if (btn) { btn.disabled = false; btn.textContent = '動画生成スタート'; }
+    } else {
+      if (status) status.textContent = 'レンダリング中... ' + (st.step || '') + ' ' + (progress ? Math.round(progress * 100) + '%' : '');
+    }
+  } catch (_) {}
 }
 
 async function searchV3StockImages() {
@@ -3276,12 +3405,18 @@ function renderScriptView(plan) {
   const auto = plan.autopilotPlan || {};
   const script = auto.scriptDraft || [];
   const modules = plan.v3Modules || [];
-  if (!script.length) {
-    const slideCount = modules.length || (auto.briefing?.slideOutline || auto.briefing?.chapters || []).length || 0;
-    return '<span class="label">脚本生成 — 最終編集フェーズ</span>' +
+  // modules があれば scriptDraft がなくてもスライドエディターを表示
+  const slides = modules.length ? modules : script.map((s, i) => ({
+    type: s.role || 'insight', title: s.title || '', narration: s.narration || '',
+    dataSlots: (s.dataNeeds || []).map((l) => ({ label: l, value: '' })), images: [],
+  }));
+
+  if (!slides.length) {
+    const slideCount = (auto.briefing?.slideOutline || auto.briefing?.chapters || []).length || 0;
+    return '<span class="label">5 スライド編集</span>' +
       '<div class="panel" style="text-align:center;padding:24px 16px;">' +
-        '<div style="font-size:15px;font-weight:700;margin-bottom:8px;">企画書の構成（' + (slideCount || '?') + '枚）をAIが脚本化します</div>' +
-        '<div style="color:var(--muted);font-size:13px;margin-bottom:18px;">生成後、各スライドのナレーション・データ・画像を個別に編集できます</div>' +
+        '<div style="font-size:15px;font-weight:700;margin-bottom:8px;">まず企画書からスライドを生成します（' + (slideCount || '?') + '枚）</div>' +
+        '<div style="color:var(--muted);font-size:13px;margin-bottom:18px;">AI脚本生成を押すとナレーション・データ・画像が編集できるようになります</div>' +
         '<div class="task-actions" style="justify-content:center;">' +
           '<button id="aiScriptBtn" onclick="runAIScriptGeneration()">AI脚本生成</button>' +
           '<button class="secondary" onclick="setResultView(\\'briefing\\')">← 企画書に戻る</button>' +
@@ -3289,84 +3424,114 @@ function renderScriptView(plan) {
         '<div id="aiScriptStatus" class="task-status" style="margin-top:10px;"></div>' +
       '</div>';
   }
-  const active = Math.max(0, Math.min(activeSlideIdx, Math.max(script.length, modules.length) - 1));
-  const activeModule = modules[active] || {};
-  const activeScript = script[active] || {};
-  const typeColors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
-  const typeBadge = (type) => '<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (typeColors[type] || '#374151') + ';color:#fff;margin-right:4px;">' + esc(type || 'insight') + '</span>';
 
-  // データスロット編集行
-  const slots = activeModule.dataSlots || [];
+  const total = slides.length;
+  const active = Math.max(0, Math.min(activeSlideIdx, total - 1));
+  const m = slides[active] || {};
+  const s = script[active] || {};
+  const narration = m.narration || s.narration || '';
+  const title = m.title || s.title || '';
+  const slideType = m.type || s.role || 'insight';
+
+  const typeColors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
+  const typeBadge = '<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (typeColors[slideType] || '#374151') + ';color:#fff;margin-right:6px;">' + esc(slideType) + '</span>';
+
+  // ③ データスロット
+  const slots = m.dataSlots || [];
   const slotRows = slots.length
-    ? slots.map((slot, i) => (
+    ? slots.map((slot, i) =>
         '<div class="slot-edit-row">' +
           '<span class="slot-edit-label" title="' + esc(slot.label || '') + '">' + esc(slot.label || '—') + '</span>' +
-          '<input style="font-size:12px;padding:5px 8px;" placeholder="値を入力" value="' + esc(slot.value || '') + '" oninput="saveDataSlotDirect(' + i + ', this.value)">' +
+          '<input style="font-size:12px;padding:5px 8px;" placeholder="値" value="' + esc(slot.value || '') + '" oninput="saveDataSlotDirect(' + i + ', this.value)">' +
         '</div>'
-      )).join('')
-    : '<div style="color:var(--muted);font-size:12px;">データスロットなし（step4で設定）</div>';
+      ).join('')
+    : '<span style="color:var(--muted);font-size:12px;">データなし</span>';
 
   // 選択済み画像
-  const selectedImgs = Array.isArray(activeModule.images) ? activeModule.images : [];
+  const selectedImgs = Array.isArray(m.images) ? m.images : [];
   const selectedImgHtml = selectedImgs.length
-    ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">' +
-        selectedImgs.map((src) => '<img src="' + esc(src) + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:2px solid var(--gold);" title="' + esc(src) + '">').join('') +
-      '</div>'
+    ? selectedImgs.map((src) => '<img src="' + esc(src) + '" style="width:44px;height:44px;object-fit:cover;border-radius:4px;border:2px solid var(--gold);" title="' + esc(src) + '">').join('')
     : '';
 
-  // 初期検索クエリ: plan.topic か slide title から
-  const initQ = esc((plan.topic || activeScript.title || '').replace(/[「」【】\s]/g, ' ').trim().split(/\s+/).slice(0, 2).join(' '));
+  const initQ = esc((plan.topic || title || '').split(/[\s「」【】]/)[0] || '');
 
-  return '<span class="label">脚本生成 — ナレーション・データ・画像を編集してV2へ渡す</span>' +
-    '<div class="task-actions">' +
-      '<button id="aiScriptBtn" onclick="runAIScriptGeneration()">AI脚本を再生成</button>' +
-      '<button class="secondary" onclick="setResultView(\\'briefing\\')">← 企画書に戻る</button>' +
+  // ① スライドタブ
+  const tabBar = '<div class="slide-tabs" style="margin:8px 0;">' +
+    slides.map((sl, i) =>
+      '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3ScriptSlide(' + i + ')">' +
+        esc((i + 1) + ' ' + (sl.type || 'slide')) +
+      '</button>'
+    ).join('') +
+  '</div>';
+
+  return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
+      '<span class="label" style="margin:0;">スライド編集 — ' + (active + 1) + ' / ' + total + '</span>' +
+      '<div style="display:flex;gap:6px;">' +
+        '<button id="aiScriptBtn" class="secondary" onclick="runAIScriptGeneration()" style="font-size:12px;padding:5px 10px;">AI脚本再生成</button>' +
+        '<button onclick="setResultView(\\'export\\')" style="font-size:12px;padding:5px 10px;">動画生成へ →</button>' +
+      '</div>' +
     '</div>' +
     '<div id="aiScriptStatus" class="task-status"></div>' +
-    '<div class="slide-tabs" style="margin-top:8px;">' +
-      script.map((item, i) => (
-        '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3ScriptSlide(' + i + ')">' +
-          esc((i + 1) + ' ' + (modules[i]?.type || item.role || 'slide')) +
-        '</button>'
-      )).join('') +
-    '</div>' +
+
+    tabBar +
+
     '<div class="step5-layout">' +
 
-      // ── 左カラム: ナレーション + データスロット ──
+    // ── 左カラム: ②ナレーション + ④TTS + ③データ ──
+    '<div class="step5-left">' +
       '<div class="panel">' +
-        '<div style="margin-bottom:8px;">' +
-          typeBadge(activeModule.type || activeScript.role) +
-          '<span style="font-size:13px;font-weight:700;">' + esc(activeScript.title || activeModule.title || '') + '</span>' +
+        '<div style="margin-bottom:6px;">' + typeBadge + '<span style="font-weight:700;font-size:13px;">' + esc(title) + '</span></div>' +
+
+        // ② ナレーション編集
+        '<label class="label" style="margin-bottom:4px;">② ナレーション</label>' +
+        '<textarea id="v3ScriptNarration" style="min-height:110px;line-height:1.65;font-size:13px;" oninput="saveScriptNarration(' + active + ')">' + esc(narration) + '</textarea>' +
+        (s.caution ? '<p style="color:#fecaca;font-size:12px;margin-top:4px;">⚠ ' + esc(s.caution) + '</p>' : '') +
+
+        // ④ TTS試聴
+        '<label class="label" style="margin-top:10px;margin-bottom:4px;">④ TTS試聴</label>' +
+        '<div class="tts-row">' +
+          '<select id="v3TtsProvider" style="font-size:12px;padding:5px 6px;">' +
+            '<option value="gemini">Gemini</option>' +
+            '<option value="minimax">MiniMax</option>' +
+          '</select>' +
+          '<input id="v3TtsSpeed" type="number" min="0.5" max="2.0" step="0.1" value="1.0" style="width:64px;font-size:12px;padding:5px 6px;" title="速度">' +
+          '<button onclick="runV3TTSPreview()" style="padding:5px 10px;">▶ 試聴</button>' +
         '</div>' +
-        '<label class="label" style="margin-bottom:4px;">ナレーション</label>' +
-        '<textarea id="v3ScriptNarration" style="min-height:130px;line-height:1.65;font-size:14px;" oninput="saveScriptNarration(' + active + ')">' + esc(activeScript.narration || '') + '</textarea>' +
-        (activeScript.caution ? '<p style="color:#fecaca;font-size:12px;margin-top:5px;">⚠ ' + esc(activeScript.caution) + '</p>' : '') +
-        '<label class="label" style="margin-top:12px;margin-bottom:6px;">データセット</label>' +
-        '<div id="v3Step5DataSlots">' + slotRows + '</div>' +
+        '<span id="v3TtsStatus" style="font-size:12px;color:var(--muted);display:block;margin-top:4px;"></span>' +
+        '<audio id="v3TtsAudio" controls style="width:100%;margin-top:6px;display:none;height:32px;"></audio>' +
       '</div>' +
 
-      // ── 右カラム: プレビュー + 画像ギャラリー ──
-      '<div class="step5-right">' +
-        '<div class="panel">' +
-          '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
-          '<div class="task-actions" style="margin-top:6px;justify-content:space-between;">' +
-            '<button class="secondary" onclick="reloadV3Preview()">プレビュー更新</button>' +
-            '<span style="color:var(--muted);font-size:12px;">スライド ' + (active + 1) + ' / ' + script.length + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="panel">' +
-          '<label class="label" style="margin-bottom:6px;">画像ギャラリー</label>' +
-          '<div class="gallery-search-row">' +
-            '<input id="v3ImgSearchInput" placeholder="選手名・チーム名" value="' + initQ + '">' +
-            '<select id="v3ImgTypeSelect" style="padding:6px 8px;font-size:12px;">' +
-              ['player','team','manager'].map((t) => '<option value="' + t + '">' + t + '</option>').join('') +
-            '</select>' +
-            '<button class="secondary" onclick="searchV3StockImages()" style="padding:6px 10px;">検索</button>' +
-          '</div>' +
-          '<div id="v3StockImgGrid" class="stock-img-grid"><span style="color:var(--muted);font-size:12px;">検索してください</span></div>' +
-          (selectedImgHtml ? '<label class="label" style="margin-top:8px;">選択中</label>' + selectedImgHtml : '') +
+      // ③ データセット
+      '<div class="panel">' +
+        '<label class="label" style="margin-bottom:6px;">③ データセット</label>' +
+        '<div id="v3Step5DataSlots">' + slotRows + '</div>' +
+      '</div>' +
+    '</div>' +
+
+    // ── 右カラム: ⑤プレビュー + 画像ギャラリー ──
+    '<div class="step5-right">' +
+      '<div class="panel">' +
+        '<label class="label" style="margin-bottom:6px;">⑤ プレビュー</label>' +
+        '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">' +
+          '<button class="secondary" onclick="reloadV3Preview()" style="font-size:12px;padding:5px 10px;">更新</button>' +
+          '<span style="color:var(--muted);font-size:11px;">' + esc(slideType) + ' | スライド ' + (active + 1) + '/' + total + '</span>' +
         '</div>' +
       '</div>' +
+
+      '<div class="panel">' +
+        '<label class="label" style="margin-bottom:6px;">画像ギャラリー</label>' +
+        '<div class="gallery-search-row">' +
+          '<input id="v3ImgSearchInput" placeholder="選手名・チーム名" value="' + initQ + '">' +
+          '<select id="v3ImgTypeSelect" style="padding:5px 6px;font-size:12px;">' +
+            ['player','team','manager'].map((t) => '<option value="' + t + '">' + t + '</option>').join('') +
+          '</select>' +
+          '<button class="secondary" onclick="searchV3StockImages()" style="padding:5px 8px;">検索</button>' +
+        '</div>' +
+        '<div id="v3StockImgGrid" class="stock-img-grid"><span style="color:var(--muted);font-size:12px;">検索してください</span></div>' +
+        (selectedImgHtml ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">' + selectedImgHtml + '</div>' : '') +
+      '</div>' +
+    '</div>' +
 
     '</div>';
 }
@@ -4447,15 +4612,33 @@ function renderResultTabs(plan) {
 }
 
 function renderExportView(plan) {
-  const auto = plan.autopilotPlan || {};
-  const scriptCount = (auto.scriptDraft || []).length;
-  return '<span class="label">V2連携。ここで初めて既存の動画生成ランチャーへ渡します</span>' +
-    '<div class="autopilot-grid">' +
-      '<div class="autopilot-card"><h2>渡す内容</h2><p>脚本スライド ' + esc(scriptCount || (plan.slidePlan || []).length || 0) + ' 枚分をV2 modules.json形式に変換します。</p></div>' +
-      '<div class="autopilot-card"><h2>次の作業</h2><p>V2ランチャーの保存済み案件から開き、Step4でプレビュー確認して動画生成へ進みます。</p></div>' +
+  const modules = plan.v3Modules || [];
+  const script = plan.autopilotPlan?.scriptDraft || [];
+  const slideCount = modules.length || script.length;
+  return '<span class="label">6 動画生成 — スライド確認後に動画を生成します</span>' +
+    '<div class="panel" style="margin-bottom:12px;">' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;">' +
+        '<div style="text-align:center;padding:10px;background:#0a0d12;border-radius:6px;border:1px solid var(--line);">' +
+          '<div style="font-size:22px;font-weight:900;color:var(--gold);">' + esc(String(slideCount)) + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);">スライド数</div>' +
+        '</div>' +
+        '<div style="text-align:center;padding:10px;background:#0a0d12;border-radius:6px;border:1px solid var(--line);">' +
+          '<div style="font-size:22px;font-weight:900;color:var(--gold);">' + esc(String(modules.filter((m) => (m.narration || '').length > 0).length)) + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);">ナレーション済み</div>' +
+        '</div>' +
+        '<div style="text-align:center;padding:10px;background:#0a0d12;border-radius:6px;border:1px solid var(--line);">' +
+          '<div style="font-size:22px;font-weight:900;color:var(--gold);">' + esc(String(modules.filter((m) => (m.images || []).length > 0).length)) + '</div>' +
+          '<div style="font-size:11px;color:var(--muted);">画像設定済み</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="task-actions">' +
+        '<button id="v3GenVideoBtn" onclick="startV3VideoGeneration()">動画生成スタート</button>' +
+        '<button class="secondary" onclick="setResultView(\\'script\\')">← スライド編集に戻る</button>' +
+      '</div>' +
+      '<div id="v3GenVideoStatus" class="task-status" style="margin-top:8px;"></div>' +
+      '<div class="video-progress-bar" id="v3ProgressBar" style="display:none;"><div class="video-progress-fill" id="v3ProgressFill" style="width:0%;"></div></div>' +
     '</div>' +
-    '<div class="task-actions"><button id="exportStepBtn" onclick="exportToV2()">Step6 V2へ渡す</button><button class="secondary" onclick="savePlan()">V3案を保存</button></div>' +
-    '<div class="task-status">V2へ渡すまではV2データを作りません。ここが最終確認Stepです。</div>';
+    '<div id="v3VideoResult"></div>';
 }
 
 function tidyControls() {
