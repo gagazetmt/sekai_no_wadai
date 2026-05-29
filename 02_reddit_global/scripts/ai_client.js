@@ -110,7 +110,13 @@ async function callAI({ model, max_tokens, messages, system, forceProvider, labe
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: typeof m.content === "string" ? m.content : (m.content?.[0]?.text || "") }],
     }));
-    const body = { contents, generationConfig: { maxOutputTokens: max_tokens } };
+    const body = {
+      contents,
+      generationConfig: {
+        maxOutputTokens: max_tokens,
+        responseMimeType: "application/json",
+      },
+    };
     if (safeSystem) body.system_instruction = { parts: [{ text: safeSystem }] };
     const res = await axios.post(url, body, { headers: { "Content-Type": "application/json" } });
     costTracker.record({
