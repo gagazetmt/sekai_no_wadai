@@ -2979,13 +2979,13 @@ async function runAIScriptGeneration() {
 
     // 記事コーパス（上位6件・各400字）
     const researchSnippets = (currentResearch?.learningCorpus || []).slice(0, 6)
-      .map((a, i) => '[記事' + (i + 1) + '] ' + (a.title || '') + ' (' + (a.host || '') + ')\n' + String(a.text || '').slice(0, 400))
-      .join('\n---\n');
+      .map((a, i) => '[記事' + (i + 1) + '] ' + (a.title || '') + ' (' + (a.host || '') + ')\\n' + String(a.text || '').slice(0, 400))
+      .join('\\n---\\n');
 
     // Wiki 小話候補
     const wikiSnippets = (currentWikiStories?.results || []).slice(0, 3)
       .map((w) => '[Wiki: ' + w.entity + '] ' + (w.sideStoryCandidates || []).map((c) => c.text || '').join(' ').slice(0, 200))
-      .join('\n');
+      .join('\\n');
 
     const res = await fetch('/api/v3/generate-script', {
       method: 'POST',
