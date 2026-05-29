@@ -3019,6 +3019,17 @@ async function runAIScriptGeneration() {
     if (!data.success) throw new Error(data.error || 'AI脚本生成失敗');
     const aiSlides = data.slides || [];
     currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+    currentPlan.v3Modules = currentPlan.v3Modules.map((m, i) => {
+      const ai = aiSlides.find(s => s.slideNo === (i + 1)) || aiSlides[i] || {};
+      return {
+        ...m,
+        narration: ai.narration || m.narration || '',
+        v3Meta: {
+          ...(m.v3Meta || {}),
+          caution: ai.caution || m.v3Meta?.caution || '',
+        },
+      };
+    });
     currentPlan.autopilotPlan.scriptDraft = currentPlan.v3Modules.map((m, i) => {
       const ai = aiSlides.find(s => s.slideNo === (i + 1)) || aiSlides[i] || {};
       return {
