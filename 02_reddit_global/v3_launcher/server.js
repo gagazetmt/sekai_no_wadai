@@ -968,6 +968,8 @@ app.post('/api/v3/generate-script', async (req, res) => {
 - 割当済みデータがあるスライドでは、最低1つの具体値を本文に入れる
 - 割当済みデータがないスライドでは、取得済みデータ一覧から無関係な数字を混ぜない
 - 企画書のheadline/pointから外れた別テーマの脚本にしない
+- history/context/timeline系スライドは過去の経緯・背景・年表を語る。今季スタッツを箇条書きで並べない
+- stats/profile/comparison/ranking/matchcard系スライドだけ、数値データを主役にする
 - 調査記事の具体的な情報（発言・経緯・背景）を積極的に引用
 - 断定禁止リストの内容は断定せず「〜とも言われています」「〜の可能性があります」表現にする
 - 推測・未確認情報を断定しない`;
@@ -4500,6 +4502,10 @@ function chooseV3ModuleType(item, index, total, needs) {
   return 'insight';
 }
 
+function allowsV3StatData(type) {
+  return ['stats', 'profile', 'comparison', 'ranking', 'matchcard'].includes(String(type || '').toLowerCase());
+}
+
 function makeModulesFromCurrentPlan() {
   if (!currentPlan) return [];
   const auto = currentPlan.autopilotPlan || {};
@@ -4531,10 +4537,11 @@ function makeModulesFromCurrentPlan() {
   return rows.map((item, index) => {
     const needs = Array.isArray(item.dataNeeds) ? item.dataNeeds : [];
     const type = item.slideType || chooseV3ModuleType(item, index, total, needs);
+    const allowStatData = allowsV3StatData(type);
     const title = item.title || item.headline || 'Slide ' + (index + 1);
     const narration = item.narration || item.point || item.claim || '';
     // For stats/profile slides: try to resolve structured {label,value} slots from SofaScore data first
-    var selectedData = Array.isArray(item.selectedData) ? item.selectedData : [];
+    var selectedData = allowStatData && Array.isArray(item.selectedData) ? item.selectedData : [];
     var resolvedSlots = (!selectedData.length && (type === 'stats' || type === 'profile')) ? resolveStatsSlots(title, narration, needs) : null;
     var dataSlots;
     if (selectedData.length) {
@@ -4548,7 +4555,7 @@ function makeModulesFromCurrentPlan() {
     } else {
       dataSlots = needs.slice(0, 6).map((need) => {
         const task = sourceTasks.find((t) => [t.need, t.expectedOutput, t.query].join(' ').includes(need));
-        const value = resolveFetchedValue(need, title, narration);
+        const value = allowStatData ? resolveFetchedValue(need, title, narration) : '';
         return { label: need, value, sourceUrl: task?.sourceUrl || '', sourceTitle: task?.sourceTitle || '' };
       });
     }
@@ -4774,6 +4781,7 @@ function makeFetchedDataItems() {
 }
 
 function scoreDataForModule(data, module, index, total) {
+  if (!allowsV3StatData(module.type)) return -20;
   const moduleText = [
     module.type,
     module.subValue,
@@ -4816,6 +4824,18 @@ function bindFetchedDataToV3Modules() {
   if (!dataItems.length) return currentPlan.v3Modules || [];
   const total = currentPlan.v3Modules.length;
   currentPlan.v3Modules = currentPlan.v3Modules.map((module, index) => {
+    if (!allowsV3StatData(module.type)) {
+      const keptSlots = (Array.isArray(module.dataSlots) ? module.dataSlots : [])
+        .filter((slot) => slot.sourceUrl && !/SofaScore|Transfermarkt|TM/i.test(slot.sourceTitle || ''));
+      return {
+        ...module,
+        dataSlots: keptSlots,
+        v3Meta: {
+          ...(module.v3Meta || {}),
+          selectedData: [],
+        },
+      };
+    }
     const slots = Array.isArray(module.dataSlots) ? module.dataSlots.map((s) => ({ ...s })) : [];
     const picked = [];
 
