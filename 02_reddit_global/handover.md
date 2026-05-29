@@ -716,3 +716,316 @@ Verification:
 - `node --check scripts/modules/fetchers/article_fetcher.js`
 - VPS `pm2 restart soccer-yt-v3 --update-env`
 - VPS health check: `curl -s http://127.0.0.1:3010/api/v3/health`
+
+## 2026-05-29 JST Update - V3 Autopilot Reliability Pass
+
+Local changes made in:
+
+- `v3_launcher/server.js`
+- `v3_launcher/v3_research.js`
+- `v3_launcher/v3_planner.js`
+
+Focus requested by user for the next V3 work:
+
+1. Are search queries appropriate, or too long to hit well?
+2. Are SofaScore / Transfermarkt / Wiki fetches stable?
+3. Are fetched data points being used enough in proposal papers?
+4. When turning proposal paper into script structure, are slide type selection and data slot selection optimal?
+5. Are there likely error points in the workflow?
+
+Changed:
+
+- Search query compaction was hardened.
+  - V3 now strips URLs/brackets/noise, cuts long clauses, caps Latin queries to about 10 words, and caps Japanese fallback queries to 72 chars.
+  - Duplicate queries after compaction are removed.
+  - Known Madrid/Spain case still uses explicit English high-intent queries.
+- Browser-side `compactSearchTopic()` was also strengthened before Step2 research.
+  - If a mixed Japanese/English title contains Latin player/team names, those are preferred over a long Japanese sentence.
+- `runResearch()` no longer crashes if the legacy `researchBtn` is absent from the current hard-separated UI.
+- `/api/v3/auto-prefetch` now uses `Promise.allSettled`.
+  - SofaScore and Transfermarkt run in parallel, but one side failing no longer kills the whole prefetch response.
+  - Response includes warnings when either side fails.
+- Step2 AI analysis memo enrichment was improved.
+  - Successful structured data is passed as `[取得済みデータ（企画書・脚本構成で優先使用）]`.
+  - Failed entity fetches are passed as `[取得失敗・未確認データ（断定禁止）]`.
+- `v3_planner.js` prompt now explicitly tells DeepSeek:
+  - Use acquired stats/profile/injury data in `dataNeeds` and `scriptDraft`.
+  - Put failed/unconfirmed targets into `missingData` or `publishGates`.
+  - Include at least one slide that uses acquired numeric data when available.
+- Step4 script-structure conversion now chooses V2 slide type by role/headline/claim/data wording instead of defaulting to `stats` whenever data exists.
+  - history/context -> `history`
+  - contrast/comparison -> `comparison`
+  - profile/person/player/club facts -> `profile`
+  - stats/evidence/numbers/list -> `stats`
+  - otherwise -> `insight`
+- Resolved SofaScore/TM slots now include source entity name in the slot label, e.g. `João Pedro ゴール`, reducing ambiguity when multiple players are fetched.
+- After VPS log review, JSON parsing and entity-noise guards were tightened:
+  - `v3_research.js` now uses loose JSON extraction for DeepSeek query/entity expansion instead of failing on fenced or prefixed JSON.
+  - V3 auto-prefetch filters obvious non-entity noise such as `Last`, `Injured`, `Official`, `Report`, `God`, `SNS`, `MVP`, `VAR`, `TV`.
+
+Verification:
+
+- `node --check v3_launcher/server.js`
+- `node --check v3_launcher/v3_research.js`
+- `node --check v3_launcher/v3_planner.js`
+- Local query-selection smoke test for the Madrid/Spain case and a João Pedro mixed Japanese/English title.
+
+Caveats / next recommended checks:
+
+- This was a local reliability pass; VPS deploy was not performed.
+- Network-backed real fetch stability still needs one live Step2 run on VPS or local with valid env.
+- Next high-value check:
+  - Run Step2 on 2 cases:
+    1. Madrid/Spain squad-count case.
+    2. A player-transfer/stats case such as João Pedro.
+  - Confirm the proposal cards actually mention acquired stats and that Step4 creates appropriate `stats/profile/comparison/history` slides.
+
+### 2026-05-29 JST Hotfix - V3 Blank UI / Browser Console
+
+User reported the V3 site became unusable / "nothing can be grabbed".
+
+Cause found:
+
+- Browser-side inline JS had a syntax error generated from `compactSearchTopic()`.
+- In `server.js`, client JS is embedded inside a template literal. Regex backslashes such as `\S` and `\s` must be double-escaped in the server source.
+- The emitted HTML contained invalid JS:
+  - `/https?://S+/g`
+- This caused the whole client script to fail parsing.
+
+Fix:
+
+- Escaped the client-side regex correctly:
+  - `https?:\\/\\/\\S+`
+  - `\\s+`
+- Redeployed `v3_launcher/server.js` to VPS.
+- Restarted only `soccer-yt-v3`.
+
+Verification:
+
+- VPS `node --check v3_launcher/server.js`
+- VPS `node --check v3_launcher/v3_research.js`
+- VPS `node --check v3_launcher/v3_planner.js`
+- VPS health check OK on port 3010.
+- Fetched generated HTML from `http://127.0.0.1:3010/`, extracted inline `<script>`, and ran:
+  - `node --check /tmp/v3_after_fix_0.js`
+- Result: inline script syntax check passed.
+
+## 2026-05-29 JST Update - V3 Background Proposal Jobs / Data Handoff Hardening
+
+Local changes made in:
+
+- `v3_launcher/server.js`
+- `v3_launcher/v3_research.js`
+- `v3_launcher/v3_planner.js`
+
+User request:
+
+- Reduce `企画提案失敗` and `データ取得失敗`.
+- Make Step2 continue even if the browser is backgrounded.
+- Improve selection of acquired data and handoff into slides.
+- Do not damage non-data-related code.
+- Use three review roles and repeat until reevaluation passes, max 5 loops.
+
+Changed:
+
+- Step2 `runProposal()` now starts a server-side job:
+  - `POST /api/v3/proposal-job/start`
+  - `GET /api/v3/proposal-job/:jobId`
+- The browser now only starts and polls the job.
+  - Web research, Wiki, SofaScore/TM, AI analysis, data selection, and saved-project progress updates run on the VPS Node process.
+  - If the browser is backgrounded, the server job should continue.
+- Server job saves progress to the selected saved project:
+  - `researchData.plan`
+  - `researchData.research`
+  - `researchData.wikiStories`
+  - `researchData.aiPlan`
+  - `researchData.acquiredData`
+  - `researchData.fetchedData`
+  - `researchData.jobStatus`
+- Wiki side-story fetch now catches `fetchWikipediaSafe()` per entity, so one Wiki miss no longer kills the full proposal flow.
+- Auto-prefetch logic was extracted into `runAutoPrefetchCore()` and reused by both the old endpoint and the new background job.
+- Entity safety fixes:
+  - `守田` now maps to `Hidemasa Morita` instead of `Daichi Kamada`.
+  - Managers are no longer treated as player stat targets.
+  - Auto-prefetch only sends `player` / `team` entities to SofaScore/TM.
+- Acquired data now has selection metadata:
+  - `relevanceScore`
+  - `selected`
+  - `sourceTitle`
+  - `sourceUrl`
+  - `fetchedAt`
+  - `confidence`
+- `selectFetchedDataForPlan()` is stricter:
+  - data must be `ok`
+  - entity name must appear in the plan/research needs
+  - score must pass threshold
+- `v3_planner.js` prompt/schema now supports:
+  - `scriptDraft[].selectedData`
+- Server attaches selected data to script slides via `attachSelectedDataToPlan()`.
+  - Final rule after reevaluation: no entity-name match, no automatic slide injection.
+  - Generic stats/data wording alone is not enough.
+- `makeModulesFromCurrentPlan()` now prioritizes `scriptDraft[].selectedData` for `dataSlots`.
+  - Removed broad fallback injection of all successful fetched data.
+  - Removed single-player unconditional fallback.
+
+Three-role review loop:
+
+1. 改善提案ミア:
+   - Recommended server-side jobs, progress saving, and explicit `selectedData`.
+2. エラーチェックミア:
+   - Flagged Wiki per-entity failure, browser fetch chain, bad entity mapping, manager-as-player, and weak data assignment.
+3. 再評価ミア:
+   - Loop 1: failed because selected data was too broad.
+   - Loop 2: failed because unselected ok data still had injection paths.
+   - Loop 3: failed because semantic matching could still inject without name match.
+   - Loop 4: failed because generic stats slide still accepted data.
+   - Loop 5: passed after requiring entity-name match and removing broad fallback paths.
+
+Verification:
+
+- `node --check v3_launcher/server.js`
+- `node --check v3_launcher/v3_research.js`
+- `node --check v3_launcher/v3_planner.js`
+
+Deploy note:
+
+- Deploy only these V3 files and restart only `soccer-yt-v3`.
+
+## 2026-05-29 JST Update - Separate Proposal / Structure / Script
+
+Local changes made in:
+
+- `v3_launcher/server.js`
+- `v3_launcher/v3_planner.js`
+- `handover.md`
+
+User clarified the intended V3 flow:
+
+`企画書 -> 脚本構成 -> 脚本生成`
+
+Problem:
+
+- Step2 proposal job was already asking the AI for `scriptStructure` and `scriptDraft`.
+- That made the three-step workflow less meaningful because Step2 had already drafted the full script and data handoff.
+
+Changed:
+
+- `v3_planner.js`
+  - Step2 prompt now stops at:
+    - `themeProposal`
+    - `briefing`
+    - `missingData`
+    - `publishGates`
+  - It explicitly tells AI not to write script structure or narration at the proposal stage.
+  - Returned `scriptStructure` and `scriptDraft` are forced to `[]` for Step2.
+- `server.js`
+  - `mergeAutopilotPlanServer()` and browser `buildMergedAutopilotPlan()` no longer import AI `scriptStructure` / `scriptDraft` from Step2.
+- Step4 `企画書の内容で脚本生成` now builds V3 modules internally from the editable briefing.
+- Visible standalone `構成` tab was removed.
+  - The structure editor code remains as an internal/backward-compatible helper, but normal flow does not expose it.
+- Step5 now has `脚本生成`.
+  - It generates narration from the finalized Step4企画書 slide outline and selected data.
+  - `autopilotPlan.scriptDraft` is created only here.
+- Step5 also supports regeneration after Step4企画書 edits.
+
+Current intended flow:
+
+1. Step3 `企画提案`
+   - research and proposal papers only.
+2. Step4 `企画書`
+   - human-editable production brief with theme, flow, core message, slide outline, slide type, and data plan.
+3. Step5 `脚本生成`
+   - narration draft generation.
+4. Step6 `V2`
+   - handoff to V2 modules.
+
+Verification:
+
+- `node --check v3_launcher/server.js`
+- `node --check v3_launcher/v3_planner.js`
+- `node --check v3_launcher/v3_research.js`
+
+### Follow-up - Move Preview to Step5 Script
+
+User clarified that preview belongs with the script stage, not the structure stage.
+
+Changed:
+
+- Step4 `構成`
+  - Removed inline slide preview iframe.
+  - Removed preview auto-refresh from structure edits.
+  - This step now focuses on slide type, title, point/script direction, data slots, source, and images.
+- Step5 `脚本`
+  - Added slide tabs and inline slide preview next to generated narration.
+  - Preview refresh runs when Step5 is active.
+  - Structure edits can still generate/re-generate script, then Step5 shows narration + actual slide view together.
+
+Verification:
+
+- `node --check v3_launcher/server.js`
+
+### Follow-up - Make Briefing Paper Explicit
+
+User clarified that the difference between `企画書` and `脚本構成` was becoming unclear.
+
+Changed:
+
+- Step3 `企画書` textarea now explicitly includes:
+  - `動画のテーマ`
+  - `動画の約束`
+  - `中心メッセージ`
+  - `全体の流れ`
+  - `スライド構成`
+    - headline
+    - summary/point
+    - slide type
+    - data type / needed data
+  - `使うデータ`
+  - `脚本指示`
+  - `注意点`
+- `脚本指示` is editable by the user.
+  - Default instruction preserves consistency with the adopted proposal and warns against unsupported claims.
+- Step5 `脚本生成` now prioritizes `briefing.slideOutline` parsed from the Step4 paper.
+  - This keeps script generation aligned with the adopted Step2 proposal while still letting the user add production instructions.
+- Purpose:
+  - Step3 is now the production paper with a proposed slide outline.
+  - The former visible structure step is now internal; the user-facing path goes from企画書 directly to脚本生成.
+
+### Follow-up - Remove Visible Structure Step
+
+User asked whether Step5 `構成` can be removed now that `企画書` includes the slide outline.
+
+Changed:
+
+- Top tabs are now:
+  - `1 案件取得`
+  - `2 保存済み`
+  - `3 企画提案`
+  - `4 企画書`
+  - `5 脚本生成`
+  - `6 V2`
+- `企画書の内容で脚本生成` now:
+  - parses the editable企画書
+  - builds internal V3 modules from `スライド構成`
+  - creates `scriptStructure` internally
+  - immediately generates `scriptDraft`
+- Step5 script view returns to `企画書`, not `構成`.
+- `collectV3SlideInputs()` now no-ops when the hidden/internal structure editor is not mounted, preventing title/data loss during direct企画書 -> 脚本生成.
+
+### Follow-up - Backfill Existing Briefing Text
+
+User found existing Neymar / João Pedro saved cases did not show `スライド構成案` in the企画書.
+
+Cause:
+
+- Existing saved cases can have old `briefing.rawText`.
+- `formatBriefingText()` returned that raw text as-is, so new sections added later were not visible unless the case was re-researched.
+
+Changed:
+
+- Existing raw企画書 text is preserved.
+- If old raw text is missing new sections, V3 appends generated sections for:
+  - `動画のテーマ`
+  - `スライド構成`
+  - `脚本指示`
+- This lets existing saved cases show the new企画書 structure after page reload/open, without pressing再調査.

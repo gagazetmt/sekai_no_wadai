@@ -9,6 +9,7 @@ const path = require('path');
 const { createArgumentPlan } = require('./v3_story_architect');
 const { runTopicResearch, fetchWikiSideStories, aiExpandResearch } = require('./v3_research');
 const { generateAIPlan } = require('./v3_planner');
+const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
 const { router: s3Router } = require('../routes/step3_routes');
 const { router: s35Router } = require('../routes/step35_routes');
 const { router: s4Router } = require('../routes/step4_routes');
@@ -58,6 +59,220 @@ function readJson(filePath, fallback) {
   } catch (_) {
     return fallback;
   }
+}
+
+function compactSearchTopicServer(title, memo) {
+  const raw = String(title || memo || '')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[\[\]【】「」『』"“”]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!raw) return '';
+  const latin = raw.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+){0,3}/g) || [];
+  const usefulLatin = latin
+    .filter((w) => !/^(reddit|thread|comments?|news|latest|the|and|for|with|from|about)$/i.test(w))
+    .slice(0, 4)
+    .join(' ');
+  if (usefulLatin) return usefulLatin.split(/\s+/).slice(0, 10).join(' ');
+  return raw
+    .replace(/[、。！？!?].*$/, '')
+    .split(/\s+/)
+    .slice(0, 10)
+    .join(' ')
+    .slice(0, 72) || raw.slice(0, 72);
+}
+
+function serverArticleDigest(articles) {
+  const full = (articles || []).filter((item) => /^full_text/.test(item.fetchStatus || ''));
+  const pool = full.length ? full : (articles || []);
+  const merged = pool.map((item) => [item.title, item.text].join('。')).join(' ');
+  const pick = (patterns) => {
+    const sentences = String(merged || '')
+      .replace(/\s+/g, ' ')
+      .split(/(?<=[。.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 30 && s.length <= 220);
+    for (const pattern of patterns) {
+      const hit = sentences.find((s) => pattern.test(s));
+      if (hit) return hit;
+    }
+    return sentences[0] || '';
+  };
+  return {
+    bullets: [
+      { label: '出来事の概要', text: pick([/qualif|予選|World Cup|W杯|出場|result|結果|score/i]) },
+      { label: '主な論点', text: pick([/transfer|移籍|contract|契約|manager|監督|squad|代表|lineup/i]) },
+      { label: '裏話・人物', text: pick([/coach|manager|player|選手|監督|comment|said|コメント/i]) },
+      { label: '企画化の材料', text: pick([/historic|history|first|初|record|記録|upset|快挙/i]) },
+    ],
+    fullTextCount: full.length,
+    articleCount: (articles || []).length,
+  };
+}
+
+function selectFetchedDataForPlan(labels, plan) {
+  const needText = [
+    plan?.topic,
+    plan?.centralQuestion,
+    plan?.thesis,
+    ...(plan?.autopilotPlan?.briefing?.dataPlan || []).map((x) => x.need || x),
+    ...(plan?.researchDesign?.tasks || []).map((x) => [x.need, x.expectedOutput, x.query].join(' ')),
+  ].join(' ').toLowerCase();
+  return (labels || []).map((item) => {
+    let score = item.ok ? 2 : -2;
+    const nameParts = String(item.nameEn || '').toLowerCase().split(/\s+/).filter((p) => p.length >= 3);
+    const nameHit = nameParts.some((p) => needText.includes(p));
+    if (nameHit) score += 5;
+    if (Array.isArray(item.slots) && item.slots.length) score += 2;
+    if (/ゴール|アシスト|評価|出場|クラブ|年齢|順位|勝点|得点|失点|状態|評価額/.test((item.labels || []).join(' '))) score += 2;
+    if (item.type === 'team' && /順位|勝点|得点|失点/.test((item.labels || []).join(' '))) score += 1;
+    return { ...item, relevanceScore: score, selected: item.ok && nameHit && score >= 7 };
+  }).sort((a, b) => Number(b.selected) - Number(a.selected) || b.relevanceScore - a.relevanceScore);
+}
+
+function buildFetchedMemoBlock(fetchedData) {
+  const usable = (fetchedData || []).filter((d) => d.ok && d.selected);
+  const standby = (fetchedData || []).filter((d) => d.ok && !d.selected);
+  const failed = (fetchedData || []).filter((d) => !d.ok);
+  const line = (d) => {
+    const slotStr = (Array.isArray(d.slots) && d.slots.length)
+      ? d.slots.map((s) => `${s.label}: ${s.value}`).join(' / ')
+      : d.summary;
+    return `${d.nameEn} (${d.type || 'entity'}): ${slotStr}`;
+  };
+  return [
+    usable.length ? `[採用候補データ（企画書・構成で優先使用）]\n${usable.map(line).join('\n')}` : '',
+    standby.length ? `[補欠データ（必要なら使用）]\n${standby.slice(0, 4).map(line).join('\n')}` : '',
+    failed.length ? `[取得失敗・未確認データ（断定禁止）]\n${failed.map(line).join('\n')}` : '',
+  ].filter(Boolean).join('\n\n');
+}
+
+function buildServerAcquiredDataSummary(research, wikiStories, fetchedData) {
+  const articles = research?.learningCorpus || [];
+  return {
+    queries: research?.queries || [],
+    articleDigest: serverArticleDigest(articles),
+    webSources: articles.slice(0, 8).map((item) => ({
+      title: item.title || item.host || 'article',
+      url: item.url || '',
+      host: item.host || '',
+      fetchStatus: item.fetchStatus || '',
+    })),
+    structuredData: (wikiStories?.results || []).slice(0, 4).map((item) => ({
+      label: item.entity + ' - Wiki小話候補',
+      source: 'Wikipedia',
+      value: (item.sideStoryCandidates || []).map((x) => x.text).join(' ').slice(0, 220),
+      status: 'side_story',
+    })),
+    entities: (fetchedData || []).map((d) => d.nameEn).filter(Boolean).slice(0, 8),
+  };
+}
+
+function mergeAutopilotPlanServer(base, aiPlan) {
+  if (!aiPlan) return base || {};
+  const selectedIdx = aiPlan.themeProposal?.selected || 0;
+  const selectedCandidate = (aiPlan.themeProposal?.candidates || [])[selectedIdx] || {};
+  return {
+    ...(base || {}),
+    aiGenerated: !!aiPlan.aiGenerated,
+    aiFallback: !!aiPlan.fallback,
+    articleCount: aiPlan.articleCount || 0,
+    themeProposal: {
+      ...(base?.themeProposal || {}),
+      hookQuestion: selectedCandidate.hookQuestion || '',
+      answer: selectedCandidate.answer || '',
+      angle: selectedCandidate.angle || '',
+      candidates: aiPlan.themeProposal?.candidates || [],
+      selected: selectedIdx,
+      selectedReason: aiPlan.themeProposal?.selectedReason || '',
+      rejectedReasons: aiPlan.themeProposal?.rejectedReasons || [],
+      dataPlan: (selectedCandidate.dataNeeds || []).map((need, i) => ({ no: i + 1, need })),
+    },
+    briefing: {
+      ...(base?.briefing || {}),
+      purpose: aiPlan.briefing?.purpose || '',
+      coreMessage: aiPlan.briefing?.coreMessage || '',
+      chapters: aiPlan.briefing?.chapters || [],
+      dataPlan: (aiPlan.briefing?.chapters || [])
+        .flatMap((ch) => (ch.dataNeeds || []).map((need) => ({ need })))
+        .slice(0, 8),
+      riskChecklist: aiPlan.briefing?.riskChecklist || [],
+    },
+    scriptStructure: base?.scriptStructure || [],
+    scriptDraft: base?.scriptDraft || [],
+    mustCheck: (aiPlan.missingData || []).map((need) => ({ need, query: '', sourcePriority: [] })),
+    publishGates: aiPlan.publishGates?.length ? aiPlan.publishGates : (base?.publishGates || []),
+  };
+}
+
+function attachSelectedDataToPlan(plan, fetchedData) {
+  const selected = (fetchedData || []).filter((d) => d.ok && d.selected);
+  const draft = plan?.autopilotPlan?.scriptDraft;
+  if (!selected.length || !Array.isArray(draft) || !draft.length) return plan;
+  const dataItems = [];
+  selected.forEach((d) => {
+    if (Array.isArray(d.slots) && d.slots.length) {
+      d.slots.slice(0, 4).forEach((slot) => {
+        dataItems.push({
+          label: `${d.nameEn} ${slot.label}`,
+          value: slot.value,
+          sourceTitle: d.sourceTitle || 'SofaScore/TM',
+          sourceUrl: d.sourceUrl || '',
+          confidence: d.confidence || (d.relevanceScore >= 6 ? 'medium' : 'low'),
+          reason: `取得済みデータ候補 score=${d.relevanceScore}`,
+        });
+      });
+    } else if (d.summary) {
+      dataItems.push({
+        label: d.nameEn,
+        value: d.summary,
+        sourceTitle: d.sourceTitle || 'SofaScore/TM',
+        sourceUrl: d.sourceUrl || '',
+        confidence: d.confidence || 'low',
+        reason: `取得済みデータ候補 score=${d.relevanceScore}`,
+      });
+    }
+  });
+  if (!dataItems.length) return plan;
+  const scoreSlide = (slide, index, data) => {
+    if (index === 0 || index === draft.length - 1) return -10;
+    const text = [slide.role, slide.title, slide.narration, ...(slide.dataNeeds || [])].join(' ').toLowerCase();
+    const label = String(data.label || '').toLowerCase();
+    const nameParts = label.split(/\s+/).filter((p) => p.length >= 3);
+    const nameMatch = nameParts.some((p) => text.includes(p));
+    const semanticRules = [
+      [/ゴール|得点|goal/i, /ゴール|得点|goal/i],
+      [/アシスト|assist/i, /アシスト|assist/i],
+      [/評価|rating/i, /評価|rating/i],
+      [/出場|appearance|試合/i, /出場|appearance|試合/i],
+      [/クラブ|所属|team|club/i, /クラブ|所属|team|club/i],
+      [/年齢|age/i, /年齢|age/i],
+      [/順位|勝点|勝|分|負|得点|失点|standing|points/i, /順位|勝点|勝|分|負|得点|失点|standing|points/i],
+      [/状態|負傷|injury/i, /状態|負傷|injury/i],
+      [/市場価値|評価額|market/i, /市場価値|評価額|market/i],
+    ];
+    const semanticMatch = semanticRules.some(function(pair) { return pair[0].test(text) && pair[1].test(label); });
+    let score = 0;
+    if (!nameMatch) return -10;
+    if (/stats|evidence|data|profile|数字|データ|成績|選手|クラブ|得点|アシスト|評価|順位|勝点/i.test(text)) score += 2;
+    if (nameMatch) score += 5;
+    if (semanticMatch) score += 1;
+    return score;
+  };
+  dataItems.forEach((data) => {
+    let best = { index: -1, score: -10 };
+    draft.forEach((slide, index) => {
+      const score = scoreSlide(slide, index, data);
+      if (score > best.score) best = { index, score };
+    });
+    if (best.index < 0 || best.score < 5) return;
+    const targetIndex = best.index;
+    draft[targetIndex].selectedData = [
+      ...(draft[targetIndex].selectedData || []),
+      data,
+    ].slice(0, 6);
+  });
+  return plan;
 }
 
 function makeV2PostId(title) {
@@ -248,6 +463,206 @@ app.post('/api/v3/analyze', async (req, res) => {
   }
 });
 
+const proposalJobs = new Map();
+
+function compactResearchForSave(research) {
+  return research ? {
+    ok: research.ok,
+    topic: research.topic,
+    queries: research.queries,
+    summary: research.summary,
+    learningCorpus: (research.learningCorpus || []).map((c) => ({
+      index: c.index,
+      title: c.title,
+      url: c.url,
+      host: c.host,
+      fetchStatus: c.fetchStatus,
+      score: c.score,
+      usableFor: c.usableFor,
+      text: (c.text || '').slice(0, 300),
+    })),
+  } : null;
+}
+
+function saveProposalResultToProject(projectId, payload, lastStage, error = '') {
+  try {
+    if (!projectId) return;
+    const saved = readJson(V2_SAVED_FILE, []);
+    if (!Array.isArray(saved)) return;
+    const idx = saved.findIndex((p) => p.id === projectId);
+    if (idx < 0) return;
+    const prev = saved[idx].researchData || {};
+    saved[idx] = {
+      ...saved[idx],
+      researchData: {
+        ...prev,
+        plan: payload.plan || prev.plan || null,
+        research: payload.research ? compactResearchForSave(payload.research) : (prev.research || null),
+        wikiStories: payload.wikiStories || prev.wikiStories || null,
+        aiPlan: payload.aiPlan || prev.aiPlan || null,
+        acquiredData: payload.acquiredData || prev.acquiredData || null,
+        fetchedData: payload.fetchedData || prev.fetchedData || null,
+        jobStatus: {
+          jobId: payload.jobId || prev.jobStatus?.jobId || '',
+          lastStage,
+          error,
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    };
+    fs.writeFileSync(V2_SAVED_FILE, JSON.stringify(saved, null, 2));
+  } catch (saveError) {
+    console.warn('[proposal-job] save progress failed:', saveError.message);
+  }
+}
+
+async function appendFollowUpSnippets(result, expanded) {
+  const followUpQueries = expanded.followUpQueries || [];
+  if (!followUpQueries.length) return;
+  const { fetchSerper } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'serper_module'));
+  const startIdx = (result.learningCorpus || []).length + 1;
+  for (let qi = 0; qi < followUpQueries.length; qi++) {
+    const q = followUpQueries[qi];
+    try {
+      const serper = await fetchSerper(q, 'v3_followup', 'en', null);
+      (serper.organic || []).slice(0, 3).forEach((item, j) => {
+        const snippet = `${item.title || ''}\n${item.snippet || ''}`.trim();
+        if (!snippet) return;
+        result.learningCorpus.push({
+          index: startIdx + qi * 3 + j,
+          title: item.title || '',
+          url: item.link || '',
+          host: (() => { try { return new URL(item.link).hostname.replace(/^www\./, ''); } catch (_) { return ''; } })(),
+          fetchStatus: 'followup_snippet',
+          score: 0.6,
+          usableFor: ['fact_check', 'rule_check'],
+          text: snippet.slice(0, 400),
+        });
+      });
+    } catch (error) {
+      console.warn('[proposal-job] follow-up query failed:', error.message);
+    }
+  }
+}
+
+async function runProposalJob(jobId, input) {
+  const job = proposalJobs.get(jobId);
+  const setStage = (stage, message, partial = {}) => {
+    Object.assign(job, { stage, message, updatedAt: new Date().toISOString(), ...partial });
+    saveProposalResultToProject(input.selectedProjectId, { ...partial, jobId }, stage);
+  };
+  try {
+    let plan = input.plan || createArgumentPlan({ topic: input.title, memo: input.memo, sourceType: input.sourceType });
+    const searchTopic = compactSearchTopicServer(input.title, input.memo);
+    const base = { topic: searchTopic || input.title, memo: input.memo || '', plan };
+
+    setStage('research', '1/5 Webリサーチ中...', { plan });
+    const research = await runTopicResearch(base);
+    const expanded = await aiExpandResearch(base.topic, base.memo, research.learningCorpus).catch((error) => {
+      console.warn('[proposal-job] aiExpandResearch failed:', error.message);
+      return { followUpQueries: [], entities: [] };
+    });
+    await appendFollowUpSnippets(research, expanded);
+    setStage('wiki', '2/5 Wikiデータ取得中...', { plan, research });
+
+    let wikiStories = { ok: true, results: [], entityCount: 0, warning: '' };
+    try {
+      wikiStories = await fetchWikiSideStories({ ...base, learningCorpus: research.learningCorpus || [] });
+    } catch (error) {
+      wikiStories = { ok: false, results: [], entityCount: 0, warning: error.message };
+    }
+    setStage('prefetch', '3/5 SofaScore / Transfermarkt データ取得中...', { plan, research, wikiStories });
+
+    let prefetch = { success: true, labels: [], warnings: [] };
+    try {
+      prefetch = await runAutoPrefetchCore({
+        topic: input.title,
+        memo: input.memo,
+        learningCorpus: research.learningCorpus || [],
+        wikiResults: wikiStories.results || [],
+        aiEntities: expanded.entities || [],
+      });
+    } catch (error) {
+      prefetch = { success: false, labels: [], warnings: [error.message] };
+    }
+    const fetchedData = selectFetchedDataForPlan(prefetch.labels || [], plan);
+    const acquiredData = buildServerAcquiredDataSummary(research, wikiStories, fetchedData);
+    setStage('analyze', '4/5 取得データを選定してAI企画書を作成中...', {
+      plan,
+      research,
+      wikiStories,
+      fetchedData,
+      acquiredData,
+    });
+
+    const memoBlock = buildFetchedMemoBlock(fetchedData);
+    const enrichedMemo = [input.memo || '', memoBlock].filter(Boolean).join('\n\n');
+    let aiPlan;
+    try {
+      aiPlan = await generateAIPlan(input.title, enrichedMemo, research, wikiStories);
+      plan = { ...plan, autopilotPlan: mergeAutopilotPlanServer(plan.autopilotPlan, aiPlan) };
+    } catch (error) {
+      aiPlan = {
+        ok: false,
+        aiGenerated: false,
+        fallback: true,
+        error: error.message,
+        missingData: ['AI企画書生成の再実行'],
+        publishGates: ['AI分析失敗のため公開前に人間確認する'],
+      };
+      plan = {
+        ...plan,
+        autopilotPlan: {
+          ...(plan.autopilotPlan || {}),
+          aiGenerated: false,
+          aiFallback: true,
+          aiFallbackReason: error.message,
+          mustCheck: [{ need: 'AI企画書生成の再実行', query: '', sourcePriority: [] }],
+        },
+      };
+    }
+    const result = { plan, research, wikiStories, aiPlan, fetchedData, acquiredData, prefetchWarnings: prefetch.warnings || [] };
+    Object.assign(job, {
+      status: 'done',
+      stage: 'done',
+      message: '5/5 完了',
+      result,
+      updatedAt: new Date().toISOString(),
+    });
+    saveProposalResultToProject(input.selectedProjectId, { ...result, jobId }, 'done');
+  } catch (error) {
+    Object.assign(job, {
+      status: 'error',
+      stage: 'error',
+      message: error.message,
+      error: error.message,
+      updatedAt: new Date().toISOString(),
+    });
+    saveProposalResultToProject(input.selectedProjectId, { plan: input.plan, jobId }, 'error', error.message);
+  }
+}
+
+app.post('/api/v3/proposal-job/start', (req, res) => {
+  const body = req.body || {};
+  const jobId = `v3job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  proposalJobs.set(jobId, {
+    id: jobId,
+    status: 'running',
+    stage: 'queued',
+    message: '開始待ち',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  setImmediate(() => runProposalJob(jobId, body));
+  res.json({ success: true, jobId });
+});
+
+app.get('/api/v3/proposal-job/:jobId', (req, res) => {
+  const job = proposalJobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ success: false, error: 'job not found' });
+  res.json({ success: true, job });
+});
+
 // ── auto-prefetch: 記事から entity 抽出 → SofaScore で構造化データを自動取得 ──
 // Japanese katakana/kanji → English lookup for common soccer figures
 const JP_ENTITY_MAP = [
@@ -268,14 +683,14 @@ const JP_ENTITY_MAP = [
   ['ディバラ', 'player', 'Paulo Dybala'], ['メッシ', 'player', 'Lionel Messi'],
   ['ロナウド', 'player', 'Cristiano Ronaldo'], ['レバンドフスキ', 'player', 'Robert Lewandowski'],
   ['フィルミーノ', 'player', 'Roberto Firmino'], ['ガクポ', 'player', 'Cody Gakpo'],
-  ['守田', 'player', 'Daichi Kamada'], ['鎌田', 'player', 'Daichi Kamada'],
+  ['守田', 'player', 'Hidemasa Morita'], ['鎌田', 'player', 'Daichi Kamada'],
   ['久保', 'player', 'Takefusa Kubo'], ['三笘', 'player', 'Kaoru Mitoma'],
   ['遠藤', 'player', 'Wataru Endo'], ['南野', 'player', 'Takumi Minamino'],
   // Managers
-  ['アンチェロッティ', 'player', 'Carlo Ancelotti'], ['グアルディオラ', 'player', 'Pep Guardiola'],
-  ['クロップ', 'player', 'Jurgen Klopp'], ['モウリーニョ', 'player', 'Jose Mourinho'],
-  ['アロンソ', 'player', 'Xabi Alonso'], ['デラフエンテ', 'player', 'Luis de la Fuente'],
-  ['エンリケ', 'player', 'Luis Enrique'], ['テンハグ', 'player', 'Erik ten Hag'],
+  ['アンチェロッティ', 'manager', 'Carlo Ancelotti'], ['グアルディオラ', 'manager', 'Pep Guardiola'],
+  ['クロップ', 'manager', 'Jurgen Klopp'], ['モウリーニョ', 'manager', 'Jose Mourinho'],
+  ['アロンソ', 'manager', 'Xabi Alonso'], ['デラフエンテ', 'manager', 'Luis de la Fuente'],
+  ['エンリケ', 'manager', 'Luis Enrique'], ['テンハグ', 'manager', 'Erik ten Hag'],
   // Teams
   ['マドリー', 'team', 'Real Madrid'], ['レアル', 'team', 'Real Madrid'],
   ['バルサ', 'team', 'FC Barcelona'], ['バルセロナ', 'team', 'FC Barcelona'],
@@ -302,14 +717,17 @@ function extractEntitiesV3(topic, memo, learningCorpus, wikiResults) {
   const seen = new Set();
   const TEAM_RE = /\b(fc|cf|sc|united|city|athletic|real|chelsea|arsenal|liverpool|barcelona|madrid|juventus|national|inter|ac milan|as roma|psv|ajax|dortmund)\b/i;
   const STOP = new Set(['Reddit','World','Cup','League','Premier','Serie','Bundesliga','Ligue','English','Spanish','Italian','French','German','European','Champion','Europa','Super','Final','Season','Soccer','Football','Players',
-    'MVP','VAR','SNS','TV','BBC','ESPN','Sky','God','His','Her','The','This','That','News','Also','After','Before','More','Most','All']);
+    'MVP','VAR','SNS','TV','BBC','ESPN','Sky','God','His','Her','The','This','That','News','Also','After','Before','More','Most','All','Last','Injured','Official','Report','Reports']);
   const jpText = `${topic || ''} ${memo || ''}`;
   function add(type, nameEn) {
-    const k = nameEn.toLowerCase().trim();
+    const clean = String(nameEn || '').trim();
+    const first = clean.split(/\s+/)[0];
+    if (STOP.has(first) || STOP.has(clean)) return;
+    const k = clean.toLowerCase();
     if (!k || k.length < 3 || seen.has(k)) return;
-    if (/^[A-Z]{2,5}$/.test(nameEn.split(' ')[0])) return;
+    if (/^[A-Z]{2,5}$/.test(first)) return;
     seen.add(k);
-    entities.push({ type, nameEn: nameEn.trim() });
+    entities.push({ type, nameEn: clean });
   }
   // Japanese katakana/kanji → English (highest priority, covers topic/memo)
   JP_ENTITY_MAP.forEach(([jp, type, en]) => {
@@ -364,6 +782,8 @@ function _parseLabelsToSlots(labels, type) {
 function buildDataLabelsV3(prefetched, tmMap = {}) {
   return Object.values(prefetched || {}).map(e => {
     const tm = e.type === 'player' ? (tmMap[e.nameEn.toLowerCase()] || null) : null;
+    const sourceTitle = tm ? 'SofaScore + Transfermarkt' : 'SofaScore';
+    const fetchedAt = new Date().toISOString();
     const tmLabels = [];
     if (tm?.injuries?.length) {
       const ongoing = tm.injuries.find(i => i.isOngoing);
@@ -373,9 +793,9 @@ function buildDataLabelsV3(prefetched, tmMap = {}) {
     if (!e.data) {
       if (tmLabels.length) {
         const slots = _parseLabelsToSlots(tmLabels, e.type);
-        return { type: e.type, nameEn: e.nameEn, ok: true, summary: tmLabels.join(' / '), labels: tmLabels, slots };
+        return { type: e.type, nameEn: e.nameEn, ok: true, summary: tmLabels.join(' / '), labels: tmLabels, slots, sourceTitle: 'Transfermarkt', sourceUrl: '', fetchedAt, confidence: 'medium' };
       }
-      return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [], slots: [] };
+      return { type: e.type, nameEn: e.nameEn, ok: false, summary: '取得失敗', labels: [], slots: [], sourceTitle, sourceUrl: '', fetchedAt, confidence: 'none' };
     }
     const labels = [];
     if (e.type === 'player') {
@@ -399,52 +819,127 @@ function buildDataLabelsV3(prefetched, tmMap = {}) {
       if (st.goalsAgainst != null) labels.push('失' + st.goalsAgainst);
     }
     const slots = _parseLabelsToSlots(labels, e.type);
-    return { type: e.type, nameEn: e.nameEn, ok: true, summary: labels.join(' / ') || '取得OK', labels, slots };
+    return { type: e.type, nameEn: e.nameEn, ok: true, summary: labels.join(' / ') || '取得OK', labels, slots, sourceTitle, sourceUrl: '', fetchedAt, confidence: slots.length ? 'medium' : 'low' };
   });
+}
+
+async function runAutoPrefetchCore({ topic = '', memo = '', learningCorpus = [], wikiResults = [], aiEntities = [] } = {}) {
+  const { prefetchEntities } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'entity_prefetcher'));
+  const { searchTransfermarktPlayer } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_games'));
+  const { fetchPlayerInjuries } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_injuries'));
+
+  const normalizeEntityName = (e) => {
+    let name = String(e.nameEn || '').trim();
+    name = name.replace(/\s+national(?:\s+football)?\s+team$/i, '').trim();
+    return { type: e.type || 'player', nameEn: name };
+  };
+  const isUsefulEntity = (e) => {
+    const name = String(e.nameEn || '').trim();
+    if (!name || name.length < 3) return false;
+    if (/^(last|injured|official|report|reports|news|god|sns|mvp|var|tv)$/i.test(name)) return false;
+    if (/^[A-Z]{2,5}$/.test(name)) return false;
+    return true;
+  };
+  const aiMapped = (Array.isArray(aiEntities) ? aiEntities : [])
+    .filter((e) => e && e.nameEn)
+    .map(normalizeEntityName)
+    .filter(isUsefulEntity);
+  const regexExtracted = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
+  const seen = new Set(aiMapped.map((e) => e.nameEn.toLowerCase()));
+  const merged = [...aiMapped, ...regexExtracted.filter((e) => !seen.has(e.nameEn.toLowerCase()))];
+  const entities = merged
+    .filter((e) => e.type === 'player' || e.type === 'team')
+    .slice(0, 6);
+  if (!entities.length) return { success: true, entities: [], labels: [], note: 'no entities found' };
+
+  const [prefetchResult, tmResult] = await Promise.allSettled([
+    prefetchEntities(entities),
+    (async () => {
+      const map = {};
+      await Promise.all(entities.filter(e => e.type === 'player').map(async e => {
+        try {
+          const hit = await searchTransfermarktPlayer(e.nameEn);
+          if (!hit) return;
+          const result = await fetchPlayerInjuries(hit.id, hit.slug);
+          if (result.ok) map[e.nameEn.toLowerCase()] = result;
+        } catch (_) {}
+      }));
+      return map;
+    })(),
+  ]);
+  const prefetched = prefetchResult.status === 'fulfilled' ? prefetchResult.value : {};
+  const tmMap = tmResult.status === 'fulfilled' ? tmResult.value : {};
+  const warnings = [];
+  if (prefetchResult.status === 'rejected') warnings.push('SofaScore: ' + prefetchResult.reason.message);
+  if (tmResult.status === 'rejected') warnings.push('Transfermarkt: ' + tmResult.reason.message);
+  return { success: true, entities, labels: buildDataLabelsV3(prefetched, tmMap), warnings };
 }
 
 app.post('/api/v3/auto-prefetch', async (req, res) => {
   try {
-    const { topic = '', memo = '', learningCorpus = [], wikiResults = [], aiEntities = [] } = req.body || {};
-    const { prefetchEntities } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'entity_prefetcher'));
-    const { searchTransfermarktPlayer } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_games'));
-    const { fetchPlayerInjuries } = require(path.join(__dirname, '..', 'scripts', 'modules', 'fetchers', 'transfermarkt_player_injuries'));
-
-    // Normalize team names: strip "national football team" suffix (SofaScore searches better with just country name)
-    const normalizeEntityName = (e) => {
-      let name = String(e.nameEn || '').trim();
-      name = name.replace(/\s+national(?:\s+football)?\s+team$/i, '').trim();
-      return { type: e.type || 'player', nameEn: name };
-    };
-    // AI-selected entities (higher accuracy) take priority, then regex-extracted as supplement
-    const aiMapped = (Array.isArray(aiEntities) ? aiEntities : [])
-      .filter((e) => e && e.nameEn)
-      .map(normalizeEntityName);
-    const regexExtracted = extractEntitiesV3(topic, memo, learningCorpus, wikiResults);
-    const seen = new Set(aiMapped.map((e) => e.nameEn.toLowerCase()));
-    const merged = [...aiMapped, ...regexExtracted.filter((e) => !seen.has(e.nameEn.toLowerCase()))];
-    const entities = merged.slice(0, 6);
-    if (!entities.length) return res.json({ success: true, entities: [], labels: [], note: 'no entities found' });
-    // SofaScore と TransferMarkt を並列取得
-    const [prefetched, tmMap] = await Promise.all([
-      prefetchEntities(entities),
-      (async () => {
-        const map = {};
-        await Promise.all(entities.filter(e => e.type === 'player').map(async e => {
-          try {
-            const hit = await searchTransfermarktPlayer(e.nameEn);
-            if (!hit) return;
-            const result = await fetchPlayerInjuries(hit.id, hit.slug);
-            if (result.ok) map[e.nameEn.toLowerCase()] = result;
-          } catch (_) {}
-        }));
-        return map;
-      })(),
-    ]);
-    const labels = buildDataLabelsV3(prefetched, tmMap);
-    res.json({ success: true, entities, labels });
+    res.json(await runAutoPrefetchCore(req.body || {}));
   } catch (error) {
     console.error('[v3/auto-prefetch]', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/v3/generate-script', async (req, res) => {
+  try {
+    const { topic, briefingText, slideOutline, fetchedData, memo } = req.body || {};
+    if (!topic && !briefingText) return res.status(400).json({ success: false, error: 'topic or briefingText is required' });
+
+    const slideCount = (slideOutline || []).length || 6;
+    const dataBlock = (fetchedData || []).filter(d => d.ok && d.summary).slice(0, 6)
+      .map(d => `${d.nameEn}: ${d.summary}`).join('\n') || 'なし';
+
+    const slideList = (slideOutline || []).slice(0, 10).map((item, i) => {
+      const needs = (item.dataNeeds || []).join('、') || 'なし';
+      return `${item.no || i + 1}. [${item.slideType || 'insight'}] ${item.headline || ''} — ${item.point || ''} (データ: ${needs})`;
+    }).join('\n') || briefingText || '';
+
+    const systemPrompt = `あなたはサッカーYouTube動画の脚本ライターです。
+各スライドのナレーション（視聴者に語りかける本番テキスト）を生成してください。
+出力は純粋なJSONのみ。コードブロック不要。
+
+【ルール】
+- 各スライドのnarrationは100〜200文字の日本語ナレーション
+- 口語・話し言葉で書く（「です・ます」調）
+- 確認済みデータ（取得済みデータ）は積極的に使う
+- 推測・未確認情報は断定しない
+- opening は視聴者の興味を引くフック文
+- ending は「まとめ・視聴者への問いかけ」で締める`;
+
+    const userPrompt = `## トピック\n${topic || ''}
+
+## 企画書メモ\n${memo || 'なし'}
+
+## スライド構成（${slideCount}枚）\n${slideList}
+
+## 取得済みデータ\n${dataBlock}
+
+## 出力JSON
+{"slides": [{"slideNo": 1, "narration": "ナレーション本文"}]}`;
+
+    const raw = await callAI({
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+      max_tokens: 4000,
+      forceProvider: 'deepseek',
+    });
+
+    let parsed = null;
+    try { parsed = JSON.parse(String(raw || '').trim()); } catch (_) {}
+    if (!parsed) {
+      const m = String(raw || '').match(/\{[\s\S]*\}/);
+      if (m) try { parsed = JSON.parse(m[0]); } catch (_) {}
+    }
+    if (!parsed?.slides) {
+      return res.json({ success: false, error: 'AI応答のJSONパース失敗', raw: String(raw || '').slice(0, 300) });
+    }
+    res.json({ success: true, slides: parsed.slides });
+  } catch (error) {
+    console.error('[v3/generate-script]', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1709,9 +2204,8 @@ body.drawer-is-open #sidebarOverlay {
   <button class="view-tab" type="button" data-view="saved" onclick="setResultView('saved')">2 保存済み</button>
   <button class="view-tab" type="button" data-view="proposal" onclick="setResultView('proposal')">3 企画提案</button>
   <button class="view-tab" type="button" data-view="briefing" onclick="setResultView('briefing')">4 企画書</button>
-  <button class="view-tab" type="button" data-view="structure" onclick="setResultView('structure')">5 脚本構成</button>
-  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">6 脚本</button>
-  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">7 V2</button>
+  <button class="view-tab" type="button" data-view="script" onclick="setResultView('script')">5 脚本生成</button>
+  <button class="view-tab" type="button" data-view="export" onclick="setResultView('export')">6 V2</button>
 </nav>
 <main>
   <aside id="savedDrawer" aria-hidden="true">
@@ -2132,8 +2626,10 @@ async function savePlan() {
 
 async function runResearch() {
   const btn = document.getElementById('researchBtn');
-  btn.disabled = true;
-  btn.textContent = 'リサーチ中...';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'リサーチ中...';
+  }
   try {
     if (!currentPlan) await generatePlan({ scroll: false });
     const baseBody = {
@@ -2166,8 +2662,76 @@ async function runResearch() {
   } catch (error) {
     alert('リサーチ失敗: ' + error.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'リサーチ';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'リサーチ';
+    }
+  }
+}
+
+function saveScriptNarration(slideIdx) {
+  if (!currentPlan?.autopilotPlan?.scriptDraft) return;
+  const el = document.getElementById('v3ScriptNarration');
+  if (!el) return;
+  const draft = currentPlan.autopilotPlan.scriptDraft;
+  if (draft[slideIdx]) draft[slideIdx].narration = el.value;
+  if (currentPlan.v3Modules?.[slideIdx]) currentPlan.v3Modules[slideIdx].narration = el.value;
+  persistV3State();
+}
+
+async function runAIScriptGeneration() {
+  const btn = document.getElementById('aiScriptBtn');
+  const status = document.getElementById('aiScriptStatus');
+  if (btn) { btn.disabled = true; btn.textContent = 'AI生成中...'; }
+  if (status) status.textContent = 'DeepSeekが脚本を生成中です...';
+  try {
+    updateBriefingFromEditor();
+    if (!currentPlan) { if (status) status.textContent = '先に企画書を作ってください'; return; }
+    if (!currentPlan.v3Modules?.length) {
+      currentPlan.v3Modules = makeModulesFromCurrentPlan();
+    }
+    const briefing = currentPlan.autopilotPlan?.briefing || {};
+    const slideOutline = briefing.slideOutline || buildBriefingSlideOutline(currentPlan);
+    const res = await fetch('/api/v3/generate-script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: document.getElementById('title')?.value || currentPlan.topic || '',
+        memo: document.getElementById('memo')?.value || '',
+        briefingText: document.getElementById('briefingText')?.value || '',
+        slideOutline,
+        fetchedData: currentFetchedData || [],
+      }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'AI脚本生成失敗');
+    const aiSlides = data.slides || [];
+    currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+    currentPlan.autopilotPlan.scriptDraft = currentPlan.v3Modules.map((m, i) => {
+      const ai = aiSlides.find(s => s.slideNo === (i + 1)) || aiSlides[i] || {};
+      return {
+        slideNo: i + 1,
+        title: m.title || '',
+        role: m.v3Meta?.role || m.subValue || m.type || '',
+        narration: ai.narration || m.narration || '',
+        dataNeeds: (m.dataSlots || []).map(s => s.label).filter(Boolean),
+        selectedData: (m.dataSlots || []).filter(s => s.value || s.sourceUrl).map(s => ({
+          label: s.label || '', value: s.value || '', sourceTitle: s.sourceTitle || '', sourceUrl: s.sourceUrl || '',
+        })),
+        caution: ai.caution || '',
+      };
+    });
+    markStepDone('script');
+    activeSlideIdx = 0;
+    activeView = 'script';
+    renderPlan(currentPlan);
+    setTimeout(() => reloadV3Preview(), 50);
+    if (status) status.textContent = aiSlides.length + '枚分の脚本を生成しました。各スライドを確認・編集してください。';
+  } catch (error) {
+    if (status) status.textContent = '生成失敗: ' + error.message;
+    alert('AI脚本生成失敗: ' + error.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'AI脚本を再生成'; }
   }
 }
 
@@ -2175,106 +2739,58 @@ async function runProposal() {
   const btn = document.getElementById('proposalStepBtn');
   const status = document.getElementById('proposalRunStatus');
   if (btn) { btn.disabled = true; btn.textContent = '調査中...'; }
-  if (status) status.textContent = '1/5 英語クエリを生成してWebリサーチ中...';
+  if (status) status.textContent = 'サーバー側ジョブを開始中...';
   try {
     if (!currentPlan) await generatePlan({ scroll: false });
-    const searchTopic = compactSearchTopic(document.getElementById('title').value, document.getElementById('memo').value);
-    const baseBody = {
-      topic: searchTopic,
-      memo: document.getElementById('memo').value,
-      plan: currentPlan,
-    };
-    // ① + ② + ③: Web リサーチ → AIが記事を読んでフォローアップクエリ＆エンティティを選定
-    const topicRes = await fetch('/api/v3/research/topic', {
+    const startRes = await fetch('/api/v3/proposal-job/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(baseBody),
+      body: JSON.stringify({
+        title: document.getElementById('title').value,
+        memo: document.getElementById('memo').value,
+        sourceType: document.getElementById('sourceType')?.value || 'custom',
+        plan: currentPlan,
+        selectedProjectId: selectedProject?.id || '',
+      }),
     });
-    const topicData = await topicRes.json();
-    if (!topicData.success) throw new Error(topicData.error || 'topic research failed');
-    currentResearch = topicData.result;
-    var _aiEntities = topicData.aiEntities || [];
-    var _followUpQueries = topicData.followUpQueries || [];
-    if (_followUpQueries.length) {
-      var s1 = document.getElementById('proposalRunStatus');
-      if (s1) s1.textContent = '2/5 フォローアップ検索完了（' + _followUpQueries.length + '件追加）。Wikiデータ取得中...';
-    } else {
-      var s1b = document.getElementById('proposalRunStatus');
-      if (s1b) s1b.textContent = '2/5 Wikiデータを取得中...';
-    }
-    const wikiRes = await fetch('/api/v3/research/wiki-side-stories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...baseBody, learningCorpus: currentResearch.learningCorpus || [] }),
-    });
-    const wikiData = await wikiRes.json();
-    if (!wikiData.success) throw new Error(wikiData.error || 'wiki research failed');
-    currentWikiStories = wikiData.result;
-    bindResearchCandidates();
-    currentAcquiredData = buildAcquiredDataSummary();
+    const startData = await startRes.json();
+    if (!startData.success) throw new Error(startData.error || 'proposal job start failed');
+    const jobId = startData.jobId;
     activeView = 'proposal';
     renderPlan(currentPlan);
-    var s2 = document.getElementById('proposalRunStatus');
-    if (s2) s2.textContent = '3/5 AIが選定したエンティティ（' + _aiEntities.map(function(e){return e.nameEn;}).join('、') + '）のデータを取得中...';
-
-    // ④: SofaScore + TM データ取得（AI選定エンティティを優先）
-    try {
-      const prefetchRes = await fetch('/api/v3/auto-prefetch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: document.getElementById('title').value,
-          memo: document.getElementById('memo').value,
-          learningCorpus: currentResearch?.learningCorpus || [],
-          wikiResults: currentWikiStories?.results || [],
-          aiEntities: _aiEntities,
-        }),
-      });
-      const prefetchData = await prefetchRes.json();
-      currentFetchedData = prefetchData.success ? (prefetchData.labels || []) : [];
-    } catch (prefetchErr) {
-      console.warn('[auto-prefetch] failed:', prefetchErr.message);
-      currentFetchedData = [];
+    let lastMessage = '';
+    for (;;) {
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      let jobData;
+      try {
+        const pollRes = await fetch('/api/v3/proposal-job/' + encodeURIComponent(jobId));
+        jobData = await pollRes.json();
+      } catch (pollError) {
+        if (status) status.textContent = (lastMessage || 'サーバー側で調査継続中...') + '（接続復帰待ち）';
+        continue;
+      }
+      if (!jobData.success) throw new Error(jobData.error || 'proposal job not found');
+      const job = jobData.job || {};
+      lastMessage = job.message || job.stage || '';
+      if (status) status.textContent = lastMessage || 'サーバー側で調査中...';
+      if (job.status === 'done') {
+        const result = job.result || {};
+        currentPlan = result.plan || currentPlan;
+        currentResearch = result.research || null;
+        currentWikiStories = result.wikiStories || null;
+        currentAIPlan = result.aiPlan || null;
+        currentFetchedData = result.fetchedData || [];
+        currentAcquiredData = result.acquiredData || buildAcquiredDataSummary();
+        break;
+      }
+      if (job.status === 'error') throw new Error(job.error || job.message || 'proposal job failed');
     }
-    currentAcquiredData = buildAcquiredDataSummary();
-    renderPlan(currentPlan);
-    var s3 = document.getElementById('proposalRunStatus');
-    if (s3) s3.textContent = '4/5 データ取得完了。AI企画書を作成中...';
-
-    try {
-      const fetchedSummary = (currentFetchedData || []).filter(function(d) { return d.ok; })
-        .map(function(d) {
-          var slotStr = (Array.isArray(d.slots) && d.slots.length)
-            ? d.slots.map(function(s) { return s.label + ': ' + s.value; }).join(' / ')
-            : d.summary;
-          return d.nameEn + ' (' + (d.type || 'player') + '): ' + slotStr;
-        }).join('\\n');
-      const enrichedMemo = document.getElementById('memo').value +
-        (fetchedSummary ? '\\n\\n[取得済みデータ（stats スライドで使用可能）]\\n' + fetchedSummary : '');
-      const analyzeRes = await fetch('/api/v3/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: document.getElementById('title').value,
-          memo: enrichedMemo,
-          researchCorpus: currentResearch,
-          wikiStories: currentWikiStories,
-        }),
-      });
-      const analyzeData = await analyzeRes.json();
-      if (!analyzeData.success) throw new Error(analyzeData.error || 'AI analysis failed');
-      currentAIPlan = analyzeData.result;
-      currentPlan.autopilotPlan = buildMergedAutopilotPlan(currentPlan.autopilotPlan, currentAIPlan);
-    } catch (aiError) {
-      currentPlan.autopilotPlan = buildFallbackAutopilotPlan(currentPlan.autopilotPlan, aiError.message);
-    }
-    currentAcquiredData = buildAcquiredDataSummary();
     markStepDone('proposal');
     activeView = 'proposal';
     renderPlan(currentPlan);
     const doneStatus = document.getElementById('proposalRunStatus');
     if (doneStatus) doneStatus.textContent = '5/5 完了。記事 ' + (currentResearch?.learningCorpus?.length || 0) + '件＋データ ' + (currentFetchedData || []).filter(function(d){return d.ok;}).length + '件で企画書を生成しました。';
-    await saveResearchToProject();
+    await loadSaved();
   } catch (error) {
     alert('企画提案失敗: ' + error.message);
   } finally {
@@ -2330,13 +2846,24 @@ function inferEntityLabels() {
 }
 
 function compactSearchTopic(title, memo) {
-  const s = String(title || memo || '').trim();
-  return s
+  const raw = String(title || memo || '')
+    .replace(/https?:\\/\\/\\S+/g, ' ')
+    .replace(/[\[\]【】「」『』"“”]/g, ' ')
+    .replace(/\\s+/g, ' ')
+    .trim();
+  if (!raw) return '';
+  const latin = raw.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+){0,3}/g) || [];
+  const usefulLatin = latin
+    .filter(function(w) { return !/^(reddit|thread|comments?|news|latest|the|and|for|with|from|about)$/i.test(w); })
+    .slice(0, 4)
+    .join(' ');
+  if (usefulLatin) return usefulLatin.split(/\\s+/).slice(0, 10).join(' ');
+  return raw
     .replace(/[、。！？!?].*$/, '')
-    .split(/\s+/)
+    .split(/\\s+/)
     .slice(0, 10)
     .join(' ')
-    .slice(0, 100) || s.slice(0, 100);
+    .slice(0, 72) || raw.slice(0, 72);
 }
 
 function sentencePick(text, patterns, fallback = '') {
@@ -2488,8 +3015,8 @@ function buildMergedAutopilotPlan(base, aiPlan) {
         .slice(0, 8),
       riskChecklist: aiPlan.briefing?.riskChecklist || [],
     },
-    scriptStructure: aiPlan.scriptStructure?.length ? aiPlan.scriptStructure : (base?.scriptStructure || []),
-    scriptDraft: aiPlan.scriptDraft?.length ? aiPlan.scriptDraft : (base?.scriptDraft || []),
+    scriptStructure: base?.scriptStructure || [],
+    scriptDraft: base?.scriptDraft || [],
     mustCheck: (aiPlan.missingData || []).map((need) => ({ need, query: '', sourcePriority: [] })),
     publishGates: aiPlan.publishGates?.length ? aiPlan.publishGates : (base?.publishGates || []),
   };
@@ -2626,7 +3153,7 @@ function renderPlan(plan) {
   });
   syncProxyInputs();
   persistV3State();
-  if (activeView === 'structure') setTimeout(() => reloadV3Preview(), 50);
+  if (activeView === 'script') setTimeout(() => reloadV3Preview(), 50);
 }
 
 function syncProxyInputs() {
@@ -2672,30 +3199,65 @@ function setResultView(view) {
 function renderScriptView(plan) {
   const auto = plan.autopilotPlan || {};
   const script = auto.scriptDraft || [];
-  if (!script.length) return '<div class="empty">脚本たたき台はまだありません。</div>';
-  return '<span class="label">脚本たたき台。未検証データはあとで差し替える前提</span>' +
-    '<div class="script-list">' +
-      script.map((item) => (
-        '<div class="script-card">' +
-          '<div class="slide-meta"><span class="meta-pill">slide ' + esc(item.slideNo) + '</span><span class="meta-pill">' + esc(item.role) + '</span></div>' +
-          '<h3>' + esc(item.title) + '</h3>' +
-          '<p>' + esc(item.narration) + '</p>' +
-          '<div class="chips">' +
-            (item.dataNeeds || []).map((x) => '<span class="chip">' + esc(x) + '</span>').join('') +
-          '</div>' +
-          (item.caution ? '<p style="color:#fecaca;margin-top:8px;">注意: ' + esc(item.caution) + '</p>' : '') +
-        '</div>'
+  const modules = plan.v3Modules || [];
+  if (!script.length) {
+    const slideCount = modules.length || (auto.briefing?.slideOutline || auto.briefing?.chapters || []).length || 0;
+    return '<span class="label">脚本生成 — 最終編集フェーズ</span>' +
+      '<div class="panel" style="text-align:center;padding:24px 16px;">' +
+        '<div style="font-size:15px;font-weight:700;margin-bottom:8px;">企画書の構成（' + (slideCount || '?') + '枚）をAIが脚本化します</div>' +
+        '<div style="color:var(--muted);font-size:13px;margin-bottom:18px;">生成後、各スライドのナレーションを個別に編集できます</div>' +
+        '<div class="task-actions" style="justify-content:center;">' +
+          '<button id="aiScriptBtn" onclick="runAIScriptGeneration()">AI脚本生成</button>' +
+          '<button class="secondary" onclick="setResultView(\\'briefing\\')">← 企画書に戻る</button>' +
+        '</div>' +
+        '<div id="aiScriptStatus" class="task-status" style="margin-top:10px;"></div>' +
+      '</div>';
+  }
+  const active = Math.max(0, Math.min(activeSlideIdx, Math.max(script.length, modules.length) - 1));
+  const activeModule = modules[active] || {};
+  const activeScript = script[active] || {};
+  const typeColors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
+  const typeBadge = (type) => '<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (typeColors[type] || '#374151') + ';color:#fff;margin-right:4px;">' + esc(type || 'insight') + '</span>';
+  return '<span class="label">脚本生成 — 最終編集フェーズ。各スライドを確認・編集してV2へ渡す</span>' +
+    '<div class="task-actions">' +
+      '<button id="aiScriptBtn" onclick="runAIScriptGeneration()">AI脚本を再生成</button>' +
+      '<button class="secondary" onclick="setResultView(\\'briefing\\')">← 企画書に戻る</button>' +
+    '</div>' +
+    '<div id="aiScriptStatus" class="task-status"></div>' +
+    '<div class="slide-tabs" style="margin-top:8px;">' +
+      script.map((item, i) => (
+        '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3ScriptSlide(' + i + ')">' +
+          esc((i + 1) + ' ' + (modules[i]?.type || item.role || 'slide')) +
+        '</button>'
       )).join('') +
+    '</div>' +
+    '<div class="editor-layout" style="margin-top:8px;">' +
+      '<div class="panel">' +
+        '<div style="margin-bottom:8px;">' +
+          typeBadge(activeModule.type || activeScript.role) +
+          '<span style="font-size:13px;font-weight:700;">' + esc(activeScript.title || activeModule.title || '') + '</span>' +
+        '</div>' +
+        '<label class="label" style="margin-bottom:4px;">ナレーション（編集可）</label>' +
+        '<textarea id="v3ScriptNarration" style="min-height:160px;line-height:1.65;font-size:14px;" oninput="saveScriptNarration(' + active + ')">' + esc(activeScript.narration || '') + '</textarea>' +
+        (activeScript.caution ? '<p style="color:#fecaca;font-size:12px;margin-top:6px;">⚠ ' + esc(activeScript.caution) + '</p>' : '') +
+        '<label class="label" style="margin-top:10px;">このスライドで使うデータ</label>' +
+        '<div class="chips">' + (activeScript.dataNeeds || []).map((x) => '<span class="chip">' + esc(x) + '</span>').join('') + '</div>' +
+      '</div>' +
+      '<div class="panel">' +
+        '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
+        '<div class="task-actions" style="margin-top:6px;"><button class="secondary" onclick="reloadV3Preview()">プレビュー更新</button></div>' +
+        '<div class="task-status" style="margin-top:6px;">スライド <b>' + (active + 1) + '</b> / ' + script.length + '枚</div>' +
+      '</div>' +
     '</div>';
 }
 
 function renderPipelineSteps() {
   const steps = [
     ['1', '案件', '入力または保存案件を選ぶ'],
-    ['2', '企画提案', 'リサーチ→AI分析→複数案'],
-    ['3', '企画書', '採用案を制作指示にする'],
-    ['4', '構成', 'スライド順に展開'],
-    ['5', '脚本', 'TTS前のたたき台'],
+    ['2', '保存済み', '過去案件を再開'],
+    ['3', '企画提案', 'リサーチ→AI分析→複数案'],
+    ['4', '企画書', 'テーマ・流れ・スライド構成'],
+    ['5', '脚本生成', 'ナレーションとプレビュー確認'],
     ['6', 'V2', '動画生成ラインへ渡す'],
   ];
   return '<div class="pipeline-steps">' + steps.map((s) =>
@@ -2728,26 +3290,26 @@ function renderStructureView(plan) {
         '</div>' +
       '</div>'
     : '';
-  return fetchedBanner + '<span class="label">脚本構成。使うスライド、使うデータとソース、画像、プレビューをここで編集</span>' +
+  return fetchedBanner + '<span class="label">構成。使うスライド、使うデータとソース、画像をここで編集</span>' +
     '<div class="slide-tabs">' + modules.map((item, i) => (
       '<button class="slide-tab' + (i === active ? ' active' : '') + '" onclick="switchV3Slide(' + i + ')">' + esc((i + 1) + ' ' + (item.type || 'slide')) + '</button>'
     )).join('') + '</div>' +
     '<div class="editor-layout">' +
       '<div class="panel">' +
         '<label class="label">使うスライド</label>' +
-        '<select id="v3SlideType" onchange="collectV3SlideInputs();reloadV3Preview()">' +
+        '<select id="v3SlideType" onchange="collectV3SlideInputs()">' +
           ['opening','insight','stats','profile','reaction','comparison','history','matchcard','ranking','timeline','picture','ending'].map((type) => '<option value="' + type + '"' + (m.type === type ? ' selected' : '') + '>' + type + '</option>').join('') +
         '</select>' +
         '<label class="label" style="margin-top:10px;">タイトル</label>' +
-        '<input id="v3SlideTitle" value="' + esc(m.title || '') + '" oninput="collectV3SlideInputs();scheduleV3Preview()">' +
-        '<label class="label" style="margin-top:10px;">脚本</label>' +
-        '<textarea id="v3SlideNarration" oninput="collectV3SlideInputs();scheduleV3Preview()">' + esc(m.narration || '') + '</textarea>' +
+        '<input id="v3SlideTitle" value="' + esc(m.title || '') + '" oninput="collectV3SlideInputs()">' +
+        '<label class="label" style="margin-top:10px;">このスライドで言うこと</label>' +
+        '<textarea id="v3SlideNarration" oninput="collectV3SlideInputs()">' + esc(m.scriptDir || m.narration || '') + '</textarea>' +
         '<label class="label" style="margin-top:10px;">使うデータ / ソース</label>' +
         '<div id="v3DataRows">' + (dataRows || '<div class="empty">データ未設定</div>') + '</div>' +
         '<button class="secondary" onclick="addV3DataSlot()">データ行を追加</button>' +
         '<label class="label" style="margin-top:14px;">画像ギャラリー</label>' +
         '<input id="v3ImageUpload" type="file" accept="image/*" onchange="uploadV3Image()" style="display:none;">' +
-        '<div class="task-actions"><button class="secondary" onclick="document.getElementById(\\'v3ImageUpload\\').click()">画像アップロード</button><button onclick="reloadV3Preview()">プレビュー更新</button></div>' +
+        '<div class="task-actions"><button class="secondary" onclick="document.getElementById(\\'v3ImageUpload\\').click()">画像アップロード</button></div>' +
         '<div class="gallery-grid">' +
           (pool.length ? pool.map((src) => (
             '<div class="gallery-thumb' + (selectedImgs.includes(src) ? ' selected' : '') + '" onclick="toggleV3Image(\\'' + esc(src).replace(/'/g, '&#39;') + '\\')"><img src="' + esc(src) + '"></div>'
@@ -2755,8 +3317,8 @@ function renderStructureView(plan) {
         '</div>' +
       '</div>' +
       '<div class="panel">' +
-        '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
-        '<div class="task-status">編集内容はV3内に保持され、Step6でV2 modules として渡します。</div>' +
+        '<div class="task-actions"><button onclick="generateScriptFromStructure()">この構成で脚本生成</button><button class="secondary" onclick="setResultView(\\'script\\')">脚本生成へ</button></div>' +
+        '<div class="task-status">Step4では構成・スライド型・使うデータを決めます。プレビュー確認はStep5脚本で行います。</div>' +
         '<div class="panel" style="margin-top:12px;">' + renderStructureSourceList(plan) + '</div>' +
       '</div>' +
     '</div>';
@@ -2775,11 +3337,14 @@ function renderStructureSourceList(plan) {
 
 function collectV3SlideInputs() {
   if (!currentPlan?.v3Modules?.length) return;
+  if (!document.getElementById('v3SlideType') && !document.getElementById('v3SlideTitle')) return;
   const m = currentPlan.v3Modules[activeSlideIdx];
   if (!m) return;
   m.type = document.getElementById('v3SlideType')?.value || m.type;
   m.title = document.getElementById('v3SlideTitle')?.value || '';
-  m.narration = document.getElementById('v3SlideNarration')?.value || '';
+  const textValue = document.getElementById('v3SlideNarration')?.value || '';
+  if (activeView === 'structure') m.scriptDir = textValue;
+  else m.narration = textValue;
   const labels = Array.from(document.querySelectorAll('.v3-data-label'));
   m.dataSlots = labels.map((el) => {
     const i = Number(el.dataset.idx);
@@ -2793,7 +3358,14 @@ function switchV3Slide(index) {
   activeSlideIdx = index;
   activeView = 'structure';
   renderPlan(currentPlan);
-  setTimeout(() => reloadV3Preview(), 50);
+}
+
+function switchV3ScriptSlide(index) {
+  saveScriptNarration(activeSlideIdx);
+  activeSlideIdx = index;
+  activeView = 'script';
+  renderPlan(currentPlan);
+  // renderPlan already triggers reloadV3Preview via the activeView === 'script' check
 }
 
 function addV3DataSlot() {
@@ -2811,7 +3383,6 @@ function deleteV3DataSlot(index) {
   if (!m) return;
   m.dataSlots.splice(index, 1);
   renderPlan(currentPlan);
-  setTimeout(() => reloadV3Preview(), 50);
 }
 
 function toggleV3Image(src) {
@@ -2822,7 +3393,7 @@ function toggleV3Image(src) {
   if (m.images.includes(src)) m.images = m.images.filter((x) => x !== src);
   else m.images.push(src);
   renderPlan(currentPlan);
-  setTimeout(() => reloadV3Preview(), 50);
+  if (activeView === 'script') setTimeout(() => reloadV3Preview(), 50);
 }
 
 async function uploadV3Image() {
@@ -3134,27 +3705,6 @@ function renderAcquiredDataView() {
   '</div>';
 }
 
-function renderReadableBriefingPaper(plan) {
-  const auto = plan.autopilotPlan || {};
-  const proposal = auto.themeProposal || {};
-  const candidates = proposal.candidates || [];
-  const selected = candidates[proposal.selected || 0] || {};
-  const briefing = auto.briefing || {};
-  const chapters = briefing.chapters || [];
-  const hasBrief = selected.title || briefing.purpose || briefing.coreMessage || chapters.length;
-  if (!hasBrief) {
-    return '<div class="briefing-paper"><h2>企画書</h2><p>調査後、ここに採用候補・動画の約束・中心メッセージ・構成案を見やすく表示します。</p></div>';
-  }
-  return '<div class="briefing-paper">' +
-    '<h2>企画書</h2>' +
-    '<h3>採用候補</h3><p>' + esc(selected.title || selected.angle || '未選択') + '</p>' +
-    '<h3>フック質問</h3><p>' + esc(selected.hook || currentPlan?.centralQuestion || '') + '</p>' +
-    '<h3>仮の答え</h3><p>' + esc(selected.answer || briefing.coreMessage || currentPlan?.thesis || '') + '</p>' +
-    '<h3>動画の約束</h3><p>' + esc(briefing.purpose || currentPlan?.viewerPromise || '') + '</p>' +
-    '<h3>構成案</h3><ol>' + chapters.slice(0, 7).map((item) => '<li>' + esc((item.role || '') + ' - ' + (item.claim || '')) + '</li>').join('') + '</ol>' +
-    '<h3>必要データ</h3><div class="chips">' + (briefing.dataPlan || selected.dataNeeds || []).slice(0, 10).map((x) => '<span class="chip">' + esc(x.need || x) + '</span>').join('') + '</div>' +
-  '</div>';
-}
 
 function fallbackProposalCandidates(plan, defaultNeeds) {
   const topic = plan.topic || document.getElementById('title')?.value || 'この案件';
@@ -3217,7 +3767,7 @@ function renderProposalPapers(plan) {
   });
 
   return '<div class="panel">' +
-    '<span class="label">4. 企画書A / B / C生成</span>' +
+    '<span class="label">企画提案 A / B / C</span>' +
     '<div class="task-status">' + esc(basisText) + '</div>' +
     '<div class="proposal-paper-grid">' +
       candidates.slice(0, 3).map(function(c, i) {
@@ -3240,8 +3790,13 @@ function renderProposalPapers(plan) {
             '<div class="task-actions"><button onclick="selectThemeCandidate(' + i + ')">この企画書を採用</button></div>' +
           '</div>';
         }
+        const outline = Array.isArray(c.slideOutline) && c.slideOutline.length ? c.slideOutline : fallbackChapters.map((item, idx) => ({ no: idx + 1, slideType: item.slideType || item.role || 'insight', headline: item.headline || item.role || '', point: item.claim || '' }));
+        const slideTypeBadge = (type) => {
+          const colors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
+          return '<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (colors[type] || '#374151') + ';color:#fff;margin-right:4px;">' + esc(type || 'insight') + '</span>';
+        };
         return '<div class="briefing-paper selected">' +
-          '<span class="label" style="font-size:10px;color:var(--muted);">採用中: 企画書' + letter + '</span>' +
+          '<span class="label" style="font-size:10px;color:var(--muted);">採用中: 企画' + letter + '</span>' +
           '<p class="proposal-hook-text">' + esc(hook) + '</p>' +
           '<hr class="proposal-divider">' +
           '<div class="proposal-meta-grid">' +
@@ -3249,10 +3804,18 @@ function renderProposalPapers(plan) {
             '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
           '</div>' +
           '<hr class="proposal-divider">' +
-          '<span class="label">動画の約束</span><p style="margin:4px 0 10px;font-size:13px;">' + esc(fallbackPurpose) + '</p>' +
-          '<span class="label">構成案</span><ol style="margin:4px 0 10px;padding-left:18px;">' +
-            fallbackChapters.slice(0, 5).map((item) => '<li style="font-size:13px;line-height:1.5;">' + esc((item.role || '') + ' — ' + (item.claim || '')) + '</li>').join('') +
-          '</ol>' +
+          '<span class="label">スライド構成案（' + outline.length + '枚）</span>' +
+          '<div class="slide-list" style="margin:6px 0 10px;gap:4px;">' +
+            outline.slice(0, 7).map((item) => (
+              '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:start;background:#0a0d12;border:1px solid var(--line);border-radius:6px;padding:7px 9px;">' +
+                '<div>' + slideTypeBadge(item.slideType || item.role) + '</div>' +
+                '<div><div style="font-size:12px;font-weight:700;color:var(--text);">' + esc(item.headline || item.role || '') + '</div>' +
+                (item.point ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(String(item.point).slice(0, 80)) + '</div>' : '') +
+                ((item.dataNeeds || []).length ? '<div class="chips" style="margin-top:3px;">' + (item.dataNeeds || []).slice(0, 3).map(d => '<span class="chip" style="font-size:9px;">' + esc(d) + '</span>').join('') + '</div>' : '') +
+                '</div>' +
+              '</div>'
+            )).join('') +
+          '</div>' +
           '<span class="label">必要データ</span><div class="chips" style="margin:4px 0 10px;">' +
             dataNeeds.slice(0, 8).map((x) => {
               const need = x.need || x;
@@ -3261,7 +3824,7 @@ function renderProposalPapers(plan) {
             }).join('') +
           '</div>' +
           (c.risk ? '<span class="label" style="color:#f87171;">注意点</span><p style="color:#fecaca;margin:4px 0 10px;font-size:13px;">' + esc(c.risk) + '</p>' : '') +
-          '<div class="task-actions"><button disabled>採用中</button></div>' +
+          '<div class="task-actions"><button disabled>採用中</button><button class="secondary" onclick="setResultView(\\'briefing\\')">企画書を確認 →</button></div>' +
         '</div>';
       }).join('') +
     '</div>' +
@@ -3279,50 +3842,6 @@ function renderProposalView(plan) {
   return html;
 }
 
-function renderResearchWorkflowView(plan, opts = {}) {
-  const auto = plan.autopilotPlan || {};
-  const summary = researchReadSummary();
-  const missingData = auto.mustCheck || [];
-  const isAI = !!auto.aiGenerated;
-
-  let html = '<span class="label">ニュース記事やデータを読んだ量と、次の試行に使う材料</span>';
-  html += '<div class="autopilot-grid">';
-  html += '<div class="autopilot-card"><h2>読んだ材料</h2><p>Web記事: ' + esc(summary.webCount) + '件 / 本文取得: ' + esc(summary.fullTextCount) + '件 / Wiki: ' + esc(summary.wikiCount) + '件</p></div>';
-  html += '<div class="autopilot-card"><h2>検索クエリ</h2><p>' + esc(summary.queries.join(' / ') || '未実行') + '</p></div>';
-
-  if (isAI && missingData.length > 0) {
-    html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>AI分析で不足と判定されたデータ</h2>' +
-      missingData.map(function(item) {
-        return '<p style="color:#fecaca;font-size:13px;">• ' + esc(item.need || item) + '</p>';
-      }).join('') +
-      '</div>';
-  }
-  html += renderBoundResearchCards(plan);
-  html += '</div>';
-  if (!opts.embedded) {
-    html += '<div class="task-actions"><button id="researchStepBtn" onclick="runResearch()">リサーチだけ実行</button><button class="secondary" onclick="runProposal()">企画提案まで実行</button></div>';
-    html += '<div class="task-status">通常は「企画提案まで実行」でOK。原因切り分けしたい時だけリサーチ単体で使います。</div>';
-  }
-  html += '<div style="margin-top:10px;">' + renderSourceSamples() + '</div>';
-  return html;
-}
-
-function renderAnalysisView(plan) {
-  const hasResearch = !!currentResearch;
-  const auto = plan.autopilotPlan || {};
-  const isAI = !!auto.aiGenerated;
-  return '<span class="label">AI分析。読んだ材料をもとに、切り口候補・採用案・脚本草稿を作るStep</span>' +
-    '<div class="autopilot-grid">' +
-      '<div class="autopilot-card"><h2>入力材料</h2><p>' + esc(hasResearch ? researchStatusLabel() : '未リサーチ。先にStep2を実行してください。') + '</p></div>' +
-      '<div class="autopilot-card"><h2>分析状態</h2><p>' + esc(isAI ? 'AI分析済み。Step4以降で確認できます。' : '未実行。') + '</p></div>' +
-      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>このStepでやること</h2><p>記事を読んだAI編集長が、動画の切り口を2〜3案出し、採用案・ブリーフ・構成・脚本草稿をまとめます。</p></div>' +
-    '</div>' +
-    '<div class="task-actions">' +
-      '<button id="analyzeStepBtn" onclick="runAnalysis()">Step3 AIで分析</button>' +
-      '<button class="secondary" onclick="setResultView(\\'theme\\')">結果を見る</button>' +
-    '</div>' +
-    '<div class="task-status">失敗した場合はこのStepだけが失敗します。リサーチ結果は保持されます。</div>';
-}
 
 function renderBoundResearchCards(plan) {
   const bound = (plan.researchDesign?.tasks || [])
@@ -3341,71 +3860,19 @@ function renderBoundResearchCards(plan) {
     '</div></div>';
 }
 
-function renderThemeProposalView(plan) {
-  const auto = plan.autopilotPlan || {};
-  const proposal = auto.themeProposal || {};
-  const candidates = proposal.candidates || [];
-  const selectedIdx = proposal.selected || 0;
-  const isAI = !!auto.aiGenerated;
-  const summary = researchReadSummary();
-
-  let basisText;
-  if (isAI) {
-    basisText = 'AI分析済み: Web ' + summary.webCount + '件・本文 ' + summary.fullTextCount + '件・Wiki ' + summary.wikiCount + '件を読んで生成';
-  } else if (currentResearch) {
-    basisText = 'Web ' + summary.webCount + '件を取得済み。「AIで分析」で切り口を生成できます。';
-  } else {
-    basisText = 'リサーチ前の仮案。左の「リサーチ」→ AI分析で実際の記事に基づく提案になります。';
-  }
-
-  let html = '<span class="label">テーマ提案。どの切り口で動画にするかを決める段階</span>';
-  html += '<div class="autopilot-grid">';
-  html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>試行結果</h2><p>' + esc(basisText) + '</p></div>';
-
-  if (candidates.length > 0) {
-    candidates.forEach(function(c, i) {
-      const isSelected = i === selectedIdx;
-      const borderStyle = isSelected
-        ? 'border: 2px solid var(--green);'
-        : 'border: 1px solid var(--line);';
-      html += '<div class="autopilot-card" style="' + borderStyle + '">' +
-        '<h2>' + (isSelected ? '✓ ' : '') + '案' + (i + 1) + '. ' + esc(c.angle || c.hookQuestion || '') + '</h2>' +
-        '<p><b>問い:</b> ' + esc(c.hookQuestion || '') + '</p>' +
-        '<p><b>仮の答え:</b> ' + esc(c.answer || '') + '</p>' +
-        '<div class="chips">' + (c.dataNeeds || []).map(function(d) { return '<span class="chip">' + esc(d) + '</span>'; }).join('') + '</div>' +
-        (c.risk ? '<p style="color:#fecaca;margin-top:6px;font-size:11px;">リスク: ' + esc(c.risk) + '</p>' : '') +
-        '<div class="task-actions"><button ' + (isSelected ? 'disabled ' : '') + 'onclick="selectThemeCandidate(' + i + ')">' + (isSelected ? '採用中' : 'この案を採用') + '</button></div>' +
-        '</div>';
-    });
-    if (proposal.selectedReason) {
-      html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>採用理由</h2><p>' + esc(proposal.selectedReason) + '</p></div>';
-    }
-    if ((proposal.rejectedReasons || []).length > 0) {
-      html += '<div class="autopilot-card" style="grid-column:1/-1;"><h2>棄却理由</h2>' +
-        proposal.rejectedReasons.map(function(r) { return '<p style="color:var(--muted);font-size:13px;">• ' + esc(r) + '</p>'; }).join('') +
-        '</div>';
-    }
-  } else {
-    html += '<div class="autopilot-card"><h2>フックとなる問題提起</h2><p>' + esc(proposal.hookQuestion || plan.centralQuestion || '') + '</p></div>' +
-      '<div class="autopilot-card"><h2>仮の答え</h2><p>' + esc(proposal.answer || plan.thesis || '') + '</p></div>' +
-      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>この切り口で使う想定データ</h2><div class="flow-list">' +
-        (proposal.dataPlan || []).slice(0, 6).map(function(item) {
-          return '<div class="flow-item"><b>' + esc(item.need) + '</b><p>検索: ' + esc(item.query || '') + '</p></div>';
-        }).join('') +
-      '</div></div>';
-  }
-
-  html += '</div>';
-  return html;
-}
 
 function formatBriefingText(plan) {
   const briefing = plan.autopilotPlan?.briefing || {};
-  if (briefing.rawText) return briefing.rawText;
+  const proposal = plan.autopilotPlan?.themeProposal || {};
+  const selected = (proposal.candidates || [])[proposal.selected || 0] || {};
   const chapters = briefing.chapters || [];
   const dataPlan = briefing.dataPlan || [];
+  const slideOutline = briefing.slideOutline || buildBriefingSlideOutline(plan);
   const risks = briefing.riskChecklist || [];
-  return [
+  const blocks = [
+    '【動画のテーマ】',
+    selected.angle || proposal.angle || plan.topic || '',
+    '',
     '【動画の約束】',
     briefing.purpose || plan.viewerPromise || '',
     '',
@@ -3415,12 +3882,61 @@ function formatBriefingText(plan) {
     '【全体の流れ】',
     chapters.map((item) => (item.no || '') + '. ' + (item.role || '') + ' - ' + (item.claim || '')).join('\\n') || '',
     '',
+    '【スライド構成】',
+    slideOutline.map((item) => {
+      const data = (item.dataNeeds || []).length ? ' / データ: ' + item.dataNeeds.join('、') : '';
+      return (item.no || '') + '. [' + (item.slideType || 'insight') + '] ' + (item.headline || '') + ' - ' + (item.point || '') + data;
+    }).join('\\n') || '',
+    '',
     '【使うデータ】',
     dataPlan.map((x) => '- ' + (x.need || x)).join('\\n') || '',
     '',
+    '【脚本指示】',
+    briefing.scriptInstructions || '企画提案の採用案から外れない。断定できない数字は言い切らない。熱量は上げるが、根拠のない煽りは入れない。',
+    '',
     '【注意点】',
     risks.map((x) => '- ' + x).join('\\n') || '',
-  ].join('\\n').trim();
+  ];
+  const generated = blocks.join('\\n').trim();
+  if (!briefing.rawText) return generated;
+
+  const raw = String(briefing.rawText || '').trim();
+  const hasSection = (text, name) => new RegExp('【' + name + '】').test(text);
+  const sectionText = (name) => {
+    const m = generated.match(new RegExp('【' + name + '】([\\\\s\\\\S]*?)(?=\\\\n【|$)'));
+    return m ? '【' + name + '】\\n' + m[1].trim() : '';
+  };
+  const missingSections = ['動画のテーマ', 'スライド構成', '脚本指示']
+    .filter((name) => !hasSection(raw, name))
+    .map(sectionText)
+    .filter(Boolean);
+  return missingSections.length ? raw + '\\n\\n' + missingSections.join('\\n\\n') : raw;
+}
+
+function buildBriefingSlideOutline(plan) {
+  const briefing = plan.autopilotPlan?.briefing || {};
+  const chapters = briefing.chapters || [];
+  const dataPlan = briefing.dataPlan || [];
+  const total = chapters.length || 6;
+  return (chapters.length ? chapters : [{ no: 1, role: 'hook', claim: plan.centralQuestion || plan.topic || 'Opening', dataNeeds: [] }]).map((item, index) => {
+    const needs = Array.isArray(item.dataNeeds) && item.dataNeeds.length
+      ? item.dataNeeds
+      : dataPlan.slice(index, index + 1).map((x) => x.need || x).filter(Boolean);
+    const type = item.slideType || chooseV3ModuleType({
+      role: item.role,
+      headline: item.headline || item.title || item.role,
+      point: item.point || item.claim,
+      claim: item.claim,
+    }, index, total, needs);
+    return {
+      no: item.no || index + 1,
+      role: item.role || 'chapter',
+      headline: item.headline || item.title || item.role || ('Slide ' + (index + 1)),
+      point: item.point || item.claim || '',
+      slideType: type,
+      dataNeeds: needs,
+    };
+  });
 }
 
 function updateBriefingFromEditor() {
@@ -3431,75 +3947,128 @@ function updateBriefingFromEditor() {
   const briefing = auto.briefing || (auto.briefing = {});
   briefing.rawText = rawText;
   const section = (name) => {
-    const m = rawText.match(new RegExp('【' + name + '】([\\\\s\\\\S]*?)(?=\\\\n【|$)'));
-    return m ? m[1].trim() : '';
+    const m = rawText.match(new RegExp('【' + name + '】([\\s\\S]*?)(?=\\r?\\n【|$)'));
+    return m ? m[1].replace(/^\\r?\\n/, '').trim() : '';
   };
+  briefing.theme = section('動画のテーマ') || briefing.theme || '';
   briefing.purpose = section('動画の約束') || briefing.purpose || '';
   briefing.coreMessage = section('中心メッセージ') || briefing.coreMessage || '';
   const flow = section('全体の流れ');
   if (flow) {
-    briefing.chapters = flow.split(/\\n+/).map((line, i) => {
-      const clean = line.replace(/^[-・\\d.\\s]+/, '').trim();
-      const parts = clean.split(/\\s+-\\s+/);
-      return { no: i + 1, role: parts[0] || 'chapter', claim: parts.slice(1).join(' - ') || clean };
-    }).filter((x) => x.claim);
+    const flowLines = flow.split(/\\r?\\n+/).map(l => l.trim()).filter(Boolean);
+    if (flowLines.length) {
+      briefing.chapters = flowLines.map((line, i) => {
+        const clean = line.replace(/^[-・\\d.\\s]+/, '').trim();
+        const parts = clean.split(/\\s+-\\s+/);
+        return { no: i + 1, role: parts[0] || 'chapter', claim: parts.slice(1).join(' - ') || clean };
+      }).filter((x) => x.claim || x.role);
+    }
   }
   const data = section('使うデータ');
   if (data) {
-    briefing.dataPlan = data.split(/\\n+/).map((line) => ({ need: line.replace(/^[-・\\s]+/, '').trim() })).filter((x) => x.need);
+    const dataLines = data.split(/\\r?\\n+/).map(l => l.replace(/^[-・\\s]+/, '').trim()).filter(Boolean);
+    if (dataLines.length) briefing.dataPlan = dataLines.map(need => ({ need }));
   }
+  const slides = section('スライド構成');
+  if (slides) {
+    const slideLines = slides.split(/\\r?\\n+/).map(l => l.trim()).filter(Boolean);
+    if (slideLines.length) {
+      briefing.slideOutline = slideLines.map((line, i) => {
+        const m = line.match(/^(\\d+)[.)、]?\\s*(?:\\[([^\\]]+)\\])?\\s*([\\s\\S]*?)$/);
+        const body = (m ? m[3] : line).trim();
+        const dashIdx = body.indexOf(' - ');
+        const headline = dashIdx >= 0 ? body.slice(0, dashIdx).trim() : body;
+        const rest = dashIdx >= 0 ? body.slice(dashIdx + 3).trim() : '';
+        const dataMarker = rest.indexOf(' / データ:');
+        const point = dataMarker >= 0 ? rest.slice(0, dataMarker).trim() : rest;
+        const dataNeeds = dataMarker >= 0
+          ? rest.slice(dataMarker + 7).split(/[、,]/).map(x => x.trim()).filter(Boolean)
+          : [];
+        return {
+          no: m ? Number(m[1]) : i + 1,
+          slideType: (m && m[2]) || '',
+          headline: headline || ('Slide ' + (i + 1)),
+          point,
+          dataNeeds,
+        };
+      });
+    }
+  } else {
+    briefing.slideOutline = buildBriefingSlideOutline(currentPlan);
+  }
+  briefing.scriptInstructions = section('脚本指示') || briefing.scriptInstructions || '';
+}
+
+function chooseV3ModuleType(item, index, total, needs) {
+  if (index === 0) return 'opening';
+  if (index === total - 1) return 'ending';
+  const text = [
+    item.role,
+    item.slideType,
+    item.type,
+    item.title,
+    item.headline,
+    item.point,
+    item.claim,
+    ...(Array.isArray(needs) ? needs : []),
+  ].join(' ');
+  if (/history|context|過去|昔|年表|経緯|来歴|移籍|2010|W杯/i.test(text)) return 'history';
+  if (/contrast|comparison|vs|比較|対比|一方|バルサ|マドリー|Barcelona|Real Madrid/i.test(text)) return 'comparison';
+  if (/profile|人物|選手|監督|プロフィール|経歴|年齢|所属|クラブ/i.test(text)) return 'profile';
+  if (/stats|evidence|data|人数|数値|得点|ゴール|アシスト|評価|順位|勝点|市場価値|出場|リスト|一覧/i.test(text)) return 'stats';
+  return 'insight';
 }
 
 function makeModulesFromCurrentPlan() {
   if (!currentPlan) return [];
   const auto = currentPlan.autopilotPlan || {};
-  const script = Array.isArray(auto.scriptDraft) && auto.scriptDraft.length ? auto.scriptDraft : [];
   const structure = Array.isArray(auto.scriptStructure) ? auto.scriptStructure : [];
+  const slideOutline = auto.briefing?.slideOutline || [];
   const chapters = auto.briefing?.chapters || [];
   const sourceTasks = currentPlan.researchDesign?.tasks || [];
-  const rows = script.length ? script : (structure.length ? structure : chapters).map((item, index) => ({
+  const rows = (structure.length ? structure : (slideOutline.length ? slideOutline : chapters)).map((item, index) => ({
     slideNo: item.no || index + 1,
     role: item.role || 'chapter',
-    title: item.headline || item.role || 'Slide ' + (index + 1),
-    narration: item.narration || item.point || item.claim || '',
+    title: item.headline || item.title || item.role || 'Slide ' + (index + 1),
+    point: item.point || item.claim || '',
+    narration: '',
     dataNeeds: item.dataNeeds || [],
+    selectedData: item.selectedData || [],
+    slideType: item.slideType || item.type || '',
   }));
   if (!rows.length) {
     rows.push({
       slideNo: 1,
       role: 'opening',
       title: currentPlan.topic || document.getElementById('title')?.value || 'Opening',
-      narration: auto.briefing?.coreMessage || currentPlan.thesis || '',
+      point: auto.briefing?.coreMessage || currentPlan.thesis || '',
+      narration: '',
       dataNeeds: (auto.briefing?.dataPlan || []).map((x) => x.need).slice(0, 3),
     });
   }
   const total = rows.length;
   return rows.map((item, index) => {
     const needs = Array.isArray(item.dataNeeds) ? item.dataNeeds : [];
-    const type = index === 0 ? 'opening' : (index === total - 1 ? 'ending' : (item.slideType || item.type || (needs.length ? 'stats' : 'insight')));
+    const type = item.slideType || chooseV3ModuleType(item, index, total, needs);
     const title = item.title || item.headline || 'Slide ' + (index + 1);
     const narration = item.narration || item.point || item.claim || '';
     // For stats/profile slides: try to resolve structured {label,value} slots from SofaScore data first
-    var resolvedSlots = (type === 'stats' || type === 'profile') ? resolveStatsSlots(title, narration, needs) : null;
+    var selectedData = Array.isArray(item.selectedData) ? item.selectedData : [];
+    var resolvedSlots = (!selectedData.length && (type === 'stats' || type === 'profile')) ? resolveStatsSlots(title, narration, needs) : null;
     var dataSlots;
-    if (resolvedSlots) {
-      dataSlots = resolvedSlots.map(function(s) { return { label: s.label, value: s.value, sourceUrl: '', sourceTitle: 'SofaScore/TM' }; });
+    if (selectedData.length) {
+      dataSlots = selectedData.slice(0, 6).map(function(s) {
+        return { label: s.label || '', value: s.value || '', sourceUrl: s.sourceUrl || '', sourceTitle: s.sourceTitle || 'SofaScore/TM' };
+      });
+    } else if (resolvedSlots) {
+      dataSlots = resolvedSlots.map(function(s) {
+        return { label: (s.sourceName ? s.sourceName + ' ' : '') + s.label, value: s.value, sourceUrl: s.sourceUrl || '', sourceTitle: s.sourceTitle || 'SofaScore/TM' };
+      });
     } else {
       dataSlots = needs.slice(0, 6).map((need) => {
         const task = sourceTasks.find((t) => [t.need, t.expectedOutput, t.query].join(' ').includes(need));
         const value = resolveFetchedValue(need, title, narration);
         return { label: need, value, sourceUrl: task?.sourceUrl || '', sourceTitle: task?.sourceTitle || '' };
-      });
-    }
-    // If still no slot matched, inject fetched entities as reference data for non-opening/ending slides
-    const fetchedOk = (currentFetchedData || []).filter((d) => d.ok);
-    if (fetchedOk.length && index > 0 && index < total - 1 && !dataSlots.some((s) => s.value)) {
-      fetchedOk.slice(0, 2).forEach((d) => {
-        if (Array.isArray(d.slots) && d.slots.length) {
-          d.slots.slice(0, 3).forEach(function(s) { dataSlots.push({ label: s.label, value: s.value, sourceUrl: '', sourceTitle: 'SofaScore/TM' }); });
-        } else {
-          dataSlots.push({ label: d.nameEn, value: d.summary, sourceUrl: '', sourceTitle: 'SofaScore/TM' });
-        }
       });
     }
     return {
@@ -3533,11 +4102,111 @@ function buildStructureFromBriefing() {
     dataNeeds: (m.dataSlots || []).map((s) => s.label),
     sources: (m.dataSlots || []).map((s) => s.sourceUrl || s.sourceTitle).filter(Boolean),
   }));
+  currentPlan.autopilotPlan.scriptDraft = [];
   activeSlideIdx = 0;
   markStepDone('structure');
   activeView = 'structure';
   renderPlan(currentPlan);
-  setTimeout(() => reloadV3Preview(), 50);
+}
+
+function confirmBriefingAndGoScript() {
+  updateBriefingFromEditor();
+  if (!currentPlan) return alert('先に企画提案を実行してください');
+  currentPlan.v3Modules = makeModulesFromCurrentPlan();
+  currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+  currentPlan.autopilotPlan.scriptStructure = currentPlan.v3Modules.map((m, i) => ({
+    no: i + 1,
+    headline: m.title,
+    point: m.scriptDir || m.narration,
+    slideType: m.type,
+    dataNeeds: (m.dataSlots || []).map((s) => s.label),
+    sources: (m.dataSlots || []).map((s) => s.sourceUrl || s.sourceTitle).filter(Boolean),
+  }));
+  currentPlan.autopilotPlan.scriptDraft = [];
+  activeSlideIdx = 0;
+  activeView = 'script';
+  renderPlan(currentPlan);
+}
+
+function generateScriptFromBriefing() {
+  updateBriefingFromEditor();
+  if (!currentPlan) return alert('先に企画書を作ってください');
+  currentPlan.v3Modules = makeModulesFromCurrentPlan();
+  currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+  currentPlan.autopilotPlan.scriptStructure = currentPlan.v3Modules.map((m, i) => ({
+    no: i + 1,
+    headline: m.title,
+    point: m.scriptDir || m.narration,
+    slideType: m.type,
+    dataNeeds: (m.dataSlots || []).map((s) => s.label),
+    sources: (m.dataSlots || []).map((s) => s.sourceUrl || s.sourceTitle).filter(Boolean),
+  }));
+  currentPlan.autopilotPlan.scriptDraft = [];
+  activeSlideIdx = 0;
+  markStepDone('structure');
+  generateScriptFromStructure();
+}
+
+function draftNarrationFromModule(module, index, total) {
+  const title = module.title || '';
+  const point = module.scriptDir || '';
+  const data = (module.dataSlots || [])
+    .filter((slot) => slot.label || slot.value)
+    .slice(0, 3)
+    .map((slot) => slot.value ? slot.label + 'は' + slot.value : slot.label)
+    .join('、');
+  const dataText = data ? 'ここで見るデータは、' + data + 'です。' : '';
+  if (index === 0) {
+    return 'まず注目したいのは「' + title + '」です。' + (point ? point + '。' : '') + dataText;
+  }
+  if (index === total - 1 || module.type === 'ending') {
+    return '結論です。' + (point ? point + '。' : '') + '確認できた材料だけに絞ると、この話題の見え方はかなり変わります。';
+  }
+  if (module.type === 'comparison') {
+    return (point || title) + '。' + dataText + 'この差を並べると、単なる印象論ではなく構造の違いが見えてきます。';
+  }
+  if (module.type === 'stats') {
+    return (point || title) + '。' + dataText + '数字で見ると、このニュースの違和感がかなりはっきりします。';
+  }
+  if (module.type === 'profile') {
+    return (point || title) + '。' + dataText + '人物やクラブの背景を押さえると、話の熱量が一段上がります。';
+  }
+  return (point || title) + '。' + dataText + 'ここは次の結論につなげるための大事な一枚です。';
+}
+
+function generateScriptFromStructure() {
+  if (!currentPlan) return alert('先に企画書を作ってください');
+  collectV3SlideInputs();
+  if (!Array.isArray(currentPlan.v3Modules) || !currentPlan.v3Modules.length) {
+    currentPlan.v3Modules = makeModulesFromCurrentPlan();
+  }
+  const total = currentPlan.v3Modules.length;
+  currentPlan.v3Modules = currentPlan.v3Modules.map((module, index) => {
+    const narration = module.narration && module.narration.trim()
+      ? module.narration.trim()
+      : draftNarrationFromModule(module, index, total);
+    return { ...module, narration };
+  });
+  currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+  currentPlan.autopilotPlan.scriptDraft = currentPlan.v3Modules.map((module, index) => ({
+    slideNo: index + 1,
+    title: module.title || 'Slide ' + (index + 1),
+    role: module.v3Meta?.role || module.subValue || module.type || '',
+    narration: module.narration || '',
+    dataNeeds: (module.dataSlots || []).map((slot) => slot.label).filter(Boolean),
+    selectedData: (module.dataSlots || []).filter((slot) => slot.value || slot.sourceUrl).map((slot) => ({
+      label: slot.label || '',
+      value: slot.value || '',
+      sourceTitle: slot.sourceTitle || '',
+      sourceUrl: slot.sourceUrl || '',
+      confidence: 'draft',
+      reason: 'Step4企画書で選定済み',
+    })),
+    caution: '',
+  }));
+  markStepDone('script');
+  activeView = 'script';
+  renderPlan(currentPlan);
 }
 
 function asciiNorm(s) {
@@ -3550,7 +4219,7 @@ function resolveFetchedValue(label, title, narration) {
   var hay = asciiNorm([label, title, narration].join(' '));
   for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
     var d = currentFetchedData[_i];
-    if (!d.ok) continue;
+    if (!d.ok || !d.selected) continue;
     var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
     if (parts.some(function(p) { return hay.includes(p); })) return d.summary;
   }
@@ -3561,13 +4230,12 @@ function resolveStatsSlots(title, narration, needs) {
   var hay = asciiNorm(hayArr.join(' '));
   for (var _i = 0; _i < (currentFetchedData || []).length; _i++) {
     var d = currentFetchedData[_i];
-    if (!d.ok || !Array.isArray(d.slots) || !d.slots.length) continue;
+    if (!d.ok || !d.selected || !Array.isArray(d.slots) || !d.slots.length) continue;
     var parts = asciiNorm(d.nameEn).split(' ').filter(function(p) { return p.length >= 3; });
-    if (parts.some(function(p) { return hay.includes(p); })) return d.slots;
+    if (parts.some(function(p) { return hay.includes(p); })) {
+      return d.slots.map(function(s) { return { ...s, sourceName: d.nameEn, sourceTitle: d.sourceTitle || 'SofaScore/TM', sourceUrl: d.sourceUrl || '' }; });
+    }
   }
-  // If exactly one player entity with slots and slide is stats type, use it
-  var playerSlots = (currentFetchedData || []).filter(function(d) { return d.ok && d.type === 'player' && Array.isArray(d.slots) && d.slots.length; });
-  if (playerSlots.length === 1) return playerSlots[0].slots;
   return null;
 }
 function dataStatusChip(need) {
@@ -3582,6 +4250,18 @@ function dataStatusChip(need) {
 
 function renderBriefingPipelineView(plan) {
   const briefing = plan.autopilotPlan?.briefing || {};
+  const proposal = plan.autopilotPlan?.themeProposal || {};
+  const selectedIdx = proposal.selected || 0;
+  const selectedLetter = String.fromCharCode(65 + selectedIdx);
+  const selectedCandidate = (proposal.candidates || [])[selectedIdx] || {};
+  const selectedAngle = selectedCandidate.angle || selectedCandidate.hookQuestion || proposal.angle || '';
+  const adoptedBanner = selectedAngle
+    ? '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#1b2230;border:2px solid var(--gold);border-radius:8px;margin-bottom:12px;">' +
+        '<span style="background:var(--gold);color:#111827;font-weight:900;font-size:12px;padding:3px 10px;border-radius:4px;flex-shrink:0;">採用: 企画' + selectedLetter + '</span>' +
+        '<span style="font-size:13px;color:var(--text);line-height:1.4;">' + esc(selectedAngle) + '</span>' +
+        '<button class="secondary" style="margin-left:auto;flex-shrink:0;font-size:11px;min-height:28px;padding:0 8px;" onclick="setResultView(\\'proposal\\')">← 企画提案に戻る</button>' +
+      '</div>'
+    : '';
   const chapters = briefing.chapters || [];
   const fetchedOk = (currentFetchedData || []).filter(d => d.ok);
   const fetchedPanel = fetchedOk.length
@@ -3592,22 +4272,37 @@ function renderBriefingPipelineView(plan) {
         '</div>' +
       '</div>'
     : '';
-  return fetchedPanel +
-    '<span class="label">企画書。採用テーマをもとに、動画のブリーフィングを作る段階</span>' +
+  const slideOutline = briefing.slideOutline || buildBriefingSlideOutline(plan);
+  const slideTypeBadge4 = (type) => {
+    const colors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
+    return '<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (colors[type] || '#374151') + ';color:#fff;">' + esc(type || 'insight') + '</span>';
+  };
+  return adoptedBanner + fetchedPanel +
+    '<span class="label">企画書。採用テーマをもとに内容を確認・編集する段階</span>' +
     '<textarea id="briefingText" class="brief-textarea" oninput="updateBriefingFromEditor()">' + esc(formatBriefingText(plan)) + '</textarea>' +
-    '<div class="task-actions"><button onclick="buildStructureFromBriefing()">企画書の内容で脚本構成</button><button class="secondary" onclick="updateBriefingFromEditor();renderPlan(currentPlan)">企画書を反映</button></div>' +
-    '<div class="autopilot-grid">' +
+    '<div class="task-actions">' +
+      '<button onclick="confirmBriefingAndGoScript()">企画書を確定して脚本生成へ →</button>' +
+      '<button class="secondary" onclick="updateBriefingFromEditor();renderPlan(currentPlan)">企画書を反映</button>' +
+    '</div>' +
+    '<div class="autopilot-grid" style="margin-top:14px;">' +
       '<div class="autopilot-card"><h2>動画の約束</h2><p>' + esc(briefing.purpose || plan.viewerPromise || '') + '</p></div>' +
       '<div class="autopilot-card"><h2>中心メッセージ</h2><p>' + esc(briefing.coreMessage || plan.thesis || '') + '</p></div>' +
-      '<div class="autopilot-card" style="grid-column:1/-1;"><h2>全体の流れ</h2><div class="flow-list">' +
-        chapters.slice(0, 7).map((item) => {
-          const needs = Array.isArray(item.dataNeeds) ? item.dataNeeds : [];
-          const needsHtml = needs.length
-            ? '<div class="chips" style="margin-top:4px;">' + needs.map(dataStatusChip).join('') + '</div>'
-            : '';
-          return '<div class="flow-item"><b>' + esc((item.no || '') + '. ' + (item.role || '')) + '</b><p>' + esc(item.claim) + '</p>' + needsHtml + '</div>';
-        }).join('') +
-      '</div></div>' +
+      (slideOutline.length
+        ? '<div class="autopilot-card" style="grid-column:1/-1;"><h2>スライド構成（' + slideOutline.length + '枚）</h2>' +
+            '<div class="slide-list" style="gap:5px;margin-top:6px;">' +
+              slideOutline.slice(0, 10).map((item) => {
+                const needs = item.dataNeeds || [];
+                return '<div style="display:grid;grid-template-columns:auto auto 1fr;gap:6px;align-items:start;background:#0a0d12;border:1px solid var(--line);border-radius:6px;padding:8px 10px;">' +
+                  '<span style="color:var(--muted);font-size:11px;min-width:18px;">' + esc(item.no || '') + '</span>' +
+                  slideTypeBadge4(item.slideType || item.role) +
+                  '<div><div style="font-size:13px;font-weight:700;">' + esc(item.headline || '') + '</div>' +
+                  (item.point ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + esc(String(item.point).slice(0, 100)) + '</div>' : '') +
+                  (needs.length ? '<div class="chips" style="margin-top:4px;">' + needs.slice(0, 4).map(dataStatusChip).join('') + '</div>' : '') +
+                  '</div>' +
+                '</div>';
+              }).join('') +
+            '</div></div>'
+        : '') +
       '<div class="autopilot-card" style="grid-column:1/-1;"><h2>使うデータ <span style="font-size:11px;font-weight:400;color:var(--muted);">✅取得済 ❓未確認</span></h2><div class="chips">' +
         (briefing.dataPlan || []).slice(0, 10).map((x) => dataStatusChip(x.need || x)).join('') +
       '</div></div>' +

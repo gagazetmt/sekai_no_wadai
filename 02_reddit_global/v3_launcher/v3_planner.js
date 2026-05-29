@@ -45,18 +45,30 @@ function buildSystemPrompt() {
 
 【手順】
 1. 読んだ記事から確認できた事実を把握する
-2. このトピックで動画にできる切り口を2案だけ考え、各案の根拠・必要データ・リスクを整理する
+2. このトピックで動画にできる切り口を3案考え、各案の根拠・必要データ・スライド構成・リスクを整理する
 3. 最もフックが強く、かつデータで支えられる1案を選ぶ
-4. 選んだ案でのブリーフ（動画の約束・論点4個・注意事項）を固める
-5. スライド構成（6枚）を設計し、各スライドの短いナレーション草稿を書く
+4. 選んだ案でのブリーフ（動画の約束・論点4〜6個・注意事項）を固める
+
+【slideTypeの選択肢】
+- opening: 冒頭フック・問い提示
+- history: 過去の経緯・比較軸の設定
+- comparison: データ対比・クラブ/選手比較
+- stats: 数字・スタッツ・順位・市場価値
+- profile: 選手/監督のプロフィール・背景
+- insight: 考察・解釈・論点まとめ
+- ending: 結論・視聴者へのメッセージ
 
 【絶対ルール】
 - 確認できていない事実を断定しない
 - 選手名・クラブ名・年号は記事の根拠があるものだけ使う
+- 相棒メモの「取得済みデータ（企画書・脚本構成で優先使用）」にある数値・所属・年齢・負傷情報は、themeProposal と briefing の dataNeeds に優先的に反映する
+- 相棒メモの「取得失敗・未確認データ」にある対象は、断定せず missingData または publishGates に回す
 - 結論はJSON形式のみ。コードブロックや前置き文は不要
 - JSONを途中で切らない。長文よりも完結したJSONを優先する
-- narrationは日本語で書く（20代前半向けサッカー解説、隣で観てる親近感）
-- 相棒メモに「取得済みデータ」がある場合、そのラベル名（ゴール/アシスト/評価/クラブ/年齢等）をdataNeeds に使うこと`;
+- この段階では脚本構成・ナレーション草稿・完成台本を書かない
+- 相棒メモに「取得済みデータ」がある場合、そのラベル名（ゴール/アシスト/評価/クラブ/年齢等）をdataNeeds に入れること
+- candidates は必ず3案出力する（A/B/C案として提示するため）
+- 各 candidate の slideOutline は4〜7枚の構成案を必ず出力する`;
 }
 
 function buildUserPrompt(topic, memo, researchSummary) {
@@ -81,41 +93,24 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
         "answer": "仮の答え",
         "angle": "動画の切り口・約束",
         "dataNeeds": ["必要なデータ1"],
-        "risk": "この案のリスクを短く"
+        "risk": "この案のリスクを短く",
+        "slideOutline": [
+          {"no": 1, "slideType": "opening", "headline": "スライドタイトル", "point": "このスライドで言うこと", "dataNeeds": []}
+        ]
       }
     ],
     "selected": 0,
     "selectedReason": "選んだ理由（読んだ記事ベースで具体的に）",
-    "rejectedReasons": ["案Bを棄却した理由"]
+    "rejectedReasons": ["案Bを棄却した理由", "案Cを棄却した理由"]
   },
   "briefing": {
     "purpose": "この動画で視聴者に届ける約束（一文）",
     "coreMessage": "一文で言える結論",
     "chapters": [
-      {"no": 1, "role": "hook", "claim": "主張", "dataNeeds": ["選手名 のゴール数など取得済みラベル名"]}
+      {"no": 1, "role": "hook", "slideType": "opening", "claim": "主張", "dataNeeds": ["選手名 のゴール数など取得済みラベル名"]}
     ],
     "riskChecklist": ["確認すべき事実1"]
   },
-  "scriptStructure": [
-    {
-      "no": 1,
-      "role": "hook",
-      "headline": "スライドタイトル",
-      "point": "このスライドで言うこと",
-      "visualIntent": "見せ方の意図",
-      "dataNeeds": ["選手名 のゴール", "選手名 のアシスト", "選手名 の評価", "選手名 のクラブ", "選手名 の年齢"]
-    }
-  ],
-  "scriptDraft": [
-    {
-      "slideNo": 1,
-      "title": "スライドタイトル",
-      "role": "hook",
-      "narration": "ナレーション草稿（日本語・1〜2文）",
-      "dataNeeds": ["選手名 のゴール", "選手名 のアシスト", "選手名 の評価", "選手名 のクラブ", "選手名 の年齢"],
-      "caution": "注意点（なければ空文字）"
-    }
-  ],
   "missingData": ["記事から確認できなかった重要なデータ"],
   "publishGates": ["公開前に確認すべき条件"]
 }`;
@@ -151,17 +146,15 @@ memo: ${memo || 'なし'}
 ${String(raw || '').slice(0, 1200)}
 
 必須条件:
-- candidatesは2件
-- scriptStructureとscriptDraftは6件
-- narrationは各1文
+- candidatesは3件（各案にslideOutline 4〜5枚を含める）
+- briefing.chaptersは4〜6件（各chapterにslideTypeを入れる）
 - 文字数を抑える
+- 脚本構成とナレーション草稿は書かない
 - JSON以外の文章は禁止
 
 {
   "themeProposal": {"candidates": [], "selected": 0, "selectedReason": "", "rejectedReasons": []},
   "briefing": {"purpose": "", "coreMessage": "", "chapters": [], "riskChecklist": []},
-  "scriptStructure": [],
-  "scriptDraft": [],
   "missingData": [],
   "publishGates": []
 }`;
@@ -200,22 +193,6 @@ function buildFallbackAIPlan(topic, researchSummary, reason) {
       chapters: slides.map((s, i) => ({ no: i + 1, role: s[0], claim: s[1], dataNeeds: ['確認ソース'] })),
       riskChecklist: ['未確認の数字を断定しない', '出典日付を明記する'],
     },
-    scriptStructure: slides.map((s, i) => ({
-      no: i + 1,
-      role: s[0],
-      headline: s[1],
-      point: s[2],
-      visualIntent: '既存V2テンプレートで見せる',
-      dataNeeds: ['確認ソース'],
-    })),
-    scriptDraft: slides.map((s, i) => ({
-      slideNo: i + 1,
-      title: s[1],
-      role: s[0],
-      narration: s[2],
-      dataNeeds: ['確認ソース'],
-      caution: '',
-    })),
     missingData: ['AI分析JSONの再生成確認', ...(researchSummary.articleCount ? [] : ['リサーチ記事'])],
     publishGates: ['強い数字はソースURL付きで確認する', 'AIフォールバック構成のため公開前に人間確認する'],
   };
@@ -259,8 +236,8 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
     articleCount: researchSummary.articleCount,
     themeProposal: parsed.themeProposal || {},
     briefing: parsed.briefing || {},
-    scriptStructure: parsed.scriptStructure || [],
-    scriptDraft: parsed.scriptDraft || [],
+    scriptStructure: [],
+    scriptDraft: [],
     missingData: parsed.missingData || [],
     publishGates: parsed.publishGates || [],
   };
