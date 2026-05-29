@@ -965,6 +965,19 @@ app.post('/api/v3/generate-script', async (req, res) => {
   }
 });
 
+app.get('/api/v3/images/stock', (req, res) => {
+  try {
+    const { findStockMatches } = require(path.join(__dirname, '..', 'scripts', 'modules', 'stock_match'));
+    const q    = String(req.query.q    || '').trim();
+    const type = String(req.query.type || 'player').toLowerCase();
+    if (!q) return res.json({ ok: true, images: [] });
+    const matches = findStockMatches({ type, entity: q, teamName: q });
+    res.json({ ok: true, images: matches.slice(0, 24).map((m) => ({ url: m.url, role: m.role, name: m.name, score: m.score })) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message, images: [] });
+  }
+});
+
 app.post('/api/v3/export-v2', (req, res) => {
   try {
     const { plan, sourceType = 'custom', memo = '' } = req.body || {};
@@ -1708,6 +1721,16 @@ button:disabled { opacity: .55; cursor: wait; }
   font-size: 13px;
   line-height: 1.55;
 }
+.step5-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.step5-right { display: flex; flex-direction: column; gap: 10px; }
+.slot-edit-row { display: grid; grid-template-columns: 1fr 1.6fr; gap: 6px; align-items: center; margin-bottom: 5px; }
+.slot-edit-label { font-size: 12px; color: var(--muted); padding: 5px 8px; background: #0a0d12; border: 1px solid var(--line); border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gallery-search-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-bottom: 8px; }
+.stock-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 5px; max-height: 160px; overflow-y: auto; }
+.stock-img-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: #0a0d12; }
+.stock-img-thumb:hover { border-color: var(--muted); }
+.stock-img-thumb.selected { border-color: var(--gold); }
+@media (max-width: 720px) { .step5-layout { grid-template-columns: 1fr; } }
 .pipeline-steps {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2700,6 +2723,38 @@ function saveScriptNarration(slideIdx) {
   persistV3State();
 }
 
+function saveDataSlotDirect(slotIdx, value) {
+  const m = currentPlan?.v3Modules?.[activeSlideIdx];
+  if (!m?.dataSlots?.[slotIdx]) return;
+  m.dataSlots[slotIdx].value = value;
+  persistV3State();
+}
+
+async function searchV3StockImages() {
+  const q = document.getElementById('v3ImgSearchInput')?.value?.trim();
+  const type = document.getElementById('v3ImgTypeSelect')?.value || 'player';
+  const grid = document.getElementById('v3StockImgGrid');
+  if (!q) { if (grid) grid.innerHTML = '<span style="color:var(--muted);font-size:12px;">検索ワードを入力</span>'; return; }
+  if (grid) grid.innerHTML = '<span style="color:var(--muted);font-size:12px;">検索中...</span>';
+  try {
+    const res = await fetch('/api/v3/images/stock?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(type));
+    const data = await res.json();
+    renderV3StockGallery(data.images || []);
+  } catch (e) {
+    if (grid) grid.innerHTML = '<span style="color:#fca5a5;font-size:12px;">' + esc(e.message) + '</span>';
+  }
+}
+
+function renderV3StockGallery(images) {
+  const grid = document.getElementById('v3StockImgGrid');
+  if (!grid) return;
+  if (!images.length) { grid.innerHTML = '<span style="color:var(--muted);font-size:12px;">画像なし</span>'; return; }
+  const selectedImgs = Array.isArray(currentPlan?.v3Modules?.[activeSlideIdx]?.images) ? currentPlan.v3Modules[activeSlideIdx].images : [];
+  grid.innerHTML = images.map((img) =>
+    '<img class="stock-img-thumb' + (selectedImgs.includes(img.url) ? ' selected' : '') + '" src="' + esc(img.url) + '" title="' + esc((img.name || img.role || '') + ' (' + (img.score || 0) + ')') + '" onclick="toggleV3Image(\'' + esc(img.url).replace(/'/g, '&#39;') + '\')" loading="lazy">'
+  ).join('');
+}
+
 async function runAIScriptGeneration() {
   const btn = document.getElementById('aiScriptBtn');
   const status = document.getElementById('aiScriptStatus');
@@ -3226,7 +3281,7 @@ function renderScriptView(plan) {
     return '<span class="label">脚本生成 — 最終編集フェーズ</span>' +
       '<div class="panel" style="text-align:center;padding:24px 16px;">' +
         '<div style="font-size:15px;font-weight:700;margin-bottom:8px;">企画書の構成（' + (slideCount || '?') + '枚）をAIが脚本化します</div>' +
-        '<div style="color:var(--muted);font-size:13px;margin-bottom:18px;">生成後、各スライドのナレーションを個別に編集できます</div>' +
+        '<div style="color:var(--muted);font-size:13px;margin-bottom:18px;">生成後、各スライドのナレーション・データ・画像を個別に編集できます</div>' +
         '<div class="task-actions" style="justify-content:center;">' +
           '<button id="aiScriptBtn" onclick="runAIScriptGeneration()">AI脚本生成</button>' +
           '<button class="secondary" onclick="setResultView(\\'briefing\\')">← 企画書に戻る</button>' +
@@ -3239,7 +3294,30 @@ function renderScriptView(plan) {
   const activeScript = script[active] || {};
   const typeColors = { opening: '#2563eb', history: '#7c3aed', comparison: '#0891b2', stats: '#b45309', profile: '#065f46', insight: '#1e40af', ending: '#374151' };
   const typeBadge = (type) => '<span style="display:inline-flex;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (typeColors[type] || '#374151') + ';color:#fff;margin-right:4px;">' + esc(type || 'insight') + '</span>';
-  return '<span class="label">脚本生成 — 最終編集フェーズ。各スライドを確認・編集してV2へ渡す</span>' +
+
+  // データスロット編集行
+  const slots = activeModule.dataSlots || [];
+  const slotRows = slots.length
+    ? slots.map((slot, i) => (
+        '<div class="slot-edit-row">' +
+          '<span class="slot-edit-label" title="' + esc(slot.label || '') + '">' + esc(slot.label || '—') + '</span>' +
+          '<input style="font-size:12px;padding:5px 8px;" placeholder="値を入力" value="' + esc(slot.value || '') + '" oninput="saveDataSlotDirect(' + i + ', this.value)">' +
+        '</div>'
+      )).join('')
+    : '<div style="color:var(--muted);font-size:12px;">データスロットなし（step4で設定）</div>';
+
+  // 選択済み画像
+  const selectedImgs = Array.isArray(activeModule.images) ? activeModule.images : [];
+  const selectedImgHtml = selectedImgs.length
+    ? '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">' +
+        selectedImgs.map((src) => '<img src="' + esc(src) + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:2px solid var(--gold);" title="' + esc(src) + '">').join('') +
+      '</div>'
+    : '';
+
+  // 初期検索クエリ: plan.topic か slide title から
+  const initQ = esc((plan.topic || activeScript.title || '').replace(/[「」【】\s]/g, ' ').trim().split(/\s+/).slice(0, 2).join(' '));
+
+  return '<span class="label">脚本生成 — ナレーション・データ・画像を編集してV2へ渡す</span>' +
     '<div class="task-actions">' +
       '<button id="aiScriptBtn" onclick="runAIScriptGeneration()">AI脚本を再生成</button>' +
       '<button class="secondary" onclick="setResultView(\\'briefing\\')">← 企画書に戻る</button>' +
@@ -3252,23 +3330,44 @@ function renderScriptView(plan) {
         '</button>'
       )).join('') +
     '</div>' +
-    '<div class="editor-layout" style="margin-top:8px;">' +
+    '<div class="step5-layout">' +
+
+      // ── 左カラム: ナレーション + データスロット ──
       '<div class="panel">' +
         '<div style="margin-bottom:8px;">' +
           typeBadge(activeModule.type || activeScript.role) +
           '<span style="font-size:13px;font-weight:700;">' + esc(activeScript.title || activeModule.title || '') + '</span>' +
         '</div>' +
-        '<label class="label" style="margin-bottom:4px;">ナレーション（編集可）</label>' +
-        '<textarea id="v3ScriptNarration" style="min-height:160px;line-height:1.65;font-size:14px;" oninput="saveScriptNarration(' + active + ')">' + esc(activeScript.narration || '') + '</textarea>' +
-        (activeScript.caution ? '<p style="color:#fecaca;font-size:12px;margin-top:6px;">⚠ ' + esc(activeScript.caution) + '</p>' : '') +
-        '<label class="label" style="margin-top:10px;">このスライドで使うデータ</label>' +
-        '<div class="chips">' + (activeScript.dataNeeds || []).map((x) => '<span class="chip">' + esc(x) + '</span>').join('') + '</div>' +
+        '<label class="label" style="margin-bottom:4px;">ナレーション</label>' +
+        '<textarea id="v3ScriptNarration" style="min-height:130px;line-height:1.65;font-size:14px;" oninput="saveScriptNarration(' + active + ')">' + esc(activeScript.narration || '') + '</textarea>' +
+        (activeScript.caution ? '<p style="color:#fecaca;font-size:12px;margin-top:5px;">⚠ ' + esc(activeScript.caution) + '</p>' : '') +
+        '<label class="label" style="margin-top:12px;margin-bottom:6px;">データセット</label>' +
+        '<div id="v3Step5DataSlots">' + slotRows + '</div>' +
       '</div>' +
-      '<div class="panel">' +
-        '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
-        '<div class="task-actions" style="margin-top:6px;"><button class="secondary" onclick="reloadV3Preview()">プレビュー更新</button></div>' +
-        '<div class="task-status" style="margin-top:6px;">スライド <b>' + (active + 1) + '</b> / ' + script.length + '枚</div>' +
+
+      // ── 右カラム: プレビュー + 画像ギャラリー ──
+      '<div class="step5-right">' +
+        '<div class="panel">' +
+          '<div class="preview-wrap" id="v3PreviewWrap"><iframe id="v3PreviewFrame" scrolling="no"></iframe></div>' +
+          '<div class="task-actions" style="margin-top:6px;justify-content:space-between;">' +
+            '<button class="secondary" onclick="reloadV3Preview()">プレビュー更新</button>' +
+            '<span style="color:var(--muted);font-size:12px;">スライド ' + (active + 1) + ' / ' + script.length + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="panel">' +
+          '<label class="label" style="margin-bottom:6px;">画像ギャラリー</label>' +
+          '<div class="gallery-search-row">' +
+            '<input id="v3ImgSearchInput" placeholder="選手名・チーム名" value="' + initQ + '">' +
+            '<select id="v3ImgTypeSelect" style="padding:6px 8px;font-size:12px;">' +
+              ['player','team','manager'].map((t) => '<option value="' + t + '">' + t + '</option>').join('') +
+            '</select>' +
+            '<button class="secondary" onclick="searchV3StockImages()" style="padding:6px 10px;">検索</button>' +
+          '</div>' +
+          '<div id="v3StockImgGrid" class="stock-img-grid"><span style="color:var(--muted);font-size:12px;">検索してください</span></div>' +
+          (selectedImgHtml ? '<label class="label" style="margin-top:8px;">選択中</label>' + selectedImgHtml : '') +
+        '</div>' +
       '</div>' +
+
     '</div>';
 }
 
