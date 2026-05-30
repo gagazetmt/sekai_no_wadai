@@ -2,6 +2,33 @@
 
 Last updated: 2026-05-30 JST
 
+## Latest Update - 2026-05-30 Step2 rebuild
+
+User approved the Step2 fix plan and asked to implement while showing, for each stage, AI/Serper usage, model, cost, AI-change recommendation, and webshare bandwidth impact.
+
+Implemented in `v3_launcher/`:
+
+- Step2-1 now creates short query labels and deduplicated compact search queries instead of repeating long phrases.
+- Step2-2 displays Japanese article titles only; original titles are kept only internally as fallback.
+- Step2-3 label candidates now carry type badges such as player / manager / team / wiki.
+- Removed the old top-level SofaScore fetched-data block; Step2-4 is the single place for fetched free data.
+- Step2-4 cards now show richer fetched slots per label from SofaScore / Transfermarkt / Wiki results.
+- Step2-5 uses Japanese material bullets for proposal material, and proposal candidates now carry `videoLengthType`, `targetMinutes`, and `recommendedSlideCount`.
+- A/B/C proposals are normalized as short / standard / long and slide outlines are variable, 4-8 slides depending on material.
+- The selected proposal's `slideOutline` is passed into the briefing/STEP3 path so slide creation has the actual adopted structure.
+- Added a Step2-6 "不足データ確認" gate before moving to STEP3, with missing data, publish gates, fetched data, and a re-research button.
+- Added Step2 cost/AI/bandwidth meta in the research material panel.
+
+Verification so far:
+
+- `node --check v3_launcher/server.js`
+- `node --check v3_launcher/v3_research.js`
+- `node --check v3_launcher/v3_planner.js`
+
+Not run yet in this round:
+
+- Full live Step2 research, to avoid spending Serper/AI credits during code verification.
+
 ## First Read
 
 This file is the active handover for the V3 launcher work. At the start of the next session, read this file before making changes.

@@ -266,6 +266,34 @@ function buildQueriesFromLabels(labels, topic) {
   return fallbackQueries(topic).map(compactSearchQuery).filter(Boolean).slice(0, 3);
 }
 
+function normalizeSearchQueries(queries, labels = [], topic = '') {
+  const labelTerms = (labels || []).map((x) => String(x || '').trim()).filter(Boolean);
+  const out = [];
+  const seen = new Set();
+  const add = (query) => {
+    const clean = String(query || '')
+      .replace(/[、。！？!?]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter((term, index, arr) => arr.findIndex((x) => x.toLowerCase() === term.toLowerCase()) === index)
+      .slice(0, 7)
+      .join(' ');
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return;
+    seen.add(key);
+    out.push(clean);
+  };
+  (queries || []).forEach(add);
+  if (labelTerms.length >= 2) {
+    add(labelTerms.slice(0, 3).join(' '));
+    add(`${labelTerms.slice(0, 2).join(' ')} squad`);
+    add(`${labelTerms.slice(0, 2).join(' ')} injury`);
+  }
+  fallbackQueries(topic).forEach(add);
+  return out.slice(0, 3);
+}
+
 async function generateSearchPlan(topic, memo = '') {
   const prompt = `You are preparing search for a Japanese soccer-news case.
 
@@ -301,15 +329,13 @@ Rules:
     const queryLabels = Array.isArray(parsed?.queryLabels)
       ? parsed.queryLabels.map((x) => String(x).trim()).filter(Boolean).slice(0, 8)
       : [];
-    const queries = Array.isArray(parsed?.queries)
-      ? parsed.queries.map((x) => compactSearchQuery(String(x))).filter(Boolean).slice(0, 3)
-      : [];
+    const queries = normalizeSearchQueries(Array.isArray(parsed?.queries) ? parsed.queries : [], queryLabels, topic);
     if (queryLabels.length && queries.length) return { queryLabels, queries };
   } catch (e) {
     console.warn('[v3_research] generateSearchPlan failed:', e.message);
   }
   const queryLabels = fallbackQueryLabels(topic, memo);
-  return { queryLabels, queries: buildQueriesFromLabels(queryLabels, topic) };
+  return { queryLabels, queries: normalizeSearchQueries(buildQueriesFromLabels(queryLabels, topic), queryLabels, topic) };
 }
 
 // Use DeepSeek to convert a Japanese soccer topic into 3 targeted English search queries.
@@ -347,15 +373,68 @@ Rules:
   return null;
 }
 
+async function enrichJapaneseResearchText(topic, learningItems) {
+  const items = (learningItems || []).slice(0, 10);
+  if (!items.length) return { titleMap: {}, materialBulletsJa: [] };
+  const prompt = `以下はサッカーニュース調査でhitした記事です。日本語UIに出すため、記事タイトルを短い日本語にし、企画書A/B/Cの材料になる要点を日本語で4つ作ってください。
+
+案件:
+${topic}
+
+記事:
+${items.map((item, i) => `[${i + 1}] ${item.title || ''} (${item.host || ''})
+${String(item.snippet || item.learningText || '').slice(0, 360)}`).join('\n\n')}
+
+出力JSONのみ:
+{
+  "titles": [{"index":1,"titleJa":"短い日本語タイトル"}],
+  "materialBulletsJa": [
+    {"label":"出来事","text":"日本語で要点"},
+    {"label":"人物","text":"日本語で要点"},
+    {"label":"背景","text":"日本語で要点"},
+    {"label":"論点","text":"日本語で要点"}
+  ]
+}`;
+  try {
+    const raw = await callAI({
+      system: 'Output valid JSON only. No markdown.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1600,
+      forceProvider: 'gemini',
+      label: 'step2_ja_titles_materials',
+    });
+    const parsed = parseLooseJson(raw);
+    const titleMap = {};
+    (Array.isArray(parsed?.titles) ? parsed.titles : []).forEach((item) => {
+      const index = Number(item.index || 0);
+      if (index > 0 && item.titleJa) titleMap[index] = String(item.titleJa).trim().slice(0, 90);
+    });
+    const materialBulletsJa = (Array.isArray(parsed?.materialBulletsJa) ? parsed.materialBulletsJa : [])
+      .map((item) => ({
+        label: String(item.label || '材料').slice(0, 20),
+        text: String(item.text || '').slice(0, 240),
+      }))
+      .filter((item) => item.text)
+      .slice(0, 4);
+    return { titleMap, materialBulletsJa };
+  } catch (e) {
+    console.warn('[v3_research] enrichJapaneseResearchText failed:', e.message);
+    return { titleMap: {}, materialBulletsJa: [] };
+  }
+}
+
 async function runTopicResearch(input = {}) {
   const topic = String(input.topic || input.title || '').trim();
   const memo = String(input.memo || '').trim();
   const searchPlan = await generateSearchPlan(topic, memo);
   // AI-translate Japanese topic to English before building query list
   const aiQueries = await generateEnglishQueries(topic, memo);
+  const plannedQueries = searchPlan.queries && searchPlan.queries.length >= 3
+    ? searchPlan.queries
+    : [...(searchPlan.queries || []), ...(aiQueries || [])];
   const queries = pickQueries({
     topic, memo, plan: input.plan,
-    queries: [...(searchPlan.queries || []), ...(aiQueries || []), ...(input.queries || [])],
+    queries: normalizeSearchQueries([...(plannedQueries || []), ...(input.queries || [])], searchPlan.queryLabels || [], topic),
   });
   const pickMin = Number(input.pickMin || DEFAULT_PICK_MIN);
   const pickMax = Number(input.pickMax || DEFAULT_PICK_MAX);
@@ -394,6 +473,7 @@ async function runTopicResearch(input = {}) {
     ...item,
     usableFor: classifyUse(item),
   }));
+  const jaText = await enrichJapaneseResearchText(topic, learningItems);
 
   return {
     ok: true,
@@ -406,6 +486,7 @@ async function runTopicResearch(input = {}) {
     learningCorpus: learningItems.map((item, i) => ({
       index: i + 1,
       title: item.title,
+      titleJa: jaText.titleMap[i + 1] || item.title,
       url: item.link,
       host: item.host,
       fetchStatus: item.fetchStatus,
@@ -418,6 +499,7 @@ async function runTopicResearch(input = {}) {
       selectedUrlCount: learningItems.length,
       fullTextCount: learningItems.filter((x) => /^full_text/.test(x.fetchStatus)).length,
       snippetOnlyCount: learningItems.filter((x) => !/^full_text/.test(x.fetchStatus)).length,
+      materialBulletsJa: jaText.materialBulletsJa,
     },
   };
 }

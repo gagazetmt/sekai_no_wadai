@@ -289,9 +289,11 @@ function buildServerAcquiredDataSummary(research, wikiStories, fetchedData) {
   return {
     queryLabels: research?.queryLabels || [],
     queries: research?.queries || [],
-    articleDigest: serverArticleDigest(articles),
+    articleDigest: (research?.summary?.materialBulletsJa?.length)
+      ? { bullets: research.summary.materialBulletsJa, fullTextCount: research.summary.fullTextCount || 0, articleCount: articles.length }
+      : serverArticleDigest(articles),
     webSources: articles.slice(0, 8).map((item) => ({
-      title: item.title || item.host || 'article',
+      title: item.titleJa || item.title || item.host || 'article',
       url: item.url || '',
       host: item.host || '',
       fetchStatus: item.fetchStatus || '',
@@ -305,9 +307,10 @@ function buildServerAcquiredDataSummary(research, wikiStories, fetchedData) {
     entities: (fetchedData || []).map((d) => d.nameEn).filter(Boolean).slice(0, 12),
     labelCandidates: [
       ...(research?.labelCandidates || []),
-      ...(wikiStories?.results || []).map((x) => x.entity).filter(Boolean),
-      ...(fetchedData || []).map((d) => d.nameEn).filter(Boolean),
+      ...(wikiStories?.results || []).map((x) => ({ name: x.entity, type: 'wiki' })).filter((x) => x.name),
+      ...(fetchedData || []).map((d) => ({ name: d.nameEn, type: d.type || 'entity' })).filter((x) => x.name),
     ].filter(Boolean).slice(0, 16),
+    costSummary: research?.costSummary || null,
   };
 }
 
@@ -336,6 +339,9 @@ function mergeAutopilotPlanServer(base, aiPlan) {
       purpose: aiPlan.briefing?.purpose || '',
       coreMessage: aiPlan.briefing?.coreMessage || '',
       chapters: aiPlan.briefing?.chapters || [],
+      slideOutline: selectedCandidate.slideOutline || aiPlan.briefing?.slideOutline || [],
+      videoLengthType: selectedCandidate.videoLengthType || '',
+      targetMinutes: selectedCandidate.targetMinutes || '',
       dataPlan: (aiPlan.briefing?.chapters || [])
         .flatMap((ch) => (ch.dataNeeds || []).map((need) => ({ need })))
         .slice(0, 8),
@@ -582,7 +588,9 @@ app.post('/api/v3/research/topic', async (req, res) => {
       console.warn('[research/topic] aiExpandResearch error:', e.message);
       return { followUpQueries: [], entities: [] };
     });
-    result.labelCandidates = (expanded.entities || []).map((e) => e.nameEn).filter(Boolean);
+    result.labelCandidates = (expanded.entities || [])
+      .filter((e) => e && e.nameEn)
+      .map((e) => ({ name: e.nameEn, type: e.type || 'entity' }));
 
     // Run follow-up queries as snippet-only entries (no full article fetch — saves Jina credits)
     if (expanded.followUpQueries.length) {
@@ -652,6 +660,7 @@ function compactResearchForSave(research) {
     learningCorpus: (research.learningCorpus || []).map((c) => ({
       index: c.index,
       title: c.title,
+      titleJa: c.titleJa,
       url: c.url,
       host: c.host,
       fetchStatus: c.fetchStatus,
@@ -742,7 +751,9 @@ async function runProposalJob(jobId, input) {
       console.warn('[proposal-job] aiExpandResearch failed:', error.message);
       return { followUpQueries: [], entities: [] };
     });
-    research.labelCandidates = (expanded.entities || []).map((e) => e.nameEn).filter(Boolean);
+    research.labelCandidates = (expanded.entities || [])
+      .filter((e) => e && e.nameEn)
+      .map((e) => ({ name: e.nameEn, type: e.type || 'entity' }));
     setStage('labels', 'Step2-3 本筋ラベル作成中...', { plan, research });
 
     let wikiStories = { ok: true, results: [], entityCount: 0, warning: '' };
@@ -817,6 +828,8 @@ async function runProposalJob(jobId, input) {
       };
     }
     const costSummary = costTracker.getSummary();
+    research.costSummary = costSummary;
+    acquiredData.costSummary = costSummary;
     console.log(`[cost] ━━ ジョブ合計: ${costSummary.calls}コール | $${costSummary.totalUsd} (¥${costSummary.totalJpy}) ━━`);
     const result = { plan, research, wikiStories, aiPlan, fetchedData, acquiredData, prefetchWarnings: prefetch.warnings || [], costSummary };
     Object.assign(job, {
@@ -3895,9 +3908,12 @@ function buildAcquiredDataSummary() {
   return {
     queryLabels: currentResearch?.queryLabels || [],
     queries: currentResearch?.queries || tasks.map((task) => task.query).filter(Boolean).slice(0, 6),
-    articleDigest: buildArticleDigest(articles),
+    articleDigest: (currentResearch?.summary?.materialBulletsJa?.length)
+      ? { bullets: currentResearch.summary.materialBulletsJa, fullTextCount: currentResearch.summary.fullTextCount || 0, articleCount: articles.length }
+      : buildArticleDigest(articles),
     webSources: articles.slice(0, 8).map((item) => ({
-      title: item.title || item.host || 'article',
+      title: item.titleJa || item.title || item.host || 'article',
+      titleJa: item.titleJa || '',
       url: item.url || '',
       host: item.host || '',
       fetchStatus: item.fetchStatus || '',
@@ -3906,9 +3922,10 @@ function buildAcquiredDataSummary() {
     entities,
     labelCandidates: [
       ...(currentResearch?.labelCandidates || []),
-      ...entities,
-      ...wikiResults.map((x) => x.entity).filter(Boolean),
+      ...entities.map((name) => ({ name, type: 'entity' })),
+      ...wikiResults.map((x) => ({ name: x.entity, type: 'wiki' })).filter((x) => x.name),
     ].filter(Boolean).slice(0, 16),
+    costSummary: currentResearch?.costSummary || null,
   };
 }
 
@@ -3998,6 +4015,9 @@ function buildMergedAutopilotPlan(base, aiPlan) {
       purpose: aiPlan.briefing?.purpose || '',
       coreMessage: aiPlan.briefing?.coreMessage || '',
       chapters: aiPlan.briefing?.chapters || [],
+      slideOutline: selectedCandidate.slideOutline || aiPlan.briefing?.slideOutline || [],
+      videoLengthType: selectedCandidate.videoLengthType || '',
+      targetMinutes: selectedCandidate.targetMinutes || '',
       dataPlan: (aiPlan.briefing?.chapters || [])
         .flatMap((ch) => (ch.dataNeeds || []).map((need) => ({ need })))
         .slice(0, 8),
@@ -4078,6 +4098,10 @@ function selectThemeCandidate(index) {
   proposal.answer = selected.answer || proposal.answer || '';
   proposal.angle = selected.angle || proposal.angle || '';
   proposal.dataPlan = (selected.dataNeeds || []).map((need, i) => ({ no: i + 1, need }));
+  const briefing = currentPlan.autopilotPlan.briefing || (currentPlan.autopilotPlan.briefing = {});
+  if (Array.isArray(selected.slideOutline) && selected.slideOutline.length) briefing.slideOutline = selected.slideOutline;
+  briefing.videoLengthType = selected.videoLengthType || briefing.videoLengthType || '';
+  briefing.targetMinutes = selected.targetMinutes || briefing.targetMinutes || '';
   activeView = 'proposal';
   renderPlan(currentPlan);
 }
@@ -4782,6 +4806,70 @@ function renderResearchActionPanel() {
   '</div>';
 }
 
+function labelTypeJa(type) {
+  const t = String(type || '').toLowerCase();
+  if (t === 'player') return '選手';
+  if (t === 'manager') return '監督';
+  if (t === 'team' || t === 'club') return 'チーム';
+  if (t === 'match') return '試合';
+  if (t === 'wiki') return 'Wiki';
+  return '関連';
+}
+
+function renderLabelCandidateChips(labels) {
+  const seen = new Set();
+  const list = (labels || []).map(function(item) {
+    if (typeof item === 'string') return { name: item, type: 'entity' };
+    return { name: item.name || item.nameEn || item.label || '', type: item.type || 'entity' };
+  }).filter(function(item) {
+    const key = String(item.name || '').toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 16);
+  if (!list.length) return '<span class="chip">候補なし</span>';
+  return list.map(function(item) {
+    return '<span class="chip">' + esc(item.name) + ' <b style="color:#f2b84b;">[' + esc(labelTypeJa(item.type)) + ']</b></span>';
+  }).join('');
+}
+
+function renderStep2CostMeta(costSummary) {
+  const aiCost = costSummary ? ('AI実績: ' + (costSummary.calls || 0) + '回 / $' + (costSummary.totalUsd || 0) + ' / 約' + (costSummary.totalJpy || 0) + '円') : 'AI実績: 実行後に集計';
+  const rows = [
+    ['Step2-1', 'AI + Serper', 'Geminiで検索ラベル作成 / Serper 3検索', '低〜中', '現状GeminiでOK', 'Serper検索のみ。webshare圧迫ほぼなし'],
+    ['Step2-2', '記事取得 + AI整形', 'Serper結果 + 記事本文fetch + Geminiで日本語タイトル化', '低', '現状GeminiでOK', '本文fetchで軽〜中。大量取得はしない'],
+    ['Step2-3', 'AI', 'Geminiで本筋ラベル抽出', '低', '現状GeminiでOK', 'webshareなし'],
+    ['Step2-4', '無料データ取得', 'SofaScore / Transfermarkt / Wiki', 'Serperなし', 'AIなし', 'SofaScore/TM取得で中。対象数を絞る'],
+    ['Step2-5', 'AI', 'DeepSeekで企画書A/B/C生成', '中', '重い時はGemini 2.5系も検討', 'webshareなし'],
+  ];
+  return '<div class="evidence-item" style="background:#0d1220;">' +
+    '<b>実行コスト / AI / 帯域メモ</b><p style="margin:4px 0 8px;color:var(--muted);font-size:12px;">' + esc(aiCost) + '</p>' +
+    rows.map(function(row) {
+      return '<div style="display:grid;grid-template-columns:70px 1fr;gap:6px;border-top:1px solid var(--line);padding:6px 0;font-size:11px;line-height:1.45;">' +
+        '<b style="color:#f2b84b;">' + esc(row[0]) + '</b>' +
+        '<div>' + esc(row[1]) + ' / ' + esc(row[2]) + '<br><span style="color:var(--muted);">コスト: ' + esc(row[3]) + ' / AI変更: ' + esc(row[4]) + ' / 帯域: ' + esc(row[5]) + '</span></div>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+
+function renderFetchedDataCards(items) {
+  const ok = (items || []).filter(function(d) { return d && d.ok; });
+  if (!ok.length) return '<div class="evidence-item"><span class="chip">取得データなし</span></div>';
+  return ok.map(function(d) {
+    const slots = (d.slots || []).slice(0, 10);
+    return '<div class="evidence-item">' +
+      '<b>' + esc(d.nameEn || '') + ' <span class="chip">' + esc(labelTypeJa(d.type)) + '</span></b>' +
+      '<div class="chips" style="margin-top:6px;">' +
+        (slots.length ? slots.map(function(s) {
+          return '<span class="chip">' + esc(s.label || '') + ': ' + esc(s.value || '-') + '</span>';
+        }).join('') : '<span class="chip">' + esc(d.summary || '取得OK') + '</span>') +
+      '</div>' +
+      '<div class="source-url">' + esc(d.sourceTitle || '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
 function renderAcquiredDataView() {
   const data = currentAcquiredData || buildAcquiredDataSummary();
   const hasAny = (data.queries || []).length || (data.webSources || []).length || (data.structuredData || []).length;
@@ -4790,7 +4878,7 @@ function renderAcquiredDataView() {
   }
   const fetchedOk = (currentFetchedData || []).filter(d => d.ok);
   const fetchedFail = (currentFetchedData || []).filter(d => !d.ok);
-  const fetchedBlock = currentFetchedData
+  const fetchedBlock = '' && currentFetchedData
     ? '<div class="panel" style="margin-bottom:10px;">' +
         '<span class="label">SofaScore取得済みデータ</span>' +
         (fetchedOk.length
@@ -4809,9 +4897,10 @@ function renderAcquiredDataView() {
       '</div>'
     : '';
   const summary = 'Web ' + (data.webSources || []).length + '件 / 本文取得 ' + (data.webSources || []).filter((s) => s.fetchStatus === 'full_text' || s.fetchStatus === 'full_text_reader').length + '件 / 関連候補 ' + (data.entities || []).length + '件';
-  return fetchedBlock + '<div class="panel evidence-section">' +
+  return '<div class="panel evidence-section">' +
     '<details>' +
     '<summary class="label" style="cursor:pointer;user-select:none;">調査で得た材料 — ' + esc(summary) + '</summary>' +
+    '<div class="evidence-list">' + renderStep2CostMeta(data.costSummary) + '</div>' +
     '<h3 class="research-heading">Step2-1 検索クエリ作成</h3>' +
     '<div class="evidence-list">' +
       '<div class="evidence-item">' +
@@ -4825,11 +4914,12 @@ function renderAcquiredDataView() {
     ).join('') + '</div>' +
     '<h3 class="research-heading">Step2-3 本筋ラベル候補</h3>' +
     '<div class="evidence-list">' +
-      '<div class="evidence-item"><div class="chips">' + ((data.labelCandidates || data.entities || []).slice(0, 16).map((q) => '<span class="chip">' + esc(q) + '</span>').join('') || '<span class="chip">候補なし</span>') + '</div></div>' +
+      '<div class="evidence-item"><div class="chips">' + renderLabelCandidateChips(data.labelCandidates || data.entities || []) + '</div></div>' +
     '</div>' +
     '<h3 class="research-heading">Step2-4 無料データ取得結果</h3>' +
     '<div class="evidence-list">' +
-      '<div class="evidence-item"><div class="chips">' + (fetchedOk.length ? fetchedOk.map(d => '<span class="chip" style="border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn) + ': ' + esc(d.summary) + '</span>').join('') : '<span class="chip">取得データなし</span>') + '</div></div>' +
+      renderFetchedDataCards(fetchedOk) +
+      (fetchedFail.length ? '<div class="evidence-item"><div class="chips">' + fetchedFail.map(d => '<span class="chip" style="border-color:#ef4444;color:#fca5a5;">' + esc(d.nameEn) + ' 取得失敗</span>').join('') + '</div></div>' : '') +
     '</div>' +
     '<h3 class="research-heading">Step2-5 企画書A/B/Cの材料</h3>' +
     '<div class="evidence-list">' + ((data.articleDigest?.bullets || []).map((item) =>
@@ -4864,7 +4954,14 @@ function fallbackProposalCandidates(plan, defaultNeeds) {
       dataNeeds: defaultNeeds,
       risk: '将来予測は推測と明示する。',
     },
-  ].map((item) => ({ ...item, title: topic }));
+  ].map((item, index) => {
+    const meta = [
+      { videoLengthType: 'short', targetMinutes: '1.5-2.5', recommendedSlideCount: 4 },
+      { videoLengthType: 'standard', targetMinutes: '3-4', recommendedSlideCount: 6 },
+      { videoLengthType: 'long', targetMinutes: '5-6', recommendedSlideCount: 8 },
+    ][index] || {};
+    return { ...item, ...meta, title: topic };
+  });
 }
 
 function renderProposalPapers(plan) {
@@ -4911,6 +5008,7 @@ function renderProposalPapers(plan) {
         const angle = c.angle || c.title || c.hookQuestion || plan.angle || plan.topic || '調査結果から切り口を作る';
         const hook = c.hookQuestion || c.hook || plan.centralQuestion || plan.topic || 'この話題の本質は何か？';
         const answer = c.answer || briefing.coreMessage || plan.thesis || '取得データをもとに仮説を検証する。';
+        const lengthText = (c.videoLengthType || 'standard') + ' / ' + (c.targetMinutes || '3-4') + '分 / ' + (c.recommendedSlideCount || (Array.isArray(c.slideOutline) ? c.slideOutline.length : 6)) + '枚目安';
         if (!isSelected) {
           return '<div class="briefing-paper briefing-paper--compact">' +
             '<h2>企画書' + letter + '</h2>' +
@@ -4919,6 +5017,7 @@ function renderProposalPapers(plan) {
             '<div class="proposal-meta-grid">' +
               '<div><span class="label">切り口</span><p>' + esc(angle) + '</p></div>' +
               '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
+              '<div><span class="label">尺 / 枚数</span><p>' + esc(lengthText) + '</p></div>' +
             '</div>' +
             (c.risk ? '<p style="color:#fca5a5;font-size:12px;margin-top:6px;">⚠ ' + esc(c.risk) + '</p>' : '') +
             '<div class="task-actions"><button onclick="selectThemeCandidate(' + i + ')">この企画書を採用</button></div>' +
@@ -4936,11 +5035,12 @@ function renderProposalPapers(plan) {
           '<div class="proposal-meta-grid">' +
             '<div><span class="label">切り口</span><p>' + esc(angle) + '</p></div>' +
             '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
+            '<div><span class="label">尺 / 枚数</span><p>' + esc(lengthText) + '</p></div>' +
           '</div>' +
           '<hr class="proposal-divider">' +
           '<span class="label">スライド構成案（' + outline.length + '枚）</span>' +
           '<div class="slide-list" style="margin:6px 0 10px;gap:4px;">' +
-            outline.slice(0, 7).map((item) => (
+            outline.slice(0, 12).map((item) => (
               '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:start;background:#0a0d12;border:1px solid var(--line);border-radius:6px;padding:7px 9px;">' +
                 '<div>' + slideTypeBadge(item.slideType || item.role) + '</div>' +
                 '<div><div style="font-size:12px;font-weight:700;color:var(--text);">' + esc(item.headline || item.role || '') + '</div>' +
@@ -4972,8 +5072,35 @@ function renderProposalView(plan) {
   html += renderResearchActionPanel();
   html += renderAcquiredDataView();
   html += renderProposalPapers(plan);
-  html += '<div class="task-actions"><button class="secondary" onclick="setResultView(\\'briefing\\')">採用案で企画書へ</button></div>';
+  html += renderProposalDataGapGate(plan);
   return html;
+}
+
+function renderProposalDataGapGate(plan) {
+  const auto = plan?.autopilotPlan || {};
+  if (!auto.aiGenerated && !auto.aiFallback) return '';
+  const missing = (auto.mustCheck || []).map((x) => x.need || x).filter(Boolean).slice(0, 8);
+  const gates = (auto.publishGates || []).filter(Boolean).slice(0, 8);
+  const fetched = (currentFetchedData || []).filter((d) => d.ok).slice(0, 8);
+  return '<div class="panel">' +
+    '<span class="label">STEP2-6 不足データ確認</span>' +
+    '<div class="task-status">企画書タブへ進む前に、採用案で足りない材料を確認します。必要ならSTEP2-4の無料データ取得から再調査します。</div>' +
+    '<div class="proposal-meta-grid">' +
+      '<div><span class="label">不足データ</span><div class="chips">' +
+        (missing.length ? missing.map((x) => '<span class="chip">' + esc(x) + '</span>').join('') : '<span class="chip" style="border-color:#22c55e;color:#bbf7d0;">大きな不足なし</span>') +
+      '</div></div>' +
+      '<div><span class="label">公開前チェック</span><div class="chips">' +
+        (gates.length ? gates.map((x) => '<span class="chip">' + esc(x) + '</span>').join('') : '<span class="chip" style="border-color:#22c55e;color:#bbf7d0;">追加チェックなし</span>') +
+      '</div></div>' +
+      '<div><span class="label">取得済み無料データ</span><div class="chips">' +
+        (fetched.length ? fetched.map((d) => '<span class="chip" style="border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn || d.label || '') + '</span>').join('') : '<span class="chip">未取得</span>') +
+      '</div></div>' +
+    '</div>' +
+    '<div class="task-actions">' +
+      '<button class="secondary" onclick="runProposal()">不足データを再調査</button>' +
+      '<button onclick="setResultView(\\'briefing\\')">STEP3 企画書へ</button>' +
+    '</div>' +
+  '</div>';
 }
 
 

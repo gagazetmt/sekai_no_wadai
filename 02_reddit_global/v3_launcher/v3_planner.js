@@ -68,7 +68,8 @@ function buildSystemPrompt() {
 - この段階では脚本構成・ナレーション草稿・完成台本を書かない
 - 相棒メモに「取得済みデータ」がある場合、そのラベル名（ゴール/アシスト/評価/クラブ/年齢等）をdataNeeds に入れること
 - candidates は必ず3案出力する（A/B/C案として提示するため）
-- 各 candidate の slideOutline は4〜7枚の構成案を必ず出力する`;
+- candidates A/B/C は短尺・標準・長尺の提案に分け、videoLengthType / targetMinutes / recommendedSlideCount を必ず入れる
+- 各 candidate の slideOutline は案件の材料量に応じて4〜8枚で可変にする。historyに今季スタッツを羅列せず、stats/profile/history/comparisonを役割で分ける`;
 }
 
 function buildUserPrompt(topic, memo, researchSummary) {
@@ -92,6 +93,9 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
         "hookQuestion": "フックとなる問い",
         "answer": "仮の答え",
         "angle": "動画の切り口・約束",
+        "videoLengthType": "short / standard / long",
+        "targetMinutes": "1.5-2.5 / 3-4 / 5-6",
+        "recommendedSlideCount": 4,
         "dataNeeds": ["必要なデータ1"],
         "risk": "この案のリスクを短く",
         "slideOutline": [
@@ -136,6 +140,32 @@ function extractJSON(raw) {
   return null;
 }
 
+function normalizeCandidateMeta(candidate, index, articleCount) {
+  const count = Array.isArray(candidate?.slideOutline) ? candidate.slideOutline.length : 0;
+  const profiles = [
+    { videoLengthType: 'short', targetMinutes: '1.5-2.5', fallbackSlides: articleCount >= 4 ? 5 : 4 },
+    { videoLengthType: 'standard', targetMinutes: '3-4', fallbackSlides: articleCount >= 4 ? 6 : 5 },
+    { videoLengthType: 'long', targetMinutes: '5-6', fallbackSlides: articleCount >= 5 ? 8 : 7 },
+  ];
+  const profile = profiles[index] || profiles[1];
+  return {
+    ...candidate,
+    videoLengthType: candidate?.videoLengthType || profile.videoLengthType,
+    targetMinutes: candidate?.targetMinutes || profile.targetMinutes,
+    recommendedSlideCount: candidate?.recommendedSlideCount || count || profile.fallbackSlides,
+  };
+}
+
+function normalizeAIPlanShape(parsed, articleCount) {
+  const proposal = parsed.themeProposal || {};
+  const candidates = Array.isArray(proposal.candidates) ? proposal.candidates : [];
+  parsed.themeProposal = {
+    ...proposal,
+    candidates: [0, 1, 2].map((i) => normalizeCandidateMeta(candidates[i] || {}, i, articleCount)),
+  };
+  return parsed;
+}
+
 function buildCompactRepairPrompt(topic, memo, raw) {
   return `前回のJSONが途中で切れました。今度は必ず完結した短いJSONだけを返してください。
 
@@ -146,14 +176,14 @@ memo: ${memo || 'なし'}
 ${String(raw || '').slice(0, 1200)}
 
 必須条件:
-- candidatesは3件（各案にslideOutline 4〜5枚を含める）
+- candidatesは3件（短尺・標準・長尺。各案にslideOutline 4〜8枚を材料量に応じて含める）
 - briefing.chaptersは4〜6件（各chapterにslideTypeを入れる）
 - 文字数を抑える
 - 脚本構成とナレーション草稿は書かない
 - JSON以外の文章は禁止
 
 {
-  "themeProposal": {"candidates": [], "selected": 0, "selectedReason": "", "rejectedReasons": []},
+  "themeProposal": {"candidates": [{"videoLengthType": "short", "targetMinutes": "1.5-2.5", "recommendedSlideCount": 4, "slideOutline": []}, {"videoLengthType": "standard", "targetMinutes": "3-4", "recommendedSlideCount": 6, "slideOutline": []}, {"videoLengthType": "long", "targetMinutes": "5-6", "recommendedSlideCount": 8, "slideOutline": []}], "selected": 0, "selectedReason": "", "rejectedReasons": []},
   "briefing": {"purpose": "", "coreMessage": "", "chapters": [], "riskChecklist": []},
   "missingData": [],
   "publishGates": []
@@ -180,8 +210,9 @@ function buildFallbackAIPlan(topic, researchSummary, reason) {
     articleCount: researchSummary.articleCount,
     themeProposal: {
       candidates: [
-        { hookQuestion: core, answer, angle: '違和感をデータで整理する', dataNeeds: ['一次情報または信頼できる記事'], risk: '未確認情報を断定しない' },
-        { hookQuestion: `${topic}の背景にある構造は何か？`, answer: '単発ニュースではなく構造変化として見る。', angle: '背景解説型', dataNeeds: ['時系列'], risk: '話を広げすぎない' },
+        { hookQuestion: core, answer, angle: '違和感をデータで整理する', videoLengthType: 'short', targetMinutes: '1.5-2.5', recommendedSlideCount: 4, dataNeeds: ['一次情報または信頼できる記事'], risk: '未確認情報を断定しない' },
+        { hookQuestion: `${topic}の背景にある構造は何か？`, answer: '単発ニュースではなく構造変化として見る。', angle: '背景解説型', videoLengthType: 'standard', targetMinutes: '3-4', recommendedSlideCount: 6, dataNeeds: ['時系列'], risk: '話を広げすぎない' },
+        { hookQuestion: `${topic}を長尺で深掘るなら何を足すべきか？`, answer: '背景・比較・反論を分け、取得済みデータで納得感を積む。', angle: '深掘り型', videoLengthType: 'long', targetMinutes: '5-6', recommendedSlideCount: 8, dataNeeds: ['比較データ', 'プロフィール', '時系列'], risk: '材料不足なら短縮する' },
       ],
       selected: 0,
       selectedReason: 'AIのJSONが崩れたため、破綻しにくい安全な構成にフォールバック。',
@@ -230,6 +261,8 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
   if (!parsed) {
     throw new Error(`AI応答のJSONパース失敗: ${String(raw).slice(0, 200)}`);
   }
+
+  parsed = normalizeAIPlanShape(parsed, researchSummary.articleCount);
 
   return {
     ok: true,
