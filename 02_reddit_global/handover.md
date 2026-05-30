@@ -1130,3 +1130,56 @@ Changed locally after the first recipe launcher deploy:
   - transfer
 - The page still saves all recipes through `POST /api/v3/recipes`.
 - If `v3_launcher/data/slide_recipes.json` exists on VPS, it takes priority over the built-in defaults.
+
+## 2026-05-30 JST Update - Step2 Research Flow Clarified
+
+User requested Step2 to become an explicit five-stage pipeline:
+
+1. Step2-1:
+   - Pressing `調査` first creates search query labels from the case title.
+   - Example: `ジョアン・ペドロ、負傷したネイマールに変わりブラジル代表選出か`
+   - Desired labels: `ジョアン・ペドロ`, `ネイマール`, `ブラジル代表`
+   - The UI should show these labels as chips.
+2. Step2-2:
+   - Show hit article title, URL, site name, and whether it was full text or snippet.
+3. Step2-3:
+   - After reading articles, propose labels/entities that seem central to the story.
+   - Example: Neymar, Joao Pedro, Ancelotti, Brazil, Santos FC, Chelsea FC, Estevao, Endrick.
+4. Step2-4:
+   - For those labels, fetch data from sources that do not consume Serper tokens:
+     - SofaScore
+     - Transfermarkt
+     - Wikipedia
+5. Step2-5:
+   - Generate proposal papers A/B/C from the article and data results.
+
+Implemented locally:
+
+- `v3_research.js`
+  - Added `generateSearchPlan(topic, memo)`.
+  - It returns:
+    - `queryLabels`
+    - targeted `queries`
+  - `runTopicResearch()` now includes `queryLabels` in the research result.
+- `server.js`
+  - Proposal job stages now use:
+    - `Step2-1 検索クエリ作成中...`
+    - `Step2-2 ニュース記事取得中...`
+    - `Step2-3 本筋ラベル作成中...`
+    - `Step2-4 SofaScore / Transfermarkt / Wiki データ取得中...`
+    - `Step2-5 取得結果から企画書A/B/C作成中...`
+  - `research.labelCandidates` is saved from AI entity expansion.
+  - Step2 display now has explicit sections:
+    - Step2-1 query labels and search queries
+    - Step2-2 article hits
+    - Step2-3 central label candidates
+    - Step2-4 free data results
+    - Step2-5 proposal source material
+  - Proposal job no longer runs extra follow-up Serper queries after Step2-2; Step2-4 is kept to non-Serper data fetching.
+
+Verification:
+
+- `node --check v3_launcher/server.js`
+- `node --check v3_launcher/v3_research.js`
+- Local V3 health check on temporary port passed.
+- Local HTML contains Step2-1 through Step2-5 labels.

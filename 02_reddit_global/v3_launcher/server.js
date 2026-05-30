@@ -287,6 +287,7 @@ function buildFetchedMemoBlock(fetchedData) {
 function buildServerAcquiredDataSummary(research, wikiStories, fetchedData) {
   const articles = research?.learningCorpus || [];
   return {
+    queryLabels: research?.queryLabels || [],
     queries: research?.queries || [],
     articleDigest: serverArticleDigest(articles),
     webSources: articles.slice(0, 8).map((item) => ({
@@ -301,7 +302,12 @@ function buildServerAcquiredDataSummary(research, wikiStories, fetchedData) {
       value: (item.sideStoryCandidates || []).map((x) => x.text).join(' ').slice(0, 220),
       status: 'side_story',
     })),
-    entities: (fetchedData || []).map((d) => d.nameEn).filter(Boolean).slice(0, 8),
+    entities: (fetchedData || []).map((d) => d.nameEn).filter(Boolean).slice(0, 12),
+    labelCandidates: [
+      ...(research?.labelCandidates || []),
+      ...(wikiStories?.results || []).map((x) => x.entity).filter(Boolean),
+      ...(fetchedData || []).map((d) => d.nameEn).filter(Boolean),
+    ].filter(Boolean).slice(0, 16),
   };
 }
 
@@ -576,6 +582,7 @@ app.post('/api/v3/research/topic', async (req, res) => {
       console.warn('[research/topic] aiExpandResearch error:', e.message);
       return { followUpQueries: [], entities: [] };
     });
+    result.labelCandidates = (expanded.entities || []).map((e) => e.nameEn).filter(Boolean);
 
     // Run follow-up queries as snippet-only entries (no full article fetch — saves Jina credits)
     if (expanded.followUpQueries.length) {
@@ -638,6 +645,8 @@ function compactResearchForSave(research) {
   return research ? {
     ok: research.ok,
     topic: research.topic,
+    queryLabels: research.queryLabels || [],
+    labelCandidates: research.labelCandidates || [],
     queries: research.queries,
     summary: research.summary,
     learningCorpus: (research.learningCorpus || []).map((c) => ({
@@ -726,14 +735,15 @@ async function runProposalJob(jobId, input) {
     const searchTopic = compactSearchTopicServer(input.title, input.memo);
     const base = { topic: searchTopic || input.title, memo: input.memo || '', plan };
 
-    setStage('research', '1/5 Webリサーチ中...', { plan });
+    setStage('query', 'Step2-1 検索クエリ作成中...', { plan });
     const research = await runTopicResearch(base);
+    setStage('articles', 'Step2-2 ニュース記事取得中...', { plan, research });
     const expanded = await aiExpandResearch(base.topic, base.memo, research.learningCorpus).catch((error) => {
       console.warn('[proposal-job] aiExpandResearch failed:', error.message);
       return { followUpQueries: [], entities: [] };
     });
-    await appendFollowUpSnippets(research, expanded);
-    setStage('wiki', '2/5 Wikiデータ取得中...', { plan, research });
+    research.labelCandidates = (expanded.entities || []).map((e) => e.nameEn).filter(Boolean);
+    setStage('labels', 'Step2-3 本筋ラベル作成中...', { plan, research });
 
     let wikiStories = { ok: true, results: [], entityCount: 0, warning: '' };
     try {
@@ -741,7 +751,7 @@ async function runProposalJob(jobId, input) {
     } catch (error) {
       wikiStories = { ok: false, results: [], entityCount: 0, warning: error.message };
     }
-    setStage('prefetch', '3/5 SofaScore / Transfermarkt データ取得中...', { plan, research, wikiStories });
+    setStage('prefetch', 'Step2-4 SofaScore / Transfermarkt / Wiki データ取得中...', { plan, research, wikiStories });
 
     let prefetch = { success: true, labels: [], warnings: [] };
     try {
@@ -757,7 +767,7 @@ async function runProposalJob(jobId, input) {
     }
     const fetchedData = selectFetchedDataForPlan(prefetch.labels || [], plan);
     const acquiredData = buildServerAcquiredDataSummary(research, wikiStories, fetchedData);
-    setStage('analyze', '4/5 取得データを選定してAI企画書を作成中...', {
+    setStage('analyze', 'Step2-5 取得結果から企画書A/B/C作成中...', {
       plan,
       research,
       wikiStories,
@@ -812,7 +822,7 @@ async function runProposalJob(jobId, input) {
     Object.assign(job, {
       status: 'done',
       stage: 'done',
-      message: '5/5 完了',
+      message: 'Step2-5 完了',
       result,
       updatedAt: new Date().toISOString(),
     });
@@ -3761,7 +3771,7 @@ async function runProposal() {
     activeView = 'proposal';
     renderPlan(currentPlan);
     const doneStatus = document.getElementById('proposalRunStatus');
-    if (doneStatus) doneStatus.textContent = '5/5 完了。記事 ' + (currentResearch?.learningCorpus?.length || 0) + '件＋データ ' + (currentFetchedData || []).filter(function(d){return d.ok;}).length + '件で企画書を生成しました。';
+    if (doneStatus) doneStatus.textContent = 'Step2-5 完了。記事 ' + (currentResearch?.learningCorpus?.length || 0) + '件＋データ ' + (currentFetchedData || []).filter(function(d){return d.ok;}).length + '件で企画書A/B/Cを生成しました。';
     await loadSaved();
   } catch (error) {
     alert('企画提案失敗: ' + error.message);
@@ -3883,6 +3893,7 @@ function buildAcquiredDataSummary() {
     });
   });
   return {
+    queryLabels: currentResearch?.queryLabels || [],
     queries: currentResearch?.queries || tasks.map((task) => task.query).filter(Boolean).slice(0, 6),
     articleDigest: buildArticleDigest(articles),
     webSources: articles.slice(0, 8).map((item) => ({
@@ -3893,6 +3904,11 @@ function buildAcquiredDataSummary() {
     })),
     structuredData: structured.slice(0, 12),
     entities,
+    labelCandidates: [
+      ...(currentResearch?.labelCandidates || []),
+      ...entities,
+      ...wikiResults.map((x) => x.entity).filter(Boolean),
+    ].filter(Boolean).slice(0, 16),
   };
 }
 
@@ -4761,8 +4777,8 @@ function renderResearchActionPanel() {
     '<div class="research-action-row">' +
       '<button id="proposalStepBtn" onclick="runProposal()">調査</button>' +
     '</div>' +
-    '<div class="research-flow"><span class="research-step">検索クエリ作成 → Webリサーチ → データ取得 → 企画書A/B/C生成</span></div>' +
-    '<div id="proposalRunStatus" class="task-status">調査を押すと、Webリサーチが終わった時点で材料を先に表示します。</div>' +
+    '<div class="research-flow"><span class="research-step">Step2-1 クエリ → Step2-2 記事 → Step2-3 ラベル → Step2-4 無料データ → Step2-5 企画書A/B/C</span></div>' +
+    '<div id="proposalRunStatus" class="task-status">調査を押すと、案件名から検索ラベルを作り、記事・本筋ラベル・無料データ取得・企画書A/B/Cまで順に進めます。</div>' +
   '</div>';
 }
 
@@ -4796,19 +4812,26 @@ function renderAcquiredDataView() {
   return fetchedBlock + '<div class="panel evidence-section">' +
     '<details>' +
     '<summary class="label" style="cursor:pointer;user-select:none;">調査で得た材料 — ' + esc(summary) + '</summary>' +
-    '<h3 class="research-heading">1. 検索クエリ作成</h3>' +
+    '<h3 class="research-heading">Step2-1 検索クエリ作成</h3>' +
     '<div class="evidence-list">' +
-      '<div class="evidence-item"><div class="chips">' + (data.queries || []).map((q) => '<span class="chip">' + esc(q) + '</span>').join('') + '</div></div>' +
+      '<div class="evidence-item">' +
+        ((data.queryLabels || []).length ? '<b>案件ラベル</b><div class="chips" style="margin:6px 0;">' + (data.queryLabels || []).map((q) => '<span class="chip">' + esc(q) + '</span>').join('') + '</div>' : '') +
+        '<b>検索クエリ</b><div class="chips" style="margin-top:6px;">' + (data.queries || []).map((q) => '<span class="chip">' + esc(q) + '</span>').join('') + '</div>' +
+      '</div>' +
     '</div>' +
-    '<h3 class="research-heading">2. Webリサーチ</h3>' +
+    '<h3 class="research-heading">Step2-2 ニュースhit一覧</h3>' +
     '<div class="evidence-list">' + (data.webSources || []).map((item) =>
       '<div class="evidence-item"><b>' + esc(item.title) + '</b><div class="chips"><span class="chip">' + esc(item.host || 'source') + '</span><span class="chip">' + esc(item.fetchStatus || 'snippet') + '</span></div><div class="source-url">' + esc(item.url) + '</div></div>'
     ).join('') + '</div>' +
-    '<h3 class="research-heading">3. 関連人物・チーム候補</h3>' +
+    '<h3 class="research-heading">Step2-3 本筋ラベル候補</h3>' +
     '<div class="evidence-list">' +
-      '<div class="evidence-item"><div class="chips">' + (data.entities || []).slice(0, 8).map((q) => '<span class="chip">' + esc(q) + '</span>').join('') + '</div></div>' +
+      '<div class="evidence-item"><div class="chips">' + ((data.labelCandidates || data.entities || []).slice(0, 16).map((q) => '<span class="chip">' + esc(q) + '</span>').join('') || '<span class="chip">候補なし</span>') + '</div></div>' +
     '</div>' +
-    '<h3 class="research-heading">4. 記事要約</h3>' +
+    '<h3 class="research-heading">Step2-4 無料データ取得結果</h3>' +
+    '<div class="evidence-list">' +
+      '<div class="evidence-item"><div class="chips">' + (fetchedOk.length ? fetchedOk.map(d => '<span class="chip" style="border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn) + ': ' + esc(d.summary) + '</span>').join('') : '<span class="chip">取得データなし</span>') + '</div></div>' +
+    '</div>' +
+    '<h3 class="research-heading">Step2-5 企画書A/B/Cの材料</h3>' +
     '<div class="evidence-list">' + ((data.articleDigest?.bullets || []).map((item) =>
       '<div class="evidence-item"><b>' + esc(item.label) + '</b><p>' + esc(item.text || '') + '</p></div>'
     ).join('')) + '</div>' +

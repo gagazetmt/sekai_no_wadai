@@ -235,6 +235,83 @@ function classifyUse(item) {
   return tags;
 }
 
+function fallbackQueryLabels(topic, memo = '') {
+  const raw = `${topic}\n${memo}`;
+  const labels = [];
+  const push = (value) => {
+    const clean = String(value || '').trim();
+    if (clean && !labels.includes(clean)) labels.push(clean);
+  };
+  (raw.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+){0,3}/g) || [])
+    .filter((w) => !/^(reddit|thread|comments?|news|latest|football|soccer|official|report|reports)$/i.test(w))
+    .slice(0, 4)
+    .forEach(push);
+  (raw.match(/[\p{Script=Katakana}ー]{3,}|[\p{Script=Han}]{2,}/gu) || [])
+    .filter((w) => !/^(ニュース|サッカー|代表|選出|負傷|移籍|報道|速報)$/.test(w))
+    .slice(0, 5)
+    .forEach(push);
+  return labels.slice(0, 8);
+}
+
+function buildQueriesFromLabels(labels, topic) {
+  const base = (labels || []).filter(Boolean).slice(0, 5);
+  if (base.length >= 2) {
+    const joined = base.slice(0, 4).join(' ');
+    return uniq([
+      joined,
+      `${joined} football news`,
+      `${joined} official report`,
+    ]).slice(0, 3);
+  }
+  return fallbackQueries(topic).map(compactSearchQuery).filter(Boolean).slice(0, 3);
+}
+
+async function generateSearchPlan(topic, memo = '') {
+  const prompt = `You are preparing search for a Japanese soccer-news case.
+
+Case title:
+${topic}
+
+Context:
+${memo || ''}
+
+Make sure the search hits articles that report the exact case, not generic background.
+
+Return JSON only:
+{
+  "queryLabels": ["main person/team", "related person/team", "national team/club"],
+  "queries": ["targeted search query 1", "targeted search query 2", "targeted search query 3"]
+}
+
+Rules:
+- queryLabels are short labels, 3 to 8 items.
+- queries must combine multiple labels from the case.
+- Include original Japanese names when the case is Japanese, and add English names only when useful.
+- Do not output broad queries like "football latest news".
+- Example: "ジョアン・ペドロ、負傷したネイマールに変わりブラジル代表選出か" -> labels ["ジョアン・ペドロ","ネイマール","ブラジル代表"], queries ["ジョアン・ペドロ ネイマール ブラジル代表 選出","Joao Pedro Neymar Brazil squad call up","Joao Pedro replaces Neymar Brazil injury"]`;
+  try {
+    const raw = await callAI({
+      system: 'Output valid JSON only. No markdown.',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 500,
+      forceProvider: 'gemini',
+      label: 'step2_query_plan',
+    });
+    const parsed = parseLooseJson(raw);
+    const queryLabels = Array.isArray(parsed?.queryLabels)
+      ? parsed.queryLabels.map((x) => String(x).trim()).filter(Boolean).slice(0, 8)
+      : [];
+    const queries = Array.isArray(parsed?.queries)
+      ? parsed.queries.map((x) => compactSearchQuery(String(x))).filter(Boolean).slice(0, 3)
+      : [];
+    if (queryLabels.length && queries.length) return { queryLabels, queries };
+  } catch (e) {
+    console.warn('[v3_research] generateSearchPlan failed:', e.message);
+  }
+  const queryLabels = fallbackQueryLabels(topic, memo);
+  return { queryLabels, queries: buildQueriesFromLabels(queryLabels, topic) };
+}
+
 // Use DeepSeek to convert a Japanese soccer topic into 3 targeted English search queries.
 // Returns array of strings, or null if topic is already English or AI call fails.
 async function generateEnglishQueries(topic, memo = '') {
@@ -273,11 +350,12 @@ Rules:
 async function runTopicResearch(input = {}) {
   const topic = String(input.topic || input.title || '').trim();
   const memo = String(input.memo || '').trim();
+  const searchPlan = await generateSearchPlan(topic, memo);
   // AI-translate Japanese topic to English before building query list
   const aiQueries = await generateEnglishQueries(topic, memo);
   const queries = pickQueries({
     topic, memo, plan: input.plan,
-    queries: [...(aiQueries || []), ...(input.queries || [])],
+    queries: [...(searchPlan.queries || []), ...(aiQueries || []), ...(input.queries || [])],
   });
   const pickMin = Number(input.pickMin || DEFAULT_PICK_MIN);
   const pickMax = Number(input.pickMax || DEFAULT_PICK_MAX);
@@ -320,6 +398,7 @@ async function runTopicResearch(input = {}) {
   return {
     ok: true,
     topic,
+    queryLabels: searchPlan.queryLabels || [],
     queries,
     serperCreditsEstimated: queries.length,
     queryResults,
@@ -481,6 +560,7 @@ module.exports = {
   runTopicResearch,
   fetchWikiSideStories,
   aiExpandResearch,
+  generateSearchPlan,
   pickQueries,
   scoreSearchItem,
 };
