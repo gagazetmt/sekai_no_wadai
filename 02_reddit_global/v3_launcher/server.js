@@ -3808,7 +3808,7 @@ async function runProposal(extraInstruction = '') {
         memo: [
           document.getElementById('memo').value,
           String(extraInstruction || '').trim() ? '追加指示: ' + String(extraInstruction || '').trim() : '',
-        ].filter(Boolean).join('\n\n'),
+        ].filter(Boolean).join('\\n\\n'),
         sourceType: document.getElementById('sourceType')?.value || 'custom',
         plan: currentPlan,
         selectedProjectId: selectedProject?.id || '',
