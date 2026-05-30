@@ -36,16 +36,31 @@ function _normKey(s) {
     .trim();
 }
 
-// インデックスから sofaId を引く（フルネーム優先 → 部分一致フォールバック）
+// インデックスから sofaId を引く
+//   優先順: ①フルネーム完全一致 → ②姓のみ一意一致 → ③部分一致
 function lookupPlayerIndex(name) {
   const idx = _loadIndex();
   if (!Object.keys(idx).length) return null;
   const key = _normKey(name);
-  // 完全一致
+
+  // ① フルネーム完全一致
   if (idx[key]) return idx[key];
-  // 部分一致（名前の各単語が全部キーに含まれる）
+
   const parts = key.split(' ').filter(p => p.length >= 3);
-  if (parts.length) {
+
+  // ② 姓（最後の単語）がインデックスキーとして一意に存在する場合
+  //    "Andrew Robertson" → "robertson" → Andy Robertson（表記ゆれ吸収）
+  //    複数選手が同じ姓なら曖昧なのでスキップ
+  const lastName = parts[parts.length - 1];
+  if (lastName && idx[lastName]) return idx[lastName];
+
+  // ③ 各単語を個別キーとして検索（"Vinicius Junior" → "vinicius" がヒット等）
+  for (const part of parts) {
+    if (part && idx[part]) return idx[part];
+  }
+
+  // ④ エントリの実名に全単語が含まれる（表記に差異がある場合の最終手段）
+  if (parts.length >= 2) {
     const hit = Object.values(idx).find(entry => {
       const entryKey = _normKey(entry.name);
       return parts.every(p => entryKey.includes(p));
