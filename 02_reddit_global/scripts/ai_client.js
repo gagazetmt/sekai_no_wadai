@@ -88,8 +88,10 @@ async function callAI({ model, max_tokens, messages, system, forceProvider, labe
     const msgs = safeSystem
       ? [{ role: "system", content: safeSystem }, ...safeMessages]
       : safeMessages;
+    // model 引数が deepseek- で始まる場合はそのまま使う（deepseek-chat 等の切り替え用）
+    const dsModel = (model && /^deepseek-/.test(model)) ? model : "deepseek-v4-flash";
     const res = await client.chat.completions.create({
-      model:      "deepseek-v4-flash",
+      model:      dsModel,
       max_tokens,
       messages:   msgs,
     });
@@ -115,6 +117,7 @@ async function callAI({ model, max_tokens, messages, system, forceProvider, labe
       generationConfig: {
         maxOutputTokens: max_tokens,
         responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 },  // 思考トークンがoutputを食い潰すバグ対策
       },
     };
     if (safeSystem) body.system_instruction = { parts: [{ text: safeSystem }] };

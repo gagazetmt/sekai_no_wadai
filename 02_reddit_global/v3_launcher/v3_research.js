@@ -353,8 +353,9 @@ Rules:
     const raw = await callAI({
       system: 'Output valid JSON only. No markdown.',
       messages: [{ role: 'user', content: prompt }],
+      model: 'deepseek-chat',
       max_tokens: 500,
-      forceProvider: 'gemini',
+      forceProvider: 'deepseek',
       label: 'step2_query_plan',
     });
     const parsed = parseLooseJson(raw);
@@ -395,8 +396,9 @@ Rules:
     const raw = await callAI({
       system: 'Output a JSON array of 3 English search queries only. No explanation, no markdown.',
       messages: [{ role: 'user', content: prompt }],
+      model: 'deepseek-chat',
       max_tokens: 250,
-      forceProvider: 'gemini',
+      forceProvider: 'deepseek',
       label: '①query_gen',
     });
     const parsed = parseLooseJson(raw);
