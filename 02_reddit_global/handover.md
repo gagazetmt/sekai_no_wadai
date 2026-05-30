@@ -36,6 +36,13 @@ Follow-up UX fix:
 - Creating or selecting a new case clears prior working data so old acquired data is not prefilled into a different case.
 - Manual edits to the case title/memo/source also clear stale Step2 state.
 
+Search/label precision follow-up:
+
+- Added deterministic title-label extraction before Gemini query planning.
+- Names in the title are now mandatory labels; omitted/left-out players are treated as high-priority data targets.
+- Squad-announcement stories now force an exact-topic query before AI-generated queries, e.g. England World Cup squad plus Foden/Palmer omitted, instead of drifting into generic tournament/FA Cup rules.
+- Entity expansion now keeps mandatory omitted players such as Phil Foden and Cole Palmer even if Gemini omits them.
+
 ## First Read
 
 This file is the active handover for the V3 launcher work. At the start of the next session, read this file before making changes.

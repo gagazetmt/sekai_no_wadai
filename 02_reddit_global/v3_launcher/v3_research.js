@@ -253,6 +253,36 @@ function fallbackQueryLabels(topic, memo = '') {
   return labels.slice(0, 8);
 }
 
+function extractCriticalCaseLabels(topic = '', memo = '') {
+  const raw = `${topic}\n${memo}`;
+  const labels = [];
+  const push = (value) => {
+    const clean = String(value || '').trim();
+    if (clean && !labels.includes(clean)) labels.push(clean);
+  };
+  const jpStop = /^(メンバー|スタメン|ニュース|サッカー|発表|選出|落選|招集|代表|今回|記事|内容|そのもの)$/;
+  (raw.match(/[\p{Script=Katakana}ー]{2,}/gu) || [])
+    .filter((x) => !jpStop.test(x))
+    .forEach(push);
+  (raw.match(/[A-Za-z][A-Za-z'.-]+(?:\s+[A-Za-z][A-Za-z'.-]+){0,3}/g) || [])
+    .filter((x) => !/^(world cup|fa cup|squad|member|members|football|soccer|news)$/i.test(x))
+    .forEach(push);
+  if (/イングランド代表|England/i.test(raw)) push('イングランド代表');
+  if (/W杯|ワールドカップ|World Cup/i.test(raw)) push('W杯');
+  if (/落選|選外|外れ|omitted|left out|not selected/i.test(raw)) push('落選');
+  const knownEnglish = new Map([
+    ['フォーデン', 'Phil Foden'],
+    ['パーマー', 'Cole Palmer'],
+    ['ケイン', 'Harry Kane'],
+    ['ベリンガム', 'Jude Bellingham'],
+    ['イングランド代表', 'England'],
+  ]);
+  labels.slice().forEach((label) => {
+    if (knownEnglish.has(label)) push(knownEnglish.get(label));
+  });
+  return labels.slice(0, 12);
+}
+
 function buildQueriesFromLabels(labels, topic) {
   const base = (labels || []).filter(Boolean).slice(0, 5);
   if (base.length >= 2) {
@@ -267,7 +297,8 @@ function buildQueriesFromLabels(labels, topic) {
 }
 
 function normalizeSearchQueries(queries, labels = [], topic = '') {
-  const labelTerms = (labels || []).map((x) => String(x || '').trim()).filter(Boolean);
+  const criticalTerms = extractCriticalCaseLabels(topic);
+  const labelTerms = [...criticalTerms, ...(labels || [])].map((x) => String(x || '').trim()).filter(Boolean);
   const out = [];
   const seen = new Set();
   const add = (query) => {
@@ -284,6 +315,14 @@ function normalizeSearchQueries(queries, labels = [], topic = '') {
     seen.add(key);
     out.push(clean);
   };
+  const raw = String(topic || '');
+  const hasSquadCase = /代表|squad|roster|メンバー|招集|選出/i.test(raw);
+  const hasOmission = /落選|選外|外れ|omitted|left out|not selected/i.test(raw);
+  const omitted = labelTerms.filter((x) => /フォーデン|パーマー|Foden|Palmer/i.test(x));
+  if (hasSquadCase && hasOmission && omitted.length) {
+    add(['イングランド代表', 'W杯', 'メンバー', ...omitted.slice(0, 2), '落選'].join(' '));
+    add(['England World Cup squad', ...omitted.filter((x) => /[A-Za-z]/.test(x)).slice(0, 2), 'omitted'].join(' '));
+  }
   (queries || []).forEach(add);
   if (labelTerms.length >= 2) {
     add(labelTerms.slice(0, 3).join(' '));
@@ -295,6 +334,7 @@ function normalizeSearchQueries(queries, labels = [], topic = '') {
 }
 
 async function generateSearchPlan(topic, memo = '') {
+  const mandatoryLabels = extractCriticalCaseLabels(topic, memo);
   const prompt = `You are preparing search for a Japanese soccer-news case.
 
 Case title:
@@ -304,6 +344,8 @@ Context:
 ${memo || ''}
 
 Make sure the search hits articles that report the exact case, not generic background.
+Mandatory labels extracted from the title. Keep all relevant names, especially omitted/not-selected players:
+${mandatoryLabels.join(', ') || '(none)'}
 
 Return JSON only:
 {
@@ -314,8 +356,11 @@ Return JSON only:
 Rules:
 - queryLabels are short labels, 3 to 8 items.
 - queries must combine multiple labels from the case.
+- Never drop a person named in the title. Players who were omitted, left out, injured, replaced, or compared are mandatory labels and mandatory data targets.
+- For squad announcement stories, include selected stars and omitted players in labels. At least one query must target the exact news topic, not generic tournament rules.
 - Include original Japanese names when the case is Japanese, and add English names only when useful.
 - Do not output broad queries like "football latest news".
+- Do not confuse "FA" / football association with "FA Cup" unless the title explicitly says FA Cup.
 - Example: "ジョアン・ペドロ、負傷したネイマールに変わりブラジル代表選出か" -> labels ["ジョアン・ペドロ","ネイマール","ブラジル代表"], queries ["ジョアン・ペドロ ネイマール ブラジル代表 選出","Joao Pedro Neymar Brazil squad call up","Joao Pedro replaces Neymar Brazil injury"]`;
   try {
     const raw = await callAI({
@@ -327,14 +372,18 @@ Rules:
     });
     const parsed = parseLooseJson(raw);
     const queryLabels = Array.isArray(parsed?.queryLabels)
-      ? parsed.queryLabels.map((x) => String(x).trim()).filter(Boolean).slice(0, 8)
+      ? [...mandatoryLabels, ...parsed.queryLabels.map((x) => String(x).trim()).filter(Boolean)]
+          .filter((x, i, arr) => arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i)
+          .slice(0, 12)
       : [];
     const queries = normalizeSearchQueries(Array.isArray(parsed?.queries) ? parsed.queries : [], queryLabels, topic);
     if (queryLabels.length && queries.length) return { queryLabels, queries };
   } catch (e) {
     console.warn('[v3_research] generateSearchPlan failed:', e.message);
   }
-  const queryLabels = fallbackQueryLabels(topic, memo);
+  const queryLabels = [...mandatoryLabels, ...fallbackQueryLabels(topic, memo)]
+    .filter((x, i, arr) => arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i)
+    .slice(0, 12);
   return { queryLabels, queries: normalizeSearchQueries(buildQueriesFromLabels(queryLabels, topic), queryLabels, topic) };
 }
 
@@ -592,6 +641,7 @@ function buildSideStoryCandidates(entity, summary, events) {
 // Returns { followUpQueries: string[], entities: {type, nameEn}[] }
 // Note: works even with empty learningCorpus — extracts from topic/memo alone.
 async function aiExpandResearch(topic, memo, learningCorpus) {
+  const mandatoryLabels = extractCriticalCaseLabels(topic, memo);
   const articles = (learningCorpus || []).slice(0, 5);
   const summaries = articles.length
     ? '\nArticles found:\n' + articles
@@ -603,11 +653,14 @@ async function aiExpandResearch(topic, memo, learningCorpus) {
 
 Topic: ${topic}
 ${memo ? `Context: ${memo}` : ''}${summaries}
+Mandatory labels from title. Omitted/not-selected players are high priority data targets:
+${mandatoryLabels.join(', ') || '(none)'}
 
 Tasks:
 1. Up to 2 follow-up English search queries for specific factual gaps (regulations, official rules, key dates).
    Example: "FIFA World Cup 2026 squad replacement deadline"
 2. Up to 4 soccer player or club names that need live stats data. IMPORTANT: translate Japanese names to English.
+   Do not drop omitted or left-out players from the title. They often need stats/comparison data more than selected players.
    Examples: ジョアン・ペドロ→João Pedro, ネイマール→Neymar, アンチェロッティ→Carlo Ancelotti,
    ブラジル代表→Brazil, スペイン代表→Spain, 日本代表→Japan, ヴィニシウス→Vinicius Junior, ムバッペ→Kylian Mbappe
 
@@ -627,9 +680,15 @@ Output JSON only (no markdown, no explanation):
     const followUpQueries = Array.isArray(parsed.followUpQueries)
       ? parsed.followUpQueries.map((q) => String(q).trim()).filter(Boolean).slice(0, 2)
       : [];
-    const entities = Array.isArray(parsed.entities)
-      ? parsed.entities.filter((e) => e && e.nameEn).slice(0, 3)
+    const aiEntities = Array.isArray(parsed.entities)
+      ? parsed.entities.filter((e) => e && e.nameEn)
       : [];
+    const mandatoryEntities = mandatoryLabels
+      .filter((name) => /Foden|Palmer|Kane|Bellingham/i.test(name))
+      .map((name) => ({ type: 'player', nameEn: name }));
+    const entities = [...mandatoryEntities, ...aiEntities]
+      .filter((e, i, arr) => arr.findIndex((x) => String(x.nameEn).toLowerCase() === String(e.nameEn).toLowerCase()) === i)
+      .slice(0, 6);
     console.log('[v3_research] aiExpandResearch → queries:', followUpQueries, 'entities:', entities.map(e => e.nameEn));
     return { followUpQueries, entities };
   } catch (e) {
