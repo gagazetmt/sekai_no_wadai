@@ -5,13 +5,28 @@
 const path = require('path');
 const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
 
-const ARTICLE_CHAR_LIMIT = 1200;
-const MAX_ARTICLES = 6;
+const ARTICLE_CHAR_LIMIT = 6500;
+const MAX_ARTICLES = 15;
 const MAX_WIKI_ENTRIES = 3;
 const WIKI_CANDIDATE_CHAR_LIMIT = 400;
 
 function buildResearchSummary(researchCorpus, wikiStories) {
-  const articles = (researchCorpus?.learningCorpus || []).slice(0, MAX_ARTICLES);
+  const raw = researchCorpus?.learningCorpus || [];
+
+  // ① 300文字未満を除外（ツイート・YouTube説明文等のノイズ）
+  // ② スコア降順でソート（高品質記事を優先）
+  // ③ 同一ドメインは2件まで（同アカウント連投対策）
+  const domainCount = {};
+  const articles = raw
+    .filter(item => (item.text || '').length >= 300)
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .filter(item => {
+      const d = item.host || 'unknown';
+      domainCount[d] = (domainCount[d] || 0) + 1;
+      return domainCount[d] <= 2;
+    })
+    .slice(0, MAX_ARTICLES);
+
   const wikiResults = (wikiStories?.results || []).slice(0, MAX_WIKI_ENTRIES);
 
   const articleText = articles
