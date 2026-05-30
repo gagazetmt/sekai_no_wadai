@@ -496,7 +496,7 @@ ${statsText || '（なし）'}
       system,
       messages: [{ role: 'user', content: user }],
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      max_tokens: 3500,
       forceProvider: 'anthropic',
       label: 'validate_plan',
     });
