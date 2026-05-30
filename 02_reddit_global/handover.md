@@ -29,6 +29,13 @@ Not run yet in this round:
 
 - Full live Step2 research, to avoid spending Serper/AI credits during code verification.
 
+Follow-up UX fix:
+
+- The Step2 research button now shows explicit progress such as `1/5 検索クエリを作成`, `2/5 ニュース記事を取得`, through `5/5 企画書A/B/Cを作成`.
+- Starting a Step2 run clears stale previous research/fetched/proposal data before the new job starts.
+- Creating or selecting a new case clears prior working data so old acquired data is not prefilled into a different case.
+- Manual edits to the case title/memo/source also clear stale Step2 state.
+
 ## First Read
 
 This file is the active handover for the V3 launcher work. At the start of the next session, read this file before making changes.

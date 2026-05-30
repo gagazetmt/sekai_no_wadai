@@ -3027,6 +3027,23 @@ let stepStatus = {
   export: false,
 };
 
+function clearStep2WorkState(opts = {}) {
+  if (!opts.keepPlan) currentPlan = null;
+  currentResearch = null;
+  currentWikiStories = null;
+  currentAIPlan = null;
+  currentAcquiredData = null;
+  currentFetchedData = null;
+  activeSlideIdx = 0;
+  imageSelections = {};
+  stepStatus.proposal = false;
+  stepStatus.briefing = false;
+  stepStatus.structure = false;
+  stepStatus.script = false;
+  stepStatus.export = false;
+  if (!opts.skipPersist) persistV3State();
+}
+
 function persistV3State() {
   try {
     localStorage.setItem(V3_STATE_KEY, JSON.stringify({
@@ -3161,6 +3178,21 @@ window.openSidebar = openSidebar;
 window.closeSidebar = closeSidebar;
 window.toggleSidebar = toggleSidebar;
 
+function bindCaseInputReset() {
+  ['title', 'memo', 'sourceType'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.resetBound === '1') return;
+    el.dataset.resetBound = '1';
+    el.addEventListener(id === 'sourceType' ? 'change' : 'input', () => {
+      if (!currentPlan && !currentResearch && !currentFetchedData && !currentAcquiredData) return;
+      selectedProject = null;
+      clearStep2WorkState({ skipPersist: true });
+      activeView = 'case';
+      persistV3State();
+    });
+  });
+}
+
 async function persistSavedProjects() {
   const res = await fetch('/api/v3/saved-projects', {
     method: 'POST',
@@ -3192,6 +3224,7 @@ async function saveCustomCase() {
     await persistSavedProjects();
     applyProjectToInputs(item);
     selectedProject = item;
+    clearStep2WorkState({ skipPersist: true });
     document.getElementById('customCaseTitle').value = '';
     document.getElementById('customCaseMemo').value = '';
     activeView = 'saved';
@@ -3249,6 +3282,8 @@ async function saveSelectedCases() {
   currentWikiStories = null;
   currentAIPlan = null;
   currentAcquiredData = null;
+  currentFetchedData = null;
+  imageSelections = {};
   activeView = 'saved';
   await loadSaved();
   renderPlan(currentPlan);
@@ -3730,11 +3765,34 @@ async function runAIScriptGeneration() {
   }
 }
 
+function step2ProgressLabel(stage, fallback) {
+  const map = {
+    queued: ['0/5', '準備中'],
+    query: ['1/5', '検索クエリを作成'],
+    articles: ['2/5', 'ニュース記事を取得'],
+    labels: ['3/5', '本筋ラベルを作成'],
+    prefetch: ['4/5', '無料データを取得'],
+    analyze: ['5/5', '企画書A/B/Cを作成'],
+    done: ['5/5', '完了'],
+    error: ['停止', 'エラー'],
+  };
+  const item = map[stage] || ['', fallback || '調査中'];
+  return (item[0] ? item[0] + ' ' : '') + item[1];
+}
+
+function setProposalRunStatus(stage, detail) {
+  const el = document.getElementById('proposalRunStatus');
+  if (!el) return;
+  const main = step2ProgressLabel(stage, detail);
+  el.innerHTML = '<b>' + esc(main) + '</b>' + (detail ? '<br><span style="font-size:12px;color:var(--muted);">' + esc(detail) + '</span>' : '');
+}
+
 async function runProposal() {
   const btn = document.getElementById('proposalStepBtn');
-  const status = document.getElementById('proposalRunStatus');
   if (btn) { btn.disabled = true; btn.textContent = '調査中...'; }
-  if (status) status.textContent = 'サーバー側ジョブを開始中...';
+  clearStep2WorkState({ keepPlan: true, skipPersist: true });
+  currentAcquiredData = null;
+  setProposalRunStatus('queued', 'サーバー側ジョブを開始中...');
   try {
     if (!currentPlan) await generatePlan({ scroll: false });
     const startRes = await fetch('/api/v3/proposal-job/start', {
@@ -3753,6 +3811,7 @@ async function runProposal() {
     const jobId = startData.jobId;
     activeView = 'proposal';
     renderPlan(currentPlan);
+    setProposalRunStatus('queued', 'サーバー側ジョブを開始しました。');
     let lastMessage = '';
     for (;;) {
       await new Promise((resolve) => setTimeout(resolve, 1800));
@@ -3761,13 +3820,13 @@ async function runProposal() {
         const pollRes = await fetch('/api/v3/proposal-job/' + encodeURIComponent(jobId));
         jobData = await pollRes.json();
       } catch (pollError) {
-        if (status) status.textContent = (lastMessage || 'サーバー側で調査継続中...') + '（接続復帰待ち）';
+        setProposalRunStatus('queued', (lastMessage || 'サーバー側で調査継続中...') + '（接続復帰待ち）');
         continue;
       }
       if (!jobData.success) throw new Error(jobData.error || 'proposal job not found');
       const job = jobData.job || {};
       lastMessage = job.message || job.stage || '';
-      if (status) status.textContent = lastMessage || 'サーバー側で調査中...';
+      setProposalRunStatus(job.stage || 'queued', lastMessage || 'サーバー側で調査中...');
       if (job.status === 'done') {
         const result = job.result || {};
         currentPlan = result.plan || currentPlan;
@@ -3783,10 +3842,10 @@ async function runProposal() {
     markStepDone('proposal');
     activeView = 'proposal';
     renderPlan(currentPlan);
-    const doneStatus = document.getElementById('proposalRunStatus');
-    if (doneStatus) doneStatus.textContent = 'Step2-5 完了。記事 ' + (currentResearch?.learningCorpus?.length || 0) + '件＋データ ' + (currentFetchedData || []).filter(function(d){return d.ok;}).length + '件で企画書A/B/Cを生成しました。';
+    setProposalRunStatus('done', '記事 ' + (currentResearch?.learningCorpus?.length || 0) + '件＋データ ' + (currentFetchedData || []).filter(function(d){return d.ok;}).length + '件で企画書A/B/Cを生成しました。');
     await loadSaved();
   } catch (error) {
+    setProposalRunStatus('error', error.message);
     alert('企画提案失敗: ' + error.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '調査'; }
@@ -4801,8 +4860,8 @@ function renderResearchActionPanel() {
     '<div class="research-action-row">' +
       '<button id="proposalStepBtn" onclick="runProposal()">調査</button>' +
     '</div>' +
-    '<div class="research-flow"><span class="research-step">Step2-1 クエリ → Step2-2 記事 → Step2-3 ラベル → Step2-4 無料データ → Step2-5 企画書A/B/C</span></div>' +
-    '<div id="proposalRunStatus" class="task-status">調査を押すと、案件名から検索ラベルを作り、記事・本筋ラベル・無料データ取得・企画書A/B/Cまで順に進めます。</div>' +
+    '<div class="research-flow"><span class="research-step">1/5 検索クエリを作成 → 2/5 記事取得 → 3/5 ラベル作成 → 4/5 無料データ取得 → 5/5 企画書A/B/C</span></div>' +
+    '<div id="proposalRunStatus" class="task-status">調査を押すと、今どの段階かをここに表示します。</div>' +
   '</div>';
 }
 
@@ -5852,6 +5911,7 @@ try {
   activeView = 'case';
   renderPlan(currentPlan);
   bindHamburgerMenu();
+  bindCaseInputReset();
 } catch (error) {
   window.dispatchEvent(new ErrorEvent('error', { message: error.message || String(error), error: error }));
 }
