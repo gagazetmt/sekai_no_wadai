@@ -630,40 +630,54 @@ function buildSideStoryCandidates(entity, summary, events) {
 
 // AI reads topic/memo/articles → decides follow-up search queries + which entities need stats data.
 // Returns { followUpQueries: string[], entities: {type, nameEn}[] }
-// Note: works even with empty learningCorpus — extracts from topic/memo alone.
+// 2026-05-30: 記事本文を600文字×8件に拡張し、物語の核心から正確にエンティティを特定
 async function aiExpandResearch(topic, memo, learningCorpus) {
   const mandatoryLabels = extractCriticalCaseLabels(topic, memo);
-  const articles = (learningCorpus || []).slice(0, 5);
+
+  // スコア降順・最低300文字フィルタ・同ドメイン2件上限（v3_planner と同じ品質基準）
+  const domainCount = {};
+  const articles = (learningCorpus || [])
+    .filter(a => (a.text || '').length >= 300)
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .filter(a => {
+      const d = a.host || 'unknown';
+      domainCount[d] = (domainCount[d] || 0) + 1;
+      return domainCount[d] <= 2;
+    })
+    .slice(0, 8);  // 最大8件（200→600文字に増やした分だけ件数を抑える）
+
   const summaries = articles.length
     ? '\nArticles found:\n' + articles
-        .map((a, i) => `[${i + 1}] ${a.title} (${a.host})\n${String(a.text || '').slice(0, 200)}`)
+        .map((a, i) => `[${i + 1}] ${a.title} (${a.host})\n${String(a.text || '').slice(0, 600)}`)
         .join('\n\n')
     : '';
 
-  const prompt = `You are a soccer research assistant. Analyze the topic, context, and articles below.
+  const prompt = `You are a soccer research assistant. Read the topic and articles carefully to identify all entities that need live stats data.
 
 Topic: ${topic}
 ${memo ? `Context: ${memo}` : ''}${summaries}
-Mandatory proper-noun labels from title/memo. Keep these available as label/data candidates:
+
+Mandatory labels from title/memo (must be included as entities):
 ${mandatoryLabels.join(', ') || '(none)'}
 
 Tasks:
-1. Up to 2 follow-up English search queries for specific factual gaps (regulations, official rules, key dates).
-   Example: "FIFA World Cup 2026 squad replacement deadline"
-2. Up to 4 soccer player or club names that need live stats data. IMPORTANT: translate Japanese names to English.
-   Do not drop named people, clubs, or national teams from the title/memo.
-   Examples: ジョアン・ペドロ→João Pedro, ネイマール→Neymar, アンチェロッティ→Carlo Ancelotti,
-   ブラジル代表→Brazil, スペイン代表→Spain, 日本代表→Japan, ヴィニシウス→Vinicius Junior, ムバッペ→Kylian Mbappe
+1. Up to 2 follow-up English search queries for factual gaps not covered by the articles above.
+   Focus on specific numbers, dates, or records mentioned but not confirmed.
+2. List ALL soccer players, clubs, and national teams referenced in the topic AND articles that need live stats.
+   - Translate Japanese names to English (ロバートソン→Andrew Robertson, トッテナム→Tottenham, etc.)
+   - Include rival clubs, managers' former clubs, or comparison targets if mentioned
+   - Max 6 entities total
 
-Output JSON only (no markdown, no explanation):
-{"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Name"},{"type":"team","nameEn":"Club"}]}`;
+Output JSON only:
+{"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Andrew Robertson"},{"type":"team","nameEn":"Tottenham"}]}`;
 
   try {
     const raw = await callAI({
       system: 'Soccer research assistant. Output valid JSON only. No markdown.',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 450,
-      forceProvider: 'gemini',
+      model: 'deepseek-chat',
+      max_tokens: 500,
+      forceProvider: 'deepseek',
       label: '③entity_expand',
     });
     const parsed = parseLooseJson(raw);
@@ -675,7 +689,7 @@ Output JSON only (no markdown, no explanation):
       ? parsed.entities.filter((e) => e && e.nameEn)
       : [];
     const mandatoryEntities = mandatoryLabels
-      .filter((name) => /[A-Za-z]/.test(name) && !/^(World Cup|squad|news)$/i.test(name))
+      .filter((name) => /[A-Za-z]/.test(name) && !/^(World Cup|squad|news|here we go)$/i.test(name))
       .map((name) => ({ type: 'entity', nameEn: name }));
     const entities = [...mandatoryEntities, ...aiEntities]
       .filter((e, i, arr) => arr.findIndex((x) => String(x.nameEn).toLowerCase() === String(e.nameEn).toLowerCase()) === i)
