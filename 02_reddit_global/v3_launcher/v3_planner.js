@@ -300,11 +300,14 @@ async function _generateOnePlan(topic, memo, researchSummary, providerOpts) {
       forceProvider: provider,
       label,
     });
-    // ```json ブロック対応
-    const cleaned = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    const parsed  = extractJSON(cleaned);
+    // ```json ブロック / 前置き文 / 後続テキスト を除去して JSON を抽出
+    const cleaned = String(raw || '')
+      .replace(/^```(?:json)?\s*/im, '')   // 先頭の```json
+      .replace(/\s*```\s*$/m, '')          // 末尾の```
+      .trim();
+    const parsed = extractJSON(cleaned);
     if (!parsed) {
-      console.warn(`[v3_planner] ${label} JSON parse failed`);
+      console.warn(`[v3_planner] ${label} JSON parse failed. raw先頭300文字: ${String(raw||'').slice(0,300)}`);
       return null;
     }
     return parsed;
@@ -397,8 +400,8 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
       rejectedReasons: [],
     },
     briefing: {
-      purpose:       bestRaw?._purpose     || '',
-      coreMessage:   bestRaw?._coreMessage || '',
+      purpose:       bestRaw?.purpose      || bestRaw?._purpose     || '',
+      coreMessage:   bestRaw?.coreMessage  || bestRaw?._coreMessage || '',
       chapters:      (bestRaw?.slideOutline || []).map((s, i) => ({
         no: i + 1, role: s.slideType || 'chapter',
         claim: s.point || s.headline || '', dataNeeds: s.dataNeeds || [],

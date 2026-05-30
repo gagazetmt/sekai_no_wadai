@@ -663,13 +663,15 @@ ${mandatoryLabels.join(', ') || '(none)'}
 Tasks:
 1. Up to 2 follow-up English search queries for factual gaps not covered by the articles above.
    Focus on specific numbers, dates, or records mentioned but not confirmed.
-2. List ALL soccer players, clubs, and national teams referenced in the topic AND articles that need live stats.
+2. List soccer players, clubs, managers, and national teams that need live stats data.
    - Translate Japanese names to English (ロバートソン→Andrew Robertson, トッテナム→Tottenham, etc.)
-   - Include rival clubs, managers' former clubs, or comparison targets if mentioned
+   - Include rival clubs, managers, or comparison targets if mentioned
+   - EXCLUDE: journalists (Fabrizio Romano, David Ornstein etc.), agents, commentators, TV presenters
+   - EXCLUDE: competitions/tournaments (Premier League, Champions League etc.) — they have no player stats
    - Max 6 entities total
 
 Output JSON only:
-{"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Andrew Robertson"},{"type":"team","nameEn":"Tottenham"}]}`;
+{"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Andrew Robertson"},{"type":"team","nameEn":"Tottenham"},{"type":"manager","nameEn":"Roberto De Zerbi"}]}`;
 
   try {
     const raw = await callAI({
