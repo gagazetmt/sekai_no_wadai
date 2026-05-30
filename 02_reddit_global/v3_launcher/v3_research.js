@@ -265,7 +265,7 @@ function extractCriticalCaseLabels(topic = '', memo = '') {
     .filter((x) => !jpStop.test(x))
     .forEach(push);
   (raw.match(/[A-Za-z][A-Za-z'.-]+(?:\s+[A-Za-z][A-Za-z'.-]+){0,3}/g) || [])
-    .filter((x) => !/^(world cup|fa cup|squad|member|members|football|soccer|news)$/i.test(x))
+    .filter((x) => !/^(world cup|fa cup|squad|member|members|football|soccer|news|here we go|here|we|go)$/i.test(x))
     .forEach(push);
   (raw.match(/[\p{Script=Katakana}\p{Script=Han}ー]{2,}代表/gu) || []).forEach(push);
   if (/W杯|ワールドカップ|World Cup/i.test(raw)) push('W杯');
@@ -273,13 +273,13 @@ function extractCriticalCaseLabels(topic = '', memo = '') {
 }
 
 function buildQueriesFromLabels(labels, topic) {
-  const base = (labels || []).filter(Boolean).slice(0, 5);
+  const base = (labels || []).filter(Boolean).slice(0, 2);  // 2語に絞る
   if (base.length >= 2) {
-    const joined = base.slice(0, 4).join(' ');
+    const core = base.join(' ');
     return uniq([
-      joined,
-      `${joined} football news`,
-      `${joined} official report`,
+      core,
+      `${core} transfer`,
+      `${core} news`,
     ]).slice(0, 3);
   }
   return fallbackQueries(topic).map(compactSearchQuery).filter(Boolean).slice(0, 3);
@@ -297,7 +297,7 @@ function normalizeSearchQueries(queries, labels = [], topic = '') {
       .trim()
       .split(/\s+/)
       .filter((term, index, arr) => arr.findIndex((x) => x.toLowerCase() === term.toLowerCase()) === index)
-      .slice(0, 7)
+      .slice(0, 4)  // 最大4語に制限
       .join(' ');
     const key = clean.toLowerCase();
     if (!clean || seen.has(key)) return;
