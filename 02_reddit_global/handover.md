@@ -2,6 +2,43 @@
 
 Last updated: 2026-05-30 JST
 
+## Today Summary - 2026-05-30
+
+V3 launcher Step2 was rebuilt around the user's goal: proposals and slides should reflect the planning brief and pass the right data forward.
+
+Main work completed today:
+
+- Added the Recipe Launcher page and then improved its mobile editor flow.
+- Reworked Step2 into visible stages: Step2-1 query labels, Step2-2 article hits, Step2-3 story labels, Step2-4 free data fetch, Step2-5 proposal generation.
+- Added clear progress while running research: `1/5 検索クエリを作成` through `5/5 企画書A/B/Cを作成`.
+- Cleared stale research/fetched/proposal data when starting a new case, selecting a new case, editing title/memo/source, or rerunning Step2.
+- Improved query generation so it uses compact exact-topic queries instead of long repeated phrases.
+- Forced title names to become mandatory labels. Omitted or left-out players are now treated as high-priority data targets.
+- Fixed the England squad example class of bug: Foden/Palmer should not be dropped from labels, queries, or entity data targets.
+- Prevented squad-announcement searches from drifting into generic tournament rules or `FA Cup` when the story is really about the football association / national squad.
+- Japanese article titles/material bullets are generated for the UI; original titles are not needed in the display.
+- Added type badges for labels such as player, manager, team, match, and wiki.
+- Removed the duplicated top SofaScore data block and kept fetched data inside Step2-4.
+- Step2-4 now shows richer data cards/slots from SofaScore, Transfermarkt, and Wiki.
+- Proposal A/B/C now supports short / standard / long video options and variable slide counts.
+- Selected proposal slide outlines are passed into the Step3 briefing path.
+- Added Step2-6 insufficient-data check before moving to Step3.
+- Added an `追加指示` textarea under Step2-6; its text is appended to the memo before re-research.
+- Added AI/Serper/cost/model/webshare-bandwidth notes for each Step2 stage.
+- Updated and deployed V3 to VPS multiple times, restarting only `soccer-yt-v3`.
+
+Verification performed today:
+
+- `node --check v3_launcher/server.js`
+- `node --check v3_launcher/v3_research.js`
+- `node --check v3_launcher/v3_planner.js`
+- Local HTML checks for progress display, Step2-6, cost display, and additional-instruction textarea.
+- VPS health checks on `http://127.0.0.1:3010/api/v3/health`.
+
+Not done today:
+
+- Full live Step2 research was intentionally not run unless necessary, to avoid spending Serper/AI credits.
+
 ## Latest Update - 2026-05-30 Step2 rebuild
 
 User approved the Step2 fix plan and asked to implement while showing, for each stage, AI/Serper usage, model, cost, AI-change recommendation, and webshare bandwidth impact.
