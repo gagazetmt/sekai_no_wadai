@@ -36,14 +36,16 @@ function _findEntityData(siData, subject, label) {
   }
   const it = (siData.boxes?.entity?.items || []).find(x => x.label === label);
   if (!it) return null;
-  const sofaOk = !!it.sofa?.ok;
-  const wikiOk = !!it.wiki?.ok;
-  const fmOk   = !!it.fotmob?.ok;
+  const sofaOk  = !!it.sofa?.ok;
+  const wikiOk  = !!it.wiki?.ok;
+  const fmOk    = !!it.fotmob?.ok;
   if (!sofaOk && !wikiOk && !fmOk) return null;
   return {
     ...(sofaOk ? it.sofa : {}),
-    _wiki:   wikiOk ? it.wiki   : null,
-    _fotmob: fmOk   ? it.fotmob : null,
+    _wiki:      wikiOk        ? it.wiki      : null,
+    _fotmob:    fmOk          ? it.fotmob    : null,
+    _tmGames:   it.tmGames?.ok  ? it.tmGames  : null,
+    _tmSeasons: it.tmSeasons?.ok ? it.tmSeasons : null,
   };
 }
 

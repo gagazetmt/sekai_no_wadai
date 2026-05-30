@@ -374,22 +374,25 @@ async function _fetchEntity(label, role) {
   // 🆕 Transfermarkt 試合単位の選手成績（player のみ・2026-05-08）
   //   ceapi/performance-game/{id} を叩いて全試合データ取得 → 直近3シーズン × 大会別集計
   //   + 直近シーズン監督別 top3（「アロンソ下のヴィニ」のような複合データ用）
+  //   2026-05-30: valueHistory（市場価値推移）も同一 TM ID で並列取得
   if (role === 'player') {
     const { searchTransfermarktPlayer, fetchPlayerSummary } = require('../scripts/modules/fetchers/transfermarkt_player_games');
     const { fetchPlayerInjuries } = require('../scripts/modules/fetchers/transfermarkt_player_injuries');
+    const { fetchPlayerValueHistory } = require('../scripts/modules/fetchers/transfermarkt_player_value');
     tasks.push(
       (async () => {
         const hit = await searchTransfermarktPlayer(label).catch(() => null);
         if (!hit) return { ok: false, error: 'tm player search miss' };
-        // summary + injuries を並列実行（同じ id+slug 共有で search 重複なし）
-        const [summary, injRes] = await Promise.all([
+        const [summary, injRes, valRes] = await Promise.all([
           fetchPlayerSummary(hit.id).catch(e => ({ ok: false, error: e.message })),
           fetchPlayerInjuries(hit.id, hit.slug).catch(e => ({ ok: false, error: e.message })),
+          fetchPlayerValueHistory(hit.id, hit.slug).catch(e => ({ ok: false, error: e.message })),
         ]);
         const base = summary?.ok
           ? { ...summary, _slug: hit.slug, _name: hit.name }
           : (summary || { ok: false, error: 'summary failed' });
-        base.injuries = (injRes && injRes.ok) ? injRes.injuries : [];
+        base.injuries   = (injRes && injRes.ok) ? injRes.injuries   : [];
+        base.valueHistory = (valRes && valRes.ok) ? valRes.valueHistory : [];
         return base;
       })()
     );
@@ -397,12 +400,12 @@ async function _fetchEntity(label, role) {
     tasks.push(Promise.resolve(null));
   }
 
-  // 🆕 Wikipedia チーム歴代シーズン（team のみ・2026-05-10）
-  //   "List of {team} F.C. seasons" から直近10シーズン分の順位・勝点・得失点抽出
-  //   history / comparison スライドで「アルテタ就任後の順位推移」のような時系列を組める
+  // 🆕 TM チーム歴代シーズン（team のみ・2026-05-30）
+  //   TransferMarkt platzierungen から直近10シーズン分の順位・勝点・W/D/L を取得
+  //   Wikipedia wikiSeasons より TM の方が構造化されており安定
   if (role === 'team') {
-    const { fetchWikiTeamSeasons } = require('../scripts/modules/fetchers/wiki_team_seasons');
-    tasks.push(fetchWikiTeamSeasons(label, { limit: 10 }).catch(e => ({ ok: false, error: e.message })));
+    const { fetchTeamSeasons } = require('../scripts/modules/fetchers/transfermarkt_team_seasons');
+    tasks.push(fetchTeamSeasons(label, { limit: 10 }).catch(e => ({ ok: false, error: e.message })));
   } else {
     tasks.push(Promise.resolve(null));
   }
@@ -423,9 +426,9 @@ async function _fetchEntity(label, role) {
     tasks.push(Promise.resolve(null));
   }
 
-  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames, wikiSeasons, wikiNational] = await Promise.all(tasks);
+  const [wiki, sofa, fmRes, tm, wikiMgrStats, tmGames, tmSeasons, wikiNational] = await Promise.all(tasks);
   const fotmob = fmRes && fmRes.data ? { ok: true, ...fmRes.data, _matched: fmRes.found } : (fmRes || null);
-  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiSeasons, wikiNational };
+  return { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, tmSeasons, wikiNational };
 }
 
 async function _fetchMatch(label) {
@@ -493,10 +496,10 @@ async function _runFetchLabel({ postId, box, label, role }) {
   const now = new Date().toISOString();
   if (box === 'entity') {
     if (!role) throw new Error('role required for entity');
-    const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational } = await _fetchEntity(label, role);
+    const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, tmSeasons, wikiNational } = await _fetchEntity(label, role);
     const items = si.boxes.entity.items;
     const i = items.findIndex(x => x.label === label);
-    const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational, fetchedAt: now };
+    const next = { label, role, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, tmSeasons, wikiNational, fetchedAt: now };
     if (i >= 0) items[i] = next; else items.push(next);
   } else if (box === 'match') {
     const data = await _fetchMatch(label);
@@ -579,8 +582,8 @@ async function _runFetchAll({ postId, items }, onProgress) {
       const it = queue.shift();
       try {
         if (it.box === 'entity') {
-          const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational } = await _fetchEntity(it.label, it.role);
-          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, wikiNational, fetchedAt: now });
+          const { wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, tmSeasons, wikiNational } = await _fetchEntity(it.label, it.role);
+          results.push({ ...it, wiki, sofa, fotmob, tm, wikiMgrStats, tmGames, tmSeasons, wikiNational, fetchedAt: now });
         } else if (it.box === 'match') {
           const data = await _fetchMatch(it.label);
           results.push({ ...it, data, fetchedAt: now });
@@ -601,7 +604,7 @@ async function _runFetchAll({ postId, items }, onProgress) {
     const items = si.boxes[r.box].items;
     const i = items.findIndex(x => x.label === r.label);
     let next;
-    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, tmGames: r.tmGames, wikiNational: r.wikiNational, fetchedAt: r.fetchedAt, error: r.error };
+    if (r.box === 'entity') next = { label: r.label, role: r.role, wiki: r.wiki, sofa: r.sofa, fotmob: r.fotmob, tm: r.tm, wikiMgrStats: r.wikiMgrStats, tmGames: r.tmGames, tmSeasons: r.tmSeasons, wikiNational: r.wikiNational, fetchedAt: r.fetchedAt, error: r.error };
     else                    next = { label: r.label, data: r.data,  fetchedAt: r.fetchedAt, error: r.error };
     if (i >= 0) items[i] = next; else items.push(next);
   }

@@ -126,15 +126,15 @@ function walkPlayer(d) {
   }
 
   // ─ シーズン履歴（全シーズン × 大会、出場0除外、新→旧）─
-  // walker priority 設計: 直近5シーズン高 / それ以前は中〜低
+  // walker priority: 直近5シーズン高 / 6〜10 中 / それ以前は低
   if (Array.isArray(d.seasonHistory) && d.seasonHistory.length) {
     d.seasonHistory.forEach((s, i) => {
-      const isRecent = i < 5;
-      const basePri  = isRecent ? 8 - i : 4;        // 直近 8,7,6,5,4 / 古い 4 固定
-      const cat      = isRecent ? 'シーズン履歴(直近5年)' : 'シーズン履歴(過去)';
+      const isRecent5 = i < 5;
+      const isRecent10 = i < 10;
+      const basePri = isRecent5 ? 8 - i : (isRecent10 ? 4 : 2);
+      const cat = isRecent5 ? 'シーズン履歴(直近5年)' : (isRecent10 ? 'シーズン履歴(直近10年)' : 'シーズン履歴(過去)');
       const seasonLabel = `${s.seasonName || '?'} ${s.tournamentName || ''}`.trim();
       const stats = s.stats || {};
-      // ラベル付き要約 1行（プルダウンで一覧性高い）
       const summary = [
         stats.appearances != null ? stats.appearances + '試合' : null,
         stats.goals       != null ? stats.goals + 'G' : null,
@@ -142,12 +142,19 @@ function walkPlayer(d) {
         stats.rating      != null ? '評定' + stats.rating : null,
       ].filter(Boolean).join(' ');
       push(`season_${i+1}_summary`, seasonLabel, summary, cat, basePri);
-      // 各項目（個別 slot として）— 直近5シーズンのみ細粒度化
-      if (isRecent) {
+      // 直近10シーズン: apps/goals/assists を個別スロット化（推移スライド用）
+      if (isRecent10) {
         push(`season_${i+1}_apps`,    `${seasonLabel} 試合`,    fmtNum(stats.appearances), cat, basePri - 1);
         push(`season_${i+1}_goals`,   `${seasonLabel} ゴール`,   fmtNum(stats.goals),       cat, basePri - 1);
         push(`season_${i+1}_assists`, `${seasonLabel} アシスト`, fmtNum(stats.assists),     cat, basePri - 1);
-        push(`season_${i+1}_rating`,  `${seasonLabel} 評定`,     fmtFloat(stats.rating, 2), cat, basePri - 1);
+      }
+      // 直近5シーズンのみ詳細スタッツも細粒度化
+      if (isRecent5) {
+        push(`season_${i+1}_rating`,    `${seasonLabel} 評定`,       fmtFloat(stats.rating, 2),          cat, basePri - 1);
+        push(`season_${i+1}_shots`,     `${seasonLabel} 枠内シュート`, fmtNum(stats.shotsOnTarget),         cat, basePri - 2);
+        push(`season_${i+1}_dribbles`,  `${seasonLabel} ドリブル成功`, fmtNum(stats.successfulDribbles),    cat, basePri - 2);
+        push(`season_${i+1}_chances`,   `${seasonLabel} チャンスメイク`, fmtNum(stats.bigChancesCreated),   cat, basePri - 2);
+        push(`season_${i+1}_keypasses`, `${seasonLabel} キーパス`,    fmtNum(stats.keyPasses),             cat, basePri - 2);
         if (stats.expectedGoals != null) push(`season_${i+1}_xG`, `${seasonLabel} xG`, fmtFloat(stats.expectedGoals, 2), cat, basePri - 2);
       }
     });
@@ -188,6 +195,15 @@ function walkPlayer(d) {
 
   if (d._wiki?.extract)     push('wikiBio',  '紹介文',    String(d._wiki.extract).slice(0, 120), 'Wikipedia', 4);
   if (d._wiki?.description) push('wikiDesc', '一行紹介',  d._wiki.description,                   'Wikipedia', 5);
+
+  // ─ 市場価値推移（TM valueHistory）────────────────────────
+  if (Array.isArray(d._tmGames?.valueHistory) && d._tmGames.valueHistory.length) {
+    d._tmGames.valueHistory.slice(0, 12).forEach((v, i) => {
+      const label = v.season ? `${v.season} 市場価値` : `${v.date || '?'} 市場価値`;
+      const val   = v.club ? `${v.valueFmt || '?'} (${v.club})` : (v.valueFmt || '?');
+      push(`mv_${i+1}`, label, val, '市場価値推移', 7 - Math.min(i, 5));
+    });
+  }
 
   // FotMob クラブごとキャリア（選手）
   _pushFotmobPlayerCareer(push, d._fotmob);
@@ -320,6 +336,23 @@ function walkTeam(d) {
 
   if (d._wiki?.extract)     push('wikiBio',  '紹介文',   String(d._wiki.extract).slice(0, 120), 'Wikipedia', 4);
   if (d._wiki?.description) push('wikiDesc', '一行紹介', d._wiki.description,                   'Wikipedia', 5);
+
+  // ─ TM 歴代シーズン（順位推移・2026-05-30）────────────────────
+  const tmSeasons = d._tmSeasons?.seasons;
+  if (Array.isArray(tmSeasons) && tmSeasons.length) {
+    tmSeasons.slice(0, 10).forEach((s, i) => {
+      const wdl = (s.wins != null && s.draws != null && s.losses != null)
+        ? ` ${s.wins}-${s.draws}-${s.losses}` : '';
+      const pts = s.points != null ? ` 勝点${s.points}` : '';
+      const pos = s.position != null ? `${s.position}位` : '?位';
+      const summary = `${s.season}: ${pos}${pts}${wdl}`;
+      const league  = s.league ? ` (${s.league})` : '';
+      push(`pastSeason_${i+1}`,     `${s.season} 順位`,   pos,                            '歴代シーズン', 7 - Math.min(i, 5));
+      push(`pastSeason_${i+1}_sum`, `${s.season} 成績`,   summary + league,               '歴代シーズン', 6 - Math.min(i, 5));
+      if (s.points  != null) push(`pastSeason_${i+1}_pts`, `${s.season} 勝点`, String(s.points),  '歴代シーズン', 5 - Math.min(i, 4));
+      if (s.wins    != null) push(`pastSeason_${i+1}_wdl`, `${s.season} W-D-L`, `${s.wins}-${s.draws}-${s.losses}`, '歴代シーズン', 4);
+    });
+  }
 
   return slots;
 }

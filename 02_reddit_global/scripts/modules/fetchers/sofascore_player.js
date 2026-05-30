@@ -9,6 +9,51 @@
 
 const { apiGet } = require('./_sofa_common');
 const { callAI } = require('../../ai_client');
+const fs   = require('fs');
+const path = require('path');
+
+// ─── 選手名インデックス（build_player_name_index.js で生成）─────
+const _INDEX_PATH = path.join(__dirname, '..', '..', '..', 'data', 'player_name_index.json');
+let _nameIndex = null;
+function _loadIndex() {
+  if (_nameIndex) return _nameIndex;
+  try {
+    const raw = JSON.parse(fs.readFileSync(_INDEX_PATH, 'utf8'));
+    _nameIndex = raw.players || {};
+  } catch (_) {
+    _nameIndex = {};
+  }
+  return _nameIndex;
+}
+
+function _normKey(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// インデックスから sofaId を引く（フルネーム優先 → 部分一致フォールバック）
+function lookupPlayerIndex(name) {
+  const idx = _loadIndex();
+  if (!Object.keys(idx).length) return null;
+  const key = _normKey(name);
+  // 完全一致
+  if (idx[key]) return idx[key];
+  // 部分一致（名前の各単語が全部キーに含まれる）
+  const parts = key.split(' ').filter(p => p.length >= 3);
+  if (parts.length) {
+    const hit = Object.values(idx).find(entry => {
+      const entryKey = _normKey(entry.name);
+      return parts.every(p => entryKey.includes(p));
+    });
+    if (hit) return hit;
+  }
+  return null;
+}
 
 // 日本語文字が含まれるか
 function hasJapanese(str) {
@@ -129,10 +174,20 @@ async function fetchSofaScorePlayer(playerNameEn) {
   if (!playerNameEn) return { ok: false, error: '選手名が未指定' };
 
   try {
-    // ① 検索
-    const player = await searchPlayer(playerNameEn);
-    if (!player) return { ok: false, error: `SofaScore に "${playerNameEn}" が見つかりません` };
-    const playerId = player.id;
+    // ① インデックス照合（IDが確定すれば /search/all をスキップ）
+    let playerId = null;
+    let player   = null;
+    const cached = lookupPlayerIndex(playerNameEn);
+    if (cached?.sofaId) {
+      playerId = cached.sofaId;
+      player   = { id: playerId, name: cached.name };
+      console.log(`[SofaScore Player] "${playerNameEn}" → index hit: ${cached.name} (id=${playerId})`);
+    } else {
+      // インデックスにない場合のみ従来の /search/all を使う
+      player = await searchPlayer(playerNameEn);
+      if (!player) return { ok: false, error: `SofaScore に "${playerNameEn}" が見つかりません` };
+      playerId = player.id;
+    }
 
     // ②③④⑤⑥ 並列取得（detail / events / statistics / nat / transfer）─────
     const [pdRaw, evRaw, statsRaw, natRaw, trnRaw] = await Promise.all([
@@ -244,6 +299,7 @@ async function fetchSofaScorePlayer(playerNameEn) {
             minutesPlayed:      s.statistics?.minutesPlayed ?? null,
             expectedGoals:      s.statistics?.expectedGoals ? parseFloat(Number(s.statistics.expectedGoals).toFixed(2)) : null,
             keyPasses:          s.statistics?.keyPasses ?? null,
+            bigChancesCreated:  s.statistics?.bigChancesCreated ?? null,
             successfulDribbles: s.statistics?.successfulDribbles ?? null,
             totalShots:         s.statistics?.totalShots ?? null,
             shotsOnTarget:      s.statistics?.shotsOnTarget ?? null,

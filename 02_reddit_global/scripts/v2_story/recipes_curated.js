@@ -77,11 +77,57 @@ const RECIPES = {
     requires: ['seasonHistory'],
   },
 
+  'player.season_trend10': {
+    label: '過去10シーズン推移（試合・G・A）',
+    description: '直近10シーズン分の試合数・ゴール・アシストを時系列で並べる',
+    keys: ['season_1_apps', 'season_1_goals', 'season_1_assists',
+           'season_2_apps', 'season_2_goals', 'season_2_assists',
+           'season_3_apps', 'season_3_goals', 'season_3_assists',
+           'season_4_apps', 'season_4_goals', 'season_4_assists',
+           'season_5_apps', 'season_5_goals', 'season_5_assists',
+           'season_6_apps', 'season_6_goals', 'season_6_assists',
+           'season_7_apps', 'season_7_goals', 'season_7_assists',
+           'season_8_apps', 'season_8_goals', 'season_8_assists',
+           'season_9_apps', 'season_9_goals', 'season_9_assists',
+           'season_10_apps', 'season_10_goals', 'season_10_assists'],
+    appliesTo: { role: ['player'] },
+    requires: ['seasonHistory'],
+  },
+
+  'player.market_value_history': {
+    label: '市場価値推移（過去10年）',
+    description: 'TransferMarkt から年別市場価値を時系列で並べる（€XXM + 所属クラブ）',
+    keys: ['mv_1', 'mv_2', 'mv_3', 'mv_4', 'mv_5',
+           'mv_6', 'mv_7', 'mv_8', 'mv_9', 'mv_10'],
+    appliesTo: { role: ['player'] },
+    requires: ['valueHistory'],
+  },
+
   'player.season_summary5': {
     label: '過去5シーズン要約',
     description: '直近5シーズンの「試合 G A 評定」を1行ずつ',
     keys: ['season_1_summary', 'season_2_summary', 'season_3_summary',
            'season_4_summary', 'season_5_summary'],
+    appliesTo: { role: ['player'] },
+    requires: ['seasonHistory'],
+  },
+
+  'player.prev_season_full': {
+    label: '前期スタッツ全項目（8指標）',
+    description: '直前シーズンの全主要スタッツ（出場・評定・G・A・枠内・ドリブル・チャンスメイク・キーパス）',
+    keys: ['season_1_apps', 'season_1_rating', 'season_1_goals', 'season_1_assists',
+           'season_1_shots', 'season_1_dribbles', 'season_1_chances', 'season_1_keypasses'],
+    appliesTo: { role: ['player'] },
+    requires: ['seasonHistory'],
+  },
+
+  'player.prev2season_compare': {
+    label: '前期 vs 前々期 比較（8指標）',
+    description: '直近2シーズンのスタッツ比較（成長・衰え・移籍影響を可視化）',
+    keys: ['season_1_apps', 'season_1_rating', 'season_1_goals', 'season_1_assists',
+           'season_1_shots', 'season_1_dribbles', 'season_1_chances', 'season_1_keypasses',
+           'season_2_apps', 'season_2_rating', 'season_2_goals', 'season_2_assists',
+           'season_2_shots', 'season_2_dribbles', 'season_2_chances', 'season_2_keypasses'],
     appliesTo: { role: ['player'] },
     requires: ['seasonHistory'],
   },
@@ -122,6 +168,17 @@ const RECIPES = {
     description: '2選手のキャリア通算（市場価値/年齢/CL得点/CL評定）',
     keys: ['marketValue', 'age', 'uclGoals', 'uclRating', 'rating'],
     appliesTo: { role: ['player'], requiresSecondary: true },
+  },
+
+  'team.season_history10': {
+    label: 'チーム 過去10シーズン順位推移',
+    description: 'TransferMarkt から過去10シーズン分の順位・勝点・W-D-L を時系列で並べる',
+    keys: ['pastSeason_1_sum', 'pastSeason_2_sum', 'pastSeason_3_sum',
+           'pastSeason_4_sum', 'pastSeason_5_sum', 'pastSeason_6_sum',
+           'pastSeason_7_sum', 'pastSeason_8_sum', 'pastSeason_9_sum',
+           'pastSeason_10_sum'],
+    appliesTo: { role: ['team'] },
+    requires: ['tmSeasons'],
   },
 
   /* ──────── チーム ──────── */
@@ -232,6 +289,8 @@ function applicableRecipes(walkerSlots, role, hasSecondary = false) {
         if (req === 'seasonHistory')   return slotKeys.has('season_1_summary');
         if (req === 'transferHistory') return slotKeys.has('transfer_1');
         if (req === 'nationalTeam')    return slotKeys.has('nat_team');
+        if (req === 'valueHistory')    return slotKeys.has('mv_1');
+        if (req === 'tmSeasons')       return slotKeys.has('pastSeason_1_sum');
         return true;
       });
     })
