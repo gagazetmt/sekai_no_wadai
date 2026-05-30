@@ -426,4 +426,92 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
   };
 }
 
-module.exports = { generateAIPlan };
+// ─── ハルシネーションチェック ──────────────────────────────────────
+// 採用した企画書の各スライドの主張を記事コーパスと照合し、
+// 「確認済み」「要確認」「修正候補」を返す
+//
+// 使い方:
+//   const result = await validatePlan(selectedCandidate, researchCorpus, fetchedData);
+//   // result.verified   : 根拠のある主張
+//   // result.unverified : 記事で確認できなかった主張
+//   // result.corrections: 誤りの可能性がある箇所と修正案
+//   // result.ok         : true / false
+
+async function validatePlan(selectedCandidate, researchCorpus, fetchedData) {
+  if (!selectedCandidate) return { ok: false, error: 'no plan selected' };
+
+  // 企画書の主張をまとめる
+  const slideText = (selectedCandidate.slideOutline || [])
+    .map(s => `[${s.no}] ${s.headline}\n  ${s.point || ''}`)
+    .join('\n');
+
+  // 記事コーパス（品質フィルタ済み・上位8件・1200文字）
+  const domainCount = {};
+  const articles = (researchCorpus?.learningCorpus || [])
+    .filter(a => (a.text || '').length >= 300)
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .filter(a => {
+      const d = a.host || 'unknown';
+      domainCount[d] = (domainCount[d] || 0) + 1;
+      return domainCount[d] <= 2;
+    })
+    .slice(0, 8)
+    .map((a, i) => `[記事${i+1}] ${a.title} (${a.host})\n${String(a.text || '').slice(0, 1200)}`)
+    .join('\n\n---\n\n');
+
+  // SofaScoreデータ（簡潔に）
+  const statsText = (fetchedData || []).filter(d => d.ok)
+    .map(d => `${d.nameEn}: ${d.slots?.slice(0, 8).map(s => `${s.label}:${s.value}`).join(' / ') || d.summary}`)
+    .join('\n');
+
+  const system = 'あなたはファクトチェック専門AIです。JSONのみ返してください。コードブロック不要。';
+  const user = `以下の企画書の各スライドに書かれた「主張・数字・事実」を、記事コーパスと取得済みデータと照合してください。
+
+## 企画書（採用案）
+フック: ${selectedCandidate.hookQuestion}
+${slideText}
+
+## 記事コーパス（根拠資料）
+${articles}
+
+## 取得済みスタッツデータ
+${statsText || '（なし）'}
+
+## 出力JSON
+{
+  "verified": [
+    {"claim": "確認できた主張・数字", "source": "記事N or SofaScore", "slideNo": 1}
+  ],
+  "unverified": [
+    {"claim": "記事に根拠が見つからない主張", "issue": "なぜ確認できないか", "slideNo": 2}
+  ],
+  "corrections": [
+    {"original": "企画書の誤記・誇張", "suggested": "正しい表現", "slideNo": 3}
+  ],
+  "summary": "全体的な品質評価（1〜2文）"
+}`;
+
+  try {
+    const raw = await callAI({
+      system,
+      messages: [{ role: 'user', content: user }],
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      forceProvider: 'anthropic',
+      label: 'validate_plan',
+    });
+    const cleaned = String(raw || '').replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
+    const parsed = extractJSON(cleaned);
+    if (!parsed) {
+      console.warn('[v3_planner] validatePlan JSON parse failed:', cleaned.slice(0, 200));
+      return { ok: false, error: 'JSON parse failed', raw: cleaned.slice(0, 300) };
+    }
+    console.log(`[v3_planner] validatePlan: verified=${(parsed.verified||[]).length} unverified=${(parsed.unverified||[]).length} corrections=${(parsed.corrections||[]).length}`);
+    return { ok: true, ...parsed };
+  } catch (e) {
+    console.warn('[v3_planner] validatePlan error:', e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = { generateAIPlan, validatePlan };
