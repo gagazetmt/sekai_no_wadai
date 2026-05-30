@@ -13,9 +13,9 @@ Main work completed today:
 - Added clear progress while running research: `1/5 検索クエリを作成` through `5/5 企画書A/B/Cを作成`.
 - Cleared stale research/fetched/proposal data when starting a new case, selecting a new case, editing title/memo/source, or rerunning Step2.
 - Improved query generation so it uses compact exact-topic queries instead of long repeated phrases.
-- Forced title names to become mandatory labels. Omitted or left-out players are now treated as high-priority data targets.
-- Fixed the England squad example class of bug: Foden/Palmer should not be dropped from labels, queries, or entity data targets.
-- Prevented squad-announcement searches from drifting into generic tournament rules or `FA Cup` when the story is really about the football association / national squad.
+- Forced proper nouns from the title/memo to become mandatory labels before AI planning.
+- Reworked query/label generation around a generic rule: proper nouns in the title/memo become mandatory labels before AI planning.
+- This avoids dropping named players/teams in cases like the England squad example, without hardcoding a case-specific exception.
 - Japanese article titles/material bullets are generated for the UI; original titles are not needed in the display.
 - Added type badges for labels such as player, manager, team, match, and wiki.
 - Removed the duplicated top SofaScore data block and kept fetched data inside Step2-4.
@@ -76,9 +76,9 @@ Follow-up UX fix:
 Search/label precision follow-up:
 
 - Added deterministic title-label extraction before Gemini query planning.
-- Names in the title are now mandatory labels; omitted/left-out players are treated as high-priority data targets.
-- Squad-announcement stories now force an exact-topic query before AI-generated queries, e.g. England World Cup squad plus Foden/Palmer omitted, instead of drifting into generic tournament/FA Cup rules.
-- Entity expansion now keeps mandatory omitted players such as Phil Foden and Cole Palmer even if Gemini omits them.
+- Names/proper nouns in the title and memo are now mandatory labels.
+- Search now forces an exact-topic query built from mandatory proper-noun labels before AI-generated queries, instead of relying on case-specific rules.
+- Entity expansion keeps mandatory proper-noun labels as data candidates even if Gemini omits them.
 - The Step2-6 insufficient-data area now has an "追加指示" textarea. Its content is appended to the memo as `追加指示:` when the user clicks re-research.
 
 ## First Read
