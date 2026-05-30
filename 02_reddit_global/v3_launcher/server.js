@@ -3787,7 +3787,12 @@ function setProposalRunStatus(stage, detail) {
   el.innerHTML = '<b>' + esc(main) + '</b>' + (detail ? '<br><span style="font-size:12px;color:var(--muted);">' + esc(detail) + '</span>' : '');
 }
 
-async function runProposal() {
+function runProposalWithGapInstructions() {
+  const extra = document.getElementById('gapResearchInstruction')?.value || '';
+  return runProposal(extra);
+}
+
+async function runProposal(extraInstruction = '') {
   const btn = document.getElementById('proposalStepBtn');
   if (btn) { btn.disabled = true; btn.textContent = '調査中...'; }
   clearStep2WorkState({ keepPlan: true, skipPersist: true });
@@ -3800,7 +3805,10 @@ async function runProposal() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: document.getElementById('title').value,
-        memo: document.getElementById('memo').value,
+        memo: [
+          document.getElementById('memo').value,
+          String(extraInstruction || '').trim() ? '追加指示: ' + String(extraInstruction || '').trim() : '',
+        ].filter(Boolean).join('\n\n'),
         sourceType: document.getElementById('sourceType')?.value || 'custom',
         plan: currentPlan,
         selectedProjectId: selectedProject?.id || '',
@@ -5155,8 +5163,10 @@ function renderProposalDataGapGate(plan) {
         (fetched.length ? fetched.map((d) => '<span class="chip" style="border-color:#22c55e;color:#bbf7d0;">' + esc(d.nameEn || d.label || '') + '</span>').join('') : '<span class="chip">未取得</span>') +
       '</div></div>' +
     '</div>' +
+    '<label class="label" style="margin-top:10px;">追加指示</label>' +
+    '<textarea id="gapResearchInstruction" style="min-height:72px;margin-top:6px;" placeholder="例: 落選したフォーデンとパーマーの今季成績・代表実績・落選理由を優先して再調査"></textarea>' +
     '<div class="task-actions">' +
-      '<button class="secondary" onclick="runProposal()">不足データを再調査</button>' +
+      '<button class="secondary" onclick="runProposalWithGapInstructions()">不足データを再調査</button>' +
       '<button onclick="setResultView(\\'briefing\\')">STEP3 企画書へ</button>' +
     '</div>' +
   '</div>';

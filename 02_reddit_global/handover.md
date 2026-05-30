@@ -42,6 +42,7 @@ Search/label precision follow-up:
 - Names in the title are now mandatory labels; omitted/left-out players are treated as high-priority data targets.
 - Squad-announcement stories now force an exact-topic query before AI-generated queries, e.g. England World Cup squad plus Foden/Palmer omitted, instead of drifting into generic tournament/FA Cup rules.
 - Entity expansion now keeps mandatory omitted players such as Phil Foden and Cole Palmer even if Gemini omits them.
+- The Step2-6 insufficient-data area now has an "追加指示" textarea. Its content is appended to the memo as `追加指示:` when the user clicks re-research.
 
 ## First Read
 
