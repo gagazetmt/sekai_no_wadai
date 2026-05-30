@@ -426,6 +426,115 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
   };
 }
 
+// ─── 脚本構成生成 ────────────────────────────────────────────────────
+// 採用した企画書のslideOutlineを元に、各スライドの
+//   - slideType（rendering type）
+//   - narration（ナレーション方向性・台本の種）
+//   - dataNeeds（使う具体的なデータ）
+//   - estimatedSec（推定尺）
+// を生成する。
+//
+// slideType の選択肢（→ slides/*.js に対応するもの）:
+//   opening / ending / stats / profile / comparison /
+//   history / insight / reaction / timeline / matchcard / picture / universal
+//
+// 使い方:
+//   const result = await generateScriptStructure(selectedCandidate, enrichedMemo, fetchedData, providerOpts);
+
+const SLIDE_TYPE_OPTIONS = [
+  'opening    — 冒頭フック・問い提示',
+  'timeline   — 長期の数値推移・年表（成績推移・市場価値推移）',
+  'stats      — 今季スタッツ・単発の数値（ゴール/順位/勝点など）',
+  'profile    — 選手/監督のプロフィール・経歴',
+  'comparison — 2エンティティのデータ対比',
+  'history    — 過去の出来事・経緯・エピソード（人間ドラマ含む）',
+  'insight    — 考察・解釈・論点まとめ・分析',
+  'reaction   — 海外コメント・SNS反応・ファンの声',
+  'matchcard  — 試合結果・スコア・ハイライト',
+  'picture    — 画像主体のビジュアルスライド',
+  'ending     — 結論・視聴者へのメッセージ・CTA',
+  'universal  — 上記に当てはまらない自由形式',
+].join('\n');
+
+function buildScriptStructurePrompt(topic, selectedCandidate, enrichedMemo, fetchedData) {
+  const slideText = (selectedCandidate.slideOutline || [])
+    .map(s => `[${s.no}] ${s.headline}\n  内容: ${s.point || ''}`)
+    .join('\n\n');
+
+  const statsText = (fetchedData || []).filter(d => d.ok)
+    .map(d => `${d.nameEn}: ${(d.slots||[]).slice(0,12).map(s=>`${s.label}:${s.value}`).join(' / ')}`)
+    .join('\n') || '（なし）';
+
+  const system = `あなたはサッカーYouTube脚本構成AIです。企画書のslideOutlineを受け取り、
+各スライドの詳細な脚本構成（slideType・ナレーション方向性・使うデータ・推定尺）を作成します。
+JSONのみ返してください。コードブロック不要。`;
+
+  const user = `## 案件
+${topic}
+
+## 採用した企画書
+フック: ${selectedCandidate.hookQuestion}
+結論: ${selectedCandidate._coreMessage || ''}
+想定尺: ${selectedCandidate.targetMinutes}分
+
+## 各スライドの企画内容
+${slideText}
+
+## 取得済みデータ（使えるデータ）
+${statsText}
+
+## 相棒メモ（文脈・確認済み事実）
+${enrichedMemo || 'なし'}
+
+## slideTypeの選択肢と意味
+${SLIDE_TYPE_OPTIONS}
+
+## 出力JSON
+{
+  "slides": [
+    {
+      "no": 1,
+      "headline": "スライドタイトル",
+      "slideType": "opening",
+      "narration": "このスライドで言うこと（2〜4文。具体的な数字・固有名詞・台本の種を入れる）",
+      "dataNeeds": ["使う具体的なデータ（例: Robertson 今季アシスト数、Tottenham 順位）"],
+      "estimatedSec": 45
+    }
+  ],
+  "totalEstimatedSec": 420,
+  "productionNotes": "撮影・編集上の注意点（1〜2文）"
+}`;
+
+  return { system, user };
+}
+
+async function generateScriptStructure(topic, selectedCandidate, enrichedMemo, fetchedData, providerOpts = {}) {
+  const { provider = 'deepseek', model = 'deepseek-chat', label = 'script_structure' } = providerOpts;
+  const { system, user } = buildScriptStructurePrompt(topic, selectedCandidate, enrichedMemo, fetchedData);
+
+  try {
+    const raw = await callAI({
+      system,
+      messages: [{ role: 'user', content: user }],
+      model,
+      max_tokens: 5000,
+      forceProvider: provider,
+      label,
+    });
+    const cleaned = String(raw || '').replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
+    const parsed = extractJSON(cleaned);
+    if (!parsed) {
+      console.warn(`[v3_planner] ${label} JSON parse failed. raw先頭200: ${cleaned.slice(0,200)}`);
+      return { ok: false, error: 'JSON parse failed' };
+    }
+    console.log(`[v3_planner] ${label}: ${(parsed.slides||[]).length}スライド生成`);
+    return { ok: true, ...parsed };
+  } catch (e) {
+    console.warn(`[v3_planner] ${label} error:`, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
 // ─── ハルシネーションチェック ──────────────────────────────────────
 // 採用した企画書の各スライドの主張を記事コーパスと照合し、
 // 「確認済み」「要確認」「修正候補」を返す
@@ -514,4 +623,4 @@ ${statsText || '（なし）'}
   }
 }
 
-module.exports = { generateAIPlan, validatePlan };
+module.exports = { generateAIPlan, validatePlan, generateScriptStructure };
