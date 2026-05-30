@@ -1,12 +1,13 @@
 // scripts/modules/fetchers/entity_prefetcher.js
 // モジュール提案と同時に SofaScore からエンティティを並列プリフェッチする
 
-const { fetchSofaScorePlayer } = require('./sofascore_player');
-const { fetchSofaScoreTeam }   = require('./sofascore_team');
-const { getCategory }          = require('../../stat_presets');
+const { fetchSofaScorePlayer }  = require('./sofascore_player');
+const { fetchSofaScoreTeam }    = require('./sofascore_team');
+const { fetchSofaScoreManager } = require('./sofascore_manager');
+const { getCategory }           = require('../../stat_presets');
 
 // エンティティ配列を並列で SofaScore から取得
-// entities: [{type: "player"|"team", nameEn: "..."}]
+// entities: [{type: "player"|"team"|"manager"|"entity", nameEn: "..."}]
 // → { "player:erling haaland": {type, nameEn, data}, ... }
 async function prefetchEntities(entities = []) {
   if (!entities.length) return {};
@@ -22,6 +23,21 @@ async function prefetchEntities(entities = []) {
         } else if (e.type === 'team') {
           const r = await fetchSofaScoreTeam(e.nameEn);
           data = r.ok ? r : null;
+        } else if (e.type === 'manager') {
+          const r = await fetchSofaScoreManager(e.nameEn);
+          data = r.ok ? r : null;
+        } else if (e.type === 'entity') {
+          // typeが曖昧な場合: player → team → manager の順でフォールバック
+          const rp = await fetchSofaScorePlayer(e.nameEn);
+          if (rp.ok) { data = rp; }
+          else {
+            const rt = await fetchSofaScoreTeam(e.nameEn);
+            if (rt.ok) { data = rt; }
+            else {
+              const rm = await fetchSofaScoreManager(e.nameEn);
+              data = rm.ok ? rm : null;
+            }
+          }
         }
         console.log(`[prefetch] ${e.type}:${e.nameEn} → ${data ? 'OK' : 'NG'}`);
         return { key, type: e.type, nameEn: e.nameEn, data };

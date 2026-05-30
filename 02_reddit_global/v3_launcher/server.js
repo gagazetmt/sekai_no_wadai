@@ -1058,7 +1058,7 @@ async function runAutoPrefetchCore({ topic = '', memo = '', learningCorpus = [],
   const seen = new Set(aiMapped.map((e) => e.nameEn.toLowerCase()));
   const merged = [...aiMapped, ...regexExtracted.filter((e) => !seen.has(e.nameEn.toLowerCase()))];
   const entities = merged
-    .filter((e) => e.type === 'player' || e.type === 'team')
+    .filter((e) => ['player', 'team', 'manager', 'entity'].includes(e.type))
     .slice(0, 6);
   if (!entities.length) return { success: true, entities: [], labels: [], note: 'no entities found' };
 

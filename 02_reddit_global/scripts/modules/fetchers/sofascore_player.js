@@ -84,6 +84,7 @@ async function buildSearchCandidates(name) {
 }
 
 // 検索のみ: playerエンティティ（ID・name等）を返す
+// 複数ヒット時は市場価値順で優先（同名の低リーグ選手・フリーエージェントを自然に弾く）
 async function searchPlayer(name) {
   const candidates = await buildSearchCandidates(name);
   for (const q of candidates) {
@@ -92,10 +93,30 @@ async function searchPlayer(name) {
       const players = (data.results || []).filter(r =>
         r.type === 'player' && (r.entity?.sport?.id === 1 || !r.entity?.sport)
       );
-      if (players.length) {
+      if (!players.length) continue;
+
+      // 1件のみ → そのまま返す
+      if (players.length === 1) {
         console.log(`[SofaScore Player] "${q}" → ${players[0].entity.name}`);
         return players[0].entity;
       }
+
+      // 複数ヒット → 上位3件の市場価値を並列取得して最大値の選手を選ぶ
+      const top3 = players.slice(0, 3);
+      const details = await Promise.allSettled(
+        top3.map(p => apiGet(`/player/${p.entity.id}`))
+      );
+      let best = players[0].entity;
+      let bestMV = -1;
+      details.forEach((r, i) => {
+        const mv = r.status === 'fulfilled'
+          ? (r.value?.player?.proposedMarketValue || 0)
+          : 0;
+        if (mv > bestMV) { bestMV = mv; best = players[i].entity; }
+      });
+      const mvStr = bestMV > 0 ? ` mv:€${(bestMV / 1e6).toFixed(0)}M` : ' mv:不明';
+      console.log(`[SofaScore Player] "${q}" → ${best.name}${mvStr} (${players.length}件中1位)`);
+      return best;
     } catch (_) {}
   }
   return null;
