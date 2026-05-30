@@ -244,52 +244,171 @@ function buildFallbackAIPlan(topic, researchSummary, reason) {
   };
 }
 
+// ─── 1モデル1案プロンプト ──────────────────────────────────────
+function buildOnePlanSystemPrompt() {
+  return `あなたはサッカー専門YouTube編集長AIです。
+渡された記事と取得済みデータを読み込み、企画書を1案だけ作ってください。
+ルール:
+- 確認できた事実のみ使う。記事にない数字を作らない
+- 各スライドに具体的な根拠・データ・台本の種を入れること
+- hookQuestion は視聴者が思わず「見たい」と感じる問いにすること
+- 動画の長さ（targetMinutes）は材料の展開力に応じて4〜8分の間で自分で判断すること
+  - 材料が豊富でストーリーの深掘りができるなら6〜8分
+  - 速報・シンプルな移籍ニュースなら4〜5分
+  - slideOutline の枚数は targetMinutes に合わせて調整する（目安：1分あたり1〜1.5枚）
+- 出力はJSONのみ（\`\`\`不要）`;
+}
+
+function buildOnePlanUserPrompt(topic, memo, researchSummary) {
+  const { articleText, wikiText, articleCount } = researchSummary;
+  return `## 案件: ${topic}
+
+## 相棒メモ
+${memo || 'なし'}
+
+## 読んだ記事（${articleCount}件）
+${articleText}
+${wikiText ? `\n## Wikiデータ\n${wikiText}` : ''}
+
+## 出力JSON
+{
+  "hookQuestion": "視聴者を引き込む問い",
+  "answer": "問いへの仮の答え",
+  "angle": "動画の切り口（1〜2文）",
+  "targetMinutes": "あなたが判断した最適な動画尺（例: 6, 7, 5.5）",
+  "purpose": "視聴者への約束（1文）",
+  "coreMessage": "一文で言える結論",
+  "risk": "この企画のリスクを短く",
+  "slideOutline": [
+    {"no":1,"slideType":"opening","headline":"スライドタイトル","point":"このスライドで言うこと・使うデータ","dataNeeds":[]}
+  ],
+  "missingData": ["確認が必要なデータ"]
+}`;
+}
+
+// 1モデルで1案生成
+async function _generateOnePlan(topic, memo, researchSummary, providerOpts) {
+  const { provider, model, label, maxTokens } = providerOpts;
+  const system  = buildOnePlanSystemPrompt();
+  const content = buildOnePlanUserPrompt(topic, memo, researchSummary);
+  try {
+    const raw = await callAI({
+      system,
+      messages: [{ role: 'user', content }],
+      model,
+      max_tokens: maxTokens || 6000,
+      forceProvider: provider,
+      label,
+    });
+    // ```json ブロック対応
+    const cleaned = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const parsed  = extractJSON(cleaned);
+    if (!parsed) {
+      console.warn(`[v3_planner] ${label} JSON parse failed`);
+      return null;
+    }
+    return parsed;
+  } catch (e) {
+    console.warn(`[v3_planner] ${label} error: ${e.message}`);
+    return null;
+  }
+}
+
+// parsed単案 → themeProposal.candidates 形式に変換
+// AIが決めた targetMinutes をそのまま使い、videoLengthType を逆算
+function _normalizeSingleToCandidate(parsed, modelLabel = '') {
+  if (!parsed) return null;
+  const slideOutline = Array.isArray(parsed.slideOutline) ? parsed.slideOutline : [];
+
+  // AIが返した targetMinutes を数値として取得（文字列 "6" / "5.5" / "6-7" 等を吸収）
+  const rawMin = String(parsed.targetMinutes || '');
+  const minNum = parseFloat(rawMin) || (slideOutline.length <= 5 ? 4 : slideOutline.length <= 7 ? 6 : 7);
+  const targetMinutes = String(minNum);
+
+  // videoLengthType を尺から逆算
+  const videoLengthType = minNum <= 3 ? 'short' : minNum <= 5 ? 'standard' : 'long';
+
+  return {
+    hookQuestion:          parsed.hookQuestion || '',
+    answer:                parsed.answer       || '',
+    angle:                 parsed.angle        || '',
+    videoLengthType,
+    targetMinutes,
+    recommendedSlideCount: slideOutline.length || Math.round(minNum * 1.2),
+    dataNeeds:             parsed.dataNeeds    || [],
+    risk:                  parsed.risk         || '',
+    slideOutline,
+    _modelLabel:   modelLabel,
+    _purpose:      parsed.purpose      || '',
+    _coreMessage:  parsed.coreMessage  || '',
+    _missingData:  parsed.missingData  || [],
+  };
+}
+
 async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
   const researchSummary = buildResearchSummary(researchCorpus, wikiStories);
-  const system = buildSystemPrompt();
-  const userContent = buildUserPrompt(topic, memo, researchSummary);
 
-  const raw = await callAI({
-    system,
-    messages: [{ role: 'user', content: userContent }],
-    max_tokens: 8000,
-    forceProvider: 'deepseek',
-    label: '④plan_generate',
-  });
+  // 3モデルを並列実行（Sonnet / DeepSeek V4 Flash / DeepSeek Chat）
+  console.log('[v3_planner] 3モデル並列企画生成...');
+  const [sonnetRaw, v4Raw, chatRaw] = await Promise.all([
+    _generateOnePlan(topic, memo, researchSummary, {
+      provider: 'anthropic', model: 'claude-sonnet-4-6',   label: '④plan_sonnet',   maxTokens: 6000,
+    }),
+    _generateOnePlan(topic, memo, researchSummary, {
+      provider: 'deepseek',  model: 'deepseek-v4-flash',   label: '④plan_v4flash',  maxTokens: 6000,
+    }),
+    _generateOnePlan(topic, memo, researchSummary, {
+      provider: 'deepseek',  model: 'deepseek-chat',       label: '④plan_chat',     maxTokens: 4000,
+    }),
+  ]);
 
-  let parsed = extractJSON(raw);
-  if (!parsed) {
-    console.warn(`[v3_planner] primary JSON parse failed, retrying compact repair. raw=${String(raw).slice(0, 180)}`);
-    const retryRaw = await callAI({
-      system: 'あなたはJSON修復専用AIです。必ず完結したJSONだけを返してください。',
-      messages: [{ role: 'user', content: buildCompactRepairPrompt(topic, memo, raw) }],
-      max_tokens: 3500,
-      forceProvider: 'deepseek',
-      label: '④plan_repair',
-    });
-    parsed = extractJSON(retryRaw);
-    if (!parsed) {
-      console.warn(`[v3_planner] compact repair JSON parse failed. retryRaw=${String(retryRaw).slice(0, 180)}`);
-      return buildFallbackAIPlan(topic, researchSummary, 'AI JSON parse failed after compact retry');
-    }
-  }
-  if (!parsed) {
-    throw new Error(`AI応答のJSONパース失敗: ${String(raw).slice(0, 200)}`);
+  const candidates = [
+    _normalizeSingleToCandidate(sonnetRaw, 'Sonnet'),
+    _normalizeSingleToCandidate(v4Raw,     'DeepSeek V4 Flash'),
+    _normalizeSingleToCandidate(chatRaw,   'DeepSeek Chat'),
+  ].filter(Boolean);
+
+  if (!candidates.length) {
+    console.warn('[v3_planner] 全モデル失敗。フォールバックに切替');
+    return buildFallbackAIPlan(topic, researchSummary, '全モデルJSON生成失敗');
   }
 
-  parsed = normalizeAIPlanShape(parsed, researchSummary.articleCount);
+  // 不足データはsonnet優先でマージ
+  const missingData = [...new Set([
+    ...(sonnetRaw?._missingData || []),
+    ...(v4Raw?._missingData     || []),
+    ...(chatRaw?._missingData   || []),
+  ])];
+
+  // briefingはsonnet → v4 → chat の優先順で取得
+  const bestRaw = sonnetRaw || v4Raw || chatRaw;
+
+  console.log(`[v3_planner] 完了: ${candidates.length}案生成`);
 
   return {
     ok: true,
     aiGenerated: true,
     topic,
     articleCount: researchSummary.articleCount,
-    themeProposal: parsed.themeProposal || {},
-    briefing: parsed.briefing || {},
+    themeProposal: {
+      candidates,
+      selected:        0,
+      selectedReason:  'Sonnet(A)・DeepSeek V4(B)・DeepSeek Chat(C) の3案。相棒が選んでください。',
+      rejectedReasons: [],
+    },
+    briefing: {
+      purpose:       bestRaw?._purpose     || '',
+      coreMessage:   bestRaw?._coreMessage || '',
+      chapters:      (bestRaw?.slideOutline || []).map((s, i) => ({
+        no: i + 1, role: s.slideType || 'chapter',
+        claim: s.point || s.headline || '', dataNeeds: s.dataNeeds || [],
+      })),
+      riskChecklist: [],
+    },
     scriptStructure: [],
     scriptDraft: [],
-    missingData: parsed.missingData || [],
-    publishGates: parsed.publishGates || [],
+    missingData,
+    publishGates: [],
   };
 }
 
