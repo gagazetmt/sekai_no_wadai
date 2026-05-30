@@ -308,16 +308,14 @@ function normalizeSearchQueries(queries, labels = [], topic = '') {
   const hasSquadCase = /代表|squad|roster|メンバー|招集|選出/i.test(raw);
   const criticalQueryTerms = labelTerms
     .filter((x, i, arr) => arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i)
-    .slice(0, hasSquadCase ? 6 : 5);
+    .slice(0, 2);  // 上位2語のみ（長いクエリはhit率を下げる）
   if (criticalQueryTerms.length >= 2) {
     add(criticalQueryTerms.join(' '));
-    if (hasSquadCase) add(`${criticalQueryTerms.slice(0, 5).join(' ')} squad news`);
+    if (hasSquadCase) add(`${criticalQueryTerms.join(' ')} squad`);
   }
   (queries || []).forEach(add);
   if (labelTerms.length >= 2) {
-    add(labelTerms.slice(0, 3).join(' '));
-    add(`${labelTerms.slice(0, 2).join(' ')} squad`);
-    add(`${labelTerms.slice(0, 2).join(' ')} injury`);
+    add(labelTerms.slice(0, 2).join(' '));
   }
   fallbackQueries(topic).forEach(add);
   return out.slice(0, 3);
@@ -387,9 +385,11 @@ ${memo ? `Context: ${memo}` : ''}
 
 Rules:
 - Translate Japanese names to proper English (ジョアン・ペドロ→João Pedro, マドリー→Real Madrid, ハーランド→Haaland, バルサ→Barcelona, etc.)
-- Query 1: Specific news/event (5-8 words)
-- Query 2: Squad/transfer/injury context (5-8 words)
-- Query 3: Player or club stats/career (5-8 words)
+- Keep each query SHORT: 3-4 words max. Fewer words = more search hits.
+- Query 1: Core news (person + club + action) e.g. "Robertson Tottenham transfer"
+- Query 2: Club context (club + situation) e.g. "Tottenham relegation crisis 2025"
+- Query 3: Player background (name + career keyword) e.g. "Robertson Liverpool career stats"
+- NO phrases like "here we go", "confirmed", "official" — these narrow results too much
 - Output ONLY a valid JSON array: ["query1","query2","query3"]`;
   try {
     const raw = await callAI({
