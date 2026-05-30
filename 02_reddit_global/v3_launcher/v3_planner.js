@@ -248,14 +248,25 @@ function buildFallbackAIPlan(topic, researchSummary, reason) {
 function buildOnePlanSystemPrompt() {
   return `あなたはサッカー専門YouTube編集長AIです。
 渡された記事と取得済みデータを読み込み、企画書を1案だけ作ってください。
-ルール:
+
+【最優先：人間ドラマを発掘する】
+視聴者が最後まで見るのは数字ではなく「人の物語」。以下を積極的に拾うこと：
+- 選手の挫折・解雇・這い上がりのエピソード
+- 移籍の舞台裏（破談・秘密交渉・監督の直接要望など）
+- ライバルとの因縁・チームメイトとの関係
+- 怪我・批判・プレッシャーの克服
+これらがあれば必ずslideOutlineに組み込む。
+
+【ルール】
 - 確認できた事実のみ使う。記事にない数字を作らない
-- 各スライドに具体的な根拠・データ・台本の種を入れること
+- 各スライドに具体的な根拠・台本の種を入れること
 - hookQuestion は視聴者が思わず「見たい」と感じる問いにすること
-- 動画の長さ（targetMinutes）は材料の展開力に応じて4〜8分の間で自分で判断すること
-  - 材料が豊富でストーリーの深掘りができるなら6〜8分
+- 動画の長さ（targetMinutes）は材料の展開力に応じて4〜8分の間で自分で判断
+  - 人間ドラマが豊富なら6〜8分
   - 速報・シンプルな移籍ニュースなら4〜5分
-  - slideOutline の枚数は targetMinutes に合わせて調整する（目安：1分あたり1〜1.5枚）
+  - slideOutline の枚数は targetMinutes に合わせて調整（目安：1分あたり1〜1.5枚）
+- slideOutlineにslideTypeは不要。headlineとpointで内容を示すだけでよい
+  （slideTypeはStep4の脚本構成時に、利用可能データに基づいて決定する）
 - 出力はJSONのみ（\`\`\`不要）`;
 }
 
@@ -280,7 +291,7 @@ ${wikiText ? `\n## Wikiデータ\n${wikiText}` : ''}
   "coreMessage": "一文で言える結論",
   "risk": "この企画のリスクを短く",
   "slideOutline": [
-    {"no":1,"slideType":"opening","headline":"スライドタイトル","point":"このスライドで言うこと・使うデータ","dataNeeds":[]}
+    {"no":1,"headline":"スライドタイトル","point":"このスライドで言うこと・根拠・台本の種"}
   ],
   "missingData": ["確認が必要なデータ"]
 }`;
