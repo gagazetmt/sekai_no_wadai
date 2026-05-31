@@ -6,9 +6,10 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), 
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { createArgumentPlan } = require('./v3_story_architect');
 const { runTopicResearch, fetchWikiSideStories, aiExpandResearch } = require('./v3_research');
-const { generateAIPlan } = require('./v3_planner');
+const { generateAIPlan, generateNarration } = require('./v3_planner');
 const { factCheckAIPlan, factCheckScript } = require('./v3_fact_checker');
 const { synthesizeStepData } = require('./v3_synthesizer');
 const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
@@ -26,6 +27,7 @@ const RECIPE_FILE = path.join(__dirname, 'data', 'slide_recipes.json');
 const V2_DATA_DIR = path.join(__dirname, '..', 'data');
 const V2_SI_DIR = path.join(V2_DATA_DIR, 'si_data');
 const V2_SAVED_FILE = path.join(V2_DATA_DIR, 'saved_projects.json');
+const JOB_DIR = path.join(V2_DATA_DIR, 'v2_jobs');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(V2_SI_DIR)) fs.mkdirSync(V2_SI_DIR, { recursive: true });
@@ -1214,6 +1216,102 @@ app.get('/api/v3/images/stock', (req, res) => {
     res.json({ ok: true, images: matches.slice(0, 24).map((m) => ({ url: m.url, role: m.role, name: m.name, score: m.score })) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message, images: [] });
+  }
+});
+
+// ─── /api/v3/generate-narration : V3ナレーション生成 + 画像自動解決 ──────
+// generateNarration (v3_planner) を呼び、imageInstruction → images[] を解決して返す。
+// export-v2 なしに V3 内部で完結するナレーション生成エンドポイント。
+app.post('/api/v3/generate-narration', async (req, res) => {
+  try {
+    const { topic, v3Modules, enrichedMemo, fetchedData, provider = 'deepseek' } = req.body || {};
+    if (!topic || !Array.isArray(v3Modules) || !v3Modules.length) {
+      return res.status(400).json({ ok: false, error: 'topic と v3Modules が必要です' });
+    }
+    // v3Modules → generateNarration 用のスライド形式に変換
+    const scriptSlides = v3Modules.map((m, i) => ({
+      no: i + 1,
+      slideType: m.type || 'insight',
+      headline: m.title || ('Slide ' + (i + 1)),
+      keyPoints: (m.dataSlots || []).map((s) => s.label).filter(Boolean),
+      dataNeeds: (m.dataSlots || []).filter((s) => s.value).map((s) => `${s.label}: ${s.value}`),
+      estimatedSec: 45,
+    }));
+    const result = await generateNarration(topic, scriptSlides, enrichedMemo, fetchedData, { provider });
+    if (!result.ok) return res.json({ ok: false, error: result.error });
+
+    // imageInstruction → images[] 解決（stock_match でファジーマッチ）
+    let findStockMatchesFn = null;
+    try {
+      const sm = require(path.join(__dirname, '..', 'scripts', 'modules', 'stock_match'));
+      findStockMatchesFn = sm.findStockMatches;
+    } catch (_) {}
+    function resolveImages(inst) {
+      if (!inst || !findStockMatchesFn) return [];
+      function matchFirst(kw) {
+        if (!kw) return [];
+        for (const type of ['player', 'manager', 'team', 'stadium']) {
+          const hits = findStockMatchesFn({ type, entity: kw }).slice(0, 1);
+          if (hits.length) return hits.map((x) => x.url);
+        }
+        return [];
+      }
+      if (inst.placement === 'left+right') {
+        const lUrls = matchFirst((inst.left?.searchKeywords || []).join(' '));
+        const rUrls = matchFirst((inst.right?.searchKeywords || []).join(' '));
+        return [...lUrls, ...rUrls];
+      }
+      return matchFirst((inst.searchKeywords || []).join(' '));
+    }
+    const slides = (result.slides || []).map((s) => ({ ...s, images: resolveImages(s.imageInstruction) }));
+    // ナレーション内容のファクトチェック（フラグのみ、修正なし）
+    const { slides: checked, flags } = await factCheckScript(slides).catch(() => ({ slides, flags: [] }));
+    res.json({ ok: true, slides: checked, factCheckFlags: flags });
+  } catch (e) {
+    console.error('[v3/generate-narration]', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── /api/v3/generate-video : V3直接動画生成（export-v2 不要） ──────────
+// modules.json を V2 データディレクトリに書き込み render.js を直接起動する。
+// V2 の saved_projects には書かない。V3 専用プロジェクトリスト (v3_projects.json) に保存。
+app.post('/api/v3/generate-video', (req, res) => {
+  try {
+    const { modules, topic, memo = '' } = req.body || {};
+    if (!Array.isArray(modules) || !modules.length) {
+      return res.status(400).json({ ok: false, error: 'modules が必要です' });
+    }
+    const postId = 'v3_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const now = new Date().toISOString();
+    // modules.json を V2 データディレクトリに書き込む（render.js 共通パス）
+    if (!fs.existsSync(V2_DATA_DIR)) fs.mkdirSync(V2_DATA_DIR, { recursive: true });
+    const modulesFile = path.join(V2_DATA_DIR, `${safeFileId(postId)}_modules.json`);
+    fs.writeFileSync(modulesFile, JSON.stringify({ postId, modules, savedAt: now, source: 'v3_launcher' }, null, 2));
+    // V3 専用プロジェクトリストに保存
+    const V3_PROJECTS_FILE = path.join(__dirname, 'data', 'v3_projects.json');
+    let projects = [];
+    try { projects = JSON.parse(fs.readFileSync(V3_PROJECTS_FILE, 'utf8')); } catch (_) {}
+    if (!Array.isArray(projects)) projects = [];
+    projects.push({ postId, topic: String(topic || '').slice(0, 100), memo: String(memo || '').slice(0, 300), createdAt: now, status: 'pending' });
+    fs.writeFileSync(V3_PROJECTS_FILE, JSON.stringify(projects, null, 2));
+    // render.js をサブプロセスで起動
+    if (!fs.existsSync(JOB_DIR)) fs.mkdirSync(JOB_DIR, { recursive: true });
+    const jobId = 'v3job_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const jp = path.join(JOB_DIR, jobId + '.json');
+    fs.writeFileSync(jp, JSON.stringify({ jobId, postId, status: 'queued', createdAt: now }, null, 2));
+    const renderScript = path.join(__dirname, '..', 'scripts', 'v2_video', 'render.js');
+    const logFd = fs.openSync(path.join(JOB_DIR, jobId + '.log'), 'a');
+    const proc = spawn('node', [renderScript, postId, jobId], {
+      detached: true, stdio: ['ignore', logFd, logFd],
+      cwd: path.join(__dirname, '..'),
+    });
+    proc.unref();
+    console.log(`[v3/generate-video] job 起動: ${jobId} (postId: ${postId})`);
+    res.json({ ok: true, jobId, postId });
+  } catch (e) {
+    console.error('[v3/generate-video]', e);
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -3588,36 +3686,32 @@ async function startV3VideoGeneration() {
   const bar = document.getElementById('v3ProgressBar');
   const fill = document.getElementById('v3ProgressFill');
   if (!currentPlan) { if (status) status.textContent = 'プランがありません'; return; }
+  const modules = currentPlan.v3Modules;
+  if (!Array.isArray(modules) || !modules.length) {
+    if (status) status.textContent = 'スライドがありません。まず脚本を生成してください';
+    return;
+  }
   if (btn) { btn.disabled = true; btn.textContent = '準備中...'; }
   if (bar) bar.style.display = '';
   if (fill) fill.style.width = '5%';
   try {
-    // まず export-v2 で postId + modules.json を作成
-    if (status) status.textContent = 'スライドデータを保存中...';
-    const expRes = await fetch('/api/v3/export-v2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: currentPlan, memo: '' }),
-    });
-    const expData = await expRes.json();
-    if (!expData.success) throw new Error(expData.error || 'export失敗');
-    const postId = expData.postId;
-    if (fill) fill.style.width = '15%';
-    // 動画生成ジョブ起動
     if (status) status.textContent = '動画生成ジョブを起動中...';
-    const genRes = await fetch('/api/v2/generate-video', {
+    const genRes = await fetch('/api/v3/generate-video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId, modules: currentPlan.v3Modules || [] }),
+      body: JSON.stringify({
+        modules,
+        topic: currentPlan.topic || document.getElementById('title')?.value || '',
+        memo: document.getElementById('memo')?.value || '',
+      }),
     });
     const genData = await genRes.json();
     if (!genData.ok) throw new Error(genData.error || '動画生成起動失敗');
     _v3VideoJobId = genData.jobId;
     if (fill) fill.style.width = '20%';
     if (status) status.textContent = 'レンダリング中... (jobId: ' + genData.jobId + ')';
-    // ポーリング開始
     if (_v3VideoPoller) clearInterval(_v3VideoPoller);
-    _v3VideoPoller = setInterval(() => pollV3VideoStatus(postId), 3000);
+    _v3VideoPoller = setInterval(() => pollV3VideoStatus(genData.postId), 3000);
   } catch (e) {
     if (status) status.textContent = '失敗: ' + e.message;
     if (btn) { btn.disabled = false; btn.textContent = '動画生成スタート'; }
@@ -3695,57 +3789,49 @@ async function runAIScriptGeneration() {
     if (!currentPlan) { if (status) status.textContent = '先に企画書を作ってください'; return; }
     rebuildV3ModulesFromBriefing();
     bindFetchedDataToV3Modules();
-    const aiBriefing = currentPlan.autopilotPlan?.briefing || {};
-    const slideOutline = buildAISlideOutlineFromModules(currentPlan.v3Modules);
-
-    // 記事コーパス（上位6件・各400字）
-    const researchSnippets = (currentResearch?.learningCorpus || []).slice(0, 6)
-      .map((a, i) => '[記事' + (i + 1) + '] ' + (a.title || '') + ' (' + (a.host || '') + ')\\n' + String(a.text || '').slice(0, 400))
-      .join('\\n---\\n');
-
-    // Wiki 小話候補
-    const wikiSnippets = (currentWikiStories?.results || []).slice(0, 3)
-      .map((w) => '[Wiki: ' + w.entity + '] ' + (w.sideStoryCandidates || []).map((c) => c.text || '').join(' ').slice(0, 200))
-      .join('\\n');
-
-    const res = await fetch('/api/v3/generate-script', {
+    const res = await fetch('/api/v3/generate-narration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         topic: currentPlan.topic || document.getElementById('title')?.value || '',
-        aiBriefing,
-        slideOutline,
+        v3Modules: currentPlan.v3Modules,
+        enrichedMemo: currentPlan.synthesis?.enrichedMemo || currentPlan.autopilotPlan?.briefing?.coreMessage || '',
         fetchedData: currentFetchedData || [],
-        researchSnippets,
-        wikiSnippets,
-        publishGates: currentPlan.autopilotPlan?.publishGates || [],
-        factCheckFlags: currentPlan.autopilotPlan?.factCheckFlags || [],
+        provider: 'deepseek',
       }),
     });
     const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'AI脚本生成失敗');
+    if (!data.ok) throw new Error(data.error || 'AI脚本生成失敗');
     const aiSlides = data.slides || [];
     currentPlan.autopilotPlan = currentPlan.autopilotPlan || {};
+    // ファクトチェックフラグを保存
+    if (data.factCheckFlags?.length) {
+      currentPlan.autopilotPlan.factCheckFlags = data.factCheckFlags;
+      console.warn('[v3] factCheckFlags:', data.factCheckFlags.length + '件');
+    }
     currentPlan.v3Modules = currentPlan.v3Modules.map((m, i) => {
-      const ai = aiSlides.find(s => s.slideNo === (i + 1)) || aiSlides[i] || {};
+      const ai = aiSlides.find((s) => s.no === (i + 1)) || aiSlides[i] || {};
+      const images = (ai.images || []).length ? ai.images : (m.images || []);
       return {
         ...m,
         narration: ai.narration || m.narration || '',
+        images,
         v3Meta: {
           ...(m.v3Meta || {}),
+          imageInstruction: ai.imageInstruction || m.v3Meta?.imageInstruction,
           caution: ai.caution || m.v3Meta?.caution || '',
         },
       };
     });
     currentPlan.autopilotPlan.scriptDraft = currentPlan.v3Modules.map((m, i) => {
-      const ai = aiSlides.find(s => s.slideNo === (i + 1)) || aiSlides[i] || {};
+      const ai = aiSlides.find((s) => s.no === (i + 1)) || aiSlides[i] || {};
       return {
         slideNo: i + 1,
         title: m.title || '',
         role: m.v3Meta?.role || m.subValue || m.type || '',
         narration: ai.narration || m.narration || '',
-        dataNeeds: (m.dataSlots || []).map(s => s.label).filter(Boolean),
-        selectedData: (m.dataSlots || []).filter(s => s.value || s.sourceUrl).map(s => ({
+        dataNeeds: (m.dataSlots || []).map((s) => s.label).filter(Boolean),
+        selectedData: (m.dataSlots || []).filter((s) => s.value || s.sourceUrl).map((s) => ({
           label: s.label || '', value: s.value || '', sourceTitle: s.sourceTitle || '', sourceUrl: s.sourceUrl || '',
         })),
         caution: ai.caution || '',
@@ -3756,7 +3842,8 @@ async function runAIScriptGeneration() {
     activeView = 'script';
     renderPlan(currentPlan);
     setTimeout(() => reloadV3Preview(), 50);
-    if (status) status.textContent = aiSlides.length + '枚分の脚本を生成しました。各スライドを確認・編集してください。';
+    const flagWarn = data.factCheckFlags?.length ? ' ⚠ ファクトチェックフラグ ' + data.factCheckFlags.length + '件' : '';
+    if (status) status.textContent = aiSlides.length + '枚分の脚本を生成しました。各スライドを確認・編集してください。' + flagWarn;
   } catch (error) {
     if (status) status.textContent = '生成失敗: ' + error.message;
     alert('AI脚本生成失敗: ' + error.message);
@@ -4467,7 +4554,7 @@ function renderPipelineSteps() {
     ['3', '企画提案', 'リサーチ→AI分析→複数案'],
     ['4', '企画書', 'テーマ・流れ・スライド構成'],
     ['5', '脚本生成', 'ナレーションとプレビュー確認'],
-    ['6', 'V2', '動画生成ラインへ渡す'],
+    ['6', '動画生成', 'ナレーション確認後にレンダリング'],
   ];
   return '<div class="pipeline-steps">' + steps.map((s) =>
     '<div class="pipeline-step"><b>' + esc(s[0] + '. ' + s[1]) + '</b><span>' + esc(s[2]) + '</span></div>'
