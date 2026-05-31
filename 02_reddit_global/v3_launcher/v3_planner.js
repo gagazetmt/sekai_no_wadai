@@ -832,4 +832,4 @@ ${statsText || '（なし）'}
   }
 }
 
-module.exports = { generateAIPlan, validatePlan, generateScriptStructure };
+module.exports = { generateAIPlan, validatePlan, generateScriptStructure, _validateSlideTypes: validateSlideTypes };
