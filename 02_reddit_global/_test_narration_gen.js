@@ -114,6 +114,18 @@ function buildFetchedData(prefetched) {
   });
 }
 
+function printImageInstruction(img) {
+  if (!img) return;
+  if (img.placement === 'left+right') {
+    console.log(`  🖼  配置: 左右`);
+    if (img.left)  console.log(`       左: ${img.left.description}  キーワード: ${(img.left.searchKeywords||[]).join(', ')}`);
+    if (img.right) console.log(`       右: ${img.right.description}  キーワード: ${(img.right.searchKeywords||[]).join(', ')}`);
+  } else {
+    console.log(`  🖼  配置: ${img.placement || '?'}  ${img.description || ''}`);
+    if ((img.searchKeywords||[]).length) console.log(`       キーワード: ${img.searchKeywords.join(', ')}`);
+  }
+}
+
 function printResult(label, r, elapsed) {
   const SEP = '━'.repeat(60);
   console.log(`\n${SEP}`);
@@ -126,6 +138,7 @@ function printResult(label, r, elapsed) {
     console.log('');
     console.log('【ナレーション】');
     console.log(s.narration || '（なし）');
+    console.log(`  ※ ${(s.narration||'').length}文字`);
     console.log('');
     if ((s.displayText || []).length) {
       console.log('【画面テキスト】');
@@ -135,6 +148,11 @@ function printResult(label, r, elapsed) {
     if ((s.dataDisplay || []).length) {
       console.log('【表示データ】');
       (s.dataDisplay || []).forEach(d => console.log(`  📊 ${d}`));
+      console.log('');
+    }
+    if (s.imageInstruction) {
+      console.log('【画像指示】');
+      printImageInstruction(s.imageInstruction);
       console.log('');
     }
   });
@@ -156,21 +174,14 @@ function printResult(label, r, elapsed) {
     research: { learningCorpus: [] }, wikiStories: null,
   });
 
-  console.log('\n▶ ナレーション生成（DeepSeek / Sonnet 並列）...\n');
+  console.log('\n▶ ナレーション生成（DeepSeek Chat）...\n');
   const t0 = Date.now();
 
-  const [dsResult, sonnetResult] = await Promise.all([
-    generateNarration(topic, deepseekScriptSlides, enrichedMemo, fetchedData, {
-      provider: 'deepseek', model: 'deepseek-chat', label: 'narration_deepseek', maxTokens: 8000,
-    }).then(r => ({ r, elapsed: ((Date.now() - t0) / 1000).toFixed(1) })),
+  const dsResult = await generateNarration(topic, deepseekScriptSlides, enrichedMemo, fetchedData, {
+    provider: 'deepseek', model: 'deepseek-chat', label: 'narration_deepseek', maxTokens: 10000,
+  }).then(r => ({ r, elapsed: ((Date.now() - t0) / 1000).toFixed(1) }));
 
-    generateNarration(topic, deepseekScriptSlides, enrichedMemo, fetchedData, {
-      provider: 'anthropic', model: 'claude-sonnet-4-6', label: 'narration_sonnet', maxTokens: 12000,
-    }).then(r => ({ r, elapsed: ((Date.now() - t0) / 1000).toFixed(1) })),
-  ]);
-
-  printResult('DeepSeek Chat    ナレーション', dsResult.r, dsResult.elapsed);
-  printResult('Claude Sonnet 4.6 ナレーション', sonnetResult.r, sonnetResult.elapsed);
+  printResult('DeepSeek Chat ナレーション＋画像指示', dsResult.r, dsResult.elapsed);
 
   console.log(`\n並列実行合計: ${((Date.now() - t0) / 1000).toFixed(0)}秒`);
 })().catch(e => console.error('ERROR:', e.message, e.stack));

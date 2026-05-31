@@ -853,35 +853,80 @@ ${statsText || '（なし）'}
 
 // ─── ナレーション生成 ─────────────────────────────────────────────────
 // generateScriptStructure の出力（slides配列）を受け取り、
-// 各スライドのナレーション・画面テキストを生成する。
+// 各スライドのナレーション・画面テキスト・画像指示を生成する。
 //
 // 出力スライド形式:
-//   { no, slideType, headline, narration, displayText, dataDisplay, estimatedSec }
+//   { no, slideType, headline, narration, displayText, dataDisplay, imageInstruction, estimatedSec }
+//
+// 画像配置ルール（slideType別）:
+//   opening/toc/ending/insight/reaction → background（背景1枚）
+//   history/stats/profile              → left（左側1枚）
+//   comparison                         → left+right（左右各1枚）
 //
 // 使い方:
 //   const result = await generateNarration(topic, scriptSlides, enrichedMemo, fetchedData, providerOpts);
+
+// slideType → 画像配置マッピング
+const IMAGE_PLACEMENT = {
+  opening:    'background',
+  toc:        'background',
+  ending:     'background',
+  insight:    'background',
+  reaction:   'background',
+  history:    'left',
+  stats:      'left',
+  profile:    'left',
+  timeline:   'left',
+  matchcard:  'left',
+  comparison: 'left+right',
+  picture:    'background',
+  universal:  'background',
+};
 
 function buildNarrationPrompt(topic, slides, enrichedMemo, fetchedData) {
   const statsText = (fetchedData || []).filter(d => d.ok)
     .map(d => `${d.nameEn}: ${(d.slots || []).slice(0, 15).map(s => `${s.label}:${s.value}`).join(' / ')}`)
     .join('\n') || '（なし）';
 
-  const slideSummary = slides.map(s =>
-    `[${s.no}] ${s.slideType.toUpperCase()}「${s.headline}」\n` +
-    `  論点: ${(s.keyPoints || []).join(' / ')}\n` +
-    `  データ: ${(s.dataNeeds || []).join(' / ')}`
-  ).join('\n\n');
+  const slideSummary = slides.map(s => {
+    const placement = IMAGE_PLACEMENT[s.slideType] || 'background';
+    return `[${s.no}] ${s.slideType.toUpperCase()}「${s.headline}」 画像配置:${placement}\n` +
+      `  論点: ${(s.keyPoints || []).join(' / ')}\n` +
+      `  データ: ${(s.dataNeeds || []).join(' / ')}`;
+  }).join('\n\n');
 
   const system = `あなたはサッカーYouTubeチャンネルのナレーション作家AIです。
-脚本構成を受け取り、各スライドのナレーション・画面テキストを作成します。
+脚本構成を受け取り、各スライドのナレーション・画面テキスト・画像指示を作成します。
+
+【ナレーション口調ルール（V2スタイル厳守）】
+- 1文を短く切る。長い文は分割する
+- 断定系を多用する（「〜だ」「〜している」「〜だった」）。体言止めも使う
+- 冒頭の1文は必ずフック（問いかけ・衝撃の事実・数字の提示）で始める
+- 選手名・クラブ名・大会名は全てカタカナ表記にする
+- 「Reddit」は使わず「海外掲示板」と書く
+- 確認できていない情報は「とも言われる」「可能性がある」と留保する
+- 1スライドのナレーション文字数: 200〜360文字（40〜60秒相当・5〜6文字/秒）
+
+【画像指示ルール】
+各スライドに imageInstruction を出力する。配置は既に指定されている（background/left/left+right）。
+- description: 画像の内容を日本語で具体的に記述（例: ロバートソンがリヴァプールで試合中のアクションショット）
+- searchKeywords: 画像検索に使う英語キーワード3〜5語の配列
+- comparison（left+right）の場合: left と right それぞれに description と searchKeywords を書く
 
 【絶対ルール】
-- ナレーションは視聴者に語りかける口語体（20代男性ナレーター・熱量あり）
-- 1スライドのナレーション目安: estimatedSec × 4〜5文字/秒
-- 確認できていない事実・数字は断定しない（「〜とも言われる」「〜の可能性がある」等）
-- displayText は画面に表示するテキスト。箇条書き・強調ワード・数字を含める
-- dataDisplay は画面に表示する実データ値（上記「取得済みデータ」から引用）
-- JSONのみ返すこと。コードブロック不要`;
+- JSONのみ返す。コードブロック不要
+- 全スライド分出力する。途中で切らない`;
+
+  const imageInstructionExample = `"imageInstruction": {
+        "placement": "left",
+        "description": "ロバートソンがリヴァプールのユニフォームでオーバーラップしているシーン",
+        "searchKeywords": ["Andrew Robertson", "Liverpool", "action", "left back"]
+      }`;
+  const comparisonExample = `"imageInstruction": {
+        "placement": "left+right",
+        "left":  { "description": "ロバートソンのポートレート写真", "searchKeywords": ["Andrew Robertson", "portrait"] },
+        "right": { "description": "ウドジェのポートレート写真",     "searchKeywords": ["Destiny Udogie", "portrait"] }
+      }`;
 
   const user = `## 案件
 ${topic}
@@ -895,20 +940,24 @@ ${enrichedMemo || 'なし'}
 ## 脚本構成（各スライドの設計図）
 ${slideSummary}
 
-## 出力JSON
+## 出力JSON（全スライド分・途中で切らないこと）
 {
   "slides": [
     {
       "no": 1,
       "slideType": "opening",
       "headline": "スライドタイトル",
-      "narration": "視聴者に語りかけるナレーション本文（口語体・熱量あり）",
-      "displayText": ["画面に表示するテキスト1", "テキスト2"],
-      "dataDisplay": ["実数値1（例: Robertson リヴァプール378試合）", "実数値2"],
+      "narration": "200〜360文字の口語体ナレーション。冒頭フック・断定系・短文・カタカナ名",
+      "displayText": ["画面に重ねるテキスト1（強調ワード・数字）", "テキスト2"],
+      "dataDisplay": ["実数値1（取得済みデータから引用）", "実数値2"],
+      ${imageInstructionExample},
       "estimatedSec": 50
     }
   ]
-}`;
+}
+
+※ comparison スライドの imageInstruction は以下の形式:
+${comparisonExample}`;
 
   return { system, user };
 }
