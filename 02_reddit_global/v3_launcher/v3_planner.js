@@ -160,12 +160,25 @@ function _fixLiteralNewlines(s) {
   return result;
 }
 
+function _jsonErrorPos(s) {
+  try { JSON.parse(s); } catch (e) {
+    const m = e.message.match(/position\s+(\d+)/i);
+    if (m) {
+      const pos = parseInt(m[1]);
+      return `pos=${pos}: ...${JSON.stringify(s.slice(Math.max(0, pos - 40), pos + 40))}...`;
+    }
+    return e.message;
+  }
+  return null;
+}
+
 function extractJSON(raw) {
   const s = String(raw || '').trim();
   // ① 直接パース
   try { return JSON.parse(s); } catch (_) {}
-  // ② リテラル改行修正してパース（Sonnetの長文ナレーション対策）
-  try { return JSON.parse(_fixLiteralNewlines(s)); } catch (_) {}
+  // ② 全制御文字エスケープしてパース
+  const fixed = _fixLiteralNewlines(s);
+  try { return JSON.parse(fixed); } catch (_) {}
   // ③ コードブロック除去
   const blockMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (blockMatch) {
@@ -175,10 +188,11 @@ function extractJSON(raw) {
   const objMatch = s.match(/\{[\s\S]*\}/);
   if (objMatch) {
     try { return JSON.parse(_fixLiteralNewlines(objMatch[0])); } catch (_) {}
-    try {
-      return JSON.parse(objMatch[0]);
-    } catch (_) {}
+    try { return JSON.parse(objMatch[0]); } catch (_) {}
   }
+  // 全失敗時: エラー位置をログ出力して null を返す
+  const diag = _jsonErrorPos(fixed) || _jsonErrorPos(s);
+  if (diag) console.warn(`[extractJSON] parse failure detail: ${diag}`);
   return null;
 }
 
