@@ -135,19 +135,36 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
 }`;
 }
 
+// JSON文字列値内のリテラル改行を \n に置換（Sonnetが長い文章で改行を入れる問題対策）
+function _fixLiteralNewlines(s) {
+  let inString = false, escaped = false, result = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escaped)       { escaped = false; result += c; continue; }
+    if (c === '\\')    { escaped = true;  result += c; continue; }
+    if (c === '"')     { inString = !inString; result += c; continue; }
+    if (inString && c === '\n') { result += '\\n'; continue; }
+    if (inString && c === '\r') { result += '\\r'; continue; }
+    result += c;
+  }
+  return result;
+}
+
 function extractJSON(raw) {
   const s = String(raw || '').trim();
-  try {
-    return JSON.parse(s);
-  } catch (_) {}
+  // ① 直接パース
+  try { return JSON.parse(s); } catch (_) {}
+  // ② リテラル改行修正してパース（Sonnetの長文ナレーション対策）
+  try { return JSON.parse(_fixLiteralNewlines(s)); } catch (_) {}
+  // ③ コードブロック除去
   const blockMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (blockMatch) {
-    try {
-      return JSON.parse(blockMatch[1].trim());
-    } catch (_) {}
+    try { return JSON.parse(blockMatch[1].trim()); } catch (_) {}
+    try { return JSON.parse(_fixLiteralNewlines(blockMatch[1].trim())); } catch (_) {}
   }
   const objMatch = s.match(/\{[\s\S]*\}/);
   if (objMatch) {
+    try { return JSON.parse(_fixLiteralNewlines(objMatch[0])); } catch (_) {}
     try {
       return JSON.parse(objMatch[0]);
     } catch (_) {}
@@ -441,6 +458,149 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
 // 使い方:
 //   const result = await generateScriptStructure(selectedCandidate, enrichedMemo, fetchedData, providerOpts);
 
+// ─── slideType バリデータ ────────────────────────────────────────────
+// LLM が提案した slideType を機械的に検証・補正する。
+// 検証可能な制約（データ実在・個数・同質性）を決定論的にガードする。
+// 閾値は SLIDE_RULES で一元管理。案件やデータ量に応じて調整可。
+
+const SLIDE_RULES = {
+  HISTORY_MIN_BEATS:  4,  // history 成立に必要な keyPoints 数
+  STATS_MIN_SLOTS:    4,  // stats 成立に必要な数値スロット数
+  TIMELINE_MIN_YEARS: 3,  // timeline 成立に必要な年号出現数
+};
+
+function _normalizeStr(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9぀-ヿ一-鿿]/g, '');
+}
+
+function _slideText(slide) {
+  return [
+    slide.theme    || '',
+    slide.headline || '',
+    ...(Array.isArray(slide.keyPoints) ? slide.keyPoints : []),
+    ...(Array.isArray(slide.dataNeeds) ? slide.dataNeeds : []),
+  ].join(' ');
+}
+
+// スライドテキストに nameEn が部分一致する fetchedData エントリを返す
+function _matchedEntities(slideText, fetchedData) {
+  const norm = _normalizeStr(slideText);
+  return (fetchedData || []).filter(d => d.ok && d.nameEn && norm.includes(_normalizeStr(d.nameEn)));
+}
+
+// 複数エンティティが共通して持つ label（正規化）を返す
+function _sharedLabels(entities) {
+  if (entities.length < 2) return [];
+  const labelSets = entities.map(e => new Set((e.slots || []).map(s => _normalizeStr(s.label))));
+  return [...labelSets[0]].filter(l => labelSets.every(set => set.has(l)));
+}
+
+// テキスト内に出現する年号（19xx/20xx）の数を返す
+function _countYears(text) {
+  return (String(text || '').match(/\b(19|20)\d{2}\b/g) || []).length;
+}
+
+/**
+ * LLM が付けた slideType を検証・補正する。
+ * @param {Array} slides  - parsed.slides
+ * @param {Array} fetchedData - SofaScore等の取得済みデータ配列
+ * @returns {{ slides: Array, demotions: Array }}
+ *   demotions: [{ no, from, to, reason }] ← ログ出力用
+ */
+function validateSlideTypes(slides, fetchedData) {
+  if (!Array.isArray(slides) || !slides.length) return { slides, demotions: [] };
+  const demotions = [];
+  const lastNo = Math.max(...slides.map(s => s.no || 0));
+
+  const result = slides.map(slide => {
+    const s = { ...slide };
+    const no     = s.no;
+    const type   = s.slideType;
+    const text   = _slideText(s);
+    const entities = _matchedEntities(text, fetchedData);
+
+    // ── 位置強制（opening / ending）──────────────────────────
+    if (no === 1 && type !== 'opening') {
+      demotions.push({ no, from: type, to: 'opening', reason: '1枚目は必ずopening' });
+      s.slideType = 'opening';
+      return s;
+    }
+    if (no === lastNo && type !== 'ending') {
+      demotions.push({ no, from: type, to: 'ending', reason: '最終枚は必ずending' });
+      s.slideType = 'ending';
+      return s;
+    }
+    if (type === 'opening' && no !== 1) {
+      demotions.push({ no, from: type, to: 'insight', reason: 'openingは1枚目のみ' });
+      s.slideType = 'insight';
+      return s;
+    }
+    if (type === 'ending' && no !== lastNo) {
+      demotions.push({ no, from: type, to: 'insight', reason: 'endingは最終枚のみ' });
+      s.slideType = 'insight';
+      return s;
+    }
+
+    // ── 各型の制約チェック ────────────────────────────────────
+    if (type === 'stats') {
+      const hasStats = entities.some(e => (e.slots || []).length >= SLIDE_RULES.STATS_MIN_SLOTS);
+      if (!hasStats) {
+        demotions.push({ no, from: 'stats', to: 'insight', reason: `照合エンティティの数値スロット<${SLIDE_RULES.STATS_MIN_SLOTS}個` });
+        s.slideType = 'insight';
+      }
+
+    } else if (type === 'timeline') {
+      const yearCount = _countYears(text);
+      if (yearCount < SLIDE_RULES.TIMELINE_MIN_YEARS) {
+        demotions.push({ no, from: 'timeline', to: 'history', reason: `年号${yearCount}個<${SLIDE_RULES.TIMELINE_MIN_YEARS}個` });
+        s.slideType = 'history';
+      }
+
+    } else if (type === 'comparison') {
+      if (entities.length < 2) {
+        demotions.push({ no, from: 'comparison', to: 'insight', reason: `照合エンティティ${entities.length}個<2個` });
+        s.slideType = 'insight';
+      } else {
+        const shared = _sharedLabels(entities);
+        if (!shared.length) {
+          demotions.push({ no, from: 'comparison', to: 'insight', reason: '共通ラベルなし（異質比較）' });
+          s.slideType = 'insight';
+        }
+      }
+
+    } else if (type === 'history') {
+      const beats = Array.isArray(s.keyPoints) ? s.keyPoints.length : 0;
+      if (beats < SLIDE_RULES.HISTORY_MIN_BEATS) {
+        demotions.push({ no, from: 'history', to: 'insight', reason: `keyPoints${beats}個<${SLIDE_RULES.HISTORY_MIN_BEATS}個` });
+        s.slideType = 'insight';
+      }
+
+    } else if (type === 'profile') {
+      if (entities.length > 1) {
+        demotions.push({ no, from: 'profile', to: 'insight', reason: `複数エンティティ検出(${entities.map(e => e.nameEn).join(',')})` });
+        s.slideType = 'insight';
+      }
+
+    } else if (type === 'matchcard') {
+      const hasMatchSlot = entities.some(e =>
+        (e.slots || []).some(slot => /score|goal|result|match/i.test(slot.label))
+      );
+      if (!hasMatchSlot) {
+        const hasStats = entities.some(e => (e.slots || []).length >= SLIDE_RULES.STATS_MIN_SLOTS);
+        const to = hasStats ? 'stats' : 'insight';
+        demotions.push({ no, from: 'matchcard', to, reason: '試合スコアスロットなし' });
+        s.slideType = to;
+      }
+    }
+    // insight / picture / universal / reaction はそのまま通す
+    // （picture/reaction のアセット実在チェックはこのレイヤーでは不可）
+
+    return s;
+  });
+
+  return { slides: result, demotions };
+}
+
 const SLIDE_TYPE_OPTIONS = [
   'opening    — 冒頭フック・問い提示',
   'timeline   — 長期の数値推移・年表（成績推移・市場価値推移）',
@@ -466,7 +626,8 @@ function buildScriptStructurePrompt(topic, selectedCandidate, enrichedMemo, fetc
     .join('\n') || '（なし）';
 
   const system = `あなたはサッカーYouTube脚本構成AIです。企画書のslideOutlineを受け取り、
-各スライドの詳細な脚本構成（slideType・ナレーション方向性・使うデータ・推定尺）を作成します。
+各スライドの「脚本構成」を作成します。ナレーション本文は書きません。
+構成とは「何を・どの順で・どのデータで見せるか」の設計図です。
 JSONのみ返してください。コードブロック不要。`;
 
   const user = `## 案件
@@ -489,27 +650,43 @@ ${enrichedMemo || 'なし'}
 ## slideTypeの選択肢と意味
 ${SLIDE_TYPE_OPTIONS}
 
+## スライド型の制約ルール（必ず守ること）
+- HISTORY: 時系列ビートが4個以上ある場合のみ使う。3個未満ならOPENINGかINSIGHTに吸収する
+- COMPARISON: 左右で「同じデータ型」（ゴール数vsゴール数、勝点vs勝点 等）のみ比較可。
+  視聴者が「で、どっちが上？」と思う疑問に答える軸を選ぶこと。
+  「課題 vs 強み」「メリット vs デメリット」など異質な軸の比較はNG → INSIGHTを使う
+- STATS: 取得済み数値データ（上記「取得済みデータ」欄）から4個以上のスロットが使える場合のみ採用する。
+  数値がなければINSIGHTかHISTORYで代替する
+
 ## 出力JSON
 {
   "slides": [
     {
       "no": 1,
-      "headline": "スライドタイトル",
+      "theme": "このスライドのテーマ（10字以内の一言）",
       "slideType": "opening",
-      "narration": "このスライドで言うこと（2〜4文。具体的な数字・固有名詞・台本の種を入れる）",
-      "dataNeeds": ["使う具体的なデータ（例: Robertson 今季アシスト数、Tottenham 順位）"],
+      "headline": "スライドタイトル（画面に表示する見出し）",
+      "keyPoints": [
+        "視聴者に伝える論点1（事実・比較・問いなど具体的に）",
+        "論点2",
+        "論点3"
+      ],
+      "dataNeeds": [
+        "実際に画面に出すデータ（例: Robertson リヴァプール在籍378試合）",
+        "比較に使う数値（例: トッテナム 2年連続17位）"
+      ],
       "estimatedSec": 45
     }
   ],
   "totalEstimatedSec": 420,
-  "productionNotes": "撮影・編集上の注意点（1〜2文）"
+  "productionNotes": "編集・制作上の注意点（1〜2文）"
 }`;
 
   return { system, user };
 }
 
 async function generateScriptStructure(topic, selectedCandidate, enrichedMemo, fetchedData, providerOpts = {}) {
-  const { provider = 'deepseek', model = 'deepseek-chat', label = 'script_structure' } = providerOpts;
+  const { provider = 'deepseek', model = 'deepseek-chat', label = 'script_structure', maxTokens = 6000 } = providerOpts;
   const { system, user } = buildScriptStructurePrompt(topic, selectedCandidate, enrichedMemo, fetchedData);
 
   try {
@@ -517,7 +694,7 @@ async function generateScriptStructure(topic, selectedCandidate, enrichedMemo, f
       system,
       messages: [{ role: 'user', content: user }],
       model,
-      max_tokens: 5000,
+      max_tokens: maxTokens,
       forceProvider: provider,
       label,
     });
@@ -527,6 +704,14 @@ async function generateScriptStructure(topic, selectedCandidate, enrichedMemo, f
       console.warn(`[v3_planner] ${label} JSON parse failed. raw先頭200: ${cleaned.slice(0,200)}`);
       return { ok: false, error: 'JSON parse failed' };
     }
+
+    // ── slideType 機械バリデーション ──────────────────────────
+    const { slides: validatedSlides, demotions } = validateSlideTypes(parsed.slides || [], fetchedData);
+    parsed.slides = validatedSlides;
+    if (demotions.length) {
+      console.log(`[v3_planner] slideType補正(${demotions.length}件): ${demotions.map(d => `#${d.no} ${d.from}→${d.to}(${d.reason})`).join(' | ')}`);
+    }
+
     console.log(`[v3_planner] ${label}: ${(parsed.slides||[]).length}スライド生成`);
     return { ok: true, ...parsed };
   } catch (e) {
