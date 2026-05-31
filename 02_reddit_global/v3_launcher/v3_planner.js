@@ -851,4 +851,93 @@ ${statsText || '（なし）'}
   }
 }
 
-module.exports = { generateAIPlan, validatePlan, generateScriptStructure, _validateSlideTypes: validateSlideTypes };
+// ─── ナレーション生成 ─────────────────────────────────────────────────
+// generateScriptStructure の出力（slides配列）を受け取り、
+// 各スライドのナレーション・画面テキストを生成する。
+//
+// 出力スライド形式:
+//   { no, slideType, headline, narration, displayText, dataDisplay, estimatedSec }
+//
+// 使い方:
+//   const result = await generateNarration(topic, scriptSlides, enrichedMemo, fetchedData, providerOpts);
+
+function buildNarrationPrompt(topic, slides, enrichedMemo, fetchedData) {
+  const statsText = (fetchedData || []).filter(d => d.ok)
+    .map(d => `${d.nameEn}: ${(d.slots || []).slice(0, 15).map(s => `${s.label}:${s.value}`).join(' / ')}`)
+    .join('\n') || '（なし）';
+
+  const slideSummary = slides.map(s =>
+    `[${s.no}] ${s.slideType.toUpperCase()}「${s.headline}」\n` +
+    `  論点: ${(s.keyPoints || []).join(' / ')}\n` +
+    `  データ: ${(s.dataNeeds || []).join(' / ')}`
+  ).join('\n\n');
+
+  const system = `あなたはサッカーYouTubeチャンネルのナレーション作家AIです。
+脚本構成を受け取り、各スライドのナレーション・画面テキストを作成します。
+
+【絶対ルール】
+- ナレーションは視聴者に語りかける口語体（20代男性ナレーター・熱量あり）
+- 1スライドのナレーション目安: estimatedSec × 4〜5文字/秒
+- 確認できていない事実・数字は断定しない（「〜とも言われる」「〜の可能性がある」等）
+- displayText は画面に表示するテキスト。箇条書き・強調ワード・数字を含める
+- dataDisplay は画面に表示する実データ値（上記「取得済みデータ」から引用）
+- JSONのみ返すこと。コードブロック不要`;
+
+  const user = `## 案件
+${topic}
+
+## 取得済みデータ（画面に出す実数値はここから引用）
+${statsText}
+
+## 相棒メモ
+${enrichedMemo || 'なし'}
+
+## 脚本構成（各スライドの設計図）
+${slideSummary}
+
+## 出力JSON
+{
+  "slides": [
+    {
+      "no": 1,
+      "slideType": "opening",
+      "headline": "スライドタイトル",
+      "narration": "視聴者に語りかけるナレーション本文（口語体・熱量あり）",
+      "displayText": ["画面に表示するテキスト1", "テキスト2"],
+      "dataDisplay": ["実数値1（例: Robertson リヴァプール378試合）", "実数値2"],
+      "estimatedSec": 50
+    }
+  ]
+}`;
+
+  return { system, user };
+}
+
+async function generateNarration(topic, scriptSlides, enrichedMemo, fetchedData, providerOpts = {}) {
+  const { provider = 'deepseek', model = 'deepseek-chat', label = 'narration', maxTokens = 8000 } = providerOpts;
+  const { system, user } = buildNarrationPrompt(topic, scriptSlides, enrichedMemo, fetchedData);
+
+  try {
+    const raw = await callAI({
+      system,
+      messages: [{ role: 'user', content: user }],
+      model,
+      max_tokens: maxTokens,
+      forceProvider: provider,
+      label,
+    });
+    const cleaned = String(raw || '').replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
+    const parsed = extractJSON(cleaned);
+    if (!parsed) {
+      console.warn(`[v3_planner] ${label} JSON parse failed.\n--- raw先頭400 ---\n${cleaned.slice(0, 400)}`);
+      return { ok: false, error: 'JSON parse failed' };
+    }
+    console.log(`[v3_planner] ${label}: ${(parsed.slides || []).length}スライド ナレーション生成完了`);
+    return { ok: true, ...parsed };
+  } catch (e) {
+    console.warn(`[v3_planner] ${label} error:`, e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = { generateAIPlan, validatePlan, generateScriptStructure, generateNarration, _validateSlideTypes: validateSlideTypes };
