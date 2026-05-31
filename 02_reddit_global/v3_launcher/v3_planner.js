@@ -135,16 +135,26 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
 }`;
 }
 
-// JSON文字列値内のリテラル改行を \n に置換（Sonnetが長い文章で改行を入れる問題対策）
+// JSON文字列値内の制御文字を全てエスケープ（Sonnetが改行・タブ等を入れる問題対策）
+// \n / \r だけでなく 0x00-0x1F 全制御文字を対象にする
 function _fixLiteralNewlines(s) {
   let inString = false, escaped = false, result = '';
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (escaped)       { escaped = false; result += c; continue; }
-    if (c === '\\')    { escaped = true;  result += c; continue; }
-    if (c === '"')     { inString = !inString; result += c; continue; }
-    if (inString && c === '\n') { result += '\\n'; continue; }
-    if (inString && c === '\r') { result += '\\r'; continue; }
+    if (escaped)    { escaped = false; result += c; continue; }
+    if (c === '\\') { escaped = true;  result += c; continue; }
+    if (c === '"')  { inString = !inString; result += c; continue; }
+    if (inString) {
+      const code = c.charCodeAt(0);
+      if (code < 0x20) {
+        switch (c) {
+          case '\n': result += '\\n'; continue;
+          case '\r': result += '\\r'; continue;
+          case '\t': result += '\\t'; continue;
+          default:   result += `\\u${code.toString(16).padStart(4, '0')}`; continue;
+        }
+      }
+    }
     result += c;
   }
   return result;
@@ -701,7 +711,7 @@ async function generateScriptStructure(topic, selectedCandidate, enrichedMemo, f
     const cleaned = String(raw || '').replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
     const parsed = extractJSON(cleaned);
     if (!parsed) {
-      console.warn(`[v3_planner] ${label} JSON parse failed. raw先頭200: ${cleaned.slice(0,200)}`);
+      console.warn(`[v3_planner] ${label} JSON parse failed.\n--- raw先頭600 ---\n${cleaned.slice(0,600)}\n--- raw末尾200 ---\n${cleaned.slice(-200)}`);
       return { ok: false, error: 'JSON parse failed' };
     }
 
