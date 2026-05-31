@@ -507,9 +507,17 @@ function _slideText(slide) {
 }
 
 // スライドテキストに nameEn が部分一致する fetchedData エントリを返す
+// フルネーム照合に加え、単語単位（"Tottenham" "Robertson" 等）でもフォールバック照合する
 function _matchedEntities(slideText, fetchedData) {
   const norm = _normalizeStr(slideText);
-  return (fetchedData || []).filter(d => d.ok && d.nameEn && norm.includes(_normalizeStr(d.nameEn)));
+  return (fetchedData || []).filter(d => {
+    if (!d.ok || !d.nameEn) return false;
+    // ① フルネーム完全一致
+    if (norm.includes(_normalizeStr(d.nameEn))) return true;
+    // ② 単語単位照合（"Andrew Robertson" → "andrew" "robertson" どちらかがあればOK）
+    const words = d.nameEn.toLowerCase().split(/\s+/).filter(w => w.length >= 4);
+    return words.some(w => norm.includes(w));
+  });
 }
 
 // 複数エンティティが共通して持つ label（正規化）を返す
@@ -667,6 +675,10 @@ ${slideText}
 
 ## 取得済みデータ（使えるデータ）
 ${statsText}
+
+【重要】dataNeeds を書くときは、上記の英語エンティティ名（Andrew Robertson / Tottenham Hotspur 等）を
+そのまま先頭に書くこと。例: "Andrew Robertson ゴール数 / アシスト数"、"Tottenham Hotspur 勝点 / 勝敗数"
+→ この英語名がないと後工程でデータを照合できない
 
 ## 相棒メモ（文脈・確認済み事実）
 ${enrichedMemo || 'なし'}
