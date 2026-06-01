@@ -40,7 +40,8 @@ const axios = require('axios');
 let _HttpsProxyAgent = null;
 try { _HttpsProxyAgent = require('https-proxy-agent').HttpsProxyAgent; } catch (_) {}
 
-const PROXY_TPL_REDDIT = process.env.WEBSHARE_PROXY_URL || null;
+const PROXY_TPL_REDDIT   = process.env.WEBSHARE_PROXY_URL       || null;
+const REDDIT_SESSION_COOKIE = process.env.REDDIT_SESSION_COOKIE || null;
 function _pickRedditProxyAgent() {
   if (!PROXY_TPL_REDDIT || !_HttpsProxyAgent) return null;
   const n = Math.floor(Math.random() * 4000) + 1;
@@ -56,7 +57,9 @@ async function redditGet(url) {
     'Accept':          'application/json, text/plain, */*',
     'Accept-Language': 'en-US,en;q=0.9',
   };
-  const agent = _pickRedditProxyAgent();
+  if (REDDIT_SESSION_COOKIE) headers['Cookie'] = REDDIT_SESSION_COOKIE;
+  // Cookie があればプロキシ不要、なければ Webshare 経由
+  const agent = REDDIT_SESSION_COOKIE ? null : _pickRedditProxyAgent();
   try {
     const res = await axios.get(url, {
       headers,
