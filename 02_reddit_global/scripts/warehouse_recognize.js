@@ -20,7 +20,13 @@ const costTracker = require('./cost_tracker');
 const PENDING_DIR  = path.join(__dirname, '..', 'images', 'warehouse', 'pending');
 const REJECTED_DIR = path.join(__dirname, '..', 'images', 'warehouse', 'rejected');
 const STOCK_DIR    = path.join(__dirname, '..', 'images_stock', 'players_official');
+const LEAGUES_DIR  = path.join(__dirname, '..', 'images_stock', 'leagues');
+const CLUBS_DIR    = path.join(__dirname, '..', 'images_stock', 'clubs');
 const INDEX_FILE   = path.join(__dirname, '..', 'data', 'players_official_index.json');
+const LEAGUES_INDEX_FILE = path.join(__dirname, '..', 'data', 'leagues_index.json');
+const CLUBS_INDEX_FILE   = path.join(__dirname, '..', 'data', 'clubs_index.json');
+
+[LEAGUES_DIR, CLUBS_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 const CONFIDENCE_THRESHOLD = 0.75;  // これ未満はrejected
 const GEMINI_MODEL         = 'gemini-2.5-flash';
@@ -49,6 +55,11 @@ function loadIndex() {
 function saveIndex(idx) {
   fs.writeFileSync(INDEX_FILE, JSON.stringify(idx, null, 2));
 }
+function loadSubIndex(file) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return {}; }
+}
+function saveSubIndex(file, idx) { fs.writeFileSync(file, JSON.stringify(idx, null, 2)); }
+
 
 // ── Gemini Flash Vision で認識 ────────────────────────────────────────────────
 async function recognizeImage(imagePath, meta = {}) {
@@ -62,12 +73,14 @@ async function recognizeImage(imagePath, meta = {}) {
     ? `ヒント: ${meta.playerHint}（所属: ${meta.clubHint || '不明'}）が写っている可能性があります。`
     : '';
 
-  const prompt = `これはサッカークラブ公式Xアカウント(@${meta.handle || '?'})の投稿画像です。${hint}
+  const prompt = `これはサッカー関連のXアカウントの投稿画像です。${hint}
 以下のJSONのみを返してください（説明・コードブロック不要）:
 {
-  "player": "最も目立つサッカー選手のフルネーム（英語）。判別不可の場合は null",
-  "scene": "portrait / play / goal / celebration / sadness / training / other のいずれか",
-  "confidence": 0.0〜1.0（選手名判別の確信度。顔が明確に写っていれば0.85以上）
+  "category": "player（選手が主役） / league（リーグのロゴ・トロフィー・表彰式） / club（クラブロゴ・スタジアム・チーム集合写真） / other",
+  "player": "categoryがplayerの時: 最も目立つ選手のフルネーム（英語）。それ以外はnull",
+  "entity": "categoryがleague/clubの時: リーグ名またはクラブ名（英語）。それ以外はnull",
+  "contentType": "player→ portrait/play/goal/celebration/sadness/training/other | league→logo/trophy/ceremony/other | club→logo/stadium/squad/other",
+  "confidence": 0.0〜1.0（判別の確信度）
 }`;
 
   const body = {
@@ -124,59 +137,78 @@ async function processOne(imagePath) {
     return null;
   }
 
-  const { player, scene, confidence } = rec;
-  const conf = Number(confidence) || 0;
-  console.log(`  [recognize] ${fname} → "${player || 'null'}" scene=${scene} conf=${conf.toFixed(2)}`);
+  const { category, player, entity, contentType, confidence } = rec;
+  const conf     = Number(confidence) || 0;
+  const cat      = (category || 'other').toLowerCase();
+  const mainName = cat === 'player' ? player : entity;
+  console.log(`  [recognize] ${fname} → [${cat}] "${mainName || 'null'}" type=${contentType} conf=${conf.toFixed(2)}`);
 
-  // ── 信頼度が低い or 選手不明 → rejected ──────────────────────────────────
-  if (!player || conf < CONFIDENCE_THRESHOLD) {
+  if (!mainName || conf < CONFIDENCE_THRESHOLD) {
     moveToRejected(imagePath, metaPath);
     return null;
   }
 
-  // ── ファイル命名・フォルダ配置（選手フォルダ構造）─────────────────────────
-  const playerSlug = slugify(player);
-  const clubSlug   = slugify(meta.clubHint || meta.handle || 'unknown');
-  const targetDir  = path.join(STOCK_DIR, playerSlug);  // 選手名フォルダ
+  const entitySlug = slugify(mainName);
+  const ext        = /\.png$/i.test(fname) ? 'png' : 'jpg';
+
+  // ── カテゴリ別フォルダ・インデックス振り分け ──────────────────────────────
+  let targetDir, prefix, indexFile, indexData, indexKey;
+
+  if (cat === 'league') {
+    targetDir = path.join(LEAGUES_DIR, entitySlug);
+    prefix    = contentType || 'other';           // logo / trophy / ceremony / other
+    indexFile = LEAGUES_INDEX_FILE;
+    indexData = loadSubIndex(indexFile);
+  } else if (cat === 'club') {
+    targetDir = path.join(CLUBS_DIR, entitySlug);
+    prefix    = contentType || 'other';           // logo / stadium / squad / other
+    indexFile = CLUBS_INDEX_FILE;
+    indexData = loadSubIndex(indexFile);
+  } else {
+    // player（デフォルト）
+    targetDir = path.join(STOCK_DIR, entitySlug);
+    prefix    = entitySlug;
+    indexFile = INDEX_FILE;
+    indexData = loadIndex();
+    indexData = indexData; // players プロパティを直接使う
+  }
+
   if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
-  // 選手フォルダ内の既存枚数でナンバリング
+  // 連番（同フォルダ内の同prefixで始まるファイル数）
   const existing = fs.readdirSync(targetDir)
-    .filter(f => f.startsWith(playerSlug + '_') && /\.(jpg|png)$/i.test(f)).length;
+    .filter(f => f.startsWith(prefix + '_') && /\.(jpg|png)$/i.test(f)).length;
   const num     = String(existing + 1).padStart(3, '0');
-  const ext     = fname.endsWith('.png') ? 'png' : 'jpg';
-  const newName = `${playerSlug}_${num}.${ext}`;
+  const newName = `${prefix}_${num}.${ext}`;
   const newPath = path.join(targetDir, newName);
 
   fs.renameSync(imagePath, newPath);
   if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);
 
-  // ── インデックス追記 ────────────────────────────────────────────────────────
-  const idx       = loadIndex();
-  const indexKey  = `${playerSlug}_${num}`;
   const localPath = path.relative(path.join(__dirname, '..'), newPath).replace(/\\/g, '/');
-  idx.players[indexKey] = {
-    name:       player,
-    slug:       playerSlug,
-    club:       clubSlug,
-    league:     slugify(meta.leagueHint || ''),
-    scene:      scene || 'other',
-    confidence: conf,
-    localPath,
-    sizeBytes:  fs.statSync(newPath).size,
-    addedAt:    new Date().toISOString().slice(0, 10),
-    source:     'warehouse',
+  const entry = {
+    name: mainName, slug: entitySlug, category: cat,
+    contentType: contentType || 'other', confidence: conf,
+    localPath, sizeBytes: fs.statSync(newPath).size,
+    addedAt: new Date().toISOString().slice(0, 10), source: 'warehouse',
   };
-  saveIndex(idx);
 
-  // score.json に新規登録
-  try {
-    const { registerNewImage } = require('./image_score_manager');
-    registerNewImage(localPath);
-  } catch (_) {}
+  // インデックス保存
+  if (cat === 'player') {
+    const idx = loadIndex();
+    const clubSlug = slugify(meta.clubHint || meta.handle || '');
+    indexKey = `${entitySlug}_${num}`;
+    idx.players[indexKey] = { ...entry, club: clubSlug, league: slugify(meta.leagueHint || '') };
+    saveIndex(idx);
+    try { const { registerNewImage } = require('./image_score_manager'); registerNewImage(localPath); } catch (_) {}
+  } else {
+    indexKey = `${entitySlug}_${prefix}_${num}`;
+    indexData[indexKey] = entry;
+    saveSubIndex(indexFile, indexData);
+  }
 
-  console.log(`  → 保存: ${localPath}`);
-  return { player, club: clubSlug, scene: scene || 'other', confidence: conf, localPath };
+  console.log(`  → [${cat}] 保存: ${localPath}`);
+  return { category: cat, name: mainName, contentType: contentType || 'other', confidence: conf, localPath };
 }
 
 function moveToRejected(imagePath, metaPath) {
