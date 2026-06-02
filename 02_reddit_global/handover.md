@@ -1,6 +1,158 @@
 # Codex Mia V3 Handover
 
-Last updated: 2026-05-30 JST
+Last updated: 2026-06-02 JST
+
+## 2026-06-02 JST Update - V3 Launcher Recipe / Step2 / Step5 Fix Log
+
+### Completed
+
+- V3 recipe list was rebuilt as the current working master.
+  - Sec1 Player: 21 recipes
+  - Sec2 Manager: 11 recipes
+  - Sec3 Team, including national teams: 11 recipes
+  - Sec4 Tournament: 7 recipes
+  - Total: 50 recipes
+- Recipe Launcher entry in the V3 launcher header was removed.
+  - `/recipes` page/API still exist for maintenance, but the normal user-facing entry is hidden.
+- Step2-3 was reframed from keyword extraction to story-cast extraction.
+  - It now asks AI to read the retrieved articles and return only story-key proper nouns: players, managers, teams, tournaments, national teams, stadiums.
+  - Labels can include `role`, `reason`, and `dataNeeded`.
+  - Ordinary Reddit comment fragments and vague words such as `Jesus` are filtered out.
+- Step2-4 now fetches data only for labels marked `dataNeeded: true`.
+  - Extra guard added before SofaScore/Transfermarkt prefetch to reject ordinary sentence fragments, source names, and vague one-word labels.
+- Step4 -> Step5 script transition was fixed.
+  - `confirmBriefingAndGoScript()` now calls `generateScriptFromStructure()`.
+  - Before the fix, it only moved to Step5 with an empty `scriptDraft`, so the user saw no generated script.
+- Deployed to VPS and restarted only `soccer-yt-v3`.
+
+### Verification
+
+- Local: `node --check v3_launcher/server.js`, `node --check v3_launcher/v3_research.js`
+- VPS: `node --check v3_launcher/server.js`, `node --check v3_launcher/v3_research.js`, `pm2 restart soccer-yt-v3 --update-env`
+- Latest health result: `{"ok":true,"name":"v3-launcher-prototype","port":3010}`
+
+### Product Direction
+
+The user rates the launcher around 65/100 and wants Mia to move it closer to 100 by understanding the intended workflow, not just patching bugs.
+
+Core intent to preserve:
+
+- V3 should complete the flow without handing the user back to V2: case selection -> article/data retrieval -> proposal generation -> planning brief/script structure -> V2-grade slide editing inside V3 -> video generation.
+- Step2 should feel like an editorial research desk: search articles, read them, identify story-cast labels, fetch only useful structured data, then build proposals.
+- Step3/4 should feel like the user is approving a production spec, not fighting raw AI output.
+- Step5 should start from a usable V2-grade editor state, with text/data/image preview already available.
+- Do not touch V2 unless explicitly requested.
+- Be careful while Claude is working on image acquisition logic; avoid duplicating or overwriting image-fetch changes.
+
+### Next High-Impact Improvements
+
+- Run a live end-to-end check on the Arne Slot case after the latest fix.
+- Improve Step2-3 display so users can clearly see label name, type, story role, data-fetch status, and reason.
+- Improve Step5 first-load state so embedded V2-grade editing loads cleanly when `scriptDraft` exists, and shows a recovery button when it does not.
+- Add a lightweight production-readiness check before video generation: slides, narration, key data, images.
+
+---
+## 2026-06-02 JST Update - 画像取得強化 + Warehouse システム構築
+
+### 背景と設計経緯
+
+V3 の画像取得を強化する議論の中で以下の問題が判明:
+- 旧設計: キーワードを1文字列に結合して `stock_match` のみ → 精度が低い
+- `from:LFC filter:images` で取得した画像が実際には別選手を映している問題
+- X API のトークン消費が 1 動画あたり最大 $0.10 になる恐れ
+
+### 最終設計方針
+
+**取得クエリ（2クエリ構成）**
+- ① `from:{handle} {shortName} filter:images -filter:retweets` — 名前直撃 20 枚
+- ③ `from:{handle} filter:images -filter:retweets since:30日前` queryType:Top — 直近いいね上位 20 枚
+- ② Latest 30 は③に吸収されるため削除
+- コスト: 1 動画 (選手 3 + クラブ 1) × 約 2 クエリ/エンティティ ≒ **$0.04/本**
+
+**Warehouse システム（画像格納庫）**
+1. `warehouse_fetch.js` で `images/warehouse/pending/` にDL（メタデータ JSON を同名で保存）
+2. `warehouse_recognize.js` で Gemini 2.5 Flash Vision が認識 → 選手名でリネーム
+3. 信頼度 0.75 以上 → `images_stock/players_official/{club-slug}/` に格納 + index 追記
+4. 信頼度未満 → `images/warehouse/rejected/` に隔離（手動確認用）
+5. `players_official_index.json` に自動追記 → `stock_match.js` が即座に拾える
+
+### 新規ファイル
+
+| ファイル | 役割 |
+|---|---|
+| `scripts/warehouse_fetch.js` | X API 2クエリで画像DL → pending/ |
+| `scripts/warehouse_recognize.js` | Gemini Vision 認識 → リネーム → stock格納 |
+| `v3_launcher/v3_image_fetcher.js` | V3スライド画像取得・自動割当（全面書き直し） |
+
+### V3 server.js の変更
+
+| 変更 | 内容 |
+|---|---|
+| `/api/v3/generate-narration` | 旧 `resolveImages()` → `fetchAndAssignSlideImages()` に差し替え |
+| `/api/v3/fetch-slide-images` | 画像のみリフレッシュ用エンドポイント追加 |
+| `sharedImagePool` | 全スライドの画像候補を1プールに集約（スライド個別ギャラリー廃止） |
+| `renderV3StockGallery` | source バッジ (W=Wikimedia, X=公式X) 表示対応 |
+
+### 動作確認済み（ローカル）
+
+Robertson × Liverpool で実行:
+- `warehouse_fetch.js` → 43 枚 DL
+- `warehouse_recognize.js` → 採用 23 枚 / 却下 7 枚
+- 認識結果例: Andrew Robertson (×7), Mohamed Salah (×3), Virgil van Dijk, Alexis Mac Allister 等
+- `players_official_index.json` に自動追記済み
+
+### 画像保存先
+
+```
+images_stock/players_official/liverpool/
+  andrew-robertson_001.jpg 〜 _007.jpg
+  mohamed-salah_001.jpg 〜 _003.jpg
+  virgil-van-dijk_001.jpg
+  ... (計 23 枚)
+
+images/warehouse/
+  pending/   ← 処理待ち（通常は空）
+  rejected/  ← 信頼度不足（手動確認用）
+```
+
+**ローカル Web URL（V3 launcher 起動時）**:
+`http://localhost:3005/images_stock/players_official/liverpool/andrew-robertson_001.jpg`
+
+**VPS URL（デプロイ後）**:
+`http://37.60.224.54:3010/images_stock/players_official/liverpool/andrew-robertson_001.jpg`
+
+### ⚠️ 透かし問題メモ（次セッション判断用）
+
+クラブ公式X（@LFC等）から取得した画像にも PA Images / Getty / Reuters のライセンス写真が混入する。
+最初のテスト画像で「Peter Byrne - PA Images」透かしを確認済み。
+
+**対策3案:**
+
+| 案 | 内容 | メリット | デメリット |
+|---|---|---|---|
+| A | **そのまま使う** | 工数ゼロ・高品質画像が使える | グレーゾーン（Getty等は自動検出強化中） |
+| B | **Wikimediaのみに戻す** | 完全フリー・法的リスクなし | 画像が古い・試合写真が少ない |
+| C | **Gemini透かし判定追加** | 自動フィルタ | クラブ公式の加工グラフィックも弾く恐れあり |
+
+**相棒の判断（2026-06-02）: 案A採用検討中**
+- Getty/AFP程度なら人間の目で透かし判定できる
+- Gemini（案C）は良質なクラブ公式グラフィックまで弾くリスクがある
+- warehouse/rejected/ に隔離してから人間が確認する運用で対応可能
+
+### 未実装（次セッション候補）
+
+- `warehouse_fetch.js` + `warehouse_recognize.js` のワンコマンド統合スクリプト
+- V3 ギャラリー UI: 選手名・クラブ名タグ付き表示
+- ドラッグ&ドロップ → stock 格納 UI
+- V3 generate-narration 実行時に warehouse フローを自動トリガー
+
+### X API トークン実績（参考）
+
+Robertson テスト実行（REPLY_SCORE_ENABLED=true, budget=20）:
+- 実消費: 2,010 クレジット ($0.002/回)
+- 見積もり 1 動画 (4 エンティティ): 約 $0.064
+
+---
 
 ## Today Summary - 2026-05-30
 
@@ -1262,3 +1414,280 @@ Verification:
 - `node --check v3_launcher/v3_research.js`
 - Local V3 health check on temporary port passed.
 - Local HTML contains Step2-1 through Step2-5 labels.
+
+## 2026-06-01 JST Handover - V2 Scenario Pattern Analysis For V3 Structure
+
+User asked whether prior V2 case JSON can be inspected to understand scenario structure/statistical direction before reorganizing V3.
+
+Data inspected:
+
+- `temp/v2_scenario_*.json`
+  - 42 V2 scenario files
+  - 334 slides total
+- `data/*_modules.json`
+  - 4 module projects
+  - 23 slides total
+- `scripts/v2_story/recipes_curated.js`
+  - V2 curated recipe definitions for player/team/manager/match/transfer/comparison data slot selection.
+
+Key finding:
+
+- V2 quality came from two different layers:
+  1. A stable scenario sequence template.
+  2. Recipe/walker/binding logic for filling data-heavy slides.
+- Recipes alone did not decide the whole story arc. They mainly stabilized the middle data slides.
+
+V2 scenario stats from `temp/v2_scenario_*.json`:
+
+- Project count: 42
+- Slide count: 334
+- Slide length distribution:
+  - 6 slides: 1
+  - 7 slides: 8
+  - 8 slides: 25
+  - 9 slides: 8
+- Every sampled V2 scenario starts with `opening`.
+- Every sampled V2 scenario ends with `ending`.
+- Most common length is 8 slides.
+
+V2 slide type counts:
+
+- `opening`: 42
+- `ending`: 42
+- `reaction`: 42
+- `insight`: 65
+- `simple`: 49
+- `type2`: 38
+- `type1`: 30
+- `stats`: 18
+- `story`: 7
+- `type4`: 1
+
+Strong positional pattern:
+
+- Slide 1: always `opening`.
+- Slide 2: usually `simple`.
+- Middle slides: mix of `insight`, `stats`, `type1`, `type2`.
+- Near the end: `reaction` appears very consistently.
+- Final slide: always `ending`.
+
+Representative V2 sequence:
+
+```text
+opening
+simple
+insight
+stats / type1 / type2
+insight / type1 / type2
+reaction
+stats / simple / insight
+ending
+```
+
+Practical interpretation:
+
+```text
+1. Opening hook
+2. News overview
+3. Background / person / club context
+4. Data, comparison, career, history, or stats
+5. Deeper interpretation
+6. Reddit / overseas reaction
+7. Final supporting data or summary argument
+8. Ending
+```
+
+Old V2 type meaning inferred from JSON:
+
+- `simple`: news overview / plain explanation.
+- `insight`: background, meaning, context, implication.
+- `stats`: numeric evidence / records / table-like factual slide.
+- `type1` and `type2`: old template buckets, often data/comparison/argument-style middle slides.
+- `reaction`: viewer-facing Reddit/overseas reaction slide.
+- `opening` and `ending`: fixed bookends.
+
+V2 recipes:
+
+- Recipe definitions exist in `scripts/v2_story/recipes_curated.js`.
+- Recipes are keyed by domains such as:
+  - `player.profile_basic`
+  - `player.fw_match_stats`
+  - `player.season_trend5`
+  - `team.season_overall`
+  - `team.titles_summary`
+  - `manager.career_overall`
+  - `comparison.player_season`
+  - `comparison.team_season`
+  - `comparison.manager_career`
+- Recipe role:
+  - Given `subject`, `aspect`, `primary`, and optional `secondary`, walker/binding produces available slots.
+  - Recipe chooses appropriate slot keys and fills `dataSlots`.
+  - This is what made V2 data slides feel coherent and less random.
+
+Important implication for V3:
+
+- V3 should not only generate a free-form proposal/script.
+- V3 should first choose a V2-style scenario skeleton, then attach binding/recipe intent to middle slides.
+
+Recommended V3 structure rule:
+
+```text
+opening
+simple
+insight
+stats/comparison/history/profile
+insight
+reaction
+stats/summary
+ending
+```
+
+Recommended V3 implementation direction for next session:
+
+1. Add a V2 scenario-pattern prior to V3 structure generation.
+   - Prefer 8 slides by default.
+   - Allow 7 or 9 only when story complexity requires it.
+2. Map old V2 types into current V3 types:
+   - `simple` -> `insight` or `profile` depending on content.
+   - `type1/type2` -> `stats`, `comparison`, `history`, or `profile`.
+   - `reaction` -> `reaction`.
+3. During V3 script/structure generation, require each data slide to include:
+   - `type`
+   - `binding.subject`
+   - `binding.aspect`
+   - `binding.primary`
+   - `binding.secondary` when comparison
+   - candidate `recipeKey` when obvious.
+4. After V3 data acquisition, run a binding/recipe pass:
+   - Convert V3 fetched data into V2-compatible `si_data`.
+   - Use V2 walker/binding to create available slots.
+   - Apply recipe or fallback custom slot keys.
+   - Fill `dataSlots`.
+5. If recipe binding fails, still show fetched data as fallback candidates in the V3 embedded editor.
+
+Current state to remember:
+
+- V3 now embeds V2-grade editing inside Step5 rather than redirecting the whole page.
+- Per-slide TTS panel and slide all-in AI are hidden in the embedded V2 editor.
+- Recent UI fixes:
+  - Top V3 embedded editor explanation panel removed.
+  - Slide tabs made taller in embedded editor.
+  - Data binding categories are intended to expand fully in embedded editor.
+
+Open concern:
+
+- If data bind does not appear, likely causes are:
+  - The case was not run through Step2 article/data acquisition.
+  - V3 fetched data is not yet fully converted into V2 `si_data`/binding shape.
+  - Slides lack `binding.subject/aspect/primary/secondary`.
+
+Next best task:
+
+- Implement "V2 scenario prior + binding/recipe post-pass" in V3, using the above stats as the default structure policy.
+
+## 2026-06-01 JST Update - V3 Proposal With Slide-Type Rough Outline
+
+User clarified an important product direction:
+
+- V3 cannot operate like V2 by forcing a fixed scenario template first, because V3's core flow is `企画書 -> 脚本構成 -> 脚本生成`.
+- The main migration goal is to reduce about 80% of manual correction work.
+- Therefore, the right design is to make Step2/Step3 proposals include a rough slide-type outline, then keep the later structure step as a production-spec confirmation step rather than a fresh re-planning step.
+
+Implemented locally:
+
+- `v3_launcher/v3_planner.js`
+  - Changed the one-plan AI prompt so each proposal must include `storyPattern`, `recommendedSlideCount`, and `slideOutline[].slideType`.
+  - Removed the old instruction saying slide types are unnecessary at proposal stage.
+  - Added proposal outline normalization/fallback so slide outlines still carry `slideType`, `dataNeeds`, and `productionCheck` even when model output is thin.
+  - Script-structure prompt now treats Step4 as "制作設計 / 検査・補正" and tells AI to preserve the proposal's slide order/headline/point unless data makes a slide type impossible.
+- `v3_launcher/server.js`
+  - Carries `storyPattern` through selected proposal, briefing, and editable briefing text.
+  - Proposal A/B/C cards now show `構成タイプ`.
+  - Fallback proposals now include rough slide outlines.
+  - Briefing text now includes `【構成タイプ】` and `【スライド構成】` lines can include ` / 確認:`.
+  - `simple` is kept as a conceptual proposal type but mapped to `insight` for production/rendering because V2 has no `simple.js` slide renderer.
+  - Step labels now describe Step3 as slide-type proposal and Step4 as slide-type rough briefing/spec confirmation.
+
+Verification:
+
+- `node --check 02_reddit_global/v3_launcher/v3_planner.js`
+- `node --check 02_reddit_global/v3_launcher/server.js`
+
+Important product decision:
+
+- Do not delete the "脚本構成 / production spec" step.
+- Its role should be changed from "ask AI to think again" to "confirm the chosen proposal is producible: slideType, title, dataSlots, sources, image needs, and continuity".
+
+## 2026-06-01 JST Update - Direct Fetched Data To Proposal AI
+
+User asked whether Step2 proposal generation reads articles and SofaScore/TM data before suggesting plans.
+
+Confirmed:
+
+- Articles and Wiki were already passed directly into `generateAIPlan`.
+- SofaScore / Transfermarkt data was fetched before proposal generation, but it mostly reached the proposal AI through `enrichedMemo` after synthesis.
+
+Implemented improvement:
+
+- `v3_launcher/v3_planner.js`
+  - Added `buildFetchedDataSummary(fetchedData)`.
+  - `generateAIPlan(topic, memo, researchCorpus, wikiStories, fetchedData = [])` now accepts fetched structured data directly.
+  - One-plan prompts now include a dedicated `取得済み構造化データ（SofaScore / Transfermarkt等）` block.
+  - Prompt rules now require stats/profile/comparison slides to use entity names and labels from fetched structured data, and to put unavailable numbers into `missingData`.
+- `v3_launcher/server.js`
+  - Step2 job now calls `generateAIPlan(input.title, enrichedMemo, research, wikiStories, fetchedData || [])`.
+  - `/api/v3/analyze` also accepts optional `fetchedData`.
+
+Verification:
+
+- `node --check 02_reddit_global/v3_launcher/v3_planner.js`
+- `node --check 02_reddit_global/v3_launcher/server.js`
+
+Not run:
+
+- Live Step2 proposal generation, to avoid AI/Serper cost unless the user asks.
+
+## 2026-06-01 JST Update - Mobile Recipe Launcher
+
+User asked to make the Recipe Launcher easier to use from a phone, especially for:
+
+1. Labeling
+   - The recipe should tell AI what the slide is meant to say at a glance.
+2. Data selection
+   - Common data sets should be easy to preselect, e.g. current-season stats with apps/rating/goals/assists plus position-specific metrics such as tackles, interceptions, dribbles, pass accuracy.
+
+Implemented:
+
+- `v3_launcher/server.js`
+  - Extended recipe normalization with:
+    - `aiLabel`
+    - `useWhen`
+    - `claim`
+    - `positionFit`
+  - Existing recipes auto-fill `aiLabel` / `useWhen` from `note` when missing, preserving backwards compatibility.
+  - Added extra slot options:
+    - `sofascore.player.totalShots`
+    - `sofascore.player.xG`
+    - `sofascore.player.passAcc`
+    - `sofascore.player.clearances`
+    - `sofascore.player.duelsWon`
+    - `sofascore.player.saves`
+    - `sofascore.player.cleanSheets`
+  - Reworked `/recipes` UI for mobile:
+    - AI label textarea
+    - use-case textarea
+    - claim textarea
+    - position-fit input
+    - preset buttons: current season, FW, MF, winger, DF, GK, profile, team season, match card, transfer/value
+    - selected metrics list with remove and move-up controls
+    - source/category filter chips
+    - detailed 8-slot dropdown editor kept under a collapsible details block
+    - sticky mobile save/action bar
+
+Verification:
+
+- `node --check 02_reddit_global/v3_launcher/server.js`
+- `node --check 02_reddit_global/v3_launcher/v3_planner.js`
+- Local `GET /recipes` returned HTML.
+- Local `GET /api/v3/recipe-slot-options` returned the expanded slot list.
+- Local `GET /api/v3/recipes` returned recipes with the new labeling fields.

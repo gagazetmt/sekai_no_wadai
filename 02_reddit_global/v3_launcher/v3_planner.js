@@ -9,6 +9,8 @@ const ARTICLE_CHAR_LIMIT = 6500;
 const MAX_ARTICLES = 15;
 const MAX_WIKI_ENTRIES = 3;
 const WIKI_CANDIDATE_CHAR_LIMIT = 400;
+const MAX_FETCHED_ENTITIES = 8;
+const MAX_FETCHED_SLOTS = 14;
 
 function buildResearchSummary(researchCorpus, wikiStories) {
   const raw = researchCorpus?.learningCorpus || [];
@@ -54,6 +56,38 @@ function buildResearchSummary(researchCorpus, wikiStories) {
   };
 }
 
+function buildFetchedDataSummary(fetchedData) {
+  const rows = (fetchedData || [])
+    .filter((d) => d && d.ok)
+    .slice(0, MAX_FETCHED_ENTITIES)
+    .map((d, i) => {
+      const slots = Array.isArray(d.slots)
+        ? d.slots
+            .filter((s) => s && (s.label || s.value))
+            .slice(0, MAX_FETCHED_SLOTS)
+            .map((s) => `- ${s.label || 'data'}: ${s.value || ''}`)
+            .join('\n')
+        : '';
+      const labels = Array.isArray(d.labels) && d.labels.length
+        ? `\n使えるラベル: ${d.labels.slice(0, 10).join(' / ')}`
+        : '';
+      const source = d.sourceTitle || d.sourceUrl
+        ? `\n出典: ${d.sourceTitle || ''}${d.sourceUrl ? ` ${d.sourceUrl}` : ''}`
+        : '';
+      return `[取得データ${i + 1}] ${d.nameEn || d.name || d.label || 'entity'} (${d.type || 'entity'})\n${slots || d.summary || '値なし'}${labels}${source}`;
+    });
+  const failed = (fetchedData || [])
+    .filter((d) => d && !d.ok)
+    .slice(0, 6)
+    .map((d) => `- ${d.nameEn || d.name || d.label || 'unknown'} (${d.type || 'entity'})`);
+  return {
+    fetchedDataText: rows.length ? rows.join('\n\n---\n\n') : '（取得済み構造化データなし）',
+    failedDataText: failed.length ? failed.join('\n') : '',
+    fetchedDataCount: rows.length,
+    failedDataCount: failed.length,
+  };
+}
+
 function buildSystemPrompt() {
   return `あなたはサッカー専門YouTube編集長AIです。
 リサーチ記事を読み、以下の手順で動画企画を立ててください。最終出力は純粋なJSONのみです。
@@ -66,17 +100,22 @@ function buildSystemPrompt() {
 
 【slideTypeの選択肢】
 - opening: 冒頭フック・問い提示
+- simple: ニュース概要・事実整理
 - history: 過去の経緯・比較軸の設定
 - comparison: データ対比・クラブ/選手比較
 - stats: 数字・スタッツ・順位・市場価値
 - profile: 選手/監督のプロフィール・背景
 - insight: 考察・解釈・論点まとめ
+- reaction: Reddit/海外反応・ファンの温度感
 - ending: 結論・視聴者へのメッセージ
 
 【絶対ルール】
 - 確認できていない事実を断定しない
 - 選手名・クラブ名・年号は記事の根拠があるものだけ使う
 - 相棒メモの「取得済みデータ（企画書・脚本構成で優先使用）」にある数値・所属・年齢・負傷情報は、themeProposal と briefing の dataNeeds に優先的に反映する
+- 「取得済み構造化データ」にある具体値は、企画案・slideOutline・dataNeedsで優先使用する
+- stats/profile/comparison系スライドを提案する場合は、取得済み構造化データ内のエンティティ名とラベル名をdataNeedsに入れる
+- 取得済み構造化データにない数字は、必要データまたはmissingDataに回し、断定しない
 - 相棒メモの「取得失敗・未確認データ」にある対象は、断定せず missingData または publishGates に回す
 - 結論はJSON形式のみ。コードブロックや前置き文は不要
 - JSONを途中で切らない。長文よりも完結したJSONを優先する
@@ -84,11 +123,13 @@ function buildSystemPrompt() {
 - 相棒メモに「取得済みデータ」がある場合、そのラベル名（ゴール/アシスト/評価/クラブ/年齢等）をdataNeeds に入れること
 - candidates は必ず3案出力する（A/B/C案として提示するため）
 - candidates A/B/C は短尺・標準・長尺の提案に分け、videoLengthType / targetMinutes / recommendedSlideCount を必ず入れる
-- 各 candidate の slideOutline は案件の材料量に応じて4〜8枚で可変にする。historyに今季スタッツを羅列せず、stats/profile/history/comparisonを役割で分ける`;
+- 各 candidate の slideOutline は案件の材料量に応じて4〜8枚で可変にする。historyに今季スタッツを羅列せず、simple/stats/profile/history/comparison/reactionを役割で分ける
+- 企画提案段階で storyPattern と slideOutline[].slideType を必ず出す。後工程は企画を作り直すのではなく、制作可能なスライド仕様へ確定する`;
 }
 
-function buildUserPrompt(topic, memo, researchSummary) {
+function buildUserPrompt(topic, memo, researchSummary, fetchedSummary = {}) {
   const { articleText, wikiText, articleCount, wikiCount } = researchSummary;
+  const { fetchedDataText, failedDataText, fetchedDataCount, failedDataCount } = fetchedSummary;
 
   return `## 案件トピック
 ${topic}
@@ -100,6 +141,10 @@ ${memo || 'なし'}
 ${articleText}
 ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
 
+## 取得済み構造化データ（SofaScore / Transfermarkt等・${fetchedDataCount || 0}件）
+${fetchedDataText || '（取得済み構造化データなし）'}
+${failedDataText ? `\n## 取得失敗・未確認データ（${failedDataCount || 0}件・断定禁止）\n${failedDataText}` : ''}
+
 ## 出力してほしいJSON（\`\`\`不要）
 {
   "themeProposal": {
@@ -108,6 +153,7 @@ ${wikiText ? `\n## Wikiデータ（${wikiCount}件）\n${wikiText}` : ''}
         "hookQuestion": "フックとなる問い",
         "answer": "仮の答え",
         "angle": "動画の切り口・約束",
+        "storyPattern": "ニュース解説型 / 比較型 / 炎上反応型 / 選手深掘り型 など",
         "videoLengthType": "short / standard / long",
         "targetMinutes": "1.5-2.5 / 3-4 / 5-6",
         "recommendedSlideCount": 4,
@@ -266,9 +312,9 @@ function buildFallbackAIPlan(topic, researchSummary, reason) {
     articleCount: researchSummary.articleCount,
     themeProposal: {
       candidates: [
-        { hookQuestion: core, answer, angle: '違和感をデータで整理する', videoLengthType: 'short', targetMinutes: '1.5-2.5', recommendedSlideCount: 4, dataNeeds: ['一次情報または信頼できる記事'], risk: '未確認情報を断定しない' },
-        { hookQuestion: `${topic}の背景にある構造は何か？`, answer: '単発ニュースではなく構造変化として見る。', angle: '背景解説型', videoLengthType: 'standard', targetMinutes: '3-4', recommendedSlideCount: 6, dataNeeds: ['時系列'], risk: '話を広げすぎない' },
-        { hookQuestion: `${topic}を長尺で深掘るなら何を足すべきか？`, answer: '背景・比較・反論を分け、取得済みデータで納得感を積む。', angle: '深掘り型', videoLengthType: 'long', targetMinutes: '5-6', recommendedSlideCount: 8, dataNeeds: ['比較データ', 'プロフィール', '時系列'], risk: '材料不足なら短縮する' },
+        { hookQuestion: core, answer, angle: '違和感をデータで整理する', storyPattern: 'データ検証型', videoLengthType: 'short', targetMinutes: '1.5-2.5', recommendedSlideCount: 4, dataNeeds: ['一次情報または信頼できる記事'], risk: '未確認情報を断定しない', slideOutline: _normalizeSlideOutline([], 4) },
+        { hookQuestion: `${topic}の背景にある構造は何か？`, answer: '単発ニュースではなく構造変化として見る。', angle: '背景解説型', storyPattern: 'ニュース解説型', videoLengthType: 'standard', targetMinutes: '3-4', recommendedSlideCount: 6, dataNeeds: ['時系列'], risk: '話を広げすぎない', slideOutline: _normalizeSlideOutline([], 6) },
+        { hookQuestion: `${topic}を長尺で深掘るなら何を足すべきか？`, answer: '背景・比較・反論を分け、取得済みデータで納得感を積む。', angle: '深掘り型', storyPattern: '選手深掘り型', videoLengthType: 'long', targetMinutes: '5-6', recommendedSlideCount: 8, dataNeeds: ['比較データ', 'プロフィール', '時系列'], risk: '材料不足なら短縮する', slideOutline: _normalizeSlideOutline([], 8) },
       ],
       selected: 0,
       selectedReason: 'AIのJSONが崩れたため、破綻しにくい安全な構成にフォールバック。',
@@ -277,7 +323,9 @@ function buildFallbackAIPlan(topic, researchSummary, reason) {
     briefing: {
       purpose: '話題の違和感を、確認できる材料だけで整理する。',
       coreMessage: answer,
-      chapters: slides.map((s, i) => ({ no: i + 1, role: s[0], claim: s[1], dataNeeds: ['確認ソース'] })),
+      storyPattern: 'データ検証型',
+      slideOutline: _normalizeSlideOutline([], 6),
+      chapters: _normalizeSlideOutline([], 6).map((s, i) => ({ no: i + 1, role: s.slideType || s[0], slideType: s.slideType, claim: s.point || s.headline || s[1], dataNeeds: ['確認ソース'] })),
       riskChecklist: ['未確認の数字を断定しない', '出典日付を明記する'],
     },
     missingData: ['AI分析JSONの再生成確認', ...(researchSummary.articleCount ? [] : ['リサーチ記事'])],
@@ -300,19 +348,27 @@ function buildOnePlanSystemPrompt() {
 
 【ルール】
 - 確認できた事実のみ使う。記事にない数字を作らない
+- 「取得済み構造化データ」にある具体値は、企画の根拠・必要データ・スライド構成に優先的に反映する
+- stats/profile/comparison系スライドを出す場合は、取得済み構造化データのエンティティ名とラベル名をdataNeedsへ具体的に入れる
+- 取得済み構造化データにない数字は作らない。不足している場合はmissingDataへ回す
 - 各スライドに具体的な根拠・台本の種を入れること
 - hookQuestion は視聴者が思わず「見たい」と感じる問いにすること
 - 動画の長さ（targetMinutes）は材料の展開力に応じて4〜8分の間で自分で判断
   - 人間ドラマが豊富なら6〜8分
   - 速報・シンプルな移籍ニュースなら4〜5分
   - slideOutline の枚数は targetMinutes に合わせて調整（目安：1分あたり1〜1.5枚）
-- slideOutlineにslideTypeは不要。headlineとpointで内容を示すだけでよい
-  （slideTypeはStep4の脚本構成時に、利用可能データに基づいて決定する）
+- 企画書段階で必ず「スライド型」を含める。後工程の手直しを減らすため、企画の勝ち筋をスライド構成に落として提案する
+- ただしこの段階では完成台本を書かない。Step4で制作可能性・データ割当・slideType妥当性を確定する
+- 企画は storyPattern で分類する（例: ニュース解説型 / 比較型 / 炎上反応型 / 選手深掘り型 / 人間ドラマ型 / データ検証型）
+- slideOutline は opening で始め、ending で終える。中盤に reaction を1枚入れられる材料があるなら優先する
+- slideTypeは次から選ぶ: opening / simple / insight / stats / profile / comparison / history / reaction / timeline / matchcard / picture / ending
+- simple はニュース概要専用。データ主役なら stats/profile/comparison、背景や意味づけなら insight/history を使う
 - 出力はJSONのみ（\`\`\`不要）`;
 }
 
-function buildOnePlanUserPrompt(topic, memo, researchSummary) {
+function buildOnePlanUserPrompt(topic, memo, researchSummary, fetchedSummary = {}) {
   const { articleText, wikiText, articleCount } = researchSummary;
+  const { fetchedDataText, failedDataText, fetchedDataCount, failedDataCount } = fetchedSummary;
   return `## 案件: ${topic}
 
 ## 相棒メモ
@@ -322,27 +378,33 @@ ${memo || 'なし'}
 ${articleText}
 ${wikiText ? `\n## Wikiデータ\n${wikiText}` : ''}
 
+## 取得済み構造化データ（SofaScore / Transfermarkt等・${fetchedDataCount || 0}件）
+${fetchedDataText || '（取得済み構造化データなし）'}
+${failedDataText ? `\n## 取得失敗・未確認データ（${failedDataCount || 0}件・断定禁止）\n${failedDataText}` : ''}
+
 ## 出力JSON
 {
   "hookQuestion": "視聴者を引き込む問い",
   "answer": "問いへの仮の答え",
   "angle": "動画の切り口（1〜2文）",
+  "storyPattern": "ニュース解説型 / 比較型 / 炎上反応型 / 選手深掘り型 / 人間ドラマ型 / データ検証型 など",
   "targetMinutes": "あなたが判断した最適な動画尺（例: 6, 7, 5.5）",
+  "recommendedSlideCount": 8,
   "purpose": "視聴者への約束（1文）",
   "coreMessage": "一文で言える結論",
   "risk": "この企画のリスクを短く",
   "slideOutline": [
-    {"no":1,"headline":"スライドタイトル","point":"このスライドで言うこと・根拠・台本の種"}
+    {"no":1,"slideType":"opening","headline":"スライドタイトル","point":"このスライドで言うこと・根拠・台本の種","dataNeeds":[],"productionCheck":"成立条件・確認ポイント"}
   ],
   "missingData": ["確認が必要なデータ"]
 }`;
 }
 
 // 1モデルで1案生成
-async function _generateOnePlan(topic, memo, researchSummary, providerOpts) {
+async function _generateOnePlan(topic, memo, researchSummary, fetchedSummary, providerOpts) {
   const { provider, model, label, maxTokens } = providerOpts;
   const system  = buildOnePlanSystemPrompt();
-  const content = buildOnePlanUserPrompt(topic, memo, researchSummary);
+  const content = buildOnePlanUserPrompt(topic, memo, researchSummary, fetchedSummary);
   try {
     const raw = await callAI({
       system,
@@ -371,14 +433,63 @@ async function _generateOnePlan(topic, memo, researchSummary, providerOpts) {
 
 // parsed単案 → themeProposal.candidates 形式に変換
 // AIが決めた targetMinutes をそのまま使い、videoLengthType を逆算
+function _inferProposalSlideType(slide, index, total) {
+  if (index === 0) return 'opening';
+  if (index === total - 1) return 'ending';
+  const text = [
+    slide?.slideType,
+    slide?.role,
+    slide?.headline,
+    slide?.point,
+    ...(Array.isArray(slide?.dataNeeds) ? slide.dataNeeds : []),
+  ].join(' ');
+  if (/reaction|reddit|comment|fan|sns|海外反応|反応|コメント/i.test(text)) return 'reaction';
+  if (/match|score|fixture|試合|スコア|対戦/i.test(text)) return 'matchcard';
+  if (/timeline|推移|年表|シーズン別/i.test(text)) return 'timeline';
+  if (/history|経緯|過去|来歴|因縁|挫折|解雇|怪我|復活|人間ドラマ/i.test(text)) return 'history';
+  if (/comparison|compare|vs|比較|対比|差|一方/i.test(text)) return 'comparison';
+  if (/profile|プロフィール|経歴|年齢|所属|監督|選手|人物/i.test(text)) return 'profile';
+  if (/stats|data|数字|数値|得点|ゴール|アシスト|順位|勝点|市場価値|出場|評価/i.test(text)) return 'stats';
+  if (/概要|ニュース|何が起きた|整理/i.test(text)) return 'simple';
+  return 'insight';
+}
+
+function _normalizeSlideOutline(slideOutline, targetCount) {
+  const source = Array.isArray(slideOutline) ? slideOutline : [];
+  const rows = source.length ? source : [
+    { headline: '何が起きたのか', point: '話題の違和感を一言で提示する。', slideType: 'opening' },
+    { headline: 'ニュース概要', point: '確認できた事実を整理する。', slideType: 'simple' },
+    { headline: '背景', point: 'なぜ今この話題が重要なのかを説明する。', slideType: 'insight' },
+    { headline: 'データで確認', point: '取得できる数字で主張を支える。', slideType: 'stats' },
+    { headline: '人物・クラブ文脈', point: '選手やクラブの来歴、関係性、人間ドラマを足す。', slideType: 'profile' },
+    { headline: '反応', point: '海外反応やファンの見方を挟む。', slideType: 'reaction' },
+    { headline: '最終論点', point: 'ここまでの材料をまとめて、視聴者の見方を更新する。', slideType: 'insight' },
+    { headline: '結論', point: '冒頭の問いに答えて締める。', slideType: 'ending' },
+  ];
+  const total = Math.max(1, targetCount || rows.length);
+  return rows.map((slide, index) => {
+    const type = slide.slideType || _inferProposalSlideType(slide, index, rows.length);
+    return {
+      no: slide.no || index + 1,
+      slideType: type,
+      headline: slide.headline || slide.title || slide.role || `Slide ${index + 1}`,
+      point: slide.point || slide.claim || '',
+      dataNeeds: Array.isArray(slide.dataNeeds) ? slide.dataNeeds : [],
+      productionCheck: slide.productionCheck || '',
+    };
+  }).slice(0, total);
+}
+
 function _normalizeSingleToCandidate(parsed, modelLabel = '') {
   if (!parsed) return null;
-  const slideOutline = Array.isArray(parsed.slideOutline) ? parsed.slideOutline : [];
+  const rawSlideOutline = Array.isArray(parsed.slideOutline) ? parsed.slideOutline : [];
 
   // AIが返した targetMinutes を数値として取得（文字列 "6" / "5.5" / "6-7" 等を吸収）
   const rawMin = String(parsed.targetMinutes || '');
-  const minNum = parseFloat(rawMin) || (slideOutline.length <= 5 ? 4 : slideOutline.length <= 7 ? 6 : 7);
+  const minNum = parseFloat(rawMin) || (rawSlideOutline.length <= 5 ? 4 : rawSlideOutline.length <= 7 ? 6 : 7);
   const targetMinutes = String(minNum);
+  const recommendedSlideCount = Number(parsed.recommendedSlideCount) || rawSlideOutline.length || Math.round(minNum * 1.2);
+  const slideOutline = _normalizeSlideOutline(rawSlideOutline, recommendedSlideCount);
 
   // videoLengthType を尺から逆算
   const videoLengthType = minNum <= 3 ? 'short' : minNum <= 5 ? 'standard' : 'long';
@@ -387,10 +498,13 @@ function _normalizeSingleToCandidate(parsed, modelLabel = '') {
     hookQuestion:          parsed.hookQuestion || '',
     answer:                parsed.answer       || '',
     angle:                 parsed.angle        || '',
+    storyPattern:          parsed.storyPattern || '',
     videoLengthType,
     targetMinutes,
-    recommendedSlideCount: slideOutline.length || Math.round(minNum * 1.2),
-    dataNeeds:             parsed.dataNeeds    || [],
+    recommendedSlideCount: slideOutline.length || recommendedSlideCount,
+    dataNeeds:             (Array.isArray(parsed.dataNeeds) && parsed.dataNeeds.length)
+      ? parsed.dataNeeds
+      : [...new Set(slideOutline.flatMap((s) => s.dataNeeds || []))],
     risk:                  parsed.risk         || '',
     slideOutline,
     _modelLabel:   modelLabel,
@@ -400,19 +514,20 @@ function _normalizeSingleToCandidate(parsed, modelLabel = '') {
   };
 }
 
-async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
+async function generateAIPlan(topic, memo, researchCorpus, wikiStories, fetchedData = []) {
   const researchSummary = buildResearchSummary(researchCorpus, wikiStories);
+  const fetchedSummary = buildFetchedDataSummary(fetchedData);
 
   // 3モデルを並列実行（Sonnet / DeepSeek V4 Flash / DeepSeek Chat）
-  console.log('[v3_planner] 3モデル並列企画生成...');
+  console.log(`[v3_planner] 3モデル並列企画生成... fetchedData=${fetchedSummary.fetchedDataCount || 0}`);
   const [sonnetRaw, v4Raw, chatRaw] = await Promise.all([
-    _generateOnePlan(topic, memo, researchSummary, {
+    _generateOnePlan(topic, memo, researchSummary, fetchedSummary, {
       provider: 'anthropic', model: 'claude-sonnet-4-6',   label: '④plan_sonnet',   maxTokens: 6000,
     }),
-    _generateOnePlan(topic, memo, researchSummary, {
+    _generateOnePlan(topic, memo, researchSummary, fetchedSummary, {
       provider: 'deepseek',  model: 'deepseek-v4-flash',   label: '④plan_v4flash',  maxTokens: 6000,
     }),
-    _generateOnePlan(topic, memo, researchSummary, {
+    _generateOnePlan(topic, memo, researchSummary, fetchedSummary, {
       provider: 'deepseek',  model: 'deepseek-chat',       label: '④plan_chat',     maxTokens: 4000,
     }),
   ]);
@@ -437,6 +552,7 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
 
   // briefingはsonnet → v4 → chat の優先順で取得
   const bestRaw = sonnetRaw || v4Raw || chatRaw;
+  const bestCandidate = candidates[0] || {};
 
   console.log(`[v3_planner] 完了: ${candidates.length}案生成`);
 
@@ -454,8 +570,10 @@ async function generateAIPlan(topic, memo, researchCorpus, wikiStories) {
     briefing: {
       purpose:       bestRaw?.purpose      || bestRaw?._purpose     || '',
       coreMessage:   bestRaw?.coreMessage  || bestRaw?._coreMessage || '',
-      chapters:      (bestRaw?.slideOutline || []).map((s, i) => ({
-        no: i + 1, role: s.slideType || 'chapter',
+      storyPattern:  bestCandidate.storyPattern || '',
+      slideOutline:  bestCandidate.slideOutline || [],
+      chapters:      (bestCandidate.slideOutline || []).map((s, i) => ({
+        no: i + 1, role: s.slideType || 'chapter', slideType: s.slideType || '',
         claim: s.point || s.headline || '', dataNeeds: s.dataNeeds || [],
       })),
       riskChecklist: [],
@@ -650,16 +768,17 @@ const SLIDE_TYPE_OPTIONS = [
 
 function buildScriptStructurePrompt(topic, selectedCandidate, enrichedMemo, fetchedData) {
   const slideText = (selectedCandidate.slideOutline || [])
-    .map(s => `[${s.no}] ${s.headline}\n  内容: ${s.point || ''}`)
+    .map(s => `[${s.no}] [${s.slideType || 'insight'}] ${s.headline}\n  内容: ${s.point || ''}\n  必要データ: ${(s.dataNeeds || []).join(' / ') || 'なし'}\n  制作確認: ${s.productionCheck || 'なし'}`)
     .join('\n\n');
 
   const statsText = (fetchedData || []).filter(d => d.ok)
     .map(d => `${d.nameEn}: ${(d.slots||[]).slice(0,12).map(s=>`${s.label}:${s.value}`).join(' / ')}`)
     .join('\n') || '（なし）';
 
-  const system = `あなたはサッカーYouTube脚本構成AIです。企画書のslideOutlineを受け取り、
-各スライドの「脚本構成」を作成します。ナレーション本文は書きません。
-構成とは「何を・どの順で・どのデータで見せるか」の設計図です。
+  const system = `あなたはサッカーYouTube制作設計AIです。企画書のslideOutlineを受け取り、
+各スライドを実制作できる「脚本構成」に確定します。ナレーション本文は書きません。
+この工程の役割は、企画書を作り直すことではなく、企画書の流れを守ったまま
+「何を・どの順で・どのデータで見せるか」を検査・補正することです。
 JSONのみ返してください。コードブロック不要。`;
 
   const user = `## 案件
@@ -672,6 +791,11 @@ ${topic}
 
 ## 各スライドの企画内容
 ${slideText}
+
+【重要】企画書のスライド順・headline・pointを尊重すること。
+- 話の順番を大きく変えない
+- slideTypeは企画書案を優先し、取得済みデータで成立しない場合だけ補正する
+- 補正した場合も、そのスライドが動画の約束にどう貢献するかは維持する
 
 ## 取得済みデータ（使えるデータ）
 ${statsText}

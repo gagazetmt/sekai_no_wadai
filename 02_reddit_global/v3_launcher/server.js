@@ -16,7 +16,7 @@ const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
 const costTracker = require(path.join(__dirname, '..', 'scripts', 'cost_tracker'));
 const { router: s3Router } = require('../routes/step3_routes');
 const { router: s35Router } = require('../routes/step35_routes');
-const { router: s4Router } = require('../routes/step4_routes');
+const { router: s4Router, getUI: s4UI } = require('../routes/step4_routes');
 
 const app = express();
 const PORT = Number(process.env.V3_LAUNCHER_PORT || 3005);
@@ -28,9 +28,11 @@ const V2_DATA_DIR = path.join(__dirname, '..', 'data');
 const V2_SI_DIR = path.join(V2_DATA_DIR, 'si_data');
 const V2_SAVED_FILE = path.join(V2_DATA_DIR, 'saved_projects.json');
 const JOB_DIR = path.join(V2_DATA_DIR, 'v2_jobs');
+const V2_IMAGE_SELECTION_DIR = path.join(V2_DATA_DIR, 'image_selections');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(V2_SI_DIR)) fs.mkdirSync(V2_SI_DIR, { recursive: true });
+if (!fs.existsSync(V2_IMAGE_SELECTION_DIR)) fs.mkdirSync(V2_IMAGE_SELECTION_DIR, { recursive: true });
 
 const V3_RECIPE_SLOT_OPTIONS = [
   { key: '', label: '未設定', source: '' },
@@ -42,10 +44,17 @@ const V3_RECIPE_SLOT_OPTIONS = [
   { key: 'sofascore.player.successfulDribbles', label: 'SofaScore: ドリブル成功数', source: 'sofascore' },
   { key: 'sofascore.player.minutes', label: 'SofaScore: 出場時間', source: 'sofascore' },
   { key: 'sofascore.player.shotsOnTarget', label: 'SofaScore: 枠内シュート', source: 'sofascore' },
+  { key: 'sofascore.player.totalShots', label: 'SofaScore: シュート数', source: 'sofascore' },
+  { key: 'sofascore.player.xG', label: 'SofaScore: xG', source: 'sofascore' },
   { key: 'sofascore.player.bigChancesCreated', label: 'SofaScore: 決定機創出', source: 'sofascore' },
   { key: 'sofascore.player.keyPasses', label: 'SofaScore: キーパス', source: 'sofascore' },
+  { key: 'sofascore.player.passAcc', label: 'SofaScore: パス成功率', source: 'sofascore' },
   { key: 'sofascore.player.tackles', label: 'SofaScore: タックル', source: 'sofascore' },
   { key: 'sofascore.player.interceptions', label: 'SofaScore: インターセプト', source: 'sofascore' },
+  { key: 'sofascore.player.clearances', label: 'SofaScore: クリア', source: 'sofascore' },
+  { key: 'sofascore.player.duelsWon', label: 'SofaScore: デュエル勝利', source: 'sofascore' },
+  { key: 'sofascore.player.saves', label: 'SofaScore: セーブ', source: 'sofascore' },
+  { key: 'sofascore.player.cleanSheets', label: 'SofaScore: クリーンシート', source: 'sofascore' },
   { key: 'sofascore.team.position', label: 'SofaScore: 順位', source: 'sofascore' },
   { key: 'sofascore.team.points', label: 'SofaScore: 勝点', source: 'sofascore' },
   { key: 'sofascore.team.wins', label: 'SofaScore: 勝利数', source: 'sofascore' },
@@ -133,6 +142,8 @@ app.use('/api', s4Router);
 app.use('/images', express.static(path.join(__dirname, '..', 'images')));
 app.use('/images_stock', express.static(path.join(__dirname, '..', 'images_stock')));
 app.use('/v2_videos', express.static(path.join(__dirname, '..', 'data', 'v2_videos')));
+app.use('/v2_thumbs', express.static(path.join(__dirname, '..', 'data', 'v2_thumbs')));
+app.use('/bgm', express.static(path.join(__dirname, '..', 'bgm')));
 
 function safeId(value) {
   return String(value || 'untitled')
@@ -168,6 +179,10 @@ function normalizeRecipe(recipe, index) {
       return allowedSlots.has(key) ? key : '';
     }),
     note: String(recipe?.note || '').slice(0, 240),
+    aiLabel: String(recipe?.aiLabel || recipe?.note || recipe?.title || '').slice(0, 120),
+    useWhen: String(recipe?.useWhen || recipe?.note || '').slice(0, 240),
+    claim: String(recipe?.claim || '').slice(0, 240),
+    positionFit: String(recipe?.positionFit || '').slice(0, 120),
     priority: String(recipe?.priority || '中').slice(0, 12),
     status: String(recipe?.status || '採用候補').slice(0, 20),
   };
@@ -330,6 +345,7 @@ function mergeAutopilotPlanServer(base, aiPlan) {
       hookQuestion: selectedCandidate.hookQuestion || '',
       answer: selectedCandidate.answer || '',
       angle: selectedCandidate.angle || '',
+      storyPattern: selectedCandidate.storyPattern || '',
       candidates: aiPlan.themeProposal?.candidates || [],
       selected: selectedIdx,
       selectedReason: aiPlan.themeProposal?.selectedReason || '',
@@ -340,6 +356,7 @@ function mergeAutopilotPlanServer(base, aiPlan) {
       ...(base?.briefing || {}),
       purpose: aiPlan.briefing?.purpose || '',
       coreMessage: aiPlan.briefing?.coreMessage || '',
+      storyPattern: selectedCandidate.storyPattern || aiPlan.briefing?.storyPattern || '',
       chapters: aiPlan.briefing?.chapters || [],
       slideOutline: selectedCandidate.slideOutline || aiPlan.briefing?.slideOutline || [],
       videoLengthType: selectedCandidate.videoLengthType || '',
@@ -502,6 +519,88 @@ function buildV2ModulesFromPlan(plan) {
   });
 }
 
+function escHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildV3SiForV2Editor({ postId, plan, fetchedData, acquiredData, research, selectedProject }) {
+  const entityItems = [];
+  const seen = new Set();
+  const pushEntity = (item = {}) => {
+    const label = item.nameEn || item.name || item.label || '';
+    if (!label || seen.has(label)) return;
+    seen.add(label);
+    entityItems.push({
+      label,
+      role: item.type || item.role || 'entity',
+      ok: item.ok !== false,
+      summary: item.summary || '',
+      slots: Array.isArray(item.slots) ? item.slots : [],
+      source: item.source || 'v3',
+      v3Selected: !!item.selected,
+      raw: item.raw || null,
+    });
+  };
+  (fetchedData || []).forEach(pushEntity);
+  const selectedData = plan?.autopilotPlan?.selectedData || plan?.selectedData || [];
+  selectedData.forEach(pushEntity);
+
+  const searchItems = [];
+  (research?.learningCorpus || []).slice(0, 24).forEach((article, index) => {
+    searchItems.push({
+      label: article.titleJa || article.title || article.host || `article_${index + 1}`,
+      url: article.url || '',
+      host: article.host || '',
+      score: article.score || 0,
+      fetchStatus: article.fetchStatus || '',
+      text: String(article.text || '').slice(0, 900),
+    });
+  });
+
+  return {
+    postId,
+    version: 'v3_to_v2_editor',
+    savedAt: new Date().toISOString(),
+    boxes: {
+      entity: { items: entityItems },
+      match: { items: [] },
+      search: { items: searchItems },
+    },
+    v3Export: {
+      topic: plan?.topic || selectedProject?.title || '',
+      centralQuestion: plan?.centralQuestion || '',
+      thesis: plan?.thesis || '',
+      researchDesign: plan?.researchDesign || null,
+      autopilotPlan: plan?.autopilotPlan || null,
+      synthesis: plan?.synthesis || null,
+      acquiredData: acquiredData || null,
+      fetchedData: fetchedData || [],
+      sourceProject: selectedProject || null,
+    },
+  };
+}
+
+function writeV3ImageSelectionsForV2Editor(postId, imageSelections, modules) {
+  const selections = {};
+  if (imageSelections && typeof imageSelections === 'object') {
+    Object.entries(imageSelections).forEach(([key, value]) => {
+      if (Array.isArray(value) && value.length) selections[key] = value;
+    });
+  }
+  (modules || []).forEach((module) => {
+    const key = module.mainKey || module.title || module.type || '';
+    if (!key || !Array.isArray(module.images) || !module.images.length) return;
+    selections[key] = Array.from(new Set([...(selections[key] || []), ...module.images]));
+  });
+  const file = path.join(V2_IMAGE_SELECTION_DIR, `${safeFileId(postId)}.json`);
+  fs.writeFileSync(file, JSON.stringify({ postId, selections, savedAt: new Date().toISOString(), source: 'v3_launcher' }, null, 2));
+  return { file, count: Object.keys(selections).length };
+}
+
 app.get('/api/v3/health', (_, res) => {
   res.json({ ok: true, name: 'v3-launcher-prototype', port: PORT });
 });
@@ -640,8 +739,8 @@ app.post('/api/v3/research/wiki-side-stories', async (req, res) => {
 
 app.post('/api/v3/analyze', async (req, res) => {
   try {
-    const { topic, memo, researchCorpus, wikiStories } = req.body || {};
-    const result = await generateAIPlan(topic, memo, researchCorpus, wikiStories);
+    const { topic, memo, researchCorpus, wikiStories, fetchedData } = req.body || {};
+    const result = await generateAIPlan(topic, memo, researchCorpus, wikiStories, fetchedData || []);
     res.json({ success: true, result });
   } catch (error) {
     console.error('[v3/analyze]', error);
@@ -753,9 +852,16 @@ async function runProposalJob(jobId, input) {
       console.warn('[proposal-job] aiExpandResearch failed:', error.message);
       return { followUpQueries: [], entities: [] };
     });
-    research.labelCandidates = (expanded.entities || [])
+    research.labelCandidates = (expanded.labels || expanded.entities || [])
       .filter((e) => e && e.nameEn)
-      .map((e) => ({ name: e.nameEn, type: e.type || 'entity' }));
+      .map((e) => ({
+        name: e.nameEn,
+        nameJa: e.nameJa || '',
+        type: e.type || 'entity',
+        role: e.role || '',
+        dataNeeded: e.dataNeeded !== false,
+        reason: e.reason || '',
+      }));
     setStage('labels', 'Step2-3 本筋ラベル作成中...', { plan, research });
 
     let wikiStories = { ok: true, results: [], entityCount: 0, warning: '' };
@@ -802,7 +908,7 @@ async function runProposalJob(jobId, input) {
     });
     let aiPlan;
     try {
-      aiPlan = await generateAIPlan(input.title, enrichedMemo, research, wikiStories);
+      aiPlan = await generateAIPlan(input.title, enrichedMemo, research, wikiStories, fetchedData || []);
       aiPlan = await factCheckAIPlan(aiPlan).catch((e) => {
         console.warn('[proposal-job] factCheck skipped:', e.message);
         return aiPlan;
@@ -1048,7 +1154,10 @@ async function runAutoPrefetchCore({ topic = '', memo = '', learningCorpus = [],
   const isUsefulEntity = (e) => {
     const name = String(e.nameEn || '').trim();
     if (!name || name.length < 3) return false;
+    if (e.dataNeeded === false) return false;
     if (/^(last|injured|official|report|reports|news|god|sns|mvp|var|tv)$/i.test(name)) return false;
+    if (/^(jesus|wikipedia|reddit)$/i.test(name)) return false;
+    if (/\b(everything|gets|analyzed|turned|into|drama|these|days|reminded|some|idiot|asked|posted|anything|basically|said|goodbye)\b/i.test(name)) return false;
     if (/^[A-Z]{2,5}$/.test(name)) return false;
     return true;
   };
@@ -1206,6 +1315,45 @@ ${warningBlock}
   }
 });
 
+// ─── /api/v3/boost-image-score : 宝箱ドロップ → 最高スコア+1 ──────────────
+app.post('/api/v3/boost-image-score', (req, res) => {
+  try {
+    const { imageUrl } = req.body || {};
+    if (!imageUrl) return res.status(400).json({ ok: false, error: 'imageUrl が必要です' });
+
+    const { recordImageUsage } = require(path.join(__dirname, '..', 'scripts', 'image_score_manager'));
+
+    // 対象ファイルの score.json を読んで現在の最高スコアを取得
+    const stockRoot = path.join(__dirname, '..', 'images_stock', 'players_official');
+    const m = String(imageUrl).replace(/\\/g, '/').match(/players_official\/([^/]+)\/([^/]+\.(jpg|png))$/i);
+    if (!m) return res.status(400).json({ ok: false, error: 'ストック画像のURLではありません' });
+
+    const playerSlug = m[1];
+    const filename   = m[2];
+    const clubDir    = path.join(stockRoot, playerSlug);   // 選手フォルダ
+    const scorePath  = path.join(clubDir, 'score.json');
+
+    let scores = {};
+    try { scores = JSON.parse(fs.readFileSync(scorePath, 'utf8')); } catch (_) {}
+
+    const maxScore = Object.values(scores).reduce((mx, v) => Math.max(mx, v.score || 0), 0);
+    const newScore = maxScore + 1;
+
+    if (!scores[filename]) {
+      scores[filename] = { score: newScore, addedAt: new Date().toISOString().slice(0, 10), lastUsed: null };
+    } else {
+      scores[filename].score    = newScore;
+      scores[filename].lastUsed = new Date().toISOString().slice(0, 10);
+    }
+    fs.writeFileSync(scorePath, JSON.stringify(scores, null, 2));
+    console.log(`[boost] ${playerSlug}/${filename} → ${newScore}点（max+1）`);
+    res.json({ ok: true, newScore, filename, player: playerSlug });
+  } catch (e) {
+    console.error('[boost-image-score]', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/v3/images/stock', (req, res) => {
   try {
     const { findStockMatches } = require(path.join(__dirname, '..', 'scripts', 'modules', 'stock_match'));
@@ -1240,35 +1388,38 @@ app.post('/api/v3/generate-narration', async (req, res) => {
     const result = await generateNarration(topic, scriptSlides, enrichedMemo, fetchedData, { provider });
     if (!result.ok) return res.json({ ok: false, error: result.error });
 
-    // imageInstruction → images[] 解決（stock_match でファジーマッチ）
-    let findStockMatchesFn = null;
+    // imageInstruction → images[] 解決（v3_image_fetcher: ストック→Wikimedia多ソース）
+    let slides;
     try {
-      const sm = require(path.join(__dirname, '..', 'scripts', 'modules', 'stock_match'));
-      findStockMatchesFn = sm.findStockMatches;
-    } catch (_) {}
-    function resolveImages(inst) {
-      if (!inst || !findStockMatchesFn) return [];
-      function matchFirst(kw) {
-        if (!kw) return [];
-        for (const type of ['player', 'manager', 'team', 'stadium']) {
-          const hits = findStockMatchesFn({ type, entity: kw }).slice(0, 1);
-          if (hits.length) return hits.map((x) => x.url);
-        }
-        return [];
-      }
-      if (inst.placement === 'left+right') {
-        const lUrls = matchFirst((inst.left?.searchKeywords || []).join(' '));
-        const rUrls = matchFirst((inst.right?.searchKeywords || []).join(' '));
-        return [...lUrls, ...rUrls];
-      }
-      return matchFirst((inst.searchKeywords || []).join(' '));
+      const { fetchAndAssignSlideImages } = require('./v3_image_fetcher');
+      slides = await fetchAndAssignSlideImages(result.slides || []);
+    } catch (e) {
+      console.warn('[v3/generate-narration] image fetch error:', e.message);
+      slides = (result.slides || []).map(s => ({ ...s, images: [], imageCandidates: [] }));
     }
-    const slides = (result.slides || []).map((s) => ({ ...s, images: resolveImages(s.imageInstruction) }));
     // ナレーション内容のファクトチェック（フラグのみ、修正なし）
     const { slides: checked, flags } = await factCheckScript(slides).catch(() => ({ slides, flags: [] }));
     res.json({ ok: true, slides: checked, factCheckFlags: flags });
   } catch (e) {
     console.error('[v3/generate-narration]', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── /api/v3/fetch-slide-images : スライド画像のみリフレッシュ ──────────────
+// ナレーション再生成なしに、imageInstruction からの画像取得だけを再実行する。
+// slides[].imageCandidates も返すので UI の候補ギャラリーに使える。
+app.post('/api/v3/fetch-slide-images', async (req, res) => {
+  try {
+    const { slides } = req.body || {};
+    if (!Array.isArray(slides) || !slides.length) {
+      return res.status(400).json({ ok: false, error: 'slides が必要です' });
+    }
+    const { fetchAndAssignSlideImages } = require('./v3_image_fetcher');
+    const updated = await fetchAndAssignSlideImages(slides);
+    res.json({ ok: true, slides: updated });
+  } catch (e) {
+    console.error('[v3/fetch-slide-images]', e);
     res.status(500).json({ ok: false, error: e.message });
   }
 });
@@ -1282,6 +1433,14 @@ app.post('/api/v3/generate-video', (req, res) => {
     if (!Array.isArray(modules) || !modules.length) {
       return res.status(400).json({ ok: false, error: 'modules が必要です' });
     }
+
+    // 使用画像のスコアを加点（ストック管理）
+    try {
+      const { recordImageUsage } = require(path.join(__dirname, '..', 'scripts', 'image_score_manager'));
+      const usedImages = modules.flatMap(m => Array.isArray(m.images) ? m.images : []).filter(Boolean);
+      if (usedImages.length) recordImageUsage(usedImages);
+    } catch (_) {}
+
     const postId = 'v3_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     const now = new Date().toISOString();
     // modules.json を V2 データディレクトリに書き込む（render.js 共通パス）
@@ -1317,10 +1476,20 @@ app.post('/api/v3/generate-video', (req, res) => {
 
 app.post('/api/v3/export-v2', (req, res) => {
   try {
-    const { plan, sourceType = 'custom', memo = '' } = req.body || {};
+    const {
+      plan,
+      sourceType = 'custom',
+      memo = '',
+      postId: existingPostId = '',
+      imageSelections = {},
+      fetchedData = [],
+      acquiredData = null,
+      research = null,
+      selectedProject = null,
+    } = req.body || {};
     if (!plan) return res.status(400).json({ success: false, error: 'plan is required' });
 
-    const postId = makeV2PostId(plan.topic || plan.title);
+    const postId = existingPostId || makeV2PostId(plan.topic || plan.title);
     const now = new Date().toISOString();
     const modules = buildV2ModulesFromPlan(plan);
     if (!modules.length) return res.status(400).json({ success: false, error: 'scriptDraft or slidePlan is empty' });
@@ -1350,27 +1519,30 @@ app.post('/api/v3/export-v2', (req, res) => {
 
     const saved = readJson(V2_SAVED_FILE, []);
     const list = Array.isArray(saved) ? saved : [];
-    list.push(project);
+    const existingIdx = list.findIndex((item) => item && item.id === postId);
+    if (existingIdx >= 0) list[existingIdx] = { ...list[existingIdx], ...project, updatedAt: now };
+    else list.push(project);
     fs.writeFileSync(V2_SAVED_FILE, JSON.stringify(list, null, 2));
 
     const modulesFile = path.join(V2_DATA_DIR, `${safeFileId(postId)}_modules.json`);
     fs.writeFileSync(modulesFile, JSON.stringify({ postId, modules, savedAt: now, source: 'v3_launcher' }, null, 2));
 
     const siFile = path.join(V2_SI_DIR, `${safeFileId(postId)}.json`);
-    if (!fs.existsSync(siFile)) {
-      fs.writeFileSync(siFile, JSON.stringify({
-        postId,
-        version: 'v3',
-        boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } },
-        v3Export: {
-          topic: plan.topic || '',
-          researchDesign: plan.researchDesign || null,
-          researchSummary: plan.autopilotPlan?.mustCheck || [],
-        },
-      }, null, 2));
-    }
+    const siPayload = buildV3SiForV2Editor({ postId, plan, fetchedData, acquiredData, research, selectedProject });
+    fs.writeFileSync(siFile, JSON.stringify(siPayload, null, 2));
 
-    res.json({ success: true, postId, project, modulesFile, siFile, moduleCount: modules.length });
+    const imageSelection = writeV3ImageSelectionsForV2Editor(postId, imageSelections, modules);
+
+    res.json({
+      success: true,
+      postId,
+      project,
+      modulesFile,
+      siFile,
+      imageSelection,
+      moduleCount: modules.length,
+      editorUrl: `/v3-editor?postId=${encodeURIComponent(postId)}`,
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1399,6 +1571,147 @@ app.get('/api/v3/argument-plans', (_, res) => {
       }
     });
   res.json({ items });
+});
+
+app.get('/v3-editor', (req, res) => {
+  const postId = String(req.query.postId || '').trim();
+  const embedded = String(req.query.embedded || '') === '1';
+  if (!postId) return res.status(400).send('postId required');
+  const saved = readJson(V2_SAVED_FILE, []);
+  const project = (Array.isArray(saved) ? saved : []).find((item) => item && item.id === postId) || {
+    id: postId,
+    title: 'V3 draft',
+    source: 'v3_editor',
+    raw: { id: postId, title: 'V3 draft', source: 'v3_editor' },
+  };
+  const projectJson = JSON.stringify(project).replace(/</g, '\\u003c');
+  res.type('html').send(`<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V3 + V2編集 - ${escHtml(project.title || project.id)}</title>
+<style>
+:root {
+  --c:#f2b84b; --bg:#0b0d12; --panel:#151922; --border:#303846;
+  --text:#eef2f7; --muted:#94a3b8; --success:#10b981;
+}
+*, *::before, *::after { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:"Yu Gothic","Noto Sans JP",system-ui,sans-serif; }
+.v3-editor-header { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; background:#111827; border-bottom:3px solid var(--c); }
+.v3-editor-header h1 { margin:0; color:var(--c); font-size:16px; font-weight:900; }
+.v3-editor-header span { color:var(--muted); font-size:12px; }
+.v3-editor-header a, .v3-editor-header button { min-height:32px; padding:6px 10px; border-radius:6px; border:1px solid #7c5c22; background:#201804; color:var(--c); font-weight:900; text-decoration:none; cursor:pointer; }
+.step-container { padding:12px 14px; }
+.panel { background:var(--panel); border-radius:8px; padding:14px; margin-bottom:14px; border:1px solid var(--border); }
+.btn { padding:8px 14px; border-radius:7px; cursor:pointer; border:none; font-weight:bold; font-size:12px; transition:opacity .15s; }
+.btn:hover { opacity:.86; }
+.btn-primary { background:var(--c); color:#111827; }
+.btn-success { background:var(--success); color:#fff; }
+.btn-sm { background:#1e2a4a; color:var(--text); font-size:11px; padding:5px 10px; }
+.inp, input, textarea, select { background:#0d1220; color:var(--text); border:1px solid var(--border); border-radius:6px; }
+textarea { width:100%; }
+.v3-hidden-editor-control { display:none !important; }
+body.embedded-v3-editor .v3-editor-header { display:none; }
+body.embedded-v3-editor .step-container { padding:8px; }
+body.embedded-v3-editor .s3-tab { min-height:54px !important; padding-top:8px !important; padding-bottom:8px !important; }
+body.embedded-v3-editor [style*="max-height:340px"] { max-height:none !important; }
+pre { background:#0d1220; padding:12px; border-radius:8px; font-size:11px; overflow-x:auto; color:#9bb5e0; white-space:pre-wrap; border:1px solid #1a2540; word-break:break-all; }
+a { color:#7dc8ff; }
+@media (max-width: 900px) {
+  [style*="grid-template-columns:1fr 1fr"] { grid-template-columns:1fr !important; }
+  .step-container { padding:8px; }
+}
+</style>
+</head>
+<body class="${embedded ? 'embedded-v3-editor' : ''}">
+<div class="v3-editor-header">
+  <h1>V3資産 + V2編集モード</h1>
+  <span>${escHtml(project.title || project.id)} / ${escHtml(postId)}</span>
+  <a href="/">V3へ戻る</a>
+  <button type="button" onclick="window.step4Init && window.step4Init()">再読込</button>
+</div>
+${s4UI()}
+<script>
+window.APP = window.APP || {};
+window.APP.selected = ${projectJson};
+window.APP.saved = [window.APP.selected];
+window.fetchJson = window.fetchJson || async function(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+};
+function hideV3EditorBlock(el, styleNeedle) {
+  if (!el) return;
+  var block = el;
+  for (var i = 0; block && i < 8; i += 1, block = block.parentElement) {
+    var style = block.getAttribute && (block.getAttribute('style') || '');
+    if (styleNeedle && style.indexOf(styleNeedle) >= 0) {
+      block.classList.add('v3-hidden-editor-control');
+      return;
+    }
+  }
+}
+function trimV3EditorControls() {
+  document.querySelectorAll('.s4-fill-prompt,.s4-fill-research-prompt,.s4-fill-go,.s4-fill-status,.s4-fill-incremental,.s4-fill-webresearch').forEach(function(el) {
+    hideV3EditorBlock(el, 'border:1px solid #6366f1');
+  });
+  document.querySelectorAll('.s4-tts-status,[onclick^="s4Tts"],[onclick*="s4Tts"]').forEach(function(el) {
+    hideV3EditorBlock(el, 'border:1px solid #4c1d95');
+  });
+  document.querySelectorAll('.s4-tts-play-chunk').forEach(function(el) {
+    el.classList.add('v3-hidden-editor-control');
+  });
+}
+var v3BindOpenSignature = '';
+function expandV3BindData() {
+  var s4 = window.APP && window.APP.s4;
+  if (!s4 || !s4.recipeSlotsByIdx) return;
+  var signature = JSON.stringify(Object.keys(s4.recipeSlotsByIdx).map(function(idx) {
+    var data = s4.recipeSlotsByIdx[idx] || {};
+    return [idx, (data.categories || []).map(function(cat) { return cat.name; }).join('|')].join(':');
+  }));
+  var changed = false;
+  Object.keys(s4.recipeSlotsByIdx).forEach(function(idx) {
+    var data = s4.recipeSlotsByIdx[idx] || {};
+    if (!Array.isArray(data.categories) || !data.categories.length) return;
+    var map = s4.openCategoriesByIdx[idx] || {};
+    data.categories.forEach(function(cat) {
+      if (cat && cat.name && map[cat.name] !== true) {
+        map[cat.name] = true;
+        changed = true;
+      }
+    });
+    s4.openCategoriesByIdx[idx] = map;
+  });
+  document.querySelectorAll('[style*="max-height:340px"]').forEach(function(el) {
+    el.style.maxHeight = 'none';
+  });
+  if (changed && signature !== v3BindOpenSignature && typeof window.s4Switch === 'function') {
+    v3BindOpenSignature = signature;
+    window.s4Switch(s4.activeTab || 0);
+  } else {
+    v3BindOpenSignature = signature;
+  }
+}
+function polishV3EmbeddedEditor() {
+  trimV3EditorControls();
+  expandV3BindData();
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var step = document.getElementById('step4');
+  if (step) step.style.display = 'block';
+  if (window.step4Init) window.step4Init();
+  polishV3EmbeddedEditor();
+  setTimeout(polishV3EmbeddedEditor, 250);
+  setTimeout(polishV3EmbeddedEditor, 800);
+  setTimeout(polishV3EmbeddedEditor, 1600);
+  var root = document.getElementById('step4') || document.body;
+  new MutationObserver(polishV3EmbeddedEditor).observe(root, { childList:true, subtree:true });
+});
+</script>
+</body>
+</html>`);
 });
 
 app.get('/case-fetch', (_, res) => {
@@ -1657,6 +1970,107 @@ textarea { min-height: 72px; resize: vertical; line-height: 1.5; }
   gap: 8px;
   margin-top: 12px;
 }
+.quick-panel {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+.preset-grid, .metric-chip-grid, .selected-metric-list {
+  display: grid;
+  gap: 8px;
+}
+.preset-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.preset-grid button {
+  min-height: 38px;
+  padding: 0 8px;
+  background: #12213a;
+  color: #dbeafe;
+  border-color: #1d4ed8;
+  font-size: 12px;
+}
+.metric-filter-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.metric-filter-row button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  background: #0f172a;
+  color: var(--text);
+  border-color: #334155;
+  font-size: 12px;
+}
+.metric-filter-row button.active {
+  background: var(--gold);
+  color: #111827;
+  border-color: var(--gold);
+}
+.metric-chip-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 2px;
+}
+.metric-chip {
+  min-height: 44px;
+  padding: 7px 9px;
+  background: #0a0d12;
+  color: var(--text);
+  border-color: #334155;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.metric-chip.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px rgba(34,197,94,.25) inset;
+  color: #bbf7d0;
+}
+.selected-metric-list {
+  grid-template-columns: 1fr;
+}
+.selected-metric {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0a0d12;
+  padding: 7px;
+}
+.selected-metric b {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.selected-metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 2px;
+}
+.mini-btn {
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 12px;
+  background: #172033;
+  color: var(--text);
+}
+.section-title {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 900;
+}
 .slot-row {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
@@ -1709,6 +2123,17 @@ textarea { min-height: 72px; resize: vertical; line-height: 1.5; }
   .saved-list { max-height: 260px; }
   .category-pills { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .meta-row { grid-template-columns: 1fr; }
+  .editor-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 15;
+    margin: 0 -12px -12px;
+    padding: 8px 12px;
+    background: rgba(17,24,39,.96);
+    border-top: 1px solid var(--line);
+  }
+  .preset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-chip-grid { grid-template-columns: 1fr; max-height: none; }
 }
 </style>
 </head>
@@ -1747,6 +2172,30 @@ var categories = ['選手', 'チーム', '監督', '試合', '移籍'];
 var slideTypes = ['opening', 'stats', 'profile', 'comparison', 'history', 'timeline', 'ranking', 'reaction', 'matchcard', 'picture', 'insight', 'ending'];
 var priorities = ['高', '中', '低'];
 var statuses = ['採用', '採用候補', '要修正', '保留', '削除候補'];
+var metricFilter = 'all';
+var metricFilters = [
+  { key: 'all', label: '全部' },
+  { key: 'player', label: '選手' },
+  { key: 'attack', label: '攻撃' },
+  { key: 'creation', label: '創造' },
+  { key: 'defense', label: '守備' },
+  { key: 'team', label: 'チーム' },
+  { key: 'match', label: '試合' },
+  { key: 'market', label: '市場/契約' },
+  { key: 'wiki', label: 'Wiki' }
+];
+var metricPresets = [
+  { label: '今季基本', category: '選手', slideType: 'stats', slots: ['sofascore.player.apps','sofascore.player.rating','sofascore.player.goals','sofascore.player.assists'] },
+  { label: 'FW/得点型', category: '選手', slideType: 'stats', slots: ['sofascore.player.apps','sofascore.player.goals','sofascore.player.assists','sofascore.player.totalShots','sofascore.player.shotsOnTarget','sofascore.player.xG','sofascore.player.rating'] },
+  { label: 'MF/創造型', category: '選手', slideType: 'stats', slots: ['sofascore.player.apps','sofascore.player.assists','sofascore.player.chancesCreated','sofascore.player.bigChancesCreated','sofascore.player.keyPasses','sofascore.player.passAcc','sofascore.player.rating'] },
+  { label: 'WG/突破型', category: '選手', slideType: 'stats', slots: ['sofascore.player.apps','sofascore.player.successfulDribbles','sofascore.player.chancesCreated','sofascore.player.goals','sofascore.player.assists','sofascore.player.rating'] },
+  { label: 'DF/守備型', category: '選手', slideType: 'stats', slots: ['sofascore.player.apps','sofascore.player.tackles','sofascore.player.interceptions','sofascore.player.clearances','sofascore.player.duelsWon','sofascore.player.passAcc','sofascore.player.rating'] },
+  { label: 'GK型', category: '選手', slideType: 'stats', slots: ['sofascore.player.apps','sofascore.player.saves','sofascore.player.cleanSheets','sofascore.player.rating','sofascore.player.minutes'] },
+  { label: 'プロフィール', category: '選手', slideType: 'profile', slots: ['wiki.person.age','wiki.person.nationality','transfermarkt.player.club','transfermarkt.player.position','transfermarkt.player.marketValue','transfermarkt.player.contractUntil'] },
+  { label: 'チーム今季', category: 'チーム', slideType: 'stats', slots: ['sofascore.team.position','sofascore.team.points','sofascore.team.wins','sofascore.team.draws','sofascore.team.losses','sofascore.team.goalsFor','sofascore.team.goalsAgainst'] },
+  { label: '試合カード', category: '試合', slideType: 'matchcard', slots: ['sofascore.match.homeTeam','sofascore.match.awayTeam','sofascore.match.score','sofascore.match.date','sofascore.match.venue'] },
+  { label: '移籍/価値', category: '移籍', slideType: 'comparison', slots: ['transfermarkt.transfer.fee','transfermarkt.player.marketValue','transfermarkt.player.marketValuePeak','transfermarkt.player.marketValueChange','transfermarkt.player.contractUntil','transfermarkt.player.position'] }
+];
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -1775,6 +2224,26 @@ function slotSource(key) {
   var hit = slotOptions.find(function(item) { return item.key === key; });
   return hit && hit.source ? hit.source : '';
 }
+function slotLabel(key) {
+  var hit = slotOptions.find(function(item) { return item.key === key; });
+  return hit ? (hit.label || hit.key || '未設定') : (key || '未設定');
+}
+function compactSlotLabel(key) {
+  return slotLabel(key).replace(/^SofaScore: /, '').replace(/^Transfermarkt: /, '').replace(/^Wiki: /, '');
+}
+function metricTags(item) {
+  var hay = [item.key, item.label, item.source].join(' ').toLowerCase();
+  var tags = ['all'];
+  if (/player|選手/.test(hay)) tags.push('player');
+  if (/goals|assists|shots|xg|ゴール|アシスト|シュート/.test(hay)) tags.push('attack');
+  if (/chances|keypasses|dribbles|passacc|チャンス|キーパス|ドリブル|パス/.test(hay)) tags.push('creation');
+  if (/tackles|interceptions|clearances|duels|saves|cleansheets|タックル|インターセプト|クリア|デュエル|セーブ|クリーン/.test(hay)) tags.push('defense');
+  if (/team|club|順位|勝点|勝利|引分|敗戦|得点|失点|クラブ/.test(hay)) tags.push('team');
+  if (/match|home|away|score|date|venue|試合|ホーム|アウェイ|スコア|会場/.test(hay)) tags.push('match');
+  if (/transfermarkt|market|contract|fee|agent|市場|契約|移籍|代理人/.test(hay)) tags.push('market');
+  if (/wiki|年齢|国籍|代表|監督|創設|スタジアム/.test(hay)) tags.push('wiki');
+  return tags;
+}
 function normalizeRecipe(recipe) {
   recipe = recipe || {};
   var slots = Array.isArray(recipe.dataSlots) ? recipe.dataSlots : [];
@@ -1785,6 +2254,10 @@ function normalizeRecipe(recipe) {
     slideType: recipe.slideType || 'stats',
     dataSlots: Array.from({ length: 8 }, function(_, i) { return slots[i] || ''; }),
     note: recipe.note || '',
+    aiLabel: recipe.aiLabel || recipe.note || recipe.title || '',
+    useWhen: recipe.useWhen || recipe.note || '',
+    claim: recipe.claim || '',
+    positionFit: recipe.positionFit || '',
     priority: recipe.priority || '中',
     status: recipe.status || '採用候補'
   };
@@ -1810,9 +2283,46 @@ function renderList() {
     return '<button type="button" class="saved-card' + (index === activeIndex ? ' active' : '') + '" onclick="selectRecipe(' + index + ')">' +
       '<span class="pill">' + esc(r.category) + '</span> <span class="pill">' + esc(r.slideType) + '</span>' +
       '<strong>' + esc(title) + '</strong>' +
-      '<small>' + esc(r.id || 'ID未設定') + ' / ' + esc(r.status || '') + '</small>' +
+      '<small>' + esc(r.aiLabel || r.note || 'AIラベル未設定') + '</small>' +
+      '<small>' + esc(r.id || 'ID未設定') + ' / ' + esc(r.status || '') + ' / データ ' + r.dataSlots.filter(Boolean).length + '件</small>' +
       '</button>';
   }).join('');
+}
+function renderPresetButtons() {
+  return '<div class="preset-grid">' + metricPresets.map(function(preset, index) {
+    return '<button type="button" onclick="applyPreset(' + index + ')">' + esc(preset.label) + '</button>';
+  }).join('') + '</div>';
+}
+function renderMetricFilters() {
+  return '<div class="metric-filter-row">' + metricFilters.map(function(filter) {
+    return '<button type="button" class="' + (metricFilter === filter.key ? 'active' : '') + '" onclick="setMetricFilter(\\'' + esc(filter.key) + '\\')">' + esc(filter.label) + '</button>';
+  }).join('') + '</div>';
+}
+function renderMetricChips(recipe) {
+  var selected = new Set((recipe.dataSlots || []).filter(Boolean));
+  var items = slotOptions
+    .filter(function(item) { return item.key; })
+    .filter(function(item) { return metricFilter === 'all' || metricTags(item).includes(metricFilter); });
+  return '<div class="metric-chip-grid">' + items.map(function(item) {
+    var isSelected = selected.has(item.key);
+    return '<button type="button" class="metric-chip' + (isSelected ? ' selected' : '') + '" onclick="toggleMetric(\\'' + esc(item.key) + '\\')">' +
+      '<b>' + esc(compactSlotLabel(item.key)) + '</b><br><small>' + esc(item.source || '') + '</small>' +
+    '</button>';
+  }).join('') + '</div>';
+}
+function renderSelectedMetrics(recipe) {
+  var slots = (recipe.dataSlots || []).filter(Boolean);
+  if (!slots.length) return '<div class="editor-empty">まだデータ未選択。プリセットか下のチップから選んでね。</div>';
+  return '<div class="selected-metric-list">' + slots.map(function(key, index) {
+    return '<div class="selected-metric">' +
+      '<span class="slot-no" style="width:28px;height:32px;">' + (index + 1) + '</span>' +
+      '<div><b>' + esc(compactSlotLabel(key)) + '</b><small>' + esc(key) + '</small></div>' +
+      '<div style="display:flex;gap:4px;">' +
+        '<button type="button" class="mini-btn" onclick="moveMetric(' + index + ', -1)">↑</button>' +
+        '<button type="button" class="mini-btn danger" onclick="removeMetric(' + index + ')">×</button>' +
+      '</div>' +
+    '</div>';
+  }).join('') + '</div>';
 }
 function renderEditor() {
   var editor = document.getElementById('editor');
@@ -1836,9 +2346,20 @@ function renderEditor() {
     '<label>カテゴリ</label>' +
     '<div class="category-pills">' + categoryButtons + '</div>' +
     '<label>タイトル<input value="' + esc(r.title) + '" oninput="setField(\\'title\\', this.value)" placeholder="例: 今期成績"></label>' +
+    '<label>AIラベル<textarea oninput="setField(\\'aiLabel\\', this.value)" placeholder="AIが一瞬でわかる説明。例: 今季の出場・評価・得点関与で、選手の現在地を数字で説明する">' + esc(r.aiLabel) + '</textarea></label>' +
+    '<label>使う場面<textarea oninput="setField(\\'useWhen\\', this.value)" placeholder="例: 今季評価、移籍先フィット、代表選考、復活/衰えを語るとき">' + esc(r.useWhen) + '</textarea></label>' +
+    '<label>このレシピが述べること<textarea oninput="setField(\\'claim\\', this.value)" placeholder="例: ただの印象ではなく、出場数・平均評価・得点関与で現在の価値を示す">' + esc(r.claim) + '</textarea></label>' +
+    '<label>ポジション適性<input value="' + esc(r.positionFit) + '" oninput="setField(\\'positionFit\\', this.value)" placeholder="例: FW/WG/AM向け、CB/SB向け、GK向け"></label>' +
     '<label>スライド型<select onchange="setField(\\'slideType\\', this.value)">' + optionHtml(slideTypes, r.slideType) + '</select></label>' +
-    '<label>データスロット</label>' +
+    '<div class="section-title"><span>データ選択</span><button type="button" class="secondary mini-btn" onclick="clearMetrics()">クリア</button></div>' +
+    '<div class="quick-panel">' +
+      '<div><label style="margin-top:0;">プリセット</label>' + renderPresetButtons() + '</div>' +
+      '<div><label>選択済みデータ（順番も保存）</label>' + renderSelectedMetrics(r) + '</div>' +
+      '<div><label>データ候補</label>' + renderMetricFilters() + renderMetricChips(r) + '</div>' +
+    '</div>' +
+    '<details style="margin-top:12px;"><summary class="section-title" style="cursor:pointer;">詳細: 8枠プルダウンで微調整</summary>' +
     '<div class="slot-list">' + slotRows + '</div>' +
+    '</details>' +
     '<div class="meta-row">' +
       '<label>レシピID<input value="' + esc(r.id) + '" oninput="setField(\\'id\\', this.value)" placeholder="PLAYER_SEASON_CURRENT"></label>' +
       '<label>優先度<select onchange="setField(\\'priority\\', this.value)">' + optionHtml(priorities, r.priority) + '</select></label>' +
@@ -1869,6 +2390,67 @@ function setSlot(el) {
   r.dataSlots[slotIndex] = el.value;
   renderEditor();
 }
+function compactSlots(slots) {
+  return Array.from(new Set((slots || []).filter(Boolean))).slice(0, 8);
+}
+function setMetricFilter(filter) {
+  metricFilter = filter || 'all';
+  renderEditor();
+}
+function toggleMetric(key) {
+  var r = currentRecipe();
+  if (!r || !key) return;
+  var slots = compactSlots(r.dataSlots);
+  if (slots.includes(key)) {
+    slots = slots.filter(function(x) { return x !== key; });
+  } else if (slots.length < 8) {
+    slots.push(key);
+  } else {
+    setStatus('データは最大8件まで。不要なものを外してね。', false);
+    return;
+  }
+  r.dataSlots = Array.from({ length: 8 }, function(_, i) { return slots[i] || ''; });
+  renderEditor();
+}
+function removeMetric(index) {
+  var r = currentRecipe();
+  if (!r) return;
+  var slots = compactSlots(r.dataSlots);
+  slots.splice(index, 1);
+  r.dataSlots = Array.from({ length: 8 }, function(_, i) { return slots[i] || ''; });
+  renderEditor();
+}
+function moveMetric(index, delta) {
+  var r = currentRecipe();
+  if (!r) return;
+  var slots = compactSlots(r.dataSlots);
+  var next = index + delta;
+  if (next < 0 || next >= slots.length) return;
+  var tmp = slots[index];
+  slots[index] = slots[next];
+  slots[next] = tmp;
+  r.dataSlots = Array.from({ length: 8 }, function(_, i) { return slots[i] || ''; });
+  renderEditor();
+}
+function clearMetrics() {
+  var r = currentRecipe();
+  if (!r) return;
+  r.dataSlots = Array(8).fill('');
+  renderEditor();
+}
+function applyPreset(index) {
+  var r = currentRecipe();
+  var preset = metricPresets[index];
+  if (!r || !preset) return;
+  r.category = preset.category || r.category;
+  r.slideType = preset.slideType || r.slideType;
+  r.dataSlots = Array.from({ length: 8 }, function(_, i) { return preset.slots[i] || ''; });
+  if (!r.title) r.title = preset.label;
+  if (!r.aiLabel) r.aiLabel = preset.label + 'を説明するデータセット';
+  if (!r.useWhen) r.useWhen = preset.label + 'を扱うスライドで使う';
+  renderAll();
+  setStatus('プリセット適用: ' + preset.label, true);
+}
 function newRecipe() {
   recipes.unshift(normalizeRecipe({
     category: '選手',
@@ -1876,6 +2458,10 @@ function newRecipe() {
     title: '',
     slideType: 'stats',
     dataSlots: Array(8).fill(''),
+    aiLabel: '',
+    useWhen: '',
+    claim: '',
+    positionFit: '',
     priority: '中',
     status: '採用候補'
   }));
@@ -2536,9 +3122,12 @@ button:disabled { opacity: .55; cursor: wait; }
 .step5-layout { display: grid; grid-template-columns: 55fr 45fr; gap: 12px; margin-top: 8px; }
 .step5-left { display: flex; flex-direction: column; gap: 10px; }
 .step5-right { display: flex; flex-direction: column; gap: 10px; }
+.step5-left .panel:has(#v3TtsProvider) { display: none; }
 .slot-edit-row { display: grid; grid-template-columns: 1fr 1.6fr; gap: 6px; align-items: center; margin-bottom: 5px; }
 .slot-edit-label { font-size: 12px; color: var(--muted); padding: 5px 8px; background: #0a0d12; border: 1px solid var(--line); border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gallery-search-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-bottom: 8px; }
+.gallery-search-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 6px; margin-bottom: 8px; }
+.stock-chest { font-size: 18px; cursor: grab; padding: 3px 6px; border-radius: 4px; border: 2px dashed var(--line); transition: border-color .15s, background .15s; user-select: none; }
+.stock-chest.drag-over { border-color: var(--gold); background: rgba(212,175,55,.15); }
 .stock-img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 5px; max-height: 140px; overflow-y: auto; }
 .stock-img-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; border: 2px solid transparent; cursor: pointer; background: #0a0d12; }
 .stock-img-thumb:hover { border-color: var(--muted); }
@@ -3056,7 +3645,7 @@ body.drawer-is-open #sidebarOverlay {
       <span class="version-badge">${UI_VERSION}</span>
     </div>
   </div>
-  <div class="tag"><a href="/recipes" style="color:var(--gold);font-weight:900;text-decoration:none;margin-right:12px;">Recipe Launcher</a> V2 preserved / argumentPlan prototype / port ${PORT}</div>
+  <div class="tag">V2 preserved / argumentPlan prototype / port ${PORT}</div>
 </header>
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <nav class="view-tabs" id="stepTabs">
@@ -3114,6 +3703,8 @@ let selectedCaseIds = new Set();
 let activeSlideIdx = 0;
 let imageSelections = {};
 let activeView = 'case';
+let v2EditorEmbedLoading = false;
+let v2EditorEmbedKey = '';
 const V3_STATE_KEY = 'v3_launcher_working_state';
 let stepStatus = {
   case: false,
@@ -3735,13 +4326,17 @@ async function pollV3VideoStatus(postId) {
       // 動画プレイヤー表示
       const resultEl = document.getElementById('v3VideoResult');
       if (resultEl) {
-        const videoUrl = '/v2_videos/' + encodeURIComponent(postId) + '.mp4';
+        const videoUrl = st.outputVideo
+          ? '/' + String(st.outputVideo).replace(/^\\/+/, '')
+          : '';
         resultEl.innerHTML =
           '<div class="panel">' +
             '<label class="label" style="margin-bottom:8px;">完成動画</label>' +
-            '<video controls style="width:100%;border-radius:6px;background:#000;" src="' + esc(videoUrl) + '"></video>' +
+            (videoUrl
+              ? '<video controls style="width:100%;border-radius:6px;background:#000;" src="' + esc(videoUrl) + '"></video>'
+              : '<div class="task-status">動画は生成済みです。ファイル一覧を再読込してください。</div>') +
             '<div class="task-actions" style="margin-top:8px;">' +
-              '<a href="' + esc(videoUrl) + '" download class="button" style="display:inline-flex;align-items:center;padding:8px 14px;background:var(--gold);color:#111827;border-radius:6px;font-weight:900;text-decoration:none;">ダウンロード</a>' +
+              (videoUrl ? '<a href="' + esc(videoUrl) + '" download class="button" style="display:inline-flex;align-items:center;padding:8px 14px;background:var(--gold);color:#111827;border-radius:6px;font-weight:900;text-decoration:none;">ダウンロード</a>' : '') +
             '</div>' +
           '</div>';
       }
@@ -3775,9 +4370,41 @@ function renderV3StockGallery(images) {
   if (!grid) return;
   if (!images.length) { grid.innerHTML = '<span style="color:var(--muted);font-size:12px;">画像なし</span>'; return; }
   const selectedImgs = Array.isArray(currentPlan?.v3Modules?.[activeSlideIdx]?.images) ? currentPlan.v3Modules[activeSlideIdx].images : [];
-  grid.innerHTML = images.map((img) =>
-    '<img class="stock-img-thumb' + (selectedImgs.includes(img.url) ? ' selected' : '') + '" src="' + esc(img.url) + '" title="' + esc((img.name || img.role || '') + ' (' + (img.score || 0) + ')') + '" onclick="toggleV3Image(\\'' + esc(img.url).replace(/'/g, '&#39;') + '\\')" loading="lazy">'
-  ).join('');
+  grid.innerHTML = images.map((img) => {
+    const url   = img.url || img;
+    const title = img.title || img.name || img.role || '';
+    const score = img.score || 0;
+    const src   = img.source || 'stock';
+    const badge = src === 'wikimedia' ? 'W' : src === 'official_x' ? 'X' : '';
+    const tip   = esc((badge ? '[' + badge + '] ' : '') + title + (score ? ' (' + score + ')' : ''));
+    const safeUrl = esc(url).replace(/'/g, '&#39;');
+    return '<img class="stock-img-thumb' + (selectedImgs.includes(url) ? ' selected' : '') + '" src="' + esc(url) + '" title="' + tip + '" draggable="true" ondragstart="onDragStartImg(event,\\'' + safeUrl + '\\')" onclick="toggleV3Image(\\'' + safeUrl + '\\')" loading="lazy">';
+  }).join('');
+}
+
+function onDragStartImg(event, url) {
+  event.dataTransfer.setData('text/plain', url);
+  event.dataTransfer.effectAllowed = 'copy';
+}
+
+async function onDropToChest(event) {
+  event.preventDefault();
+  const chest = document.getElementById('v3StockChest');
+  if (chest) chest.classList.remove('drag-over');
+  const url = event.dataTransfer.getData('text/plain');
+  if (!url) return;
+  try {
+    const res  = await fetch('/api/v3/boost-image-score', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageUrl: url }) });
+    const data = await res.json();
+    if (data.ok) {
+      if (chest) { chest.textContent = '✨'; setTimeout(() => { chest.textContent = '🪙'; }, 1200); }
+      console.log('[chest] スコア更新:', url, '→', data.newScore, '点');
+    } else {
+      console.warn('[chest] 失敗:', data.error);
+    }
+  } catch (e) {
+    console.warn('[chest] エラー:', e.message);
+  }
 }
 
 async function runAIScriptGeneration() {
@@ -3816,6 +4443,7 @@ async function runAIScriptGeneration() {
         ...m,
         narration: ai.narration || m.narration || '',
         images,
+        imageCandidates: ai.imageCandidates || m.imageCandidates || [],
         v3Meta: {
           ...(m.v3Meta || {}),
           imageInstruction: ai.imageInstruction || m.v3Meta?.imageInstruction,
@@ -3823,6 +4451,12 @@ async function runAIScriptGeneration() {
         },
       };
     });
+    // 全スライドの画像候補を1つの共有ギャラリーに集約（URL重複除去）
+    const _seen = new Set();
+    currentPlan.sharedImagePool = (currentPlan.v3Modules || [])
+      .flatMap(m => m.imageCandidates || [])
+      .filter(c => { if (!c.url || _seen.has(c.url)) return false; _seen.add(c.url); return true; });
+
     currentPlan.autopilotPlan.scriptDraft = currentPlan.v3Modules.map((m, i) => {
       const ai = aiSlides.find((s) => s.no === (i + 1)) || aiSlides[i] || {};
       return {
@@ -4145,6 +4779,110 @@ async function exportToV2() {
   }
 }
 
+async function saveV3ToV2EditorProject() {
+  if (!currentPlan) await generatePlan({ scroll: false });
+  collectV3SlideInputs();
+  const existingPostId = currentPlan.v2EditorPostId || selectedProject?.v2EditorPostId || '';
+  const res = await fetch('/api/v3/export-v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      plan: currentPlan,
+      postId: existingPostId,
+      sourceType: document.getElementById('sourceType').value,
+      memo: document.getElementById('memo').value,
+      imageSelections,
+      fetchedData: currentFetchedData || [],
+      acquiredData: currentAcquiredData || null,
+      research: currentResearch || null,
+      selectedProject,
+    }),
+  });
+  const data = await res.json();
+  if (!data.success) throw new Error(data.error || 'export failed');
+  currentPlan.v2EditorPostId = data.postId;
+  if (selectedProject) selectedProject.v2EditorPostId = data.postId;
+  markStepDone('export');
+  persistV3State();
+  return data;
+}
+
+async function openV2EditorFromV3(opts = {}) {
+  const btn = document.getElementById('v2EditorBtn');
+  const primaryBtn = document.getElementById('v2EditorBtnPrimary');
+  const original = btn ? btn.textContent : '';
+  const primaryOriginal = primaryBtn ? primaryBtn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'V2編集準備中...'; }
+  if (primaryBtn) { primaryBtn.disabled = true; primaryBtn.textContent = 'V2編集準備中...'; }
+  try {
+    const data = await saveV3ToV2EditorProject();
+    window.location.href = data.editorUrl || ('/v3-editor?postId=' + encodeURIComponent(data.postId));
+  } catch (error) {
+    if (opts.auto) {
+      const status = document.getElementById('v2EditorAutoStatus') || document.getElementById('aiScriptStatus');
+      if (status) status.textContent = 'V2級編集モードの自動起動に失敗しました: ' + error.message;
+    } else {
+      alert('V2級編集を開けませんでした: ' + error.message);
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original || 'V2級編集で開く'; }
+    if (primaryBtn) { primaryBtn.disabled = false; primaryBtn.textContent = primaryOriginal || 'V2級編集を開く'; }
+  }
+}
+
+async function loadV2EditorIntoV3(opts = {}) {
+  const frame = document.getElementById('v3EmbeddedV2Editor');
+  const status = document.getElementById('v3EmbeddedV2Status') || document.getElementById('v2EditorAutoStatus') || document.getElementById('aiScriptStatus');
+  const btn = document.getElementById('v2EditorBtnPrimary') || document.getElementById('v2EditorBtn');
+  const original = btn ? btn.textContent : '';
+  if (!frame) {
+    return openV2EditorFromV3(opts);
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'V2級編集を準備中...'; }
+  if (status) status.textContent = 'V3内にV2級編集機能を読み込み中...';
+  try {
+    const data = await saveV3ToV2EditorProject();
+    const url = (data.editorUrl || ('/v3-editor?postId=' + encodeURIComponent(data.postId))) + '&embedded=1';
+    frame.src = url;
+    frame.style.display = 'block';
+    const link = document.getElementById('v3EmbeddedV2Separate');
+    if (link) link.href = data.editorUrl || url;
+    if (status) status.textContent = 'V3内蔵のV2級編集機能を読み込みました。';
+  } catch (error) {
+    if (status) status.textContent = 'V2級編集機能の読み込みに失敗しました: ' + error.message;
+    if (!opts.auto) alert('V2級編集機能を読み込めませんでした: ' + error.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original || 'V2級編集を読み込む'; }
+  }
+}
+
+function getV3EditableSlideCount(plan) {
+  const modules = Array.isArray(plan?.v3Modules) ? plan.v3Modules.length : 0;
+  const draft = Array.isArray(plan?.autopilotPlan?.scriptDraft) ? plan.autopilotPlan.scriptDraft.length : 0;
+  return modules || draft;
+}
+
+function maybeLoadV2EditorInV3() {
+  if (activeView !== 'script' || v2EditorEmbedLoading || !getV3EditableSlideCount(currentPlan)) return;
+  if (!document.getElementById('v3EmbeddedV2Editor')) return;
+  const key = [
+    currentPlan?.v2EditorPostId || '',
+    selectedProject?.id || '',
+    currentPlan?.topic || '',
+    getV3EditableSlideCount(currentPlan),
+  ].join('|');
+  if (v2EditorEmbedKey === key) return;
+  v2EditorEmbedKey = key;
+  v2EditorEmbedLoading = true;
+  setTimeout(async function() {
+    try {
+      await loadV2EditorIntoV3({ auto: true });
+    } finally {
+      v2EditorEmbedLoading = false;
+    }
+  }, 120);
+}
+
 function buildMergedAutopilotPlan(base, aiPlan) {
   if (!aiPlan) return base;
   const selectedIdx = aiPlan.themeProposal?.selected || 0;
@@ -4158,6 +4896,7 @@ function buildMergedAutopilotPlan(base, aiPlan) {
       hookQuestion: selectedCandidate.hookQuestion || '',
       answer: selectedCandidate.answer || '',
       angle: selectedCandidate.angle || '',
+      storyPattern: selectedCandidate.storyPattern || '',
       candidates: aiPlan.themeProposal?.candidates || [],
       selected: selectedIdx,
       selectedReason: aiPlan.themeProposal?.selectedReason || '',
@@ -4168,6 +4907,7 @@ function buildMergedAutopilotPlan(base, aiPlan) {
       ...base?.briefing,
       purpose: aiPlan.briefing?.purpose || '',
       coreMessage: aiPlan.briefing?.coreMessage || '',
+      storyPattern: selectedCandidate.storyPattern || aiPlan.briefing?.storyPattern || '',
       chapters: aiPlan.briefing?.chapters || [],
       slideOutline: selectedCandidate.slideOutline || aiPlan.briefing?.slideOutline || [],
       videoLengthType: selectedCandidate.videoLengthType || '',
@@ -4251,9 +4991,11 @@ function selectThemeCandidate(index) {
   proposal.hookQuestion = selected.hookQuestion || proposal.hookQuestion || '';
   proposal.answer = selected.answer || proposal.answer || '';
   proposal.angle = selected.angle || proposal.angle || '';
+  proposal.storyPattern = selected.storyPattern || proposal.storyPattern || '';
   proposal.dataPlan = (selected.dataNeeds || []).map((need, i) => ({ no: i + 1, need }));
   const briefing = currentPlan.autopilotPlan.briefing || (currentPlan.autopilotPlan.briefing = {});
   if (Array.isArray(selected.slideOutline) && selected.slideOutline.length) briefing.slideOutline = selected.slideOutline;
+  briefing.storyPattern = selected.storyPattern || briefing.storyPattern || '';
   briefing.videoLengthType = selected.videoLengthType || briefing.videoLengthType || '';
   briefing.targetMinutes = selected.targetMinutes || briefing.targetMinutes || '';
   activeView = 'proposal';
@@ -4319,7 +5061,10 @@ function renderPlan(plan) {
   });
   syncProxyInputs();
   persistV3State();
-  if (activeView === 'script') setTimeout(() => reloadV3Preview(), 50);
+  if (activeView === 'script') {
+    setTimeout(() => reloadV3Preview(), 50);
+    maybeLoadV2EditorInV3();
+  }
 }
 
 function syncProxyInputs() {
@@ -4363,8 +5108,16 @@ function setResultView(view) {
   if (view === 'script') {
     // ③ TTS ボイス一覧読み込み
     setTimeout(loadV3TtsVoices, 100);
-    // ⑤ 画像ギャラリー自動検索
-    setTimeout(() => { const inp = document.getElementById('v3ImgSearchInput'); if (inp?.value) searchV3StockImages(); }, 200);
+    // ⑤ 画像ギャラリー: AI割当候補があればそのまま表示、なければ検索
+    setTimeout(() => {
+      const pool = currentPlan?.sharedImagePool;
+      if (Array.isArray(pool) && pool.length) {
+        renderV3StockGallery(pool);
+      } else {
+        const inp = document.getElementById('v3ImgSearchInput');
+        if (inp?.value) searchV3StockImages();
+      }
+    }, 200);
   }
 }
 
@@ -4404,6 +5157,9 @@ function renderScriptView(plan) {
         '<div id="aiScriptStatus" class="task-status" style="margin-top:10px;"></div>' +
       '</div>';
   }
+
+  return caseBanner +
+    '<iframe id="v3EmbeddedV2Editor" title="V3内蔵 V2級編集機能" style="display:block;width:100%;height:calc(100vh - 130px);min-height:780px;border:1px solid var(--line);border-radius:8px;background:#0b0d12;"></iframe>';
 
   const total = slides.length;
   const active = Math.max(0, Math.min(activeSlideIdx, total - 1));
@@ -4457,11 +5213,24 @@ function renderScriptView(plan) {
 
   const initQ = esc((plan.topic || title || '').split(/[\s「」【】]/)[0] || '');
 
+  const v2EditorLead =
+    '<div class="panel" style="border-color:var(--gold);background:#14110a;margin-bottom:10px;">' +
+      '<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' +
+        '<div style="min-width:220px;flex:1;">' +
+          '<div style="font-weight:900;color:var(--gold);font-size:14px;margin-bottom:3px;">V2級編集モード</div>' +
+          '<div style="font-size:12px;color:var(--muted);line-height:1.5;">画像調整・数値編集・プレビュー確認までV2ベースで編集できます。個別TTS試聴とスライドおまかせAIはV3側では非表示にしています。</div>' +
+        '</div>' +
+        '<button id="v2EditorBtnPrimary" onclick="openV2EditorFromV3()" style="font-size:13px;padding:8px 14px;">V2級編集を開く</button>' +
+      '</div>' +
+    '</div>';
+
   return caseBanner +
+    v2EditorLead +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
       '<span class="label" style="margin:0;">スライド編集 — ' + (active + 1) + ' / ' + total + '</span>' +
       '<div style="display:flex;gap:6px;">' +
         '<button id="aiScriptBtn" class="secondary" onclick="runAIScriptGeneration()" style="font-size:12px;padding:5px 10px;">AI脚本再生成</button>' +
+        '<button id="v2EditorBtn" class="secondary" onclick="openV2EditorFromV3()" style="font-size:12px;padding:5px 10px;">V2級編集で開く</button>' +
         '<button onclick="setResultView(\\'export\\')" style="font-size:12px;padding:5px 10px;">動画生成へ →</button>' +
       '</div>' +
     '</div>' +
@@ -4538,6 +5307,7 @@ function renderScriptView(plan) {
             ['player','team','manager'].map((t) => '<option value="' + t + '">' + t + '</option>').join('') +
           '</select>' +
           '<button class="secondary" onclick="searchV3StockImages()" style="padding:5px 8px;">検索</button>' +
+          '<div id="v3StockChest" class="stock-chest" title="ここにドロップ → 最高スコア+1で永続保存" ondragover="event.preventDefault();this.classList.add(\\'drag-over\\')" ondragleave="this.classList.remove(\\'drag-over\\')" ondrop="onDropToChest(event)">🪙</div>' +
         '</div>' +
         '<div id="v3StockImgGrid" class="stock-img-grid"><span style="color:var(--muted);font-size:12px;">検索中...</span></div>' +
         (selectedImgHtml ? '<label class="label" style="margin-top:8px;margin-bottom:4px;">選択中（クリックで解除）</label><div style="display:flex;gap:5px;flex-wrap:wrap;">' + selectedImgHtml + '</div>' : '') +
@@ -4551,8 +5321,8 @@ function renderPipelineSteps() {
   const steps = [
     ['1', '案件', '入力または保存案件を選ぶ'],
     ['2', '保存済み', '過去案件を再開'],
-    ['3', '企画提案', 'リサーチ→AI分析→複数案'],
-    ['4', '企画書', 'テーマ・流れ・スライド構成'],
+    ['3', '企画提案', 'リサーチ→スライド型つき複数案'],
+    ['4', '企画書', 'テーマ・流れ・スライド型ラフ'],
     ['5', '脚本生成', 'ナレーションとプレビュー確認'],
     ['6', '動画生成', 'ナレーション確認後にレンダリング'],
   ];
@@ -4661,10 +5431,15 @@ function switchV3ScriptSlide(index) {
   activeSlideIdx = index;
   activeView = 'script';
   renderPlan(currentPlan);
-  // ⑤ 画像ギャラリー自動検索
+  // ⑤ 画像ギャラリー: AI割当候補があればそのまま表示、なければ検索
   setTimeout(() => {
-    const inp = document.getElementById('v3ImgSearchInput');
-    if (inp?.value) searchV3StockImages();
+    const m = currentPlan?.v3Modules?.[activeSlideIdx];
+    if (Array.isArray(m?.imageCandidates) && m.imageCandidates.length) {
+      renderV3StockGallery(m.imageCandidates);
+    } else {
+      const inp = document.getElementById('v3ImgSearchInput');
+      if (inp?.value) searchV3StockImages();
+    }
   }, 80);
 }
 
@@ -5084,6 +5859,24 @@ function renderAcquiredDataView() {
 }
 
 
+function fallbackCandidateSlideOutline(topic, count) {
+  const base = [
+    { slideType: 'opening', headline: '何が起きたのか', point: topic + 'の違和感を冒頭で提示する。', dataNeeds: [] },
+    { slideType: 'simple', headline: 'ニュース概要', point: '確認できた事実を短く整理する。', dataNeeds: [] },
+    { slideType: 'insight', headline: 'なぜ重要なのか', point: 'この話題が視聴者に関係する理由を説明する。', dataNeeds: [] },
+    { slideType: 'stats', headline: '数字で確認', point: '取得済みデータで主張を補強する。', dataNeeds: [] },
+    { slideType: 'history', headline: '背景と経緯', point: '過去の流れや人間ドラマを足して文脈を作る。', dataNeeds: [] },
+    { slideType: 'reaction', headline: '海外反応', point: 'Redditや海外ファンの反応で温度感を入れる。', dataNeeds: [] },
+    { slideType: 'insight', headline: '最終論点', point: 'ここまでの材料を一つの見方にまとめる。', dataNeeds: [] },
+    { slideType: 'ending', headline: '結論', point: '冒頭の問いに答え、コメントしたくなる形で締める。', dataNeeds: [] },
+  ];
+  return base.slice(0, Math.max(4, Math.min(count || 6, base.length))).map((item, index, arr) => ({
+    ...item,
+    no: index + 1,
+    slideType: index === 0 ? 'opening' : (index === arr.length - 1 ? 'ending' : item.slideType),
+  }));
+}
+
 function fallbackProposalCandidates(plan, defaultNeeds) {
   const topic = plan.topic || document.getElementById('title')?.value || 'この案件';
   return [
@@ -5091,6 +5884,7 @@ function fallbackProposalCandidates(plan, defaultNeeds) {
       angle: topic + ' の背景を分解する',
       hookQuestion: topic + ' の本質は何か？',
       answer: '取得データをもとに、表面的な見方を超えた背景と構造を説明する。',
+      storyPattern: 'ニュース解説型',
       dataNeeds: defaultNeeds,
       risk: '事実確認・数字の出典を固定する。',
     },
@@ -5098,6 +5892,7 @@ function fallbackProposalCandidates(plan, defaultNeeds) {
       angle: 'データで見る ' + topic,
       hookQuestion: topic + '、数字は何を示しているか？',
       answer: 'スタッツと文脈を組み合わせ、なぜこの結果が起きたかを具体的に示す。',
+      storyPattern: 'データ検証型',
       dataNeeds: defaultNeeds,
       risk: '統計の前提・対象期間を明示する。',
     },
@@ -5105,6 +5900,7 @@ function fallbackProposalCandidates(plan, defaultNeeds) {
       angle: topic + ' の今後を読む',
       hookQuestion: topic + ' から、何が変わるのか？',
       answer: '過去のデータと現状分析を軸に、今後への影響を視聴者に分かりやすく伝える。',
+      storyPattern: '選手深掘り型',
       dataNeeds: defaultNeeds,
       risk: '将来予測は推測と明示する。',
     },
@@ -5114,7 +5910,7 @@ function fallbackProposalCandidates(plan, defaultNeeds) {
       { videoLengthType: 'standard', targetMinutes: '3-4', recommendedSlideCount: 6 },
       { videoLengthType: 'long', targetMinutes: '5-6', recommendedSlideCount: 8 },
     ][index] || {};
-    return { ...item, ...meta, title: topic };
+    return { ...item, ...meta, title: topic, slideOutline: fallbackCandidateSlideOutline(topic, meta.recommendedSlideCount) };
   });
 }
 
@@ -5163,6 +5959,7 @@ function renderProposalPapers(plan) {
         const hook = c.hookQuestion || c.hook || plan.centralQuestion || plan.topic || 'この話題の本質は何か？';
         const answer = c.answer || briefing.coreMessage || plan.thesis || '取得データをもとに仮説を検証する。';
         const lengthText = (c.videoLengthType || 'standard') + ' / ' + (c.targetMinutes || '3-4') + '分 / ' + (c.recommendedSlideCount || (Array.isArray(c.slideOutline) ? c.slideOutline.length : 6)) + '枚目安';
+        const storyPattern = c.storyPattern || briefing.storyPattern || proposal.storyPattern || 'ニュース解説型';
         if (!isSelected) {
           return '<div class="briefing-paper briefing-paper--compact">' +
             '<h2>企画書' + letter + '</h2>' +
@@ -5171,6 +5968,7 @@ function renderProposalPapers(plan) {
             '<div class="proposal-meta-grid">' +
               '<div><span class="label">切り口</span><p>' + esc(angle) + '</p></div>' +
               '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
+              '<div><span class="label">構成タイプ</span><p>' + esc(storyPattern) + '</p></div>' +
               '<div><span class="label">尺 / 枚数</span><p>' + esc(lengthText) + '</p></div>' +
             '</div>' +
             (c.risk ? '<p style="color:#fca5a5;font-size:12px;margin-top:6px;">⚠ ' + esc(c.risk) + '</p>' : '') +
@@ -5189,6 +5987,7 @@ function renderProposalPapers(plan) {
           '<div class="proposal-meta-grid">' +
             '<div><span class="label">切り口</span><p>' + esc(angle) + '</p></div>' +
             '<div><span class="label">仮の答え</span><p>' + esc(answer) + '</p></div>' +
+            '<div><span class="label">構成タイプ</span><p>' + esc(storyPattern) + '</p></div>' +
             '<div><span class="label">尺 / 枚数</span><p>' + esc(lengthText) + '</p></div>' +
           '</div>' +
           '<hr class="proposal-divider">' +
@@ -5286,9 +6085,13 @@ function formatBriefingText(plan) {
   const dataPlan = briefing.dataPlan || [];
   const slideOutline = briefing.slideOutline || buildBriefingSlideOutline(plan);
   const risks = briefing.riskChecklist || [];
+  const storyPattern = briefing.storyPattern || selected.storyPattern || proposal.storyPattern || '';
   const blocks = [
     '【動画のテーマ】',
     selected.angle || proposal.angle || plan.topic || '',
+    '',
+    '【構成タイプ】',
+    storyPattern,
     '',
     '【動画の約束】',
     briefing.purpose || plan.viewerPromise || '',
@@ -5302,7 +6105,8 @@ function formatBriefingText(plan) {
     '【スライド構成】',
     slideOutline.map((item) => {
       const data = (item.dataNeeds || []).length ? ' / データ: ' + item.dataNeeds.join('、') : '';
-      return (item.no || '') + '. [' + (item.slideType || 'insight') + '] ' + (item.headline || '') + ' - ' + (item.point || '') + data;
+      const check = item.productionCheck ? ' / 確認: ' + item.productionCheck : '';
+      return (item.no || '') + '. [' + (item.slideType || 'insight') + '] ' + (item.headline || '') + ' - ' + (item.point || '') + data + check;
     }).join('\\n') || '',
     '',
     '【使うデータ】',
@@ -5323,7 +6127,7 @@ function formatBriefingText(plan) {
     const m = generated.match(new RegExp('【' + name + '】([\\\\s\\\\S]*?)(?=\\\\n【|$)'));
     return m ? '【' + name + '】\\n' + m[1].trim() : '';
   };
-  const missingSections = ['動画のテーマ', 'スライド構成', '脚本指示']
+  const missingSections = ['動画のテーマ', '構成タイプ', 'スライド構成', '脚本指示']
     .filter((name) => !hasSection(raw, name))
     .map(sectionText)
     .filter(Boolean);
@@ -5368,6 +6172,7 @@ function updateBriefingFromEditor() {
     return m ? m[1].replace(/^\\r?\\n/, '').trim() : '';
   };
   briefing.theme = section('動画のテーマ') || briefing.theme || '';
+  briefing.storyPattern = section('構成タイプ') || briefing.storyPattern || '';
   briefing.purpose = section('動画の約束') || briefing.purpose || '';
   briefing.coreMessage = section('中心メッセージ') || briefing.coreMessage || '';
   const flow = section('全体の流れ');
@@ -5397,16 +6202,20 @@ function updateBriefingFromEditor() {
         const headline = dashIdx >= 0 ? body.slice(0, dashIdx).trim() : body;
         const rest = dashIdx >= 0 ? body.slice(dashIdx + 3).trim() : '';
         const dataMarker = rest.indexOf(' / データ:');
-        const point = dataMarker >= 0 ? rest.slice(0, dataMarker).trim() : rest;
+        const checkMarker = rest.indexOf(' / 確認:');
+        const firstMarker = [dataMarker, checkMarker].filter((x) => x >= 0).sort((a, b) => a - b)[0];
+        const point = firstMarker >= 0 ? rest.slice(0, firstMarker).trim() : rest;
         const dataNeeds = dataMarker >= 0
-          ? rest.slice(dataMarker + 7).split(/[、,]/).map(x => x.trim()).filter(Boolean)
+          ? rest.slice(dataMarker + 7, checkMarker >= 0 ? checkMarker : undefined).split(/[、,]/).map(x => x.trim()).filter(Boolean)
           : [];
+        const productionCheck = checkMarker >= 0 ? rest.slice(checkMarker + 6).trim() : '';
         return {
           no: m ? Number(m[1]) : i + 1,
           slideType: (m && m[2]) || '',
           headline: headline || ('Slide ' + (i + 1)),
           point,
           dataNeeds,
+          productionCheck,
         };
       });
     }
@@ -5434,6 +6243,13 @@ function chooseV3ModuleType(item, index, total, needs) {
   if (/profile|人物|選手|監督|プロフィール|経歴|年齢|所属|クラブ/i.test(text)) return 'profile';
   if (/stats|evidence|data|人数|数値|得点|ゴール|アシスト|評価|順位|勝点|市場価値|出場|リスト|一覧/i.test(text)) return 'stats';
   return 'insight';
+}
+
+function normalizeV3ProductionType(type) {
+  const t = String(type || '').toLowerCase();
+  if (t === 'simple') return 'insight';
+  const allowed = new Set(['opening','insight','stats','profile','reaction','comparison','history','matchcard','ranking','timeline','picture','ending','universal']);
+  return allowed.has(t) ? t : 'insight';
 }
 
 function allowsV3StatData(type) {
@@ -5470,7 +6286,8 @@ function makeModulesFromCurrentPlan() {
   const total = rows.length;
   return rows.map((item, index) => {
     const needs = Array.isArray(item.dataNeeds) ? item.dataNeeds : [];
-    const type = item.slideType || chooseV3ModuleType(item, index, total, needs);
+    const conceptualType = item.slideType || chooseV3ModuleType(item, index, total, needs);
+    const type = normalizeV3ProductionType(conceptualType);
     const allowStatData = allowsV3StatData(type);
     const title = item.title || item.headline || 'Slide ' + (index + 1);
     const narration = item.narration || item.point || item.claim || '';
@@ -5506,7 +6323,7 @@ function makeModulesFromCurrentPlan() {
       images: [],
       catchphrases: [],
       comments: [],
-      v3Meta: { role: item.role || '', source: 'v3_editor' },
+      v3Meta: { role: item.role || '', source: 'v3_editor', conceptualSlideType: conceptualType, productionCheck: item.productionCheck || '' },
     };
   });
 }
@@ -5546,8 +6363,8 @@ function confirmBriefingAndGoScript() {
   }));
   currentPlan.autopilotPlan.scriptDraft = [];
   activeSlideIdx = 0;
-  activeView = 'script';
-  renderPlan(currentPlan);
+  markStepDone('structure');
+  generateScriptFromStructure();
 }
 
 function generateScriptFromBriefing() {
@@ -5916,13 +6733,14 @@ function renderBriefingPipelineView(plan) {
     return '<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:900;background:' + (colors[type] || '#374151') + ';color:#fff;">' + esc(type || 'insight') + '</span>';
   };
   return adoptedBanner + fetchedPanel +
-    '<span class="label">企画書。採用テーマをもとに内容を確認・編集する段階</span>' +
+    '<span class="label">企画書。採用テーマとスライド型ラフを確認・編集する段階</span>' +
     '<textarea id="briefingText" class="brief-textarea" oninput="updateBriefingFromEditor()">' + esc(formatBriefingText(plan)) + '</textarea>' +
     '<div class="task-actions">' +
-      '<button onclick="confirmBriefingAndGoScript()">企画書を確定して脚本生成へ →</button>' +
+      '<button onclick="confirmBriefingAndGoScript()">制作仕様を確定して脚本生成へ →</button>' +
       '<button class="secondary" onclick="updateBriefingFromEditor();renderPlan(currentPlan)">企画書を反映</button>' +
     '</div>' +
     '<div class="autopilot-grid" style="margin-top:14px;">' +
+      '<div class="autopilot-card"><h2>構成タイプ</h2><p>' + esc(briefing.storyPattern || selectedCandidate.storyPattern || proposal.storyPattern || 'ニュース解説型') + '</p></div>' +
       '<div class="autopilot-card"><h2>動画の約束</h2><p>' + esc(briefing.purpose || plan.viewerPromise || '') + '</p></div>' +
       '<div class="autopilot-card"><h2>中心メッセージ</h2><p>' + esc(briefing.coreMessage || plan.thesis || '') + '</p></div>' +
       (slideOutline.length
@@ -5985,6 +6803,7 @@ function renderExportView(plan) {
         '</div>' +
       '</div>' +
       '<div class="task-actions">' +
+        '<button id="v2EditorBtn" class="secondary" onclick="setResultView(\\'script\\')">V3内蔵編集へ戻る</button>' +
         '<button id="v3GenVideoBtn" onclick="startV3VideoGeneration()">動画生成スタート</button>' +
         '<button class="secondary" onclick="setResultView(\\'script\\')">← スライド編集に戻る</button>' +
       '</div>' +
