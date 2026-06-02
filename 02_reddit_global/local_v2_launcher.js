@@ -27,6 +27,7 @@ const { router: s6Router,  getUI: s6UI  } = require('./routes/step6_routes');
 const { router: dataExplorerRouter }     = require('./routes/data_explorer_routes');
 const { router: chatRouter, getUI: chatUI } = require('./routes/chat_routes');
 const { router: curatedRouter }          = require('./routes/curated_routes');
+const { router: v25Router }              = require('./routes/v25_autopilot_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
@@ -38,6 +39,7 @@ app.use('/api', s6Router);
 app.use('/api', dataExplorerRouter);
 app.use('/api', chatRouter);
 app.use('/api', curatedRouter);
+app.use('/api', v25Router);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
@@ -463,7 +465,11 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   <div class="header">
     <button class="hamburger" onclick="toggleSidebar(true)" aria-label="メニュー">☰</button>
     <h1>⚽ サッカーYT v2 Pro <span style="color:var(--c);">RED</span></h1>
-    <span class="header-sub">Local Launcher — port ${PORT}</span>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+      <button class="btn btn-sm" id="v25AutoBtn" onclick="runV25Autopilot()" title="V2.5: V2 data + V3 proposal/images + V2 editing" style="background:#f59e0b;color:#111827;">V2.5 AUTO</button>
+      <span id="v25AutoStatus" style="font-size:11px;color:#fcd34d;"></span>
+      <span class="header-sub">Local Launcher - port ${PORT}</span>
+    </div>
   </div>
   <div class="steps">
     <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
@@ -580,6 +586,210 @@ window.deleteSavedProject = async function(idx) {
 };
 
 /* ── 案件選択（サイドバー → Step2 遷移）── */
+
+
+/* V2.5 AUTO: V2 data acquisition + V3 proposal/images + V2 editing bridge */
+window.runV25Autopilot = async function() {
+  const post = window.APP && window.APP.selected;
+  const status = document.getElementById('v25AutoStatus');
+  const btn = document.getElementById('v25AutoBtn');
+  if (!post || !post.id) return alert('Select a case first');
+  const setStatus = (txt) => { if (status) status.textContent = txt || ''; };
+  try {
+    if (btn) btn.disabled = true;
+    setStatus('starting...');
+    const result = await window.runJob({
+      startUrl: '/api/v25/autopilot/start',
+      statusUrl: '/api/v25/autopilot/status',
+      kind: 'v25-autopilot',
+      key: 'v25_autopilot:' + post.id,
+      intervalMs: 3000,
+      timeoutMs: 40 * 60 * 1000,
+      body: { postId: post.id, count: 7, sprint: !!window.appSprint, attachImages: true },
+      onProgress: (job) => {
+        const p = job.progress != null && job.total ? ' ' + job.progress + '/' + job.total : '';
+        setStatus((job.step || 'running') + p);
+      },
+    });
+    var pc = result.cost || {};
+    setStatus((result.proposals || 0) + '案できた（提案 ¥' + (pc.totalJpy || 0) + ' / ' + (pc.calls || 0) + 'コール）— 企画書を選択');
+    var plan = await fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id)).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    window.showV25PlanPanel(plan, post, []);
+  } catch (e) {
+    console.error('[V2.5 AUTO]', e);
+    setStatus('failed');
+    alert('V2.5 AUTO failed: ' + (e.message || e));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
+window.registerJobResumer && window.registerJobResumer('v25-autopilot', async ({ key, meta }) => {
+  const status = document.getElementById('v25AutoStatus');
+  if (status) status.textContent = 'V2.5 resuming...';
+  const result = await window.runJob({ startUrl: null, statusUrl: meta.statusUrl, kind: 'v25-autopilot', key });
+  window.APP.modules = result.modules || [];
+  if (window.APP.s3) window.APP.s3.modules = window.APP.modules;
+  if (status) status.textContent = 'done: ' + (result.moduleCount || 0) + ' slides';
+});
+
+/* V2.5: 企画書 A/B/C 選択＋微修正パネル (Fix#3)
+   - 注: この関数は buildPage() のテンプレートリテラル内。 バッククォート/＄{} 禁止。
+     文字列連結のみ。 改行リテラルは '\\n' (ブラウザに '\n' で届く)。 */
+window.showV25PlanPanel = function(plan, post, defaultModules) {
+  var tp = (plan && plan.aiPlan && plan.aiPlan.themeProposal) || {};
+  var cands = tp.candidates || [];
+  var defaultIndex = (tp.selected | 0) || 0;
+  function gotoStep3(mods) {
+    window.APP.modules = mods || [];
+    if (window.APP.s3) window.APP.s3.modules = window.APP.modules;
+    window.goStep(3);
+    if (typeof window.step3Init === 'function') window.step3Init();
+  }
+  if (!cands.length) { gotoStep3(defaultModules); return; }
+
+  var selected = defaultIndex;
+  var edited = false;
+  var LAB = ['A', 'B', 'C', 'D', 'E'];
+  var LEN = { short: '短尺', standard: '標準', long: '長尺' };
+  var statusEl = document.getElementById('v25AutoStatus');
+  function setStatus(t) { if (statusEl) statusEl.textContent = t || ''; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function outlineToText(o) {
+    return (o || []).map(function(s){
+      return (s.slideType || 'insight') + ' | ' + (s.headline || '') + (s.point ? ' | ' + s.point : '');
+    }).join('\\n');
+  }
+  function textToOutline(t) {
+    return String(t || '').split('\\n').map(function(line){
+      var parts = line.split('|').map(function(x){ return x.trim(); });
+      if (!parts[0] && !parts[1]) return null;
+      return { slideType: parts[0] || 'insight', headline: parts[1] || '', point: parts[2] || '' };
+    }).filter(Boolean);
+  }
+
+  var overlay = document.createElement('div');
+  overlay.id = 'v25PlanOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.74);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:12px;max-width:1080px;width:100%;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,0.6);';
+  overlay.appendChild(box);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+
+  function render() {
+    var c = cands[selected] || {};
+    var html = '';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<div style="font-size:16px;font-weight:700;">企画書を選んで微修正 — V2.5</div>';
+    html += '<button id="v25pClose" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;">✕ 閉じる</button>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">A=Sonnet / B=DeepSeek V4 / C=DeepSeek Chat の3案。 選択した企画書を seed に V2 が脚本構成を作る。</div>';
+    // cards
+    html += '<div style="display:flex;gap:10px;margin-bottom:16px;">';
+    for (var i = 0; i < cands.length; i++) {
+      var cc = cands[i] || {};
+      var on = (i === selected);
+      var border = on ? '#f59e0b' : '#334155';
+      var bg = on ? '#1f2937' : '#111827';
+      html += '<div class="v25pCard" data-idx="' + i + '" style="flex:1;cursor:pointer;border:2px solid ' + border + ';background:' + bg + ';border-radius:10px;padding:12px;">';
+      html += '<div style="font-weight:700;color:#fcd34d;margin-bottom:4px;">案' + LAB[i] + ' · ' + esc(LEN[cc.videoLengthType] || cc.videoLengthType || '') + ' · ' + esc(cc.recommendedSlideCount || (cc.slideOutline ? cc.slideOutline.length : '?')) + '枚</div>';
+      html += '<div style="font-size:12px;color:#e5e7eb;margin-bottom:4px;min-height:32px;">' + esc((cc.hookQuestion || '').slice(0, 70)) + '</div>';
+      html += '<div style="font-size:11px;color:#94a3b8;">' + esc((cc.angle || '').slice(0, 50)) + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    // editor
+    html += '<div style="border-top:1px solid #334155;padding-top:14px;">';
+    html += '<div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">▼ 案' + LAB[selected] + ' の微修正（編集すると V2 がこの内容で構成し直す）</div>';
+    html += '<label style="font-size:11px;color:#94a3b8;">フック（hook）</label>';
+    html += '<input id="v25f_hook" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;" value="' + esc(c.hookQuestion) + '">';
+    html += '<label style="font-size:11px;color:#94a3b8;">切り口（angle）</label>';
+    html += '<input id="v25f_angle" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;" value="' + esc(c.angle) + '">';
+    html += '<label style="font-size:11px;color:#94a3b8;">結論（answer）</label>';
+    html += '<textarea id="v25f_answer" rows="2" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;">' + esc(c.answer) + '</textarea>';
+    html += '<label style="font-size:11px;color:#94a3b8;">スライド構成（1行=1枚 / 形式: slideType | 見出し | 補足）</label>';
+    html += '<textarea id="v25f_outline" rows="8" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;font-family:monospace;font-size:12px;">' + esc(outlineToText(c.slideOutline)) + '</textarea>';
+    html += '</div>';
+    // footer
+    html += '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;">';
+    html += '<button id="v25pCancel" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;">キャンセル</button>';
+    html += '<button id="v25pGo" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:8px 16px;font-weight:700;cursor:pointer;">▶ この企画書で脚本構成</button>';
+    html += '</div>';
+    box.innerHTML = html;
+
+    // wire
+    var cardEls = box.querySelectorAll('.v25pCard');
+    for (var k = 0; k < cardEls.length; k++) {
+      cardEls[k].addEventListener('click', function(ev) {
+        var idx = parseInt(ev.currentTarget.getAttribute('data-idx'), 10);
+        if (idx === selected) return;
+        // 既存の編集内容を退避してから切替（取りこぼし防止）
+        captureEdits();
+        selected = idx;
+        render();
+      });
+    }
+    ['v25f_hook', 'v25f_angle', 'v25f_answer', 'v25f_outline'].forEach(function(id) {
+      var el = box.querySelector('#' + id);
+      if (el) el.addEventListener('input', function() { edited = true; });
+    });
+    box.querySelector('#v25pClose').addEventListener('click', close);
+    box.querySelector('#v25pCancel').addEventListener('click', close);
+    box.querySelector('#v25pGo').addEventListener('click', confirmGo);
+  }
+
+  function val(id) { var el = box.querySelector('#' + id); return el ? el.value : ''; }
+  function captureEdits() {
+    var c = cands[selected];
+    if (!c) return;
+    c.hookQuestion = val('v25f_hook');
+    c.angle = val('v25f_angle');
+    c.answer = val('v25f_answer');
+    c.slideOutline = textToOutline(val('v25f_outline'));
+  }
+
+  async function confirmGo() {
+    captureEdits();
+    var editedCandidate = {
+      hookQuestion: val('v25f_hook'),
+      angle: val('v25f_angle'),
+      answer: val('v25f_answer'),
+      slideOutline: textToOutline(val('v25f_outline')),
+    };
+    var needRebuild = edited || (selected !== defaultIndex);
+    // 案A 無編集ならば autopilot が既に作った modules を流用（再生成コスト回避）
+    if (!needRebuild && defaultModules && defaultModules.length) {
+      close();
+      gotoStep3(defaultModules);
+      return;
+    }
+    close();
+    setStatus('構成生成中... 案' + LAB[selected]);
+    try {
+      var jobRes = await window.runJob({
+        startUrl: '/api/v25/structure',
+        statusUrl: '/api/v25/structure/status',
+        kind: 'v25-structure',
+        key: 'v25_structure:' + post.id,
+        intervalMs: 3000,
+        timeoutMs: 20 * 60 * 1000,
+        body: { postId: post.id, selectedIndex: selected, editedCandidate: editedCandidate, sprint: !!window.appSprint, attachImages: true },
+        onProgress: function(job) { setStatus((job.step || 'running')); },
+      });
+      var sc = jobRes.cost || {};
+      setStatus('done: ' + (jobRes.moduleCount || 0) + ' slides (案' + LAB[selected] + ' / 構成 ¥' + (sc.totalJpy || 0) + ')');
+      gotoStep3(jobRes.modules || []);
+    } catch (e) {
+      console.error('[V2.5 structure]', e);
+      setStatus('structure failed');
+      alert('脚本構成に失敗: ' + (e.message || e));
+    }
+  }
+
+  render();
+  document.body.appendChild(overlay);
+};
+
 window.selectLead = function(idx) {
   const item = window.APP.saved[idx];
   if (!item) return;

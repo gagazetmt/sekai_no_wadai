@@ -175,13 +175,34 @@ ${customNote ? `\n【相棒の補足メモ（最重要参考情報）】\n${cust
 ━━━━━━━━━━━━━━━━━━━━━━━
 ` : '';
 
+    // 🆕 V2.5: 選択した企画書(A/B/C)を seed として構成に反映する。
+    //   企画書の「方向性・物語の流れ」に沿わせつつ、固有名・データは
+    //   【取得済みデータ】の範囲に接地させる（企画書の固有名を鵜呑みにしない）。
+    const seedPlan = opts.seedPlan && typeof opts.seedPlan === 'object' ? opts.seedPlan : null;
+    const seedOutline = Array.isArray(seedPlan?.slideOutline) ? seedPlan.slideOutline : [];
+    const seedBanner = seedPlan ? `
+━━━ 🎬 採用された企画書（この方向性で構成する）━━━
+- フック: ${String(seedPlan.hookQuestion || '').slice(0, 120)}
+- 切り口(angle): ${String(seedPlan.angle || '').slice(0, 120)}
+- 結論(answer): ${String(seedPlan.answer || '').slice(0, 160)}
+- 物語パターン: ${String(seedPlan.storyPattern || '').slice(0, 60)}
+${seedOutline.length ? `- 企画書のスライド流れ（参考。データに接地させて確定する）:\n${seedOutline.map((s, i) => `  ${i + 1}. [${s.slideType || '?'}] ${String(s.headline || '').slice(0, 60)}${s.point ? ' — ' + String(s.point).slice(0, 60) : ''}`).join('\n')}` : ''}
+
+【企画書 seed の扱い（厳守）】
+- 上記の**方向性・物語の流れ・slideType の並び**を尊重して構成する
+- ただし固有名・数値は必ず【取得済みデータ】に存在するものだけを subject に使う
+- 企画書に登場するが取得済みデータに無い固有名は、subject にせず insight として一般論で触れる
+- 企画書が要求するデータが取れていない場合、その枚は type を insight に落とす
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : '';
+
     const prompt = `あなたはサッカー解説YouTube動画のクリエイティブ・ディレクターです。
 以下の案件素材を見て、**多角的な視点**で ${count} 枚のスライド構成（outline）を提案してください。
 
 【今日の日付】${todayJst}（JST）
 【案件タイトル】${titleJa}
 ${titleOrig ? `【原題】${titleOrig}` : ''}
-${customBanner}
+${customBanner}${seedBanner}
 【案件本文（事実情報の主源）】
 ${bodyExcerpt || '(なし)'}
 
@@ -2054,4 +2075,4 @@ function getUI() {
 </script>`;
 }
 
-module.exports = { router, getUI };
+module.exports = { router, getUI, _runProposeModules, _runScenarioJob };

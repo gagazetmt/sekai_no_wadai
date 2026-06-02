@@ -301,6 +301,125 @@ JSONのみ:
   };
 }
 
+// ═══════════════════════════════════════════════════════════
+// 🆕 V2.5: ②-2 記事収集 ＋ ②-3 記事熟読→精度版ラベル再提案
+//   V2.5 の核心。 ②-1 (suggest-labels の searches) を「データ取得ラベル」に
+//   そのまま流用すると精度が落ちる（検索クエリ＝取得ラベル問題）。
+//   そこで:
+//     ②-2: searches を Serper で叩き、関連記事を約15件集める（収集専用）
+//     ②-3: 記事本文＋案件を AI が熟読し、案件のテーマに直結する
+//          entity / match ラベルを「再提案」する（精度向上版）
+//   検索クエリ自体は entity/match の fetch ラベルにはしない。
+//   返り値の articles は ③ 企画提案コーパス (Fix#2) でも再利用する。
+// ═══════════════════════════════════════════════════════════
+async function _gatherArticles(searches, opts = {}) {
+  const queries = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 4);
+  if (!queries.length) return [];
+  const maxArticles = Number(opts.maxArticles) || 15;
+  const results = await Promise.all(queries.map(q =>
+    fetchSerper(q).catch(e => ({ ok: false, error: e.message, query: q }))
+  ));
+  const articles = [];
+  const seen = new Set();
+  results.forEach((news, qi) => {
+    (news?.organic || []).forEach(r => {
+      const title = (r.title || '').trim();
+      const key = title.toLowerCase();
+      if (!title || seen.has(key)) return;
+      seen.add(key);
+      let host = 'search';
+      try { host = new URL(r.link).hostname.replace(/^www\./, ''); } catch (_) {}
+      articles.push({
+        title,
+        snippet: (r.snippet || '').slice(0, 320),
+        link: r.link || '',
+        host,
+        date: r.date || null,
+        query: queries[qi],
+      });
+    });
+  });
+  return articles.slice(0, maxArticles);
+}
+
+// ②-3: 記事熟読 → 精度版 entity / match ラベル再提案
+async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
+  const _resolved = resolveSprintMode(opts.sprint);
+  const _initialProv = _resolved.provider;
+  const title    = post.titleOrig || post.title || '';
+  const titleJa  = post.titleJa   || '';
+  const selftext = (post.selftext || post.raw?.selftext || '').slice(0, 1500);
+  const baseEntities = Array.isArray(baseSuggested?.entities) ? baseSuggested.entities : [];
+  const searches     = Array.isArray(baseSuggested?.searches) ? baseSuggested.searches : [];
+
+  // ②-2: 記事収集（収集専用 / fetch ラベルにはしない）
+  const articles = await _gatherArticles(searches, opts);
+  console.log(`[Step2 v2.5] ②-2 記事収集: ${articles.length}件 (queries=${searches.slice(0,4).join(' | ')})`);
+  if (!articles.length) {
+    // 記事ゼロなら base のまま返す（②-3 をスキップ）
+    return { articles: [], refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], usedAI: false };
+  }
+
+  const articleBlock = articles
+    .map((a, i) => `${i + 1}. [${a.host}] ${a.title}\n   ${a.snippet}`)
+    .join('\n')
+    .slice(0, 6000);
+
+  const prompt = `あなたはサッカーニュース解析の専門家です。以下の【関連記事 約${articles.length}件】を熟読し、この案件の動画で**データ取得すべき** entity / match ラベルを精度高く再提案してください。
+検索クエリではなく、記事本文に実際に登場し、案件テーマに直結する固有名のみを選びます。
+
+【案件 (原題)】 ${title}
+${titleJa ? `【案件 (日本語訳)】 ${titleJa}\n` : ''}${selftext ? `\n【本文】\n${selftext}\n` : ''}
+【①で出した暫定 entities（参考。記事と照合し精査する）】
+${baseEntities.map(e => `- ${e.name} [${e.role}]`).join('\n') || '(なし)'}
+
+【関連記事（熟読対象）】
+${articleBlock}
+
+【ルール（厳守）】
+- entities: 案件テーマに**直接関係**し、記事に登場するチーム・大会・選手・監督のみ最大10件
+  - role は "player" / "manager" / "team" / "tournament"
+  - **公式英語フルネーム必須**（"Kane"→"Harry Kane"。苗字のみ・ファーストネームのみは除外）
+  - **除外**: 解説者/アナリスト/記者（Henry, Carragher, Lineker 等）、他チームの比較言及だけの人物、推測した人物
+- matches: 記事で扱われている試合があれば「HomeTeam vs AwayTeam」最大2件
+- 検索クエリ文（"... goals scorers" 等）はラベルにしない。あくまで固有名に正規化する
+- 記事に根拠が無い固有名は出さない（捏造禁止）
+
+JSONのみ:
+{
+  "entities": [{"name":"...","role":"..."}],
+  "matches": ["HomeTeam vs AwayTeam"]
+}`;
+
+  async function _ask(provider) {
+    return callAI({ forceProvider: provider, model: _modelFor(provider), max_tokens: 4000, messages: [{ role: 'user', content: prompt }] });
+  }
+  let parsed = null;
+  try {
+    parsed = _parseEntities(await _ask(_initialProv));
+  } catch (e) { console.warn('[Step2 v2.5] ②-3 例外:', e.message); }
+  if (!parsed) {
+    try { parsed = _parseEntities(await _ask(_resolved.fallbackProvider)); }
+    catch (e) { console.warn('[Step2 v2.5] ②-3 fallback 例外:', e.message); }
+  }
+  if (!parsed) {
+    console.warn('[Step2 v2.5] ②-3 失敗 → ① の結果を維持');
+    return { articles, refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], usedAI: false };
+  }
+
+  const refinedEntities = Array.isArray(parsed.entities) ? parsed.entities : [];
+  const refinedMatches  = Array.isArray(parsed.matches)  ? parsed.matches.filter(Boolean) : [];
+  // ① の暫定 entity と記事ベースの再提案をマージ（記事ベース優先・重複排除）
+  const merged = _dedupeEntities(refinedEntities, baseEntities);
+  console.log(`[Step2 v2.5] ②-3 精度版ラベル: entities ${merged.length} (記事${refinedEntities.length}+①${baseEntities.length}) / matches ${refinedMatches.length}`);
+  return {
+    articles,
+    refined: { entities: merged, matches: refinedMatches.length ? refinedMatches : (baseSuggested?.matches || []), searches },
+    refinedMatches,
+    usedAI: true,
+  };
+}
+
 // 🆕 /v3/suggest-labels: ジョブ作成 → jobId 即返却（バックグラウンド実行）
 //   body.sprint=true で ⚡SPRINT モード: AI 呼び出しを全て DeepSeek に強制
 router.post('/v3/suggest-labels', (req, res) => {
@@ -1427,4 +1546,4 @@ function getUI() {
 </script>`;
 }
 
-module.exports = { router, getUI };
+module.exports = { router, getUI, _runSuggestLabels, _runFetchAll, _runRefineLabelsFromArticles, _gatherArticles };
