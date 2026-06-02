@@ -4414,7 +4414,9 @@ async function runAIScriptGeneration() {
   if (status) status.textContent = 'DeepSeekが脚本を生成中です...';
   try {
     if (!currentPlan) { if (status) status.textContent = '先に企画書を作ってください'; return; }
-    rebuildV3ModulesFromBriefing();
+    if (!Array.isArray(currentPlan.v3Modules) || !currentPlan.v3Modules.length) {
+      rebuildV3ModulesFromBriefing();
+    }
     bindFetchedDataToV3Modules();
     const res = await fetch('/api/v3/generate-narration', {
       method: 'POST',
@@ -5158,9 +5160,6 @@ function renderScriptView(plan) {
       '</div>';
   }
 
-  return caseBanner +
-    '<iframe id="v3EmbeddedV2Editor" title="V3内蔵 V2級編集機能" style="display:block;width:100%;height:calc(100vh - 130px);min-height:780px;border:1px solid var(--line);border-radius:8px;background:#0b0d12;"></iframe>';
-
   const total = slides.length;
   const active = Math.max(0, Math.min(activeSlideIdx, total - 1));
   const m = slides[active] || {};
@@ -5213,24 +5212,11 @@ function renderScriptView(plan) {
 
   const initQ = esc((plan.topic || title || '').split(/[\s「」【】]/)[0] || '');
 
-  const v2EditorLead =
-    '<div class="panel" style="border-color:var(--gold);background:#14110a;margin-bottom:10px;">' +
-      '<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;">' +
-        '<div style="min-width:220px;flex:1;">' +
-          '<div style="font-weight:900;color:var(--gold);font-size:14px;margin-bottom:3px;">V2級編集モード</div>' +
-          '<div style="font-size:12px;color:var(--muted);line-height:1.5;">画像調整・数値編集・プレビュー確認までV2ベースで編集できます。個別TTS試聴とスライドおまかせAIはV3側では非表示にしています。</div>' +
-        '</div>' +
-        '<button id="v2EditorBtnPrimary" onclick="openV2EditorFromV3()" style="font-size:13px;padding:8px 14px;">V2級編集を開く</button>' +
-      '</div>' +
-    '</div>';
-
   return caseBanner +
-    v2EditorLead +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">' +
-      '<span class="label" style="margin:0;">スライド編集 — ' + (active + 1) + ' / ' + total + '</span>' +
+      '<span class="label" style="margin:0;">スライド編集 - ' + (active + 1) + ' / ' + total + '</span>' +
       '<div style="display:flex;gap:6px;">' +
         '<button id="aiScriptBtn" class="secondary" onclick="runAIScriptGeneration()" style="font-size:12px;padding:5px 10px;">AI脚本再生成</button>' +
-        '<button id="v2EditorBtn" class="secondary" onclick="openV2EditorFromV3()" style="font-size:12px;padding:5px 10px;">V2級編集で開く</button>' +
         '<button onclick="setResultView(\\'export\\')" style="font-size:12px;padding:5px 10px;">動画生成へ →</button>' +
       '</div>' +
     '</div>' +
@@ -5383,7 +5369,7 @@ function renderStructureView(plan) {
         '</div>' +
       '</div>' +
       '<div class="panel">' +
-        '<div class="task-actions"><button onclick="generateScriptFromStructure()">この構成で脚本生成</button><button class="secondary" onclick="setResultView(\\'script\\')">脚本生成へ</button></div>' +
+        '<div class="task-actions"><button onclick="generateScriptFromStructure()">この構成で脚本生成</button><button class="secondary" onclick="generateScriptFromStructure()">脚本生成へ</button></div>' +
         '<div class="task-status">Step4では構成・スライド型・使うデータを決めます。プレビュー確認はStep5脚本で行います。</div>' +
         '<div class="panel" style="margin-top:12px;">' + renderStructureSourceList(plan) + '</div>' +
       '</div>' +
@@ -6413,7 +6399,7 @@ function draftNarrationFromModule(module, index, total) {
   return (point || title) + '。' + dataText + 'ここは次の結論につなげるための大事な一枚です。';
 }
 
-function generateScriptFromStructure() {
+function generateScriptFromStructure(options = {}) {
   if (!currentPlan) return alert('先に企画書を作ってください');
   collectV3SlideInputs();
   if (!Array.isArray(currentPlan.v3Modules) || !currentPlan.v3Modules.length) {
@@ -6446,6 +6432,10 @@ function generateScriptFromStructure() {
   markStepDone('script');
   activeView = 'script';
   renderPlan(currentPlan);
+  setTimeout(() => reloadV3Preview(), 50);
+  if (options.autoAi !== false) {
+    setTimeout(() => runAIScriptGeneration(), 80);
+  }
 }
 
 function asciiNorm(s) {

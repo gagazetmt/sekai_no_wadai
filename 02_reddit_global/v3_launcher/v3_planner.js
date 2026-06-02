@@ -242,6 +242,23 @@ function extractJSON(raw) {
   return null;
 }
 
+function buildNarrationRepairPrompt(raw, slideCount) {
+  return `The following response was meant to be JSON for a soccer video script, but it is invalid JSON.
+Repair it into valid JSON only.
+
+Rules:
+- Output JSON only. No markdown.
+- Keep the same meaning and Japanese text as much as possible.
+- The root object must be {"slides":[...]}.
+- slides must contain ${slideCount || 'the same number of'} items if possible.
+- Every slide must have: no, slideType, headline, narration, displayText, dataDisplay, imageInstruction, estimatedSec.
+- Escape all double quotes inside string values, or replace decorative quotes with Japanese corner quotes 「」.
+- Do not truncate the JSON.
+
+Broken response:
+${String(raw || '').slice(0, 12000)}`;
+}
+
 function normalizeCandidateMeta(candidate, index, articleCount) {
   const count = Array.isArray(candidate?.slideOutline) ? candidate.slideOutline.length : 0;
   const profiles = [
@@ -1062,6 +1079,8 @@ narration 冒頭は必ず接続フレーズで始める。箇条書き読み上�
 
 【絶対ルール】
 - JSONのみ返す。コードブロック不要
+- JSON文字列の中で強調引用を使う場合は、半角ダブルクォート " を使わず、日本語の鉤括弧「」に置き換える
+- どうしても半角ダブルクォートを入れる場合は必ず \\" のようにエスケープする
 - 全スライド分出力する。途中で切らない`;
 
   const imageInstructionExample = `"imageInstruction": {
@@ -1123,10 +1142,23 @@ async function generateNarration(topic, scriptSlides, enrichedMemo, fetchedData,
       label,
     });
     const cleaned = String(raw || '').replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim();
-    const parsed = extractJSON(cleaned);
+    let parsed = extractJSON(cleaned);
     if (!parsed) {
       console.warn(`[v3_planner] ${label} JSON parse failed.\n--- raw先頭400 ---\n${cleaned.slice(0, 400)}`);
-      return { ok: false, error: 'JSON parse failed' };
+      try {
+        const repairedRaw = await callAI({
+          system: 'Repair invalid JSON. Output valid JSON only. No markdown.',
+          messages: [{ role: 'user', content: buildNarrationRepairPrompt(cleaned, scriptSlides.length) }],
+          model: 'deepseek-chat',
+          max_tokens: maxTokens,
+          forceProvider: 'deepseek',
+          label: `${label}_json_repair`,
+        });
+        parsed = extractJSON(String(repairedRaw || '').replace(/^```(?:json)?\s*/im, '').replace(/\s*```\s*$/m, '').trim());
+      } catch (repairError) {
+        console.warn(`[v3_planner] ${label} JSON repair failed:`, repairError.message);
+      }
+      if (!parsed) return { ok: false, error: 'JSON parse failed' };
     }
     console.log(`[v3_planner] ${label}: ${(parsed.slides || []).length}スライド ナレーション生成完了`);
     return { ok: true, ...parsed };

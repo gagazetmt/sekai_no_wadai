@@ -39,6 +39,9 @@ const TRUSTED_DOMAIN_HINTS = [
   'beinsports.com',
 ];
 
+const OFF_TOPIC_F1_RE = /\b(f1|formula\s*1|formula one|grand prix|motorsport|racing|aston martin f1|fernando alonso)\b/i;
+const SOCCER_CONTEXT_RE = /\b(football|soccer|premier league|chelsea|liverpool|arsenal|manchester|real madrid|barcelona|bayern|bundesliga|laliga|serie a|uefa|fifa|transfer|manager|coach|player)\b/i;
+
 function tokenize(text) {
   return String(text || '')
     .toLowerCase()
@@ -48,12 +51,56 @@ function tokenize(text) {
     .slice(0, 80);
 }
 
+function normalizeSoccerSearchText(value, topic = '') {
+  let s = String(value || '').replace(/\s+/g, ' ').trim();
+  const joined = `${topic} ${s}`;
+  if (/アチェンポン/.test(joined) && !/Josh\s+Acheampong/i.test(s)) {
+    s = `Josh Acheampong ${s}`;
+  }
+  if (/アロンソ/.test(joined) && !/Xabi\s+Alonso|Fernando\s+Alonso/i.test(s)) {
+    s = s.replace(/アロンソ/g, 'Xabi Alonso');
+    if (!/Xabi\s+Alonso/i.test(s)) s = `Xabi Alonso ${s}`;
+  }
+  if (/\bAlonso\b/i.test(s) && !/Xabi\s+Alonso|Fernando\s+Alonso/i.test(s) && !/f1|formula|racing|motorsport/i.test(joined)) {
+    s = s.replace(/\bAlonso\b/gi, 'Xabi Alonso');
+  }
+  if (/アチェンポン/.test(s)) s = s.replace(/アチェンポン/g, 'Josh Acheampong');
+  if (/チェルシー/.test(s)) s = s.replace(/チェルシー/g, 'Chelsea');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+function isOffTopicSearchItem(item, topic = '', query = '') {
+  const text = `${item.title || ''} ${item.snippet || ''} ${item.link || ''} ${query || ''}`.toLowerCase();
+  const joined = `${topic || ''} ${query || ''}`.toLowerCase();
+  if (!OFF_TOPIC_F1_RE.test(text)) return false;
+  if (/fernando alonso|formula\s*1|formula one|grand prix|motorsport|racing|aston martin f1|f1\b/i.test(text)) {
+    return !/fernando alonso|f1|formula|motorsport|racing/i.test(joined);
+  }
+  return false;
+}
+
+function isOffTopicEntityName(name, topic = '') {
+  const clean = String(name || '').trim();
+  const joined = `${topic || ''} ${clean}`.toLowerCase();
+  if (/fernando\s+alonso/i.test(clean) && !/\b(f1|formula|motorsport|racing)\b/i.test(joined)) return true;
+  return false;
+}
+
+function isLikelyLatinEntityLabel(value) {
+  const clean = String(value || '').trim();
+  if (!clean || clean.length < 3 || clean.length > 80) return false;
+  if (/^[a-z]/.test(clean)) return false;
+  if (/^(World Cup|FA Cup|Premier League|Champions League|Europa League|Conference League|Reddit|Wikipedia|News|Latest|Football|Soccer|Official|Report|Reports|Here We Go|Jesus)$/i.test(clean)) return false;
+  if (/\b(everything|gets|analyzed|turned|into|drama|these|days|reminded|some|idiot|asked|posted|anything|basically|said|goodbye)\b/i.test(clean)) return false;
+  return true;
+}
+
 function uniq(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
 function compactSearchQuery(query) {
-  const raw = String(query || '')
+  const raw = normalizeSoccerSearchText(query)
     .replace(/https?:\/\/\S+/g, ' ')
     .replace(/[\[\]【】「」『』"“”]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -137,7 +184,8 @@ function scoreSearchItem(item, topic, query) {
   const relevance = relevanceScore(item, topic, query);
   const freshness = freshnessScore(item.date);
   const trust = trustedScore(item.link);
-  const score = relevance * 0.55 + freshness * 0.25 + trust * 0.20;
+  const soccerContext = SOCCER_CONTEXT_RE.test(`${item.title || ''} ${item.snippet || ''} ${item.link || ''}`) ? 0.08 : 0;
+  const score = Math.min(1, relevance * 0.55 + freshness * 0.25 + trust * 0.20 + soccerContext);
   return {
     ...item,
     host: hostOf(item.link),
@@ -163,11 +211,12 @@ function fallbackQueries(topic, memo = '') {
   const latinNames = (topic.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+)*/g) || [])
     .filter((w) => w.length >= 3 && !/^(the|and|for|with|news|latest|transfer|about|from|that|this)$/i.test(w));
   if (latinNames.length >= 1) {
-    const nameStr = latinNames.slice(0, 2).join(' ');
+    const nameStr = normalizeSoccerSearchText(latinNames.slice(0, 2).join(' '), topic);
+    const clubContext = /chelsea|繝√ぉ繝ｫ繧ｷ繝ｼ/i.test(joined) ? `${nameStr} Chelsea football` : `${nameStr} football latest`;
     return [
-      `${nameStr} 2026 news`,
+      `${nameStr} football news`,
+      clubContext,
       `${nameStr} transfer latest`,
-      `${nameStr} stats season`,
     ];
   }
   const compactTopic = compactSearchQuery(topic);
@@ -189,7 +238,7 @@ function pickQueries({ topic, memo = '', plan = null, queries = [] }) {
     }
   }
   return uniq(uniq([...queries, ...fromPlan, ...fallbackQueries(topic, memo)])
-    .map(compactSearchQuery)
+    .map((q) => compactSearchQuery(normalizeSoccerSearchText(q, topic)))
     .filter(Boolean))
     .slice(0, DEFAULT_QUERY_LIMIT);
 }
@@ -242,8 +291,9 @@ function fallbackQueryLabels(topic, memo = '') {
     const clean = String(value || '').trim();
     if (clean && !labels.includes(clean)) labels.push(clean);
   };
-  (raw.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+){0,3}/g) || [])
-    .filter((w) => !/^(reddit|thread|comments?|news|latest|football|soccer|official|report|reports)$/i.test(w))
+  (raw.match(/[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'.-]+){0,3}/g) || [])
+    .filter(isLikelyLatinEntityLabel)
+    .filter((w) => !isOffTopicEntityName(w, raw))
     .slice(0, 4)
     .forEach(push);
   (raw.match(/[\p{Script=Katakana}ー]{3,}|[\p{Script=Han}]{2,}/gu) || [])
@@ -264,8 +314,9 @@ function extractCriticalCaseLabels(topic = '', memo = '') {
   (raw.match(/[\p{Script=Katakana}ー]{2,}/gu) || [])
     .filter((x) => !jpStop.test(x))
     .forEach(push);
-  (raw.match(/[A-Za-z][A-Za-z'.-]+(?:\s+[A-Za-z][A-Za-z'.-]+){0,3}/g) || [])
-    .filter((x) => !/^(world cup|fa cup|squad|member|members|football|soccer|news|here we go|here|we|go)$/i.test(x))
+  (raw.match(/[A-Z][A-Za-z'.-]+(?:\s+[A-Z][A-Za-z'.-]+){0,3}/g) || [])
+    .filter(isLikelyLatinEntityLabel)
+    .filter((x) => !isOffTopicEntityName(x, raw))
     .forEach(push);
   (raw.match(/[\p{Script=Katakana}\p{Script=Han}ー]{2,}代表/gu) || []).forEach(push);
   if (/W杯|ワールドカップ|World Cup/i.test(raw)) push('W杯');
@@ -291,13 +342,13 @@ function normalizeSearchQueries(queries, labels = [], topic = '') {
   const out = [];
   const seen = new Set();
   const add = (query) => {
-    const clean = String(query || '')
+    const clean = normalizeSoccerSearchText(query, topic)
       .replace(/[、。！？!?]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .split(/\s+/)
       .filter((term, index, arr) => arr.findIndex((x) => x.toLowerCase() === term.toLowerCase()) === index)
-      .slice(0, 4)  // 最大4語に制限
+      .slice(0, 6)
       .join(' ');
     const key = clean.toLowerCase();
     if (!clean || seen.has(key)) return;
@@ -344,6 +395,10 @@ Return JSON only:
 Rules:
 - queryLabels are short labels, 3 to 8 items.
 - queries must combine multiple labels from the case.
+- This is always a football/soccer case. Never interpret ambiguous names as Formula 1, motorsport, racing, or other sports unless the case explicitly says so.
+- If "Alonso" appears in a football context, interpret it as Xabi Alonso. Do not use Fernando Alonso unless Formula 1 is explicit.
+- If the case mentions Acheampong, prefer the football query "Josh Acheampong" and include club context such as Chelsea when present.
+- For ambiguous surnames, add club/football context to the query.
 - Never drop a proper noun named in the title or memo. Named people, clubs, national teams, competitions, and venues must remain labels.
 - For squad announcement stories, keep every named player/team from the title in labels. At least one query must target the exact news topic, not generic tournament rules.
 - Include original Japanese names when the case is Japanese, and add English names only when useful.
@@ -386,6 +441,8 @@ ${memo ? `Context: ${memo}` : ''}
 
 Rules:
 - Translate Japanese names to proper English (ジョアン・ペドロ→João Pedro, マドリー→Real Madrid, ハーランド→Haaland, バルサ→Barcelona, etc.)
+- This is always football/soccer. Never generate Formula 1, motorsport, racing, or Fernando Alonso queries unless the topic explicitly says F1.
+- In football context, "Alonso" means Xabi Alonso. "Acheampong" should be Josh Acheampong, with Chelsea context when relevant.
 - Keep each query SHORT: 3-4 words max. Fewer words = more search hits.
 - Query 1: Core news (person + club + action) e.g. "Robertson Tottenham transfer"
 - Query 2: Club context (club + situation) e.g. "Tottenham relegation crisis 2025"
@@ -420,6 +477,10 @@ async function enrichJapaneseResearchText(topic, learningItems) {
 
 案件:
 ${topic}
+
+重要ルール:
+- これはサッカー動画の企画材料です。F1、モータースポーツ、レース、Fernando Alonso は、案件が明示的にF1でない限り無視してください。
+- サッカー文脈の "Alonso" は Xabi Alonso として扱い、Fernando Alonso を人物欄や材料に入れないでください。
 
 記事:
 ${items.map((item, i) => `[${i + 1}] ${item.title || ''} (${item.host || ''})
@@ -483,7 +544,9 @@ async function runTopicResearch(input = {}) {
   for (const query of queries) {
     const serper = await fetchSerper(query, 'v3_topic_research', input.lang || 'en', input.tbs || null);
     const scored = (serper.organic || [])
+      .filter((item) => !isOffTopicSearchItem(item, topic, query))
       .map((item) => scoreSearchItem(item, topic, query))
+      .map((item) => ({ ...item, sourceQuery: query }))
       .sort((a, b) => b.score - a.score);
     const picked = scored.slice(0, Math.max(pickMin, Math.min(pickMax, scored.length)));
     queryResults.push({
@@ -501,7 +564,7 @@ async function runTopicResearch(input = {}) {
   if (fullTextCount < FULL_TEXT_TARGET) {
     const pickedUrls = new Set(allPicked.map((x) => x.link));
     const extras = dedupeByUrl(queryResults.flatMap((r) => r.candidates || []))
-      .filter((item) => item.link && !pickedUrls.has(item.link))
+      .filter((item) => item.link && !pickedUrls.has(item.link) && !isOffTopicSearchItem(item, topic, item.sourceQuery || ''))
       .slice(0, EXTRA_FETCH_LIMIT);
     const extraEnriched = await Promise.all(extras.map(enrichItemWithArticle));
     const usefulExtras = extraEnriched
@@ -633,6 +696,15 @@ function buildSideStoryCandidates(entity, summary, events) {
 // 2026-05-30: 記事本文を600文字×8件に拡張し、物語の核心から正確にエンティティを特定
 async function aiExpandResearch(topic, memo, learningCorpus) {
   const mandatoryLabels = extractCriticalCaseLabels(topic, memo);
+  const isStoryEntityName = (name) => {
+    const clean = String(name || '').trim().replace(/\s+/g, ' ');
+    if (!clean || clean.length < 3 || clean.length > 80) return false;
+    if (/^(jesus|reddit|wikipedia|news|football|soccer|official|report|reports)$/i.test(clean)) return false;
+    if (/^[a-z]/.test(clean)) return false;
+    const lower = clean.toLowerCase();
+    if (/\b(everything|gets|analyzed|turned|into|drama|these|days|reminded|some|idiot|asked|posted|anything|basically|said|goodbye)\b/.test(lower)) return false;
+    return true;
+  };
 
   // スコア降順・最低300文字フィルタ・同ドメイン2件上限（v3_planner と同じ品質基準）
   const domainCount = {};
@@ -652,26 +724,32 @@ async function aiExpandResearch(topic, memo, learningCorpus) {
         .join('\n\n')
     : '';
 
-  const prompt = `You are a soccer research assistant. Read the topic and articles carefully to identify all entities that need live stats data.
+  const prompt = `You are a soccer story editor. Read the retrieved articles carefully and create a cast list for the video.
 
 Topic: ${topic}
 ${memo ? `Context: ${memo}` : ''}${summaries}
 
-Mandatory labels from title/memo (must be included as entities):
+Possible labels from title/memo. Use only if they are real soccer entities after reading the articles:
 ${mandatoryLabels.join(', ') || '(none)'}
 
 Tasks:
 1. Up to 2 follow-up English search queries for factual gaps not covered by the articles above.
    Focus on specific numbers, dates, or records mentioned but not confirmed.
-2. List soccer players, clubs, managers, and national teams that need live stats data.
+2. Extract only story-key proper nouns needed for the video.
    - Translate Japanese names to English (ロバートソン→Andrew Robertson, トッテナム→Tottenham, etc.)
-   - Include rival clubs, managers, or comparison targets if mentioned
+   - Include players, managers, clubs, tournaments, national teams, and stadiums only when they matter to the story
+   - Give each label a story role: protagonist, related, comparison, successor_candidate, background, stage
+   - Set dataNeeded=true only when SofaScore/Transfermarkt/Wiki data should be fetched for Step2-4
    - EXCLUDE: journalists (Fabrizio Romano, David Ornstein etc.), agents, commentators, TV presenters
+   - EXCLUDE: Formula 1, motorsport, racing, and Fernando Alonso unless the topic explicitly says this is an F1 story
    - EXCLUDE: competitions/tournaments (Premier League, Champions League etc.) — they have no player stats
-   - Max 6 entities total
+   - EXCLUDE: ordinary sentences, Reddit comment fragments, exclamations, abstract words, source/site names
+   - EXCLUDE: ambiguous one-word labels such as "Jesus" unless the article clearly identifies the full football person
+   - Max 8 labels total
+   - For dataNeeded=true, prefer only the protagonist and direct clubs/successor/comparison targets. Background-only names usually dataNeeded=false.
 
 Output JSON only:
-{"followUpQueries":["query1"],"entities":[{"type":"player","nameEn":"Andrew Robertson"},{"type":"team","nameEn":"Tottenham"},{"type":"manager","nameEn":"Roberto De Zerbi"}]}`;
+{"followUpQueries":["query1"],"labels":[{"type":"manager","nameEn":"Arne Slot","nameJa":"アルネ・スロット","role":"protagonist","dataNeeded":true,"reason":"退任記事の中心人物"}]}`;
 
   try {
     const raw = await callAI({
@@ -687,20 +765,32 @@ Output JSON only:
     const followUpQueries = Array.isArray(parsed.followUpQueries)
       ? parsed.followUpQueries.map((q) => String(q).trim()).filter(Boolean).slice(0, 2)
       : [];
-    const aiEntities = Array.isArray(parsed.entities)
-      ? parsed.entities.filter((e) => e && e.nameEn)
-      : [];
-    const mandatoryEntities = mandatoryLabels
-      .filter((name) => /[A-Za-z]/.test(name) && !/^(World Cup|squad|news|here we go)$/i.test(name))
-      .map((name) => ({ type: 'entity', nameEn: name }));
-    const entities = [...mandatoryEntities, ...aiEntities]
+    const rawLabels = Array.isArray(parsed.labels)
+      ? parsed.labels
+      : (Array.isArray(parsed.entities) ? parsed.entities : []);
+    const labels = rawLabels
+      .filter((e) => e && e.nameEn && isStoryEntityName(e.nameEn))
+      .filter((e) => !isOffTopicEntityName(e.nameEn, topic))
+      .map((e) => ({
+        type: e.type || 'entity',
+        nameEn: String(e.nameEn || '').trim(),
+        nameJa: String(e.nameJa || '').trim(),
+        role: e.role || 'related',
+        dataNeeded: e.dataNeeded !== false,
+        reason: String(e.reason || '').slice(0, 120),
+      }))
+      .filter((e, i, arr) => arr.findIndex((x) => String(x.nameEn).toLowerCase() === String(e.nameEn).toLowerCase()) === i)
+      .slice(0, 8);
+    const entities = labels
+      .filter((e) => e.dataNeeded)
+      .map((e) => ({ type: e.type || 'entity', nameEn: e.nameEn, role: e.role, dataNeeded: true }))
       .filter((e, i, arr) => arr.findIndex((x) => String(x.nameEn).toLowerCase() === String(e.nameEn).toLowerCase()) === i)
       .slice(0, 6);
     console.log('[v3_research] aiExpandResearch → queries:', followUpQueries, 'entities:', entities.map(e => e.nameEn));
-    return { followUpQueries, entities };
+    return { followUpQueries, labels, entities };
   } catch (e) {
     console.warn('[v3_research] aiExpandResearch failed:', e.message);
-    return { followUpQueries: [], entities: [] };
+    return { followUpQueries: [], labels: [], entities: [] };
   }
 }
 

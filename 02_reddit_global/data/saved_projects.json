@@ -363,5 +363,815 @@
       ],
       "added_at": "2026-04-24T07:30:01.946+09:00"
     }
+  },
+  {
+    "id": "v3_robertson_test",
+    "postId": "v3_robertson_test",
+    "title": "Robertson テスト案件（V3画像フェッチャー）",
+    "topic": "Andrew Robertson Liverpool",
+    "savedAt": "2026-06-01T15:21:06.551Z",
+    "source": "custom",
+    "sharedImagePool": [
+      {
+        "url": "https://pbs.twimg.com/media/HJqGd6SXgAI9nKm.jpg",
+        "score": 47,
+        "source": "official_x",
+        "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+        "tags": [
+          "LFC"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJqGfeXW0AQbPe0.jpg",
+        "score": 47,
+        "source": "official_x",
+        "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+        "tags": [
+          "LFC"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJqGg9uWEAAupqN.jpg",
+        "score": 47,
+        "source": "official_x",
+        "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+        "tags": [
+          "LFC"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/DF2BaXxXYAE4qiA.jpg",
+        "score": 35,
+        "source": "official_x",
+        "title": "Andrew Robertson will make his #LFC debut in tomorrow's friendly with @HerthaBSC",
+        "tags": [
+          "LFC"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtNUg8XgAE4R3G.jpg",
+        "score": 35,
+        "source": "official_x",
+        "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+        "tags": [
+          "Header",
+          "LIVBRE"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtNUg-WIAQvdjc.jpg",
+        "score": 35,
+        "source": "official_x",
+        "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+        "tags": [
+          "Header",
+          "LIVBRE"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtNUg4W8AMzZdO.jpg",
+        "score": 35,
+        "source": "official_x",
+        "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+        "tags": [
+          "Header",
+          "LIVBRE"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtNUg1XwAQIdlN.jpg",
+        "score": 35,
+        "source": "official_x",
+        "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+        "tags": [
+          "Header",
+          "LIVBRE"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJgGf-FWIAMuIaD.jpg",
+        "score": 63,
+        "source": "official_x",
+        "title": "Liverpool have unveiled a new memorial at Anfield today to mark the 41st anniver",
+        "tags": []
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtQICtWcAABL4m.jpg",
+        "score": 62,
+        "source": "official_x",
+        "title": "THIS MONTH @foofighters play in the UK!\n\n25th &amp; 27th June. Two nights at Anf",
+        "tags": []
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtBqPnXIAIr73l.jpg",
+        "score": 62,
+        "source": "official_x",
+        "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+        "tags": []
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtBqR4W0AAF5Pb.jpg",
+        "score": 62,
+        "source": "official_x",
+        "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+        "tags": []
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJtBqRdWwAQMZQ0.jpg",
+        "score": 62,
+        "source": "official_x",
+        "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+        "tags": []
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJgxzqcWwAUipbG.jpg",
+        "score": 62,
+        "source": "official_x",
+        "title": "Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st anni",
+        "tags": [
+          "lfc"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJgIYrxXsAQzxVI.jpg",
+        "score": 61,
+        "source": "official_x",
+        "title": "❤️ | Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st",
+        "tags": [
+          "lfc"
+        ]
+      },
+      {
+        "url": "https://pbs.twimg.com/media/HJe-KlPWMAAI6lx.jpg",
+        "score": 61,
+        "source": "official_x",
+        "title": "Liverpool FC today unveiled a new memorial at Anfield to mark the 41st anniversa",
+        "tags": [
+          "LFC"
+        ]
+      }
+    ],
+    "v3Modules": [
+      {
+        "type": "stats",
+        "title": "ロバートソンがリヴァプールのユニフォームでオーバーラップしているシーン",
+        "images": [
+          "/images/v3_cache/v3s1_andrew_robertson_0.jpg"
+        ],
+        "imageCandidates": [
+          {
+            "url": "https://pbs.twimg.com/media/HJqGd6SXgAI9nKm.jpg",
+            "score": 47,
+            "source": "official_x",
+            "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJqGfeXW0AQbPe0.jpg",
+            "score": 47,
+            "source": "official_x",
+            "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJqGg9uWEAAupqN.jpg",
+            "score": 47,
+            "source": "official_x",
+            "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/DF2BaXxXYAE4qiA.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "Andrew Robertson will make his #LFC debut in tomorrow's friendly with @HerthaBSC",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg8XgAE4R3G.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg-WIAQvdjc.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg4W8AMzZdO.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg1XwAQIdlN.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          }
+        ],
+        "narration": "",
+        "dataSlots": []
+      },
+      {
+        "type": "profile",
+        "title": "ロバートソンのポートレート写真",
+        "images": [
+          "/images/v3_cache/v3s2_andrew_robertson_1.jpg"
+        ],
+        "imageCandidates": [
+          {
+            "url": "https://pbs.twimg.com/media/HJqGd6SXgAI9nKm.jpg",
+            "score": 47,
+            "source": "official_x",
+            "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJqGfeXW0AQbPe0.jpg",
+            "score": 47,
+            "source": "official_x",
+            "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJqGg9uWEAAupqN.jpg",
+            "score": 47,
+            "source": "official_x",
+            "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/DF2BaXxXYAE4qiA.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "Andrew Robertson will make his #LFC debut in tomorrow's friendly with @HerthaBSC",
+            "tags": [
+              "LFC"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg8XgAE4R3G.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg-WIAQvdjc.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg4W8AMzZdO.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtNUg1XwAQIdlN.jpg",
+            "score": 35,
+            "source": "official_x",
+            "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+            "tags": [
+              "Header",
+              "LIVBRE"
+            ]
+          }
+        ],
+        "narration": "",
+        "dataSlots": []
+      },
+      {
+        "type": "comparison",
+        "title": "",
+        "images": [
+          "/images/v3_cache/v3s3L_andrew_robertson_2.jpg",
+          "/images_stock/players_official/la-liga/real-madrid/trent-alexander-arnold.png"
+        ],
+        "imageCandidates": [],
+        "narration": "",
+        "dataSlots": []
+      },
+      {
+        "type": "opening",
+        "title": "リヴァプールのスタジアム全景",
+        "images": [
+          "/images/v3_cache/v3s4_liverpool_4.jpg"
+        ],
+        "imageCandidates": [
+          {
+            "url": "https://pbs.twimg.com/media/HJgGf-FWIAMuIaD.jpg",
+            "score": 63,
+            "source": "official_x",
+            "title": "Liverpool have unveiled a new memorial at Anfield today to mark the 41st anniver",
+            "tags": []
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtQICtWcAABL4m.jpg",
+            "score": 62,
+            "source": "official_x",
+            "title": "THIS MONTH @foofighters play in the UK!\n\n25th &amp; 27th June. Two nights at Anf",
+            "tags": []
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtBqPnXIAIr73l.jpg",
+            "score": 62,
+            "source": "official_x",
+            "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+            "tags": []
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtBqR4W0AAF5Pb.jpg",
+            "score": 62,
+            "source": "official_x",
+            "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+            "tags": []
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJtBqRdWwAQMZQ0.jpg",
+            "score": 62,
+            "source": "official_x",
+            "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+            "tags": []
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJgxzqcWwAUipbG.jpg",
+            "score": 62,
+            "source": "official_x",
+            "title": "Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st anni",
+            "tags": [
+              "lfc"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJgIYrxXsAQzxVI.jpg",
+            "score": 61,
+            "source": "official_x",
+            "title": "❤️ | Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st",
+            "tags": [
+              "lfc"
+            ]
+          },
+          {
+            "url": "https://pbs.twimg.com/media/HJe-KlPWMAAI6lx.jpg",
+            "score": 61,
+            "source": "official_x",
+            "title": "Liverpool FC today unveiled a new memorial at Anfield to mark the 41st anniversa",
+            "tags": [
+              "LFC"
+            ]
+          }
+        ],
+        "narration": "",
+        "dataSlots": []
+      }
+    ],
+    "researchData": {
+      "sharedImagePool": [
+        {
+          "url": "https://pbs.twimg.com/media/HJqGd6SXgAI9nKm.jpg",
+          "score": 47,
+          "source": "official_x",
+          "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+          "tags": [
+            "LFC"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJqGfeXW0AQbPe0.jpg",
+          "score": 47,
+          "source": "official_x",
+          "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+          "tags": [
+            "LFC"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJqGg9uWEAAupqN.jpg",
+          "score": 47,
+          "source": "official_x",
+          "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+          "tags": [
+            "LFC"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/DF2BaXxXYAE4qiA.jpg",
+          "score": 35,
+          "source": "official_x",
+          "title": "Andrew Robertson will make his #LFC debut in tomorrow's friendly with @HerthaBSC",
+          "tags": [
+            "LFC"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtNUg8XgAE4R3G.jpg",
+          "score": 35,
+          "source": "official_x",
+          "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+          "tags": [
+            "Header",
+            "LIVBRE"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtNUg-WIAQvdjc.jpg",
+          "score": 35,
+          "source": "official_x",
+          "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+          "tags": [
+            "Header",
+            "LIVBRE"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtNUg4W8AMzZdO.jpg",
+          "score": 35,
+          "source": "official_x",
+          "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+          "tags": [
+            "Header",
+            "LIVBRE"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtNUg1XwAQIdlN.jpg",
+          "score": 35,
+          "source": "official_x",
+          "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+          "tags": [
+            "Header",
+            "LIVBRE"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJgGf-FWIAMuIaD.jpg",
+          "score": 63,
+          "source": "official_x",
+          "title": "Liverpool have unveiled a new memorial at Anfield today to mark the 41st anniver",
+          "tags": []
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtQICtWcAABL4m.jpg",
+          "score": 62,
+          "source": "official_x",
+          "title": "THIS MONTH @foofighters play in the UK!\n\n25th &amp; 27th June. Two nights at Anf",
+          "tags": []
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtBqPnXIAIr73l.jpg",
+          "score": 62,
+          "source": "official_x",
+          "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+          "tags": []
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtBqR4W0AAF5Pb.jpg",
+          "score": 62,
+          "source": "official_x",
+          "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+          "tags": []
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJtBqRdWwAQMZQ0.jpg",
+          "score": 62,
+          "source": "official_x",
+          "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+          "tags": []
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJgxzqcWwAUipbG.jpg",
+          "score": 62,
+          "source": "official_x",
+          "title": "Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st anni",
+          "tags": [
+            "lfc"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJgIYrxXsAQzxVI.jpg",
+          "score": 61,
+          "source": "official_x",
+          "title": "❤️ | Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st",
+          "tags": [
+            "lfc"
+          ]
+        },
+        {
+          "url": "https://pbs.twimg.com/media/HJe-KlPWMAAI6lx.jpg",
+          "score": 61,
+          "source": "official_x",
+          "title": "Liverpool FC today unveiled a new memorial at Anfield to mark the 41st anniversa",
+          "tags": [
+            "LFC"
+          ]
+        }
+      ],
+      "v3Modules": [
+        {
+          "type": "stats",
+          "title": "ロバートソンがリヴァプールのユニフォームでオーバーラップしているシーン",
+          "images": [
+            "/images/v3_cache/v3s1_andrew_robertson_0.jpg"
+          ],
+          "imageCandidates": [
+            {
+              "url": "https://pbs.twimg.com/media/HJqGd6SXgAI9nKm.jpg",
+              "score": 47,
+              "source": "official_x",
+              "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJqGfeXW0AQbPe0.jpg",
+              "score": 47,
+              "source": "official_x",
+              "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJqGg9uWEAAupqN.jpg",
+              "score": 47,
+              "source": "official_x",
+              "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/DF2BaXxXYAE4qiA.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "Andrew Robertson will make his #LFC debut in tomorrow's friendly with @HerthaBSC",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg8XgAE4R3G.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg-WIAQvdjc.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg4W8AMzZdO.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg1XwAQIdlN.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            }
+          ],
+          "narration": "",
+          "dataSlots": []
+        },
+        {
+          "type": "profile",
+          "title": "ロバートソンのポートレート写真",
+          "images": [
+            "/images/v3_cache/v3s2_andrew_robertson_1.jpg"
+          ],
+          "imageCandidates": [
+            {
+              "url": "https://pbs.twimg.com/media/HJqGd6SXgAI9nKm.jpg",
+              "score": 47,
+              "source": "official_x",
+              "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJqGfeXW0AQbPe0.jpg",
+              "score": 47,
+              "source": "official_x",
+              "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJqGg9uWEAAupqN.jpg",
+              "score": 47,
+              "source": "official_x",
+              "title": "In last match PL, vs Brentford, 24 May 2026, Liverpool FC playing in kits for se",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/DF2BaXxXYAE4qiA.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "Andrew Robertson will make his #LFC debut in tomorrow's friendly with @HerthaBSC",
+              "tags": [
+                "LFC"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg8XgAE4R3G.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg-WIAQvdjc.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg4W8AMzZdO.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtNUg1XwAQIdlN.jpg",
+              "score": 35,
+              "source": "official_x",
+              "title": "4K #Header\n   └📂 Andrew Robertson ❤️‍🔥❄️\n      └📂 #LIVBRE https://t.co/qYbEF5",
+              "tags": [
+                "Header",
+                "LIVBRE"
+              ]
+            }
+          ],
+          "narration": "",
+          "dataSlots": []
+        },
+        {
+          "type": "comparison",
+          "title": "",
+          "images": [
+            "/images/v3_cache/v3s3L_andrew_robertson_2.jpg",
+            "/images_stock/players_official/la-liga/real-madrid/trent-alexander-arnold.png"
+          ],
+          "imageCandidates": [],
+          "narration": "",
+          "dataSlots": []
+        },
+        {
+          "type": "opening",
+          "title": "リヴァプールのスタジアム全景",
+          "images": [
+            "/images/v3_cache/v3s4_liverpool_4.jpg"
+          ],
+          "imageCandidates": [
+            {
+              "url": "https://pbs.twimg.com/media/HJgGf-FWIAMuIaD.jpg",
+              "score": 63,
+              "source": "official_x",
+              "title": "Liverpool have unveiled a new memorial at Anfield today to mark the 41st anniver",
+              "tags": []
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtQICtWcAABL4m.jpg",
+              "score": 62,
+              "source": "official_x",
+              "title": "THIS MONTH @foofighters play in the UK!\n\n25th &amp; 27th June. Two nights at Anf",
+              "tags": []
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtBqPnXIAIr73l.jpg",
+              "score": 62,
+              "source": "official_x",
+              "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+              "tags": []
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtBqR4W0AAF5Pb.jpg",
+              "score": 62,
+              "source": "official_x",
+              "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+              "tags": []
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJtBqRdWwAQMZQ0.jpg",
+              "score": 62,
+              "source": "official_x",
+              "title": "On May 31, 2008, Paul McCartney rehearsed for the Liverpool Sound Concert at Anf",
+              "tags": []
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJgxzqcWwAUipbG.jpg",
+              "score": 62,
+              "source": "official_x",
+              "title": "Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st anni",
+              "tags": [
+                "lfc"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJgIYrxXsAQzxVI.jpg",
+              "score": 61,
+              "source": "official_x",
+              "title": "❤️ | Liverpool FC has unveiled a new memorial at Anfield to commemorate the 41st",
+              "tags": [
+                "lfc"
+              ]
+            },
+            {
+              "url": "https://pbs.twimg.com/media/HJe-KlPWMAAI6lx.jpg",
+              "score": 61,
+              "source": "official_x",
+              "title": "Liverpool FC today unveiled a new memorial at Anfield to mark the 41st anniversa",
+              "tags": [
+                "LFC"
+              ]
+            }
+          ],
+          "narration": "",
+          "dataSlots": []
+        }
+      ]
+    }
   }
 ]

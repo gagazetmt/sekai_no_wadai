@@ -33,6 +33,11 @@ function buildPrompt(topic, rawMemo, research, wikiStories, fetchedData) {
 ## トピック
 ${topic}
 
+## 重要ルール
+- これはサッカー動画の企画材料です。F1、モータースポーツ、レース、Fernando Alonso は、案件が明示的にF1でない限り無視してください。
+- サッカー文脈の "Alonso" は Xabi Alonso として扱い、Fernando Alonso を人物欄・事実・論点に入れないでください。
+- 記事コーパスに別競技の検索ノイズが混じっていても、サッカー案件に直接関係する人物、監督、クラブ、大会だけを採用してください。
+
 ## 相棒メモ
 ${rawMemo || 'なし'}
 

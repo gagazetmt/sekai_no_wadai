@@ -1,6 +1,58 @@
 # Codex Mia V3 Handover
 
-Last updated: 2026-06-02 JST
+Last updated: 2026-06-03 JST
+
+## 2026-06-03 JST Update - V2.5 Pivot Implementation
+
+### Direction Locked
+
+- User and Mia decided not to keep forcing V3 as the main launcher.
+- New architecture: V2 is the mothership, with only the stronger V3 assets grafted in.
+- Step ownership:
+  - Step1 case selection: V2
+  - Step2-1 through Step2-4 search query / labels / data acquisition: V2
+  - Step3 proposal A/B/C: V3 AI, using data acquired by V2 Step2
+  - Script structure: V2-compatible structure generated from the selected V3 proposal, then validated against V2 SI data
+  - Script generation: V2
+  - Editing: V2
+  - Image acquisition: V3 image fetcher, including named/official-X logic and improved image selection
+  - Video generation: V2
+- Known continuing issue: subtitle bar timing can drift from narration timing. Keep this as an open follow-up for Step6/video generation.
+
+### Implemented
+
+- Added V2.5 autopilot route: routes/v25_autopilot_routes.js
+- Added header button in local_v2_launcher.js: V2.5 AUTO
+- Exported V2 Step2 internals for reuse: _runSuggestLabels and _runFetchAll
+- Exported V2 Step3 internals for future reuse: _runProposeModules and _runScenarioJob
+- V2.5 job flow:
+  - Runs V2 label suggestion
+  - Filters sentence fragments and contextual Alonso noise
+  - Runs V2 fetch-all
+  - Builds V3 proposal A/B/C with generateAIPlan
+  - Converts the selected V3 proposal into V2-compatible modules
+  - Guards stats/profile/comparison against real V2 SI bindings
+  - Demotes invalid comparison to insight instead of allowing hallucinated comparisons
+  - Attaches V3 image fetcher results to modules
+  - Saves proposal details to data/v25_plans/{postId}.json
+  - Saves final modules to data/{postId}_modules.json
+
+### Verification
+
+- Local syntax checks passed for local_v2_launcher.js, routes/step2_routes.js, routes/step3_routes.js, routes/v25_autopilot_routes.js
+- Local require checks passed for routes/v25_autopilot_routes.js and local_v2_launcher.js
+- Deployed to VPS /root/sekai_no_wadai/02_reddit_global
+- Restarted PM2 app soccer-yt-v2
+- VPS checks:
+  - GET http://127.0.0.1:3004/ returned 200 and contains V2.5 AUTO
+  - GET /api/v25/plan?postId=__missing__ returned 200 with plan not found JSON
+
+### Next Review Points
+
+- Confirm a real case run from the V2 UI.
+- Confirm A/B/C proposals are saved in data/v25_plans and that the selected proposal feels better than V3's old end-to-end output.
+- If user wants visible A/B/C selection inside V2, add a compact proposal review panel before Step3 modules.
+- Continue tracking subtitle bar / narration drift as a separate video-generation issue.
 
 ## 2026-06-02 JST Update - V3 Launcher Recipe / Step2 / Step5 Fix Log
 
