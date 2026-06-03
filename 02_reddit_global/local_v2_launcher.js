@@ -483,13 +483,12 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     ${s2UI()}
     <div id="step25" class="step-container" style="display:none">
 <div class="panel" style="padding:16px 18px;">
-  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #1e293b;">
-    <span style="font-size:14px;font-weight:700;color:#fcd34d;">企画提案</span>
-    <button id="v25RunBtn" onclick="window.runV25FromTab()" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;">▶ V2.5 AUTO実行</button>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+    <button id="v25RunBtn" onclick="window.runV25FromTab()" class="btn">▶ 調査して企画書を生成</button>
     <span id="v25TabStatus" style="font-size:11px;color:#94a3b8;"></span>
   </div>
   <div id="v25ProposalArea">
-    <div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">案件を選択してV2.5 AUTOを実行すると、企画提案A/B/Cが表示されます</div>
+    <div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">案件を選択して「調査して企画書を生成」を押してください</div>
   </div>
 </div>
 </div>
@@ -755,7 +754,7 @@ window.renderV25Proposals = function(plan, post) {
     html += '<textarea id="v25p_note" rows="2" style="width:100%;margin:4px 0 10px;padding:6px;background:#111827;border:1px solid #1e3a5f;border-radius:5px;color:#e5e7eb;font-size:12px;" placeholder="例: 比較スライドはCucurellaではなくMalo Gusto(RSB)と比較すること"></textarea>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">';
-    html += '<button id="v25pGoBtn" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer;font-size:13px;">④ 脚本構成を生成</button>';
+    html += '<button id="v25pGoBtn" class="btn" style="font-size:13px;font-weight:700;">▶ 脚本構成を生成</button>';
     html += '</div>';
     html += '</div>';
     area.innerHTML = html;
