@@ -5,13 +5,13 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '..', '.env'), quiet: true });
 
 // tbs オプション例: 'qdr:d'=24h, 'qdr:w'=1週間, 'qdr:m'=1ヶ月, 'qdr:y'=1年
-async function fetchSerper(query, moduleId = '', lang = 'en', tbs = null) {
+async function fetchSerper(query, moduleId = '', lang = 'en', tbs = null, extraParams = {}) {
   const apiKey = process.env.SERPER_API_KEY;
   if (!apiKey) return { ok: false, error: 'SERPER_API_KEY が設定されていません' };
   if (!query)  return { ok: false, error: '検索クエリが未指定' };
 
   try {
-    const body = { q: query, num: 6, hl: lang, gl: lang === 'ja' ? 'jp' : 'us' };
+    const body = { q: query, num: 6, hl: lang, gl: lang === 'ja' ? 'jp' : 'us', ...extraParams };
     if (tbs) body.tbs = tbs;
 
     const res = await fetch('https://google.serper.dev/search', {

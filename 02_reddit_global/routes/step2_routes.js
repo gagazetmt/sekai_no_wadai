@@ -312,7 +312,35 @@ JSONのみ:
 //   検索クエリ自体は entity/match の fetch ラベルにはしない。
 //   返り値の articles は ③ 企画提案コーパス (Fix#2) でも再利用する。
 // ═══════════════════════════════════════════════════════════
-// P1: クエリキーワードと記事タイトル/スニペットの一致度でノイズ除去
+// ソーススコア（高いほど優先取得・Jina対象になる）
+const SOURCE_SCORE_MAP = {
+  'bbc.co.uk': 90, 'bbc.com': 90,
+  'theathletic.com': 88,
+  'theguardian.com': 85,
+  'skysports.com': 82,
+  'espn.com': 80, 'espn.co.uk': 80,
+  'goal.com': 75,
+  'bundesliga.com': 72,
+  'transfermarkt.com': 70,
+  'football-zone.net': 75,
+  'footballchannel.jp': 72,
+  'gekisaka.jp': 70,
+  'soccer-king.jp': 68,
+  'soccerdigestweb.com': 68,
+  'number.bunshun.jp': 70,
+  'sportsnavi.yahoo.co.jp': 75,
+  'nhk.or.jp': 78,
+};
+function _sourceScore(host) {
+  if (!host) return 50;
+  if (SOURCE_SCORE_MAP[host]) return SOURCE_SCORE_MAP[host];
+  for (const [k, v] of Object.entries(SOURCE_SCORE_MAP)) {
+    if (host.endsWith(k)) return v;
+  }
+  return 50;
+}
+
+// P1: キーワード一致でノイズ除去
 function _isArticleRelevant(article, queries) {
   const STOP = new Set(['the','and','for','with','from','that','this','are','was','has','been','will',
     'soccer','football','sport','sports','about','have','its','his','her','their','not','but','can']);
@@ -337,17 +365,26 @@ async function _jinaFetch(url, maxChars = 2000) {
   } catch (_) { return null; }
 }
 
+// opts.jaQuery: 日本語クエリ (gl=jp, hl=ja で検索)
 async function _gatherArticles(searches, opts = {}) {
-  const queries = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 4);
-  if (!queries.length) return [];
+  const enQueries = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 2);
+  const jaQuery   = opts.jaQuery || null;
   const maxArticles = Number(opts.maxArticles) || 15;
-  const results = await Promise.all(queries.map(q =>
-    fetchSerper(q).catch(e => ({ ok: false, error: e.message, query: q }))
+  if (!enQueries.length && !jaQuery) return [];
+
+  // 英語クエリ: lr=lang_en で英語ページ限定
+  const enResults = await Promise.all(enQueries.map(q =>
+    fetchSerper(q, '', 'en', null, { lr: 'lang_en' }).catch(() => ({ organic: [] }))
   ));
+  // 日本語クエリ: gl=jp, hl=ja で日本語ページ
+  const jaResult = jaQuery
+    ? await fetchSerper(jaQuery, '', 'ja').catch(() => ({ organic: [] }))
+    : { organic: [] };
+
   const articles = [];
   const seen = new Set();
-  results.forEach((news, qi) => {
-    (news?.organic || []).forEach(r => {
+  function collect(res, lang) {
+    (res?.organic || []).forEach(r => {
       const title = (r.title || '').trim();
       const key = title.toLowerCase();
       if (!title || seen.has(key)) return;
@@ -355,35 +392,33 @@ async function _gatherArticles(searches, opts = {}) {
       let host = 'search';
       try { host = new URL(r.link).hostname.replace(/^www\./, ''); } catch (_) {}
       articles.push({
-        title,
-        snippet: (r.snippet || '').slice(0, 320),
-        link: r.link || '',
-        host,
-        date: r.date || null,
-        query: queries[qi],
+        title, snippet: (r.snippet || '').slice(0, 320),
+        link: r.link || '', host, date: r.date || null, lang,
+        sourceScore: _sourceScore(host),
       });
     });
-  });
+  }
+  enResults.forEach(r => collect(r, 'en'));
+  collect(jaResult, 'ja');
+
+  // ソーススコア降順で並べ替え（Jina取得優先順位も兼ねる）
+  articles.sort((a, b) => b.sourceScore - a.sourceScore);
 
   // P1: ノイズフィルタ
-  const relevant = articles.filter(a => _isArticleRelevant(a, queries));
+  const allQueries = [...enQueries, jaQuery].filter(Boolean);
+  const relevant = articles.filter(a => _isArticleRelevant(a, allQueries));
   const removed = articles.length - relevant.length;
-  if (removed > 0) console.log(`[gatherArticles] ノイズ除去: ${removed}件除外 (${articles.length}→${relevant.length})`);
-  // 全件フィルタされた時だけ元に戻す（閾値0: 1件でも残れば優先）
+  if (removed > 0) console.log(`[gatherArticles] ノイズ除去: ${removed}件除外`);
   const filtered = (relevant.length > 0 ? relevant : articles).slice(0, maxArticles);
 
-  // P2: 上位5件を Jina Reader で全文取得（並列・失敗は無視）
+  // P2: ソーススコア上位から5件を Jina Reader で全文取得（既にスコア順）
   const TOP_JINA = 5;
-  const jinaTargets = filtered.slice(0, TOP_JINA).filter(a => a.link);
-  await Promise.all(jinaTargets.map(async (a) => {
+  await Promise.all(filtered.slice(0, TOP_JINA).filter(a => a.link).map(async (a) => {
     const fullText = await _jinaFetch(a.link);
-    if (fullText) {
-      a.fullText = fullText;
-      a.snippet = fullText.slice(0, 320); // スニペットも更新
-    }
+    if (fullText) { a.fullText = fullText; a.snippet = fullText.slice(0, 320); }
   }));
-  const jinaHits = jinaTargets.filter(a => a.fullText).length;
-  console.log(`[gatherArticles] Jina全文取得: ${jinaHits}/${jinaTargets.length}件成功`);
+  const jinaHits = filtered.slice(0, TOP_JINA).filter(a => a.fullText).length;
+  console.log(`[gatherArticles] EN×${enQueries.length} JA×${jaQuery?1:0} | 収集:${articles.length}件 → フィルタ後:${filtered.length}件 Jina:${jinaHits}件`);
 
   return filtered;
 }
@@ -398,9 +433,14 @@ async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
   const baseEntities = Array.isArray(baseSuggested?.entities) ? baseSuggested.entities : [];
   const searches     = Array.isArray(baseSuggested?.searches) ? baseSuggested.searches : [];
 
-  // ②-2: 記事収集（収集専用 / fetch ラベルにはしない）
-  const articles = await _gatherArticles(searches, opts);
-  console.log(`[Step2 v2.5] ②-2 記事収集: ${articles.length}件 (queries=${searches.slice(0,4).join(' | ')})`);
+  // 日本語クエリ: titleJaから主要固有名詞を抽出（記号除去して先頭40字）
+  const jaQuery = titleJa
+    ? titleJa.replace(/[【】「」『』（）〔〕！？!?＊…◆◇■□▶▷→←↑↓]/g, ' ').trim().slice(0, 40)
+    : null;
+
+  // ②-2: 記事収集（英語×2 + 日本語×1）
+  const articles = await _gatherArticles(searches, { ...opts, jaQuery });
+  console.log(`[Step2 v2.5] ②-2 記事収集: ${articles.length}件 JA="${jaQuery||'なし'}"`);
   if (!articles.length) {
     // 記事ゼロなら base のまま返す（②-3 をスキップ）
     return { articles: [], refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], usedAI: false };
