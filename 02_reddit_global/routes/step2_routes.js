@@ -365,7 +365,7 @@ function _isArticleRelevant(article, queries, requiredTerms = []) {
 }
 
 // P2: Jina Reader で記事本文をフル取得（失敗時はスニペットのまま）
-async function _jinaFetch(url, maxChars = 2000) {
+async function _jinaFetch(url, maxChars = 6000) {
   try {
     const res = await fetch('https://r.jina.ai/' + url, {
       headers: { 'Accept': 'text/plain', 'X-Timeout': '8' },
