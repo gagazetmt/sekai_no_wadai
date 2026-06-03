@@ -430,17 +430,17 @@ async function _gatherArticles(searches, opts = {}) {
 
   console.log(`[gatherArticles] EN ${enRaw.length}→${enFiltered.length}件 / JA ${jaRaw.length}→${jaFiltered.length}件 | 必須語:[${requiredTerms.slice(0,3).join('/')}]`);
 
-  // EN→JA の順で結合（Jina はEN優先でスコア順）
-  const filtered = [...enFiltered, ...jaFiltered];
-
-  // P2: Jina全文取得（EN優先・上位7件）
-  const TOP_JINA = 7;
-  await Promise.all(filtered.slice(0, TOP_JINA).filter(a => a.link).map(async (a) => {
+  // P2: Jina全文取得（EN上位5件 + JA上位3件を並列）
+  const jinaTargets = [...enFiltered.slice(0, 5), ...jaFiltered.slice(0, 3)].filter(a => a.link);
+  await Promise.all(jinaTargets.map(async (a) => {
     const fullText = await _jinaFetch(a.link);
     if (fullText) { a.fullText = fullText; a.snippet = fullText.slice(0, 320); }
   }));
-  const jinaHits = filtered.slice(0, TOP_JINA).filter(a => a.fullText).length;
-  console.log(`[gatherArticles] Jina:${jinaHits}/${TOP_JINA}件`);
+  const jinaHits = jinaTargets.filter(a => a.fullText).length;
+  console.log(`[gatherArticles] Jina:${jinaHits}/${jinaTargets.length}件(EN5+JA3)`);
+
+  // EN→JA の順で結合
+  const filtered = [...enFiltered, ...jaFiltered];
 
   return filtered;
 }
