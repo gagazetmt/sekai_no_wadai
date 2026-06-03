@@ -22,6 +22,9 @@ const PLAN_DIR = path.join(DATA_DIR, 'v25_plans');
 if (!fs.existsSync(PLAN_DIR)) fs.mkdirSync(PLAN_DIR, { recursive: true });
 
 const PLAYER_IMAGE_TYPES = new Set(['stats', 'profile', 'comparison']);
+const TRANSFER_WORD_RE = /移籍|契約|流出|獲得|退団|フリー|延長|transfer|contract|signing|departure|free/i;
+const NUMERIC_PLAYER_WORD_RE = /市場価値|契約|出場|ゴール|アシスト|評価|得点|分|apps|goals|assists|rating|market|contract|minutes/i;
+const CLUB_ROUTE_WORD_RE = /レアル|Real Madrid|Madrid|リバプール|Liverpool/i;
 
 // コスト計測: グローバル _log のインデックスを起点に、その後追加された
 //   AIコール分だけを集計する（ジョブ単位のコスト。 並行ジョブと混ざらない）。
@@ -199,33 +202,83 @@ async function buildModulesViaV2(postId, aiPlan, selectedIndex, si, opts = {}) {
   const fallbackPlan = { ...aiPlan, themeProposal: { ...proposal, selected: idx } };
   return { modules: buildModulesFromV3Plan(fallbackPlan, si), via: 'v3_plan_fallback', selectedIndex: idx, candidate };
 }
+function moduleText(mod) {
+  return [mod?.title, mod?.scriptDir, mod?.narration, mod?.headline]
+    .filter(Boolean)
+    .join(' ');
+}
+function clearDataBinding(mod) {
+  mod.secondary = null;
+  mod.binding = null;
+  mod.customSlotKeys = [];
+  mod.dataSlots = [];
+}
+function isTransferRelationshipHistory(mod) {
+  const text = moduleText(mod);
+  return TRANSFER_WORD_RE.test(text) && CLUB_ROUTE_WORD_RE.test(text);
+}
+function shouldPromoteInsightToStats(mod, si) {
+  if (mod.type !== 'insight' || typeof mod.mainKey !== 'string' || !mod.mainKey.startsWith('entity:')) return false;
+  if (!NUMERIC_PLAYER_WORD_RE.test(moduleText(mod))) return false;
+  return !!getBindingMeta({ ...mod, type: 'stats' }, si);
+}
+function bindStatsLikeModule(mod, si) {
+  const meta = getBindingMeta(mod, si);
+  if (!meta) return false;
+  const sel = resolveCustomSlotKeys(meta, mod);
+  mod.binding = { subject: meta.subject, aspect: meta.aspect, primary: meta.primary, secondary: meta.secondary || null };
+  mod.customSlotKeys = sel.keys;
+  mod.dataSlots = buildDataSlotsFromMeta(meta, sel.keys);
+  return true;
+}
+function moveEarlyReactionLater(modules, demotions) {
+  const out = modules.slice();
+  const endingIdx = out.findIndex(m => m.type === 'ending');
+  const lastContentIdx = endingIdx >= 0 ? endingIdx : out.length;
+  const minReactionIdx = Math.min(Math.max(4, Math.floor(out.length * 0.55)), Math.max(2, lastContentIdx - 1));
+  const earlyIdx = out.findIndex((m, idx) => m.type === 'reaction' && idx < minReactionIdx);
+  if (earlyIdx < 0) return out;
+  const [reaction] = out.splice(earlyIdx, 1);
+  const newEndingIdx = out.findIndex(m => m.type === 'ending');
+  const insertIdx = Math.max(2, (newEndingIdx >= 0 ? newEndingIdx : out.length) - 1);
+  out.splice(Math.min(insertIdx, out.length), 0, reaction);
+  demotions.push({ index: earlyIdx + 1, from: 'reaction', to: 'reaction', reason: 'reaction moved after evidence slides' });
+  return out;
+}
 function applyBindingGuards(modules, si) {
   const demotions = [];
   const guarded = modules.map((mod, idx) => {
     const next = { ...mod };
+    if (next.type === 'history' && next.secondary && isTransferRelationshipHistory(next)) {
+      demotions.push({ index: idx + 1, from: 'history', to: 'insight', reason: 'transfer route history should not use H2H history binding' });
+      next.type = 'insight';
+      clearDataBinding(next);
+      return next;
+    }
+    if (shouldPromoteInsightToStats(next, si)) {
+      demotions.push({ index: idx + 1, from: 'insight', to: 'stats', reason: 'numeric player card promoted to stats' });
+      next.type = 'stats';
+      bindStatsLikeModule(next, si);
+      return next;
+    }
     if (next.type === 'comparison') {
       const meta = getBindingMeta(next, si);
       if (!meta || !meta.isCompare) {
         demotions.push({ index: idx + 1, from: 'comparison', to: 'insight', reason: 'comparison requires two fetched entities of the same role' });
-        next.type = 'insight'; next.secondary = null; next.binding = null; next.customSlotKeys = []; next.dataSlots = [];
+        next.type = 'insight'; clearDataBinding(next);
         return next;
       }
     }
     if (['stats', 'profile', 'comparison', 'matchcard'].includes(next.type)) {
-      const meta = getBindingMeta(next, si);
-      if (!meta) {
+      if (!bindStatsLikeModule(next, si)) {
         demotions.push({ index: idx + 1, from: next.type, to: 'insight', reason: 'no fetched data binding' });
-        next.type = 'insight'; next.binding = null; next.customSlotKeys = []; next.dataSlots = [];
+        next.type = 'insight'; clearDataBinding(next);
         return next;
       }
-      const sel = resolveCustomSlotKeys(meta, next);
-      next.binding = { subject: meta.subject, aspect: meta.aspect, primary: meta.primary, secondary: meta.secondary || null };
-      next.customSlotKeys = sel.keys;
-      next.dataSlots = buildDataSlotsFromMeta(meta, sel.keys);
     }
     return next;
   });
-  return { modules: guarded, demotions };
+  return { modules: moveEarlyReactionLater(guarded, demotions), demotions };
 }
 function buildResearchCorpus(project, si, articles = []) {
   const learningCorpus = [];

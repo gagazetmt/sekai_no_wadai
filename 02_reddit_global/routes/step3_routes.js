@@ -195,6 +195,9 @@ ${seedNote ? `\n⚠️ 【追加指示（最優先・必ず従う）】\n${seedN
 - 企画書に登場するが取得済みデータに無い固有名は、subject にせず insight として一般論で触れる
 - 企画書が要求するデータが取れていない場合、その枚は type を insight に落とす
 - 移籍・契約・噂の企画では、リーグが異なる2クラブの順位/勝点/得失点を stats/comparison の主役にしない。クラブ成績は背景に留め、主役選手の契約・市場価値・出場状況・関係者発言を優先する
+- 移籍・契約・噂の企画で、クラブ間の「流出ルート」「獲得の連鎖」「契約延長の火種」を語る枚は history ではなく insight にする。history は対戦史/H2H/年表データがある時だけ使う
+- 主役選手の市場価値・契約満了・出場数・ゴール/アシスト/評価を語る枚は insight ではなく stats/profile にする
+- reaction は事実整理・主役プロフィール・契約/移籍論点のあと、中盤以降に置く。opening/toc直後に置かない
 - comparison は同じ役割・同じ競技条件・同じ文脈で比較できる対象だけに使う。必然性が弱い比較は insight にする
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : '';
@@ -269,6 +272,9 @@ ${_curatedBlock(si)}
   - "matchcard:{ラベル}" （試合プレビュー）
 - comparison の場合は "secondary" にも label を入れる
 - 移籍・契約・噂の企画では、Liverpool vs Real Madrid のような別リーグ所属クラブの順位/勝点比較を作らない。クラブ間の関係性は history/insight で扱う
+- ただし移籍ルート/流出連鎖/契約延長騒動の文脈は H2H ではないため、secondary 付き history にしない。原則 insight として扱う
+- 主役選手の市場価値・契約満了・出場数・ゴール/アシスト/評価を見せる枚は stats/profile にする。insight で数値を雑に語らない
+- reaction は、ニュース概要・主役の現状・契約/移籍論点を出したあとに置く。opening/toc直後には置かない
 - **history の場合**: 主題が「2チーム/2選手の対戦・対比の歴史」なら **secondary にも label を入れる**
   ・例: クラシコ特集の history → mainKey="entity:Real Madrid" + secondary="FC Barcelona"
   ・secondary を入れると H2H（直接対決）データが AI に渡され、関係ない他チームの試合を拾わなくなる

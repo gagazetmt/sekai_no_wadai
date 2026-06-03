@@ -127,6 +127,7 @@ function buildSystemPrompt() {
 - candidates は必ず3案出力する（A/B/C案として提示するため）
 - candidates A/B/C は短尺・標準・長尺の提案に分け、videoLengthType / targetMinutes / recommendedSlideCount を必ず入れる。ただし recommendedSlideCount は目安だけで、具体的なスライド案は書かない
 - storyPattern は必ず出すが、slideOutline は出さない。後工程で企画書をもとに制作可能なスライド構成へ展開する
+- structureNote は「構成順の方針」だけを書く。例: 背景→主役プロフィール→契約発言→クラブ事情→反応→結論。スライド名・slideType・枚数は書かない
 - comparison スライドで選手同士を比較する場合、必ず同じ詳細ポジション（RSB同士/LSB同士/CB同士/ST同士/CM同士など）の選手を選ぶこと。RSB（右SB）とLSB（左SB）は守備の役割が異なり比較として不自然なため使わない。ポジションが確認できない場合は comparison を避けて insight にする
 - comparison の比較対象は、記事・ニュースで実際に言及された選手を優先すること。記事に登場しない選手を無断で比較対象に追加しない`;
 }
@@ -161,6 +162,7 @@ ${failedDataText ? `\n## 取得失敗・未確認データ（${failedDataCount |
         "videoLengthType": "short / standard / long",
         "targetMinutes": "1.5-2.5 / 3-4 / 5-6",
         "recommendedSlideCount": 4,
+        "structureNote": "構成順の方針（スライド案ではなく、論点の並べ方だけ）",
         "dataNeeds": ["必要なデータ1"],
         "risk": "この案のリスクを短く"
       }
