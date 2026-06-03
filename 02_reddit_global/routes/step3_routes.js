@@ -894,7 +894,7 @@ ${matchBlock}
 
 [search 一覧]
 ${searchBlock}
-${h2hBlock ? `\n[H2H 一覧 — 対戦史型 history カード専用 / サーバ確定データ]\n${h2hBlock}\n` : ''}━━━━━━━━━━━━━━━━
+${h2hBlock ? `\n[H2H 一覧 — 対戦史型 history カード専用 / サーバ確定データ]\n${h2hBlock}\n` : ''}${_curatedBlock(si)}━━━━━━━━━━━━━━━━
 
 【outline (${mods.length}枚)】
 ${outlineLines}

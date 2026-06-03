@@ -301,6 +301,21 @@ async function runV25Job(jobId, { postId, count = 7, sprint = false, attachImage
   onProgress({ step: '2-4-fetch', total: items.length, progress: 0, message: '②-4 V2 データ取得' });
   const fetched = await _runFetchAll({ postId, items }, (p) => onProgress({ ...p, step: '2-4-fetch' }));
   const si = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
+  // Serper記事をcuratedArticlesとしてsi_dataに保存
+  // → _runProposeModules(_curatedBlock)と_runScenarioJob(_curatedBlock追加後)が自動で読む
+  if (articles.length) {
+    si.curatedArticles = {
+      articles: articles.map(a => ({
+        title: a.title || '',
+        content: a.snippet || '',
+        link: a.link || '',
+        sourceName: a.host || 'web',
+        pubDate: a.date || null,
+      }))
+    };
+    fs.writeFileSync(siPath(postId), JSON.stringify(si, null, 2));
+    console.log(`[v25] curatedArticles保存: ${articles.length}件 → ②③のAIプロンプトに自動注入`);
+  }
   onProgress({ step: '3-v3-proposal', message: '③ V3 企画提案 A/B/C（②全情報を熟読）' });
   const researchCorpus = buildResearchCorpus(project, si, articles);
   const fetchedData = fetchedDataFromSi(si);
