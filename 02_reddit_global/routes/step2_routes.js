@@ -340,15 +340,27 @@ function _sourceScore(host) {
   return 50;
 }
 
+// titleJaからカタカナ固有名詞を抽出（汎用ローン語を除く）→ jaQuery生成に使う
+const _KANA_STOP = new Set(['フリー','オプション','チーム','クラブ','リーグ','ゲーム','シーズン','トップ','ベスト','ポジション','システム','コメント','プレー','バトル','センター','キャプテン','ポイント']);
+function _extractJaProperNouns(text, max = 4) {
+  return [...new Set(
+    (text.match(/[゠-ヿ・ー]+/g) || [])
+      .filter(m => m.replace(/[・ー]/g, '').length >= 3 && !_KANA_STOP.has(m))
+  )].slice(0, max);
+}
+
 // P1: キーワード一致でノイズ除去
-function _isArticleRelevant(article, queries) {
+// requiredTerms: どれか1つが記事に含まれないと除外（エンティティ名ベース）
+function _isArticleRelevant(article, queries, requiredTerms = []) {
+  const haystack = (article.title + ' ' + article.snippet).toLowerCase();
+  if (requiredTerms.length > 0 && !requiredTerms.some(t => haystack.includes(t))) return false;
   const STOP = new Set(['the','and','for','with','from','that','this','are','was','has','been','will',
-    'soccer','football','sport','sports','about','have','its','his','her','their','not','but','can']);
+    'soccer','football','sport','sports','about','have','its','his','her','their','not','but','can',
+    'transfer','signing','deal','move','joins','joined','signs','signed','news','latest','report']);
   const keywords = queries.flatMap(q =>
     q.toLowerCase().split(/[\s\-_,.()\[\]]+/).filter(w => w.length > 3 && !STOP.has(w))
   );
   if (!keywords.length) return true;
-  const haystack = (article.title + ' ' + article.snippet).toLowerCase();
   return keywords.some(k => haystack.includes(k));
 }
 
@@ -365,11 +377,13 @@ async function _jinaFetch(url, maxChars = 2000) {
   } catch (_) { return null; }
 }
 
-// opts.jaQuery: 日本語クエリ (gl=jp, hl=ja で検索)
+// opts: jaQuery / requiredTerms / maxEn / maxJa
 async function _gatherArticles(searches, opts = {}) {
-  const enQueries = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 2);
-  const jaQuery   = opts.jaQuery || null;
-  const maxArticles = Number(opts.maxArticles) || 15;
+  const enQueries    = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 2);
+  const jaQuery      = opts.jaQuery || null;
+  const requiredTerms = (opts.requiredTerms || []).map(t => t.toLowerCase());
+  const maxEn        = Number(opts.maxEn) || 10;
+  const maxJa        = Number(opts.maxJa) || 5;
   if (!enQueries.length && !jaQuery) return [];
 
   // 英語クエリ: lr=lang_en で英語ページ限定
@@ -381,44 +395,43 @@ async function _gatherArticles(searches, opts = {}) {
     ? await fetchSerper(jaQuery, '', 'ja').catch(() => ({ organic: [] }))
     : { organic: [] };
 
-  const articles = [];
   const seen = new Set();
-  function collect(res, lang) {
-    (res?.organic || []).forEach(r => {
-      const title = (r.title || '').trim();
-      const key = title.toLowerCase();
-      if (!title || seen.has(key)) return;
-      seen.add(key);
-      let host = 'search';
-      try { host = new URL(r.link).hostname.replace(/^www\./, ''); } catch (_) {}
-      articles.push({
-        title, snippet: (r.snippet || '').slice(0, 320),
-        link: r.link || '', host, date: r.date || null, lang,
-        sourceScore: _sourceScore(host),
-      });
-    });
+  function makeArticle(r, lang) {
+    const title = (r.title || '').trim();
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) return null;
+    seen.add(key);
+    let host = 'search';
+    try { host = new URL(r.link).hostname.replace(/^www\./, ''); } catch (_) {}
+    return { title, snippet: (r.snippet || '').slice(0, 320), link: r.link || '', host, date: r.date || null, lang, sourceScore: _sourceScore(host) };
   }
-  enResults.forEach(r => collect(r, 'en'));
-  collect(jaResult, 'ja');
 
-  // ソーススコア降順で並べ替え（Jina取得優先順位も兼ねる）
-  articles.sort((a, b) => b.sourceScore - a.sourceScore);
+  const enRaw = enResults.flatMap(r => (r?.organic || []).map(a => makeArticle(a, 'en')).filter(Boolean));
+  const jaRaw = (jaResult?.organic || []).map(r => makeArticle(r, 'ja')).filter(Boolean);
 
-  // P1: ノイズフィルタ
   const allQueries = [...enQueries, jaQuery].filter(Boolean);
-  const relevant = articles.filter(a => _isArticleRelevant(a, allQueries));
-  const removed = articles.length - relevant.length;
-  if (removed > 0) console.log(`[gatherArticles] ノイズ除去: ${removed}件除外`);
-  const filtered = (relevant.length > 0 ? relevant : articles).slice(0, maxArticles);
 
-  // P2: ソーススコア上位から5件を Jina Reader で全文取得（既にスコア順）
-  const TOP_JINA = 5;
+  // 英語記事: 必須語（エンティティ名）+ キーワードフィルタ
+  const enRelevant = enRaw.filter(a => _isArticleRelevant(a, allQueries, requiredTerms));
+  const enFiltered = (enRelevant.length > 0 ? enRelevant : enRaw)
+    .sort((a, b) => b.sourceScore - a.sourceScore).slice(0, maxEn);
+
+  // 日本語記事: jaQueryがエンティティ名ベースなのでGoogle側に任せ、ソーススコア順で上位のみ
+  const jaFiltered = jaRaw.sort((a, b) => b.sourceScore - a.sourceScore).slice(0, maxJa);
+
+  console.log(`[gatherArticles] EN ${enRaw.length}→${enFiltered.length}件 / JA ${jaRaw.length}→${jaFiltered.length}件 | 必須語:[${requiredTerms.slice(0,3).join('/')}]`);
+
+  // EN→JA の順で結合（Jina はEN優先でスコア順）
+  const filtered = [...enFiltered, ...jaFiltered];
+
+  // P2: Jina全文取得（EN優先・上位7件）
+  const TOP_JINA = 7;
   await Promise.all(filtered.slice(0, TOP_JINA).filter(a => a.link).map(async (a) => {
     const fullText = await _jinaFetch(a.link);
     if (fullText) { a.fullText = fullText; a.snippet = fullText.slice(0, 320); }
   }));
   const jinaHits = filtered.slice(0, TOP_JINA).filter(a => a.fullText).length;
-  console.log(`[gatherArticles] EN×${enQueries.length} JA×${jaQuery?1:0} | 収集:${articles.length}件 → フィルタ後:${filtered.length}件 Jina:${jinaHits}件`);
+  console.log(`[gatherArticles] Jina:${jinaHits}/${TOP_JINA}件`);
 
   return filtered;
 }
@@ -433,13 +446,20 @@ async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
   const baseEntities = Array.isArray(baseSuggested?.entities) ? baseSuggested.entities : [];
   const searches     = Array.isArray(baseSuggested?.searches) ? baseSuggested.searches : [];
 
-  // 日本語クエリ: titleJaから主要固有名詞を抽出（記号除去して先頭40字）
-  const jaQuery = titleJa
-    ? titleJa.replace(/[【】「」『』（）〔〕！？!?＊…◆◇■□▶▷→←↑↓]/g, ' ').trim().slice(0, 40)
-    : null;
+  // 必須語: エンティティ名の各単語（3文字超）- 英語記事のノイズ除去に使用
+  const requiredTerms = [...new Set(
+    baseEntities.slice(0, 5).flatMap(e =>
+      (e.name || '').toLowerCase().split(/[\s\-]+/).filter(p => p.length > 3)
+    )
+  )];
+
+  // jaQuery: titleJaのカタカナ固有名詞だけ抽出（例: "レアル・マドリード コナテ ペレス"）
+  // → 汎用語を除いた短いクエリ = Jリーグ記事等のノイズが入らない
+  const jaTerms = titleJa ? _extractJaProperNouns(titleJa) : [];
+  const jaQuery = jaTerms.length >= 2 ? jaTerms.join(' ') : null;
 
   // ②-2: 記事収集（英語×2 + 日本語×1）
-  const articles = await _gatherArticles(searches, { ...opts, jaQuery });
+  const articles = await _gatherArticles(searches, { ...opts, jaQuery, requiredTerms });
   console.log(`[Step2 v2.5] ②-2 記事収集: ${articles.length}件 JA="${jaQuery||'なし'}"`);
   if (!articles.length) {
     // 記事ゼロなら base のまま返す（②-3 をスキップ）
