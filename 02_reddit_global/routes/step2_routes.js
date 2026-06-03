@@ -369,8 +369,8 @@ async function _gatherArticles(searches, opts = {}) {
   const relevant = articles.filter(a => _isArticleRelevant(a, queries));
   const removed = articles.length - relevant.length;
   if (removed > 0) console.log(`[gatherArticles] ノイズ除去: ${removed}件除外 (${articles.length}→${relevant.length})`);
-  // フィルタ後3件未満なら元に戻す（過フィルタ防止）
-  const filtered = (relevant.length >= 3 ? relevant : articles).slice(0, maxArticles);
+  // 全件フィルタされた時だけ元に戻す（閾値0: 1件でも残れば優先）
+  const filtered = (relevant.length > 0 ? relevant : articles).slice(0, maxArticles);
 
   // P2: 上位5件を Jina Reader で全文取得（並列・失敗は無視）
   const TOP_JINA = 5;
