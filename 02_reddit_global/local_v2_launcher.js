@@ -709,6 +709,15 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
     html += '<textarea id="v25f_answer" rows="2" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;">' + esc(c.answer) + '</textarea>';
     html += '<label style="font-size:11px;color:#94a3b8;">スライド構成（1行=1枚 / 形式: slideType | 見出し | 補足）</label>';
     html += '<textarea id="v25f_outline" rows="8" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;font-family:monospace;font-size:12px;">' + esc(outlineToText(c.slideOutline)) + '</textarea>';
+    html += '<div style="border-top:1px solid #1e3a5f;padding-top:10px;margin-top:4px;">';
+    html += '<div style="font-size:11px;color:#60a5fa;font-weight:700;margin-bottom:6px;">追加エンティティ（比較対象の変更など。取得後に指示を入れる）</div>';
+    html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+    html += '<input id="v25f_entity" style="flex:1;padding:6px;background:#111827;border:1px solid #334155;border-radius:6px;color:#e5e7eb;font-size:12px;" placeholder="例: Malo Gusto:player  Reece James:player">';
+    html += '<button id="v25pFetch" style="background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;white-space:nowrap;">SIに取得</button>';
+    html += '</div>';
+    html += '<label style="font-size:11px;color:#94a3b8;">追加指示（構成生成AIへの最優先指示。比較対象変更・特定スライドへの修正等）</label>';
+    html += '<textarea id="v25f_note" rows="2" style="width:100%;margin:2px 0 0;padding:6px;background:#111827;border:1px solid #1e3a5f;border-radius:6px;color:#e5e7eb;font-size:12px;" placeholder="例: 比較スライドはCucurellaではなくMalo Gusto（RSB）と比較すること"></textarea>';
+    html += '</div>';
     html += '</div>';
     // footer
     html += '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;">';
@@ -729,13 +738,34 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
         render();
       });
     }
-    ['v25f_hook', 'v25f_angle', 'v25f_answer', 'v25f_outline'].forEach(function(id) {
+    ['v25f_hook', 'v25f_angle', 'v25f_answer', 'v25f_outline', 'v25f_note'].forEach(function(id) {
       var el = box.querySelector('#' + id);
       if (el) el.addEventListener('input', function() { edited = true; });
     });
     box.querySelector('#v25pClose').addEventListener('click', close);
     box.querySelector('#v25pCancel').addEventListener('click', close);
     box.querySelector('#v25pGo').addEventListener('click', confirmGo);
+    box.querySelector('#v25pFetch').addEventListener('click', async function() {
+      var entityText = (box.querySelector('#v25f_entity') || {}).value || '';
+      entityText = entityText.trim();
+      if (!entityText) return;
+      var items = entityText.split(/\s+/).filter(Boolean).map(function(t) {
+        var parts = t.split(':');
+        return { box: 'entity', label: parts[0].trim(), role: parts[1] ? parts[1].trim() : 'player' };
+      });
+      setStatus('エンティティ取得中... ' + items.map(function(x){ return x.label; }).join(', '));
+      try {
+        var r = await fetch('/api/v2/fetch-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postId: post.id, items: items }),
+        });
+        var d = await r.json().catch(function(){ return {}; });
+        setStatus('取得完了: ' + items.map(function(x){ return x.label; }).join(', ') + (d.error ? ' (警告: ' + d.error + ')' : ''));
+      } catch (e) {
+        setStatus('取得失敗: ' + (e.message || e));
+      }
+    });
   }
 
   function val(id) { var el = box.querySelector('#' + id); return el ? el.value : ''; }
@@ -746,6 +776,7 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
     c.angle = val('v25f_angle');
     c.answer = val('v25f_answer');
     c.slideOutline = textToOutline(val('v25f_outline'));
+    c.structureNote = val('v25f_note');
   }
 
   async function confirmGo() {
@@ -755,6 +786,7 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
       angle: val('v25f_angle'),
       answer: val('v25f_answer'),
       slideOutline: textToOutline(val('v25f_outline')),
+      structureNote: val('v25f_note'),
     };
     var needRebuild = edited || (selected !== defaultIndex);
     // 案A 無編集ならば autopilot が既に作った modules を流用（再生成コスト回避）

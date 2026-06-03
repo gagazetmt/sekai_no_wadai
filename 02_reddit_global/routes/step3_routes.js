@@ -180,6 +180,7 @@ ${customNote ? `\n【相棒の補足メモ（最重要参考情報）】\n${cust
     //   【取得済みデータ】の範囲に接地させる（企画書の固有名を鵜呑みにしない）。
     const seedPlan = opts.seedPlan && typeof opts.seedPlan === 'object' ? opts.seedPlan : null;
     const seedOutline = Array.isArray(seedPlan?.slideOutline) ? seedPlan.slideOutline : [];
+    const seedNote = String(seedPlan?.structureNote || '').trim().slice(0, 300);
     const seedBanner = seedPlan ? `
 ━━━ 🎬 採用された企画書（この方向性で構成する）━━━
 - フック: ${String(seedPlan.hookQuestion || '').slice(0, 120)}
@@ -187,7 +188,7 @@ ${customNote ? `\n【相棒の補足メモ（最重要参考情報）】\n${cust
 - 結論(answer): ${String(seedPlan.answer || '').slice(0, 160)}
 - 物語パターン: ${String(seedPlan.storyPattern || '').slice(0, 60)}
 ${seedOutline.length ? `- 企画書のスライド流れ（参考。データに接地させて確定する）:\n${seedOutline.map((s, i) => `  ${i + 1}. [${s.slideType || '?'}] ${String(s.headline || '').slice(0, 60)}${s.point ? ' — ' + String(s.point).slice(0, 60) : ''}`).join('\n')}` : ''}
-
+${seedNote ? `\n⚠️ 【追加指示（最優先・必ず従う）】\n${seedNote}` : ''}
 【企画書 seed の扱い（厳守）】
 - 上記の**方向性・物語の流れ・slideType の並び**を尊重して構成する
 - ただし固有名・数値は必ず【取得済みデータ】に存在するものだけを subject に使う

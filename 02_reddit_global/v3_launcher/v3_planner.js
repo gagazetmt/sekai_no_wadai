@@ -124,7 +124,9 @@ function buildSystemPrompt() {
 - candidates は必ず3案出力する（A/B/C案として提示するため）
 - candidates A/B/C は短尺・標準・長尺の提案に分け、videoLengthType / targetMinutes / recommendedSlideCount を必ず入れる
 - 各 candidate の slideOutline は案件の材料量に応じて4〜8枚で可変にする。historyに今季スタッツを羅列せず、simple/stats/profile/history/comparison/reactionを役割で分ける
-- 企画提案段階で storyPattern と slideOutline[].slideType を必ず出す。後工程は企画を作り直すのではなく、制作可能なスライド仕様へ確定する`;
+- 企画提案段階で storyPattern と slideOutline[].slideType を必ず出す。後工程は企画を作り直すのではなく、制作可能なスライド仕様へ確定する
+- comparison スライドで選手同士を比較する場合、必ず同じ詳細ポジション（RSB同士/LSB同士/CB同士/ST同士/CM同士など）の選手を選ぶこと。RSB（右SB）とLSB（左SB）は守備の役割が異なり比較として不自然なため使わない。ポジションが確認できない場合は comparison を避けて insight にする
+- comparison の比較対象は、記事・ニュースで実際に言及された選手を優先すること。記事に登場しない選手を無断で比較対象に追加しない`;
 }
 
 function buildUserPrompt(topic, memo, researchSummary, fetchedSummary = {}) {
