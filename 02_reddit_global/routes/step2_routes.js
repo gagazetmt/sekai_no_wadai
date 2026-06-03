@@ -312,6 +312,31 @@ JSONのみ:
 //   検索クエリ自体は entity/match の fetch ラベルにはしない。
 //   返り値の articles は ③ 企画提案コーパス (Fix#2) でも再利用する。
 // ═══════════════════════════════════════════════════════════
+// P1: クエリキーワードと記事タイトル/スニペットの一致度でノイズ除去
+function _isArticleRelevant(article, queries) {
+  const STOP = new Set(['the','and','for','with','from','that','this','are','was','has','been','will',
+    'soccer','football','sport','sports','about','have','its','his','her','their','not','but','can']);
+  const keywords = queries.flatMap(q =>
+    q.toLowerCase().split(/[\s\-_,.()\[\]]+/).filter(w => w.length > 3 && !STOP.has(w))
+  );
+  if (!keywords.length) return true;
+  const haystack = (article.title + ' ' + article.snippet).toLowerCase();
+  return keywords.some(k => haystack.includes(k));
+}
+
+// P2: Jina Reader で記事本文をフル取得（失敗時はスニペットのまま）
+async function _jinaFetch(url, maxChars = 2000) {
+  try {
+    const res = await fetch('https://r.jina.ai/' + url, {
+      headers: { 'Accept': 'text/plain', 'X-Timeout': '8' },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const text = (await res.text()).replace(/\s+/g, ' ').trim();
+    return text.length > 100 ? text.slice(0, maxChars) : null;
+  } catch (_) { return null; }
+}
+
 async function _gatherArticles(searches, opts = {}) {
   const queries = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 4);
   if (!queries.length) return [];
@@ -339,7 +364,28 @@ async function _gatherArticles(searches, opts = {}) {
       });
     });
   });
-  return articles.slice(0, maxArticles);
+
+  // P1: ノイズフィルタ
+  const relevant = articles.filter(a => _isArticleRelevant(a, queries));
+  const removed = articles.length - relevant.length;
+  if (removed > 0) console.log(`[gatherArticles] ノイズ除去: ${removed}件除外 (${articles.length}→${relevant.length})`);
+  // フィルタ後3件未満なら元に戻す（過フィルタ防止）
+  const filtered = (relevant.length >= 3 ? relevant : articles).slice(0, maxArticles);
+
+  // P2: 上位5件を Jina Reader で全文取得（並列・失敗は無視）
+  const TOP_JINA = 5;
+  const jinaTargets = filtered.slice(0, TOP_JINA).filter(a => a.link);
+  await Promise.all(jinaTargets.map(async (a) => {
+    const fullText = await _jinaFetch(a.link);
+    if (fullText) {
+      a.fullText = fullText;
+      a.snippet = fullText.slice(0, 320); // スニペットも更新
+    }
+  }));
+  const jinaHits = jinaTargets.filter(a => a.fullText).length;
+  console.log(`[gatherArticles] Jina全文取得: ${jinaHits}/${jinaTargets.length}件成功`);
+
+  return filtered;
 }
 
 // ②-3: 記事熟読 → 精度版 entity / match ラベル再提案

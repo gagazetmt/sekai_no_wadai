@@ -307,7 +307,7 @@ async function runV25Job(jobId, { postId, count = 7, sprint = false, attachImage
     si.curatedArticles = {
       articles: articles.map(a => ({
         title: a.title || '',
-        content: a.snippet || '',
+        content: a.fullText || a.snippet || '', // P2: Jina全文を優先
         link: a.link || '',
         sourceName: a.host || 'web',
         pubDate: a.date || null,
