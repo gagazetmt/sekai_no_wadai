@@ -364,23 +364,22 @@ function _isArticleRelevant(article, queries, requiredTerms = []) {
   return keywords.some(k => haystack.includes(k));
 }
 
-// P2: Jina Reader で記事本文をフル取得（失敗時はスニペットのまま）
-async function _jinaFetch(url, maxChars = 2000) {
+// P2: Readability で英語記事の本文を直接取得（ナビ・広告・関連記事を除去）
+const { Readability } = require('@mozilla/readability');
+const { JSDOM } = require('jsdom');
+async function _readabilityFetch(url, maxChars = 4000) {
   try {
-    const res = await fetch('https://r.jina.ai/' + url, {
-      headers: { 'Accept': 'text/plain', 'X-Timeout': '8' },
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsBot/1.0)', 'Accept': 'text/html' },
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
-    const raw = await res.text();
-    // URLだけ除去してテキストは残す（[コナテ](url) → コナテ）
-    const body = raw
-      .replace(/\*\s*\[([^\]]*)\]\([^\)]*\)/g, '$1')  // * [text](url) → text
-      .replace(/\[([^\]]*)\]\([^\)]*\)/g, '$1')         // [text](url) → text
-      .replace(/#{1,6}\s*/g, '')                         // ## 見出しマーカー除去
-      .replace(/\s+/g, ' ')
-      .trim();
-    return body.length > 100 ? body.slice(0, maxChars) : null;
+    const html = await res.text();
+    const dom = new JSDOM(html, { url });
+    const article = new Readability(dom.window.document).parse();
+    if (!article?.textContent) return null;
+    const text = article.textContent.replace(/\s+/g, ' ').trim();
+    return text.length > 100 ? text.slice(0, maxChars) : null;
   } catch (_) { return null; }
 }
 
@@ -431,13 +430,14 @@ async function _gatherArticles(searches, opts = {}) {
   console.log(`[gatherArticles] EN ${enRaw.length}→${enFiltered.length}件 / JA ${jaRaw.length}→${jaFiltered.length}件 | 必須語:[${requiredTerms.slice(0,3).join('/')}]`);
 
   // P2: Jina全文取得（EN上位5件 + JA上位3件を並列）
-  const jinaTargets = [...enFiltered.slice(0, 5), ...jaFiltered.slice(0, 3)].filter(a => a.link);
-  await Promise.all(jinaTargets.map(async (a) => {
-    const fullText = await _jinaFetch(a.link);
+  // 英語: Readability で本文直接取得、日本語: スニペットのまま（短い記事が多いのでスニペットで十分）
+  const enTargets = enFiltered.slice(0, 5).filter(a => a.link);
+  await Promise.all(enTargets.map(async (a) => {
+    const fullText = await _readabilityFetch(a.link);
     if (fullText) { a.fullText = fullText; a.snippet = fullText.slice(0, 320); }
   }));
-  const jinaHits = jinaTargets.filter(a => a.fullText).length;
-  console.log(`[gatherArticles] Jina:${jinaHits}/${jinaTargets.length}件(EN5+JA3)`);
+  const hits = enTargets.filter(a => a.fullText).length;
+  console.log(`[gatherArticles] Readability:${hits}/${enTargets.length}件(EN) JA:スニペットのみ`);
 
   // EN→JA の順で結合
   const filtered = [...enFiltered, ...jaFiltered];
