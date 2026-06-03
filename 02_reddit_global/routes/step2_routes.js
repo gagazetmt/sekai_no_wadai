@@ -318,7 +318,7 @@ const SOURCE_SCORE_MAP = {
   'theathletic.com': 88,
   'theguardian.com': 85,
   'skysports.com': 82,
-  'espn.com': 80, 'espn.co.uk': 80,
+  'espn.com': 45, 'espn.co.uk': 45,
   'goal.com': 75,
   'bundesliga.com': 72,
   'transfermarkt.com': 70,
@@ -372,8 +372,15 @@ async function _jinaFetch(url, maxChars = 2000) {
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) return null;
-    const text = (await res.text()).replace(/\s+/g, ' ').trim();
-    return text.length > 100 ? text.slice(0, maxChars) : null;
+    const raw = await res.text();
+    // マークダウンリンク (* [text](url) / [text](url)) とヘッダー記号を除去して記事本文を抽出
+    const body = raw
+      .replace(/\*\s*\[.*?\]\(.*?\)/g, '')  // * [text](url) ナビゲーションリンク
+      .replace(/\[.*?\]\(.*?\)/g, '')         // [text](url) インラインリンク
+      .replace(/#{1,6}\s*/g, '')              // ## 見出しマーカー
+      .replace(/\s+/g, ' ')
+      .trim();
+    return body.length > 100 ? body.slice(0, maxChars) : null;
   } catch (_) { return null; }
 }
 
