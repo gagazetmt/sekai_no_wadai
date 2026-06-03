@@ -386,23 +386,25 @@ async function _gatherArticles(searches, opts = {}) {
   const maxJa        = Number(opts.maxJa) || 5;
   if (!enQueries.length && !jaQuery) return [];
 
-  // 英語クエリ: lr=lang_en で英語ページ限定
+  // 英語クエリ: lr=lang_en で英語ページ限定、num=10で多めに取得（除外後も十分残るよう）
   const enResults = await Promise.all(enQueries.map(q =>
-    fetchSerper(q, '', 'en', null, { lr: 'lang_en' }).catch(() => ({ organic: [] }))
+    fetchSerper(q, '', 'en', null, { lr: 'lang_en', num: 10 }).catch(() => ({ organic: [] }))
   ));
   // 日本語クエリ: gl=jp, hl=ja で日本語ページ
   const jaResult = jaQuery
     ? await fetchSerper(jaQuery, '', 'ja').catch(() => ({ organic: [] }))
     : { organic: [] };
 
+  const BLOCKED_HOSTS = new Set(['youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com', 'twitter.com', 'x.com', 'facebook.com']);
   const seen = new Set();
   function makeArticle(r, lang) {
     const title = (r.title || '').trim();
     const key = title.toLowerCase();
     if (!title || seen.has(key)) return null;
-    seen.add(key);
     let host = 'search';
     try { host = new URL(r.link).hostname.replace(/^www\./, ''); } catch (_) {}
+    if (BLOCKED_HOSTS.has(host)) return null;
+    seen.add(key);
     return { title, snippet: (r.snippet || '').slice(0, 320), link: r.link || '', host, date: r.date || null, lang, sourceScore: _sourceScore(host) };
   }
 
