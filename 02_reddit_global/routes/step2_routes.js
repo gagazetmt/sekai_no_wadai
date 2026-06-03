@@ -994,7 +994,7 @@ function getUI() {
   </div>
 
   <button class="btn btn-success" id="s2BtnNext" style="width:100%;padding:13px;font-size:14px;font-weight:bold">
-    &#x1F3AC; モジュール提案へ &#x2192;
+    &#x1F4CB; 企画提案へ &#x2192;
   </button>
 </div>
 
@@ -1585,7 +1585,7 @@ function getUI() {
 
   /* ── Step3 へ ── */
   document.getElementById('s2BtnNext').addEventListener('click', function() {
-    if (typeof window.goStep === 'function') window.goStep(3);
+    if (typeof window.goStep === 'function') window.goStep(25);
   });
 
 })();
