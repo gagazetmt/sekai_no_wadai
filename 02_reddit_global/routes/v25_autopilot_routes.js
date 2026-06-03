@@ -389,4 +389,13 @@ router.get('/v25/structure/status', (req, res) => {
   if (!j) return res.status(404).json({ error: 'job not found' });
   res.json(j);
 });
+
+// 🆕 V2.5 構成確認パネルで編集したモジュールを保存する（脚本生成前に呼ぶ）
+router.post('/v25/save-modules', express.json(), (req, res) => {
+  const { postId, modules } = req.body || {};
+  if (!postId || !Array.isArray(modules)) return res.status(400).json({ error: 'postId + modules[] required' });
+  fs.writeFileSync(modulesPath(postId), JSON.stringify({ postId, modules, savedAt: new Date().toISOString(), source: 'v25_structure_edit' }, null, 2));
+  res.json({ ok: true, count: modules.length });
+});
+
 module.exports = { router, runV25Job };

@@ -810,7 +810,7 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
       });
       var sc = jobRes.cost || {};
       setStatus('done: ' + (jobRes.moduleCount || 0) + ' slides (案' + LAB[selected] + ' / 構成 ¥' + (sc.totalJpy || 0) + ')');
-      gotoStep3(jobRes.modules || []);
+      window.showV25StructurePanel(jobRes.modules || [], post);
     } catch (e) {
       console.error('[V2.5 structure]', e);
       setStatus('structure failed');
@@ -818,6 +818,164 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
     }
   }
 
+  render();
+  document.body.appendChild(overlay);
+};
+
+/* ── V2.5 ③ 脚本構成確認パネル ── */
+window.showV25StructurePanel = function(modules, post) {
+  if (!modules || !modules.length) { window.goStep(3); return; }
+  var postId = post && post.id;
+  if (!postId) { window.goStep(3); return; }
+  var statusEl = document.getElementById('v25AutoStatus');
+  function setStatus(t) { if (statusEl) statusEl.textContent = t || ''; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var TYPE_CLR = { opening:'#4b5563',ending:'#4b5563',stats:'#1d4ed8',comparison:'#6d28d9',profile:'#047857',history:'#b45309',insight:'#7c3aed',reaction:'#c2410c',matchcard:'#0e7490',ranking:'#b91c1c' };
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.80);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:12px;max-width:900px;width:100%;padding:20px;';
+  overlay.appendChild(box);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  function render() {
+    var html = '';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#fcd34d;">③ 脚本構成確認 <span style="font-size:12px;color:#94a3b8;font-weight:400;">— ' + modules.length + 'スライド</span></div>';
+    html += '<button id="v25scClose" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;">✕</button>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:#64748b;margin-bottom:12px;">scriptDir（脚本の方向性）を確認・修正してから④脚本生成へ。変更なしでそのまま進んでもOK。</div>';
+    for (var i = 0; i < modules.length; i++) {
+      var m = modules[i];
+      var clr = TYPE_CLR[m.type] || '#374151';
+      html += '<div style="border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:8px;background:#0a0f1a;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+      html += '<span style="background:' + clr + ';color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;white-space:nowrap;">' + esc(m.type) + '</span>';
+      html += '<input data-si="' + i + '" data-f="title" style="flex:1;padding:4px 8px;background:#111827;border:1px solid #374151;border-radius:4px;color:#e5e7eb;font-size:13px;font-weight:600;" value="' + esc(m.title || '') + '">';
+      html += '</div>';
+      html += '<textarea data-si="' + i + '" data-f="scriptDir" rows="2" style="width:100%;padding:6px;background:#111827;border:1px solid #374151;border-radius:4px;color:#94a3b8;font-size:12px;resize:vertical;">' + esc(m.scriptDir || '') + '</textarea>';
+      html += '</div>';
+    }
+    html += '<div style="border-top:1px solid #1e293b;padding-top:10px;margin-top:4px;">';
+    html += '<label style="font-size:11px;color:#94a3b8;">追加指示（全スライド共通 / ナレーションのトーン・禁止事項など）</label>';
+    html += '<textarea id="v25sc_note" rows="2" style="width:100%;margin:4px 0 10px;padding:6px;background:#111827;border:1px solid #1e3a5f;border-radius:6px;color:#e5e7eb;font-size:12px;" placeholder="例: テンション高め・数字を具体的に・断定は避ける"></textarea>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+    html += '<button id="v25scV2" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;">V2で編集</button>';
+    html += '<button id="v25scGo" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer;">④ 全スライド脚本生成</button>';
+    html += '</div>';
+    box.innerHTML = html;
+    box.querySelector('#v25scClose').addEventListener('click', function(){ close(); window.goStep(3); });
+    box.querySelector('#v25scV2').addEventListener('click', function(){ close(); window.APP.modules = modules; if(window.APP.s3) window.APP.s3.modules = modules; window.goStep(3); });
+    box.querySelector('#v25scGo').addEventListener('click', generateNarration);
+  }
+  function collectEdits() {
+    var mods = modules.map(function(m){ return Object.assign({}, m); });
+    box.querySelectorAll('[data-si]').forEach(function(el){
+      var idx = parseInt(el.getAttribute('data-si'),10);
+      var f = el.getAttribute('data-f');
+      if (mods[idx] != null) mods[idx][f] = el.value;
+    });
+    return mods;
+  }
+  async function generateNarration() {
+    var edited = collectEdits();
+    var note = (box.querySelector('#v25sc_note') || {}).value || '';
+    close();
+    setStatus('脚本生成中...');
+    try {
+      await fetch('/api/v25/save-modules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: postId, modules: edited }) });
+      var postData = Object.assign({}, (window.APP && window.APP.selected) || {});
+      if (note) postData.customNote = note;
+      var jobRes = await window.runJob({
+        startUrl: '/api/v3/generate-scenario',
+        statusUrl: '/api/v3/scenario-status',
+        kind: 'v25-narration',
+        key: 'v25_narr:' + postId,
+        intervalMs: 3500,
+        timeoutMs: 15 * 60 * 1000,
+        body: { postId: postId, modules: edited, post: postData, sprint: false },
+        onProgress: function(job){ setStatus('脚本生成: ' + (job.step||'...') + (job.progress!=null ? ' '+job.progress+'/'+job.total : '')); },
+      });
+      setStatus('脚本生成完了');
+      window.showV25NarrationPanel(jobRes.modules || edited, post);
+    } catch(e) {
+      console.error('[v25 narration]', e);
+      setStatus('脚本生成失敗');
+      alert('脚本生成失敗: ' + (e.message || e));
+      window.APP.modules = edited; if(window.APP.s3) window.APP.s3.modules = edited; window.goStep(3);
+    }
+  }
+  render();
+  document.body.appendChild(overlay);
+};
+
+/* ── V2.5 ⑤ 脚本確認パネル ── */
+window.showV25NarrationPanel = function(modules, post) {
+  if (!modules || !modules.length) { window.goStep(4); return; }
+  var postId = post && post.id;
+  var statusEl = document.getElementById('v25AutoStatus');
+  function setStatus(t) { if (statusEl) statusEl.textContent = t || ''; }
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.80);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:12px;max-width:900px;width:100%;padding:20px;';
+  overlay.appendChild(box);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  function render() {
+    var totalChr = modules.reduce(function(s,m){ return s + (m.narration||'').length; }, 0);
+    var html = '';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    html += '<div style="font-size:15px;font-weight:700;color:#34d399;">⑤ 脚本確認 <span style="font-size:12px;color:#94a3b8;font-weight:400;">— ' + modules.length + 'スライド / 合計 ' + totalChr + '字</span></div>';
+    html += '<button id="v25nrClose" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;">✕</button>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:#64748b;margin-bottom:12px;">ナレーションを確認・修正して動画生成へ。</div>';
+    for (var i = 0; i < modules.length; i++) {
+      var m = modules[i];
+      var charN = (m.narration||'').length;
+      var warn = charN < 50 ? ' style="color:#f87171;"' : '';
+      html += '<div style="border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:8px;background:#0a0f1a;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">';
+      html += '<span style="font-size:10px;color:#94a3b8;background:#1e293b;padding:2px 6px;border-radius:4px;">' + esc(m.type) + '</span>';
+      html += '<span style="font-size:13px;font-weight:600;flex:1;">' + esc(m.title||'') + '</span>';
+      html += '<span' + warn + ' style="font-size:10px;color:#6b7280;">' + charN + '字</span>';
+      html += '</div>';
+      html += '<textarea data-ni="' + i + '" rows="3" style="width:100%;padding:6px;background:#111827;border:1px solid #374151;border-radius:4px;color:#e5e7eb;font-size:12px;resize:vertical;">' + esc(m.narration||'') + '</textarea>';
+      html += '</div>';
+    }
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">';
+    html += '<button id="v25nrV2" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;">V2で続けて編集</button>';
+    html += '<button id="v25nrGo" style="background:#10b981;color:#111827;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer;">動画生成へ →</button>';
+    html += '</div>';
+    box.innerHTML = html;
+    box.querySelector('#v25nrClose').addEventListener('click', close);
+    box.querySelector('#v25nrV2').addEventListener('click', function(){
+      var mods = collectFinal();
+      close();
+      window.APP.modules = mods; if(window.APP.s3) window.APP.s3.modules = mods;
+      window.goStep(3);
+    });
+    box.querySelector('#v25nrGo').addEventListener('click', goVideo);
+  }
+  function collectFinal() {
+    var mods = modules.map(function(m){ return Object.assign({}, m); });
+    box.querySelectorAll('textarea[data-ni]').forEach(function(el){
+      var idx = parseInt(el.getAttribute('data-ni'),10);
+      if (mods[idx]) mods[idx].narration = el.value;
+    });
+    return mods;
+  }
+  async function goVideo() {
+    var finalMods = collectFinal();
+    if (postId) {
+      await fetch('/api/v25/save-modules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: postId, modules: finalMods }) }).catch(function(){});
+    }
+    close();
+    window.APP.modules = finalMods;
+    if (window.APP.s3) window.APP.s3.modules = finalMods;
+    setStatus('Step4（TTS・動画生成）へ');
+    window.goStep(4);
+  }
   render();
   document.body.appendChild(overlay);
 };
