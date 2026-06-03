@@ -7,8 +7,8 @@
 
 const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont } = require('./_common');
 
-// 2026-05-16: MAX_ITEMS 8 → 9 に拡張（相棒指示）
-const MAX_ITEMS = 9;
+// 2026-06-04: TOCは10秒前後で読み切るため最大5項目に抑える
+const MAX_ITEMS = 5;
 
 // 項目数で行高 / フォント / 番号フォントを動的調整
 //   行高はそのままで、フォントは行高ぎりぎりまで大きく

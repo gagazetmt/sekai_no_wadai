@@ -80,7 +80,7 @@ async function processInParallel(items, limit, worker, onError) {
 }
 
 // 音声チャンク合計 + 前後インターバル → スライド長(ms)を決定。音声無しなら DEFAULT
-//   opening は無音時 6秒（タイトル冒頭のテンポ重視）、それ以外は 8秒
+//   opening は無音時 5秒（タイトル冒頭のテンポ重視）、それ以外は 8秒
 function slideDurationMs(mod) {
   const a = Array.isArray(mod.audio) ? mod.audio : [];
   if (a.length) {
@@ -90,7 +90,7 @@ function slideDurationMs(mod) {
       return Math.min(ms, MAX_SLIDE_MS);
     }
   }
-  return mod?.type === 'opening' ? 6000 : DEFAULT_SLIDE_MS;
+  return mod?.type === 'opening' ? 5000 : DEFAULT_SLIDE_MS;
 }
 
 const BASE_DIR     = path.join(__dirname, '..', '..');
@@ -403,18 +403,22 @@ async function main() {
       .filter(Boolean);
     if (chapters.length >= 2) {
       const insertIdx = (modules[0] && modules[0].type === 'opening') ? 1 : 0;
-      const tocChapters = chapters.slice(0, 8);
-      const intro = '今日のラインナップはこちらです';
-      // narrationChunks: [intro, ...items] → audio.length = items.length + 1
-      // toc.js は audio.length === items.length + 1 ならイントロ扱いで chunkStarts[i+1] を items[i] の登場時刻に使う
+      const tocChapters = chapters.slice(0, 5).map(t => {
+        const chars = Array.from(String(t || '').replace(/[。！？!?].*$/, '').trim());
+        return chars.length > 14 ? chars.slice(0, 14).join('') : chars.join('');
+      }).filter(Boolean);
+      const intro = `今日のラインナップは、${tocChapters.map((t, i) => {
+        if (i === tocChapters.length - 1 && tocChapters.length >= 2) return `そして${t}`;
+        return t;
+      }).join('、')}でお届けします。`;
       modules.splice(insertIdx, 0, {
         type: 'toc',
         title: '今日のラインナップ',
         tocItems: tocChapters,
-        narration: intro + '。' + tocChapters.join('。') + '。',
-        narrationChunks: [intro, ...tocChapters],
+        narration: intro,
+        narrationChunks: [intro],
       });
-      console.log(`📑 TOC 自動挿入: ${tocChapters.length} 章 (slot ${insertIdx}, イントロ+項目読み上げ ON)`);
+      console.log(`📑 TOC 自動挿入: ${tocChapters.length} 章 (slot ${insertIdx}, 10秒前後の一息読み)`);
     }
   }
 

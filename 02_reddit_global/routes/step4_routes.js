@@ -843,7 +843,8 @@ ${incremental
 
 ━━━ ⚡ 最低基準（絶対厳守 / 違反すると無効）━━━
 ${incremental ? '※ 微調整モード時も、 修正後に以下を満たすこと' : ''}
-- **narration**: 220〜280字（reaction は 100〜140字 / opening は空 / toc は 150〜200字）
+- **narration**: 220〜280字（reaction は 100〜140字 / opening は空 / toc は 60〜90字）
+- **尺ルール**: opening はタイトル読み上げを5秒以内、toc は今日のラインナップ紹介を10秒前後で終える
 - **dataSlots（stats / profile）**: **6個以上**（5個以下は不可・必ず元データから 6 個以上抽出）
 - **dataSlots（history B 単独史型 / comparison）**: 4〜7個
 - **catchphrases（insight）**: 3〜6個
