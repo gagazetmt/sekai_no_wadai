@@ -365,7 +365,7 @@ function _isArticleRelevant(article, queries, requiredTerms = []) {
 }
 
 // P2: Jina Reader で記事本文をフル取得（失敗時はスニペットのまま）
-async function _jinaFetch(url, maxChars = 6000) {
+async function _jinaFetch(url, maxChars = 2000) {
   try {
     const res = await fetch('https://r.jina.ai/' + url, {
       headers: { 'Accept': 'text/plain', 'X-Timeout': '8' },
@@ -373,11 +373,11 @@ async function _jinaFetch(url, maxChars = 6000) {
     });
     if (!res.ok) return null;
     const raw = await res.text();
-    // マークダウンリンク (* [text](url) / [text](url)) とヘッダー記号を除去して記事本文を抽出
+    // URLだけ除去してテキストは残す（[コナテ](url) → コナテ）
     const body = raw
-      .replace(/\*\s*\[.*?\]\(.*?\)/g, '')  // * [text](url) ナビゲーションリンク
-      .replace(/\[.*?\]\(.*?\)/g, '')         // [text](url) インラインリンク
-      .replace(/#{1,6}\s*/g, '')              // ## 見出しマーカー
+      .replace(/\*\s*\[([^\]]*)\]\([^\)]*\)/g, '$1')  // * [text](url) → text
+      .replace(/\[([^\]]*)\]\([^\)]*\)/g, '$1')         // [text](url) → text
+      .replace(/#{1,6}\s*/g, '')                         // ## 見出しマーカー除去
       .replace(/\s+/g, ' ')
       .trim();
     return body.length > 100 ? body.slice(0, maxChars) : null;
