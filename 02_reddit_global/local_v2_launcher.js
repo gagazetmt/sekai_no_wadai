@@ -886,21 +886,32 @@ window.showV25StructurePanel = function(modules, post) {
       await fetch('/api/v25/save-modules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: postId, modules: edited }) });
       var postData = Object.assign({}, (window.APP && window.APP.selected) || {});
       if (note) postData.customNote = note;
-      var jobRes = await window.runJob({
-        startUrl: '/api/v3/generate-scenario',
-        statusUrl: '/api/v3/scenario-status',
-        kind: 'v25-narration',
-        key: 'v25_narr:' + postId,
-        intervalMs: 3500,
-        timeoutMs: 15 * 60 * 1000,
-        body: { postId: postId, modules: edited, post: postData, sprint: false },
-        onProgress: function(job){ setStatus('脚本生成: ' + (job.step||'...') + (job.progress!=null ? ' '+job.progress+'/'+job.total : '')); },
+      // generate-scenario のジョブは job.modules がトップレベル (job.result 不在)
+      // runJob は job.result を返すため使わず直接ポーリング
+      var startR = await fetch('/api/v3/generate-scenario', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: postId, modules: edited, post: postData, sprint: false }),
       });
+      var startD = await startR.json();
+      if (!startD.jobId) throw new Error('jobId not returned');
+      var scJobId = startD.jobId;
+      var deadline = Date.now() + 15 * 60 * 1000;
+      var narratedModules = null;
+      while (true) {
+        if (Date.now() > deadline) throw new Error('narration timeout');
+        await new Promise(function(resolve){ setTimeout(resolve, 3500); });
+        var pollR = await fetch('/api/v3/scenario-status?jobId=' + encodeURIComponent(scJobId));
+        if (pollR.status === 404) throw new Error('narration job vanished');
+        var job = await pollR.json();
+        setStatus('脚本生成: ' + (job.step || '...'));
+        if (job.status === 'error') throw new Error(job.error || 'narration error');
+        if (job.status === 'done') { narratedModules = job.modules || edited; break; }
+      }
       setStatus('脚本生成完了');
-      window.showV25NarrationPanel(jobRes.modules || edited, post);
+      window.showV25NarrationPanel(narratedModules, post);
     } catch(e) {
       console.error('[v25 narration]', e);
-      setStatus('脚本生成失敗');
+      setStatus('脚本生成失敗: ' + (e.message || e));
       alert('脚本生成失敗: ' + (e.message || e));
       window.APP.modules = edited; if(window.APP.s3) window.APP.s3.modules = edited; window.goStep(3);
     }
