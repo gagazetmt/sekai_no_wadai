@@ -94,7 +94,7 @@ function buildSystemPrompt() {
 
 【手順】
 1. 読んだ記事から確認できた事実を把握する
-2. このトピックで動画にできる切り口を3案考え、各案の根拠・必要データ・スライド構成・リスクを整理する
+2. このトピックで動画にできる切り口を3案考え、各案の根拠・必要データ・リスクを整理する
 3. 最もフックが強く、かつデータで支えられる1案を選ぶ
 4. 選んだ案でのブリーフ（動画の約束・論点4〜6個・注意事項）を固める
 
@@ -113,8 +113,11 @@ function buildSystemPrompt() {
 - 確認できていない事実を断定しない
 - 選手名・クラブ名・年号は記事の根拠があるものだけ使う
 - 相棒メモの「取得済みデータ（企画書・脚本構成で優先使用）」にある数値・所属・年齢・負傷情報は、themeProposal と briefing の dataNeeds に優先的に反映する
-- 「取得済み構造化データ」にある具体値は、企画案・slideOutline・dataNeedsで優先使用する
-- stats/profile/comparison系スライドを提案する場合は、取得済み構造化データ内のエンティティ名とラベル名をdataNeedsに入れる
+- 「取得済み構造化データ」にある具体値は、企画案・dataNeedsで優先使用する
+- この段階ではスライド案・スライド順・slideType・slideOutlineを出さない。企画書は切り口、視聴者への約束、根拠、必要素材だけを決める
+- dataNeeds は「この切り口を検証するための素材」に限定する。スライド名やスライド構成を書かない
+- 移籍・契約・噂の企画では、リーグが異なる2クラブの順位/勝点/得失点を横比較する dataNeeds を入れない。クラブ状態は必要な場合も背景素材に留め、主役選手の契約・市場価値・出場状況・関係者発言を優先する
+- comparison を必要素材にする場合は、同じ競技条件・同じ役割・同じ文脈で比較できる対象だけに限定する。比較の必然性が弱い場合は insight 用の論点に留める
 - 取得済み構造化データにない数字は、必要データまたはmissingDataに回し、断定しない
 - 相棒メモの「取得失敗・未確認データ」にある対象は、断定せず missingData または publishGates に回す
 - 結論はJSON形式のみ。コードブロックや前置き文は不要
@@ -122,9 +125,8 @@ function buildSystemPrompt() {
 - この段階では脚本構成・ナレーション草稿・完成台本を書かない
 - 相棒メモに「取得済みデータ」がある場合、そのラベル名（ゴール/アシスト/評価/クラブ/年齢等）をdataNeeds に入れること
 - candidates は必ず3案出力する（A/B/C案として提示するため）
-- candidates A/B/C は短尺・標準・長尺の提案に分け、videoLengthType / targetMinutes / recommendedSlideCount を必ず入れる
-- 各 candidate の slideOutline は案件の材料量に応じて4〜8枚で可変にする。historyに今季スタッツを羅列せず、simple/stats/profile/history/comparison/reactionを役割で分ける
-- 企画提案段階で storyPattern と slideOutline[].slideType を必ず出す。後工程は企画を作り直すのではなく、制作可能なスライド仕様へ確定する
+- candidates A/B/C は短尺・標準・長尺の提案に分け、videoLengthType / targetMinutes / recommendedSlideCount を必ず入れる。ただし recommendedSlideCount は目安だけで、具体的なスライド案は書かない
+- storyPattern は必ず出すが、slideOutline は出さない。後工程で企画書をもとに制作可能なスライド構成へ展開する
 - comparison スライドで選手同士を比較する場合、必ず同じ詳細ポジション（RSB同士/LSB同士/CB同士/ST同士/CM同士など）の選手を選ぶこと。RSB（右SB）とLSB（左SB）は守備の役割が異なり比較として不自然なため使わない。ポジションが確認できない場合は comparison を避けて insight にする
 - comparison の比較対象は、記事・ニュースで実際に言及された選手を優先すること。記事に登場しない選手を無断で比較対象に追加しない`;
 }
@@ -160,10 +162,7 @@ ${failedDataText ? `\n## 取得失敗・未確認データ（${failedDataCount |
         "targetMinutes": "1.5-2.5 / 3-4 / 5-6",
         "recommendedSlideCount": 4,
         "dataNeeds": ["必要なデータ1"],
-        "risk": "この案のリスクを短く",
-        "slideOutline": [
-          {"no": 1, "slideType": "opening", "headline": "スライドタイトル", "point": "このスライドで言うこと", "dataNeeds": []}
-        ]
+        "risk": "この案のリスクを短く"
       }
     ],
     "selected": 0,
@@ -174,7 +173,7 @@ ${failedDataText ? `\n## 取得失敗・未確認データ（${failedDataCount |
     "purpose": "この動画で視聴者に届ける約束（一文）",
     "coreMessage": "一文で言える結論",
     "chapters": [
-      {"no": 1, "role": "hook", "slideType": "opening", "claim": "主張", "dataNeeds": ["選手名 のゴール数など取得済みラベル名"]}
+      {"no": 1, "role": "hook", "claim": "この章で扱う論点", "dataNeeds": ["選手名 の契約満了など取得済みラベル名"]}
     ],
     "riskChecklist": ["確認すべき事実1"]
   },
@@ -262,18 +261,18 @@ ${String(raw || '').slice(0, 12000)}`;
 }
 
 function normalizeCandidateMeta(candidate, index, articleCount) {
-  const count = Array.isArray(candidate?.slideOutline) ? candidate.slideOutline.length : 0;
   const profiles = [
     { videoLengthType: 'short', targetMinutes: '1.5-2.5', fallbackSlides: articleCount >= 4 ? 5 : 4 },
     { videoLengthType: 'standard', targetMinutes: '3-4', fallbackSlides: articleCount >= 4 ? 6 : 5 },
     { videoLengthType: 'long', targetMinutes: '5-6', fallbackSlides: articleCount >= 5 ? 8 : 7 },
   ];
   const profile = profiles[index] || profiles[1];
+  const { slideOutline, ...rest } = candidate || {};
   return {
-    ...candidate,
+    ...rest,
     videoLengthType: candidate?.videoLengthType || profile.videoLengthType,
     targetMinutes: candidate?.targetMinutes || profile.targetMinutes,
-    recommendedSlideCount: candidate?.recommendedSlideCount || count || profile.fallbackSlides,
+    recommendedSlideCount: candidate?.recommendedSlideCount || profile.fallbackSlides,
   };
 }
 
@@ -297,14 +296,14 @@ memo: ${memo || 'なし'}
 ${String(raw || '').slice(0, 1200)}
 
 必須条件:
-- candidatesは3件（短尺・標準・長尺。各案にslideOutline 4〜8枚を材料量に応じて含める）
-- briefing.chaptersは4〜6件（各chapterにslideTypeを入れる）
+- candidatesは3件（短尺・標準・長尺。slideOutline は含めない）
+- briefing.chaptersは4〜6件（論点単位。slideType やスライド案は入れない）
 - 文字数を抑える
 - 脚本構成とナレーション草稿は書かない
 - JSON以外の文章は禁止
 
 {
-  "themeProposal": {"candidates": [{"videoLengthType": "short", "targetMinutes": "1.5-2.5", "recommendedSlideCount": 4, "slideOutline": []}, {"videoLengthType": "standard", "targetMinutes": "3-4", "recommendedSlideCount": 6, "slideOutline": []}, {"videoLengthType": "long", "targetMinutes": "5-6", "recommendedSlideCount": 8, "slideOutline": []}], "selected": 0, "selectedReason": "", "rejectedReasons": []},
+  "themeProposal": {"candidates": [{"videoLengthType": "short", "targetMinutes": "1.5-2.5", "recommendedSlideCount": 4, "dataNeeds": []}, {"videoLengthType": "standard", "targetMinutes": "3-4", "recommendedSlideCount": 6, "dataNeeds": []}, {"videoLengthType": "long", "targetMinutes": "5-6", "recommendedSlideCount": 8, "dataNeeds": []}], "selected": 0, "selectedReason": "", "rejectedReasons": []},
   "briefing": {"purpose": "", "coreMessage": "", "chapters": [], "riskChecklist": []},
   "missingData": [],
   "publishGates": []

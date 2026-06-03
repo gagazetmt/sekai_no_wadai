@@ -194,6 +194,8 @@ ${seedNote ? `\n⚠️ 【追加指示（最優先・必ず従う）】\n${seedN
 - ただし固有名・数値は必ず【取得済みデータ】に存在するものだけを subject に使う
 - 企画書に登場するが取得済みデータに無い固有名は、subject にせず insight として一般論で触れる
 - 企画書が要求するデータが取れていない場合、その枚は type を insight に落とす
+- 移籍・契約・噂の企画では、リーグが異なる2クラブの順位/勝点/得失点を stats/comparison の主役にしない。クラブ成績は背景に留め、主役選手の契約・市場価値・出場状況・関係者発言を優先する
+- comparison は同じ役割・同じ競技条件・同じ文脈で比較できる対象だけに使う。必然性が弱い比較は insight にする
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : '';
 
@@ -233,7 +235,7 @@ ${_curatedBlock(si)}
 動画の視聴維持率を上げるため、以下のような複数の視点を**バランスよく**織り交ぜる：
 1. 試合・ニュースそのものの解説 (insight / matchcard)
 2. 主役選手・チームの現状スタッツ (stats / profile)
-3. 2選手・2チーム・2監督の比較 (comparison)
+3. 2選手・2チーム・2監督の比較 (comparison) ※同一文脈で比較できる場合のみ
 4. 戦術・監督観点・哲学 (insight / profile)
 5. 過去対戦・歴史的背景 (history / comparison)
 6. ファンコメントの温度感 (reaction)
@@ -266,6 +268,7 @@ ${_curatedBlock(si)}
   - "match:{ラベル}" （試合主体スライド）
   - "matchcard:{ラベル}" （試合プレビュー）
 - comparison の場合は "secondary" にも label を入れる
+- 移籍・契約・噂の企画では、Liverpool vs Real Madrid のような別リーグ所属クラブの順位/勝点比較を作らない。クラブ間の関係性は history/insight で扱う
 - **history の場合**: 主題が「2チーム/2選手の対戦・対比の歴史」なら **secondary にも label を入れる**
   ・例: クラシコ特集の history → mainKey="entity:Real Madrid" + secondary="FC Barcelona"
   ・secondary を入れると H2H（直接対決）データが AI に渡され、関係ない他チームの試合を拾わなくなる
