@@ -466,24 +466,36 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     <button class="hamburger" onclick="toggleSidebar(true)" aria-label="メニュー">☰</button>
     <h1>⚽ サッカーYT v2 Pro <span style="color:var(--c);">RED</span></h1>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-      <button class="btn btn-sm" id="v25AutoBtn" onclick="runV25Autopilot()" title="V2.5: V2 data + V3 proposal/images + V2 editing" style="background:#f59e0b;color:#111827;">V2.5 AUTO</button>
-      <span id="v25AutoStatus" style="font-size:11px;color:#fcd34d;"></span>
+      <button class="btn btn-sm" id="v25AutoBtn" onclick="goStep(25)" title="企画提案タブへ" style="background:#f59e0b;color:#111827;">企画提案</button>
       <span class="header-sub">Local Launcher - port ${PORT}</span>
     </div>
   </div>
   <div class="steps">
     <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
-    <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. SI情報取得 + 画像選定</div>
-    <div class="step-nav"        id="nav3"  onclick="goStep(3)">3. 構成提案</div>
-    <div class="step-nav"        id="nav4"  onclick="goStep(4)">4. シナリオ編集</div>
-    <div class="step-nav"        id="nav5"  onclick="goStep(5)">5. サムネ生成</div>
-    <div class="step-nav"        id="nav6"  onclick="goStep(6)">6. 動画投稿</div>
+    <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. データ取得</div>
+    <div class="step-nav"        id="nav25" onclick="goStep(25)">3. 企画提案</div>
+    <div class="step-nav"        id="nav3"  onclick="goStep(3)">4. 脚本構成</div>
+    <div class="step-nav"        id="nav4"  onclick="goStep(4)">5. 脚本編集</div>
+    <div class="step-nav"        id="nav5"  onclick="goStep(5)">6. サムネ生成</div>
+    <div class="step-nav"        id="nav6"  onclick="goStep(6)">7. 動画投稿</div>
     <div class="step-nav"        id="nav35" onclick="goStep(35)" style="display:none;font-size:9px;opacity:.4;">[旧3.5(裏)]</div>
   </div>
   <div class="content-scroll">
     <!-- 各 Step の UI（routes/*.js から注入） -->
     ${s1UI()}
     ${s2UI()}
+    <div id="step25" class="step-container" style="display:none">
+<div class="panel" style="padding:16px 18px;">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #1e293b;">
+    <span style="font-size:14px;font-weight:700;color:#fcd34d;">企画提案</span>
+    <button id="v25RunBtn" onclick="window.runV25FromTab()" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;">▶ V2.5 AUTO実行</button>
+    <span id="v25TabStatus" style="font-size:11px;color:#94a3b8;"></span>
+  </div>
+  <div id="v25ProposalArea">
+    <div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">案件を選択してV2.5 AUTOを実行すると、企画提案A/B/Cが表示されます</div>
+  </div>
+</div>
+</div>
     ${s3UI()}
     ${s35UI()}
     ${s4UI()}
@@ -527,7 +539,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 3, 35, 4, 5, 6].forEach(i => {
+  [1, 2, 25, 3, 35, 4, 5, 6].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
@@ -612,9 +624,10 @@ window.runV25Autopilot = async function() {
       },
     });
     var pc = result.cost || {};
-    setStatus((result.proposals || 0) + '案できた（提案 ¥' + (pc.totalJpy || 0) + ' / ' + (pc.calls || 0) + 'コール）— 企画書を選択');
+    setStatus('');
     var plan = await fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id)).then(function(r){ return r.json(); }).catch(function(){ return null; });
-    window.showV25PlanPanel(plan, post, []);
+    window.goStep(25);
+    window.renderV25Proposals(plan, post);
   } catch (e) {
     console.error('[V2.5 AUTO]', e);
     setStatus('failed');
@@ -636,7 +649,196 @@ window.registerJobResumer && window.registerJobResumer('v25-autopilot', async ({
 /* V2.5: 企画書 A/B/C 選択＋微修正パネル (Fix#3)
    - 注: この関数は buildPage() のテンプレートリテラル内。 バッククォート/＄{} 禁止。
      文字列連結のみ。 改行リテラルは '\\n' (ブラウザに '\n' で届く)。 */
+/* ── Step25: 企画提案タブ ─────────────────────────────────── */
+window.step25Init = function() {
+  var post = window.APP && window.APP.selected;
+  var area = document.getElementById('v25ProposalArea');
+  if (!area) return;
+  if (!post || !post.id) {
+    area.innerHTML = '<div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">Step1で案件を選択してください</div>';
+    return;
+  }
+  area.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:16px;text-align:center;">読込中...</div>';
+  fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id))
+    .then(function(r){ return r.json(); })
+    .then(function(plan) {
+      var cands = plan && plan.aiPlan && plan.aiPlan.themeProposal && plan.aiPlan.themeProposal.candidates;
+      if (cands && cands.length) { window.renderV25Proposals(plan, post); }
+      else { area.innerHTML = '<div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">企画提案がまだありません。▶ V2.5 AUTO実行ボタンを押してください</div>'; }
+    })
+    .catch(function() {
+      area.innerHTML = '<div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">企画提案がまだありません</div>';
+    });
+};
+
+window.runV25FromTab = async function() {
+  var post = window.APP && window.APP.selected;
+  if (!post || !post.id) { alert('Step1で案件を選択してください'); return; }
+  var statusEl = document.getElementById('v25TabStatus');
+  var btn = document.getElementById('v25RunBtn');
+  function setStatus(t) { if(statusEl) statusEl.textContent = t||''; }
+  if (btn) btn.disabled = true;
+  try {
+    setStatus('実行中...');
+    var result = await window.runJob({
+      startUrl: '/api/v25/autopilot/start',
+      statusUrl: '/api/v25/autopilot/status',
+      kind: 'v25-autopilot',
+      key: 'v25_autopilot:' + post.id,
+      intervalMs: 3000,
+      timeoutMs: 40 * 60 * 1000,
+      body: { postId: post.id, count: 7, sprint: !!window.appSprint, attachImages: true },
+      onProgress: function(job) {
+        var p = job.progress != null && job.total ? ' '+job.progress+'/'+job.total : '';
+        setStatus((job.step||'running')+p);
+      },
+    });
+    var pc = result && result.cost || {};
+    setStatus((result&&result.proposals||0)+'案 ¥'+(pc.totalJpy||0));
+    var plan = await fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id)).then(function(r){ return r.json(); }).catch(function(){ return null; });
+    window.renderV25Proposals(plan, post);
+  } catch(e) {
+    console.error('[v25 tab]', e);
+    setStatus('失敗: '+(e.message||e));
+    alert('V2.5 AUTO失敗: '+(e.message||e));
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
+window.renderV25Proposals = function(plan, post) {
+  var area = document.getElementById('v25ProposalArea');
+  if (!area) return;
+  var tp = (plan && plan.aiPlan && plan.aiPlan.themeProposal) || {};
+  var cands = tp.candidates || [];
+  if (!cands.length) { area.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">企画提案なし</div>'; return; }
+  var selected = tp.selected || 0;
+  var LAB = ['A', 'B', 'C', 'D', 'E'];
+  var LEN = { short:'短尺', standard:'標準', long:'長尺' };
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function outlineToText(o){ return (o||[]).map(function(s){ return (s.slideType||'insight')+' | '+(s.headline||'')+(s.point?' | '+s.point:''); }).join('\\n'); }
+  function textToOutline(t){ return String(t||'').split('\\n').map(function(line){ var p=line.split('|').map(function(x){return x.trim();}); if(!p[0]&&!p[1]) return null; return {slideType:p[0]||'insight',headline:p[1]||'',point:p[2]||''}; }).filter(Boolean); }
+
+  function render() {
+    var c = cands[selected] || {};
+    var html = '';
+    // A/B/C cards
+    html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">';
+    for (var i=0; i<cands.length; i++) {
+      var cc = cands[i]||{};
+      var on = (i===selected);
+      var border = on ? '#f59e0b' : '#334155';
+      var bg = on ? '#1f2937' : '#111827';
+      html += '<div class="v25pCard" data-idx="'+i+'" style="flex:1;min-width:200px;cursor:pointer;border:2px solid '+border+';background:'+bg+';border-radius:8px;padding:10px;">';
+      html += '<div style="font-weight:700;color:#fcd34d;margin-bottom:4px;font-size:12px;">案'+LAB[i]+' · '+(LEN[cc.videoLengthType]||cc.videoLengthType||'')+' · '+(cc.recommendedSlideCount||(cc.slideOutline?cc.slideOutline.length:'?'))+'枚</div>';
+      html += '<div style="font-size:12px;color:#e5e7eb;margin-bottom:3px;">'+esc((cc.hookQuestion||'').slice(0,70))+'</div>';
+      html += '<div style="font-size:11px;color:#94a3b8;">'+esc((cc.angle||'').slice(0,50))+'</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    // Edit area
+    var c2 = cands[selected]||{};
+    html += '<div style="border-top:1px solid #334155;padding-top:12px;">';
+    html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">▼ 案'+LAB[selected]+' 微修正（編集すると V2 がこの内容で構成）</div>';
+    html += '<label style="font-size:11px;color:#94a3b8;">フック</label>';
+    html += '<input id="v25p_hook" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;" value="'+esc(c2.hookQuestion)+'">';
+    html += '<label style="font-size:11px;color:#94a3b8;">切り口</label>';
+    html += '<input id="v25p_angle" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;" value="'+esc(c2.angle)+'">';
+    html += '<label style="font-size:11px;color:#94a3b8;">結論</label>';
+    html += '<textarea id="v25p_answer" rows="2" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;">'+esc(c2.answer)+'</textarea>';
+    html += '<label style="font-size:11px;color:#94a3b8;">スライド構成（slideType | 見出し | 補足）</label>';
+    html += '<textarea id="v25p_outline" rows="7" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:11px;font-family:monospace;">'+esc(outlineToText(c2.slideOutline))+'</textarea>';
+    html += '<div style="border-top:1px solid #1e3a5f;padding-top:10px;margin-top:4px;">';
+    html += '<label style="font-size:11px;color:#60a5fa;font-weight:700;">追加エンティティ（比較対象変更等。"名前:role" 形式）</label>';
+    html += '<div style="display:flex;gap:6px;margin:4px 0 8px;">';
+    html += '<input id="v25p_entity" style="flex:1;padding:5px 8px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;" placeholder="例: Malo Gusto:player">';
+    html += '<button id="v25pFetchBtn" style="background:#1d4ed8;color:#fff;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;">SIに取得</button>';
+    html += '</div>';
+    html += '<label style="font-size:11px;color:#94a3b8;">修正指示（構成生成AIへの最優先指示）</label>';
+    html += '<textarea id="v25p_note" rows="2" style="width:100%;margin:4px 0 10px;padding:6px;background:#111827;border:1px solid #1e3a5f;border-radius:5px;color:#e5e7eb;font-size:12px;" placeholder="例: 比較スライドはCucurellaではなくMalo Gusto(RSB)と比較すること"></textarea>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">';
+    html += '<button id="v25pGoBtn" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer;font-size:13px;">④ 脚本構成を生成</button>';
+    html += '</div>';
+    html += '</div>';
+    area.innerHTML = html;
+
+    // wire card selection
+    area.querySelectorAll('.v25pCard').forEach(function(el) {
+      el.addEventListener('click', function() {
+        var idx = parseInt(el.getAttribute('data-idx'),10);
+        if (idx === selected) return;
+        captureEdits(); selected = idx; render();
+      });
+    });
+    // wire entity fetch
+    area.querySelector('#v25pFetchBtn').addEventListener('click', async function() {
+      var entityText = (area.querySelector('#v25p_entity')||{}).value||'';
+      if (!entityText.trim()) return;
+      var items = entityText.trim().split(/\s+/).filter(Boolean).map(function(t){ var p=t.split(':'); return {box:'entity',label:p[0].trim(),role:p[1]?p[1].trim():'player'}; });
+      var statusEl = document.getElementById('v25TabStatus');
+      if(statusEl) statusEl.textContent = '取得中...';
+      try {
+        await fetch('/api/v2/fetch-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({postId:post.id,items:items})});
+        if(statusEl) statusEl.textContent = '取得完了: '+items.map(function(x){return x.label;}).join(', ');
+      } catch(e) { if(statusEl) statusEl.textContent = '取得失敗'; }
+    });
+    // wire generate button
+    area.querySelector('#v25pGoBtn').addEventListener('click', generateStructure);
+  }
+
+  function val(id){ var el=area.querySelector('#'+id); return el?el.value:''; }
+  function captureEdits() {
+    var c = cands[selected];
+    if(!c) return;
+    c.hookQuestion = val('v25p_hook');
+    c.angle = val('v25p_angle');
+    c.answer = val('v25p_answer');
+    c.slideOutline = textToOutline(val('v25p_outline'));
+    c.structureNote = val('v25p_note');
+  }
+
+  async function generateStructure() {
+    captureEdits();
+    var editedCandidate = { hookQuestion:val('v25p_hook'), angle:val('v25p_angle'), answer:val('v25p_answer'), slideOutline:textToOutline(val('v25p_outline')), structureNote:val('v25p_note') };
+    var statusEl = document.getElementById('v25TabStatus');
+    function setStatus(t){ if(statusEl) statusEl.textContent = t||''; }
+    setStatus('脚本構成生成中...');
+    var btn = area.querySelector('#v25pGoBtn');
+    if(btn) btn.disabled = true;
+    try {
+      var jobRes = await window.runJob({
+        startUrl: '/api/v25/structure',
+        statusUrl: '/api/v25/structure/status',
+        kind: 'v25-structure',
+        key: 'v25_structure:' + post.id,
+        intervalMs: 3000,
+        timeoutMs: 20*60*1000,
+        body: { postId:post.id, selectedIndex:selected, editedCandidate:editedCandidate, sprint:!!window.appSprint, attachImages:true },
+        onProgress: function(job){ setStatus('構成生成: '+(job.step||'...')); },
+      });
+      var sc = jobRes && jobRes.cost || {};
+      setStatus('構成完了 '+( jobRes&&jobRes.moduleCount||0)+'枚 ¥'+(sc.totalJpy||0));
+      window.APP.modules = jobRes && jobRes.modules || [];
+      if (window.APP.s3) window.APP.s3.modules = window.APP.modules;
+      window.goStep(3);
+      if (typeof window.step3Init === 'function') window.step3Init();
+    } catch(e) {
+      console.error('[v25 structure]', e);
+      setStatus('構成生成失敗');
+      alert('脚本構成生成に失敗: '+(e.message||e));
+      if(btn) btn.disabled = false;
+    }
+  }
+
+  render();
+};
+
+/* 後方互換: overlay版 showV25PlanPanel → step25 にリダイレクト */
 window.showV25PlanPanel = function(plan, post, defaultModules) {
+  window.goStep(25);
+  window.renderV25Proposals(plan, post);
+};
   var tp = (plan && plan.aiPlan && plan.aiPlan.themeProposal) || {};
   var cands = tp.candidates || [];
   var defaultIndex = (tp.selected | 0) || 0;
@@ -822,7 +1024,7 @@ window.showV25PlanPanel = function(plan, post, defaultModules) {
   document.body.appendChild(overlay);
 };
 
-/* ── V2.5 ③ 脚本構成確認パネル ── */
+/* ── V2.5 ③ 脚本構成確認パネル（後方互換・企画提案タブから呼ばれなくなったが残置）── */
 window.showV25StructurePanel = function(modules, post) {
   if (!modules || !modules.length) { window.goStep(3); return; }
   var postId = post && post.id;
