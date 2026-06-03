@@ -17,7 +17,8 @@ const { callAI } = require(path.join(__dirname, '..', 'scripts', 'ai_client'));
 const DEFAULT_QUERY_LIMIT = 3;
 const DEFAULT_PICK_MIN = 3;
 const DEFAULT_PICK_MAX = 6;
-const ARTICLE_CHAR_LIMIT = 3200;
+const ARTICLE_CHAR_LIMIT = 30000;
+const ARTICLE_TOTAL_CHAR_LIMIT = 30000;
 const FULL_TEXT_TARGET = 5;
 const EXTRA_FETCH_LIMIT = 8;
 
@@ -262,15 +263,42 @@ async function enrichItemWithArticle(item) {
       fetchStatus: article.url ? 'snippet_only' : 'blocked',
       articleText: '',
       learningText: `${item.title || ''}\n${item.snippet || ''}`.trim(),
+      comments: [],
+      commentsUrl: null,
     };
   }
   const articleText = article.content.slice(0, ARTICLE_CHAR_LIMIT);
   return {
     ...item,
-    fetchStatus: article.method === 'jina_reader' ? 'full_text_reader' : 'full_text',
+    fetchStatus: article.method === 'jina_reader' ? 'full_text_reader' : article.method === 'yahoo_news' ? 'full_text_yahoo' : 'full_text',
     articleText,
     learningText: `[${item.host}] ${item.title || ''}\n${item.snippet || ''}\n${articleText}`.trim(),
+    comments: article.comments || [],
+    commentsUrl: article.commentsUrl || null,
   };
+}
+
+function applyLearningTextBudget(items, maxChars = ARTICLE_TOTAL_CHAR_LIMIT) {
+  let used = 0;
+  let kept = 0;
+  for (const item of items) {
+    const text = String(item.learningText || '').trim();
+    if (!text) continue;
+    if (used >= maxChars) {
+      item.articleText = '';
+      item.learningText = `${item.title || ''}\n${item.snippet || ''}`.trim();
+      continue;
+    }
+    const left = maxChars - used;
+    item.learningText = text.length > left ? text.slice(0, left) : text;
+    if (item.articleText) {
+      const prefix = `[${item.host}] ${item.title || ''}\n${item.snippet || ''}\n`;
+      item.articleText = String(item.articleText).slice(0, Math.max(0, item.learningText.length - prefix.length));
+    }
+    used += item.learningText.length;
+    kept += 1;
+  }
+  return { used, kept };
 }
 
 function classifyUse(item) {
@@ -576,6 +604,7 @@ async function runTopicResearch(input = {}) {
     ...item,
     usableFor: classifyUse(item),
   }));
+  const textBudget = applyLearningTextBudget(learningItems);
   const jaText = await enrichJapaneseResearchText(topic, learningItems);
 
   return {
@@ -595,6 +624,8 @@ async function runTopicResearch(input = {}) {
       fetchStatus: item.fetchStatus,
       score: item.score,
       usableFor: item.usableFor,
+      comments: item.comments || [],
+      commentsUrl: item.commentsUrl || null,
       text: item.learningText,
     })),
     summary: {
@@ -602,6 +633,9 @@ async function runTopicResearch(input = {}) {
       selectedUrlCount: learningItems.length,
       fullTextCount: learningItems.filter((x) => /^full_text/.test(x.fetchStatus)).length,
       snippetOnlyCount: learningItems.filter((x) => !/^full_text/.test(x.fetchStatus)).length,
+      articleTextBudgetChars: textBudget.used,
+      articleTextBudgetItemCount: textBudget.kept,
+      yahooCommentCount: learningItems.reduce((sum, item) => sum + (item.comments?.length || 0), 0),
       materialBulletsJa: jaText.materialBulletsJa,
     },
   };

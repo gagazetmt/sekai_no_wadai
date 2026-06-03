@@ -28,6 +28,7 @@ const { fetchSofaScoreManager }    = require('../scripts/modules/fetchers/sofasc
 const { fetchSofaScoreMatch }      = require('../scripts/modules/fetchers/sofascore_match');
 const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
 const { fetchSerper }              = require('../scripts/modules/fetchers/serper_module');
+const { fetchArticleContent }      = require('../scripts/modules/fetchers/article_fetcher');
 const { suggestEntities }          = require('../scripts/modules/stock_match');
 const { fetchImagesForLabel }      = require('./step35_routes');
 const { createJob, readJob, updateJob } = require('./_job_helper');
@@ -364,23 +365,35 @@ function _isArticleRelevant(article, queries, requiredTerms = []) {
   return keywords.some(k => haystack.includes(k));
 }
 
-// P2: Readability で英語記事の本文を直接取得（ナビ・広告・関連記事を除去）
-const { Readability } = require('@mozilla/readability');
-const { JSDOM } = require('jsdom');
-async function _readabilityFetch(url, maxChars = 4000) {
+// P2: fetch article bodies with Yahoo News support, then cap total text.
+const ARTICLE_TOTAL_CHAR_LIMIT = 30000;
+
+function _applyArticleTextBudget(articles, maxChars = ARTICLE_TOTAL_CHAR_LIMIT) {
+  let used = 0;
+  let kept = 0;
+  for (const a of articles) {
+    const text = String(a.fullText || '').trim();
+    if (!text) continue;
+    if (used >= maxChars) {
+      delete a.fullText;
+      continue;
+    }
+    const left = maxChars - used;
+    a.fullText = text.length > left ? text.slice(0, left) : text;
+    used += a.fullText.length;
+    kept += 1;
+  }
+  return { used, kept };
+}
+
+async function _articleFetch(url) {
   try {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NewsBot/1.0)', 'Accept': 'text/html' },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const dom = new JSDOM(html, { url });
-    const article = new Readability(dom.window.document).parse();
-    if (!article?.textContent) return null;
-    const text = article.textContent.replace(/\s+/g, ' ').trim();
-    return text.length > 100 ? text.slice(0, maxChars) : null;
-  } catch (_) { return null; }
+    const article = await fetchArticleContent(url);
+    if (!article?.ok || !article.content) return null;
+    return article;
+  } catch (_) {
+    return null;
+  }
 }
 
 // opts: jaQuery / requiredTerms / maxEn / maxJa
@@ -429,18 +442,24 @@ async function _gatherArticles(searches, opts = {}) {
 
   console.log(`[gatherArticles] EN ${enRaw.length}→${enFiltered.length}件 / JA ${jaRaw.length}→${jaFiltered.length}件 | 必須語:[${requiredTerms.slice(0,3).join('/')}]`);
 
-  // P2: Jina全文取得（EN上位5件 + JA上位3件を並列）
-  // 英語: Readability で本文直接取得、日本語: スニペットのまま（短い記事が多いのでスニペットで十分）
-  const enTargets = enFiltered.slice(0, 5).filter(a => a.link);
-  await Promise.all(enTargets.map(async (a) => {
-    const fullText = await _readabilityFetch(a.link);
-    if (fullText) { a.fullText = fullText; a.snippet = fullText.slice(0, 320); }
-  }));
-  const hits = enTargets.filter(a => a.fullText).length;
-  console.log(`[gatherArticles] Readability:${hits}/${enTargets.length}件(EN) JA:スニペットのみ`);
-
-  // EN→JA の順で結合
   const filtered = [...enFiltered, ...jaFiltered];
+
+  const targets = filtered.filter(a => a.link);
+  await Promise.all(targets.map(async (a) => {
+    const article = await _articleFetch(a.link);
+    if (article?.content) {
+      a.fullText = article.content;
+      a.fetchMethod = article.method || 'article';
+      if (Array.isArray(article.comments) && article.comments.length) {
+        a.comments = article.comments;
+        a.commentsUrl = article.commentsUrl || null;
+      }
+      a.snippet = article.content.slice(0, 320);
+    }
+  }));
+  const budget = _applyArticleTextBudget(filtered);
+  const hits = targets.filter(a => a.fullText).length;
+  console.log(`[gatherArticles] articleFetch:${hits}/${targets.length}件 | fullText ${budget.kept}件/${budget.used}字 (cap ${ARTICLE_TOTAL_CHAR_LIMIT})`);
 
   return filtered;
 }
@@ -476,9 +495,14 @@ async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
   }
 
   const articleBlock = articles
-    .map((a, i) => `${i + 1}. [${a.host}] ${a.title}\n   ${a.snippet}`)
-    .join('\n')
-    .slice(0, 6000);
+    .map((a, i) => {
+      const body = String(a.fullText || a.snippet || '').trim();
+      const method = a.fetchMethod ? ` / ${a.fetchMethod}` : '';
+      const commentNote = Array.isArray(a.comments) && a.comments.length ? ` / Yahooコメント${a.comments.length}件` : '';
+      return `${i + 1}. [${a.host}${method}${commentNote}] ${a.title}\n${body}`;
+    })
+    .join('\n\n')
+    .slice(0, ARTICLE_TOTAL_CHAR_LIMIT);
 
   const prompt = `あなたはサッカーニュース解析の専門家です。以下の【関連記事 約${articles.length}件】を熟読し、この案件の動画で**データ取得すべき** entity / match ラベルを精度高く再提案してください。
 検索クエリではなく、記事本文に実際に登場し、案件テーマに直結する固有名のみを選びます。
