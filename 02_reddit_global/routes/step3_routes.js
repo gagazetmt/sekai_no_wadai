@@ -181,12 +181,14 @@ ${customNote ? `\n【相棒の補足メモ（最重要参考情報）】\n${cust
     const seedPlan = opts.seedPlan && typeof opts.seedPlan === 'object' ? opts.seedPlan : null;
     const seedOutline = Array.isArray(seedPlan?.slideOutline) ? seedPlan.slideOutline : [];
     const seedNote = String(seedPlan?.structureNote || '').trim().slice(0, 300);
+    const seedChapters = Array.isArray(seedPlan?.briefing?.chapters) ? seedPlan.briefing.chapters : [];
     const seedBanner = seedPlan ? `
 ━━━ 🎬 採用された企画書（この方向性で構成する）━━━
 - フック: ${String(seedPlan.hookQuestion || '').slice(0, 120)}
 - 切り口(angle): ${String(seedPlan.angle || '').slice(0, 120)}
 - 結論(answer): ${String(seedPlan.answer || '').slice(0, 160)}
 - 物語パターン: ${String(seedPlan.storyPattern || '').slice(0, 60)}
+${seedChapters.length ? `- 章立て（論点 + 必要データ → スライド型の根拠にする）:\n${seedChapters.map((c, i) => `  ${c.no || i + 1}. [${c.role || '?'}] ${String(c.claim || '').slice(0, 80)} / dataNeeds: ${(c.dataNeeds || []).slice(0, 5).join(' · ')}`).join('\n')}` : ''}
 ${seedOutline.length ? `- 企画書のスライド流れ（参考。データに接地させて確定する）:\n${seedOutline.map((s, i) => `  ${i + 1}. [${s.slideType || '?'}] ${String(s.headline || '').slice(0, 60)}${s.point ? ' — ' + String(s.point).slice(0, 60) : ''}`).join('\n')}` : ''}
 ${seedNote ? `\n⚠️ 【追加指示（最優先・必ず従う）】\n${seedNote}` : ''}
 【企画書 seed の扱い（厳守）】
@@ -233,7 +235,33 @@ ${matchBlock}
 ${searchBlock}
 ━━━━━━━━━━━━━━━━
 ${_curatedBlock(si)}
+${seedChapters.length ? `
+━━━ 【章立て → スライド型 推論ガイド（厳守）】━━━
+企画書の章立て dataNeeds キーワードから、以下のルールでスライド型を選ぶこと：
 
+dataNeeds キーワード → 推奨スライド型
+- ゴール/アシスト/評価/出場/分/xG/シュート/タックル → **stats**（選手単体）
+- 年齢/国籍/ポジション/所属/契約満了/市場価値 → **profile**（初出）または **stats**
+- H2H/対戦/対戦史/過去対戦/対戦成績 → **history**（secondary に相手 entity 必須）
+- 反応/コメント/Reddit/海外の声/ファン → **reaction**
+- 順位表/得点王/複数チーム比較 → **ranking**
+- 移籍/契約/噂/発言 の背景・文脈 → **insight**（数値スライド化しない）
+
+章ロール → スライド型のヒント
+- hook/opening → opening（先頭固定）
+- evidence/proof/data → stats または profile（データで証明する章）
+- context/background → insight（一般論・背景）
+- comparison → comparison（同条件で比較可能な場合のみ）
+- reaction/audience → reaction
+- conclusion/ending → ending（末尾固定）
+
+entity 役割 × スライド型 制約（最重要）
+- [player] sofa:ok → stats か profile を必ず最低1枚作る。insight だけで数値を語るな
+- [team] 「移籍・契約・噂」が主題の記事に登場するクラブ → そのチームの stats/comparison は作らない。insight で背景に触れる程度に留める（選手がメイン、クラブは文脈）
+- [manager] → profile または insight
+- [tournament] → ranking または insight（tournament の stats/comparison は不可）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}
 【視点の引き出し（多角的に組み合わせる）】
 動画の視聴維持率を上げるため、以下のような複数の視点を**バランスよく**織り交ぜる：
 1. 試合・ニュースそのものの解説 (insight / matchcard)
@@ -284,6 +312,11 @@ ${_curatedBlock(si)}
   ✅例:「2023-24 ブンデス無敗優勝の数字（87勝/315得点）で歴史的功績を語る」
   ❌例:「選手の今を語る」← 具体性ゼロ、 V4-Flash が薄い narration を返す原因
   ❌例:「キャリアを振り返る」← どの数字を使うか不明確
+- **recipeKey のヒント（generate-scenario での選定を先読みして scriptDir に意図を込める）**
+  - 選手の今季スタッツ → recipeKey は player.fw_match_stats / player.mf_match_stats / player.df_match_stats のいずれか（ポジション別）
+  - 選手の基本プロフィール → recipeKey は player.profile_basic
+  - 選手の複数シーズン推移 → recipeKey は player.season_trend5
+  - scriptDir にポジション（FW/MF/DF/GK）または「今季スタッツ」「プロフィール」「シーズン推移」を書いておくと generate-scenario でレシピが一致しやすい
 
 【出力】JSON のみ（マークダウン不要）:
 {

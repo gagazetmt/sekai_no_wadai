@@ -502,7 +502,7 @@ async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
       return `${i + 1}. [${a.host}${method}${commentNote}] ${a.title}\n${body}`;
     })
     .join('\n\n')
-    .slice(0, ARTICLE_TOTAL_CHAR_LIMIT);
+    .slice(0, 8000);  // ラベル精製は 8k で十分。フルテキストはプランナー・研究フェーズ専用
 
   const prompt = `あなたはサッカーニュース解析の専門家です。以下の【関連記事 約${articles.length}件】を熟読し、この案件の動画で**データ取得すべき** entity / match ラベルを精度高く再提案してください。
 検索クエリではなく、記事本文に実際に登場し、案件テーマに直結する固有名のみを選びます。
