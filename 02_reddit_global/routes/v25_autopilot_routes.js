@@ -26,21 +26,6 @@ const TRANSFER_WORD_RE = /移籍|契約|流出|獲得|退団|フリー|延長|tr
 const NUMERIC_PLAYER_WORD_RE = /市場価値|契約|出場|ゴール|アシスト|評価|得点|分|apps|goals|assists|rating|market|contract|minutes/i;
 const CLUB_ROUTE_WORD_RE = /レアル|Real Madrid|Madrid|リバプール|Liverpool/i;
 
-// チームリーグ成績の dataNeeds — insight のナレーションで語るものであってデータスロットには不適
-// "(team).順位" / "(team).勝点" / "(team).得失点" などを除去するパターン
-const TEAM_LEAGUE_STAT_RE = /\(team\)[.\s]*(順位|勝点|得失点|勝利数|引分|敗戦|standing|points|wins?|losses?|draws?)/i;
-
-// briefing.chapters[].dataNeeds からスライド構成上無効な要素を除去する
-// 企画書レベルで許された「チームリーグ成績の言及」がそのまま dataSlots に流れ込まないようにする
-function sanitizeBriefingForSlides(briefing) {
-  if (!briefing || !Array.isArray(briefing.chapters)) return briefing;
-  const cleaned = briefing.chapters.map(ch => {
-    const filtered = (ch.dataNeeds || []).filter(dn => !TEAM_LEAGUE_STAT_RE.test(dn));
-    if (filtered.length === (ch.dataNeeds || []).length) return ch;
-    return { ...ch, dataNeeds: filtered };
-  });
-  return { ...briefing, chapters: cleaned };
-}
 
 // コスト計測: グローバル _log のインデックスを起点に、その後追加された
 //   AIコール分だけを集計する（ジョブ単位のコスト。 並行ジョブと混ざらない）。
@@ -204,9 +189,7 @@ async function buildModulesViaV2(postId, aiPlan, selectedIndex, si, opts = {}) {
     storyPattern: candidate.storyPattern || '',
     slideOutline: Array.isArray(candidate.slideOutline) ? candidate.slideOutline : [],
     structureNote: candidate.structureNote || '',
-    briefing: sanitizeBriefingForSlides(
-      typeof aiPlan?.briefing === 'object' && aiPlan.briefing !== null ? aiPlan.briefing : null
-    ),
+    briefing: typeof aiPlan?.briefing === 'object' && aiPlan.briefing !== null ? aiPlan.briefing : null,
   };
   const count = Math.max(4, Math.min(10, Number(candidate.recommendedSlideCount) || Number(opts.count) || 7));
   try {

@@ -257,7 +257,9 @@ dataNeeds キーワード → 推奨スライド型
 
 entity 役割 × スライド型 制約（最重要）
 - [player] sofa:ok → stats か profile を必ず最低1枚作る。insight だけで数値を語るな
-- [team] 「移籍・契約・噂」が主題の記事に登場するクラブ → そのチームの stats/comparison は作らない。insight で背景に触れる程度に留める（選手がメイン、クラブは文脈）
+  ✅ "entity:選手名" の stats/profile スライドには選手自身のデータのみ → mainKey の entity 以外の成績を scriptDir に混ぜない
+- [team] sofa:ok → その1クラブの成績は stats / 近年推移なら timeline / 歴史的文脈なら history が適切
+  ⚠️ ただし「移籍・噂」主体の記事でリーグの異なる2クラブを1スライドで横並び比較するのは避ける → 各クラブ単体スライドに分けるか insight に
 - [manager] → profile または insight
 - [tournament] → ranking または insight（tournament の stats/comparison は不可）
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
