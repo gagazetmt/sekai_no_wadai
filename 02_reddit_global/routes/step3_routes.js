@@ -317,6 +317,11 @@ entity 役割 × スライド型 制約（最重要）
   - 選手の基本プロフィール → recipeKey は player.profile_basic
   - 選手の複数シーズン推移 → recipeKey は player.season_trend5
   - scriptDir にポジション（FW/MF/DF/GK）または「今季スタッツ」「プロフィール」「シーズン推移」を書いておくと generate-scenario でレシピが一致しやすい
+- **stats / profile の scriptDir ルール（厳守）**
+  - stats / profile スライドの scriptDir は**その entity 自身のデータのみ**を参照する
+  - "entity:選手名" の stats スライドに「所属クラブのリーグ順位 / 勝点 / 得失点」を書かない（クラブ成績は insight の narration で語る）
+  - ✅ 「マック・アリスターの今季MFスタッツ（出場時間・パス成功率・キーパス）で貢献度を可視化」
+  - ❌ 「マック・アリスターのスタッツとリバプールの5位（勝点60）を軸に移籍の背景を語る」← クラブ成績混在NG
 
 【出力】JSON のみ（マークダウン不要）:
 {
