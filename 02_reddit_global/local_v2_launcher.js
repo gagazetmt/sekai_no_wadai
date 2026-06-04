@@ -28,6 +28,7 @@ const { router: dataExplorerRouter }     = require('./routes/data_explorer_route
 const { router: chatRouter, getUI: chatUI } = require('./routes/chat_routes');
 const { router: curatedRouter }          = require('./routes/curated_routes');
 const { router: v25Router }              = require('./routes/v25_autopilot_routes');
+const { router: vpRouter }               = require('./routes/viewpoint_routes');
 
 app.use('/api', s1Router);
 app.use('/api', s2Router);
@@ -40,6 +41,7 @@ app.use('/api', dataExplorerRouter);
 app.use('/api', chatRouter);
 app.use('/api', curatedRouter);
 app.use('/api', v25Router);
+app.use('/api', vpRouter);
 
 // 取得済み画像を静的配信（Step3 のプレビューに使用）
 app.use('/images', require('express').static(path.join(__dirname, 'images')));
@@ -201,6 +203,36 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
           transition: background .15s; }
 .s3-tab:hover { background: #252f4a; }
 .s3-tab-active { color: #fff; border-color: var(--c); }
+
+/* ── 視点パレット ── */
+.vp-card { display:flex; align-items:flex-start; gap:10px; padding:10px 12px;
+           background:#1a2540; border:1px solid #2a3a5a; border-radius:8px;
+           margin-bottom:6px; cursor:pointer; transition:border-color .15s; }
+.vp-card:hover { border-color:#4a6090; }
+.vp-card.vp-fixed { opacity:.8; cursor:default; }
+.vp-card input[type=checkbox] { margin-top:3px; flex-shrink:0; cursor:pointer; }
+.vp-card-body { flex:1; min-width:0; }
+.vp-card-title { font-size:13px; font-weight:600; color:#e2e8f0; margin-bottom:2px; }
+.vp-card-preview { font-size:11px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vp-card-script { font-size:11px; color:#94a3b8; margin-top:3px; }
+.vp-type-badge { font-size:9px; font-weight:bold; padding:2px 6px; border-radius:4px;
+                 white-space:nowrap; flex-shrink:0; margin-top:3px; }
+.vp-t-opening,.vp-t-ending   { background:#ff4d4d22; color:#ff4d4d; border:1px solid #ff4d4d44; }
+.vp-t-stats                   { background:#3b82f622; color:#60a5fa; border:1px solid #3b82f644; }
+.vp-t-profile                 { background:#8b5cf622; color:#a78bfa; border:1px solid #8b5cf644; }
+.vp-t-history                 { background:#f59e0b22; color:#fbbf24; border:1px solid #f59e0b44; }
+.vp-t-timeline                { background:#06b6d422; color:#22d3ee; border:1px solid #06b6d444; }
+.vp-t-insight                 { background:#10b98122; color:#34d399; border:1px solid #10b98144; }
+.vp-t-comparison              { background:#ec489922; color:#f472b6; border:1px solid #ec489944; }
+.vp-t-reaction                { background:#f9731622; color:#fb923c; border:1px solid #f9731644; }
+.vp-t-ranking                 { background:#eab30822; color:#facc15; border:1px solid #eab30844; }
+.vp-t-matchcard,.vp-t-picture { background:#64748b22; color:#94a3b8; border:1px solid #64748b44; }
+.vp-confidence { font-size:10px; font-weight:bold; flex-shrink:0; margin-top:3px; }
+.vp-conf-high   { color:#22c55e; }
+.vp-conf-medium { color:#f59e0b; }
+.vp-conf-low    { color:#ef4444; }
+.vp-palette-footer { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid #2a3a5a; margin-top:8px; }
+.vp-count-label { font-size:12px; color:#64748b; }
 
 /* ════════════════════════════════════════════════
    📱 タブレット (≤1024px) — 中間ブレイクポイント
@@ -471,6 +503,7 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
     <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. データ取得</div>
     <div class="step-nav"        id="nav25" onclick="goStep(25)">3. 企画提案</div>
+    <div class="step-nav"        id="nav26" onclick="goStep(26)">3.5 視点パレット</div>
     <div class="step-nav"        id="nav3"  onclick="goStep(3)">4. 脚本構成</div>
     <div class="step-nav"        id="nav4"  onclick="goStep(4)">5. 脚本編集</div>
     <div class="step-nav"        id="nav5"  onclick="goStep(5)">6. サムネ生成</div>
@@ -489,6 +522,21 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   </div>
   <div id="v25ProposalArea">
     <div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">案件を選択して「調査して企画書を生成」を押してください</div>
+  </div>
+</div>
+</div>
+    <div id="step26" class="step-container" style="display:none">
+<div class="panel" style="padding:16px 18px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+    <button id="vpGenBtn" onclick="window.generateViewpoints()">📌 視点カードを生成</button>
+    <span id="vpStatus" style="font-size:11px;color:#94a3b8;"></span>
+  </div>
+  <div id="vpCards" style="color:#64748b;font-size:12px;padding:24px;text-align:center;">
+    案件を選択して「視点カードを生成」を押してください
+  </div>
+  <div class="vp-palette-footer" id="vpFooter" style="display:none;">
+    <span class="vp-count-label" id="vpCountLabel">0枚選択</span>
+    <button onclick="window.generateFromViewpoints()">この構成で脚本生成 →</button>
   </div>
 </div>
 </div>
@@ -535,7 +583,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 25, 3, 35, 4, 5, 6].forEach(i => {
+  [1, 2, 25, 26, 3, 35, 4, 5, 6].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
@@ -545,6 +593,169 @@ window.goStep = function(n) {
   const fn = window['step' + n + 'Init'];
   if (typeof fn === 'function') fn();
 };
+
+/* ════════════════════════════════════════
+   📌 視点パレット（step26）
+   ════════════════════════════════════════ */
+(function() {
+  let _vpCards = [];   // 生成済みカード全件
+  const FIXED_TYPES = new Set(['opening', 'ending']);
+
+  const TYPE_COLORS = {
+    opening:'vp-t-opening', ending:'vp-t-ending', stats:'vp-t-stats',
+    profile:'vp-t-profile', history:'vp-t-history', timeline:'vp-t-timeline',
+    insight:'vp-t-insight', comparison:'vp-t-comparison', reaction:'vp-t-reaction',
+    ranking:'vp-t-ranking', matchcard:'vp-t-matchcard', picture:'vp-t-picture',
+  };
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderCards(cards) {
+    if (!cards || !cards.length) return '<div class="empty">カードなし</div>';
+    return cards.map((card, idx) => {
+      const fixed    = FIXED_TYPES.has(card.slideType);
+      const conf     = card.confidence || 'medium';
+      const confDot  = conf === 'high' ? '●' : conf === 'medium' ? '◐' : '○';
+      const confCls  = 'vp-confidence vp-conf-' + conf;
+      const typeCls  = TYPE_COLORS[card.slideType] || 'vp-t-matchcard';
+      return (
+        '<div class="vp-card' + (fixed ? ' vp-fixed' : '') + '" onclick="window._vpToggle(' + idx + ',event)">' +
+          '<input type="checkbox"' + (fixed ? ' checked disabled' : ' data-vp-idx="' + idx + '"') + '>' +
+          '<div class="vp-card-body">' +
+            '<div class="vp-card-title">' + esc(card.title) + '</div>' +
+            (card.dataPreview ? '<div class="vp-card-preview">' + esc(card.dataPreview) + '</div>' : '') +
+            (card.scriptDir ? '<div class="vp-card-script">' + esc(card.scriptDir) + '</div>' : '') +
+          '</div>' +
+          '<span class="vp-type-badge ' + typeCls + '">' + esc(card.slideType) + '</span>' +
+          '<span class="' + confCls + '">' + confDot + '</span>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function updateFooter() {
+    const selected = _vpCards.filter((c, i) => {
+      if (FIXED_TYPES.has(c.slideType)) return true;
+      const cb = document.querySelector('[data-vp-idx="' + i + '"]');
+      return cb && cb.checked;
+    });
+    const lbl = document.getElementById('vpCountLabel');
+    if (lbl) lbl.textContent = selected.length + '枚選択中';
+    const footer = document.getElementById('vpFooter');
+    if (footer) footer.style.display = selected.length >= 2 ? '' : 'none';
+  }
+
+  window._vpToggle = function(idx, evt) {
+    if (FIXED_TYPES.has((_vpCards[idx] || {}).slideType)) return;
+    const cb = document.querySelector('[data-vp-idx="' + idx + '"]');
+    if (!cb || evt.target === cb) { updateFooter(); return; }
+    cb.checked = !cb.checked;
+    updateFooter();
+  };
+
+  window.generateViewpoints = async function() {
+    const postId = window.APP?.selected?.id;
+    if (!postId) { alert('先に案件を選択してください'); return; }
+
+    const btn = document.getElementById('vpGenBtn');
+    const status = document.getElementById('vpStatus');
+    const cardsEl = document.getElementById('vpCards');
+    const footer = document.getElementById('vpFooter');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = '生成中...';
+    if (cardsEl) cardsEl.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">視点カードを生成しています（20〜40秒）...</div>';
+    if (footer) footer.style.display = 'none';
+
+    try {
+      const r1 = await window.fetchJson('/api/v3/generate-viewpoints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId }),
+      });
+      if (!r1.ok || !r1.jobId) throw new Error(r1.error || 'ジョブ起動失敗');
+
+      // ポーリング
+      for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        const r2 = await window.fetchJson('/api/v3/viewpoints-status?jobId=' + r1.jobId);
+        if (r2.status === 'error') throw new Error(r2.error || '生成失敗');
+        if (r2.status === 'done') {
+          _vpCards = r2.cards || [];
+          if (cardsEl) cardsEl.innerHTML = renderCards(_vpCards);
+          if (status) status.textContent = _vpCards.length + '枚生成完了';
+          updateFooter();
+          if (btn) btn.disabled = false;
+          return;
+        }
+        if (status) status.textContent = '生成中... ' + (i * 3) + 's';
+      }
+      throw new Error('タイムアウト');
+    } catch (e) {
+      if (status) status.textContent = 'エラー: ' + e.message;
+      if (cardsEl) cardsEl.innerHTML = '<div style="color:#ef4444;padding:20px;">' + esc(e.message) + '</div>';
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  window.generateFromViewpoints = async function() {
+    if (!_vpCards.length) { alert('先に視点カードを生成してください'); return; }
+
+    // 選択中のカードを取得（fixed は常に含む）
+    const selected = _vpCards.filter((c, i) => {
+      if (FIXED_TYPES.has(c.slideType)) return true;
+      const cb = document.querySelector('[data-vp-idx="' + i + '"]');
+      return cb && cb.checked;
+    });
+    if (selected.length < 3) { alert('3枚以上選択してください'); return; }
+
+    // カード → modules 変換
+    const modules = selected.map(c => ({
+      type:      c.slideType,
+      mainKey:   c.mainKey,
+      secondary: c.secondary || null,
+      scriptDir: c.scriptDir || '',
+      recipeKey: c.recipeKey || null,   // 事前設定 recipeKey（generate-scenario で優先使用）
+    }));
+
+    // APP にセット → step3（脚本構成）に反映してから generate-scenario を呼ぶ
+    window.APP.modules = modules;
+    if (window.APP.s3) window.APP.s3.modules = modules;
+
+    const postId = window.APP?.selected?.id;
+    const post   = window.APP?.selected;
+    if (!postId) { alert('案件が未選択です'); return; }
+
+    // save-modules して generate-scenario を起動
+    try {
+      await window.fetchJson('/api/save-modules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, modules }),
+      });
+    } catch (_) {}
+
+    // Step4（脚本編集）に遷移してから脚本生成を実行
+    window.goStep(4);
+    // Step4 の runAIScriptGeneration がある場合は呼び出す（step4_routes.js のグローバル関数）
+    await new Promise(r => setTimeout(r, 300));
+    if (typeof window.runAIScriptGeneration === 'function') {
+      window.runAIScriptGeneration({ modules, postId, post });
+    } else {
+      // フォールバック: generate-scenario エンドポイントを直接叩く
+      const status = document.getElementById('vpStatus');
+      if (status) status.textContent = '脚本生成中...';
+      const r = await window.fetchJson('/api/v3/generate-scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId, modules, post }),
+      });
+      if (!r.ok) throw new Error(r.error || '脚本生成失敗');
+      alert('脚本生成ジョブ: ' + r.jobId + '\nStep4 タブで確認してください');
+    }
+  };
+})();
 
 /* ── ハンバーガー: サイドバー開閉（モバイル）── */
 window.toggleSidebar = function(open) {
