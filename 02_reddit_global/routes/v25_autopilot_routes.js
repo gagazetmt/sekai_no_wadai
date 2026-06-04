@@ -188,6 +188,7 @@ async function buildModulesViaV2(postId, aiPlan, selectedIndex, si, opts = {}) {
     storyPattern: candidate.storyPattern || '',
     slideOutline: Array.isArray(candidate.slideOutline) ? candidate.slideOutline : [],
     structureNote: candidate.structureNote || '',
+    briefing: typeof aiPlan?.briefing === 'object' && aiPlan.briefing !== null ? aiPlan.briefing : null,
   };
   const count = Math.max(4, Math.min(10, Number(candidate.recommendedSlideCount) || Number(opts.count) || 7));
   try {
