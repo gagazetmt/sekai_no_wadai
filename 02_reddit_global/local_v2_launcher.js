@@ -502,9 +502,8 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   <div class="steps">
     <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
     <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. データ取得</div>
-    <div class="step-nav"        id="nav25" onclick="goStep(25)">3. 企画提案</div>
-    <div class="step-nav"        id="nav26" onclick="goStep(26)">3.5 視点パレット</div>
-    <div class="step-nav"        id="nav3"  onclick="goStep(3)">4. 脚本構成</div>
+    <div class="step-nav"        id="nav25" onclick="goStep(25)">3. 視点パレット</div>
+    <div class="step-nav"        id="nav3"  onclick="goStep(3)" style="font-size:10px;opacity:.5;">[旧構成]</div>
     <div class="step-nav"        id="nav4"  onclick="goStep(4)">5. 脚本編集</div>
     <div class="step-nav"        id="nav5"  onclick="goStep(5)">6. サムネ生成</div>
     <div class="step-nav"        id="nav6"  onclick="goStep(6)">7. 動画投稿</div>
@@ -516,19 +515,9 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     ${s2UI()}
     <div id="step25" class="step-container" style="display:none">
 <div class="panel" style="padding:16px 18px;">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-    <button id="v25RunBtn" onclick="window.runV25FromTab()" class="btn">▶ 調査して企画書を生成</button>
-    <span id="v25TabStatus" style="font-size:11px;color:#94a3b8;"></span>
-  </div>
-  <div id="v25ProposalArea">
-    <div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">案件を選択して「調査して企画書を生成」を押してください</div>
-  </div>
-</div>
-</div>
-    <div id="step26" class="step-container" style="display:none">
-<div class="panel" style="padding:16px 18px;">
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
     <button id="vpGenBtn" onclick="window.generateViewpoints()">📌 視点カードを生成</button>
+    <button class="secondary" id="vpRegenBtn" onclick="window.generateViewpoints()" style="display:none;font-size:11px;">再生成</button>
     <span id="vpStatus" style="font-size:11px;color:#94a3b8;"></span>
   </div>
   <div id="vpCards" style="color:#64748b;font-size:12px;padding:24px;text-align:center;">
@@ -536,7 +525,7 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   </div>
   <div class="vp-palette-footer" id="vpFooter" style="display:none;">
     <span class="vp-count-label" id="vpCountLabel">0枚選択</span>
-    <button onclick="window.generateFromViewpoints()">この構成で脚本生成 →</button>
+    <button onclick="window.generateFromViewpoints()">この視点で脚本生成 →</button>
   </div>
 </div>
 </div>
@@ -583,7 +572,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 25, 26, 3, 35, 4, 5, 6].forEach(i => {
+  [1, 2, 25, 3, 35, 4, 5, 6].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
@@ -595,167 +584,234 @@ window.goStep = function(n) {
 };
 
 /* ════════════════════════════════════════
-   📌 視点パレット（step26）
+   📌 視点パレット（step25）
    ════════════════════════════════════════ */
-(function() {
-  let _vpCards = [];   // 生成済みカード全件
-  const FIXED_TYPES = new Set(['opening', 'ending']);
+window._vpState = { cards: [], generating: false };
 
-  const TYPE_COLORS = {
+window._vpEsc = function(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+};
+
+window._vpIsFixed = function(slideType) {
+  return slideType === 'opening' || slideType === 'ending';
+};
+
+window._vpTypeCls = function(slideType) {
+  var map = {
     opening:'vp-t-opening', ending:'vp-t-ending', stats:'vp-t-stats',
     profile:'vp-t-profile', history:'vp-t-history', timeline:'vp-t-timeline',
     insight:'vp-t-insight', comparison:'vp-t-comparison', reaction:'vp-t-reaction',
-    ranking:'vp-t-ranking', matchcard:'vp-t-matchcard', picture:'vp-t-picture',
+    ranking:'vp-t-ranking', matchcard:'vp-t-matchcard', picture:'vp-t-picture'
   };
+  return map[slideType] || 'vp-t-matchcard';
+};
 
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+window._vpRenderCards = function(cards) {
+  if (!cards || !cards.length) return '<div class="empty">カードなし</div>';
+  var html = '';
+  for (var i = 0; i < cards.length; i++) {
+    var card = cards[i];
+    var fixed = window._vpIsFixed(card.slideType);
+    var conf = card.confidence || 'medium';
+    var dot = conf === 'high' ? '●' : conf === 'medium' ? '◐' : '○';
+    var confCls = 'vp-confidence vp-conf-' + conf;
+    var typeCls = window._vpTypeCls(card.slideType);
+    html += '<div class="vp-card' + (fixed ? ' vp-fixed' : '') + '" onclick="window._vpToggle(' + i + ',event)">';
+    html += '<input type="checkbox"' + (fixed ? ' checked disabled' : ' data-vp-idx="' + i + '"') + '>';
+    html += '<div class="vp-card-body">';
+    html += '<div class="vp-card-title">' + window._vpEsc(card.title) + '</div>';
+    if (card.dataPreview) html += '<div class="vp-card-preview">' + window._vpEsc(card.dataPreview) + '</div>';
+    if (card.scriptDir)   html += '<div class="vp-card-script">' + window._vpEsc(card.scriptDir) + '</div>';
+    html += '</div>';
+    html += '<span class="vp-type-badge ' + typeCls + '">' + window._vpEsc(card.slideType) + '</span>';
+    html += '<span class="' + confCls + '">' + dot + '</span>';
+    html += '</div>';
   }
+  return html;
+};
 
-  function renderCards(cards) {
-    if (!cards || !cards.length) return '<div class="empty">カードなし</div>';
-    return cards.map((card, idx) => {
-      const fixed    = FIXED_TYPES.has(card.slideType);
-      const conf     = card.confidence || 'medium';
-      const confDot  = conf === 'high' ? '●' : conf === 'medium' ? '◐' : '○';
-      const confCls  = 'vp-confidence vp-conf-' + conf;
-      const typeCls  = TYPE_COLORS[card.slideType] || 'vp-t-matchcard';
-      return (
-        '<div class="vp-card' + (fixed ? ' vp-fixed' : '') + '" onclick="window._vpToggle(' + idx + ',event)">' +
-          '<input type="checkbox"' + (fixed ? ' checked disabled' : ' data-vp-idx="' + idx + '"') + '>' +
-          '<div class="vp-card-body">' +
-            '<div class="vp-card-title">' + esc(card.title) + '</div>' +
-            (card.dataPreview ? '<div class="vp-card-preview">' + esc(card.dataPreview) + '</div>' : '') +
-            (card.scriptDir ? '<div class="vp-card-script">' + esc(card.scriptDir) + '</div>' : '') +
-          '</div>' +
-          '<span class="vp-type-badge ' + typeCls + '">' + esc(card.slideType) + '</span>' +
-          '<span class="' + confCls + '">' + confDot + '</span>' +
-        '</div>'
-      );
-    }).join('');
+window._vpUpdateFooter = function() {
+  var cards = window._vpState.cards;
+  var count = 0;
+  for (var i = 0; i < cards.length; i++) {
+    if (window._vpIsFixed(cards[i].slideType)) { count++; continue; }
+    var cb = document.querySelector('[data-vp-idx="' + i + '"]');
+    if (cb && cb.checked) count++;
   }
+  var lbl = document.getElementById('vpCountLabel');
+  if (lbl) lbl.textContent = count + '枚選択中';
+  var footer = document.getElementById('vpFooter');
+  if (footer) footer.style.display = count >= 3 ? '' : 'none';
+};
 
-  function updateFooter() {
-    const selected = _vpCards.filter((c, i) => {
-      if (FIXED_TYPES.has(c.slideType)) return true;
-      const cb = document.querySelector('[data-vp-idx="' + i + '"]');
-      return cb && cb.checked;
-    });
-    const lbl = document.getElementById('vpCountLabel');
-    if (lbl) lbl.textContent = selected.length + '枚選択中';
-    const footer = document.getElementById('vpFooter');
-    if (footer) footer.style.display = selected.length >= 2 ? '' : 'none';
+window._vpToggle = function(idx, evt) {
+  var card = (window._vpState.cards || [])[idx];
+  if (!card || window._vpIsFixed(card.slideType)) return;
+  var cb = document.querySelector('[data-vp-idx="' + idx + '"]');
+  if (!cb) return;
+  if (evt && evt.target !== cb) cb.checked = !cb.checked;
+  window._vpUpdateFooter();
+};
+
+window.step25Init = function() {
+  /* 案件が変わったら前回カードをクリア */
+  var postId = window.APP && window.APP.selected && window.APP.selected.id;
+  if (!postId) {
+    var el = document.getElementById('vpCards');
+    if (el) el.innerHTML = '<div style="color:#64748b;padding:24px;text-align:center;">先に案件を選択してください</div>';
+    return;
   }
+  /* 生成済みカードがあれば再描画だけ */
+  if (window._vpState.cards && window._vpState.cards.length && window._vpState.postId === postId) {
+    var el2 = document.getElementById('vpCards');
+    if (el2) el2.innerHTML = window._vpRenderCards(window._vpState.cards);
+    window._vpUpdateFooter();
+    var rb = document.getElementById('vpRegenBtn');
+    if (rb) rb.style.display = '';
+  }
+};
 
-  window._vpToggle = function(idx, evt) {
-    if (FIXED_TYPES.has((_vpCards[idx] || {}).slideType)) return;
-    const cb = document.querySelector('[data-vp-idx="' + idx + '"]');
-    if (!cb || evt.target === cb) { updateFooter(); return; }
-    cb.checked = !cb.checked;
-    updateFooter();
-  };
+window.generateViewpoints = function() {
+  var postId = window.APP && window.APP.selected && window.APP.selected.id;
+  if (!postId) { alert('先に案件を選択してください'); return; }
+  if (window._vpState.generating) return;
+  window._vpState.generating = true;
+  window._vpState.postId = postId;
 
-  window.generateViewpoints = async function() {
-    const postId = window.APP?.selected?.id;
-    if (!postId) { alert('先に案件を選択してください'); return; }
+  var btn    = document.getElementById('vpGenBtn');
+  var regen  = document.getElementById('vpRegenBtn');
+  var status = document.getElementById('vpStatus');
+  var cardsEl = document.getElementById('vpCards');
+  var footer = document.getElementById('vpFooter');
+  if (btn)    btn.disabled = true;
+  if (regen)  regen.style.display = 'none';
+  if (status) status.textContent = '生成中...';
+  if (cardsEl) cardsEl.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">視点カードを生成しています（20〜40秒）...</div>';
+  if (footer) footer.style.display = 'none';
 
-    const btn = document.getElementById('vpGenBtn');
-    const status = document.getElementById('vpStatus');
-    const cardsEl = document.getElementById('vpCards');
-    const footer = document.getElementById('vpFooter');
-    if (btn) btn.disabled = true;
-    if (status) status.textContent = '生成中...';
-    if (cardsEl) cardsEl.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">視点カードを生成しています（20〜40秒）...</div>';
-    if (footer) footer.style.display = 'none';
-
-    try {
-      const r1 = await window.fetchJson('/api/v3/generate-viewpoints', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId }),
-      });
-      if (!r1.ok || !r1.jobId) throw new Error(r1.error || 'ジョブ起動失敗');
-
-      // ポーリング
-      for (let i = 0; i < 60; i++) {
-        await new Promise(r => setTimeout(r, 3000));
-        const r2 = await window.fetchJson('/api/v3/viewpoints-status?jobId=' + r1.jobId);
-        if (r2.status === 'error') throw new Error(r2.error || '生成失敗');
-        if (r2.status === 'done') {
-          _vpCards = r2.cards || [];
-          if (cardsEl) cardsEl.innerHTML = renderCards(_vpCards);
-          if (status) status.textContent = _vpCards.length + '枚生成完了';
-          updateFooter();
+  window.fetchJson('/api/v3/generate-viewpoints', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ postId: postId }),
+  }).then(function(r1) {
+    if (!r1.ok || !r1.jobId) throw new Error(r1.error || 'ジョブ起動失敗');
+    var tick = 0;
+    function poll() {
+      setTimeout(function() {
+        window.fetchJson('/api/v3/viewpoints-status?jobId=' + r1.jobId).then(function(r2) {
+          if (r2.status === 'error') throw new Error(r2.error || '生成失敗');
+          if (r2.status === 'done') {
+            window._vpState.cards = r2.cards || [];
+            window._vpState.generating = false;
+            if (cardsEl) cardsEl.innerHTML = window._vpRenderCards(window._vpState.cards);
+            if (status)  status.textContent = window._vpState.cards.length + '枚生成完了';
+            if (btn)     btn.disabled = false;
+            if (regen)   regen.style.display = '';
+            window._vpUpdateFooter();
+            return;
+          }
+          tick++;
+          if (tick > 60) { window._vpState.generating = false; throw new Error('タイムアウト'); }
+          if (status) status.textContent = '生成中... ' + (tick * 3) + 's';
+          poll();
+        }).catch(function(e2) {
+          window._vpState.generating = false;
+          if (status)  status.textContent = 'エラー: ' + (e2.message || e2);
+          if (cardsEl) cardsEl.innerHTML = '<div style="color:#ef4444;padding:20px;">' + window._vpEsc(e2.message || String(e2)) + '</div>';
           if (btn) btn.disabled = false;
-          return;
-        }
-        if (status) status.textContent = '生成中... ' + (i * 3) + 's';
-      }
-      throw new Error('タイムアウト');
-    } catch (e) {
-      if (status) status.textContent = 'エラー: ' + e.message;
-      if (cardsEl) cardsEl.innerHTML = '<div style="color:#ef4444;padding:20px;">' + esc(e.message) + '</div>';
-      if (btn) btn.disabled = false;
+        });
+      }, 3000);
     }
-  };
+    poll();
+  }).catch(function(e) {
+    window._vpState.generating = false;
+    if (status)  status.textContent = 'エラー: ' + (e.message || e);
+    if (cardsEl) cardsEl.innerHTML = '<div style="color:#ef4444;padding:20px;">' + window._vpEsc(e.message || String(e)) + '</div>';
+    if (btn) btn.disabled = false;
+  });
+};
 
-  window.generateFromViewpoints = async function() {
-    if (!_vpCards.length) { alert('先に視点カードを生成してください'); return; }
+window.generateFromViewpoints = function() {
+  var cards = window._vpState.cards || [];
+  if (!cards.length) { alert('先に視点カードを生成してください'); return; }
 
-    // 選択中のカードを取得（fixed は常に含む）
-    const selected = _vpCards.filter((c, i) => {
-      if (FIXED_TYPES.has(c.slideType)) return true;
-      const cb = document.querySelector('[data-vp-idx="' + i + '"]');
-      return cb && cb.checked;
+  var selected = [];
+  for (var i = 0; i < cards.length; i++) {
+    if (window._vpIsFixed(cards[i].slideType)) { selected.push(cards[i]); continue; }
+    var cb = document.querySelector('[data-vp-idx="' + i + '"]');
+    if (cb && cb.checked) selected.push(cards[i]);
+  }
+  if (selected.length < 3) { alert('3枚以上選択してください'); return; }
+
+  var modules = [];
+  for (var j = 0; j < selected.length; j++) {
+    var c = selected[j];
+    modules.push({ type: c.slideType, mainKey: c.mainKey, secondary: c.secondary || null,
+                   scriptDir: c.scriptDir || '', recipeKey: c.recipeKey || null });
+  }
+
+  var postId = window.APP && window.APP.selected && window.APP.selected.id;
+  var post   = window.APP && window.APP.selected;
+  if (!postId) { alert('案件が未選択です'); return; }
+
+  var status = document.getElementById('vpStatus');
+  var footer = document.getElementById('vpFooter');
+  if (status) status.textContent = '脚本生成を開始します...';
+  if (footer) footer.style.display = 'none';
+
+  /* モジュールを保存してから generate-scenario を起動 */
+  window.fetchJson('/api/save-modules', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ postId: postId, modules: modules }),
+  }).catch(function() {}).then(function() {
+    return window.fetchJson('/api/v3/generate-scenario', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId: postId, modules: modules, post: post }),
     });
-    if (selected.length < 3) { alert('3枚以上選択してください'); return; }
-
-    // カード → modules 変換
-    const modules = selected.map(c => ({
-      type:      c.slideType,
-      mainKey:   c.mainKey,
-      secondary: c.secondary || null,
-      scriptDir: c.scriptDir || '',
-      recipeKey: c.recipeKey || null,   // 事前設定 recipeKey（generate-scenario で優先使用）
-    }));
-
-    // APP にセット → step3（脚本構成）に反映してから generate-scenario を呼ぶ
+  }).then(function(r) {
+    if (!r.ok || !r.jobId) throw new Error(r.error || '脚本生成ジョブ起動失敗');
+    var jobId = r.jobId;
+    if (status) status.textContent = '脚本生成中... (jobId:' + jobId + ')';
+    /* Step4 に遷移してポーリング開始 */
     window.APP.modules = modules;
     if (window.APP.s3) window.APP.s3.modules = modules;
-
-    const postId = window.APP?.selected?.id;
-    const post   = window.APP?.selected;
-    if (!postId) { alert('案件が未選択です'); return; }
-
-    // save-modules して generate-scenario を起動
-    try {
-      await window.fetchJson('/api/save-modules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, modules }),
-      });
-    } catch (_) {}
-
-    // Step4（脚本編集）に遷移してから脚本生成を実行
     window.goStep(4);
-    // Step4 の runAIScriptGeneration がある場合は呼び出す（step4_routes.js のグローバル関数）
-    await new Promise(r => setTimeout(r, 300));
-    if (typeof window.runAIScriptGeneration === 'function') {
-      window.runAIScriptGeneration({ modules, postId, post });
-    } else {
-      // フォールバック: generate-scenario エンドポイントを直接叩く
-      const status = document.getElementById('vpStatus');
-      if (status) status.textContent = '脚本生成中...';
-      const r = await window.fetchJson('/api/v3/generate-scenario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId, modules, post }),
-      });
-      if (!r.ok) throw new Error(r.error || '脚本生成失敗');
-      alert('脚本生成ジョブ: ' + r.jobId + '\nStep4 タブで確認してください');
+    if (typeof window.step4Init === 'function') window.step4Init();
+    /* step4 に専用ポーリング関数があれば渡す、なければ内部ポーリング */
+    if (typeof window.startScenarioPolling === 'function') {
+      window.startScenarioPolling(jobId);
+      return;
     }
-  };
-})();
+    /* フォールバック: ポーリングしてモジュールを反映 */
+    var tick2 = 0;
+    function pollScenario() {
+      setTimeout(function() {
+        window.fetchJson('/api/v3/scenario-status?jobId=' + jobId).then(function(j) {
+          if (j.status === 'error') { alert('脚本生成失敗: ' + (j.error || '')); return; }
+          if (j.status === 'done' && j.modules && j.modules.length) {
+            window.APP.modules = j.modules;
+            if (window.APP.s3) window.APP.s3.modules = j.modules;
+            window.fetchJson('/api/save-modules', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ postId: postId, modules: j.modules }),
+            }).catch(function() {});
+            if (typeof window.step4Init === 'function') window.step4Init();
+            return;
+          }
+          tick2++;
+          if (tick2 < 80) pollScenario();
+        }).catch(function() { tick2++; if (tick2 < 80) pollScenario(); });
+      }, 3000);
+    }
+    pollScenario();
+  }).catch(function(e) {
+    if (status) status.textContent = 'エラー: ' + (e.message || e);
+    alert('エラー: ' + (e.message || e));
+    if (footer) footer.style.display = '';
+  });
+};
 
 /* ── ハンバーガー: サイドバー開閉（モバイル）── */
 window.toggleSidebar = function(open) {
