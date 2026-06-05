@@ -182,29 +182,45 @@ async function buildPrompt(input, theme) {
 /**
  * Imagen 4 (Gemini API) で画像生成
  */
-async function _generateImagen4({ prompt, count, aspectRatio, outputDir }) {
-  if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set in .env');
+// 複数 API キーのリスト（429 ローテーション用）
+function _imagenApiKeys() {
+  const multi = (process.env.GEMINI_API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean);
+  const single = GEMINI_API_KEY;
+  const all = [...new Set([...multi, single].filter(Boolean))];
+  return all.length ? all : null;
+}
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:predict?key=${GEMINI_API_KEY}`;
+async function _generateImagen4({ prompt, count, aspectRatio, outputDir }) {
+  const keys = _imagenApiKeys();
+  if (!keys) throw new Error('GEMINI_API_KEY not set in .env');
+
   const body = {
     instances: [{ prompt }],
-    parameters: {
-      sampleCount: count,
-      aspectRatio,
-      personGeneration: 'ALLOW_ADULT',
-    },
+    parameters: { sampleCount: count, aspectRatio, personGeneration: 'ALLOW_ADULT' },
   };
 
   let res;
-  try {
-    res = await axios.post(url, body, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 90000,
-      validateStatus: () => true,
-    });
-  } catch (e) {
-    throw new Error(`Imagen 4 network error: ${e.message}`);
+  let lastErr = '';
+  for (const key of keys) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:predict?key=${key}`;
+    try {
+      res = await axios.post(url, body, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 90000,
+        validateStatus: () => true,
+      });
+      if (res.status === 429) {
+        lastErr = `429 key=${key.slice(-6)}`;
+        console.warn(`[imagen4] 429 rate limit, rotating key...`);
+        continue;
+      }
+      break;
+    } catch (e) {
+      lastErr = e.message;
+      continue;
+    }
   }
+  if (!res) throw new Error(`Imagen 4 network error (all keys): ${lastErr}`);
 
   if (res.status !== 200) {
     const errMsg = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
