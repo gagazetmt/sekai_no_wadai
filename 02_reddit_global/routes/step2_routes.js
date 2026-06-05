@@ -421,6 +421,11 @@ async function _gatherArticles(searches, opts = {}) {
   const jaResult = jaQuery
     ? await fetchSerper(jaQuery, '', 'ja').catch(() => ({ organic: [] }))
     : { organic: [] };
+  // Yahoo News専用クエリ（同じJAキーワード + site:news.yahoo.co.jp）
+  const yahooQuery = jaQuery ? jaQuery + ' site:news.yahoo.co.jp' : null;
+  const yahooResult = yahooQuery
+    ? await fetchSerper(yahooQuery, '', 'ja').catch(() => ({ organic: [] }))
+    : { organic: [] };
 
   const BLOCKED_HOSTS = new Set(['youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com', 'twitter.com', 'x.com', 'facebook.com']);
   const seen = new Set();
@@ -436,7 +441,10 @@ async function _gatherArticles(searches, opts = {}) {
   }
 
   const enRaw = enResults.flatMap(r => (r?.organic || []).map(a => makeArticle(a, 'en')).filter(Boolean));
-  const jaRaw = (jaResult?.organic || []).map(r => makeArticle(r, 'ja')).filter(Boolean);
+  const jaRaw = [
+    ...(jaResult?.organic || []).map(r => makeArticle(r, 'ja')),
+    ...(yahooResult?.organic || []).map(r => makeArticle(r, 'ja')),
+  ].filter(Boolean);
 
   const allQueries = [...enQueries, jaQuery].filter(Boolean);
 
@@ -445,7 +453,7 @@ async function _gatherArticles(searches, opts = {}) {
   const enFiltered = (enRelevant.length > 0 ? enRelevant : enRaw)
     .sort((a, b) => b.sourceScore - a.sourceScore).slice(0, maxEn);
 
-  // 日本語記事: jaQueryがエンティティ名ベースなのでGoogle側に任せ、ソーススコア順で上位のみ
+  // 日本語記事: Yahoo専用結果も混ぜてソーススコア順、上位maxJa件
   const jaFiltered = jaRaw.sort((a, b) => b.sourceScore - a.sourceScore).slice(0, maxJa);
 
   console.log(`[gatherArticles] EN ${enRaw.length}→${enFiltered.length}件 / JA ${jaRaw.length}→${jaFiltered.length}件 | 必須語:[${requiredTerms.slice(0,3).join('/')}]`);

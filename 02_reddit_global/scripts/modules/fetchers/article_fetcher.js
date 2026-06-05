@@ -123,26 +123,32 @@ function extractYahooComments(html, limit = 12) {
   return uniqueTexts(candidates).slice(0, limit);
 }
 
-async function fetchYahooNewsArticle(url) {
+// Webshare住宅プロキシ設定（Yahoo News は VPS IP が 403 されるため必須）
+function _yahooProxy() {
+  const raw = process.env.WEBSHARE_PROXY_URL;
+  if (!raw) return undefined;
   try {
-    const res = await axios.get(url, {
-      headers: HEADERS,
-      timeout: FETCH_TIMEOUT,
-      maxRedirects: 3,
-      responseType: 'text',
-    });
+    const filled = raw.replace('{N}', String(Math.floor(Math.random() * 4000) + 1));
+    const u = new URL(filled);
+    return { host: u.hostname, port: Number(u.port) || 80, auth: { username: u.username, password: u.password } };
+  } catch (_) {
+    return undefined;
+  }
+}
+
+async function fetchYahooNewsArticle(url) {
+  const proxy = _yahooProxy();
+  const axiosOpts = { headers: HEADERS, timeout: FETCH_TIMEOUT, maxRedirects: 3, responseType: 'text' };
+  if (proxy) axiosOpts.proxy = proxy;
+  try {
+    const res = await axios.get(url, axiosOpts);
     const body = extractYahooArticleBody(String(res.data));
     if (body.length < 120) return { ok: false, url, method: 'yahoo_news' };
 
     let comments = [];
     const commentsUrl = url.replace(/\/comments(?:\?.*)?$/, '').replace(/([?#].*)$/, '') + '/comments';
     try {
-      const cr = await axios.get(commentsUrl, {
-        headers: { ...HEADERS, Referer: url },
-        timeout: FETCH_TIMEOUT,
-        maxRedirects: 3,
-        responseType: 'text',
-      });
+      const cr = await axios.get(commentsUrl, { ...axiosOpts, headers: { ...HEADERS, Referer: url } });
       comments = extractYahooComments(String(cr.data), 12);
     } catch (_) {
       comments = [];
