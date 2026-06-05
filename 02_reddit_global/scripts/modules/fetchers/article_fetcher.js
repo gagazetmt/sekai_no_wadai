@@ -100,10 +100,15 @@ function _isYahooComment(text) {
   // 除外: UI系テキスト
   if (/^(コメント|返信|共感した|なるほど|うーん|ログイン|表示順|投稿|違反報告|もっと見る)/.test(text)) return false;
   if (/Yahoo!ニュース|利用規約|プライバシー|ヘルプ|ニュース一覧/.test(text)) return false;
-  // 除外: 関連記事タイトル — 文末に「。！？」がなく短い or 「…」が途中に入って文末記号なし
+  // 除外: 【タイトル形式】見出し
+  if (/^【/.test(text)) return false;
+  // 除外: 「…」が途中に入って文末記号なし → ニュース見出しの典型
   const hasSentenceEnd = /[。！？]/.test(text);
-  const hasMidEllipsis = /…/.test(text) && !hasSentenceEnd;
-  if (hasMidEllipsis) return false;
+  if (/…/.test(text) && !hasSentenceEnd) return false;
+  // 除外: ニュース見出し末尾パターン（「〜へ」「〜か」「〜も」「〜現実」「〜決断」等）
+  if (/[へかもを]$|現実$|決断$|発覚$|浮上$|判明$|見通し$/.test(text) && !hasSentenceEnd) return false;
+  // 除外: 人物紹介型見出し（「〜氏を待つ」「〜氏が」）
+  if (/氏を待つ|氏が[語明否]/.test(text)) return false;
   // 除外: 60字未満かつ文末記号なし → ニュース見出しの典型
   if (text.length < 60 && !hasSentenceEnd) return false;
   return true;
