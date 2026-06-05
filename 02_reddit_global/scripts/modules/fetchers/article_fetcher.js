@@ -4,6 +4,7 @@
 
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { curlGet } = require('./_curl_cffi_caller');
 
 const FETCH_TIMEOUT = 9000;  // 1記事あたり9秒でタイムアウト
 const MAX_CHARS     = 30000; // 1記事あたりの最大文字数（呼び出し側で総量制限）
@@ -123,36 +124,29 @@ function extractYahooComments(html, limit = 12) {
   return uniqueTexts(candidates).slice(0, limit);
 }
 
-// Webshare住宅プロキシ設定（Yahoo News は VPS IP が 403 されるため必須）
-function _yahooProxy() {
-  const raw = process.env.WEBSHARE_PROXY_URL;
-  if (!raw) return undefined;
-  try {
-    const filled = raw.replace('{N}', String(Math.floor(Math.random() * 4000) + 1));
-    const u = new URL(filled);
-    return { host: u.hostname, port: Number(u.port) || 80, auth: { username: u.username, password: u.password } };
-  } catch (_) {
-    return undefined;
-  }
-}
-
+// Yahoo News は VPS IP が 403 されるため curl-cffi + Webshare JP proxy 経由で取得
 async function fetchYahooNewsArticle(url) {
-  const proxy = _yahooProxy();
-  const axiosOpts = { headers: HEADERS, timeout: FETCH_TIMEOUT, maxRedirects: 3, responseType: 'text' };
-  if (proxy) axiosOpts.proxy = proxy;
   try {
-    const res = await axios.get(url, axiosOpts);
-    const body = extractYahooArticleBody(String(res.data));
-    if (body.length < 120) return { ok: false, url, method: 'yahoo_news' };
+    const r = await curlGet(url, {
+      referer: 'https://news.yahoo.co.jp/',
+      headers: { 'Accept-Language': 'ja,en;q=0.9' },
+      timeout: 15,
+    });
+    if (!r.ok) return { ok: false, url, method: 'yahoo_news' };
+
+    const body = extractYahooArticleBody(String(r.body));
+    if (body.length < 60) return { ok: false, url, method: 'yahoo_news' };
 
     let comments = [];
     const commentsUrl = url.replace(/\/comments(?:\?.*)?$/, '').replace(/([?#].*)$/, '') + '/comments';
     try {
-      const cr = await axios.get(commentsUrl, { ...axiosOpts, headers: { ...HEADERS, Referer: url } });
-      comments = extractYahooComments(String(cr.data), 12);
-    } catch (_) {
-      comments = [];
-    }
+      const cr = await curlGet(commentsUrl, {
+        referer: url,
+        headers: { 'Accept-Language': 'ja,en;q=0.9' },
+        timeout: 12,
+      });
+      if (cr.ok) comments = extractYahooComments(String(cr.body), 12);
+    } catch (_) {}
 
     const commentBlock = comments.length
       ? `\n\n【Yahooコメント欄】\n${comments.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
