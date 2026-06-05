@@ -377,7 +377,6 @@ async function _generateGptImage1({ prompt, count, quality = 'medium', outputDir
     n: count,
     size: '1536x1024',  // 横型 16:9相当
     quality,
-    response_format: 'b64_json',
   }, {
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     timeout: 120000,
@@ -387,13 +386,20 @@ async function _generateGptImage1({ prompt, count, quality = 'medium', outputDir
     throw new Error(`GPT-image-1 API ${res.status}: ${JSON.stringify(res.data).slice(0, 400)}`);
   }
   const ts = Date.now();
-  (res.data?.data || []).forEach((item, i) => {
-    if (!item.b64_json) return;
+  for (let i = 0; i < (res.data?.data || []).length; i++) {
+    const item = res.data.data[i];
     const filename = `gptimg1_${quality}_${ts}_${i}.png`;
     const fullPath = path.join(outputDir, filename);
-    fs.writeFileSync(fullPath, Buffer.from(item.b64_json, 'base64'));
+    if (item.b64_json) {
+      fs.writeFileSync(fullPath, Buffer.from(item.b64_json, 'base64'));
+    } else if (item.url) {
+      const dlRes = await axios.get(item.url, { responseType: 'arraybuffer', timeout: 30000 });
+      fs.writeFileSync(fullPath, dlRes.data);
+    } else {
+      continue;
+    }
     results.push({ file: filename, path: fullPath, provider: 'gpt-image-1', model: `gpt-image-1-${quality}` });
-  });
+  }
   return results;
 }
 
