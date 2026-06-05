@@ -12,10 +12,12 @@
 //   - data/{postId}_step5.json              : 選択したサムネを selectedThumb に記録
 // ═══════════════════════════════════════════════════════════
 
-const express = require('express');
-const fs      = require('fs');
-const path    = require('path');
-const router  = express.Router();
+const express    = require('express');
+const fs         = require('fs');
+const path       = require('path');
+const axios      = require('axios');
+const router     = express.Router();
+const costTracker = require('../scripts/cost_tracker');
 
 const ROOT_DIR        = path.join(__dirname, '..');
 const THUMB_OUT_BASE  = path.join(ROOT_DIR, 'data', 'v2_thumbs');
@@ -155,6 +157,104 @@ router.post('/v5/generate-thumb', async (req, res) => {
       })),
     });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Gemini Vision でサムネ2枚を比較し、より良い方を自動選定 ───
+async function _geminiSelectBestThumb(results, outputDir) {
+  if (results.length <= 1) return results[0] || null;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return results[0];
+  try {
+    const parts = [
+      { text: 'You are evaluating YouTube thumbnails for a Japanese soccer channel. Which thumbnail (0 or 1) would get more clicks? Consider eye-catching visuals, clear subject, and impact. Return JSON only: {"winner": 0}' },
+    ];
+    for (let i = 0; i < Math.min(results.length, 2); i++) {
+      const imgPath = path.join(outputDir, results[i].file);
+      if (!fs.existsSync(imgPath)) continue;
+      const base64 = fs.readFileSync(imgPath).toString('base64');
+      if (i > 0) parts.push({ text: `Image ${i}:` });
+      parts.push({ inline_data: { mime_type: 'image/png', data: base64 } });
+    }
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const r = await axios.post(url, {
+      contents: [{ parts }],
+      generationConfig: { maxOutputTokens: 100, thinkingConfig: { thinkingBudget: 0 } },
+    }, { timeout: 20000 });
+    const usage = r.data?.usageMetadata || {};
+    costTracker.record({ label: 'thumb_auto_select', provider: 'gemini',
+      inputTokens: usage.promptTokenCount || 0, outputTokens: usage.candidatesTokenCount || 0 });
+    const raw = r.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const m = raw.match(/\{[\s\S]*\}/);
+    const winner = m ? (JSON.parse(m[0]).winner || 0) : 0;
+    return results[winner] || results[0];
+  } catch (e) {
+    console.warn('[auto-thumb/gemini-select]', e.message);
+    return results[0];
+  }
+}
+
+// 全自動サムネ生成: classify → extract text → build prompt → generate × 2 → Gemini 選定 → 保存
+// Body: { postId, briefing? }   Cost 目安: ¥12〜13（Imagen4 × 2 枚 + Gemini Vision）
+router.post('/v5/auto-thumb', async (req, res) => {
+  const { postId, briefing } = req.body || {};
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+  try {
+    const t0 = Date.now();
+    const safePostId = _sanitizePostId(postId);
+    const outputDir  = path.join(THUMB_OUT_BASE, safePostId);
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    // ① テーマ分類（briefing の angle / storyPattern を summary に付加）
+    const info = _collectPostInfo(postId, {});
+    if (briefing) {
+      info.summary = [
+        briefing.angle        ? `切り口: ${briefing.angle}`          : '',
+        briefing.storyPattern ? `ストーリー: ${briefing.storyPattern}` : '',
+        briefing.answer       ? `結論: ${briefing.answer}`            : '',
+      ].filter(Boolean).join('\n');
+    }
+    const { theme } = await thumbAi.classifyTheme(info);
+
+    // ② サムネテキスト抽出（briefing.hookQuestion → topText、answer → bottomText）
+    const openingTitle = briefing?.hookQuestion || info.title || '';
+    const openingNarration = briefing?.answer || briefing?.angle || '';
+    const { topText, bottomText } = await thumbAi.extractThumbText({ openingTitle, openingNarration });
+
+    // ③ Imagen 4 プロンプト生成
+    info.topText = topText;
+    info.bottomText = bottomText;
+    const prompt = await thumbAi.buildPrompt(info, theme);
+
+    // ④ Imagen 4 で 2 枚生成
+    const results = await thumbAi.generateThumb({
+      provider: 'imagen4', prompt, count: 2, aspectRatio: '16:9', outputDir,
+    });
+    if (!results.length) throw new Error('Imagen 4 生成失敗: 0枚');
+
+    // ⑤ Gemini Vision で自動選定
+    const selected = await _geminiSelectBestThumb(results, outputDir);
+
+    // ⑥ meta に保存（Step6 で使用）
+    const meta = readMeta(postId);
+    meta.selectedThumb    = selected.file;
+    meta.selectedThumbAt  = new Date().toISOString();
+    meta.autoThumbTheme   = theme;
+    meta.autoThumbTopText = topText;
+    meta.autoThumbBotText = bottomText;
+    writeMeta(postId, meta);
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+    console.log(`[auto-thumb] ${postId.slice(-20)} theme:${theme} top:"${topText}" bot:"${bottomText}" selected:${selected.file} (${elapsed}s)`);
+    res.json({
+      ok: true, theme, topText, bottomText, prompt,
+      selected: { file: selected.file, url: `/v2_thumbs/${safePostId}/${selected.file}` },
+      all: results.map(r => ({ file: r.file, url: `/v2_thumbs/${safePostId}/${r.file}` })),
+      elapsedSec: parseFloat(elapsed),
+    });
+  } catch (e) {
+    console.error('[auto-thumb]', e.message);
     res.status(500).json({ error: e.message });
   }
 });
