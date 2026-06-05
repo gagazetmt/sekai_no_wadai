@@ -65,6 +65,21 @@ function pathToUrl(localPath) {
   return '/' + cleaned;
 }
 
+function readImageScore(localPath) {
+  if (!localPath) return {};
+  try {
+    const cleaned = String(localPath).replace(/\\/g, '/').replace(/^.*?(images_stock\/players_official\/)/, '$1');
+    const m = cleaned.match(/^images_stock\/players_official\/([^/]+)\/([^/]+)$/);
+    if (!m) return {};
+    const scorePath = path.join(ROOT, 'images_stock', 'players_official', m[1], 'score.json');
+    if (!fs.existsSync(scorePath)) return {};
+    const scores = JSON.parse(fs.readFileSync(scorePath, 'utf8'));
+    return scores[m[2]] || {};
+  } catch (_) {
+    return {};
+  }
+}
+
 // === 個別マッチャー ===
 
 function matchPlayers(query, opts = {}) {
@@ -77,8 +92,24 @@ function matchPlayers(query, opts = {}) {
     const score = matchScore(p.name, query);
     if (score >= threshold) scored.push({ score, item: p });
   }
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const bs = readImageScore(b.item.localPath);
+    const as = readImageScore(a.item.localPath);
+    const bv = Number(bs.visionScore || 0);
+    const av = Number(as.visionScore || 0);
+    if (bv !== av) return bv - av;
+    return Number(bs.score || 0) - Number(as.score || 0);
+  });
   return scored.slice(0, limit).map(s => ({
+    ...(() => {
+      const imageScore = readImageScore(s.item.localPath);
+      return {
+        usageScore: Number(imageScore.score || 0),
+        visionScore: Number(imageScore.visionScore || 0),
+        confidence: imageScore.confidence ?? null,
+      };
+    })(),
     source: 'stock',
     role: 'player',
     score: s.score,
@@ -148,28 +179,28 @@ function matchLegends(query, opts = {}) {
 
 // === メイン ===
 // label の type に応じて適切なマッチャーを呼ぶ
-function findStockMatches({ type, entity, teamName, teamNameAway }) {
+function findStockMatches({ type, entity, teamName, teamNameAway, limit = 20 }) {
   const out = [];
   if (!entity && !teamName) return out;
 
   const t = (type || '').toLowerCase();
 
   if (t === 'player' || t === 'entity') {
-    if (entity) out.push(...matchPlayers(entity));
-    if (entity) out.push(...matchLegends(entity));
+    if (entity) out.push(...matchPlayers(entity, { limit }));
+    if (entity) out.push(...matchLegends(entity, { limit: Math.min(limit, 8) }));
   }
   if (t === 'manager') {
-    if (entity) out.push(...matchManagers(entity));
+    if (entity) out.push(...matchManagers(entity, { limit }));
   }
   if (t === 'team') {
-    if (entity) out.push(...matchClubs(entity, { kinds: ['logo', 'stadium'] }));
+    if (entity) out.push(...matchClubs(entity, { kinds: ['logo', 'stadium'], limit }));
   }
   if (t === 'stadium') {
-    if (entity) out.push(...matchClubs(entity, { kinds: ['stadium'] }));
+    if (entity) out.push(...matchClubs(entity, { kinds: ['stadium'], limit }));
   }
   if (t === 'match' || t === 'matchcard') {
-    if (teamName)     out.push(...matchClubs(teamName,     { kinds: ['logo', 'stadium'], limit: 4 }));
-    if (teamNameAway) out.push(...matchClubs(teamNameAway, { kinds: ['logo'], limit: 2 }));
+    if (teamName)     out.push(...matchClubs(teamName,     { kinds: ['logo', 'stadium'], limit: Math.max(8, Math.ceil(limit / 2)) }));
+    if (teamNameAway) out.push(...matchClubs(teamNameAway, { kinds: ['logo', 'stadium'], limit: Math.max(8, Math.ceil(limit / 2)) }));
   }
 
   // role/url 重複除外
@@ -178,7 +209,7 @@ function findStockMatches({ type, entity, teamName, teamNameAway }) {
     if (!m.url || seenUrls.has(m.url)) return false;
     seenUrls.add(m.url);
     return true;
-  });
+  }).slice(0, limit);
 }
 
 // === タイプアヘッド用: 軽量サジェスト ===

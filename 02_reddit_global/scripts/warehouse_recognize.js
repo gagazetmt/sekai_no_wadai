@@ -33,7 +33,7 @@ const GEMINI_MODEL         = 'gemini-2.5-flash';
 const CONCURRENCY          = 3;     // Gemini同時リクエスト数
 const STOCK_CAP            = 20;    // 1選手フォルダの最大画像枚数（スコア管理で超過分削除）
 
-[REJECTED_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+[PENDING_DIR, REJECTED_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 // ── 文字列→スラッグ ──────────────────────────────────────────────────────────
 function slugify(s) {
@@ -68,7 +68,8 @@ async function recognizeImage(imagePath, meta = {}) {
 
   const imgBuf  = fs.readFileSync(imagePath);
   const base64  = imgBuf.toString('base64');
-  const mime    = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+  const lowerPath = imagePath.toLowerCase();
+  const mime    = lowerPath.endsWith('.png') ? 'image/png' : (lowerPath.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
   const hint    = meta.playerHint
     ? `ヒント: ${meta.playerHint}（所属: ${meta.clubHint || '不明'}）が写っている可能性があります。`
     : '';
@@ -122,7 +123,7 @@ async function recognizeImage(imagePath, meta = {}) {
 // ── 1枚処理 ──────────────────────────────────────────────────────────────────
 async function processOne(imagePath) {
   const fname    = path.basename(imagePath);
-  const metaPath = imagePath.replace(/\.(jpg|png)$/i, '.json');
+  const metaPath = imagePath.replace(/\.(jpg|jpeg|png|webp)$/i, '.json');
   const meta     = fs.existsSync(metaPath)
     ? JSON.parse(fs.readFileSync(metaPath, 'utf8'))
     : {};
@@ -149,7 +150,7 @@ async function processOne(imagePath) {
   }
 
   const entitySlug = slugify(mainName);
-  const ext        = /\.png$/i.test(fname) ? 'png' : 'jpg';
+  const ext        = /\.png$/i.test(fname) ? 'png' : (/\.webp$/i.test(fname) ? 'webp' : 'jpg');
 
   // ── カテゴリ別フォルダ・インデックス振り分け ──────────────────────────────
   let targetDir, prefix, indexFile, indexData, indexKey;
@@ -177,7 +178,7 @@ async function processOne(imagePath) {
 
   // 連番（同フォルダ内の同prefixで始まるファイル数）
   const existing = fs.readdirSync(targetDir)
-    .filter(f => f.startsWith(prefix + '_') && /\.(jpg|png)$/i.test(f)).length;
+    .filter(f => f.startsWith(prefix + '_') && /\.(jpg|jpeg|png|webp)$/i.test(f)).length;
   const num     = String(existing + 1).padStart(3, '0');
   const newName = `${prefix}_${num}.${ext}`;
   const newPath = path.join(targetDir, newName);
@@ -200,7 +201,14 @@ async function processOne(imagePath) {
     indexKey = `${entitySlug}_${num}`;
     idx.players[indexKey] = { ...entry, club: clubSlug, league: slugify(meta.leagueHint || '') };
     saveIndex(idx);
-    try { const { registerNewImage } = require('./image_score_manager'); registerNewImage(localPath); } catch (_) {}
+    try {
+      const { registerNewImage } = require('./image_score_manager');
+      registerNewImage(localPath, {
+        visionScore: Math.round(conf * 100),
+        confidence: conf,
+        source: meta.source || meta.sourceUrl || 'warehouse',
+      });
+    } catch (_) {}
   } else {
     indexKey = `${entitySlug}_${prefix}_${num}`;
     indexData[indexKey] = entry;
@@ -250,7 +258,62 @@ async function runRecognition() {
   return results;
 }
 
-module.exports = { runRecognition, processOne };
+function safePendingName(sourcePath, idx) {
+  const ext = path.extname(sourcePath || '').toLowerCase().replace(/^\./, '') || 'jpg';
+  const base = path.basename(sourcePath || `image_${idx}`)
+    .replace(/\.(jpg|jpeg|png|webp)$/i, '')
+    .replace(/[^\w-]+/g, '_')
+    .slice(0, 60) || `image_${idx}`;
+  return `step2_${Date.now()}_${idx}_${base}.${ext === 'jpeg' ? 'jpg' : ext}`;
+}
+
+async function processPendingPaths(paths) {
+  const pending = (paths || []).filter(Boolean);
+  const results = [];
+  for (let i = 0; i < pending.length; i += CONCURRENCY) {
+    const batch = pending.slice(i, i + CONCURRENCY).map(p => processOne(p).catch(e => {
+      console.warn(`  processOne error: ${e.message}`);
+      return null;
+    }));
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults.filter(Boolean));
+  }
+  return results;
+}
+
+async function ingestImagesForPlayer(candidates, meta = {}) {
+  if (!Array.isArray(candidates) || !candidates.length) return [];
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn('[warehouse_ingest] GEMINI_API_KEY missing; skip warehouse recognition');
+    return [];
+  }
+  const copied = [];
+  const seen = new Set();
+  candidates.slice(0, Number(meta.limit || 12)).forEach((candidate, idx) => {
+    const src = typeof candidate === 'string' ? candidate : (candidate.localPath || candidate.path);
+    if (!src || seen.has(src) || !fs.existsSync(src)) return;
+    seen.add(src);
+    const dest = path.join(PENDING_DIR, safePendingName(src, idx));
+    fs.copyFileSync(src, dest);
+    const jsonPath = dest.replace(/\.(jpg|jpeg|png|webp)$/i, '.json');
+    fs.writeFileSync(jsonPath, JSON.stringify({
+      playerHint: meta.playerHint || meta.entity || '',
+      clubHint: meta.clubHint || '',
+      leagueHint: meta.leagueHint || '',
+      label: meta.label || '',
+      postId: meta.postId || '',
+      source: candidate.source || meta.source || 'step2',
+      sourceUrl: candidate.url || '',
+      copiedFrom: src,
+      copiedAt: new Date().toISOString(),
+    }, null, 2));
+    copied.push(dest);
+  });
+  if (!copied.length) return [];
+  return processPendingPaths(copied);
+}
+
+module.exports = { runRecognition, processOne, ingestImagesForPlayer };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 if (require.main === module) {

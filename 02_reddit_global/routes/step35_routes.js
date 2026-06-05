@@ -11,6 +11,7 @@
 const express = require('express');
 const fs      = require('fs');
 const path    = require('path');
+const axios   = require('axios');
 
 const {
   fetchOfficialXImagesByName,
@@ -20,6 +21,12 @@ const { fetchWikimediaImages } = require('../scripts/fetch_wikimedia_images');
 const { findStockMatches }     = require('../scripts/modules/stock_match');
 
 const router = express.Router();
+
+const REPO_ROOT = path.join(__dirname, '..');
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash';
+const GEMINI_IMAGE_CLASSIFY_LIMIT = Number(process.env.GEMINI_IMAGE_CLASSIFY_LIMIT || 60);
+const PLAYER_STOCK_DIR = path.join(REPO_ROOT, 'images_stock', 'players_official');
+const PLAYER_INDEX_FILE = path.join(REPO_ROOT, 'data', 'players_official_index.json');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const SI_DIR   = path.join(DATA_DIR, 'si_data');
@@ -53,6 +60,24 @@ function labelSafe(label) {
 
 function imageOutDirForLabel(postId, label) {
   return path.join(IMG_BASE, safeId(postId), labelSafe(label));
+}
+
+function slugifyName(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'unknown-player';
+}
+
+function imageDataUriToBuffer(dataUri) {
+  const m = String(dataUri || '').match(/^data:(image\/(?:png|jpe?g|webp));base64,(.*)$/i);
+  if (!m) return null;
+  const mime = m[1].toLowerCase();
+  const ext = mime.includes('png') ? 'png' : (mime.includes('webp') ? 'webp' : 'jpg');
+  return { mime, ext, buffer: Buffer.from(m[2], 'base64') };
 }
 
 // "entity:Jude Bellingham" → { type: 'entity', entity: 'Jude Bellingham' }
@@ -91,6 +116,24 @@ function findEntityItem(items, entityName) {
     return lab.includes(en) || en.includes(lab);
   });
   return hit || null;
+}
+
+function resolveSofaPlayerInfo(si, entityName) {
+  const target = findEntityItem(si?.boxes?.entity?.items || [], entityName);
+  const sofa = target?.sofa || {};
+  const playerId = sofa.playerId
+    || sofa.sofaPlayerId
+    || sofa.player?.id
+    || sofa.data?.player?.id
+    || sofa.id
+    || null;
+  if (!playerId) return null;
+  return {
+    playerId,
+    name: sofa.name || sofa.player?.name || sofa.data?.player?.name || target?.label || entityName,
+    team: sofa.team?.name || sofa.player?.team?.name || sofa.teamName || sofa.club || null,
+    league: sofa.leagueName || sofa.tournament?.name || sofa.player?.team?.tournament?.name || null,
+  };
 }
 
 function resolveTeamForEntity(si, entityName) {
@@ -174,6 +217,186 @@ function pathToUrl(filePath) {
 // 各ラベルに「使用スライド」「役割（player/team/manager）」を付与して返す。
 //   matchcard:home_vs_away は team:home / team:away に展開
 //   opening / ending はラベル無しなのでスキップ
+function imageUrlToLocalPath(url) {
+  const cleaned = String(url || '').split('?')[0];
+  if (!cleaned.startsWith('/images/') && !cleaned.startsWith('/images_stock/')) return null;
+  const local = path.join(REPO_ROOT, cleaned.replace(/^\//, ''));
+  return fs.existsSync(local) ? local : null;
+}
+
+function imageMimeFromPath(filePath) {
+  const ext = path.extname(filePath || '').toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.webp') return 'image/webp';
+  return 'image/jpeg';
+}
+
+function parseGeminiJson(text) {
+  const raw = String(text || '').trim();
+  try { return JSON.parse(raw); } catch (_) {}
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (_) { return null; }
+}
+
+async function mapLimit(items, limit, worker) {
+  const out = new Array(items.length);
+  let next = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await worker(items[i], i);
+    }
+  });
+  await Promise.all(runners);
+  return out;
+}
+
+async function classifyImageCandidate(candidate, ctx) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  const filePath = imageUrlToLocalPath(candidate.url);
+  if (!filePath) return null;
+  const b64 = fs.readFileSync(filePath).toString('base64');
+  const prompt = [
+    'You are selecting soccer images for a short-form video editor.',
+    'Return only JSON.',
+    'Target label: ' + (ctx.label || ''),
+    'Target entity/person/team: ' + (ctx.entity || ''),
+    'Role/type: ' + (ctx.effectiveType || ctx.type || ''),
+    'Related club home: ' + (ctx.teamName || ''),
+    'Related club away: ' + (ctx.teamNameAway || ''),
+    'Candidate source: ' + candidate.source,
+    'Decide whether this image should be kept for the target video context.',
+    'JSON schema: {"keep":true,"category":"target_person|same_team|match_context|club_asset|wrong_person|other","contentType":"portrait|action|celebration|training|logo|stadium|squad|other","confidence":0.0,"reason":"short Japanese"}'
+  ].join('\n');
+  const body = {
+    contents: [{
+      parts: [
+        { text: prompt },
+        { inline_data: { mime_type: imageMimeFromPath(filePath), data: b64 } },
+      ],
+    }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+  };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${apiKey}`;
+  const res = await axios.post(url, body, { timeout: 25000 });
+  const text = res.data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('\n') || '';
+  const parsed = parseGeminiJson(text) || {};
+  const confidence = Number(parsed.confidence || 0);
+  return {
+    url: candidate.url,
+    source: candidate.source,
+    keep: Boolean(parsed.keep),
+    category: parsed.category || 'other',
+    contentType: parsed.contentType || 'other',
+    confidence: Number.isFinite(confidence) ? confidence : 0,
+    reason: parsed.reason || '',
+  };
+}
+
+async function classifyImageGroups(images, ctx) {
+  const sourceOrder = ['warehouse_adopted', 'stock', 'x_by_name', 'x_by_time', 'x_by_time_away', 'wikimedia', 'manual'];
+  const seen = new Set();
+  const candidates = [];
+  for (const source of sourceOrder) {
+    for (const url of images[source] || []) {
+      if (typeof url !== 'string' || !url || seen.has(url)) continue;
+      seen.add(url);
+      candidates.push({ source, url });
+    }
+  }
+  const fallback = candidates.map(c => c.url).slice(0, 20);
+  if (!candidates.length) {
+    return { gemini_selected: [], gemini_rejected: [], gemini_meta: [], gemini_status: { ok: false, reason: 'no candidates' } };
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    return {
+      gemini_selected: fallback,
+      gemini_rejected: [],
+      gemini_meta: [],
+      gemini_status: { ok: false, reason: 'GEMINI_API_KEY missing; fallback order used', checked: 0, selected: fallback.length },
+    };
+  }
+  const limit = Math.max(1, Math.min(GEMINI_IMAGE_CLASSIFY_LIMIT || 60, candidates.length));
+  const batch = candidates.slice(0, limit);
+  const results = (await mapLimit(batch, 3, async (candidate) => {
+    try { return await classifyImageCandidate(candidate, ctx); }
+    catch (e) {
+      console.warn('[gemini-image-classify]', candidate.source, candidate.url, e.message);
+      return { url: candidate.url, source: candidate.source, keep: false, category: 'other', contentType: 'other', confidence: 0, reason: e.message };
+    }
+  })).filter(Boolean);
+  const priority = { target_person: 0, match_context: 1, same_team: 2, club_asset: 3, other: 4, wrong_person: 9 };
+  const kept = results
+    .filter(r => r.keep && r.confidence >= 0.4 && r.category !== 'wrong_person')
+    .sort((a, b) => (priority[a.category] ?? 5) - (priority[b.category] ?? 5) || b.confidence - a.confidence);
+  const rejected = results.filter(r => !kept.find(k => k.url === r.url)).slice(0, 20);
+  return {
+    gemini_selected: kept.map(r => r.url).slice(0, 24),
+    gemini_rejected: rejected.map(r => r.url).slice(0, 20),
+    gemini_meta: results,
+    gemini_status: { ok: true, checked: results.length, selected: kept.length },
+  };
+}
+
+async function fetchSofaProfileToStock({ si, postId, label, entity, teamName }) {
+  const info = resolveSofaPlayerInfo(si, entity);
+  if (!info?.playerId) return null;
+
+  const { apiGetImage } = require('../scripts/modules/fetchers/_sofa_common');
+  const dataUri = await apiGetImage(`/player/${info.playerId}/image`);
+  const img = imageDataUriToBuffer(dataUri);
+  if (!img?.buffer?.length) return null;
+
+  const playerName = info.name || entity;
+  const playerSlug = slugifyName(playerName);
+  const outDir = path.join(PLAYER_STOCK_DIR, playerSlug);
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+  const filename = `${playerSlug}_sofa_${info.playerId}.${img.ext}`;
+  const outPath = path.join(outDir, filename);
+  if (!fs.existsSync(outPath)) fs.writeFileSync(outPath, img.buffer);
+
+  const localPath = path.relative(REPO_ROOT, outPath).replace(/\\/g, '/');
+  const idx = safeJson(PLAYER_INDEX_FILE, { players: {} });
+  idx.players = idx.players || {};
+  const indexKey = `sofascore:${info.playerId}`;
+  idx.players[indexKey] = {
+    ...(idx.players[indexKey] || {}),
+    name: playerName,
+    slug: playerSlug,
+    club: teamName || info.team || '',
+    league: info.league || '',
+    sofaPlayerId: info.playerId,
+    photoUrl: `https://api.sofascore.com/api/v1/player/${info.playerId}/image`,
+    localPath,
+    sizeBytes: fs.statSync(outPath).size,
+    source: 'sofascore-profile',
+    confidence: 0.99,
+    label,
+    postId,
+    addedAt: new Date().toISOString().slice(0, 10),
+  };
+  idx.updatedAt = new Date().toISOString();
+  idx.total = Object.keys(idx.players).length;
+  fs.writeFileSync(PLAYER_INDEX_FILE, JSON.stringify(idx, null, 2));
+
+  try {
+    const { registerNewImage } = require('../scripts/image_score_manager');
+    registerNewImage(localPath, { visionScore: 99, confidence: 0.99, source: 'sofascore-profile' });
+  } catch (_) {}
+
+  return {
+    url: '/' + localPath,
+    localPath,
+    playerId: info.playerId,
+    name: playerName,
+    team: teamName || info.team || null,
+    league: info.league || null,
+  };
+}
+
 function extractLabels(modules, si) {
   const seen = new Map(); // key -> { key, role, displayName, slidesUsing, source }
 
@@ -286,7 +509,7 @@ async function fetchImagesForLabel(postId, label) {
 
   if ((effectiveType === 'player' || effectiveType === 'manager') && teamName && entity) {
     tasks.push(
-      fetchOfficialXImagesByName(teamName, entity, '', 10, { outDir })
+      fetchOfficialXImagesByName(teamName, entity, '', 20, { outDir })
         .then(paths => ({ source: 'x_by_name', paths }))
         .catch(e => { console.warn('[x_by_name]', e.message); return { source: 'x_by_name', paths: [] }; })
     );
@@ -298,7 +521,7 @@ async function fetchImagesForLabel(postId, label) {
   //   ⚠️ 監督ラベルでは混入源（チーム他選手・ファン写真等）になるためスキップ（2026-05-10）
   if (teamName && effectiveType !== 'manager') {
     tasks.push(
-      fetchOfficialXImagesByTime(teamName, '', 10, { outDir, matchKickoff })
+      fetchOfficialXImagesByTime(teamName, '', 20, { outDir, matchKickoff })
         .then(paths => ({ source: 'x_by_time', paths }))
         .catch(e => { console.warn('[x_by_time]', e.message); return { source: 'x_by_time', paths: [] }; })
     );
@@ -309,7 +532,7 @@ async function fetchImagesForLabel(postId, label) {
   // x_by_time_away: 同上、監督ラベルではスキップ
   if (teamNameAway && effectiveType !== 'manager') {
     tasks.push(
-      fetchOfficialXImagesByTime(teamNameAway, 'away', 10, { outDir, matchKickoff })
+      fetchOfficialXImagesByTime(teamNameAway, 'away', 20, { outDir, matchKickoff })
         .then(paths => ({ source: 'x_by_time_away', paths }))
         .catch(e => { console.warn('[x_by_time_away]', e.message); return { source: 'x_by_time_away', paths: [] }; })
     );
@@ -336,11 +559,26 @@ async function fetchImagesForLabel(postId, label) {
     images[r.source] = r.paths.map(pathToUrl);
   }
 
+  try {
+    if (process.env.ENABLE_SOFA_PROFILE_IMAGES === '1' && effectiveType === 'player' && entity) {
+      const sofaProfile = await fetchSofaProfileToStock({ si, postId, label, entity, teamName });
+      images.sofa_profile = sofaProfile?.url ? [sofaProfile.url] : [];
+      images.sofa_profile_meta = sofaProfile ? [sofaProfile] : [];
+    } else {
+      images.sofa_profile = [];
+      images.sofa_profile_meta = [];
+    }
+  } catch (e) {
+    console.warn('[sofa-profile-image]', e.message);
+    images.sofa_profile = [];
+    images.sofa_profile_meta = [];
+  }
+
   // ストック画像（images_stock の indices からラベル一致を引く）
   try {
-    const stockMatches = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway });
+    const stockMatches = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway, limit: 20 });
     images.stock = stockMatches.map(m => m.url).filter(Boolean);
-    images.stock_meta = stockMatches.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, league: m.league || null }));
+    images.stock_meta = stockMatches.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, usageScore: m.usageScore || 0, visionScore: m.visionScore || 0, confidence: m.confidence ?? null, league: m.league || null }));
   } catch (e) {
     console.warn('[stock]', e.message);
     images.stock = [];
@@ -360,7 +598,83 @@ async function fetchImagesForLabel(postId, label) {
     images.manual = [];
   }
 
-  const total = Object.values(images).reduce((s, a) => Array.isArray(a) ? s + a.length : s, 0);
+  try {
+    Object.assign(images, await classifyImageGroups(images, {
+      label,
+      type,
+      effectiveType,
+      entity,
+      teamName,
+      teamNameAway,
+      matchKickoff,
+    }));
+  } catch (e) {
+    console.warn('[gemini-image-classify]', e.message);
+    const fallback = ['stock', 'x_by_name', 'x_by_time', 'x_by_time_away', 'wikimedia', 'manual']
+      .flatMap(k => images[k] || [])
+      .filter((url, i, arr) => typeof url === 'string' && url && arr.indexOf(url) === i)
+      .slice(0, 20);
+    images.gemini_selected = fallback;
+    images.gemini_rejected = [];
+    images.gemini_meta = [];
+    images.gemini_status = { ok: false, reason: e.message, selected: fallback.length };
+  }
+
+  if (effectiveType === 'player' && entity) {
+    try {
+      const sourceMap = new Map();
+      const warehouseSources = new Set(['x_by_name', 'x_by_time', 'x_by_time_away']);
+      Array.from(warehouseSources).forEach(k => {
+        (images[k] || []).forEach(url => sourceMap.set(url, k));
+      });
+      const selectedRows = Array.isArray(images.gemini_meta)
+        ? images.gemini_meta.filter(r => r.keep && r.category !== 'wrong_person' && warehouseSources.has(r.source))
+        : [];
+      const selectedUrls = (selectedRows.length ? selectedRows.map(r => r.url) : (images.gemini_selected || []))
+        .filter((url, i, arr) => typeof url === 'string'
+          && url
+          && !url.startsWith('/images_stock/')
+          && warehouseSources.has(sourceMap.get(url))
+          && arr.indexOf(url) === i)
+        .slice(0, Number(process.env.WAREHOUSE_INGEST_LIMIT || 12));
+      const warehouseCandidates = selectedUrls.map(url => ({
+        url,
+        localPath: imageUrlToLocalPath(url),
+        source: sourceMap.get(url) || 'step2',
+      })).filter(c => c.localPath);
+      const { ingestImagesForPlayer } = require('../scripts/warehouse_recognize');
+      const adopted = await ingestImagesForPlayer(warehouseCandidates, {
+        postId,
+        label,
+        playerHint: entity,
+        clubHint: teamName || '',
+        source: 'step2-image-fetch',
+        limit: Number(process.env.WAREHOUSE_INGEST_LIMIT || 12),
+      });
+      images.warehouse_adopted = adopted.map(r => '/' + r.localPath).filter(Boolean);
+      images.warehouse_status = { ok: true, checked: warehouseCandidates.length, adopted: adopted.length };
+      if (adopted.length) {
+        const refreshed = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway, limit: 20 });
+        const seenStock = new Set();
+        images.stock = refreshed.map(m => m.url).filter(url => {
+          if (!url || seenStock.has(url)) return false;
+          seenStock.add(url);
+          return true;
+        });
+        images.stock_meta = refreshed.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, usageScore: m.usageScore || 0, visionScore: m.visionScore || 0, confidence: m.confidence ?? null, league: m.league || null }));
+      }
+    } catch (e) {
+      console.warn('[warehouse-ingest]', e.message);
+      images.warehouse_adopted = [];
+      images.warehouse_status = { ok: false, reason: e.message };
+    }
+  }
+
+  const total = new Set(
+    Object.values(images)
+      .flatMap(a => Array.isArray(a) ? a : [])
+      .filter(v => typeof v === 'string' && v)
+  ).size;
 
   return {
     ok: true,

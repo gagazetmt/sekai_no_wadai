@@ -33,7 +33,7 @@ function writeScores(clubDir, scores) {
 function resolveStockPath(imagePath) {
   if (!imagePath) return null;
   const normalized = imagePath.replace(/\\/g, '/');
-  const m = normalized.match(/images_stock\/players_official\/([^/]+)\/([^/]+\.(jpg|png))$/i);
+  const m = normalized.match(/images_stock\/players_official\/([^/]+)\/([^/]+\.(jpg|jpeg|png|webp))$/i);
   if (!m) return null;
   return {
     playerSlug: m[1],
@@ -43,18 +43,25 @@ function resolveStockPath(imagePath) {
 }
 
 // ── 新規画像を score.json に登録（warehouse_recognize から呼ぶ） ─────────────
-function registerNewImage(localPath) {
+function registerNewImage(localPath, meta = {}) {
   const info = resolveStockPath(localPath);
   if (!info || !fs.existsSync(info.playerDir)) return;
   const scores = readScores(info.playerDir);
   if (!scores[info.filename]) {
     scores[info.filename] = {
       score:    0,
+      visionScore: Number.isFinite(Number(meta.visionScore)) ? Number(meta.visionScore) : null,
+      confidence: Number.isFinite(Number(meta.confidence)) ? Number(meta.confidence) : null,
+      source: meta.source || null,
       addedAt:  new Date().toISOString().slice(0, 10),
       lastUsed: null,
     };
-    writeScores(info.playerDir, scores);
+  } else {
+    if (Number.isFinite(Number(meta.visionScore))) scores[info.filename].visionScore = Number(meta.visionScore);
+    if (Number.isFinite(Number(meta.confidence))) scores[info.filename].confidence = Number(meta.confidence);
+    if (meta.source) scores[info.filename].source = meta.source;
   }
+  writeScores(info.playerDir, scores);
 }
 
 // ── 動画生成で使われた画像のスコアを +1 ─────────────────────────────────────
@@ -92,14 +99,14 @@ function recordImageUsage(imagePaths) {
 function pruneClubDir(clubDir, scoresOverride) {
   const scores    = scoresOverride || readScores(clubDir);
   const allImages = fs.readdirSync(clubDir)
-    .filter(f => /\.(jpg|png)$/i.test(f));
+    .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
 
   if (allImages.length <= STOCK_CAP) return;
 
   // 選手ごとにグループ分け → それぞれ上限チェック
   const groups = {};
   for (const fname of allImages) {
-    const slug = fname.replace(/_\d{3}\.(jpg|png)$/i, '');
+      const slug = fname.replace(/_\d{3}\.(jpg|jpeg|png|webp)$/i, '');
     if (!groups[slug]) groups[slug] = [];
     groups[slug].push(fname);
   }
@@ -134,7 +141,7 @@ function initAllScores() {
   for (const club of clubs) {
     const clubDir = path.join(STOCK_ROOT, club);
     const scores  = readScores(clubDir);
-    const images  = fs.readdirSync(clubDir).filter(f => /\.(jpg|png)$/i.test(f));
+    const images  = fs.readdirSync(clubDir).filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f));
     let updated   = false;
     for (const fname of images) {
       if (!scores[fname]) {
