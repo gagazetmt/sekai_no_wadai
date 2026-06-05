@@ -181,12 +181,16 @@ ${RECIPE_CATALOG}
 25. 画面変化のため、insight が続く論点は profile/history/picture に降格できないか再判定する
 
 【出力（JSONのみ。コードブロック・説明文一切不要）】
-{"cards":[
+{
+  "briefing": {
+    "hookQuestion": "視聴者が最初に抱く疑問・驚き（30〜60字）。動画全体のフック",
+    "angle": "この動画独自の切り口・視点（20〜40字）。他チャンネルと差別化する観点",
+    "answer": "動画を見終えた視聴者に残る結論・メッセージ（30〜60字）",
+    "storyPattern": "物語の流れ型（例: 個人の試練→背景の構造→問いかけ / 栄光→転落→復活 / 比較→驚き→考察）"
+  },
+  "cards":[
   {"id":"opening","title":"動画冒頭フック","slideType":"opening","mainKey":"opening","secondary":null,"recipeKey":null,"dataSource":"","dataPreview":"","scriptDir":"タイトルで視聴者を掴む","confidence":"high","hookScore":90,"insightSubtype":"none","bullets":[]},
   {"id":"sample_stats","title":"今季スタッツ","slideType":"stats","mainKey":"entity:選手名","secondary":null,"recipeKey":"player.fw_match_stats","dataSource":"sofa:選手名","dataPreview":"G32 A7 評8.1 出場31試合","scriptDir":"今季G32・A7・評8.1の数字で存在感を可視化（FWスタッツ）","confidence":"high","hookScore":72,"insightSubtype":"none","bullets":[]},
-  {"id":"sample_profile_person","title":"中心人物の実績","slideType":"profile","mainKey":"entity:人物名","secondary":null,"recipeKey":null,"dataSource":"wiki+articles","dataPreview":"会長4期 / CL複数回制覇 / 銀河系政策","scriptDir":"中心人物の役職・実績・影響力をデータ風テキストで見せる","confidence":"medium","hookScore":74,"insightSubtype":"none","bullets":[]},
-  {"id":"sample_history_flow","title":"会長選から補強戦略へ","slideType":"history","mainKey":"entity:クラブ名","secondary":null,"recipeKey":null,"dataSource":"articles","dataPreview":"選挙報道 → 獲得候補 → 市場戦略","scriptDir":"会長選挙と選手獲得の流れを時系列で整理する","confidence":"medium","hookScore":76,"insightSubtype":"none","bullets":[]},
-  {"id":"sample_picture_symbol","title":"象徴の1枚","slideType":"picture","mainKey":"entity:人物名","secondary":null,"recipeKey":null,"dataSource":"images","dataPreview":"中心人物やクラブを1枚絵で見せる","scriptDir":"ナレーションはそのまま、象徴写真で画面に変化を作る","confidence":"medium","hookScore":66,"insightSubtype":"none","bullets":[]},
   {"id":"sample_insight","title":"契約満了スター戦略","slideType":"insight","mainKey":"insight:contract_strategy","secondary":null,"recipeKey":null,"dataSource":"articles+wiki","dataPreview":"複数ソースの文脈統合","scriptDir":"過去の契約満了獲得と今回の噂をブランド戦略として語る","confidence":"medium","hookScore":86,"insightSubtype":"strategy","bullets":["2021年夏にアラバを獲得","2022年夏にリュディガーも加入","2024年夏にはエムバペ獲得","2025年にはトレントも確保","次の標的として主役の名前","ブランド力だけに許された戦略"]},
   ...
   {"id":"ending","title":"締め・問いかけ","slideType":"ending","mainKey":"ending","secondary":null,"recipeKey":null,"dataSource":"","dataPreview":"","scriptDir":"視聴者への投げかけと登録誘導","confidence":"high","bullets":[]}
@@ -216,6 +220,15 @@ ${RECIPE_CATALOG}
   if (!parsed?.cards?.length) {
     throw new Error('視点カード生成失敗: ' + String(raw || '').slice(0, 400));
   }
+
+  // briefing を正規化して抽出（cards と一緒に返す）
+  const rawBriefing = parsed.briefing || {};
+  const briefing = {
+    hookQuestion: String(rawBriefing.hookQuestion || '').slice(0, 120),
+    angle:        String(rawBriefing.angle        || '').slice(0, 80),
+    answer:       String(rawBriefing.answer       || '').slice(0, 120),
+    storyPattern: String(rawBriefing.storyPattern || '').slice(0, 80),
+  };
 
   const VALID_TYPES = new Set(['opening','ending','stats','profile','comparison','history',
                                 'insight','reaction','timeline','matchcard','ranking','picture']);
@@ -275,7 +288,8 @@ ${RECIPE_CATALOG}
     secondary:null, recipeKey:null, dataSource:'', dataPreview:'', scriptDir:'視聴者への投げかけと登録誘導', confidence:'high', hookScore:55, insightSubtype:'none', bullets:[],
   });
 
-  return [{ ...openings[0], hookScore: Math.max(openings[0].hookScore || 0, 85) }, ...middles.slice(0, 16), endings[0]];
+  const finalCards = [{ ...openings[0], hookScore: Math.max(openings[0].hookScore || 0, 85) }, ...middles.slice(0, 16), endings[0]];
+  return { cards: finalCards, briefing };
 }
 
 // ─── Routes ────────────────────────────────────────────────────────
@@ -290,10 +304,10 @@ router.post('/v3/generate-viewpoints', express.json(), (req, res) => {
   setImmediate(async () => {
     try {
       writeJob(jobId, { jobId, postId, status: 'running', step: 'generating' });
-      const cards = await _runGenerateViewpoints(postId);
-      writeJob(jobId, { jobId, postId, status: 'done', step: 'done', cards, count: cards.length,
+      const { cards, briefing } = await _runGenerateViewpoints(postId);
+      writeJob(jobId, { jobId, postId, status: 'done', step: 'done', cards, briefing, count: cards.length,
         finishedAt: new Date().toISOString() });
-      console.log(`[viewpoints] ${cards.length} cards generated for ${postId}`);
+      console.log(`[viewpoints] ${cards.length} cards generated for ${postId} | hook: ${briefing.hookQuestion.slice(0,40)}`);
     } catch (e) {
       console.error('[viewpoints]', e.message);
       writeJob(jobId, { jobId, postId, status: 'error', error: e.message });
