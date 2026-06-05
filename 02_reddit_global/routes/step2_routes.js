@@ -160,17 +160,23 @@ ${comments || '(なし)'}
     ・過去の選手の比較言及（例: "Like Messi vs Ronaldo days" → メッシ/ロナウドは除外）
   - 推測しない（タイトル・本文・コメントに登場し、かつ案件のテーマに直接関係するもののみ）
 - matches: 試合があれば「HomeTeam vs AwayTeam」最大2件
-- searches: ニュース検索キーワード（英語、選手名検索に使えるもの）最大3件
-  - **試合関連なら必ず "scorers" "goals" "key players" "match report" 等の選手名抽出キーワードを含める**
-    ・例OK: "PSG Bayern Munich semifinal goals scorers"
-    ・例OK: "PSG Bayern match report goals players"
-    ・例NG: "PSG Bayern 5-4 semifinal" （スコアだけだと総括記事に偏り選手名出ない）
+- searches: ニュース検索クエリ **ちょうど3件**（順番厳守）
+  - [0]: 英語 **3〜4語以内**「主役名(姓のみ可) + 核心キーワード1〜2語」
+    ・例OK: "Lewandowski Poland caps record"
+    ・例OK: "PSG Bayern semifinal scorers"
+    ・例NG: "Robert Lewandowski 167th cap Poland most capped players" ← 長すぎ NG
+  - [1]: 英語 **3〜4語以内**「別角度キーワード」（[0]と重複しないこと）
+    ・例OK: "Poland most capped Europeans"
+    ・例OK: "PSG Bayern match report"
+  - [2]: 日本語 **3〜5語以内**「カタカナ主役名 + 核心語（漢字混じりOK）」
+    ・例OK: "レヴァンドフスキ ポーランド代表 キャップ数"
+    ・例OK: "PSG バイエルン 準決勝 スコア"
 
 JSONのみ:
 {
   "entities": [{"name":"...","role":"..."}],
   "matches": ["..."],
-  "searches": ["..."]
+  "searches": ["EN短文1", "EN短文2", "JA短文"]
 }`;
 
   // 2026-05-24: mode に応じた provider を初期使用、 失敗時は fallbackProvider に落とす
@@ -200,7 +206,7 @@ JSONのみ:
 
   const phase1Entities = Array.isArray(phase1.entities) ? phase1.entities : [];
   const matches  = Array.isArray(phase1.matches)  ? phase1.matches.filter(Boolean)  : [];
-  const searches = Array.isArray(phase1.searches) ? phase1.searches.filter(Boolean) : [];
+  const searches = Array.isArray(phase1.searches) ? phase1.searches.filter(Boolean).slice(0, 2) : [];
   console.log(`  Phase1: entities ${phase1Entities.length} / matches ${matches.length} / searches ${searches.length}`);
 
   // ── Phase 2: 検索でニュース取得 → 追加選手抽出（DeepSeek）──
@@ -397,9 +403,11 @@ async function _articleFetch(url) {
 }
 
 // opts: jaQuery / requiredTerms / maxEn / maxJa
+function _isJaQuery(q) { return /[ぁ-ん]|[ァ-ン]|[一-龥]/.test(q); }
 async function _gatherArticles(searches, opts = {}) {
-  const enQueries    = (Array.isArray(searches) ? searches : []).filter(Boolean).slice(0, 2);
-  const jaQuery      = opts.jaQuery || null;
+  const all = (Array.isArray(searches) ? searches : []).filter(Boolean);
+  const enQueries = all.filter(q => !_isJaQuery(q)).slice(0, 2);
+  const jaQuery   = opts.jaQuery || all.find(_isJaQuery) || null;
   const requiredTerms = (opts.requiredTerms || []).map(t => t.toLowerCase());
   const maxEn        = Number(opts.maxEn) || 10;
   const maxJa        = Number(opts.maxJa) || 5;
@@ -481,17 +489,16 @@ async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
     )
   )];
 
-  // jaQuery: titleJaのカタカナ固有名詞だけ抽出（例: "レアル・マドリード コナテ ペレス"）
-  // → 汎用語を除いた短いクエリ = Jリーグ記事等のノイズが入らない
-  const jaTerms = titleJa ? _extractJaProperNouns(titleJa) : [];
-  const jaQuery = jaTerms.length >= 2 ? jaTerms.join(' ') : null;
-
   // ②-2: 記事収集（英語×2 + 日本語×1）
+  // jaQuery は Phase1 の searches[2]（日本語クエリ）から自動抽出 or カタカナ抽出フォールバック
+  const phase1JaQuery = (Array.isArray(searches) ? searches : []).find(_isJaQuery) || null;
+  const fallbackJaTerms = !phase1JaQuery && titleJa ? _extractJaProperNouns(titleJa) : [];
+  const jaQuery = phase1JaQuery || (fallbackJaTerms.length >= 2 ? fallbackJaTerms.join(' ') : null);
   const articles = await _gatherArticles(searches, { ...opts, jaQuery, requiredTerms });
   console.log(`[Step2 v2.5] ②-2 記事収集: ${articles.length}件 JA="${jaQuery||'なし'}"`);
   if (!articles.length) {
     // 記事ゼロなら base のまま返す（②-3 をスキップ）
-    return { articles: [], refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], usedAI: false };
+    return { articles: [], refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], jaQuery, usedAI: false };
   }
 
   const articleBlock = articles
@@ -506,6 +513,7 @@ async function _runRefineLabelsFromArticles(post, baseSuggested, opts = {}) {
 
   const prompt = `あなたはサッカーニュース解析の専門家です。以下の【関連記事 約${articles.length}件】を熟読し、この案件の動画で**データ取得すべき** entity / match ラベルを精度高く再提案してください。
 検索クエリではなく、記事本文に実際に登場し、案件テーマに直結する固有名のみを選びます。
+さらに、動画の企画・冒頭フック・テロップに使える storyFacts も抽出してください。
 
 【案件 (原題)】 ${title}
 ${titleJa ? `【案件 (日本語訳)】 ${titleJa}\n` : ''}${selftext ? `\n【本文】\n${selftext}\n` : ''}
@@ -523,11 +531,19 @@ ${articleBlock}
 - matches: 記事で扱われている試合があれば「HomeTeam vs AwayTeam」最大2件
 - 検索クエリ文（"... goals scorers" 等）はラベルにしない。あくまで固有名に正規化する
 - 記事に根拠が無い固有名は出さない（捏造禁止）
+- storyFacts: 複数記事から読み取れる「動画で使える一文」を最大12件
+  - fact: テロップに使える短い日本語（18〜34字）
+  - detail: その文脈の補足（60字以内）
+  - angle: contract / transfer / strategy / profile / rivalry / rumor / money / timeline / reaction / other
+  - catchiness: 0〜100（衝撃・意外性・対立・有名度・数字の強さで採点）
+  - usableAs: insight / opening / profile / history / picture / stats の候補配列
+  - sourceHint: host名や記事タイトルの短縮
 
 JSONのみ:
 {
   "entities": [{"name":"...","role":"..."}],
-  "matches": ["HomeTeam vs AwayTeam"]
+  "matches": ["HomeTeam vs AwayTeam"],
+  "storyFacts": [{"fact":"...","detail":"...","angle":"contract","catchiness":82,"usableAs":["insight","opening"],"sourceHint":"..."}]
 }`;
 
   async function _ask(provider) {
@@ -543,11 +559,12 @@ JSONのみ:
   }
   if (!parsed) {
     console.warn('[Step2 v2.5] ②-3 失敗 → ① の結果を維持');
-    return { articles, refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], usedAI: false };
+    return { articles, refined: baseSuggested, refinedMatches: baseSuggested?.matches || [], jaQuery, usedAI: false };
   }
 
   const refinedEntities = Array.isArray(parsed.entities) ? parsed.entities : [];
   const refinedMatches  = Array.isArray(parsed.matches)  ? parsed.matches.filter(Boolean) : [];
+  const storyFacts = _normalizeStoryFacts(parsed.storyFacts);
   // ① の暫定 entity と記事ベースの再提案をマージ（記事ベース優先・重複排除）
   const merged = _dedupeEntities(refinedEntities, baseEntities);
   console.log(`[Step2 v2.5] ②-3 精度版ラベル: entities ${merged.length} (記事${refinedEntities.length}+①${baseEntities.length}) / matches ${refinedMatches.length}`);
@@ -555,8 +572,63 @@ JSONのみ:
     articles,
     refined: { entities: merged, matches: refinedMatches.length ? refinedMatches : (baseSuggested?.matches || []), searches },
     refinedMatches,
+    jaQuery,
+    storyFacts,
     usedAI: true,
   };
+}
+
+function _normalizeStoryFacts(raw) {
+  if (!Array.isArray(raw)) return [];
+  const allowedAngles = new Set(['contract','transfer','strategy','profile','rivalry','rumor','money','timeline','reaction','other']);
+  const allowedUse = new Set(['insight','opening','profile','history','picture','stats']);
+  const seen = new Set();
+  return raw.map((it) => {
+    if (!it || typeof it !== 'object') return null;
+    const fact = String(it.fact || '').trim().slice(0, 44);
+    if (!fact) return null;
+    const key = fact.toLowerCase();
+    if (seen.has(key)) return null;
+    seen.add(key);
+    const usableAs = Array.isArray(it.usableAs)
+      ? it.usableAs.map(s => String(s || '').trim()).filter(s => allowedUse.has(s)).slice(0, 4)
+      : [];
+    return {
+      fact,
+      detail: String(it.detail || '').trim().slice(0, 90),
+      angle: allowedAngles.has(String(it.angle || '').trim()) ? String(it.angle).trim() : 'other',
+      catchiness: Math.max(0, Math.min(100, Number(it.catchiness) || 50)),
+      usableAs: usableAs.length ? usableAs : ['insight'],
+      sourceHint: String(it.sourceHint || '').trim().slice(0, 80),
+    };
+  }).filter(Boolean).sort((a, b) => b.catchiness - a.catchiness).slice(0, 12);
+}
+
+function _finalSearchesForUi(baseSuggested, refineResult) {
+  const out = [];
+  // EN: 日本語を含まないクエリを最大2件
+  (Array.isArray(baseSuggested?.searches) ? baseSuggested.searches : []).forEach(q => {
+    const s = String(q || '').trim();
+    if (s && !_isJaQuery(s) && out.filter(x => !_isJaQuery(x)).length < 2 && !out.includes(s)) out.push(s);
+  });
+  // JA: Phase1のJAクエリ優先、なければ refineResult.jaQuery
+  const phase1Ja = (Array.isArray(baseSuggested?.searches) ? baseSuggested.searches : [])
+    .map(q => String(q || '').trim()).find(_isJaQuery) || '';
+  const ja = phase1Ja || String(refineResult?.jaQuery || '').trim();
+  if (ja && !out.includes(ja)) out.push(ja);
+  return out;
+}
+
+function _articleHitsForUi(refineResult) {
+  return (Array.isArray(refineResult?.articles) ? refineResult.articles : []).slice(0, 24).map(a => ({
+    title: String(a.title || '').slice(0, 160),
+    host: String(a.host || 'search').slice(0, 60),
+    link: String(a.link || '').slice(0, 400),
+    snippet: String(a.snippet || a.fullText || '').replace(/\s+/g, ' ').trim().slice(0, 260),
+    lang: String(a.lang || '').slice(0, 8),
+    sourceScore: Number(a.sourceScore) || 0,
+    hasFullText: Boolean(a.fullText),
+  })).filter(a => a.title || a.snippet);
 }
 
 // 🆕 /v3/suggest-labels: ジョブ作成 → jobId 即返却（バックグラウンド実行）
@@ -568,9 +640,34 @@ router.post('/v3/suggest-labels', (req, res) => {
   res.json({ ok: true, jobId });
   setImmediate(async () => {
     try {
-      updateJob(jobId, { status: 'running', step: 'phase1' });
-      const result = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch), { sprint });
-      updateJob(jobId, { status: 'done', step: 'merged', result });
+      updateJob(jobId, { status: 'running', step: '2-1-query', message: '検索クエリ作成中' });
+      const suggested = await _runSuggestLabels(post, (patch) => updateJob(jobId, patch), { sprint });
+
+      updateJob(jobId, { status: 'running', step: '2-2-read-articles', message: '関連記事を収集して本文を熟読中' });
+      const refineResult = await _runRefineLabelsFromArticles(post, suggested, { sprint });
+      const result = refineResult.refined || suggested;
+      result.searches = _finalSearchesForUi(suggested, refineResult);
+      result._flow = {
+        mode: 'query_articles_refined_labels',
+        articleCount: refineResult.articles?.length || 0,
+        refinedByAI: !!refineResult.usedAI,
+      };
+      try {
+        const si = safeJson(siPath(post.id), emptySiData(post.id));
+        si.storyFacts = Array.isArray(refineResult.storyFacts) ? refineResult.storyFacts : [];
+        si.articleLearning = {
+          savedAt: new Date().toISOString(),
+          articleCount: refineResult.articles?.length || 0,
+          jaQuery: refineResult.jaQuery || null,
+          refinedByAI: !!refineResult.usedAI,
+        };
+        si.articleHits = _articleHitsForUi(refineResult);
+        fs.writeFileSync(siPath(post.id), JSON.stringify(si, null, 2));
+      } catch (e) {
+        console.warn('[Step2/storyFacts] save failed:', e.message);
+      }
+
+      updateJob(jobId, { status: 'done', step: '2-3-refined-labels', message: '記事熟読ベースのラベル提案完了', result });
     } catch (e) {
       console.error(`[Step2/suggest-labels:${jobId}]`, e);
       updateJob(jobId, { status: 'error', error: e.message });
@@ -1040,11 +1137,24 @@ function getUI() {
     } catch (_) {}
   </script>
 
-  <!-- 3ボックス -->
-  <div id="s2Boxes" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:flex-start;margin-bottom:14px;">
-    <!-- 左: entity -->
+  <!-- ①②③④ フロー表示 -->
+  <div id="s2Boxes" style="display:grid;grid-template-columns:1fr;gap:12px;align-items:flex-start;margin-bottom:14px;">
     <div class="panel">
-      <div style="font-size:12px;font-weight:bold;color:#10b981;margin-bottom:8px">&#x1F464; 固有名（選手・監督・チーム・大会）</div>
+      <div style="font-size:12px;font-weight:bold;color:#0ea5e9;margin-bottom:8px">① 検索クエリ</div>
+      <div id="s2BoxSearch"></div>
+      <div style="display:grid;grid-template-columns:1fr 28px;gap:4px;margin-top:6px;">
+        <input class="inp" id="s2NewSearchLabel" placeholder="英語短文2件 + 日本語1件 / URLも可" style="font-size:11px;padding:4px 6px;">
+        <button class="btn btn-sm" id="s2BtnAddSearch" style="background:#0ea5e9;color:#fff;padding:4px 6px;">+</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="font-size:12px;font-weight:bold;color:#f59e0b;margin-bottom:8px">② hit記事一覧</div>
+      <div id="s2ArticleHits"></div>
+    </div>
+
+    <div class="panel">
+      <div style="font-size:12px;font-weight:bold;color:#10b981;margin-bottom:8px">③ ラベル（選手・監督・チーム・大会）</div>
       <div id="s2BoxEntity"></div>
       <div style="position:relative;display:grid;grid-template-columns:1fr 80px 28px;gap:4px;margin-top:6px;">
         <input class="inp" id="s2NewEntityName" placeholder="名前（入力すると候補表示）" style="font-size:11px;padding:4px 6px;" autocomplete="off">
@@ -1059,23 +1169,12 @@ function getUI() {
       </div>
     </div>
 
-    <!-- 中央: match -->
     <div class="panel">
-      <div style="font-size:12px;font-weight:bold;color:#ef4444;margin-bottom:8px">&#x26BD; 試合（HomeTeam vs AwayTeam）</div>
+      <div style="font-size:12px;font-weight:bold;color:#ef4444;margin-bottom:8px">④ マッチカード（HomeTeam vs AwayTeam）</div>
       <div id="s2BoxMatch"></div>
       <div style="display:grid;grid-template-columns:1fr 28px;gap:4px;margin-top:6px;">
         <input class="inp" id="s2NewMatchLabel" placeholder="例: Real Madrid vs Real Betis" style="font-size:11px;padding:4px 6px;">
         <button class="btn btn-sm" id="s2BtnAddMatch" style="background:#ef4444;color:#fff;padding:4px 6px;">+</button>
-      </div>
-    </div>
-
-    <!-- 右: search -->
-    <div class="panel">
-      <div style="font-size:12px;font-weight:bold;color:#0ea5e9;margin-bottom:8px">&#x1F50D; ニュース検索ワード</div>
-      <div id="s2BoxSearch"></div>
-      <div style="display:grid;grid-template-columns:1fr 28px;gap:4px;margin-top:6px;">
-        <input class="inp" id="s2NewSearchLabel" placeholder="キーワード or URL (https://…)" style="font-size:11px;padding:4px 6px;">
-        <button class="btn btn-sm" id="s2BtnAddSearch" style="background:#0ea5e9;color:#fff;padding:4px 6px;">+</button>
       </div>
     </div>
   </div>
@@ -1138,6 +1237,8 @@ function getUI() {
     document.getElementById('s2BoxEntity').innerHTML = _renderEntityList(si.boxes.entity.items || []);
     document.getElementById('s2BoxMatch').innerHTML  = _renderMatchOrSearch('match',  si.boxes.match.items  || []);
     document.getElementById('s2BoxSearch').innerHTML = _renderMatchOrSearch('search', si.boxes.search.items || []);
+    const hitEl = document.getElementById('s2ArticleHits');
+    if (hitEl) hitEl.innerHTML = _renderArticleHits(si.articleHits || [], si.articleLearning || {});
   }
 
   function _renderEntityList(items) {
@@ -1185,6 +1286,33 @@ function getUI() {
 
   /* ── 🖼 画像候補展開（lazy load + 選択状態保存） ── */
   // s2.imageCache: { "<label>": { images, selection } }
+  function _renderArticleHits(items, learning) {
+    const meta = learning || {};
+    if (!items.length) {
+      return '<div style="font-size:11px;color:#94a3b8;padding:10px;text-align:center;background:#0f172a;border:1px dashed #334155;border-radius:6px;">AI提案後に、hit記事一覧がここに並びます</div>';
+    }
+    const summary = [
+      meta.articleCount ? ('hit ' + meta.articleCount + '件') : null,
+      meta.readCount ? ('熟読 ' + meta.readCount + '件') : null,
+      meta.queryCount ? ('検索 ' + meta.queryCount + '本') : null,
+    ].filter(Boolean).join(' / ');
+    return '<div style="font-size:10px;color:#94a3b8;margin-bottom:6px;">' + _esc(summary || '記事hit一覧') + '</div>'
+      + items.slice(0, 24).map(function(a, idx) {
+        const title = a.titleJa || a.title || a.label || a.url || 'Untitled';
+        const source = a.host || a.source || a.domain || a.site || '';
+        const q = a.snippet || a.query || a.searchQuery || '';
+        const score = a.hasFullText ? '熟読' : (a.sourceScore ? String(a.sourceScore) : '');
+        return '<div class="s2-row-wrap" style="border-bottom:1px solid #1a2540;">'
+          + '<div class="s2-row" onclick="s2PreviewArticle(' + idx + ')" style="display:grid;grid-template-columns:1fr auto;gap:8px;padding:7px 8px;align-items:center;cursor:pointer;font-size:11px;">'
+          + '<div style="min-width:0;">'
+          + '<div style="color:#e5e7eb;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _esc(title) + '</div>'
+          + '<div style="color:#94a3b8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _esc([source, q].filter(Boolean).join(' / ')) + '</div>'
+          + '</div>'
+          + '<span style="font-size:10px;color:#38bdf8;">' + _esc(score ? String(score) : ('#' + (idx + 1))) + '</span>'
+          + '</div></div>';
+      }).join('');
+  }
+
   window.APP.s2.imageCache = window.APP.s2.imageCache || {};
 
   window.s2ToggleImages = async function(btn, box, rawLabel) {
@@ -1235,14 +1363,35 @@ function getUI() {
       { key: 'x_by_time_away', title: '📷 X 時間 (Away)',     color: '#3b82f6' },
       { key: 'wikimedia',      title: '🌐 Wikimedia',          color: '#8b5cf6' },
     ];
+    groups.unshift({ key: 'gemini_selected', title: 'Gemini選別', color: '#22c55e' });
+    groups.unshift({ key: 'warehouse_adopted', title: 'X AI識別倉庫化', color: '#84cc16' });
+    groups.push({ key: 'manual', title: '手動追加', color: '#f59e0b' });
+    groups.push({ key: 'gemini_rejected', title: 'Gemini除外候補', color: '#64748b' });
+    const titleMap = {
+      warehouse_adopted: 'X AI識別倉庫化',
+      gemini_selected: 'Gemini選別',
+      stock: '選手公式/ストック',
+      x_by_name: 'X公式 マッチ度順',
+      x_by_time: 'X公式 最新順 Home',
+      x_by_time_away: 'X公式 最新順 Away',
+      wikimedia: 'Wikimedia',
+      manual: '手動追加',
+      gemini_rejected: 'Gemini除外候補',
+    };
     let html = '';
     let totalCount = 0;
+    if (images.warehouse_status) {
+      const st = images.warehouse_status;
+      html += '<div style="font-size:10px;color:' + (st.ok ? '#bef264' : '#fbbf24') + ';margin-bottom:5px;">'
+        + _esc(st.ok ? ('画像倉庫: ' + (st.checked || 0) + '件確認 / ' + (st.adopted || 0) + '件ストック化') : ('画像倉庫: ' + (st.reason || 'skip')))
+        + '</div>';
+    }
     for (const g of groups) {
       const arr = (images[g.key] || []).filter(Boolean);
       if (!arr.length) continue;
       totalCount += arr.length;
       html += '<div style="margin-bottom:6px;">'
-        + '<div style="font-size:10px;font-weight:bold;color:' + g.color + ';margin-bottom:3px;">' + g.title + ' (' + arr.length + ')</div>'
+        + '<div style="font-size:10px;font-weight:bold;color:' + g.color + ';margin-bottom:3px;">' + (titleMap[g.key] || g.title) + ' (' + arr.length + ')</div>'
         + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:4px;">'
         + arr.map(function(url) {
           const isSelected = selSet.has(url);
@@ -1325,6 +1474,13 @@ function getUI() {
   window.s2Preview = function(box, label) {
     const si = window.APP.s2.siData;
     const it = (si.boxes[box].items || []).find(x => x.label === label);
+    if (!it) return;
+    document.getElementById('s2Preview').textContent = JSON.stringify(it, null, 2);
+  };
+
+  window.s2PreviewArticle = function(idx) {
+    const items = window.APP.s2.siData?.articleHits || [];
+    const it = items[idx];
     if (!it) return;
     document.getElementById('s2Preview').textContent = JSON.stringify(it, null, 2);
   };
@@ -1514,7 +1670,8 @@ function getUI() {
           break;
         }
         // running の場合は継続
-        _msg('⏳ AI ラベル提案中...(' + (tries * interval / 1000) + 's)');
+        const phaseMsg = j.message || (j.step ? ('AI提案中: ' + j.step) : 'AI ラベル提案中');
+        _msg('⏳ ' + phaseMsg + '...(' + (tries * interval / 1000) + 's)');
       } catch (e) {
         if (String(e.message).includes('404')) {
           _clearSuggestJob(post.id);
