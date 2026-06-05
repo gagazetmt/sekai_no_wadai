@@ -96,6 +96,19 @@ function extractYahooArticleBody(html) {
   return cleanYahooText(meta);
 }
 
+function _isYahooComment(text) {
+  // 除外: UI系テキスト
+  if (/^(コメント|返信|共感した|なるほど|うーん|ログイン|表示順|投稿|違反報告|もっと見る)/.test(text)) return false;
+  if (/Yahoo!ニュース|利用規約|プライバシー|ヘルプ|ニュース一覧/.test(text)) return false;
+  // 除外: 関連記事タイトル — 文末に「。！？」がなく短い or 「…」が途中に入って文末記号なし
+  const hasSentenceEnd = /[。！？]/.test(text);
+  const hasMidEllipsis = /…/.test(text) && !hasSentenceEnd;
+  if (hasMidEllipsis) return false;
+  // 除外: 60字未満かつ文末記号なし → ニュース見出しの典型
+  if (text.length < 60 && !hasSentenceEnd) return false;
+  return true;
+}
+
 function extractYahooComments(html, limit = 12) {
   const $ = cheerio.load(html);
   $('script, style, noscript, svg, nav, header, footer, aside').remove();
@@ -114,8 +127,7 @@ function extractYahooComments(html, limit = 12) {
       const text = cleanYahooText($(el).text());
       if (text.length < 24 || text.length > 700) return;
       if (!/[ぁ-んァ-ン一-龥]/.test(text)) return;
-      if (/^(コメント|返信|共感した|なるほど|うーん|ログイン|表示順|投稿|違反報告|もっと見る)/.test(text)) return;
-      if (/Yahoo!ニュース|利用規約|プライバシー|ヘルプ|ニュース一覧/.test(text)) return;
+      if (!_isYahooComment(text)) return;
       candidates.push(text);
     });
     if (candidates.length >= limit) break;
