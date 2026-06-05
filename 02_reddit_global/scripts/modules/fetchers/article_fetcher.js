@@ -202,12 +202,30 @@ async function fetchViaJinaReader(url) {
 }
 
 // 単一URLから記事本文を取得
+// 優先順: Yahoo専用 → curl-cffi+Webshare → 素axios → Jina
 async function fetchArticleContent(url) {
   if (!url) return { ok: false };
+
+  // Yahoo Newsは専用ルート（curl-cffi + JP proxy + コメント取得）
   if (isYahooNewsUrl(url)) {
     const yahoo = await fetchYahooNewsArticle(url);
     if (yahoo.ok) return yahoo;
   }
+
+  // curl-cffi + Webshare JP proxy（Chrome131 TLS指紋でCF突破）
+  try {
+    const r = await curlGet(url, {
+      referer: 'https://www.google.com/',
+      headers: { 'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8' },
+      timeout: 15,
+    });
+    if (r.ok && r.body) {
+      const text = normalizeArticleText(extractText(String(r.body)));
+      if (text.length >= 160) return { ok: true, url, content: text.slice(0, MAX_CHARS), method: 'curl_cffi' };
+    }
+  } catch (_) {}
+
+  // フォールバック①: 素axios（プロキシなし・VPS直）
   try {
     const res = await axios.get(url, {
       headers:      HEADERS,
@@ -217,9 +235,9 @@ async function fetchArticleContent(url) {
     });
     const text = normalizeArticleText(extractText(String(res.data)));
     if (text.length >= 160) return { ok: true, url, content: text.slice(0, MAX_CHARS), method: 'direct' };
-  } catch (_) {
-    // fall through to reader fallback
-  }
+  } catch (_) {}
+
+  // フォールバック②: Jina Reader
   return await fetchViaJinaReader(url);
 }
 
