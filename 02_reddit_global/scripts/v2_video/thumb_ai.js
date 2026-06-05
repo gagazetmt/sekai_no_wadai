@@ -190,9 +190,10 @@ function _imagenApiKeys() {
   return all.length ? all : null;
 }
 
-async function _generateImagen4({ prompt, count, aspectRatio, outputDir }) {
+async function _generateImagen4({ prompt, count, aspectRatio, outputDir, model: modelOverride }) {
   const keys = _imagenApiKeys();
   if (!keys) throw new Error('GEMINI_API_KEY not set in .env');
+  const useModel = modelOverride || IMAGEN_MODEL;
 
   const body = {
     instances: [{ prompt }],
@@ -202,7 +203,7 @@ async function _generateImagen4({ prompt, count, aspectRatio, outputDir }) {
   let res;
   let lastErr = '';
   for (const key of keys) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGEN_MODEL}:predict?key=${key}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModel}:predict?key=${key}`;
     try {
       res = await axios.post(url, body, {
         headers: { 'Content-Type': 'application/json' },
@@ -361,6 +362,42 @@ async function _generateVertexImagen4({ prompt, count, aspectRatio, outputDir, m
 }
 
 /**
+ * OpenAI GPT-image-1 で画像生成
+ * quality: 'low'($0.011) / 'medium'($0.042) / 'high'($0.167)
+ */
+async function _generateGptImage1({ prompt, count, quality = 'medium', outputDir }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not set in .env');
+  fs.mkdirSync(outputDir, { recursive: true });
+  const results = [];
+  // GPT-image-1は1回のリクエストでn枚指定可能
+  const res = await axios.post('https://api.openai.com/v1/images/generations', {
+    model: 'gpt-image-1',
+    prompt,
+    n: count,
+    size: '1536x1024',  // 横型 16:9相当
+    quality,
+    response_format: 'b64_json',
+  }, {
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    timeout: 120000,
+    validateStatus: () => true,
+  });
+  if (res.status !== 200) {
+    throw new Error(`GPT-image-1 API ${res.status}: ${JSON.stringify(res.data).slice(0, 400)}`);
+  }
+  const ts = Date.now();
+  (res.data?.data || []).forEach((item, i) => {
+    if (!item.b64_json) return;
+    const filename = `gptimg1_${quality}_${ts}_${i}.png`;
+    const fullPath = path.join(outputDir, filename);
+    fs.writeFileSync(fullPath, Buffer.from(item.b64_json, 'base64'));
+    results.push({ file: filename, path: fullPath, provider: 'gpt-image-1', model: `gpt-image-1-${quality}` });
+  });
+  return results;
+}
+
+/**
  * fal.ai 経由で生成（Seedream / Flux など）— 将来実装
  */
 async function _generateFal(_opts) {
@@ -392,6 +429,17 @@ async function generateThumb(opts) {
   switch (provider) {
     case 'imagen4':
       return await _generateImagen4({ prompt, count, aspectRatio, outputDir });
+    case 'imagen4-fast':
+      return await _generateImagen4({ prompt, count, aspectRatio, outputDir, model: 'imagen-4.0-fast-generate-001' });
+    case 'imagen4-ultra':
+      return await _generateImagen4({ prompt, count, aspectRatio, outputDir, model: 'imagen-4.0-ultra-generate-001' });
+    case 'gpt-image-1':
+    case 'gpt-image-1-low':
+    case 'gpt-image-1-medium':
+    case 'gpt-image-1-high': {
+      const q = provider === 'gpt-image-1-low' ? 'low' : provider === 'gpt-image-1-high' ? 'high' : 'medium';
+      return await _generateGptImage1({ prompt, count, quality: q, outputDir });
+    }
     case 'vertex/imagen4':
     case 'vertex/imagen4-ultra':
     case 'vertex/imagen4-fast':
