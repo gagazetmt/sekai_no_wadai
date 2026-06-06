@@ -24,6 +24,7 @@ const THUMB_OUT_BASE  = path.join(ROOT_DIR, 'data', 'v2_thumbs');
 // 2026-05-16: postId に '/' 等を含む Reddit 形式に対応するため、 step4 modulesPath と同様にサニタイズ
 //   未サニタイズだと '/r/soccer/comments/.../' でパスが壊れて 404
 const _sanitizePostId = (s) => (s || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_');
+const _thumbPostId = (s) => String(s || '_unsorted').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
 const META_FILE       = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_step5.json');
 const SI_DATA_FILE    = (postId) => path.join(ROOT_DIR, 'data', 'si_data', _sanitizePostId(postId) + '.json');
 const MODULES_FILE    = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_modules.json');
@@ -138,7 +139,7 @@ router.post('/v5/generate-thumb', async (req, res) => {
   if (!postId) return res.status(400).json({ error: 'postId required' });
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
   try {
-    const safePostId = String(postId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+    const safePostId = _thumbPostId(postId);
     const outputDir = path.join(THUMB_OUT_BASE, safePostId);
     const results = await thumbAi.generateThumb({
       provider:    provider    || 'imagen4',
@@ -202,7 +203,7 @@ router.post('/v5/auto-thumb', async (req, res) => {
   if (!postId) return res.status(400).json({ error: 'postId required' });
   try {
     const t0 = Date.now();
-    const safePostId = _sanitizePostId(postId);
+    const safePostId = _thumbPostId(postId);
     const outputDir  = path.join(THUMB_OUT_BASE, safePostId);
     fs.mkdirSync(outputDir, { recursive: true });
 
@@ -280,7 +281,7 @@ router.post('/v5/upload-thumb', (req, res) => {
 
   const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
   const buffer = Buffer.from(m[2], 'base64');
-  const safePostId = String(postId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+  const safePostId = _thumbPostId(postId);
   const outDir = path.join(THUMB_OUT_BASE, safePostId);
   fs.mkdirSync(outDir, { recursive: true });
   const safeName = String(filename || 'external')
@@ -310,7 +311,7 @@ router.post('/v5/upload-thumb', (req, res) => {
 // ════════════════════════════════════════════════════════════
 router.get('/v5/list-saved', (req, res) => {
   const { postId } = req.query;
-  const safePostId = String(postId || '_unsorted').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+  const safePostId = _thumbPostId(postId);
   const dir = path.join(THUMB_OUT_BASE, safePostId);
   if (!fs.existsSync(dir)) return res.json({ files: [] });
   const files = fs.readdirSync(dir)
@@ -326,7 +327,7 @@ router.get('/v5/list-saved', (req, res) => {
 router.delete('/v5/delete-saved', (req, res) => {
   const { postId, file } = req.query;
   if (!postId || !file) return res.status(400).json({ error: 'missing params' });
-  const safePostId = String(postId).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+  const safePostId = _thumbPostId(postId);
   const safeFile = path.basename(String(file));
   const target = path.join(THUMB_OUT_BASE, safePostId, safeFile);
   try {
@@ -359,6 +360,209 @@ router.get('/v5/case-images', (req, res) => {
   res.json({ images: out });
 });
 
+// ─── ① 顔スコアリング ───────────────────────────────────────────
+// images/{postId}/ 以下の全画像を Gemini Vision で採点し、顔スコア順に返す
+router.post('/v5/face-score', async (req, res) => {
+  const { postId } = req.body || {};
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+
+  const imgDir = path.join(ROOT_DIR, 'images', _sanitizePostId(postId));
+  if (!fs.existsSync(imgDir)) return res.json({ images: [] });
+
+  // 再帰的に画像収集（最大 24 枚）
+  const candidates = [];
+  const walk = (dir) => {
+    if (candidates.length >= 24) return;
+    let ents;
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const e of ents) {
+      if (candidates.length >= 24) break;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full);
+      else if (/\.(jpe?g|png|webp)$/i.test(e.name)) candidates.push(full);
+    }
+  };
+  walk(imgDir);
+  if (!candidates.length) return res.json({ images: [] });
+
+  const scorePrompt = `この画像を分析してください。JSONのみで返答（前置き不要）:
+{"score":0-10,"faceVisible":true/false,"faceSize":"large/medium/small/none","clarity":"sharp/blurry/none","expression":"strong/neutral/unclear/none"}
+scoreの基準:
+10=顔が大きく鮮明で表情が強い 7-9=顔が鮮明で表情あり 4-6=顔は見えるが小さいか不鮮明 1-3=辛うじて顔あり 0=顔なし/後ろ姿/集合写真`;
+
+  const scoreOne = async (imgPath) => {
+    try {
+      const mimeType = /\.png$/i.test(imgPath) ? 'image/png' : 'image/jpeg';
+      const data = fs.readFileSync(imgPath).toString('base64');
+      const r = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        { contents: [{ parts: [{ text: scorePrompt }, { inlineData: { mimeType, data } }] }] },
+        { timeout: 20000, validateStatus: () => true }
+      );
+      const text = r.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const m = text.match(/\{[\s\S]*\}/);
+      const parsed = m ? JSON.parse(m[0]) : {};
+      const rel = path.relative(ROOT_DIR, imgPath).replace(/\\/g, '/');
+      return { url: '/' + rel, localPath: imgPath, score: parsed.score || 0, faceVisible: !!parsed.faceVisible, faceSize: parsed.faceSize, clarity: parsed.clarity, expression: parsed.expression };
+    } catch (_) {
+      const rel = path.relative(ROOT_DIR, imgPath).replace(/\\/g, '/');
+      return { url: '/' + rel, localPath: imgPath, score: 0, faceVisible: false };
+    }
+  };
+
+  // 並列スコアリング（最大 6 並列）
+  const results = [];
+  for (let i = 0; i < candidates.length; i += 6) {
+    const batch = candidates.slice(i, i + 6);
+    results.push(...await Promise.all(batch.map(scoreOne)));
+  }
+  results.sort((a, b) => b.score - a.score);
+  res.json({ images: results });
+});
+
+// ─── ② 顔画像 × シーン説明 → GPT-image-1 で背景生成 ──────────────
+// 固有名詞を使わず「この人物が〜」参照で celebrity フィルター回避
+router.post('/v5/gen-bg-from-face', async (req, res) => {
+  const { localPath, sceneDesc, postId } = req.body || {};
+  if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not set' });
+
+  const absPath = path.isAbsolute(localPath) ? localPath : path.join(ROOT_DIR, localPath.replace(/^\//, ''));
+  if (!fs.existsSync(absPath)) return res.status(400).json({ error: 'image not found: ' + absPath });
+
+  const prompt = `この人物が、${sceneDesc}。YouTubeサムネイル用の横型写真風画像。プロのスポーツカメラマンが撮影したような臨場感と迫力。16:9構図。人物を右側か中央に配置し、左側にテキスト用の暗いスペースを確保。背景はドラマティックに。`;
+
+  const FormData = require('form-data');
+  const form = new FormData();
+  form.append('model', 'gpt-image-1');
+  form.append('image', fs.createReadStream(absPath), { filename: 'face.jpg', contentType: /\.png$/i.test(absPath) ? 'image/png' : 'image/jpeg' });
+  form.append('prompt', prompt);
+  form.append('n', '1');
+  form.append('size', '1536x1024');
+
+  let genRes;
+  try {
+    genRes = await axios.post('https://api.openai.com/v1/images/edits', form, {
+      headers: { 'Authorization': `Bearer ${apiKey}`, ...form.getHeaders() },
+      timeout: 120000,
+      validateStatus: () => true,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: 'GPT-image-1 network error: ' + e.message });
+  }
+
+  if (genRes.status !== 200) {
+    return res.status(500).json({ error: `GPT-image-1 ${genRes.status}: ${JSON.stringify(genRes.data).slice(0, 400)}` });
+  }
+
+  // b64_json または url から保存
+  const item = (genRes.data?.data || [])[0];
+  if (!item) return res.status(500).json({ error: 'no image returned' });
+
+  const safePostId = _thumbPostId(postId || 'genbg');
+  const outDir = path.join(THUMB_OUT_BASE, safePostId);
+  fs.mkdirSync(outDir, { recursive: true });
+  const ts = Date.now();
+  const outFile = `genbg_${ts}.png`;
+  const outPath = path.join(outDir, outFile);
+
+  if (item.b64_json) {
+    fs.writeFileSync(outPath, Buffer.from(item.b64_json, 'base64'));
+  } else if (item.url) {
+    const dl = await axios.get(item.url, { responseType: 'arraybuffer', timeout: 30000 });
+    fs.writeFileSync(outPath, dl.data);
+  } else {
+    return res.status(500).json({ error: 'no b64_json or url in response' });
+  }
+
+  res.json({ ok: true, url: `/v2_thumbs/${safePostId}/${outFile}`, localPath: outPath });
+});
+
+// v2_thumbs/ 全体を再帰的に走査してギャラリー一覧を返す
+router.get('/v5/gallery', (req, res) => {
+  const images = [];
+  const walk = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        if (ent.name === '_editor') continue;   // エディター本体はスキップ
+        walk(full);
+      } else if (/\.(png|jpe?g|webp)$/i.test(ent.name)) {
+        const rel = path.relative(THUMB_OUT_BASE, full).replace(/\\/g, '/');
+        const stat = fs.statSync(full);
+        const dirName = path.basename(path.dirname(full));
+        images.push({ url: '/v2_thumbs/' + rel, file: ent.name, dir: dirName, mtime: stat.mtimeMs });
+      }
+    }
+  };
+  walk(THUMB_OUT_BASE);
+  images.sort((a, b) => b.mtime - a.mtime);
+  res.json({ images });
+});
+
+// Gemini Vision で背景を読み、商業フォントプリセットを選ぶ
+router.post('/v5/analyze-font-layer', async (req, res) => {
+  const { imageDataUrl, presets } = req.body || {};
+  if (!imageDataUrl) return res.status(400).json({ error: 'imageDataUrl required' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+
+  const m = String(imageDataUrl).match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: 'invalid imageDataUrl' });
+  const mime = m[1] === 'jpg' ? 'image/jpeg' : `image/${m[1]}`;
+  const safePresets = Array.isArray(presets) ? presets.slice(0, 30) : [];
+
+  try {
+    const prompt = [
+      'You are selecting a Japanese YouTube soccer thumbnail typography preset.',
+      'Analyze the image for base colors, bright/dark regions, faces, logos/crests, key objects, and safe text zones.',
+      'Choose exactly one preset id from the provided list. Do not copy the style of any specific channel; use only general composition principles.',
+      'Return JSON only:',
+      '{"baseTone":"dark|bright|blue|green|gray|red","safeZone":"bottom_left|bottom_right|top_left|top_right|center_left|center_right","recommendedPresetId":"...","reason":"short Japanese reason"}',
+      '',
+      'Preset candidates:',
+      JSON.stringify(safePresets),
+    ].join('\n');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const r = await axios.post(url, {
+      contents: [{
+        parts: [
+          { text: prompt },
+          { inline_data: { mime_type: mime, data: m[2] } },
+        ],
+      }],
+      generationConfig: { maxOutputTokens: 400, thinkingConfig: { thinkingBudget: 0 } },
+    }, { timeout: 30000 });
+
+    const usage = r.data?.usageMetadata || {};
+    costTracker.record({
+      label: 'thumb_font_layer_analyze',
+      provider: 'gemini',
+      inputTokens: usage.promptTokenCount || 0,
+      outputTokens: usage.candidatesTokenCount || 0,
+    });
+
+    const raw = r.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const jm = raw.match(/\{[\s\S]*\}/);
+    if (!jm) throw new Error('Gemini JSON parse failed: ' + raw.slice(0, 160));
+    const parsed = JSON.parse(jm[0]);
+    const ids = new Set(safePresets.map(p => p.id));
+    if (!ids.has(parsed.recommendedPresetId)) {
+      parsed.recommendedPresetId = safePresets[0]?.id || '';
+      parsed.reason = (parsed.reason || '') + ' / fallback preset';
+    }
+    res.json({ ok: true, ...parsed });
+  } catch (e) {
+    console.error('[thumb-font-layer/analyze]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ════════════════════════════════════════════════════════════
 // UI（AI生成タブ + サムネエディタータブ）
 // ════════════════════════════════════════════════════════════
@@ -373,8 +577,9 @@ function getUI() {
 
   <!-- サブタブ -->
   <div id="s5-subnav" style="display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border);">
-    <button onclick="s5GoSub('ai')"     id="s5sub-ai"     class="s5sub active">🤖 AI生成（Imagen 4）</button>
-    <button onclick="s5GoSub('editor')" id="s5sub-editor" class="s5sub">🎨 サムネエディター</button>
+    <button onclick="s5GoSub('fontlayer')" id="s5sub-fontlayer" class="s5sub active">✨ 顔→背景→文字</button>
+    <button onclick="s5GoSub('ai')"        id="s5sub-ai"        class="s5sub">🤖 AI生成（Imagen 4）</button>
+    <button onclick="s5GoSub('editor')"    id="s5sub-editor"    class="s5sub">🎨 サムネエディター</button>
   </div>
   <style>
     .s5sub { background:transparent; color:var(--muted); border:0; padding:9px 14px; cursor:pointer;
@@ -396,8 +601,113 @@ function getUI() {
     .s5thumb-card.selected { border-color: var(--c); box-shadow: 0 0 12px rgba(255,77,77,.4); }
   </style>
 
+  <!-- ───── ✨ 顔→背景→文字 ───── -->
+  <div id="s5pane-fontlayer" class="s5pane">
+
+    <!-- ① 顔選出 -->
+    <div class="s5card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <strong style="color:var(--c); font-size:12px;">① 顔選出（Gemini Vision）</strong>
+        <button onclick="s5FlLoadFaces()" class="s5btn" id="s5fl-face-btn">スコアリング実行</button>
+        <span id="s5fl-face-status" style="font-size:11px; color:var(--muted);"></span>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.5;">
+        X取得済み画像の中から、人物の顔が最も鮮明に映っているものをAIが自動選出します。<br>
+        案件ID は自動入力されます。
+      </div>
+      <input type="hidden" id="s5fl-postid">
+      <div id="s5fl-face-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px;"></div>
+    </div>
+
+    <!-- ② 背景生成 -->
+    <div class="s5card" id="s5fl-genbg-card" style="display:none;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+        <strong style="color:var(--c); font-size:12px;">② 背景生成（GPT-image-1）</strong>
+        <button onclick="s5FlGenBg()" class="s5btn" id="s5fl-gen-btn">背景生成</button>
+        <span id="s5fl-gen-status" style="font-size:11px; color:var(--muted);"></span>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.5;">
+        選んだ顔画像を参照して「この人物が〜」形式でシーンを生成します。<br>
+        <b>固有名詞不要</b> → 選手名なしでもcelebrityフィルターを回避できます。
+      </div>
+      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:10px; color:var(--muted); margin-bottom:4px;">選択中の顔画像</div>
+          <img id="s5fl-selected-img" style="width:160px; border-radius:6px; border:2px solid var(--c);" alt="">
+        </div>
+        <div style="flex:1; min-width:200px;">
+          <label class="s5label">シーン説明（固有名詞なし）</label>
+          <input type="text" id="s5fl-scene" class="s5input" placeholder="スタンフォードブリッジで選手に情熱的に指示している">
+          <div style="font-size:10px; color:var(--muted); margin-top:4px;">例: ピッチで両手を広げてゴールを喜んでいる / トンネルを出てくる場面</div>
+        </div>
+      </div>
+      <div id="s5fl-bg-preview" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- ③ フォントレイヤー -->
+    <div class="s5card" id="s5fl-text-card" style="display:none;">
+      <div style="margin-bottom:10px;">
+        <strong style="color:var(--c); font-size:12px;">③ フォントレイヤー（速報サッカー式）</strong>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+        <div>
+          <label class="s5label">コンテキスト行（小・上）</label>
+          <input type="text" id="s5fl-ctx" class="s5input" placeholder="最終節の死闘！">
+        </div>
+        <div>
+          <label class="s5label">バッジラベル 任意</label>
+          <input type="text" id="s5fl-badge" class="s5input" placeholder="降格圏内">
+        </div>
+        <div>
+          <label class="s5label">メイン文字（大）※必須</label>
+          <input type="text" id="s5fl-main" class="s5input" placeholder="トッテナム、生き残れるか。">
+        </div>
+        <div>
+          <label class="s5label">パンチライン（大・下）任意</label>
+          <input type="text" id="s5fl-punch" class="s5input" placeholder="残留シナリオは！？">
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:160px;">
+          <label class="s5label">スタイル</label>
+          <select id="s5fl-style" class="s5input">
+            <option value="gold">金文字（移籍・監督就任）</option>
+            <option value="fire">炎文字（優勝争い・クライマックス）</option>
+            <option value="white">白×黒（残留争い・分析）</option>
+            <option value="yellow">黄×白（代表・選手フィーチャー）</option>
+          </select>
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label class="s5label">テキスト位置</label>
+          <select id="s5fl-pos" class="s5input">
+            <option value="left">左寄せ（選手1人・監督就任）</option>
+            <option value="center">センター（試合プレビュー）</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="s5FlOpenEditor()" class="s5btn" style="width:100%; font-size:14px; padding:12px;">
+        🎨 エディターで仕上げる →
+      </button>
+      <div style="font-size:10px; color:var(--muted); margin-top:6px; text-align:center;">
+        背景＋フォントレイヤー設定を引き継いでエディターが開きます
+      </div>
+    </div>
+  </div>
+
   <!-- ───── 🤖 AI 生成 ───── -->
-  <div id="s5pane-ai" class="s5pane">
+  <div id="s5pane-ai" class="s5pane" style="display:none;">
+
+    <div class="s5card">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
+        <strong style="color:var(--c); font-size:12px;">全自動</strong>
+        <button onclick="s5AutoThumb()" class="s5btn" id="s5-auto-btn">AIで2枚生成して自動選択</button>
+        <span id="s5-auto-status" style="font-size:11px; color:var(--muted);"></span>
+      </div>
+      <div style="font-size:11px; color:var(--muted); line-height:1.6;">
+        題材分類、短文抽出、プロンプト生成、Imagen 4 生成、Gemini Vision 選定まで一括実行。
+      </div>
+    </div>
+
     <!-- ステップ 1: 題材分類 -->
     <div class="s5card">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
@@ -440,6 +750,18 @@ function getUI() {
     <div class="s5card">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
         <strong style="color:var(--c); font-size:12px;">④ Imagen 4 で生成</strong>
+        <label style="font-size:11px; color:var(--muted);">モデル:</label>
+        <select id="s5-provider" class="s5input" style="width:auto;">
+          <option value="imagen4" selected>Imagen 4</option>
+          <option value="imagen4-fast">Imagen 4 Fast</option>
+          <option value="imagen4-ultra">Imagen 4 Ultra</option>
+          <option value="gpt-image-1-low">GPT-image-1 Low</option>
+          <option value="gpt-image-1-medium">GPT-image-1 Medium</option>
+          <option value="gpt-image-1-high">GPT-image-1 High</option>
+          <option value="vertex/imagen4">Vertex Imagen 4</option>
+          <option value="vertex/imagen4-fast">Vertex Imagen 4 Fast</option>
+          <option value="vertex/imagen4-ultra">Vertex Imagen 4 Ultra</option>
+        </select>
         <label style="font-size:11px; color:var(--muted);">枚数:</label>
         <select id="s5-count" class="s5input" style="width:auto;">
           <option value="3">3枚</option>
@@ -495,19 +817,25 @@ function getUI() {
   if (window.__s5Init) return; window.__s5Init = true;
 
   const STATE = {
-    sub: 'ai',
-    selectedThumb: null,  // file 名
-    generated: [],        // 直近生成バッチの thumbs
+    sub: 'fontlayer',
+    selectedThumb: null,
+    generated: [],
     editorLoaded: false,
   };
 
   function _e(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function postId() { return window.APP && window.APP.selected ? window.APP.selected.id : null; }
   function postTitle() { return window.APP && window.APP.selected ? (window.APP.selected.title || '') : ''; }
+  function setS5Status(id, text, color) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (color) el.style.color = color;
+  }
 
   window.s5GoSub = function(name) {
     STATE.sub = name;
-    ['ai','editor'].forEach(n => {
+    ['fontlayer','ai','editor'].forEach(n => {
       const btn = document.getElementById('s5sub-' + n);
       const pane = document.getElementById('s5pane-' + n);
       if (btn) btn.className = 's5sub' + (n === name ? ' active' : '');
@@ -516,6 +844,133 @@ function getUI() {
     if (name === 'editor' && !STATE.editorLoaded) {
       document.getElementById('s5-editor-iframe').src = '/v2_thumbs/_editor/';
       STATE.editorLoaded = true;
+    }
+    if (name === 'fontlayer') {
+      const id = postId();
+      if (id) document.getElementById('s5fl-postid').value = id;
+    }
+  };
+
+  // ═══ ✨ 顔→背景→文字 タブ ═══
+  let _s5FlSelectedPath = null;
+  let _s5FlBgUrl = null;
+
+  window.s5FlLoadFaces = async function() {
+    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
+    document.getElementById('s5fl-postid').value = id;
+    const grid = document.getElementById('s5fl-face-grid');
+    const st = document.getElementById('s5fl-face-status');
+    const btn = document.getElementById('s5fl-face-btn');
+    grid.innerHTML = '';
+    document.getElementById('s5fl-genbg-card').style.display = 'none';
+    document.getElementById('s5fl-text-card').style.display = 'none';
+    _s5FlSelectedPath = null;
+    btn.disabled = true;
+    st.textContent = '⏳ Gemini Vision でスコアリング中...（30〜60秒）';
+    try {
+      const r = await window.fetchJson('/api/v5/face-score', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ postId: id }),
+      });
+      const imgs = r.images || [];
+      if (!imgs.length) { st.textContent = '画像なし（images/{postId}/ を確認）'; return; }
+      st.textContent = imgs.length + '枚スコア完了 — 顔を選んでね';
+      grid.innerHTML = imgs.map(img => \`
+        <div onclick="s5FlSelectFace('\${img.localPath}','\${img.url}')"
+             style="cursor:pointer;border:2px solid var(--border);border-radius:6px;overflow:hidden;background:#000;aspect-ratio:1/1;position:relative;transition:border-color .15s;"
+             onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
+          <img src="\${img.url}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
+          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.75);font-size:10px;color:#fff;padding:2px 5px;">
+            ★\${img.score} \${img.faceSize||''} \${img.clarity||''}
+          </div>
+        </div>
+      \`).join('');
+    } catch(e) {
+      st.textContent = 'エラー: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  window.s5FlSelectFace = function(localPath, url) {
+    _s5FlSelectedPath = localPath;
+    document.getElementById('s5fl-selected-img').src = url;
+    document.getElementById('s5fl-genbg-card').style.display = '';
+    document.getElementById('s5fl-face-status').textContent = '✅ 選択済み → シーンを入力して背景生成へ';
+  };
+
+  window.s5FlGenBg = async function() {
+    if (!_s5FlSelectedPath) { alert('顔画像を選んでね'); return; }
+    const scene = document.getElementById('s5fl-scene').value.trim();
+    if (!scene) { alert('シーン説明を入力してね'); return; }
+    const id = postId() || 'genbg';
+    const btn = document.getElementById('s5fl-gen-btn');
+    const st = document.getElementById('s5fl-gen-status');
+    const preview = document.getElementById('s5fl-bg-preview');
+    btn.disabled = true;
+    st.textContent = '⏳ GPT-image-1 で生成中...（30〜60秒）';
+    preview.innerHTML = '';
+    try {
+      const r = await window.fetchJson('/api/v5/gen-bg-from-face', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ localPath: _s5FlSelectedPath, sceneDesc: scene, postId: id }),
+      });
+      _s5FlBgUrl = r.url;
+      preview.innerHTML = \`<img src="\${r.url}" style="width:100%;border-radius:6px;border:2px solid var(--c);margin-top:8px;" alt="">\`;
+      st.textContent = '✅ 背景生成完了！→ フォントレイヤーを設定してエディターへ';
+      document.getElementById('s5fl-text-card').style.display = '';
+      document.getElementById('s5fl-text-card').scrollIntoView({ behavior:'smooth', block:'start' });
+    } catch(e) {
+      st.textContent = 'エラー: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  window.s5FlOpenEditor = function() {
+    const main = document.getElementById('s5fl-main').value.trim();
+    if (!main) { alert('メイン文字を入力してね'); return; }
+    const params = new URLSearchParams();
+    if (_s5FlBgUrl) params.set('bg', _s5FlBgUrl);
+    const ctx   = document.getElementById('s5fl-ctx').value.trim();
+    const punch = document.getElementById('s5fl-punch').value.trim();
+    const badge = document.getElementById('s5fl-badge').value.trim();
+    const style = document.getElementById('s5fl-style').value;
+    const pos   = document.getElementById('s5fl-pos').value;
+    if (ctx)   params.set('ctx',   ctx);
+               params.set('main',  main);
+    if (punch) params.set('punch', punch);
+    if (badge) params.set('badge', badge);
+               params.set('style', style);
+               params.set('pos',   pos);
+    window.open('/v2_thumbs/_editor/?' + params.toString(), '_blank');
+  };
+
+  // ═══ 全自動: 分類 → 文字 → プロンプト → 2枚生成 → AI選定 ═══
+  window.s5AutoThumb = async function() {
+    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
+    const btn = document.getElementById('s5-auto-btn');
+    btn.disabled = true;
+    setS5Status('s5-auto-status', '⏳ 全自動生成中（60〜120秒）...', 'var(--muted)');
+    try {
+      const r = await window.fetchJson('/api/v5/auto-thumb', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ postId: id }),
+      });
+      if (r.theme) document.getElementById('s5-theme').value = r.theme;
+      if (r.topText) document.getElementById('s5-top-text').value = r.topText;
+      if (r.bottomText) document.getElementById('s5-bottom-text').value = r.bottomText;
+      if (r.prompt) document.getElementById('s5-prompt').value = r.prompt;
+      STATE.generated = r.all || [];
+      STATE.selectedThumb = r.selected && r.selected.file ? r.selected.file : null;
+      renderGenerated();
+      await s5LoadSaved();
+      setS5Status('s5-selected-status', STATE.selectedThumb ? '✅ 選択中: ' + STATE.selectedThumb : '', 'var(--success)');
+      setS5Status('s5-auto-status', '✅ 自動選択完了: ' + (STATE.selectedThumb || '生成済み'), 'var(--success)');
+    } catch (e) {
+      setS5Status('s5-auto-status', '❌ ' + e.message, 'var(--c)');
+    } finally {
+      btn.disabled = false;
     }
   };
 
@@ -593,9 +1048,8 @@ function getUI() {
   window.s5ExtractThumbText = async function() {
     const id = postId(); if (!id) { alert('案件を選択してね'); return; }
     const btn = document.getElementById('s5-extract-btn');
-    btn.disabled = true;
-    document.getElementById('s5-extract-status').textContent = '⏳ オープニングから抽出中…';
-    document.getElementById('s5-extract-status').style.color = 'var(--muted)';
+    if (btn) btn.disabled = true;
+    setS5Status('s5-extract-suggest-status', '⏳ オープニングから抽出中…', 'var(--muted)');
     try {
       const r = await window.fetchJson('/api/v5/extract-thumb-text', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -604,13 +1058,11 @@ function getUI() {
       if (r.error) throw new Error(r.error);
       if (r.topText)    document.getElementById('s5-top-text').value    = r.topText;
       if (r.bottomText) document.getElementById('s5-bottom-text').value = r.bottomText;
-      document.getElementById('s5-extract-status').textContent = '✅ 抽出完了（編集可）';
-      document.getElementById('s5-extract-status').style.color = 'var(--success)';
+      setS5Status('s5-extract-suggest-status', '✅ 抽出完了（編集可）', 'var(--success)');
     } catch (e) {
-      document.getElementById('s5-extract-status').textContent = '❌ ' + e.message;
-      document.getElementById('s5-extract-status').style.color = 'var(--c)';
+      setS5Status('s5-extract-suggest-status', '❌ ' + e.message, 'var(--c)');
     } finally {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
   };
 
@@ -624,21 +1076,19 @@ function getUI() {
       if (!confirm('上端・下端の日本語テキストが空だよ。それでも進める？')) return;
     }
     const btn = document.getElementById('s5-suggest-btn');
-    btn.disabled = true;
-    document.getElementById('s5-prompt-status').textContent = '⏳ DeepSeek 思考中…';
+    if (btn) btn.disabled = true;
+    setS5Status('s5-extract-suggest-status', '⏳ DeepSeek 思考中…', 'var(--muted)');
     try {
       const r = await window.fetchJson('/api/v5/suggest-thumb-prompt', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ postId: id, theme, topText, bottomText, title: postTitle() }),
       });
       document.getElementById('s5-prompt').value = r.prompt;
-      document.getElementById('s5-prompt-status').textContent = '✅ プロンプト生成完了（編集可）';
-      document.getElementById('s5-prompt-status').style.color = 'var(--success)';
+      setS5Status('s5-extract-suggest-status', '✅ プロンプト生成完了（編集可）', 'var(--success)');
     } catch (e) {
-      document.getElementById('s5-prompt-status').textContent = '❌ ' + e.message;
-      document.getElementById('s5-prompt-status').style.color = 'var(--c)';
+      setS5Status('s5-extract-suggest-status', '❌ ' + e.message, 'var(--c)');
     } finally {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
   };
 
@@ -647,6 +1097,7 @@ function getUI() {
     const id = postId(); if (!id) { alert('案件を選択してね'); return; }
     const prompt = document.getElementById('s5-prompt').value.trim();
     if (!prompt) { alert('プロンプトを入力してね（③ で提案ボタン押すか手動入力）'); return; }
+    const provider = document.getElementById('s5-provider').value || 'imagen4';
     const count = parseInt(document.getElementById('s5-count').value, 10) || 5;
     const btn = document.getElementById('s5-gen-btn');
     btn.disabled = true;
@@ -655,7 +1106,7 @@ function getUI() {
     try {
       const r = await window.fetchJson('/api/v5/generate-thumb', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ postId: id, prompt, count }),
+        body: JSON.stringify({ postId: id, prompt, count, provider }),
       });
       STATE.generated = r.thumbs || [];
       renderGenerated();
@@ -690,9 +1141,7 @@ function getUI() {
     const t = document.getElementById('s5-prompt').value.trim();
     if (!t) { alert('プロンプトが空だよ。先に「リネカ＋DeepSeekで提案」押すか、手動入力してね'); return; }
     navigator.clipboard.writeText(t).then(() => {
-      const el = document.getElementById('s5-prompt-status');
-      el.textContent = '✅ クリップボードにコピー！Gemini Web に貼り付けてね';
-      el.style.color = 'var(--success)';
+      setS5Status('s5-extract-suggest-status', '✅ クリップボードにコピー！Gemini Web に貼り付けてね', 'var(--success)');
     }).catch(e => alert('コピー失敗: ' + e.message));
   };
 
@@ -788,7 +1237,7 @@ function getUI() {
   window.step5Init = async function() {
     const post = window.APP && window.APP.selected;
     document.getElementById('s5-postlabel').textContent = post ? '案件: ' + (post.title || post.id) : '案件未選択';
-    s5GoSub('ai');
+    s5GoSub('fontlayer');
     // meta から既選択サムネを復元
     if (post) {
       try {

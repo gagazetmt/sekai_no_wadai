@@ -218,6 +218,7 @@ main {
 /* テキスト本体（.tb の中に span として配置 / 下地と分離）*/
 .tb .tb-content {
   display: inline;
+  paint-order: stroke fill;
 }
 .tb-label {
   position: absolute;
@@ -268,6 +269,42 @@ main {
 .tb-list .tb-item:hover { border-color: var(--accent); }
 .tb-list .tb-item.active { background: rgba(245,158,11,0.15); border-color: var(--accent); }
 .tb-list .tb-item .del { color: #ef4444; cursor: pointer; padding: 0 4px; }
+
+/* ギャラリーカード */
+.gal-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #000;
+  aspect-ratio: 16/9;
+  transition: border-color 0.15s;
+}
+.gal-card:hover { border-color: var(--accent); }
+.gal-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gal-card .gal-label {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(0,0,0,0.75);
+  font-size: 9px;
+  color: var(--muted);
+  padding: 2px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gal-card .gal-del {
+  position: absolute;
+  top: 2px; right: 3px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  line-height: 1;
+  display: none;
+}
+.gal-card:hover .gal-del { display: block; }
+.gal-card .gal-del:hover { color: #ef4444; }
 
 .code-output {
   background: var(--bg);
@@ -492,6 +529,44 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
 
 <!-- 左サイドバー：背景・画像範囲・テキスト追加 -->
 <aside>
+
+  <!-- ─── 顔選出 → 背景生成 ─── -->
+  <details id="faceGenPanel" style="margin-bottom:14px;">
+    <summary style="cursor:pointer;color:var(--accent);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:6px 4px;list-style:none;user-select:none;display:flex;align-items:center;gap:6px;">
+      <span>顔選出 → 背景生成</span>
+    </summary>
+    <div style="padding-top:8px;">
+      <div class="row">
+        <label>案件ID（postId）</label>
+        <input type="text" id="fg-postid" placeholder="_r_soccer_comments_...">
+      </div>
+      <button style="width:100%;margin-bottom:8px;" onclick="fgLoadFaces()">顔スコアリング実行（Gemini）</button>
+      <div id="fg-status" style="font-size:10px;color:var(--muted);margin-bottom:6px;line-height:1.4;"></div>
+      <div id="fg-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-bottom:10px;"></div>
+      <div id="fg-selected-wrap" style="display:none;">
+        <div style="font-size:10px;color:var(--accent);margin-bottom:4px;">選択中 ↓</div>
+        <img id="fg-selected-img" style="width:100%;border-radius:4px;border:1px solid var(--accent);margin-bottom:8px;" alt="">
+        <div class="row">
+          <label>シーン説明（固有名詞なしで）</label>
+          <input type="text" id="fg-scene" placeholder="スタンフォードブリッジで選手に情熱的に指示している">
+        </div>
+        <button class="primary" style="width:100%;" onclick="fgGenBg()">背景生成（GPT-image-1）</button>
+        <div id="fg-gen-status" style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4;"></div>
+      </div>
+    </div>
+  </details>
+
+  <!-- ─── ギャラリー保管庫 ─── -->
+  <details id="galleryPanel" style="margin-bottom:14px;">
+    <summary style="cursor:pointer;color:var(--accent);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:6px 4px;display:flex;align-items:center;justify-content:space-between;list-style:none;user-select:none;">
+      <span>ギャラリー保管庫</span>
+      <button style="font-size:10px;padding:2px 8px;" onclick="event.preventDefault();loadGallery()">更新</button>
+    </summary>
+    <div id="galleryGrid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:8px;max-height:420px;overflow-y:auto;">
+      <div style="grid-column:1/-1;font-size:10px;color:var(--muted);text-align:center;padding:12px 0;">▲ 開くと読み込みます</div>
+    </div>
+  </details>
+
   <h2>背景（画像範囲外）</h2>
 
   <div class="row">
@@ -559,6 +634,35 @@ small.hint { color: var(--muted); font-size: 10px; display: block; margin-top: 2
   </div>
 
   <h2 style="margin-top:18px;">テキストボックス</h2>
+
+  <div class="row" style="background:#0a0e1a;border:1px solid var(--border);border-radius:6px;padding:10px;">
+    <label style="color:var(--accent);font-weight:700;display:block;margin-bottom:10px;">フォントレイヤー（速報サッカー式）</label>
+    <div class="row"><label>コンテキスト行（小・上）</label>
+      <input type="text" id="fl-ctx" placeholder="最終節の死闘！"></div>
+    <div class="row"><label>メイン文字（大）※必須</label>
+      <input type="text" id="fl-main" placeholder="トッテナム、生き残れるか。"></div>
+    <div class="row"><label>パンチライン（大・下）任意</label>
+      <input type="text" id="fl-punch" placeholder="残留シナリオは！？"></div>
+    <div class="row"><label>バッジラベル 任意</label>
+      <input type="text" id="fl-badge" placeholder="降格圏内"></div>
+    <div class="row"><label>スタイル</label>
+      <select id="fl-style">
+        <option value="gold">金文字（移籍・監督就任）</option>
+        <option value="fire">炎文字（優勝争い・クライマックス）</option>
+        <option value="white">白×黒（残留争い・分析）</option>
+        <option value="yellow">黄×白（代表・選手フィーチャー）</option>
+      </select>
+    </div>
+    <div class="row"><label>テキスト位置</label>
+      <select id="fl-pos">
+        <option value="left">左寄せ（選手1人・監督就任）</option>
+        <option value="center">センター（試合プレビュー）</option>
+      </select>
+    </div>
+    <button class="primary" style="width:100%;margin-top:4px;" onclick="applyFontLayer()">フォントレイヤー生成</button>
+    <button style="width:100%;margin-top:6px;" onclick="geminiPickFontLayer()">Gemini で背景解析してスタイル選択</button>
+    <div id="fl-status" style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.4;"></div>
+  </div>
 
   <div class="row">
     <button class="primary" style="width:100%;" onclick="addText()">+ テキスト追加</button>
@@ -1401,6 +1505,200 @@ function mountGradEditor(container, model, onUpdate, opts) {
 
   render();
   return { render, getSelectedIdx: () => selectedIdx };
+}
+
+// ────────────────────────────────────────────
+// 商業フォントプリセット（背景とは別レイヤーで一括生成）
+// ────────────────────────────────────────────
+// ─── フォントレイヤー（速報サッカー式 / sokuhosoccer 実分析ベース）─────────────
+// 4スタイル × 2ポジション。傾きなし。フォントは Noto Sans JP Black(900)。
+// 3階層構造: コンテキスト行（小）→ メイン（超大）→ パンチライン（大）
+//
+// ★縁取りは -webkit-text-stroke ではなく text-shadow でシミュレート。
+//   text-shadow はテキストの後ろに描画されるため gradient fill が前面に出る。
+//   paint-order は非標準 text-stroke には効かないため。
+
+function _flOutline(px, col) {
+  // px の黒縁取りを 16 方向 text-shadow で生成（blur=0 でシャープ）
+  const d = Math.round(px * 0.71);
+  const c = col || '#000000';
+  const pts = [
+    [-px,-px],[0,-px],[px,-px],
+    [-px,0],          [px,0],
+    [-px,px], [0,px], [px,px],
+    [-d,-px],[d,-px],[-px,-d],[px,-d],
+    [-px,d], [px,d], [-d,px], [d,px],
+  ];
+  return pts.map(([x,y]) => `${x}px ${y}px 0 ${c}`).join(', ');
+}
+
+const _O4 = _flOutline(4,'#000000');  // 小テキスト用 4px 縁取り
+const _O6 = _flOutline(6,'#000000');  // 大テキスト用 6px 縁取り
+
+const FL_STYLES = {
+  gold: {
+    name: '金文字',
+    ctx:   { grad:'flatWhite', sw:0, shadow:`${_O4}, 0 2px 8px rgba(0,0,0,0.9)` },
+    main:  { grad:'goldBright',sw:0, shadow:`${_O6}, 0 0 32px rgba(255,215,0,0.9), 0 0 64px rgba(255,175,0,0.6)` },
+    punch: { grad:'goldBright',sw:0, shadow:`${_O6}, 0 0 32px rgba(255,215,0,0.9), 0 0 64px rgba(255,175,0,0.6)` },
+    badge: { bg:'#b91c1c', text:'#ffffff' },
+  },
+  fire: {
+    name: '炎文字',
+    ctx:   { grad:'flatWhite', sw:0, shadow:`${_O4}, 0 2px 8px rgba(0,0,0,0.9)` },
+    main:  { grad:'fire',      sw:0, shadow:`${_flOutline(6,'#1a0000')}, 0 0 32px rgba(255,110,0,0.95), 0 0 64px rgba(255,50,0,0.65)` },
+    punch: { grad:'goldBright',sw:0, shadow:`${_flOutline(6,'#1a0000')}, 0 0 28px rgba(255,200,0,0.85), 0 0 56px rgba(255,150,0,0.55)` },
+    badge: { bg:'#7c2d12', text:'#ffffff' },
+  },
+  white: {
+    name: '白×黒',
+    ctx:   { grad:'flatWhite', sw:0, shadow:`${_O4}, 0 2px 10px rgba(0,0,0,0.98)` },
+    main:  { grad:'flatWhite', sw:0, shadow:`${_O6}, 0 2px 14px rgba(0,0,0,0.98)` },
+    punch: { grad:'flatWhite', sw:0, shadow:`${_O6}, 0 2px 14px rgba(0,0,0,0.98)` },
+    badge: { bg:'#dc2626', text:'#ffffff' },
+  },
+  yellow: {
+    name: '黄×白（代表）',
+    ctx:   { grad:'goldBright',sw:0, shadow:`${_flOutline(3,'#7f0000')}, 0 0 10px rgba(0,0,0,0.85)` },
+    main:  { grad:'flatWhite', sw:0, shadow:`${_O6}, 0 2px 14px rgba(0,0,0,0.98)` },
+    punch: { grad:'flatWhite', sw:0, shadow:`${_O6}, 0 2px 14px rgba(0,0,0,0.98)` },
+    badge: { bg:'#dc2626', text:'#ffffff' },
+  },
+};
+
+// x, y, size, width は % 単位（キャンバス 1280×720 基準）
+const FL_POSITIONS = {
+  left: {
+    ctx:   { x:4,  y:8,  size:38, width:62 },
+    main:  { x:3,  y:22, size:82, width:64 },
+    punch: { x:3,  y:60, size:74, width:64 },
+    badge: { x:4,  y:77, size:34, width:32 },
+  },
+  center: {
+    ctx:   { x:10, y:8,  size:38, width:80 },
+    main:  { x:8,  y:26, size:80, width:84 },
+    punch: { x:8,  y:63, size:72, width:84 },
+    badge: { x:10, y:79, size:34, width:32 },
+  },
+};
+
+// FL_STYLES の grad → 代表ソリッドカラー マップ
+const _FL_SOLID = {
+  goldBright: '#ffd700',
+  goldMetal:  '#f5c842',
+  fire:       '#ff7700',
+  flatWhite:  '#ffffff',
+  flatGold:   '#ffd700',
+};
+
+function _buildFLText(role, text, styleDef, posDef) {
+  const grad = TEXT_GRAD_PRESETS[styleDef.grad];
+  // ソリッドカラーを使用（background-clip:text は headless で不安定なため）
+  // 縁取りは text-shadow シミュレーションで行う（styleDef.shadow に含まれている）
+  const solidColor = _FL_SOLID[styleDef.grad] || '#ffffff';
+  return {
+    id: state.nextId++, text,
+    x: posDef.x, y: posDef.y,
+    width: posDef.width, wrap: 'nowrap', align: 'left',
+    size: posDef.size,
+    weight: '900',
+    family: "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif",
+    italic: 'normal',
+    colorMode: 'solid',
+    color: solidColor,
+    gradAngle: grad ? grad.angle : 180,
+    gradStops: grad ? JSON.parse(JSON.stringify(grad.stops)) : JSON.parse(JSON.stringify(TEXT_GRAD_PRESETS.flatWhite.stops)),
+    texture: 'none',
+    letterSpacing: role === 'ctx' ? -1 : -3,
+    lineHeight: 0.90,
+    shadow: styleDef.shadow,
+    strokeWidth: 0,
+    strokeColor: '#000000',
+    halo: { enabled: false, color:'#000000', alpha: 0, blur: 0, layers: 1 },
+    bgColor:'#000000', bgAlpha:0, bgPaddingX:8, bgPaddingY:2,
+    bdColor:'#ffffff', bdAlpha:1, bdWidth:0, bdRadius:0,
+    rotation: 0,
+  };
+}
+
+function _buildFLBadge(text, posDef, styleDef) {
+  const w = Math.max(14, Math.min(42, String(text).length * 5.0 + 10));
+  return {
+    id: state.nextShapeId++, kind: 'rect',
+    x: posDef.x - 0.3, y: posDef.y - 1.0,
+    w, h: 9,
+    fillColor: styleDef.badge.bg, fillAlpha: 0.92,
+    strokeColor: '#ffffff', strokeAlpha: 0.88, strokeWidth: 1.5,
+    borderRadius: 3, rotation: 0,
+  };
+}
+
+function applyFontLayer() {
+  const ctxText   = (document.getElementById('fl-ctx')   || {}).value?.trim() || '';
+  const mainText  = (document.getElementById('fl-main')  || {}).value?.trim() || '';
+  const punchText = (document.getElementById('fl-punch') || {}).value?.trim() || '';
+  const badgeText = (document.getElementById('fl-badge') || {}).value?.trim() || '';
+  const styleKey  = (document.getElementById('fl-style') || {}).value || 'gold';
+  const posKey    = (document.getElementById('fl-pos')   || {}).value || 'left';
+  const flStatus  = document.getElementById('fl-status');
+
+  if (!mainText) {
+    if (flStatus) flStatus.textContent = 'メイン文字を入力してください';
+    return;
+  }
+
+  const style = FL_STYLES[styleKey] || FL_STYLES.gold;
+  const pos   = FL_POSITIONS[posKey] || FL_POSITIONS.left;
+  const newTexts = [], newShapes = [];
+
+  if (ctxText)   newTexts.push(_buildFLText('ctx',   ctxText,   style.ctx,   pos.ctx));
+                 newTexts.push(_buildFLText('main',  mainText,  style.main,  pos.main));
+  if (punchText) newTexts.push(_buildFLText('punch', punchText, style.punch, pos.punch));
+  if (badgeText) {
+    newShapes.push(_buildFLBadge(badgeText, pos.badge, style));
+    const bt = _buildFLText('ctx', badgeText, { grad:'flatWhite', stroke:'#00000000', sw:0, shadow:'0 2px 6px rgba(0,0,0,0.6)' }, { ...pos.badge, size:32 });
+    bt.colorMode = 'solid';
+    bt.color = style.badge.text;
+    bt.strokeWidth = 0;
+    bt.halo = { enabled:false, color:'#000000', alpha:0, blur:0, layers:1 };
+    newTexts.push(bt);
+  }
+
+  state.shapes.push(...newShapes);
+  state.texts.push(...newTexts);
+  state.selectedShapeId = null;
+  state.selectedIbId    = null;
+  state.selectedId      = newTexts.length ? newTexts[newTexts.length - 1].id : null;
+  renderAll();
+  if (flStatus) flStatus.textContent = '生成完了！位置は手動で微調整してね。';
+}
+
+async function geminiPickFontLayer() {
+  const flStatus = document.getElementById('fl-status');
+  if (flStatus) flStatus.textContent = 'Gemini Vision 解析中...';
+  try {
+    if (typeof html2canvas !== 'function') throw new Error('html2canvas not loaded');
+    const canvasEl = document.getElementById('canvas');
+    const shot = await html2canvas(canvasEl, { backgroundColor: null, scale: 0.5, useCORS: true });
+    const dataUrl = shot.toDataURL('image/jpeg', 0.82);
+    const presets = Object.entries(FL_STYLES).map(([id, s]) => ({ id, name: s.name }));
+    const r = await fetch('/api/v5/analyze-font-layer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageDataUrl: dataUrl, presets }),
+    });
+    const json = await r.json();
+    if (!r.ok || json.error) throw new Error(json.error || 'Gemini analyze failed');
+    const sel = document.getElementById('fl-style');
+    if (sel && FL_STYLES[json.recommendedPresetId]) {
+      sel.value = json.recommendedPresetId;
+      if (flStatus) flStatus.textContent = '推奨: ' + FL_STYLES[json.recommendedPresetId].name + ' — ' + (json.reason || '');
+    } else {
+      throw new Error('unknown style: ' + json.recommendedPresetId);
+    }
+  } catch (e) {
+    if (flStatus) flStatus.textContent = 'Gemini失敗: ' + e.message;
+  }
 }
 
 // ────────────────────────────────────────────
@@ -2478,6 +2776,8 @@ function applyTbStyle(el, t) {
   // ─── .tb 自体（下地：背景・枠線・余白・配置）───
   el.style.left = t.x + '%';
   el.style.top = t.y + '%';
+  el.style.transform = t.rotation ? `rotate(${t.rotation}deg)` : '';
+  el.style.transformOrigin = 'left top';
   if (t.wrap === 'nowrap') {
     // 自動折り返し OFF。ただし手動改行 (\n) は尊重 → white-space: pre
     el.style.maxWidth = 'none';
@@ -2893,6 +3193,10 @@ function exportTemplate() {
     lines.push(`.tb-${t.id} {`);
     lines.push(`  position: absolute;`);
     lines.push(`  left: ${t.x}%; top: ${t.y}%;`);
+    if (t.rotation) {
+      lines.push(`  transform: rotate(${t.rotation}deg);`);
+      lines.push(`  transform-origin: left top;`);
+    }
     if (t.wrap === 'nowrap') {
       lines.push(`  white-space: pre;`);  // 改行は尊重、自動折り返しなし
     } else {
@@ -3141,10 +3445,157 @@ function unmarkSelection() {
   updateProp('text', ta.value);
 }
 
+// ─── 顔選出 → 背景生成 ─────────────────────────────────────────
+let _fgSelectedPath = null;
+
+async function fgLoadFaces() {
+  const postId = (document.getElementById('fg-postid') || {}).value?.trim();
+  if (!postId) { document.getElementById('fg-status').textContent = 'postId を入力してください'; return; }
+  const grid = document.getElementById('fg-grid');
+  const st = document.getElementById('fg-status');
+  const sw = document.getElementById('fg-selected-wrap');
+  grid.innerHTML = '';
+  sw.style.display = 'none';
+  _fgSelectedPath = null;
+  st.textContent = 'Gemini Vision でスコアリング中...（画像数によって1〜2分）';
+
+  try {
+    const r = await fetch('/api/v5/face-score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ postId }),
+    });
+    const json = await r.json();
+    if (!r.ok || json.error) throw new Error(json.error || 'face-score failed');
+    const imgs = json.images || [];
+    if (!imgs.length) { st.textContent = '画像が見つかりません（images/{postId}/ を確認）'; return; }
+
+    st.textContent = `${imgs.length}枚スコア完了 — クリックで選択`;
+    grid.innerHTML = imgs.map(img => `
+      <div class="gal-card" onclick="fgSelectFace('${img.localPath}','${img.url}')" title="score:${img.score}">
+        <img src="${img.url}" loading="lazy" alt="">
+        <span class="gal-label">★${img.score} ${img.faceSize || ''} ${img.clarity || ''}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    st.textContent = 'エラー: ' + e.message;
+  }
+}
+
+function fgSelectFace(localPath, url) {
+  _fgSelectedPath = localPath;
+  document.getElementById('fg-selected-img').src = url;
+  document.getElementById('fg-selected-wrap').style.display = 'block';
+  document.getElementById('fg-gen-status').textContent = '';
+}
+
+async function fgGenBg() {
+  if (!_fgSelectedPath) return;
+  const scene = (document.getElementById('fg-scene') || {}).value?.trim();
+  if (!scene) { document.getElementById('fg-gen-status').textContent = 'シーン説明を入力してください'; return; }
+  const postId = (document.getElementById('fg-postid') || {}).value?.trim() || 'genbg';
+  const gst = document.getElementById('fg-gen-status');
+  gst.textContent = 'GPT-image-1 で生成中...（30〜60秒）';
+
+  try {
+    const r = await fetch('/api/v5/gen-bg-from-face', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ localPath: _fgSelectedPath, sceneDesc: scene, postId }),
+    });
+    const json = await r.json();
+    if (!r.ok || json.error) throw new Error(json.error || 'gen-bg failed');
+
+    // 生成した画像をキャンバス背景にセット
+    galLoadBg(json.url);
+    gst.textContent = `生成完了！背景にセットしたよ → フォントレイヤーで文字を乗せよう`;
+  } catch (e) {
+    gst.textContent = 'エラー: ' + e.message;
+  }
+}
+
+// ─── ギャラリー保管庫 ───────────────────────────────────────────
+async function loadGallery() {
+  const grid = document.getElementById('galleryGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="grid-column:1/-1;font-size:10px;color:var(--muted);text-align:center;padding:12px 0;">読み込み中...</div>';
+  try {
+    const res = await fetch('/api/v5/gallery');
+    const { images } = await res.json();
+    if (!images || !images.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;font-size:10px;color:var(--muted);text-align:center;padding:12px 0;">保存済みサムネがありません</div>';
+      return;
+    }
+    grid.innerHTML = images.map(img => `
+      <div class="gal-card" onclick="galLoadBg('${img.url}')" title="${img.file}">
+        <img src="${img.url}" loading="lazy" alt="">
+        <span class="gal-label">${img.file}</span>
+        <span class="gal-del" onclick="event.stopPropagation();galDelete('${img.url}',this.closest('.gal-card'))">✕</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    grid.innerHTML = `<div style="grid-column:1/-1;font-size:10px;color:#ef4444;padding:8px 0;">エラー: ${e.message}</div>`;
+  }
+}
+function galLoadBg(url) {
+  // 既存の image-box があれば1枚目の URL を更新、なければ新規追加
+  if (state.imageBoxes.length > 0) {
+    state.imageBoxes[0].url = url;
+  } else {
+    const id = state.nextIbId++;
+    state.imageBoxes.push({ id, url, x:0, y:0, w:100, h:100, imgZoom:1, imgX:0, imgY:0, contrast:1, brightness:1, mask:'none', innerGrad:{ type:'none', stops:[], opacity:1 } });
+  }
+  renderImageBoxes();
+  renderIbList();
+}
+function galDelete(url, card) {
+  if (!confirm('このサムネを削除しますか？')) return;
+  const rel = url.replace(/^\//, '');
+  const parts = rel.split('/');  // v2_thumbs/{dir}/{file}
+  const file = parts[parts.length - 1];
+  const dir  = parts[parts.length - 2];
+  fetch(`/api/v5/delete-saved?postId=${encodeURIComponent(dir)}&file=${encodeURIComponent(file)}`, { method:'DELETE' })
+    .then(() => card && card.remove())
+    .catch(e => alert('削除失敗: ' + e.message));
+}
+// パネルを開いたとき自動ロード
+document.getElementById('galleryPanel').addEventListener('toggle', function() {
+  if (this.open) loadGallery();
+});
+
 // 初期化
 renderGradStops();
 setZoom(0.7);
 renderIbList();
+
+// ─── URLパラメータ受け取り（Step5 フォントレイヤータブからの連携）───
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  const bg = p.get('bg');
+  if (bg) {
+    const id = state.nextIbId++;
+    state.imageBoxes.push({ id, url: decodeURIComponent(bg), x:0, y:0, w:100, h:100, imgZoom:1.0, imgX:0, imgY:0, contrast:1, brightness:1, mask:'none', innerGrad:{ type:'none', stops:[], opacity:1 } });
+    renderImageBoxes();
+    renderIbList();
+  }
+  const ctx   = p.get('ctx');
+  const main  = p.get('main');
+  const punch = p.get('punch');
+  const badge = p.get('badge');
+  const style = p.get('style') || 'gold';
+  const pos   = p.get('pos')   || 'left';
+  if (main) {
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = decodeURIComponent(v); };
+    setVal('fl-ctx',   ctx);
+    setVal('fl-main',  main);
+    setVal('fl-punch', punch);
+    setVal('fl-badge', badge);
+    const sel = document.getElementById('fl-style'); if (sel) sel.value = style;
+    const pos2 = document.getElementById('fl-pos');  if (pos2) pos2.value = pos;
+    // 背景セット後に少し待ってからレイヤー生成
+    setTimeout(() => applyFontLayer(), 300);
+  }
+})();
 // キャンバスクリックで選択解除（背景レイヤークリック時）
 document.getElementById('canvas').addEventListener('click', e => {
   if (e.target.classList.contains('canvas') || e.target.id === 'bgLayer' || e.target.id === 'bgOverlay') {
