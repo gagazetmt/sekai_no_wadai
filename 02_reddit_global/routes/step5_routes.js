@@ -659,12 +659,29 @@ router.post('/v5/face-score', async (req, res) => {
 
   const _collectPeople = () => {
     const people = [];
-    const add = (name, role) => {
+    const add = (name, role, priority = 10) => {
       const cleanName = String(name || '').replace(/^(?:entity|manager):/, '').trim();
       const cleanRole = String(role || '').toLowerCase();
       if (!cleanName || !['player', 'entity'].includes(cleanRole)) return;
-      people.push({ name: cleanName, role: 'player' });
+      people.push({ name: cleanName, role: 'player', priority });
     };
+
+    // 動画構成で主役に指定された選手を最優先
+    const modulesFile = MODULES_FILE(postId);
+    if (fs.existsSync(modulesFile)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(modulesFile, 'utf8'));
+        const modules = Array.isArray(parsed) ? parsed : parsed.modules || [];
+        let playerOrder = 0;
+        for (const mod of modules) {
+          const subject = String(mod?.binding?.subject || '').toLowerCase();
+          if (subject === 'player') add(mod?.binding?.primary, 'player', playerOrder++);
+          if (String(mod?.mainKey || '').startsWith('entity:') && subject === 'player') {
+            add(mod.mainKey, 'player', Math.max(0, playerOrder - 1));
+          }
+        }
+      } catch (_) {}
+    }
 
     const siFile = SI_DATA_FILE(postId);
     if (fs.existsSync(siFile)) {
@@ -672,37 +689,23 @@ router.post('/v5/face-score', async (req, res) => {
         const siData = JSON.parse(fs.readFileSync(siFile, 'utf8'));
         const entityItems = siData?.boxes?.entity?.items;
         if (Array.isArray(entityItems)) {
-          for (const item of entityItems) add(item?.label || item?.name, item?.role);
+          for (const item of entityItems) add(item?.label || item?.name, item?.role, 10);
         }
         // 旧形式との互換
         for (const key of Object.keys(siData || {})) {
-          if (key.startsWith('entity:')) add(key, 'player');
+          if (key.startsWith('entity:')) add(key, 'player', 10);
         }
       } catch (_) {}
     }
 
-    const modulesFile = MODULES_FILE(postId);
-    if (fs.existsSync(modulesFile)) {
-      try {
-        const parsed = JSON.parse(fs.readFileSync(modulesFile, 'utf8'));
-        const modules = Array.isArray(parsed) ? parsed : parsed.modules || [];
-        for (const mod of modules) {
-          const subject = String(mod?.binding?.subject || '').toLowerCase();
-          if (subject === 'player') add(mod?.binding?.primary, 'player');
-          if (String(mod?.mainKey || '').startsWith('entity:') && subject !== 'manager') {
-            add(mod.mainKey, 'player');
-          }
-        }
-      } catch (_) {}
-    }
-
-    const seen = new Set();
-    return people.filter(person => {
+    const best = new Map();
+    for (const person of people) {
       const key = person.name.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+      if (!key) continue;
+      const current = best.get(key);
+      if (!current || person.priority < current.priority) best.set(key, person);
+    }
+    return [...best.values()].sort((a, b) => a.priority - b.priority);
   };
 
   // source優先度: official_stock(0) > other_stock(1) > x(2)
@@ -713,8 +716,10 @@ router.post('/v5/face-score', async (req, res) => {
   const seenUrls = new Set();
   for (const person of _collectPeople()) {
     if (stockCandidates.length >= 24) break;
-    const matches = findStockMatches({ type: 'player', entity: person.name, limit: 8 });
-    for (const m of matches) {
+    const matches = findStockMatches({ type: 'player', entity: person.name, limit: 30 });
+    const official = matches.filter(m => _isOfficialLeague(m.league, m.leagueSlug, m.stockProvider)).slice(0, 2);
+    const other = matches.filter(m => !_isOfficialLeague(m.league, m.leagueSlug, m.stockProvider)).slice(0, 5);
+    for (const m of [...official, ...other]) {
       if (!m.url || seenUrls.has(m.url)) continue;
       seenUrls.add(m.url);
       const localPath = path.join(ROOT_DIR, m.url.replace(/^\//, ''));
@@ -722,7 +727,7 @@ router.post('/v5/face-score', async (req, res) => {
       const src = _isOfficialLeague(m.league, m.leagueSlug, m.stockProvider)
         ? 'official_stock'
         : 'other_stock';
-      stockCandidates.push({ localPath, source: src, entity: person.name });
+      stockCandidates.push({ localPath, source: src, entity: person.name, entityPriority: person.priority });
       if (stockCandidates.length >= 24) break;
     }
   }
@@ -751,7 +756,7 @@ router.post('/v5/face-score', async (req, res) => {
 scoreの基準:
 10=顔が大きく鮮明で表情が強い 7-9=顔が鮮明で表情あり 4-6=顔は見えるが小さいか不鮮明 1-3=辛うじて顔あり 0=顔なし/後ろ姿/集合写真`;
 
-  const scoreOne = async ({ localPath, source }) => {
+  const scoreOne = async ({ localPath, source, entity, entityPriority }) => {
     try {
       const mimeType = /\.png$/i.test(localPath) ? 'image/png' : 'image/jpeg';
       const data = fs.readFileSync(localPath).toString('base64');
@@ -764,10 +769,10 @@ scoreの基準:
       const m = text.match(/\{[\s\S]*\}/);
       const parsed = m ? JSON.parse(m[0]) : {};
       const rel = path.relative(ROOT_DIR, localPath).replace(/\\/g, '/');
-      return { url: '/' + rel, localPath, source, score: parsed.score || 0, faceVisible: !!parsed.faceVisible, faceSize: parsed.faceSize, clarity: parsed.clarity, expression: parsed.expression };
+      return { url: '/' + rel, localPath, source, entity, entityPriority, score: parsed.score || 0, faceVisible: !!parsed.faceVisible, faceSize: parsed.faceSize, clarity: parsed.clarity, expression: parsed.expression };
     } catch (_) {
       const rel = path.relative(ROOT_DIR, localPath).replace(/\\/g, '/');
-      return { url: '/' + rel, localPath, source, score: 0, faceVisible: false };
+      return { url: '/' + rel, localPath, source, entity, entityPriority, score: 0, faceVisible: false };
     }
   };
 
@@ -781,6 +786,9 @@ scoreの基準:
   // ソート: official_stock → other_stock → x の中で顔スコア降順
   const _srcPriority = { official_stock: 0, other_stock: 1, x: 2 };
   results.sort((a, b) => {
+    const ea = Number(a.entityPriority ?? 99);
+    const eb = Number(b.entityPriority ?? 99);
+    if (ea !== eb) return ea - eb;
     const pa = _srcPriority[a.source] ?? 3;
     const pb = _srcPriority[b.source] ?? 3;
     if (pa !== pb) return pa - pb;
@@ -789,8 +797,7 @@ scoreの基準:
   res.json({ images: results });
 });
 
-// ─── 顔画像参照 × シーン説明 → Gemini 3.1 Flash Image で背景生成 ──
-// 顔画像を inlineData で渡す → 人物名不要・フィルター回避
+// ─── 選手画像の前景を維持し、Gemini 2.5 Flash Image で背景を置換 ──
 router.post('/v5/gen-bg-from-face', async (req, res) => {
   const { localPath, sceneDesc, postId } = req.body || {};
   if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
@@ -811,18 +818,44 @@ router.post('/v5/gen-bg-from-face', async (req, res) => {
     .trim();
   if (!cleanedScene) return res.status(400).json({ error: 'シーン説明が空です' });
 
-  const model = process.env.GEMINI_IMAGE_GENERATION_MODEL || 'gemini-3.1-flash-image';
-  const baseInstruction = [
-    '参照画像と同じ人物の顔立ちと外見を保つ。',
-    'YouTubeサムネイル用の横型16:9の実写スポーツ報道写真。',
-    '人物を右側または中央に配置し、顔と頭は隠さない。',
-    '左側40%は日本語タイトルを後から置けるよう、暗めで情報量を抑える。',
-    '画像内にはタイトル、字幕、文字、透かしを一切入れない。',
-    'クラブやユニフォームのロゴは自然な範囲で使用してよい。',
-  ].join('');
+  let backgroundScene = cleanedScene;
+  const fixedBackground = /空港|搭乗|入国|出国|ESTA|パスポート/.test(cleanedScene)
+    ? 'a realistic airport check-in area'
+    : /会見|記者|就任|移籍/.test(cleanedScene)
+      ? 'a realistic football press conference room'
+      : /スタジアム|ピッチ|試合|ゴール/.test(cleanedScene)
+        ? 'a realistic football stadium beside the pitch'
+        : /病院|負傷|怪我|検査/.test(cleanedScene)
+          ? 'a clean professional sports medical facility'
+          : '';
+  if (fixedBackground) {
+    backgroundScene = fixedBackground;
+  } else try {
+    const raw = await callAI({
+      forceProvider: 'deepseek',
+      max_tokens: 500,
+      system: `Convert the Japanese thumbnail scene request into one concise English BACKGROUND description for image editing.
+Return JSON only: {"background":"..."}
+Describe only location, environment, props, lighting, and atmosphere.
+Do not describe changing the foreground person's face, pose, body, expression, clothing, or identity.
+Do not include names, readable text, signs, violence, weapons, fire, or fantasy elements.`,
+      messages: [{ role: 'user', content: cleanedScene }],
+      label: 'thumb_scene_translate',
+    });
+    const match = String(raw || '').match(/\{[\s\S]*\}/);
+    const translated = match ? String(JSON.parse(match[0]).background || '').trim() : '';
+    if (translated) backgroundScene = translated;
+  } catch (e) {
+    console.warn('[gen-bg-from-face/translate]', e.message);
+  }
+  if (!/^[\x20-\x7e]+$/.test(backgroundScene)) {
+    backgroundScene = 'a realistic professional football stadium interior';
+  }
+
+  const model = process.env.GEMINI_IMAGE_EDIT_MODEL || 'gemini-2.5-flash-image';
   const prompts = [
-    `この画像の人物が、${cleanedScene}。${baseInstruction}映画的でドラマティックな照明。`,
-    `参照画像の人物を使い、次のサッカー報道シーンを自然な実写写真として再現する: ${cleanedScene}。${baseInstruction}過激・暴力的・幻想的な演出は避ける。`,
+    `Edit the provided sports portrait. Keep the foreground person unchanged and replace only the background with ${backgroundScene}. Wide 16:9 composition. No text.`,
+    `Preserve the foreground subject exactly as provided. Change only the background to ${backgroundScene}. Realistic sports news photograph, wide 16:9, no letters or signs.`,
   ];
 
   const diagnostics = [];
@@ -835,8 +868,8 @@ router.post('/v5/gen-bg-from-face', async (req, res) => {
         {
           contents: [{
             parts: [
-              { inlineData: { mimeType, data: imgData } },
               { text: prompts[attempt] },
+              { inlineData: { mimeType, data: imgData } },
             ],
           }],
           generationConfig: {
@@ -1114,6 +1147,8 @@ function getUI() {
     _el('s5-scene').value = '';
     _el('s5-scene-presets').innerHTML = '';
     if (post) {
+      // 顔スコアリングを待たずに、案件に沿ったシーン案を先に用意する
+      _loadScenePresets(post.id);
       try {
         const m = await window.fetchJson('/api/v6/get-meta?postId=' + encodeURIComponent(post.id));
         if (m.selectedThumb) {
@@ -1135,7 +1170,10 @@ function getUI() {
         body: JSON.stringify({ postId: id }),
       });
       const prompts = r.prompts || [];
-      if (!prompts.length) { box.innerHTML = ''; return; }
+      if (!prompts.length) {
+        box.innerHTML = '<span style="font-size:10px;color:#f59e0b;">シーン案を生成できませんでした。再読み込みしてください。</span>';
+        return;
+      }
       // 案件変更前の古い提案を残さず、最新案件の1件目を自動入力
       const sceneEl = _el('s5-scene');
       if (sceneEl && prompts[0]) sceneEl.value = prompts[0];
@@ -1147,7 +1185,9 @@ function getUI() {
           onmouseover="this.style.borderColor='var(--c)'"
           onmouseout="this.style.borderColor='var(--border)'">\${p}</button>
       \`).join('');
-    } catch(_) { box.innerHTML = ''; }
+    } catch(e) {
+      box.innerHTML = '<span style="font-size:10px;color:#ef4444;">シーン案エラー: ' + e.message + '</span>';
+    }
   }
   window._s5UsePreset = p => { const el = _el('s5-scene'); if (el) el.value = p; };
 
@@ -1175,8 +1215,6 @@ function getUI() {
       // 最高スコアを自動選択
       const first = _el('s5-face-grid').querySelector('.s5face-card');
       if (first) first.click();
-      // プリセット提案を非同期で取得（UIをブロックしない）
-      _loadScenePresets(id);
     } catch(e) {
       _el('s5-face-status').textContent = 'エラー: ' + e.message;
     } finally { btn.disabled = false; }
