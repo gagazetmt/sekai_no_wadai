@@ -598,74 +598,49 @@ async function fetchImagesForLabel(postId, label) {
     images.manual = [];
   }
 
-  try {
-    Object.assign(images, await classifyImageGroups(images, {
-      label,
-      type,
-      effectiveType,
-      entity,
-      teamName,
-      teamNameAway,
-      matchKickoff,
-    }));
-  } catch (e) {
-    console.warn('[gemini-image-classify]', e.message);
-    const fallback = ['stock', 'x_by_name', 'x_by_time', 'x_by_time_away', 'wikimedia', 'manual']
-      .flatMap(k => images[k] || [])
-      .filter((url, i, arr) => typeof url === 'string' && url && arr.indexOf(url) === i)
-      .slice(0, 20);
-    images.gemini_selected = fallback;
-    images.gemini_rejected = [];
-    images.gemini_meta = [];
-    images.gemini_status = { ok: false, reason: e.message, selected: fallback.length };
-  }
-
+  // Gemini分類 + warehouse ingest をバックグラウンドで統合実行
   if (effectiveType === 'player' && entity) {
-    try {
-      const sourceMap = new Map();
-      const warehouseSources = new Set(['x_by_name', 'x_by_time', 'x_by_time_away']);
-      Array.from(warehouseSources).forEach(k => {
-        (images[k] || []).forEach(url => sourceMap.set(url, k));
-      });
-      const selectedRows = Array.isArray(images.gemini_meta)
-        ? images.gemini_meta.filter(r => r.keep && r.category !== 'wrong_person' && warehouseSources.has(r.source))
-        : [];
-      const selectedUrls = (selectedRows.length ? selectedRows.map(r => r.url) : (images.gemini_selected || []))
-        .filter((url, i, arr) => typeof url === 'string'
-          && url
-          && !url.startsWith('/images_stock/')
-          && warehouseSources.has(sourceMap.get(url))
-          && arr.indexOf(url) === i)
-        .slice(0, Number(process.env.WAREHOUSE_INGEST_LIMIT || 12));
-      const warehouseCandidates = selectedUrls.map(url => ({
-        url,
-        localPath: imageUrlToLocalPath(url),
-        source: sourceMap.get(url) || 'step2',
-      })).filter(c => c.localPath);
-      // バックグラウンドで実行（レスポンスをブロックしない）
-      images.warehouse_adopted = [];
-      images.warehouse_status = { ok: true, checked: warehouseCandidates.length, adopted: 0, async: true };
-      setImmediate(async () => {
-        try {
-          const { ingestImagesForPlayer } = require('../scripts/warehouse_recognize');
-          await ingestImagesForPlayer(warehouseCandidates, {
-            postId,
-            label,
-            playerHint: entity,
-            clubHint: teamName || '',
-            source: 'step2-image-fetch',
-            limit: Number(process.env.WAREHOUSE_INGEST_LIMIT || 12),
-          });
-          console.log(`[warehouse-ingest] bg完了: ${label} (${warehouseCandidates.length}枚)`);
-        } catch (e) {
-          console.warn('[warehouse-ingest] bg失敗:', e.message);
-        }
-      });
-    } catch (e) {
-      console.warn('[warehouse-ingest]', e.message);
-      images.warehouse_adopted = [];
-      images.warehouse_status = { ok: false, reason: e.message };
+    images.warehouse_adopted = [];
+    images.warehouse_status = { ok: true, checked: 0, adopted: 0, async: true };
+    const imagesSnap = {};
+    for (const k of ['x_by_name', 'x_by_time', 'x_by_time_away', 'stock', 'wikimedia', 'manual']) {
+      imagesSnap[k] = images[k] ? [...images[k]] : [];
     }
+    setImmediate(async () => {
+      try {
+        const classified = await classifyImageGroups(imagesSnap, {
+          label, type, effectiveType, entity, teamName, teamNameAway, matchKickoff,
+        });
+        const sourceMap = new Map();
+        const warehouseSources = new Set(['x_by_name', 'x_by_time', 'x_by_time_away']);
+        Array.from(warehouseSources).forEach(k => {
+          (imagesSnap[k] || []).forEach(url => sourceMap.set(url, k));
+        });
+        const geminiMeta = classified.gemini_meta || [];
+        const selectedRows = geminiMeta.filter(r => r.keep && r.category !== 'wrong_person' && warehouseSources.has(r.source));
+        const selectedUrls = (selectedRows.length ? selectedRows.map(r => r.url) : (classified.gemini_selected || []))
+          .filter((url, i, arr) => typeof url === 'string'
+            && url
+            && !url.startsWith('/images_stock/')
+            && warehouseSources.has(sourceMap.get(url))
+            && arr.indexOf(url) === i)
+          .slice(0, Number(process.env.WAREHOUSE_INGEST_LIMIT || 12));
+        const warehouseCandidates = selectedUrls.map(url => ({
+          url,
+          localPath: imageUrlToLocalPath(url),
+          source: sourceMap.get(url) || 'step2',
+        })).filter(c => c.localPath);
+        const { ingestImagesForPlayer } = require('../scripts/warehouse_recognize');
+        await ingestImagesForPlayer(warehouseCandidates, {
+          postId, label, playerHint: entity, clubHint: teamName || '',
+          source: 'step2-image-fetch',
+          limit: Number(process.env.WAREHOUSE_INGEST_LIMIT || 12),
+        });
+        console.log(`[bg-classify-ingest] 完了: ${label} (${warehouseCandidates.length}枚候補)`);
+      } catch (e) {
+        console.warn('[bg-classify-ingest] 失敗:', e.message);
+      }
+    });
   }
 
   const total = new Set(
@@ -747,6 +722,38 @@ router.post('/v35/save-selection', (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+
+  // バックグラウンド: ストック画像の使用スコア記録 + 非ストック画像の強制ストック追加
+  setImmediate(async () => {
+    try {
+      const { recordImageUsage } = require('../scripts/image_score_manager');
+      const { addToStockDirect } = require('../scripts/warehouse_recognize');
+      const si = safeJson(siPath(postId), {});
+      const stockPaths = [];
+      for (const [label, urls] of Object.entries(selections || {})) {
+        const { type, entity } = parseMainKey(label);
+        const nonStockCandidates = [];
+        for (const url of (urls || [])) {
+          const localPath = imageUrlToLocalPath(url);
+          if (!localPath) continue;
+          if (url.startsWith('/images_stock/')) {
+            stockPaths.push(localPath);
+          } else if (type === 'player' && entity) {
+            nonStockCandidates.push({ url, localPath, source: 'user-selected' });
+          }
+        }
+        if (nonStockCandidates.length && type === 'player' && entity) {
+          const teamName = resolveTeamForEntity(si, entity);
+          await addToStockDirect(nonStockCandidates, {
+            playerHint: entity, clubHint: teamName || '', source: 'user-selected',
+          });
+        }
+      }
+      if (stockPaths.length) recordImageUsage(stockPaths);
+    } catch (e) {
+      console.warn('[save-selection bg]', e.message);
+    }
+  });
 });
 
 // ─── /api/v35/get-selection : 既存の選択を取得 ─────────────

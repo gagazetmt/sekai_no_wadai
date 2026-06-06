@@ -313,7 +313,44 @@ async function ingestImagesForPlayer(candidates, meta = {}) {
   return processPendingPaths(copied);
 }
 
-module.exports = { runRecognition, processOne, ingestImagesForPlayer };
+// ユーザーが選択した画像をGemini判定なしで直接ストックへ追加
+async function addToStockDirect(candidates, meta = {}) {
+  const entitySlug = slugify(meta.playerHint || '');
+  if (!entitySlug) return [];
+  const targetDir = path.join(STOCK_DIR, entitySlug);
+  if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+  const added = [];
+  for (const candidate of (candidates || [])) {
+    const src = candidate.localPath;
+    if (!src || !fs.existsSync(src)) continue;
+    const ext = /\.png$/i.test(src) ? 'png' : (/\.webp$/i.test(src) ? 'webp' : 'jpg');
+    const existing = fs.readdirSync(targetDir)
+      .filter(f => f.startsWith(entitySlug + '_') && /\.(jpg|jpeg|png|webp)$/i.test(f)).length;
+    const num = String(existing + 1).padStart(3, '0');
+    const newPath = path.join(targetDir, `${entitySlug}_${num}.${ext}`);
+    fs.copyFileSync(src, newPath);
+    const localPath = path.relative(path.join(__dirname, '..'), newPath).replace(/\\/g, '/');
+    const idx = loadIndex();
+    idx.players[`${entitySlug}_${num}`] = {
+      name: meta.playerHint, slug: entitySlug, category: 'player',
+      contentType: 'portrait', confidence: 1.0, localPath,
+      sizeBytes: fs.statSync(newPath).size,
+      addedAt: new Date().toISOString().slice(0, 10),
+      source: 'user-selected',
+      club: slugify(meta.clubHint || ''), league: slugify(meta.leagueHint || ''),
+    };
+    saveIndex(idx);
+    try {
+      const { registerNewImage } = require('./image_score_manager');
+      registerNewImage(localPath, { visionScore: 100, confidence: 1.0, source: 'user-selected' });
+    } catch (_) {}
+    added.push(localPath);
+    console.log(`  → [user-selected] 直接ストック: ${localPath}`);
+  }
+  return added;
+}
+
+module.exports = { runRecognition, processOne, ingestImagesForPlayer, addToStockDirect };
 
 // ── CLI ───────────────────────────────────────────────────────────────────────
 if (require.main === module) {

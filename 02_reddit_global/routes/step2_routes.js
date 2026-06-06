@@ -1371,20 +1371,14 @@ function getUI() {
       { key: 'x_by_time_away', title: '📷 X 時間 (Away)',     color: '#3b82f6' },
       { key: 'wikimedia',      title: '🌐 Wikimedia',          color: '#8b5cf6' },
     ];
-    groups.unshift({ key: 'gemini_selected', title: 'Gemini選別', color: '#22c55e' });
-    groups.unshift({ key: 'warehouse_adopted', title: 'X AI識別倉庫化', color: '#84cc16' });
     groups.push({ key: 'manual', title: '手動追加', color: '#f59e0b' });
-    groups.push({ key: 'gemini_rejected', title: 'Gemini除外候補', color: '#64748b' });
     const titleMap = {
-      warehouse_adopted: 'X AI識別倉庫化',
-      gemini_selected: 'Gemini選別',
       stock: '選手公式/ストック',
       x_by_name: 'X公式 マッチ度順',
       x_by_time: 'X公式 最新順 Home',
       x_by_time_away: 'X公式 最新順 Away',
       wikimedia: 'Wikimedia',
       manual: '手動追加',
-      gemini_rejected: 'Gemini除外候補',
     };
     let html = '';
     let totalCount = 0;

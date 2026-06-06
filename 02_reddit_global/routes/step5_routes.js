@@ -30,6 +30,7 @@ const SI_DATA_FILE    = (postId) => path.join(ROOT_DIR, 'data', 'si_data', _sani
 const MODULES_FILE    = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_modules.json');
 
 const thumbAi = require('../scripts/v2_video/thumb_ai');
+const { findStockMatches } = require('../scripts/modules/stock_match');
 
 // ─── 共通: メタ JSON 読み書き（step6 と共用）─────
 function readMeta(postId) {
@@ -602,41 +603,58 @@ router.post('/v5/face-score', async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
 
-  // ─── 候補収集: X画像 + ストック画像 ───────────────────────────
-  const candidates = [];
-  const STOCK_BASE = path.join(ROOT_DIR, 'images_stock', 'players_official');
-  const walkDir = (dir, max) => {
-    if (candidates.length >= max) return;
-    let ents;
-    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
-    for (const e of ents) {
-      if (candidates.length >= max) break;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) walkDir(full, max);
-      else if (/\.(jpe?g|png|webp)$/i.test(e.name)) candidates.push(full);
-    }
+  // ─── 候補収集: ストック画像（公式優先）+ X画像 ────────────────
+  // PL/LaLiga等の公式リーグ判定（league値が slugified/raw 両方に対応）
+  const _isOfficialLeague = (league) => {
+    const l = (league || '').toLowerCase().replace(/[-]+/g, ' ').trim();
+    return ['premier league', 'la liga', 'bundesliga', 'serie a', 'ligue 1'].includes(l);
   };
 
-  // X取得済み画像（最大16枚）
-  const imgDir = path.join(ROOT_DIR, 'images', _sanitizePostId(postId));
-  if (fs.existsSync(imgDir)) walkDir(imgDir, 16);
+  // source優先度: official_stock(0) > other_stock(1) > x(2)
+  const stockCandidates = [];  // { localPath, source: 'official_stock'|'other_stock' }
+  const xCandidates    = [];  // { localPath, source: 'x' }
 
-  // ストック画像: si_dataのエンティティ名からプレイヤーフォルダを検索（最大12枚）
+  // ストック画像: findStockMatchesで各エンティティを検索
   const siFile = SI_DATA_FILE(postId);
-  if (fs.existsSync(siFile) && fs.existsSync(STOCK_BASE)) {
+  if (fs.existsSync(siFile)) {
     try {
       const siData = JSON.parse(fs.readFileSync(siFile, 'utf8'));
-      const entities = Object.keys(siData);
-      for (const entity of entities) {
-        if (candidates.length >= 28) break;
-        // "entity:Player Name" → "player-name" に変換してフォルダ検索
-        const name = entity.replace(/^entity:/, '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        const stockDir = path.join(STOCK_BASE, name);
-        if (fs.existsSync(stockDir)) walkDir(stockDir, 28);
+      const seenUrls = new Set();
+      for (const key of Object.keys(siData)) {
+        if (stockCandidates.length >= 24) break;
+        const type   = key.startsWith('entity:') ? 'player' : key.startsWith('team:') ? 'team' : null;
+        if (!type || type === 'team') continue;
+        const entity = key.replace(/^(?:entity|manager):/, '').trim();
+        const matches = findStockMatches({ type, entity, limit: 8 });
+        for (const m of matches) {
+          if (!m.url || seenUrls.has(m.url)) continue;
+          seenUrls.add(m.url);
+          const localPath = path.join(ROOT_DIR, m.url.replace(/^\//, ''));
+          if (!fs.existsSync(localPath)) continue;
+          const src = _isOfficialLeague(m.league) ? 'official_stock' : 'other_stock';
+          stockCandidates.push({ localPath, source: src });
+        }
       }
     } catch (_) {}
   }
 
+  // X取得済み画像（最大16枚）
+  const imgDir = path.join(ROOT_DIR, 'images', _sanitizePostId(postId));
+  const walkForX = (dir, arr, max) => {
+    if (arr.length >= max) return;
+    let ents;
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    for (const e of ents) {
+      if (arr.length >= max) break;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walkForX(full, arr, max);
+      else if (/\.(jpe?g|png|webp)$/i.test(e.name)) arr.push({ localPath: full, source: 'x' });
+    }
+  };
+  if (fs.existsSync(imgDir)) walkForX(imgDir, xCandidates, 16);
+
+  // 結合順: 公式ストック → その他ストック → X画像
+  const candidates = [...stockCandidates, ...xCandidates];
   if (!candidates.length) return res.json({ images: [] });
 
   const scorePrompt = `この画像を分析してください。JSONのみで返答（前置き不要）:
@@ -644,10 +662,10 @@ router.post('/v5/face-score', async (req, res) => {
 scoreの基準:
 10=顔が大きく鮮明で表情が強い 7-9=顔が鮮明で表情あり 4-6=顔は見えるが小さいか不鮮明 1-3=辛うじて顔あり 0=顔なし/後ろ姿/集合写真`;
 
-  const scoreOne = async (imgPath) => {
+  const scoreOne = async ({ localPath, source }) => {
     try {
-      const mimeType = /\.png$/i.test(imgPath) ? 'image/png' : 'image/jpeg';
-      const data = fs.readFileSync(imgPath).toString('base64');
+      const mimeType = /\.png$/i.test(localPath) ? 'image/png' : 'image/jpeg';
+      const data = fs.readFileSync(localPath).toString('base64');
       const r = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         { contents: [{ parts: [{ text: scorePrompt }, { inlineData: { mimeType, data } }] }] },
@@ -656,11 +674,11 @@ scoreの基準:
       const text = r.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const m = text.match(/\{[\s\S]*\}/);
       const parsed = m ? JSON.parse(m[0]) : {};
-      const rel = path.relative(ROOT_DIR, imgPath).replace(/\\/g, '/');
-      return { url: '/' + rel, localPath: imgPath, score: parsed.score || 0, faceVisible: !!parsed.faceVisible, faceSize: parsed.faceSize, clarity: parsed.clarity, expression: parsed.expression };
+      const rel = path.relative(ROOT_DIR, localPath).replace(/\\/g, '/');
+      return { url: '/' + rel, localPath, source, score: parsed.score || 0, faceVisible: !!parsed.faceVisible, faceSize: parsed.faceSize, clarity: parsed.clarity, expression: parsed.expression };
     } catch (_) {
-      const rel = path.relative(ROOT_DIR, imgPath).replace(/\\/g, '/');
-      return { url: '/' + rel, localPath: imgPath, score: 0, faceVisible: false };
+      const rel = path.relative(ROOT_DIR, localPath).replace(/\\/g, '/');
+      return { url: '/' + rel, localPath, source, score: 0, faceVisible: false };
     }
   };
 
@@ -670,7 +688,15 @@ scoreの基準:
     const batch = candidates.slice(i, i + 6);
     results.push(...await Promise.all(batch.map(scoreOne)));
   }
-  results.sort((a, b) => b.score - a.score);
+
+  // ソート: official_stock → other_stock → x の中で顔スコア降順
+  const _srcPriority = { official_stock: 0, other_stock: 1, x: 2 };
+  results.sort((a, b) => {
+    const pa = _srcPriority[a.source] ?? 3;
+    const pb = _srcPriority[b.source] ?? 3;
+    if (pa !== pb) return pa - pb;
+    return b.score - a.score;
+  });
   res.json({ images: results });
 });
 
