@@ -557,29 +557,86 @@ router.post('/v5/composite-thumb', async (req, res) => {
 
 // ─── ① 顔スコアリング ───────────────────────────────────────────
 // images/{postId}/ 以下の全画像を Gemini Vision で採点し、顔スコア順に返す
+// AIがシーン説明プリセットを提案
+router.post('/v5/suggest-bg-prompts', async (req, res) => {
+  const { postId } = req.body || {};
+  const { callAI } = require('../scripts/ai_client');
+
+  // 案件情報を収集
+  let context = '';
+  if (postId) {
+    const mf = MODULES_FILE(postId);
+    if (fs.existsSync(mf)) {
+      try {
+        const mods = JSON.parse(fs.readFileSync(mf,'utf8'));
+        const arr = Array.isArray(mods) ? mods : mods.modules || [];
+        context = arr.map(m => m.title||'').filter(Boolean).join(' / ').slice(0, 300);
+      } catch (_) {}
+    }
+  }
+
+  try {
+    const raw = await callAI({
+      forceProvider: 'deepseek', max_tokens: 600,
+      system: `YouTubeサムネイル背景生成のシーン説明文を考えます。
+JSONのみ返答（前置き不要）: {"prompts":["...", "...", "...", "..."]}
+ルール:
+- 4案提案する
+- 人物名は使わず「この人物が〜」の形で
+- 日本語で、具体的なシーン描写
+- ドラマティックで視覚的に映えるもの
+- 末尾に「クラブのロゴはOK。テキストは不要。」を付けない（システム側で付ける）`,
+      messages: [{ role: 'user', content: `動画内容: ${context || '（タイトル未取得）'}` }],
+    });
+    const m = raw.match(/\{[\s\S]*\}/);
+    const parsed = m ? JSON.parse(m[0]) : {};
+    res.json({ prompts: parsed.prompts || [] });
+  } catch (e) {
+    res.json({ prompts: [] });
+  }
+});
+
 router.post('/v5/face-score', async (req, res) => {
   const { postId } = req.body || {};
   if (!postId) return res.status(400).json({ error: 'postId required' });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
 
-  const imgDir = path.join(ROOT_DIR, 'images', _sanitizePostId(postId));
-  if (!fs.existsSync(imgDir)) return res.json({ images: [] });
-
-  // 再帰的に画像収集（最大 24 枚）
+  // ─── 候補収集: X画像 + ストック画像 ───────────────────────────
   const candidates = [];
-  const walk = (dir) => {
-    if (candidates.length >= 24) return;
+  const STOCK_BASE = path.join(ROOT_DIR, 'images_stock', 'players_official');
+  const walkDir = (dir, max) => {
+    if (candidates.length >= max) return;
     let ents;
     try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
     for (const e of ents) {
-      if (candidates.length >= 24) break;
+      if (candidates.length >= max) break;
       const full = path.join(dir, e.name);
-      if (e.isDirectory()) walk(full);
+      if (e.isDirectory()) walkDir(full, max);
       else if (/\.(jpe?g|png|webp)$/i.test(e.name)) candidates.push(full);
     }
   };
-  walk(imgDir);
+
+  // X取得済み画像（最大16枚）
+  const imgDir = path.join(ROOT_DIR, 'images', _sanitizePostId(postId));
+  if (fs.existsSync(imgDir)) walkDir(imgDir, 16);
+
+  // ストック画像: si_dataのエンティティ名からプレイヤーフォルダを検索（最大12枚）
+  const siFile = SI_DATA_FILE(postId);
+  if (fs.existsSync(siFile) && fs.existsSync(STOCK_BASE)) {
+    try {
+      const siData = JSON.parse(fs.readFileSync(siFile, 'utf8'));
+      const entities = Object.keys(siData);
+      for (const entity of entities) {
+        if (candidates.length >= 28) break;
+        // "entity:Player Name" → "player-name" に変換してフォルダ検索
+        const name = entity.replace(/^entity:/, '').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const stockDir = path.join(STOCK_BASE, name);
+        if (fs.existsSync(stockDir)) walkDir(stockDir, 28);
+      }
+    } catch (_) {}
+  }
+
   if (!candidates.length) return res.json({ images: [] });
 
   const scorePrompt = `この画像を分析してください。JSONのみで返答（前置き不要）:
@@ -617,61 +674,62 @@ scoreの基準:
   res.json({ images: results });
 });
 
-// ─── ② 顔画像 × シーン説明 → GPT-image-1 で背景生成 ──────────────
-// 固有名詞を使わず「この人物が〜」参照で celebrity フィルター回避
+// ─── 顔画像参照 × シーン説明 → Gemini 3.1 Flash Image で背景生成 ──
+// 顔画像を inlineData で渡す → 人物名不要・フィルター回避
 router.post('/v5/gen-bg-from-face', async (req, res) => {
   const { localPath, sceneDesc, postId } = req.body || {};
   if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not set' });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
 
   const absPath = path.isAbsolute(localPath) ? localPath : path.join(ROOT_DIR, localPath.replace(/^\//, ''));
   if (!fs.existsSync(absPath)) return res.status(400).json({ error: 'image not found: ' + absPath });
 
-  const prompt = `この人物が、${sceneDesc}。YouTubeサムネイル用の横型写真風画像。プロのスポーツカメラマンが撮影したような臨場感と迫力。16:9構図。人物を右側か中央に配置し、左側にテキスト用の暗いスペースを確保。背景はドラマティックに。`;
+  const mimeType = /\.png$/i.test(absPath) ? 'image/png' : 'image/jpeg';
+  const imgData  = fs.readFileSync(absPath).toString('base64');
 
-  const FormData = require('form-data');
-  const form = new FormData();
-  form.append('model', 'gpt-image-1');
-  form.append('image', fs.createReadStream(absPath), { filename: 'face.jpg', contentType: /\.png$/i.test(absPath) ? 'image/png' : 'image/jpeg' });
-  form.append('prompt', prompt);
-  form.append('n', '1');
-  form.append('size', '1536x1024');
+  const prompt = `この画像の人物が、${sceneDesc}。`
+    + `YouTubeサムネイル用横型画像。`
+    + `タイトルや文字テキストは一切入れないこと。`
+    + `クラブ・ユニフォームのロゴはOK。`
+    + `映画的でドラマティックな照明。16:9構図。`
+    + `人物を右側または中央に配置し、左側40%を暗めに（テキスト用余白）。`;
 
   let genRes;
   try {
-    genRes = await axios.post('https://api.openai.com/v1/images/edits', form, {
-      headers: { 'Authorization': `Bearer ${apiKey}`, ...form.getHeaders() },
-      timeout: 120000,
-      validateStatus: () => true,
-    });
+    genRes = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
+      {
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType, data: imgData } },
+          ],
+        }],
+        generationConfig: { responseModalities: ['image', 'text'] },
+      },
+      { timeout: 90000, validateStatus: () => true }
+    );
   } catch (e) {
-    return res.status(500).json({ error: 'GPT-image-1 network error: ' + e.message });
+    return res.status(500).json({ error: 'Gemini network error: ' + e.message });
   }
 
   if (genRes.status !== 200) {
-    return res.status(500).json({ error: `GPT-image-1 ${genRes.status}: ${JSON.stringify(genRes.data).slice(0, 400)}` });
+    return res.status(500).json({ error: `Gemini ${genRes.status}: ${JSON.stringify(genRes.data).slice(0, 300)}` });
   }
 
-  // b64_json または url から保存
-  const item = (genRes.data?.data || [])[0];
-  if (!item) return res.status(500).json({ error: 'no image returned' });
+  const imgPart = (genRes.data?.candidates?.[0]?.content?.parts || []).find(p => p.inlineData?.data);
+  if (!imgPart) {
+    const reason = genRes.data?.candidates?.[0]?.finishReason || 'unknown';
+    return res.status(500).json({ error: `Gemini: 画像なし (${reason}) — プロンプトを変えて再試行してください` });
+  }
 
   const safePostId = _thumbPostId(postId || 'genbg');
   const outDir = path.join(THUMB_OUT_BASE, safePostId);
   fs.mkdirSync(outDir, { recursive: true });
-  const ts = Date.now();
-  const outFile = `genbg_${ts}.png`;
+  const outFile = `bg_${Date.now()}.png`;
   const outPath = path.join(outDir, outFile);
-
-  if (item.b64_json) {
-    fs.writeFileSync(outPath, Buffer.from(item.b64_json, 'base64'));
-  } else if (item.url) {
-    const dl = await axios.get(item.url, { responseType: 'arraybuffer', timeout: 30000 });
-    fs.writeFileSync(outPath, dl.data);
-  } else {
-    return res.status(500).json({ error: 'no b64_json or url in response' });
-  }
+  fs.writeFileSync(outPath, Buffer.from(imgPart.inlineData.data, 'base64'));
 
   res.json({ ok: true, url: `/v2_thumbs/${safePostId}/${outFile}`, localPath: outPath });
 });
@@ -818,9 +876,9 @@ function getUI() {
         <label class="s5label">シーン説明（日本語OK）</label>
         <input type="text" id="s5-scene" class="s5input"
           placeholder="レアルマドリーの会長選挙の景品となっている場面">
+        <div id="s5-scene-presets" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;"></div>
         <div style="font-size:10px; color:var(--muted); margin-top:5px; line-height:1.5;">
-          人物名不要。顔画像を参照して生成するのでフィルター回避できます。<br>
-          ロゴを入れたい場合は「クラブのロゴはOK」と書き添えてください。
+          人物名不要。顔画像参照でフィルター回避。テキストなしで背景生成。
         </div>
       </div>
     </div>
@@ -910,6 +968,30 @@ function getUI() {
     }
   };
 
+  // プリセット提案を非同期で取得・表示
+  async function _loadScenePresets(id) {
+    const box = _el('s5-scene-presets');
+    if (!box) return;
+    box.innerHTML = '<span style="font-size:10px;color:var(--muted);">AIがシーン案を考え中...</span>';
+    try {
+      const r = await window.fetchJson('/api/v5/suggest-bg-prompts', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ postId: id }),
+      });
+      const prompts = r.prompts || [];
+      if (!prompts.length) { box.innerHTML = ''; return; }
+      box.innerHTML = prompts.map(p => \`
+        <button onclick="_s5UsePreset(this.dataset.p)" data-p="\${p.replace(/"/g,'&quot;')}"
+          style="font-size:10px;background:#0a0e1a;border:1px solid var(--border);
+                 border-radius:4px;padding:4px 8px;cursor:pointer;color:var(--muted);
+                 text-align:left;max-width:100%;"
+          onmouseover="this.style.borderColor='var(--c)'"
+          onmouseout="this.style.borderColor='var(--border)'">\${p}</button>
+      \`).join('');
+    } catch(_) { box.innerHTML = ''; }
+  }
+  window._s5UsePreset = p => { const el = _el('s5-scene'); if (el) el.value = p; };
+
   // ① 顔スコアリング
   window.s5RunFaceScore = async function() {
     const id = _pid(); if (!id) { alert('案件を選択してください'); return; }
@@ -934,6 +1016,8 @@ function getUI() {
       // 最高スコアを自動選択
       const first = _el('s5-face-grid').querySelector('.s5face-card');
       if (first) first.click();
+      // プリセット提案を非同期で取得（UIをブロックしない）
+      _loadScenePresets(id);
     } catch(e) {
       _el('s5-face-status').textContent = 'エラー: ' + e.message;
     } finally { btn.disabled = false; }
