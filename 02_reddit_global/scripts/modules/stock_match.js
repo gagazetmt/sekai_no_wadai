@@ -80,12 +80,27 @@ function readImageScore(localPath) {
   }
 }
 
+function loadPlayerRecords() {
+  const idx = loadIndex('players_official_index.json');
+  const records = [
+    ...Object.values(idx.players || {}),
+    ...(Array.isArray(idx.entries) ? idx.entries : []),
+  ];
+  const seen = new Set();
+  return records.filter(p => {
+    if (!p || !p.name || !p.localPath) return false;
+    const key = String(p.localPath).replace(/\\/g, '/').toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // === 個別マッチャー ===
 
 function matchPlayers(query, opts = {}) {
   const { limit = 5, leagueSlug = null, threshold = 60 } = opts;
-  const idx = loadIndex('players_official_index.json');
-  const players = Object.values(idx.players || {});
+  const players = loadPlayerRecords();
   const scored = [];
   for (const p of players) {
     if (leagueSlug && p.leagueSlug !== leagueSlug) continue;
@@ -115,7 +130,9 @@ function matchPlayers(query, opts = {}) {
     score: s.score,
     name: s.item.name,
     league: s.item.league,
+    leagueSlug: s.item.leagueSlug,
     club: s.item.club,
+    stockProvider: s.item.source || 'official-index',
     url: pathToUrl(s.item.localPath),
     sizeBytes: s.item.sizeBytes,
   }));
@@ -228,8 +245,7 @@ function suggestEntities(query, opts = {}) {
   const wantMgr  = wantAll || role === 'manager';
 
   if (wantPlay) {
-    const pIdx = loadIndex('players_official_index.json');
-    for (const p of Object.values(pIdx.players || {})) {
+    for (const p of loadPlayerRecords()) {
       const score = matchScore(p.name, q);
       if (score >= threshold) {
         out.push({ label: p.name, role: 'player', league: p.league, club: p.club, score });

@@ -28,6 +28,7 @@ const _thumbPostId = (s) => String(s || '_unsorted').replace(/[^a-zA-Z0-9_-]/g, 
 const META_FILE       = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_step5.json');
 const SI_DATA_FILE    = (postId) => path.join(ROOT_DIR, 'data', 'si_data', _sanitizePostId(postId) + '.json');
 const MODULES_FILE    = (postId) => path.join(ROOT_DIR, 'data', _sanitizePostId(postId) + '_modules.json');
+const V25_PLAN_FILE   = (postId) => path.join(ROOT_DIR, 'data', 'v25_plans', _sanitizePostId(postId) + '.json');
 
 const thumbAi = require('../scripts/v2_video/thumb_ai');
 const { findStockMatches } = require('../scripts/modules/stock_match');
@@ -77,6 +78,47 @@ function _collectPostInfo(postId, override = {}) {
     }
   }
   return info;
+}
+
+function _collectThumbnailStoryContext(postId) {
+  const lines = [];
+  const mf = MODULES_FILE(postId);
+  if (fs.existsSync(mf)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(mf, 'utf8'));
+      const modules = Array.isArray(parsed) ? parsed : parsed.modules || [];
+      const opening = modules.find(m => m.type === 'opening' || m.mainKey === 'opening') || modules[0];
+      if (opening?.title) lines.push(`動画タイトル: ${opening.title}`);
+      if (opening?.scriptDir) lines.push(`事件の核心: ${opening.scriptDir}`);
+      if (opening?.narration) lines.push(`冒頭ナレーション: ${opening.narration.slice(0, 700)}`);
+
+      const outline = modules.slice(0, 8).map((m, i) => {
+        const detail = m.scriptDir || m.narration || '';
+        return `${i + 1}. ${m.title || m.type || 'slide'}: ${String(detail).slice(0, 280)}`;
+      });
+      if (outline.length) lines.push(`動画構成:\n${outline.join('\n')}`);
+    } catch (_) {}
+  }
+
+  const pf = V25_PLAN_FILE(postId);
+  if (fs.existsSync(pf)) {
+    try {
+      const plan = JSON.parse(fs.readFileSync(pf, 'utf8'));
+      const briefing = plan.briefing
+        || plan.aiPlan?.briefing
+        || plan.result?.briefing
+        || plan.plan?.briefing
+        || plan.proposals?.briefing;
+      if (briefing) {
+        if (briefing.purpose) lines.push(`動画の目的: ${briefing.purpose}`);
+        if (briefing.coreMessage) lines.push(`核心メッセージ: ${briefing.coreMessage}`);
+        if (briefing.angle) lines.push(`切り口: ${briefing.angle}`);
+        if (briefing.storyPattern) lines.push(`構成型: ${briefing.storyPattern}`);
+      }
+    } catch (_) {}
+  }
+
+  return lines.join('\n').slice(0, 5000);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -562,37 +604,40 @@ router.post('/v5/composite-thumb', async (req, res) => {
 router.post('/v5/suggest-bg-prompts', async (req, res) => {
   const { postId } = req.body || {};
   const { callAI } = require('../scripts/ai_client');
-
-  // 案件情報を収集
-  let context = '';
-  if (postId) {
-    const mf = MODULES_FILE(postId);
-    if (fs.existsSync(mf)) {
-      try {
-        const mods = JSON.parse(fs.readFileSync(mf,'utf8'));
-        const arr = Array.isArray(mods) ? mods : mods.modules || [];
-        context = arr.map(m => m.title||'').filter(Boolean).join(' / ').slice(0, 300);
-      } catch (_) {}
-    }
-  }
+  const context = postId ? _collectThumbnailStoryContext(postId) : '';
 
   try {
     const raw = await callAI({
-      forceProvider: 'deepseek', max_tokens: 600,
-      system: `YouTubeサムネイル背景生成のシーン説明文を考えます。
+      forceProvider: 'deepseek', max_tokens: 1000,
+      system: `あなたはサッカー報道専門のYouTubeサムネイル・ディレクターです。
+渡された動画情報から、事件の核心が一目で伝わる背景シーンを設計してください。
 JSONのみ返答（前置き不要）: {"prompts":["...", "...", "...", "..."]}
+
 ルール:
 - 4案提案する
-- 人物名は使わず「この人物が〜」の形で
-- 日本語で、具体的なシーン描写
-- ドラマティックで視覚的に映えるもの
-- 末尾に「クラブのロゴはOK。テキストは不要。」を付けない（システム側で付ける）`,
-      messages: [{ role: 'user', content: `動画内容: ${context || '（タイトル未取得）'}` }],
+- 各案は必ず、動画情報に書かれた実際のニュース・試合・移籍・会見などを一場面に変換する
+- 動画情報にない設定、職業、場所、出来事を創作しない
+- 抽象的な「決意」「苦悩」だけで済ませず、空港、スタジアム、会見場、ベンチなど案件に合う具体的な場所と行動を書く
+- 人物名、クラブ名、大会名などの固有名詞は出力しない。「この人物が〜」で始める
+- 画像内の看板、モニター、書類にも文字や固有名詞を描かせない
+- 炎、武器、戦場、瓦礫、災害、犯罪的演出は、元情報に明記されていない限り絶対に使わない
+- 実写スポーツ報道として自然で、ドラマティックかつ視覚的に分かりやすくする
+- 4案はカメラ位置や場所を変えても、同じ案件の核心から逸脱しない
+- 「クラブのロゴはOK」「テキストは不要」は出力に含めない（生成側で付ける）`,
+      messages: [{
+        role: 'user',
+        content: `以下の案件だけを根拠にしてください。\n\n${context || '案件情報を取得できませんでした。一般案を作らず、サッカー報道の場面に限定してください。'}`,
+      }],
     });
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = m ? JSON.parse(m[0]) : {};
-    res.json({ prompts: parsed.prompts || [] });
+    const prompts = (Array.isArray(parsed.prompts) ? parsed.prompts : [])
+      .map(p => String(p || '').trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    res.json({ prompts });
   } catch (e) {
+    console.warn('[suggest-bg-prompts]', e.message);
     res.json({ prompts: [] });
   }
 });
@@ -605,37 +650,81 @@ router.post('/v5/face-score', async (req, res) => {
 
   // ─── 候補収集: ストック画像（公式優先）+ X画像 ────────────────
   // PL/LaLiga等の公式リーグ判定（league値が slugified/raw 両方に対応）
-  const _isOfficialLeague = (league) => {
-    const l = (league || '').toLowerCase().replace(/[-]+/g, ' ').trim();
-    return ['premier league', 'la liga', 'bundesliga', 'serie a', 'ligue 1'].includes(l);
+  const _isOfficialLeague = (league, leagueSlug, stockProvider) => {
+    const l = `${league || ''} ${leagueSlug || ''}`.toLowerCase().replace(/[-]+/g, ' ').trim();
+    if (/official/i.test(stockProvider || '')) return true;
+    return ['premier league', 'la liga', 'bundesliga', 'serie a', 'ligue 1']
+      .some(name => l.includes(name));
+  };
+
+  const _collectPeople = () => {
+    const people = [];
+    const add = (name, role) => {
+      const cleanName = String(name || '').replace(/^(?:entity|manager):/, '').trim();
+      const cleanRole = String(role || '').toLowerCase();
+      if (!cleanName || !['player', 'entity'].includes(cleanRole)) return;
+      people.push({ name: cleanName, role: 'player' });
+    };
+
+    const siFile = SI_DATA_FILE(postId);
+    if (fs.existsSync(siFile)) {
+      try {
+        const siData = JSON.parse(fs.readFileSync(siFile, 'utf8'));
+        const entityItems = siData?.boxes?.entity?.items;
+        if (Array.isArray(entityItems)) {
+          for (const item of entityItems) add(item?.label || item?.name, item?.role);
+        }
+        // 旧形式との互換
+        for (const key of Object.keys(siData || {})) {
+          if (key.startsWith('entity:')) add(key, 'player');
+        }
+      } catch (_) {}
+    }
+
+    const modulesFile = MODULES_FILE(postId);
+    if (fs.existsSync(modulesFile)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(modulesFile, 'utf8'));
+        const modules = Array.isArray(parsed) ? parsed : parsed.modules || [];
+        for (const mod of modules) {
+          const subject = String(mod?.binding?.subject || '').toLowerCase();
+          if (subject === 'player') add(mod?.binding?.primary, 'player');
+          if (String(mod?.mainKey || '').startsWith('entity:') && subject !== 'manager') {
+            add(mod.mainKey, 'player');
+          }
+        }
+      } catch (_) {}
+    }
+
+    const seen = new Set();
+    return people.filter(person => {
+      const key = person.name.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   };
 
   // source優先度: official_stock(0) > other_stock(1) > x(2)
   const stockCandidates = [];  // { localPath, source: 'official_stock'|'other_stock' }
   const xCandidates    = [];  // { localPath, source: 'x' }
 
-  // ストック画像: findStockMatchesで各エンティティを検索
-  const siFile = SI_DATA_FILE(postId);
-  if (fs.existsSync(siFile)) {
-    try {
-      const siData = JSON.parse(fs.readFileSync(siFile, 'utf8'));
-      const seenUrls = new Set();
-      for (const key of Object.keys(siData)) {
-        if (stockCandidates.length >= 24) break;
-        const type   = key.startsWith('entity:') ? 'player' : key.startsWith('team:') ? 'team' : null;
-        if (!type || type === 'team') continue;
-        const entity = key.replace(/^(?:entity|manager):/, '').trim();
-        const matches = findStockMatches({ type, entity, limit: 8 });
-        for (const m of matches) {
-          if (!m.url || seenUrls.has(m.url)) continue;
-          seenUrls.add(m.url);
-          const localPath = path.join(ROOT_DIR, m.url.replace(/^\//, ''));
-          if (!fs.existsSync(localPath)) continue;
-          const src = _isOfficialLeague(m.league) ? 'official_stock' : 'other_stock';
-          stockCandidates.push({ localPath, source: src });
-        }
-      }
-    } catch (_) {}
+  // ストック画像: si_data の人物ラベル + modules binding から検索
+  const seenUrls = new Set();
+  for (const person of _collectPeople()) {
+    if (stockCandidates.length >= 24) break;
+    const matches = findStockMatches({ type: 'player', entity: person.name, limit: 8 });
+    for (const m of matches) {
+      if (!m.url || seenUrls.has(m.url)) continue;
+      seenUrls.add(m.url);
+      const localPath = path.join(ROOT_DIR, m.url.replace(/^\//, ''));
+      if (!fs.existsSync(localPath)) continue;
+      const src = _isOfficialLeague(m.league, m.leagueSlug, m.stockProvider)
+        ? 'official_stock'
+        : 'other_stock';
+      stockCandidates.push({ localPath, source: src, entity: person.name });
+      if (stockCandidates.length >= 24) break;
+    }
   }
 
   // X取得済み画像（最大16枚）
@@ -711,43 +800,81 @@ router.post('/v5/gen-bg-from-face', async (req, res) => {
   const absPath = path.isAbsolute(localPath) ? localPath : path.join(ROOT_DIR, localPath.replace(/^\//, ''));
   if (!fs.existsSync(absPath)) return res.status(400).json({ error: 'image not found: ' + absPath });
 
-  const mimeType = /\.png$/i.test(absPath) ? 'image/png' : 'image/jpeg';
+  const mimeType = /\.png$/i.test(absPath)
+    ? 'image/png'
+    : /\.webp$/i.test(absPath) ? 'image/webp' : 'image/jpeg';
   const imgData  = fs.readFileSync(absPath).toString('base64');
+  const cleanedScene = String(sceneDesc)
+    .replace(/^\s*この画像の人物が[、,\s]*/u, '')
+    .replace(/^\s*この人物が[、,\s]*/u, '')
+    .replace(/[。.\s]+$/u, '')
+    .trim();
+  if (!cleanedScene) return res.status(400).json({ error: 'シーン説明が空です' });
 
-  const prompt = `この画像の人物が、${sceneDesc}。`
-    + `YouTubeサムネイル用横型画像。`
-    + `タイトルや文字テキストは一切入れないこと。`
-    + `クラブ・ユニフォームのロゴはOK。`
-    + `映画的でドラマティックな照明。16:9構図。`
-    + `人物を右側または中央に配置し、左側40%を暗めに（テキスト用余白）。`;
+  const model = process.env.GEMINI_IMAGE_GENERATION_MODEL || 'gemini-3.1-flash-image';
+  const baseInstruction = [
+    '参照画像と同じ人物の顔立ちと外見を保つ。',
+    'YouTubeサムネイル用の横型16:9の実写スポーツ報道写真。',
+    '人物を右側または中央に配置し、顔と頭は隠さない。',
+    '左側40%は日本語タイトルを後から置けるよう、暗めで情報量を抑える。',
+    '画像内にはタイトル、字幕、文字、透かしを一切入れない。',
+    'クラブやユニフォームのロゴは自然な範囲で使用してよい。',
+  ].join('');
+  const prompts = [
+    `この画像の人物が、${cleanedScene}。${baseInstruction}映画的でドラマティックな照明。`,
+    `参照画像の人物を使い、次のサッカー報道シーンを自然な実写写真として再現する: ${cleanedScene}。${baseInstruction}過激・暴力的・幻想的な演出は避ける。`,
+  ];
 
-  let genRes;
-  try {
-    genRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
-      {
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType, data: imgData } },
-          ],
-        }],
-        generationConfig: { responseModalities: ['image', 'text'] },
-      },
-      { timeout: 90000, validateStatus: () => true }
-    );
-  } catch (e) {
-    return res.status(500).json({ error: 'Gemini network error: ' + e.message });
+  const diagnostics = [];
+  let imgPart = null;
+  for (let attempt = 0; attempt < prompts.length && !imgPart; attempt++) {
+    let genRes;
+    try {
+      genRes = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          contents: [{
+            parts: [
+              { inlineData: { mimeType, data: imgData } },
+              { text: prompts[attempt] },
+            ],
+          }],
+          generationConfig: {
+            responseModalities: ['IMAGE', 'TEXT'],
+            imageConfig: { aspectRatio: '16:9' },
+          },
+        },
+        { timeout: 120000, validateStatus: () => true }
+      );
+    } catch (e) {
+      diagnostics.push(`attempt ${attempt + 1}: network ${e.message}`);
+      continue;
+    }
+
+    if (genRes.status !== 200) {
+      diagnostics.push(`attempt ${attempt + 1}: HTTP ${genRes.status} ${JSON.stringify(genRes.data).slice(0, 240)}`);
+      continue;
+    }
+
+    const candidate = genRes.data?.candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    imgPart = parts.find(p => p.inlineData?.data || p.inline_data?.data) || null;
+    if (!imgPart) {
+      const text = parts.find(p => p.text)?.text || '';
+      const reason = candidate?.finishReason
+        || candidate?.finishMessage
+        || genRes.data?.promptFeedback?.blockReason
+        || genRes.data?.promptFeedback?.blockReasonMessage
+        || '画像データなし';
+      diagnostics.push(`attempt ${attempt + 1}: ${reason}${text ? ` / ${text.slice(0, 160)}` : ''}`);
+    }
   }
 
-  if (genRes.status !== 200) {
-    return res.status(500).json({ error: `Gemini ${genRes.status}: ${JSON.stringify(genRes.data).slice(0, 300)}` });
-  }
-
-  const imgPart = (genRes.data?.candidates?.[0]?.content?.parts || []).find(p => p.inlineData?.data);
   if (!imgPart) {
-    const reason = genRes.data?.candidates?.[0]?.finishReason || 'unknown';
-    return res.status(500).json({ error: `Gemini: 画像なし (${reason}) — プロンプトを変えて再試行してください` });
+    console.warn('[gen-bg-from-face]', diagnostics.join(' | '));
+    return res.status(500).json({
+      error: `Geminiが画像を返しませんでした: ${diagnostics.join(' | ').slice(0, 500)}`,
+    });
   }
 
   const safePostId = _thumbPostId(postId || 'genbg');
@@ -755,7 +882,8 @@ router.post('/v5/gen-bg-from-face', async (req, res) => {
   fs.mkdirSync(outDir, { recursive: true });
   const outFile = `bg_${Date.now()}.png`;
   const outPath = path.join(outDir, outFile);
-  fs.writeFileSync(outPath, Buffer.from(imgPart.inlineData.data, 'base64'));
+  const generatedData = imgPart.inlineData?.data || imgPart.inline_data?.data;
+  fs.writeFileSync(outPath, Buffer.from(generatedData, 'base64'));
 
   res.json({ ok: true, url: `/v2_thumbs/${safePostId}/${outFile}`, localPath: outPath });
 });
@@ -889,7 +1017,7 @@ function getUI() {
   <!-- ② 背景生成 -->
   <div class="s5card" id="s5-bg-card" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-      <strong style="color:var(--c); font-size:13px;">② 背景生成（GPT-image-1）</strong>
+      <strong style="color:var(--c); font-size:13px;">② 背景生成（Gemini）</strong>
       <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">背景生成</button>
       <span id="s5-bg-status" style="font-size:11px; color:var(--muted);"></span>
     </div>
@@ -983,6 +1111,8 @@ function getUI() {
     ['s5-bg-card','s5-text-card','s5-result-card'].forEach(id => _el(id).style.display = 'none');
     _el('s5-face-grid').innerHTML = '';
     _el('s5-face-status').textContent = '';
+    _el('s5-scene').value = '';
+    _el('s5-scene-presets').innerHTML = '';
     if (post) {
       try {
         const m = await window.fetchJson('/api/v6/get-meta?postId=' + encodeURIComponent(post.id));
@@ -1006,9 +1136,9 @@ function getUI() {
       });
       const prompts = r.prompts || [];
       if (!prompts.length) { box.innerHTML = ''; return; }
-      // 1件目を自動入力
+      // 案件変更前の古い提案を残さず、最新案件の1件目を自動入力
       const sceneEl = _el('s5-scene');
-      if (sceneEl && !sceneEl.value && prompts[0]) sceneEl.value = prompts[0];
+      if (sceneEl && prompts[0]) sceneEl.value = prompts[0];
       box.innerHTML = prompts.map(p => \`
         <button onclick="_s5UsePreset(this.dataset.p)" data-p="\${p.replace(/"/g,'&quot;')}"
           style="font-size:10px;background:#0a0e1a;border:1px solid var(--border);
@@ -1039,7 +1169,7 @@ function getUI() {
       _el('s5-face-grid').innerHTML = imgs.map(img => \`
         <div class="s5face-card" onclick="s5SelectFace('\${img.localPath}','\${img.url}',this)">
           <img src="\${img.url}" loading="lazy" alt="">
-          <div class="s5score">★\${img.score} \${img.faceSize||''} \${img.clarity||''}</div>
+          <div class="s5score">\${img.source==='official_stock'?'公式リーグ':img.source==='other_stock'?'ストック':'X'}　★\${img.score} \${img.faceSize||''} \${img.clarity||''}</div>
         </div>
       \`).join('');
       // 最高スコアを自動選択
@@ -1067,7 +1197,7 @@ function getUI() {
     const scene = _v('s5-scene');
     if (!scene) { alert('シーン説明を入力してください'); return; }
     const btn = _el('s5-bg-btn'); btn.disabled = true;
-    _el('s5-bg-status').textContent = '⏳ GPT-image-1 で生成中...（30〜60秒）';
+    _el('s5-bg-status').textContent = '⏳ Gemini で生成中...（30〜90秒）';
     _el('s5-bg-preview').innerHTML = '';
     _el('s5-text-card').style.display = 'none';
     try {
