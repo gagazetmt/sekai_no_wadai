@@ -360,6 +360,139 @@ router.get('/v5/case-images', (req, res) => {
   res.json({ images: out });
 });
 
+// ─── 完全自動サムネ生成: Gemini背景 + AIパターン選択 + SVG合成 ──
+const compositor = require('../scripts/v2_video/thumb_compositor');
+const { callAI } = require('../scripts/ai_client');
+
+// AIにフォントパターンとテキスト内容を渡してレイアウトを決めてもらう
+async function _selectLayers(title, texts) {
+  const patternList = compositor.patternsForPrompt();
+  const system = `あなたはYouTubeサムネイルのタイポグラフィ専門家です。
+与えられた動画情報をもとに、テキストレイヤーの配置をJSONで返してください。
+
+【キャンバスサイズ】1280×720px
+【テキスト配置エリア】x: 40〜700px（左側60%。右側は人物写真のスペース）
+【y座標の目安】上端60px〜下端680px
+
+【フォントパターン一覧】
+${patternList}
+
+【出力形式】JSONのみ、前置き不要:
+{
+  "layers": [
+    { "text": "テキスト内容（\\nで改行可）", "pattern": 番号, "x": x座標, "y": y座標, "fontSize": px数 }
+  ]
+}
+
+【ルール】
+- layers は2〜4個まで
+- 主役テキストはパターン1〜6（大テキスト）を使う
+- バッジ（13〜15）はあれば1個まで
+- y座標が重ならないよう適切にスペースを取る
+- メインの煽り文を最も大きく目立たせる
+- 日本語YouTube視聴者向けに「速報サッカー」スタイルで`;
+
+  const userMsg = `動画タイトル: ${title}
+テキスト内容:
+${Object.entries(texts).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join('\n')}`;
+
+  const raw = await callAI({
+    forceProvider: 'deepseek',
+    max_tokens: 1000,
+    system,
+    messages: [{ role: 'user', content: userMsg }],
+  });
+
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error('AIレイアウト応答のJSONパース失敗: ' + raw.slice(0, 100));
+  const parsed = JSON.parse(m[0]);
+  if (!Array.isArray(parsed.layers) || !parsed.layers.length) throw new Error('layers配列が空');
+  return parsed.layers;
+}
+
+router.post('/v5/gen-thumb-full', async (req, res) => {
+  const { postId, subject, title, ctx, main, punch, badge } = req.body || {};
+  if (!subject) return res.status(400).json({ error: 'subject required' });
+  if (!main)    return res.status(400).json({ error: 'main text required' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+
+  const t0 = Date.now();
+  const safeId = _thumbPostId(postId || 'thumb');
+  const outDir = path.join(THUMB_OUT_BASE, safeId);
+  fs.mkdirSync(outDir, { recursive: true });
+  const ts = Date.now();
+
+  // ① AI でフォントパターン選択
+  let layers;
+  try {
+    layers = await _selectLayers(
+      title || subject,
+      { ctx, main, punch, badge }
+    );
+  } catch (e) {
+    // フォールバック: シンプルな2レイヤー
+    layers = [
+      { text: ctx || '', pattern: 10, x: 46, y: 80, fontSize: 38 },
+      { text: main,      pattern: 2,  x: 46, y: 280, fontSize: 88 },
+      ...(punch ? [{ text: punch, pattern: 6, x: 46, y: 420, fontSize: 72 }] : []),
+      ...(badge ? [{ text: badge, pattern: 13, x: 46, y: 510, fontSize: 30 }] : []),
+    ].filter(l => l.text);
+    console.warn('[gen-thumb-full] AI layout failed, using fallback:', e.message);
+  }
+
+  // ② Gemini 3.1 Flash Image で背景生成（テキストなし）
+  const bgPrompt = `YouTubeサムネイル用の背景画像。${subject}。`
+    + `重要: テキスト・文字は一切入れないこと。`
+    + `左側40〜50%は暗め（後でテキストを重ねる）。`
+    + `映画的でドラマティックな照明。16:9横型構図。`;
+
+  let bgPath;
+  try {
+    const gr = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: bgPrompt }] }],
+        generationConfig: { responseModalities: ['image', 'text'] },
+      },
+      { timeout: 90000, validateStatus: () => true }
+    );
+    if (gr.status !== 200) {
+      return res.status(500).json({ error: `Gemini ${gr.status}: ${JSON.stringify(gr.data).slice(0, 300)}` });
+    }
+    const imgPart = (gr.data?.candidates?.[0]?.content?.parts || []).find(p => p.inlineData?.data);
+    if (!imgPart) return res.status(500).json({ error: 'Gemini: 画像なし（フィルターに引っかかった可能性）' });
+    bgPath = path.join(outDir, `bg_${ts}.png`);
+    fs.writeFileSync(bgPath, Buffer.from(imgPart.inlineData.data, 'base64'));
+  } catch (e) {
+    return res.status(500).json({ error: '背景生成失敗: ' + e.message });
+  }
+
+  // ③ SVGテキスト + Puppeteer合成
+  const finalFile = `final_${ts}.png`;
+  const finalPath = path.join(outDir, finalFile);
+  try {
+    await compositor.composite({ bgPath, layers, outputPath: finalPath });
+  } catch (e) {
+    return res.status(500).json({ error: 'テキスト合成失敗: ' + e.message });
+  }
+
+  // ④ selectedThumb に保存
+  if (postId) {
+    const meta = readMeta(postId);
+    meta.selectedThumb   = finalFile;
+    meta.selectedThumbAt = new Date().toISOString();
+    writeMeta(postId, meta);
+  }
+
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  const bgUrl    = `/v2_thumbs/${safeId}/bg_${ts}.png`;
+  const finalUrl = `/v2_thumbs/${safeId}/${finalFile}`;
+  console.log(`[gen-thumb-full] ${safeId} layers:${layers.length} ${elapsed}s`);
+  res.json({ ok: true, bgUrl, finalUrl, layers, elapsedSec: parseFloat(elapsed) });
+});
+
 // ─── ① 顔スコアリング ───────────────────────────────────────────
 // images/{postId}/ 以下の全画像を Gemini Vision で採点し、顔スコア順に返す
 router.post('/v5/face-score', async (req, res) => {
@@ -601,95 +734,75 @@ function getUI() {
     .s5thumb-card.selected { border-color: var(--c); box-shadow: 0 0 12px rgba(255,77,77,.4); }
   </style>
 
-  <!-- ───── ✨ 顔→背景→文字 ───── -->
+  <!-- ───── ✨ AI サムネ生成 ───── -->
   <div id="s5pane-fontlayer" class="s5pane">
-
-    <!-- ① 顔選出 -->
     <div class="s5card">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-        <strong style="color:var(--c); font-size:12px;">① 顔選出（Gemini Vision）</strong>
-        <button onclick="s5FlLoadFaces()" class="s5btn" id="s5fl-face-btn">スコアリング実行</button>
-        <span id="s5fl-face-status" style="font-size:11px; color:var(--muted);"></span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+        <strong style="color:var(--c);font-size:13px;">① 背景 + ② テキスト　ワンクリック生成</strong>
+        <span style="font-size:10px;color:var(--muted);">Gemini 3.1 Flash Image → SVG合成 / 約¥10</span>
       </div>
-      <div style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.5;">
-        X取得済み画像の中から、人物の顔が最も鮮明に映っているものをAIが自動選出します。<br>
-        案件ID は自動入力されます。
-      </div>
-      <input type="hidden" id="s5fl-postid">
-      <div id="s5fl-face-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px;"></div>
-    </div>
 
-    <!-- ② 背景生成 -->
-    <div class="s5card" id="s5fl-genbg-card" style="display:none;">
-      <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-        <strong style="color:var(--c); font-size:12px;">② 背景生成（GPT-image-1）</strong>
-        <button onclick="s5FlGenBg()" class="s5btn" id="s5fl-gen-btn">背景生成</button>
-        <span id="s5fl-gen-status" style="font-size:11px; color:var(--muted);"></span>
-      </div>
-      <div style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.5;">
-        選んだ顔画像を参照して「この人物が〜」形式でシーンを生成します。<br>
-        <b>固有名詞不要</b> → 選手名なしでもcelebrityフィルターを回避できます。
-      </div>
-      <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-start; flex-wrap:wrap;">
-        <div>
-          <div style="font-size:10px; color:var(--muted); margin-bottom:4px;">選択中の顔画像</div>
-          <img id="s5fl-selected-img" style="width:160px; border-radius:6px; border:2px solid var(--c);" alt="">
-        </div>
-        <div style="flex:1; min-width:200px;">
-          <label class="s5label">シーン説明（固有名詞なし）</label>
-          <input type="text" id="s5fl-scene" class="s5input" placeholder="スタンフォードブリッジで選手に情熱的に指示している">
-          <div style="font-size:10px; color:var(--muted); margin-top:4px;">例: ピッチで両手を広げてゴールを喜んでいる / トンネルを出てくる場面</div>
-        </div>
-      </div>
-      <div id="s5fl-bg-preview" style="margin-top:8px;"></div>
-    </div>
+      <label class="s5label">背景の被写体・シーン説明</label>
+      <input type="text" id="s5fl-subject" class="s5input" style="margin-bottom:6px;"
+        placeholder="シャビアロンソがチェルシーのスタジアムに入る場面">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:10px;">固有名詞OK（Geminiはフィルターなし）。「テキスト入れて」は不要。</div>
 
-    <!-- ③ フォントレイヤー -->
-    <div class="s5card" id="s5fl-text-card" style="display:none;">
-      <div style="margin-bottom:10px;">
-        <strong style="color:var(--c); font-size:12px;">③ フォントレイヤー（速報サッカー式）</strong>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+      <label class="s5label">動画タイトル（AIがレイアウトを最適化）</label>
+      <input type="text" id="s5fl-title" class="s5input" style="margin-bottom:10px;"
+        placeholder="チェルシー新監督シャビアロンソ就任！低迷する王者を救えるか">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
         <div>
-          <label class="s5label">コンテキスト行（小・上）</label>
-          <input type="text" id="s5fl-ctx" class="s5input" placeholder="最終節の死闘！">
+          <label class="s5label">コンテキスト行（小・上）任意</label>
+          <input type="text" id="s5fl-ctx" class="s5input" placeholder="チェルシー監督就任">
         </div>
         <div>
           <label class="s5label">バッジラベル 任意</label>
-          <input type="text" id="s5fl-badge" class="s5input" placeholder="降格圏内">
+          <input type="text" id="s5fl-badge" class="s5input" placeholder="電撃就任">
         </div>
         <div>
           <label class="s5label">メイン文字（大）※必須</label>
-          <input type="text" id="s5fl-main" class="s5input" placeholder="トッテナム、生き残れるか。">
+          <input type="text" id="s5fl-main" class="s5input" placeholder="シャビアロンソ">
         </div>
         <div>
           <label class="s5label">パンチライン（大・下）任意</label>
-          <input type="text" id="s5fl-punch" class="s5input" placeholder="残留シナリオは！？">
+          <input type="text" id="s5fl-punch" class="s5input" placeholder="低迷する王者を救えるか！？">
         </div>
       </div>
-      <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-        <div style="flex:1; min-width:160px;">
-          <label class="s5label">スタイル</label>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:140px;">
+          <label class="s5label">テキストスタイル</label>
           <select id="s5fl-style" class="s5input">
-            <option value="gold">金文字（移籍・監督就任）</option>
-            <option value="fire">炎文字（優勝争い・クライマックス）</option>
-            <option value="white">白×黒（残留争い・分析）</option>
-            <option value="yellow">黄×白（代表・選手フィーチャー）</option>
+            <option value="gold">金文字</option>
+            <option value="fire">炎文字</option>
+            <option value="white">白×黒</option>
+            <option value="yellow">黄×白（代表）</option>
           </select>
         </div>
-        <div style="flex:1; min-width:160px;">
+        <div style="flex:1;min-width:140px;">
           <label class="s5label">テキスト位置</label>
           <select id="s5fl-pos" class="s5input">
-            <option value="left">左寄せ（選手1人・監督就任）</option>
-            <option value="center">センター（試合プレビュー）</option>
+            <option value="left">左寄せ</option>
+            <option value="center">センター</option>
           </select>
         </div>
       </div>
-      <button onclick="s5FlOpenEditor()" class="s5btn" style="width:100%; font-size:14px; padding:12px;">
-        🎨 エディターで仕上げる →
+
+      <button onclick="s5GenThumbFull()" class="s5btn" id="s5fl-gen-btn"
+        style="width:100%;font-size:14px;padding:12px;">
+        ✨ サムネ生成
       </button>
-      <div style="font-size:10px; color:var(--muted); margin-top:6px; text-align:center;">
-        背景＋フォントレイヤー設定を引き継いでエディターが開きます
+      <div id="s5fl-status" style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;"></div>
+    </div>
+
+    <!-- 結果プレビュー -->
+    <div class="s5card" id="s5fl-result-card" style="display:none;">
+      <strong style="color:var(--c);font-size:12px;display:block;margin-bottom:10px;">生成結果</strong>
+      <img id="s5fl-result-img" style="width:100%;border-radius:6px;border:2px solid var(--c);" alt="">
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button onclick="s5FlSelectResult()" class="s5btn" style="flex:1;">✅ このサムネを採用</button>
+        <button onclick="s5GenThumbFull()" class="s5btn-sub" style="flex:1;">↻ 再生成</button>
       </div>
     </div>
   </div>
@@ -846,80 +959,49 @@ function getUI() {
       STATE.editorLoaded = true;
     }
     if (name === 'fontlayer') {
-      const id = postId();
-      if (id) document.getElementById('s5fl-postid').value = id;
+      // 案件タイトルをsubjectの初期値に設定
+      const title = postTitle();
+      const sub = document.getElementById('s5fl-subject');
+      if (sub && title && !sub.value) sub.value = title;
     }
   };
 
-  // ═══ ✨ 顔→背景→文字 タブ ═══
-  let _s5FlSelectedPath = null;
-  let _s5FlBgUrl = null;
+  // ═══ ✨ AIサムネ生成タブ ═══
+  let _s5FlFinalUrl = null;
 
-  window.s5FlLoadFaces = async function() {
-    const id = postId(); if (!id) { alert('案件を選択してね'); return; }
-    document.getElementById('s5fl-postid').value = id;
-    const grid = document.getElementById('s5fl-face-grid');
-    const st = document.getElementById('s5fl-face-status');
-    const btn = document.getElementById('s5fl-face-btn');
-    grid.innerHTML = '';
-    document.getElementById('s5fl-genbg-card').style.display = 'none';
-    document.getElementById('s5fl-text-card').style.display = 'none';
-    _s5FlSelectedPath = null;
-    btn.disabled = true;
-    st.textContent = '⏳ Gemini Vision でスコアリング中...（30〜60秒）';
-    try {
-      const r = await window.fetchJson('/api/v5/face-score', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ postId: id }),
-      });
-      const imgs = r.images || [];
-      if (!imgs.length) { st.textContent = '画像なし（images/{postId}/ を確認）'; return; }
-      st.textContent = imgs.length + '枚スコア完了 — 顔を選んでね';
-      grid.innerHTML = imgs.map(img => \`
-        <div onclick="s5FlSelectFace('\${img.localPath}','\${img.url}')"
-             style="cursor:pointer;border:2px solid var(--border);border-radius:6px;overflow:hidden;background:#000;aspect-ratio:1/1;position:relative;transition:border-color .15s;"
-             onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
-          <img src="\${img.url}" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy">
-          <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.75);font-size:10px;color:#fff;padding:2px 5px;">
-            ★\${img.score} \${img.faceSize||''} \${img.clarity||''}
-          </div>
-        </div>
-      \`).join('');
-    } catch(e) {
-      st.textContent = 'エラー: ' + e.message;
-    } finally {
-      btn.disabled = false;
-    }
-  };
+  window.s5GenThumbFull = async function() {
+    const subject = (document.getElementById('s5fl-subject') || {}).value?.trim();
+    const main    = (document.getElementById('s5fl-main')    || {}).value?.trim();
+    if (!subject) { alert('背景のシーン説明を入力してね'); return; }
+    if (!main)    { alert('メイン文字を入力してね'); return; }
 
-  window.s5FlSelectFace = function(localPath, url) {
-    _s5FlSelectedPath = localPath;
-    document.getElementById('s5fl-selected-img').src = url;
-    document.getElementById('s5fl-genbg-card').style.display = '';
-    document.getElementById('s5fl-face-status').textContent = '✅ 選択済み → シーンを入力して背景生成へ';
-  };
-
-  window.s5FlGenBg = async function() {
-    if (!_s5FlSelectedPath) { alert('顔画像を選んでね'); return; }
-    const scene = document.getElementById('s5fl-scene').value.trim();
-    if (!scene) { alert('シーン説明を入力してね'); return; }
-    const id = postId() || 'genbg';
     const btn = document.getElementById('s5fl-gen-btn');
-    const st = document.getElementById('s5fl-gen-status');
-    const preview = document.getElementById('s5fl-bg-preview');
+    const st  = document.getElementById('s5fl-status');
+    const rc  = document.getElementById('s5fl-result-card');
     btn.disabled = true;
-    st.textContent = '⏳ GPT-image-1 で生成中...（30〜60秒）';
-    preview.innerHTML = '';
+    rc.style.display = 'none';
+    st.textContent = '⏳ ① Gemini で背景生成中...（20〜40秒）';
+
     try {
-      const r = await window.fetchJson('/api/v5/gen-bg-from-face', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ localPath: _s5FlSelectedPath, sceneDesc: scene, postId: id }),
+      const id = postId();
+      const r = await window.fetchJson('/api/v5/gen-thumb-full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          postId:  id,
+          subject,
+          title: (document.getElementById('s5fl-title')||{}).value?.trim() || subject,
+          ctx:   (document.getElementById('s5fl-ctx')  ||{}).value?.trim() || '',
+          main,
+          punch: (document.getElementById('s5fl-punch')||{}).value?.trim() || '',
+          badge: (document.getElementById('s5fl-badge')||{}).value?.trim() || '',
+        }),
       });
-      _s5FlBgUrl = r.url;
-      preview.innerHTML = \`<img src="\${r.url}" style="width:100%;border-radius:6px;border:2px solid var(--c);margin-top:8px;" alt="">\`;
-      st.textContent = '✅ 背景生成完了！→ フォントレイヤーを設定してエディターへ';
-      document.getElementById('s5fl-text-card').style.display = '';
-      document.getElementById('s5fl-text-card').scrollIntoView({ behavior:'smooth', block:'start' });
+      _s5FlFinalUrl = r.finalUrl;
+      document.getElementById('s5fl-result-img').src = r.finalUrl + '?t=' + Date.now();
+      rc.style.display = '';
+      rc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      st.textContent = \`✅ 完成！（\${r.elapsedSec}秒）　背景: \${r.bgUrl.split('/').pop()}\`;
     } catch(e) {
       st.textContent = 'エラー: ' + e.message;
     } finally {
@@ -927,23 +1009,13 @@ function getUI() {
     }
   };
 
-  window.s5FlOpenEditor = function() {
-    const main = document.getElementById('s5fl-main').value.trim();
-    if (!main) { alert('メイン文字を入力してね'); return; }
-    const params = new URLSearchParams();
-    if (_s5FlBgUrl) params.set('bg', _s5FlBgUrl);
-    const ctx   = document.getElementById('s5fl-ctx').value.trim();
-    const punch = document.getElementById('s5fl-punch').value.trim();
-    const badge = document.getElementById('s5fl-badge').value.trim();
-    const style = document.getElementById('s5fl-style').value;
-    const pos   = document.getElementById('s5fl-pos').value;
-    if (ctx)   params.set('ctx',   ctx);
-               params.set('main',  main);
-    if (punch) params.set('punch', punch);
-    if (badge) params.set('badge', badge);
-               params.set('style', style);
-               params.set('pos',   pos);
-    window.open('/v2_thumbs/_editor/?' + params.toString(), '_blank');
+  window.s5FlSelectResult = function() {
+    if (!_s5FlFinalUrl) return;
+    const fname = _s5FlFinalUrl.split('/').pop();
+    STATE.selectedThumb = fname;
+    const el = document.getElementById('s5-selected-status');
+    if (el) el.textContent = '選択中: ' + fname;
+    alert('採用しました！Step6で投稿できます。');
   };
 
   // ═══ 全自動: 分類 → 文字 → プロンプト → 2枚生成 → AI選定 ═══
