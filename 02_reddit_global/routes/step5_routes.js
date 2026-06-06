@@ -649,7 +649,7 @@ scoreの基準:
       const mimeType = /\.png$/i.test(imgPath) ? 'image/png' : 'image/jpeg';
       const data = fs.readFileSync(imgPath).toString('base64');
       const r = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         { contents: [{ parts: [{ text: scorePrompt }, { inlineData: { mimeType, data } }] }] },
         { timeout: 20000, validateStatus: () => true }
       );
@@ -980,6 +980,9 @@ function getUI() {
       });
       const prompts = r.prompts || [];
       if (!prompts.length) { box.innerHTML = ''; return; }
+      // 1件目を自動入力
+      const sceneEl = _el('s5-scene');
+      if (sceneEl && !sceneEl.value && prompts[0]) sceneEl.value = prompts[0];
       box.innerHTML = prompts.map(p => \`
         <button onclick="_s5UsePreset(this.dataset.p)" data-p="\${p.replace(/"/g,'&quot;')}"
           style="font-size:10px;background:#0a0e1a;border:1px solid var(--border);

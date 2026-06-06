@@ -642,27 +642,25 @@ async function fetchImagesForLabel(postId, label) {
         localPath: imageUrlToLocalPath(url),
         source: sourceMap.get(url) || 'step2',
       })).filter(c => c.localPath);
-      const { ingestImagesForPlayer } = require('../scripts/warehouse_recognize');
-      const adopted = await ingestImagesForPlayer(warehouseCandidates, {
-        postId,
-        label,
-        playerHint: entity,
-        clubHint: teamName || '',
-        source: 'step2-image-fetch',
-        limit: Number(process.env.WAREHOUSE_INGEST_LIMIT || 12),
+      // バックグラウンドで実行（レスポンスをブロックしない）
+      images.warehouse_adopted = [];
+      images.warehouse_status = { ok: true, checked: warehouseCandidates.length, adopted: 0, async: true };
+      setImmediate(async () => {
+        try {
+          const { ingestImagesForPlayer } = require('../scripts/warehouse_recognize');
+          await ingestImagesForPlayer(warehouseCandidates, {
+            postId,
+            label,
+            playerHint: entity,
+            clubHint: teamName || '',
+            source: 'step2-image-fetch',
+            limit: Number(process.env.WAREHOUSE_INGEST_LIMIT || 12),
+          });
+          console.log(`[warehouse-ingest] bg完了: ${label} (${warehouseCandidates.length}枚)`);
+        } catch (e) {
+          console.warn('[warehouse-ingest] bg失敗:', e.message);
+        }
       });
-      images.warehouse_adopted = adopted.map(r => '/' + r.localPath).filter(Boolean);
-      images.warehouse_status = { ok: true, checked: warehouseCandidates.length, adopted: adopted.length };
-      if (adopted.length) {
-        const refreshed = findStockMatches({ type: effectiveType, entity, teamName, teamNameAway, limit: 20 });
-        const seenStock = new Set();
-        images.stock = refreshed.map(m => m.url).filter(url => {
-          if (!url || seenStock.has(url)) return false;
-          seenStock.add(url);
-          return true;
-        });
-        images.stock_meta = refreshed.map(m => ({ url: m.url, role: m.role, name: m.name, score: m.score, usageScore: m.usageScore || 0, visionScore: m.visionScore || 0, confidence: m.confidence ?? null, league: m.league || null }));
-      }
     } catch (e) {
       console.warn('[warehouse-ingest]', e.message);
       images.warehouse_adopted = [];
