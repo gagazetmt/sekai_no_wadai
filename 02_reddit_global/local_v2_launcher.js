@@ -96,26 +96,30 @@ function buildPage() {
 <style>
 /* ── グローバル変数 ── */
 :root {
-  --c:      #ff4d4d;
-  --bg:     #0f1117;
-  --panel:  #161b2e;
-  --border: #2a3050;
-  --text:   #e0e0e0;
-  --muted:  #8a9aba;
+  --c:      #e06b58;
+  --bg:     #151617;
+  --panel:  #1d1f21;
+  --surface:#25282b;
+  --border: #363b40;
+  --text:   #e8e2d8;
+  --muted:  #a6adb5;
   --success:#10b981;
+  --soft-blue:#7db2ff;
+  --soft-green:#6fd39a;
+  --shadow: 0 12px 30px rgba(0, 0, 0, .26);
 }
 
 /* ── ベースリセット ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: sans-serif; background: var(--bg); color: var(--text);
+body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text);
        display: flex; height: 100vh; overflow: hidden; }
 
 /* ── サイドバー（コンパクト化）── */
-.sidebar { width: 220px; background: #0d1220; border-right: 1px solid var(--border);
+.sidebar { width: 220px; background: #17191b; border-right: 1px solid var(--border);
            display: flex; flex-direction: column; flex-shrink: 0;
            transition: transform .25s ease; }
-.sidebar-header { padding: 12px 14px; background: #1a2540; color: var(--c);
-                  font-weight: 900; font-size: 12px; border-bottom: 1px solid #2a3560; letter-spacing: 1px;
+.sidebar-header { padding: 12px 14px; background: #202326; color: var(--c);
+                  font-weight: 900; font-size: 12px; border-bottom: 1px solid var(--border); letter-spacing: 1px;
                   display: flex; justify-content: space-between; align-items: center; }
 .sidebar-close { display: none; background: transparent; border: 1px solid #ff4d4d40;
                  color: var(--c); padding: 4px 9px; border-radius: 4px; cursor: pointer;
@@ -125,35 +129,35 @@ body { font-family: sans-serif; background: var(--bg); color: var(--text);
 .hamburger { display: none; background: transparent; border: 1px solid var(--c);
              color: var(--c); padding: 6px 10px; border-radius: 6px; cursor: pointer;
              font-size: 16px; font-weight: bold; min-height: 36px; }
-.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
                    z-index: 998; }
 .lead-item { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
              padding: 8px 10px; margin-bottom: 6px; cursor: pointer; font-size: 11px;
              transition: border-color .15s; line-height: 1.35; word-break: break-all; }
 .lead-item:hover { border-color: var(--muted); }
-.lead-item.active { border-color: var(--c); border-left: 3px solid var(--c); background: #1e2540; }
+.lead-item.active { border-color: var(--c); border-left: 3px solid var(--c); background: #2a2422; }
 
 /* ── メインエリア ── */
 .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.header { background: #1a2040; padding: 13px 22px; border-bottom: 3px solid var(--c);
+.header { background: #202326; padding: 13px 22px; border-bottom: 3px solid var(--c);
           display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .header h1 { font-size: 18px; color: var(--c); font-weight: 900;
-             text-shadow: 0 0 12px rgba(255,77,77,.35); }
+             text-shadow: none; }
 .header-sub { font-size: 11px; color: var(--muted); }
 
 /* ── ステップナビ ── */
-.steps { display: flex; background: #0d1220; border-bottom: 1px solid #1e2540; flex-shrink: 0; }
-.step-nav { padding: 11px 22px; font-size: 11px; font-weight: bold; color: #3a4a6a; cursor: pointer;
-            transition: color .15s; user-select: none; }
+.steps { display: flex; background: #191b1d; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.step-nav { padding: 11px 22px; font-size: 11px; font-weight: bold; color: #8f98a2; cursor: pointer;
+             transition: color .15s; user-select: none; }
 .step-nav:hover { color: var(--muted); }
 .step-nav.active { color: var(--c); background: var(--panel); border-bottom: 2px solid var(--c); }
 
 /* ── コンテンツスクロール ── */
-.content-scroll { flex: 1; overflow-y: auto; }
+.content-scroll { flex: 1; overflow-y: auto; background: var(--bg); }
 
 /* ── 共通パーツ（各 Step から使用可）── */
 .panel { background: var(--panel); border-radius: 10px; padding: 18px;
-         margin-bottom: 16px; border: 1px solid var(--border); }
+         margin-bottom: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); }
 .step-container { padding: 18px 20px; }
 
 .btn { padding: 8px 16px; border-radius: 7px; cursor: pointer; border: none;
@@ -161,23 +165,27 @@ body { font-family: sans-serif; background: var(--bg); color: var(--text);
 .btn:hover { opacity: 0.85; }
 .btn-primary { background: var(--c); color: #fff; }
 .btn-success { background: var(--success); color: #fff; }
-.btn-sm { background: #1e2a4a; color: var(--text); font-size: 11px; padding: 5px 10px; }
+.btn-sm { background: #30343a; color: var(--text); font-size: 11px; padding: 5px 10px; }
+button { background: var(--c); color:#fff; border:none; border-radius:7px; padding:8px 13px;
+         font-weight:800; font-size:12px; cursor:pointer; }
+button.secondary { background:#30343a; color:#d5dce4; border:1px solid #424850; }
+button:disabled { opacity:.5; cursor:default; }
 
-.inp { background: #0d1220; color: var(--text); border: 1px solid var(--border);
+.inp { background: var(--surface); color: var(--text); border: 1px solid var(--border);
        padding: 7px 10px; border-radius: 6px; font-size: 12px; outline: none; }
 .inp:focus { border-color: var(--c); }
 select.inp { cursor: pointer; }
 
 /* ── 案件一覧（Step1）── */
 .time-group { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.time-summary { background: #1a2840; padding: 9px 14px; cursor: pointer;
-                color: #7dc8ff; font-size: 12px; font-weight: bold; }
-.time-summary:hover { background: #1f3050; }
+.time-summary { background: #202326; padding: 9px 14px; cursor: pointer;
+                color: var(--soft-blue); font-size: 12px; font-weight: bold; }
+.time-summary:hover { background: #282c30; }
 .time-content {}
-.post-row { padding: 9px 14px; border-bottom: 1px solid #1a2540; display: flex;
+.post-row { padding: 9px 14px; border-bottom: 1px solid #30343a; display: flex;
             align-items: center; gap: 10px; font-size: 13px; cursor: pointer; transition: background .1s; }
-.post-row:hover { background: #131a30; }
-.post-row.selected { background: #1a2440; }
+.post-row:hover { background: #202326; }
+.post-row.selected { background: #2a2422; }
 .post-row input[type=checkbox] { flex-shrink: 0; }
 .src-badge { padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: bold; flex-shrink: 0; }
 .badge-reddit { background: #ff4500; color: #fff; }
@@ -204,35 +212,71 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
 .s3-tab:hover { background: #252f4a; }
 .s3-tab-active { color: #fff; border-color: var(--c); }
 
-/* ── 視点パレット ── */
-.vp-card { display:flex; align-items:flex-start; gap:10px; padding:10px 12px;
-           background:#1a2540; border:1px solid #2a3a5a; border-radius:8px;
-           margin-bottom:6px; cursor:pointer; transition:border-color .15s; }
-.vp-card:hover { border-color:#4a6090; }
-.vp-card.vp-fixed { opacity:.8; cursor:default; }
-.vp-card input[type=checkbox] { margin-top:3px; flex-shrink:0; cursor:pointer; }
+/* ── STEP3: 企画ビルダー ── */
+.vp-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+.vp-title { font-size:17px; font-weight:800; color:var(--text); }
+.vp-sub { font-size:11px; color:var(--muted); margin-top:3px; line-height:1.5; }
+.vp-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.vp-status { font-size:11px; color:var(--muted); min-height:16px; }
+.vp-builder { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(280px,.95fr); gap:14px; align-items:start; }
+.vp-column { min-width:0; }
+.vp-column-head { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.vp-column-title { font-size:13px; font-weight:800; color:var(--text); }
+.vp-column-note { font-size:10px; color:var(--muted); }
+.vp-list { display:flex; flex-direction:column; gap:8px; }
+.vp-card { display:grid; grid-template-columns:32px minmax(0,1fr) auto; gap:10px; padding:12px;
+           background:var(--surface); border:1px solid var(--border); border-radius:8px;
+           cursor:pointer; transition:border-color .15s, background .15s, opacity .15s, transform .15s; }
+.vp-card:hover { border-color:#59616b; background:#2b2f34; transform:translateY(-1px); }
+.vp-card.vp-added { opacity:.48; }
+.vp-card.vp-fixed { cursor:default; }
+.vp-card-icon { width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+                font-size:13px; font-weight:900; background:#30343a; color:#f0c6bd; border:1px solid #444a52; }
 .vp-card-body { flex:1; min-width:0; }
-.vp-card-title { font-size:13px; font-weight:600; color:#e2e8f0; margin-bottom:2px; }
-.vp-card-preview { font-size:11px; color:#64748b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.vp-card-script { font-size:11px; color:#94a3b8; margin-top:3px; }
+.vp-card-title { font-size:13px; font-weight:800; color:var(--text); margin-bottom:3px; line-height:1.35; }
+.vp-card-preview { font-size:11px; color:#aab2bb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vp-card-script { font-size:11px; color:#c6cdd4; margin-top:4px; line-height:1.45; }
+.vp-card-bullets { margin:6px 0 0; padding-left:16px; color:#d7dde3; font-size:11px; line-height:1.45; }
+.vp-card-bullets li { margin:1px 0; }
 .vp-type-badge { font-size:9px; font-weight:bold; padding:2px 6px; border-radius:4px;
-                 white-space:nowrap; flex-shrink:0; margin-top:3px; }
-.vp-t-opening,.vp-t-ending   { background:#ff4d4d22; color:#ff4d4d; border:1px solid #ff4d4d44; }
-.vp-t-stats                   { background:#3b82f622; color:#60a5fa; border:1px solid #3b82f644; }
-.vp-t-profile                 { background:#8b5cf622; color:#a78bfa; border:1px solid #8b5cf644; }
-.vp-t-history                 { background:#f59e0b22; color:#fbbf24; border:1px solid #f59e0b44; }
-.vp-t-timeline                { background:#06b6d422; color:#22d3ee; border:1px solid #06b6d444; }
-.vp-t-insight                 { background:#10b98122; color:#34d399; border:1px solid #10b98144; }
-.vp-t-comparison              { background:#ec489922; color:#f472b6; border:1px solid #ec489944; }
-.vp-t-reaction                { background:#f9731622; color:#fb923c; border:1px solid #f9731644; }
-.vp-t-ranking                 { background:#eab30822; color:#facc15; border:1px solid #eab30844; }
-.vp-t-matchcard,.vp-t-picture { background:#64748b22; color:#94a3b8; border:1px solid #64748b44; }
+                 white-space:nowrap; flex-shrink:0; margin-top:2px; }
+.vp-t-opening,.vp-t-ending   { background:#3a2725; color:#ff9a89; border:1px solid #6e443d; }
+.vp-t-stats                   { background:#223047; color:#9fc5ff; border:1px solid #405a84; }
+.vp-t-profile                 { background:#312a47; color:#c3b5ff; border:1px solid #5a4d84; }
+.vp-t-history                 { background:#3a321f; color:#f0c96d; border:1px solid #6c5a2f; }
+.vp-t-timeline                { background:#203a39; color:#80d5cf; border:1px solid #376d68; }
+.vp-t-insight                 { background:#20382b; color:#8be3ab; border:1px solid #386b4a; }
+.vp-t-comparison              { background:#3a2432; color:#f29ac4; border:1px solid #70445f; }
+.vp-t-reaction                { background:#3b2b21; color:#f3b178; border:1px solid #704e35; }
+.vp-t-ranking                 { background:#38351f; color:#eadf74; border:1px solid #6b6534; }
+.vp-t-matchcard,.vp-t-picture { background:#2a3036; color:#cad2dc; border:1px solid #4a535d; }
 .vp-confidence { font-size:10px; font-weight:bold; flex-shrink:0; margin-top:3px; }
-.vp-conf-high   { color:#22c55e; }
-.vp-conf-medium { color:#f59e0b; }
-.vp-conf-low    { color:#ef4444; }
-.vp-palette-footer { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid #2a3a5a; margin-top:8px; }
-.vp-count-label { font-size:12px; color:#64748b; }
+.vp-conf-high   { color:#6fd39a; }
+.vp-conf-medium { color:#e6b35f; }
+.vp-conf-low    { color:#ff8c7a; }
+.vp-hook { font-size:9px; font-weight:900; letter-spacing:.2px; padding:2px 5px; border-radius:4px;
+           background:#332825; color:#ffb199; border:1px solid #5f4038; white-space:nowrap; }
+.vp-subtype { font-size:9px; color:#aab2bb; text-transform:uppercase; }
+.vp-add-btn { background:#4078b8; color:#fff; border:none; border-radius:7px; width:30px; height:30px; font-weight:900; cursor:pointer; }
+.vp-add-btn:disabled { background:#454a51; cursor:default; }
+.vp-card-toggle { display:none; font-size:10px; color:#aab2bb; margin-top:5px; }
+.vp-plan-box { background:#202326; border:1px solid var(--border); border-radius:8px; padding:10px; }
+.vp-plan-empty { padding:24px 12px; text-align:center; color:#aab2bb; font-size:12px; border:1px dashed #4c535b; border-radius:8px; }
+.vp-plan-item { display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:9px; align-items:start;
+                background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; }
+.vp-plan-no { width:24px; height:24px; border-radius:999px; background:#30343a; color:#d5dce4;
+              display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; }
+.vp-plan-main { min-width:0; }
+.vp-plan-title { font-size:12px; font-weight:800; color:var(--text); line-height:1.35; margin-bottom:5px; }
+.vp-plan-script { width:100%; min-height:48px; resize:vertical; margin-top:6px; padding:7px 8px;
+                  background:#17191b; border:1px solid #424850; border-radius:6px; color:#d7dde3; font-size:11px; line-height:1.45; }
+.vp-plan-tools { display:flex; flex-direction:column; gap:5px; }
+.vp-icon-btn { width:28px; height:28px; border-radius:7px; padding:0; display:flex; align-items:center;
+               justify-content:center; background:#30343a; color:#d5dce4; border:1px solid #424850; }
+.vp-icon-btn:disabled { opacity:.35; cursor:default; }
+.vp-palette-footer { display:flex; align-items:center; justify-content:space-between; gap:12px;
+                     padding:12px 0 0; border-top:1px solid var(--border); margin-top:12px; flex-wrap:wrap; }
+.vp-count-label { font-size:12px; color:var(--muted); }
 
 /* ════════════════════════════════════════════════
    📱 タブレット (≤1024px) — 中間ブレイクポイント
@@ -243,6 +287,7 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   .header h1 { font-size: 16px; }
   .step-nav { padding: 10px 14px; }
   .step-container { padding: 14px 16px; }
+  .vp-builder { grid-template-columns:1fr; }
 }
 
 /* ════════════════════════════════════════════════
@@ -300,6 +345,20 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   .lead-item { padding: 12px 14px; font-size: 12px; }
   .cand-row, .si-hist-row { padding: 12px; font-size: 12px; }
   .time-summary { padding: 12px 14px; font-size: 12px; }
+  .vp-head { gap:10px; }
+  .vp-title { font-size:15px; }
+  .vp-actions { width:100%; }
+  .vp-actions button { flex:1; min-height:42px; }
+  .vp-card { padding:12px; }
+  .vp-plan-box { padding:8px; }
+  .vp-plan-item { grid-template-columns:26px minmax(0,1fr); }
+  .vp-plan-tools { grid-column:1 / -1; flex-direction:row; justify-content:flex-end; }
+  .vp-icon-btn { width:36px; height:34px; }
+  .vp-palette-footer button { width:100%; min-height:44px; }
+  .vp-card { grid-template-columns:32px minmax(0,1fr) auto; }
+  .vp-card-details { display:none; }
+  .vp-card.vp-card-open .vp-card-details { display:block; }
+  .vp-card-toggle { display:block; }
 
   /* ── pre：横スクロール保険 ── */
   pre { font-size: 11px; padding: 10px; max-width: 100%;
@@ -502,11 +561,10 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
   <div class="steps">
     <div class="step-nav active" id="nav1"  onclick="goStep(1)">1. 案件選択</div>
     <div class="step-nav"        id="nav2"  onclick="goStep(2)">2. データ取得</div>
-    <div class="step-nav"        id="nav25" onclick="goStep(25)">3. 視点パレット</div>
-    <div class="step-nav"        id="nav3"  onclick="goStep(3)" style="font-size:10px;opacity:.5;">[旧構成]</div>
-    <div class="step-nav"        id="nav4"  onclick="goStep(4)">5. 脚本編集</div>
-    <div class="step-nav"        id="nav5"  onclick="goStep(5)">6. サムネ生成</div>
-    <div class="step-nav"        id="nav6"  onclick="goStep(6)">7. 動画投稿</div>
+    <div class="step-nav"        id="nav25" onclick="goStep(25)">3. 企画ビルダー</div>
+    <div class="step-nav"        id="nav4"  onclick="goStep(4)">4. 脚本編集</div>
+    <div class="step-nav"        id="nav5"  onclick="goStep(5)">5. サムネ生成</div>
+    <div class="step-nav"        id="nav6"  onclick="goStep(6)">6. 動画投稿</div>
     <div class="step-nav"        id="nav35" onclick="goStep(35)" style="display:none;font-size:9px;opacity:.4;">[旧3.5(裏)]</div>
   </div>
   <div class="content-scroll">
@@ -515,21 +573,48 @@ pre { background: #0d1220; padding: 12px; border-radius: 8px; font-size: 11px;
     ${s2UI()}
     <div id="step25" class="step-container" style="display:none">
 <div class="panel" style="padding:16px 18px;">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
-    <button id="vpGenBtn" onclick="window.generateViewpoints()">📌 視点カードを生成</button>
-    <button class="secondary" id="vpRegenBtn" onclick="window.generateViewpoints()" style="display:none;font-size:11px;">再生成</button>
-    <span id="vpStatus" style="font-size:11px;color:#94a3b8;"></span>
+  <div class="vp-head">
+    <div>
+      <div class="vp-title">企画ビルダー</div>
+      <div class="vp-sub">AIが出した企画ピースをタップして、相棒の企画書に積んでいく画面です。</div>
+    </div>
+    <div class="vp-actions">
+      <button id="vpGenBtn" onclick="window.generateViewpoints()">企画ピース生成</button>
+      <button class="secondary" id="vpAutoBtn" onclick="window.autoBuildViewpointPlan()" style="display:none;font-size:11px;">量産おまかせ</button>
+      <button class="secondary" id="vpRegenBtn" onclick="window.generateViewpoints()" style="display:none;font-size:11px;">再生成</button>
+    </div>
   </div>
-  <div id="vpCards" style="color:#64748b;font-size:12px;padding:24px;text-align:center;">
-    案件を選択して「視点カードを生成」を押してください
+  <div id="vpStatus" class="vp-status"></div>
+  <div class="vp-builder">
+    <div class="vp-column">
+      <div class="vp-column-head">
+        <div>
+          <div class="vp-column-title">AIの企画ピース</div>
+          <div class="vp-column-note">タップで右の企画書に追加</div>
+        </div>
+      </div>
+      <div id="vpCards" class="vp-list" style="color:#64748b;font-size:12px;padding:18px;text-align:center;border:1px dashed #334155;border-radius:8px;">
+        案件を選択して「企画ピース生成」を押してください
+      </div>
+    </div>
+    <div class="vp-column">
+      <div class="vp-column-head">
+        <div>
+          <div class="vp-column-title">相棒の企画書</div>
+          <div class="vp-column-note">順番変更・指示文編集OK</div>
+        </div>
+      </div>
+      <div id="vpPlan" class="vp-plan-box">
+        <div class="vp-plan-empty">企画ピースをタップするとここに追加されます</div>
+      </div>
+    </div>
   </div>
   <div class="vp-palette-footer" id="vpFooter" style="display:none;">
-    <span class="vp-count-label" id="vpCountLabel">0枚選択</span>
-    <button onclick="window.generateFromViewpoints()">この視点で脚本生成 →</button>
+    <span class="vp-count-label" id="vpCountLabel">0枚の企画</span>
+    <button onclick="window.generateFromViewpoints()">この企画書で脚本生成 →</button>
   </div>
 </div>
 </div>
-    ${s3UI()}
     ${s35UI()}
     ${s4UI()}
     ${s5UI()}
@@ -572,7 +657,7 @@ window.fetchJson = async function(url, opts) {
 
 /* ── ステップナビ ── */
 window.goStep = function(n) {
-  [1, 2, 25, 3, 35, 4, 5, 6].forEach(i => {
+  [1, 2, 25, 35, 4, 5, 6].forEach(i => {
     const content = document.getElementById('step' + i);
     const nav     = document.getElementById('nav' + i);
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
@@ -584,9 +669,9 @@ window.goStep = function(n) {
 };
 
 /* ════════════════════════════════════════
-   📌 視点パレット（step25）
+   STEP3: 企画ビルダー（企画ピース → 企画書）
    ════════════════════════════════════════ */
-window._vpState = { cards: [], generating: false };
+window._vpState = { cards: [], plan: [], generating: false, postId: null, openCards: {} };
 
 window._vpEsc = function(s) {
   return String(s == null ? '' : s)
@@ -608,68 +693,355 @@ window._vpTypeCls = function(slideType) {
   return map[slideType] || 'vp-t-matchcard';
 };
 
+window._vpTypeIcon = function(slideType) {
+  var map = {
+    opening:'OP', ending:'ED', stats:'#', profile:'ID', history:'YR',
+    timeline:'TL', insight:'IN', comparison:'VS', reaction:'RX',
+    ranking:'RK', matchcard:'MC', picture:'PX'
+  };
+  return map[slideType] || 'SL';
+};
+
+window._vpClone = function(card) {
+  return Object.assign({}, card, { bullets: Array.isArray(card && card.bullets) ? card.bullets.slice(0, 6) : [] });
+};
+
+window._vpHasInPlan = function(cardId) {
+  return (window._vpState.plan || []).some(function(c) { return c && c.id === cardId; });
+};
+
+window._vpBulletHtml = function(card, max) {
+  var bs = Array.isArray(card && card.bullets) ? card.bullets.slice(0, max || 6) : [];
+  if (!bs.length) return '';
+  return '<ul class="vp-card-bullets">' + bs.map(function(b) {
+    return '<li>' + window._vpEsc(b) + '</li>';
+  }).join('') + '</ul>';
+};
+
+window._vpFallbackCard = function(type) {
+  if (type === 'opening') {
+    return { id:'opening', title:'動画冒頭フック', slideType:'opening', mainKey:'opening',
+      secondary:null, recipeKey:null, scriptDir:'タイトルで視聴者を掴む', confidence:'high', bullets:[] };
+  }
+  return { id:'ending', title:'締め・問いかけ', slideType:'ending', mainKey:'ending',
+    secondary:null, recipeKey:null, scriptDir:'視聴者への投げかけと登録誘導', confidence:'high', bullets:[] };
+};
+
+window._vpResetPlan = function() {
+  var cards = window._vpState.cards || [];
+  var opening = cards.find(function(c) { return c.slideType === 'opening'; }) || window._vpFallbackCard('opening');
+  var ending  = cards.find(function(c) { return c.slideType === 'ending'; })  || window._vpFallbackCard('ending');
+  window._vpState.plan = [window._vpClone(opening), window._vpClone(ending)];
+};
+
 window._vpRenderCards = function(cards) {
-  if (!cards || !cards.length) return '<div class="empty">カードなし</div>';
+  var pool = (cards || []).filter(function(c) { return c && !window._vpIsFixed(c.slideType); });
+  if (!pool.length) return '<div class="vp-plan-empty">企画ピースなし</div>';
   var html = '';
-  for (var i = 0; i < cards.length; i++) {
-    var card = cards[i];
-    var fixed = window._vpIsFixed(card.slideType);
+  for (var i = 0; i < pool.length; i++) {
+    var card = pool[i];
+    var realIdx = cards.indexOf(card);
+    var added = window._vpHasInPlan(card.id);
     var conf = card.confidence || 'medium';
     var dot = conf === 'high' ? '●' : conf === 'medium' ? '◐' : '○';
     var confCls = 'vp-confidence vp-conf-' + conf;
     var typeCls = window._vpTypeCls(card.slideType);
-    html += '<div class="vp-card' + (fixed ? ' vp-fixed' : '') + '" onclick="window._vpToggle(' + i + ',event)">';
-    html += '<input type="checkbox"' + (fixed ? ' checked disabled' : ' data-vp-idx="' + i + '"') + '>';
+    var hook = Math.max(0, Math.min(100, Number(card.hookScore) || 0));
+    var subtype = card.slideType === 'insight' && card.insightSubtype && card.insightSubtype !== 'none' ? card.insightSubtype : '';
+    var open = !!(window._vpState.openCards && window._vpState.openCards[card.id]);
+    html += '<div class="vp-card' + (added ? ' vp-added' : '') + (open ? ' vp-card-open' : '') + '" onclick="window._vpCardTap(' + realIdx + ',event)">';
+    html += '<div class="vp-card-icon ' + typeCls + '">' + window._vpEsc(window._vpTypeIcon(card.slideType)) + '</div>';
     html += '<div class="vp-card-body">';
     html += '<div class="vp-card-title">' + window._vpEsc(card.title) + '</div>';
+    html += '<div class="vp-card-toggle">' + (open ? '詳細を閉じる' : '詳細を見る') + '</div>';
+    html += '<div class="vp-card-details">';
     if (card.dataPreview) html += '<div class="vp-card-preview">' + window._vpEsc(card.dataPreview) + '</div>';
     if (card.scriptDir)   html += '<div class="vp-card-script">' + window._vpEsc(card.scriptDir) + '</div>';
+    if (card.slideType === 'insight') html += window._vpBulletHtml(card, 6);
     html += '</div>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">';
     html += '<span class="vp-type-badge ' + typeCls + '">' + window._vpEsc(card.slideType) + '</span>';
+    if (hook) html += '<span class="vp-hook">HOOK ' + hook + '</span>';
+    if (subtype) html += '<span class="vp-subtype">' + window._vpEsc(subtype) + '</span>';
     html += '<span class="' + confCls + '">' + dot + '</span>';
+    html += '<button class="vp-add-btn" title="企画書に追加" onclick="window._vpAddToPlan(' + realIdx + ');event.stopPropagation();" ' + (added ? 'disabled' : '') + '>+</button>';
+    html += '</div>';
     html += '</div>';
   }
   return html;
 };
 
-window._vpUpdateFooter = function() {
-  var cards = window._vpState.cards;
-  var count = 0;
-  for (var i = 0; i < cards.length; i++) {
-    if (window._vpIsFixed(cards[i].slideType)) { count++; continue; }
-    var cb = document.querySelector('[data-vp-idx="' + i + '"]');
-    if (cb && cb.checked) count++;
+window._vpRenderPlan = function() {
+  var planEl = document.getElementById('vpPlan');
+  if (!planEl) return;
+  var plan = window._vpState.plan || [];
+  if (!plan.length) {
+    planEl.innerHTML = '<div class="vp-plan-empty">企画ピースをタップするとここに追加されます</div>';
+    return;
   }
-  var lbl = document.getElementById('vpCountLabel');
-  if (lbl) lbl.textContent = count + '枚選択中';
-  var footer = document.getElementById('vpFooter');
-  if (footer) footer.style.display = count >= 3 ? '' : 'none';
+  var html = '';
+  for (var i = 0; i < plan.length; i++) {
+    var card = plan[i];
+    var fixed = window._vpIsFixed(card.slideType);
+    var typeCls = window._vpTypeCls(card.slideType);
+    var canUp = !fixed && i > 1;
+    var canDown = !fixed && i < plan.length - 2;
+    html += '<div class="vp-plan-item">';
+    html += '<div class="vp-plan-no">' + (i + 1) + '</div>';
+    html += '<div class="vp-plan-main">';
+    html += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">';
+    html += '<span class="vp-card-icon ' + typeCls + '" style="width:24px;height:24px;font-size:10px;">' + window._vpEsc(window._vpTypeIcon(card.slideType)) + '</span>';
+    html += '<span class="vp-type-badge ' + typeCls + '">' + window._vpEsc(card.slideType) + '</span>';
+    if (card.hookScore) html += '<span class="vp-hook">HOOK ' + Math.max(0, Math.min(100, Number(card.hookScore) || 0)) + '</span>';
+    html += '<span class="vp-plan-title">' + window._vpEsc(card.title) + '</span>';
+    html += '</div>';
+    if (card.slideType === 'insight') html += window._vpBulletHtml(card, 6);
+    html += '<textarea class="vp-plan-script" oninput="window._vpEditPlanScript(' + i + ',this.value)">' + window._vpEsc(card.scriptDir || '') + '</textarea>';
+    html += '</div>';
+    html += '<div class="vp-plan-tools">';
+    html += '<button class="vp-icon-btn" title="上へ" onclick="window._vpMovePlan(' + i + ',-1)"' + (canUp ? '' : ' disabled') + '>↑</button>';
+    html += '<button class="vp-icon-btn" title="下へ" onclick="window._vpMovePlan(' + i + ',1)"' + (canDown ? '' : ' disabled') + '>↓</button>';
+    html += '<button class="vp-icon-btn" title="削除" onclick="window._vpRemovePlan(' + i + ')"' + (fixed ? ' disabled' : '') + '>×</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+  planEl.innerHTML = html;
 };
 
-window._vpToggle = function(idx, evt) {
-  var card = (window._vpState.cards || [])[idx];
-  if (!card || window._vpIsFixed(card.slideType)) return;
-  var cb = document.querySelector('[data-vp-idx="' + idx + '"]');
-  if (!cb) return;
-  if (evt && evt.target !== cb) cb.checked = !cb.checked;
+window._vpRenderAll = function() {
+  var cardsEl = document.getElementById('vpCards');
+  if (cardsEl) {
+    cardsEl.style.padding = '0';
+    cardsEl.style.borderStyle = 'none';
+    cardsEl.style.textAlign = 'left';
+    cardsEl.innerHTML = window._vpRenderCards(window._vpState.cards || []);
+  }
+  window._vpRenderPlan();
   window._vpUpdateFooter();
 };
 
-window.step25Init = function() {
-  /* 案件が変わったら前回カードをクリア */
-  var postId = window.APP && window.APP.selected && window.APP.selected.id;
-  if (!postId) {
-    var el = document.getElementById('vpCards');
-    if (el) el.innerHTML = '<div style="color:#64748b;padding:24px;text-align:center;">先に案件を選択してください</div>';
+window._vpUpdateFooter = function() {
+  var plan = window._vpState.plan || [];
+  var middleCount = plan.filter(function(c) { return c && !window._vpIsFixed(c.slideType); }).length;
+  var lbl = document.getElementById('vpCountLabel');
+  if (lbl) lbl.textContent = '企画ピース ' + middleCount + '枚 / 全' + plan.length + '枚';
+  var footer = document.getElementById('vpFooter');
+  if (footer) footer.style.display = middleCount >= 1 ? '' : 'none';
+};
+
+window._vpAddToPlan = function(idx) {
+  var card = (window._vpState.cards || [])[idx];
+  if (!card || window._vpIsFixed(card.slideType) || window._vpHasInPlan(card.id)) return;
+  var plan = window._vpState.plan || [];
+  var insertAt = Math.max(0, plan.findIndex(function(c) { return c.slideType === 'ending'; }));
+  if (insertAt < 0) insertAt = plan.length;
+  plan.splice(insertAt, 0, window._vpClone(card));
+  window._vpState.plan = plan;
+  window._vpRenderAll();
+};
+
+window._vpCardTap = function(idx, evt) {
+  var card = (window._vpState.cards || [])[idx];
+  if (!card || window._vpIsFixed(card.slideType)) return;
+  if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+    window._vpState.openCards = window._vpState.openCards || {};
+    window._vpState.openCards[card.id] = !window._vpState.openCards[card.id];
+    window._vpRenderAll();
     return;
   }
-  /* 生成済みカードがあれば再描画だけ */
-  if (window._vpState.cards && window._vpState.cards.length && window._vpState.postId === postId) {
-    var el2 = document.getElementById('vpCards');
-    if (el2) el2.innerHTML = window._vpRenderCards(window._vpState.cards);
-    window._vpUpdateFooter();
+  window._vpAddToPlan(idx);
+};
+
+window._vpRemovePlan = function(idx) {
+  var plan = window._vpState.plan || [];
+  if (!plan[idx] || window._vpIsFixed(plan[idx].slideType)) return;
+  plan.splice(idx, 1);
+  window._vpRenderAll();
+};
+
+window._vpMovePlan = function(idx, dir) {
+  var plan = window._vpState.plan || [];
+  var next = idx + dir;
+  if (!plan[idx] || window._vpIsFixed(plan[idx].slideType)) return;
+  if (next <= 0 || next >= plan.length - 1) return;
+  var tmp = plan[idx];
+  plan[idx] = plan[next];
+  plan[next] = tmp;
+  window._vpRenderAll();
+};
+
+window._vpEditPlanScript = function(idx, value) {
+  if (window._vpState.plan && window._vpState.plan[idx]) {
+    window._vpState.plan[idx].scriptDir = value;
+  }
+};
+
+window._vpCardScore = function(card) {
+  var n = Number(card && card.hookScore);
+  if (!isFinite(n) || n <= 0) n = 50;
+  if (card && card.confidence === 'high') n += 5;
+  if (card && card.confidence === 'low') n -= 8;
+  return Math.max(0, Math.min(100, n));
+};
+
+window._vpBalancedMiddle = function(source, targetCount) {
+  var cards = (source || []).filter(function(c) { return c && !window._vpIsFixed(c.slideType); });
+  var picked = [];
+  var used = {};
+  var insightCount = 0;
+  var visualTypes = { profile:1, stats:1, history:1, timeline:1, picture:1, comparison:1, matchcard:1 };
+  cards = cards.slice().sort(function(a, b) { return window._vpCardScore(b) - window._vpCardScore(a); });
+  function canPick(c) {
+    if (!c || used[c.id]) return false;
+    if (c.slideType === 'insight' && insightCount >= 4) return false;
+    var last = picked[picked.length - 1];
+    var prev = picked[picked.length - 2];
+    if (c.slideType === 'insight' && last && prev && last.slideType === 'insight' && prev.slideType === 'insight') return false;
+    return true;
+  }
+  function push(c) {
+    if (!canPick(c)) return false;
+    picked.push(window._vpClone(c));
+    used[c.id] = true;
+    if (c.slideType === 'insight') insightCount++;
+    return true;
+  }
+  cards.filter(function(c) { return visualTypes[c.slideType]; }).forEach(function(c) {
+    if (picked.length < targetCount) push(c);
+  });
+  cards.forEach(function(c) {
+    if (picked.length < targetCount) push(c);
+  });
+  return picked;
+};
+
+window._vpRepairPlanBalance = function(plan) {
+  if (!Array.isArray(plan) || plan.length < 3) return plan || [];
+  var opening = plan.find(function(c) { return c && c.slideType === 'opening'; }) || window._vpFallbackCard('opening');
+  var ending = plan.find(function(c) { return c && c.slideType === 'ending'; }) || window._vpFallbackCard('ending');
+  var middle = plan.filter(function(c) { return c && !window._vpIsFixed(c.slideType); });
+  var out = [];
+  var stash = [];
+  var insightCount = 0;
+  for (var i = 0; i < middle.length; i++) {
+    var c = middle[i];
+    if (c.slideType === 'insight' && insightCount >= 4) { stash.push(c); continue; }
+    var last = out[out.length - 1];
+    var prev = out[out.length - 2];
+    if (c.slideType === 'insight' && last && prev && last.slideType === 'insight' && prev.slideType === 'insight') {
+      stash.push(c);
+      continue;
+    }
+    out.push(c);
+    if (c.slideType === 'insight') insightCount++;
+  }
+  stash.forEach(function(c) {
+    if (c.slideType === 'insight' && insightCount >= 4) return;
+    out.push(c);
+    if (c.slideType === 'insight') insightCount++;
+  });
+  return [window._vpClone(opening)].concat(out.map(window._vpClone), [window._vpClone(ending)]);
+};
+
+window.autoBuildViewpointPlan = function() {
+  if (!window._vpState.cards || !window._vpState.cards.length) { alert('先に企画ピースを生成してください'); return; }
+  var opening = (window._vpState.cards || []).find(function(c) { return c.slideType === 'opening'; }) || window._vpFallbackCard('opening');
+  var ending = (window._vpState.cards || []).find(function(c) { return c.slideType === 'ending'; }) || window._vpFallbackCard('ending');
+  var middle = window._vpBalancedMiddle(window._vpState.cards, 8);
+  window._vpState.plan = [window._vpClone(opening)].concat(middle, [window._vpClone(ending)]);
+  window._vpRenderAll();
+  var status = document.getElementById('vpStatus');
+  if (status) status.textContent = '量産向けに強い企画ピースを自動で組みました。必要なら順番と指示文だけ微調整してください';
+};
+
+window._vpAttachImagesFromSelections = function(modules, selections) {
+  var all = selections || {};
+  var labels = Object.keys(all);
+  if (!labels.length) return modules;
+  var firstPool = null;
+  for (var p = 0; p < labels.length && !firstPool; p++) {
+    var arr0 = all[labels[p]];
+    if (Array.isArray(arr0) && arr0.length) firstPool = arr0[0];
+  }
+  return (modules || []).map(function(m) {
+    if (!m || (Array.isArray(m.images) && m.images.length)) return m;
+    var cands = [];
+    if (typeof m.mainKey === 'string' && m.mainKey.indexOf('entity:') === 0) {
+      cands.push(m.mainKey);
+      cands.push(m.mainKey.slice(7));
+    }
+    if (m.secondary) {
+      cands.push(m.secondary);
+      if (String(m.secondary).indexOf(':') < 0) cands.push('entity:' + m.secondary);
+    }
+    var picked = null;
+    for (var i = 0; i < cands.length && !picked; i++) {
+      var arr = all[cands[i]];
+      if (Array.isArray(arr) && arr.length) picked = arr[0];
+    }
+    if (!picked && (m.type === 'opening' || m.type === 'ending' || m.type === 'insight' || m.type === 'picture')) {
+      picked = firstPool;
+    }
+    if (picked) m.images = [picked];
+    return m;
+  });
+};
+
+window._vpRepairFinalModules = function(modules) {
+  return (modules || []).map(function(m) {
+    if (!m) return m;
+    var out = Object.assign({}, m);
+    var bullets = Array.isArray(out.viewpointBullets) ? out.viewpointBullets.filter(Boolean).slice(0, 6) : [];
+    if (!out.narration && out.scriptDir) out.narration = out.scriptDir;
+    if (out.type === 'insight') {
+      if (!Array.isArray(out.catchphrases) || !out.catchphrases.length) {
+        out.catchphrases = bullets.map(function(b) { return { text: String(b).slice(0, 18), chunkText: String(b) }; }).slice(0, 6);
+      }
+      if (!Array.isArray(out.narrationChunks) || !out.narrationChunks.length) {
+        out.narrationChunks = bullets.length ? bullets : null;
+      }
+    }
+    if ((out.type === 'profile' || out.type === 'stats' || out.type === 'history') &&
+        (!Array.isArray(out.dataSlots) || !out.dataSlots.length) && out.dataPreview) {
+      var parts = String(out.dataPreview).split(/\s*[/／・,、]\s*/).filter(Boolean).slice(0, 6);
+      out.dataSlots = parts.map(function(p, i) {
+        var kv = String(p).split(/[:：]/);
+        return { label: (kv[0] || ('項目' + (i + 1))).slice(0, 12), value: (kv[1] || kv[0] || '').slice(0, 36) };
+      });
+    }
+    if (out.type === 'picture' && (!Array.isArray(out.images) || !out.images.length) && out.mainKey) {
+      out.imagePromptHint = out.title || out.scriptDir || out.mainKey;
+    }
+    return out;
+  });
+};
+
+window.step25Init = function() {
+  var postId = window.APP && window.APP.selected && window.APP.selected.id;
+  var cardsEl = document.getElementById('vpCards');
+  var planEl = document.getElementById('vpPlan');
+  var footer = document.getElementById('vpFooter');
+  if (!postId) {
+    window._vpState.cards = [];
+    window._vpState.plan = [];
+    if (cardsEl) cardsEl.innerHTML = '<div style="color:#64748b;padding:24px;text-align:center;">先に案件を選択してください</div>';
+    if (planEl) planEl.innerHTML = '<div class="vp-plan-empty">案件選択後に企画書を組み立てます</div>';
+    if (footer) footer.style.display = 'none';
+    return;
+  }
+  if (window._vpState.postId && window._vpState.postId !== postId) {
+    window._vpState.cards = [];
+    window._vpState.plan = [];
+    window._vpState.openCards = {};
+  }
+  window._vpState.postId = postId;
+  if (window._vpState.cards && window._vpState.cards.length) {
+    window._vpRenderAll();
     var rb = document.getElementById('vpRegenBtn');
+    var ab = document.getElementById('vpAutoBtn');
     if (rb) rb.style.display = '';
+    if (ab) ab.style.display = '';
   }
 };
 
@@ -679,16 +1051,23 @@ window.generateViewpoints = function() {
   if (window._vpState.generating) return;
   window._vpState.generating = true;
   window._vpState.postId = postId;
+  window._vpState.cards = [];
+  window._vpState.plan = [];
+  window._vpState.openCards = {};
 
   var btn    = document.getElementById('vpGenBtn');
   var regen  = document.getElementById('vpRegenBtn');
+  var autoBtn = document.getElementById('vpAutoBtn');
   var status = document.getElementById('vpStatus');
   var cardsEl = document.getElementById('vpCards');
+  var planEl = document.getElementById('vpPlan');
   var footer = document.getElementById('vpFooter');
   if (btn)    btn.disabled = true;
   if (regen)  regen.style.display = 'none';
-  if (status) status.textContent = '生成中...';
-  if (cardsEl) cardsEl.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">視点カードを生成しています（20〜40秒）...</div>';
+  if (autoBtn) autoBtn.style.display = 'none';
+  if (status) status.textContent = '企画ピース生成中...';
+  if (cardsEl) cardsEl.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">記事・Wiki・データから企画ピースを生成しています（20〜40秒）...</div>';
+  if (planEl) planEl.innerHTML = '<div class="vp-plan-empty">生成後、ここに冒頭と締めが入ります</div>';
   if (footer) footer.style.display = 'none';
 
   window.fetchJson('/api/v3/generate-viewpoints', {
@@ -705,20 +1084,21 @@ window.generateViewpoints = function() {
           if (r2.status === 'done') {
             window._vpState.cards = r2.cards || [];
             window._vpState.generating = false;
-            if (cardsEl) cardsEl.innerHTML = window._vpRenderCards(window._vpState.cards);
-            if (status)  status.textContent = window._vpState.cards.length + '枚生成完了';
-            if (btn)     btn.disabled = false;
-            if (regen)   regen.style.display = '';
-            window._vpUpdateFooter();
+            window._vpResetPlan();
+            if (status) status.textContent = window._vpState.cards.length + '枚生成完了。使うピースをタップして企画書へ追加してください';
+            if (btn) btn.disabled = false;
+            if (regen) regen.style.display = '';
+            if (autoBtn) autoBtn.style.display = '';
+            window._vpRenderAll();
             return;
           }
           tick++;
           if (tick > 60) { window._vpState.generating = false; throw new Error('タイムアウト'); }
-          if (status) status.textContent = '生成中... ' + (tick * 3) + 's';
+          if (status) status.textContent = '企画ピース生成中... ' + (tick * 3) + 's';
           poll();
         }).catch(function(e2) {
           window._vpState.generating = false;
-          if (status)  status.textContent = 'エラー: ' + (e2.message || e2);
+          if (status) status.textContent = 'エラー: ' + (e2.message || e2);
           if (cardsEl) cardsEl.innerHTML = '<div style="color:#ef4444;padding:20px;">' + window._vpEsc(e2.message || String(e2)) + '</div>';
           if (btn) btn.disabled = false;
         });
@@ -727,29 +1107,29 @@ window.generateViewpoints = function() {
     poll();
   }).catch(function(e) {
     window._vpState.generating = false;
-    if (status)  status.textContent = 'エラー: ' + (e.message || e);
+    if (status) status.textContent = 'エラー: ' + (e.message || e);
     if (cardsEl) cardsEl.innerHTML = '<div style="color:#ef4444;padding:20px;">' + window._vpEsc(e.message || String(e)) + '</div>';
     if (btn) btn.disabled = false;
   });
 };
 
 window.generateFromViewpoints = function() {
-  var cards = window._vpState.cards || [];
-  if (!cards.length) { alert('先に視点カードを生成してください'); return; }
-
-  var selected = [];
-  for (var i = 0; i < cards.length; i++) {
-    if (window._vpIsFixed(cards[i].slideType)) { selected.push(cards[i]); continue; }
-    var cb = document.querySelector('[data-vp-idx="' + i + '"]');
-    if (cb && cb.checked) selected.push(cards[i]);
-  }
-  if (selected.length < 3) { alert('3枚以上選択してください'); return; }
+  var plan = window._vpRepairPlanBalance(window._vpState.plan || []);
+  window._vpState.plan = plan;
+  if (!window._vpState.cards.length) { alert('先に企画ピースを生成してください'); return; }
+  var middleCount = plan.filter(function(c) { return c && !window._vpIsFixed(c.slideType); }).length;
+  if (middleCount < 1) { alert('企画ピースを1枚以上追加してください'); return; }
 
   var modules = [];
-  for (var j = 0; j < selected.length; j++) {
-    var c = selected[j];
-    modules.push({ type: c.slideType, mainKey: c.mainKey, secondary: c.secondary || null,
-                   scriptDir: c.scriptDir || '', recipeKey: c.recipeKey || null });
+  for (var j = 0; j < plan.length; j++) {
+    var c = plan[j];
+    var bullets = Array.isArray(c.bullets) ? c.bullets.filter(Boolean).slice(0, 6) : [];
+    var dir = c.scriptDir || '';
+    if (bullets.length) dir += ' / 論点: ' + bullets.join(' / ');
+    modules.push({ title: c.title || '', type: c.slideType, mainKey: c.mainKey,
+                   secondary: c.secondary || null, scriptDir: dir, recipeKey: c.recipeKey || null,
+                   viewpointBullets: bullets, dataPreview: c.dataPreview || '', dataSource: c.dataSource || '',
+                   hookScore: Number(c.hookScore) || 0, insightSubtype: c.insightSubtype || 'none' });
   }
 
   var postId = window.APP && window.APP.selected && window.APP.selected.id;
@@ -758,57 +1138,65 @@ window.generateFromViewpoints = function() {
 
   var status = document.getElementById('vpStatus');
   var footer = document.getElementById('vpFooter');
+  var btn = document.querySelector('#vpFooter button');
+  if (btn) btn.disabled = true;
   if (status) status.textContent = '脚本生成を開始します...';
   if (footer) footer.style.display = 'none';
 
-  /* モジュールを保存してから generate-scenario を起動 */
-  window.fetchJson('/api/save-modules', {
+  window.fetchJson('/api/v3/generate-scenario', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ postId: postId, modules: modules }),
-  }).catch(function() {}).then(function() {
-    return window.fetchJson('/api/v3/generate-scenario', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId: postId, modules: modules, post: post }),
-    });
+    body: JSON.stringify({ postId: postId, modules: modules, post: post }),
   }).then(function(r) {
     if (!r.ok || !r.jobId) throw new Error(r.error || '脚本生成ジョブ起動失敗');
     var jobId = r.jobId;
     if (status) status.textContent = '脚本生成中... (jobId:' + jobId + ')';
-    /* Step4 に遷移してポーリング開始 */
-    window.APP.modules = modules;
-    if (window.APP.s3) window.APP.s3.modules = modules;
-    window.goStep(4);
-    if (typeof window.step4Init === 'function') window.step4Init();
-    /* step4 に専用ポーリング関数があれば渡す、なければ内部ポーリング */
-    if (typeof window.startScenarioPolling === 'function') {
-      window.startScenarioPolling(jobId);
-      return;
-    }
-    /* フォールバック: ポーリングしてモジュールを反映 */
     var tick2 = 0;
     function pollScenario() {
       setTimeout(function() {
         window.fetchJson('/api/v3/scenario-status?jobId=' + jobId).then(function(j) {
           if (j.status === 'error') { alert('脚本生成失敗: ' + (j.error || '')); return; }
           if (j.status === 'done' && j.modules && j.modules.length) {
-            window.APP.modules = j.modules;
-            if (window.APP.s3) window.APP.s3.modules = j.modules;
-            window.fetchJson('/api/save-modules', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ postId: postId, modules: j.modules }),
-            }).catch(function() {});
-            if (typeof window.step4Init === 'function') window.step4Init();
+            if (status) status.textContent = '脚本生成完了。画像とデータを反映しています...';
+            window.fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(postId))
+              .catch(function() { return { selections: {} }; })
+              .then(function(sel) {
+                var finalModules = window._vpAttachImagesFromSelections(j.modules, (sel && sel.selections) || {});
+                finalModules = window._vpRepairFinalModules(finalModules);
+                window.APP.modules = finalModules;
+                if (window.APP.s3) window.APP.s3.modules = finalModules;
+                return window.fetchJson('/api/save-modules', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ postId: postId, modules: finalModules }),
+                }).catch(function() {});
+              })
+              .then(function() {
+                if (status) status.textContent = 'STEP4へ移動します...';
+                window.goStep(4);
+                if (typeof window.step4Init === 'function') window.step4Init();
+              });
             return;
           }
           tick2++;
-          if (tick2 < 80) pollScenario();
-        }).catch(function() { tick2++; if (tick2 < 80) pollScenario(); });
+          if (status) status.textContent = '脚本生成中... ' + (j.step || 'running') + ' / ' + (tick2 * 3) + 's';
+          if (tick2 < 120) pollScenario();
+          else throw new Error('脚本生成タイムアウト');
+        }).catch(function(e) {
+          tick2++;
+          if (status) status.textContent = '脚本生成待機中... ' + (tick2 * 3) + 's';
+          if (tick2 < 120) pollScenario();
+          else {
+            if (btn) btn.disabled = false;
+            if (footer) footer.style.display = '';
+            alert('脚本生成確認に失敗: ' + (e.message || e));
+          }
+        });
       }, 3000);
     }
     pollScenario();
   }).catch(function(e) {
     if (status) status.textContent = 'エラー: ' + (e.message || e);
     alert('エラー: ' + (e.message || e));
+    if (btn) btn.disabled = false;
     if (footer) footer.style.display = '';
   });
 };
@@ -862,415 +1250,6 @@ window.deleteSavedProject = async function(idx) {
 
 /* ── 案件選択（サイドバー → Step2 遷移）── */
 
-
-/* V2.5 AUTO: V2 data acquisition + V3 proposal/images + V2 editing bridge */
-window.runV25Autopilot = async function() {
-  const post = window.APP && window.APP.selected;
-  const status = document.getElementById('v25AutoStatus');
-  const btn = document.getElementById('v25AutoBtn');
-  if (!post || !post.id) return alert('Select a case first');
-  const setStatus = (txt) => { if (status) status.textContent = txt || ''; };
-  try {
-    if (btn) btn.disabled = true;
-    setStatus('starting...');
-    const result = await window.runJob({
-      startUrl: '/api/v25/autopilot/start',
-      statusUrl: '/api/v25/autopilot/status',
-      kind: 'v25-autopilot',
-      key: 'v25_autopilot:' + post.id,
-      intervalMs: 3000,
-      timeoutMs: 40 * 60 * 1000,
-      body: { postId: post.id, count: 7, sprint: !!window.appSprint, attachImages: true },
-      onProgress: (job) => {
-        const p = job.progress != null && job.total ? ' ' + job.progress + '/' + job.total : '';
-        setStatus((job.step || 'running') + p);
-      },
-    });
-    var pc = result.cost || {};
-    setStatus('');
-    var plan = await fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id)).then(function(r){ return r.json(); }).catch(function(){ return null; });
-    window.goStep(25);
-    window.renderV25Proposals(plan, post);
-  } catch (e) {
-    console.error('[V2.5 AUTO]', e);
-    setStatus('failed');
-    alert('V2.5 AUTO failed: ' + (e.message || e));
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-};
-
-window.registerJobResumer && window.registerJobResumer('v25-autopilot', async ({ key, meta }) => {
-  const status = document.getElementById('v25AutoStatus');
-  if (status) status.textContent = 'V2.5 resuming...';
-  const result = await window.runJob({ startUrl: null, statusUrl: meta.statusUrl, kind: 'v25-autopilot', key });
-  window.APP.modules = result.modules || [];
-  if (window.APP.s3) window.APP.s3.modules = window.APP.modules;
-  if (status) status.textContent = 'done: ' + (result.moduleCount || 0) + ' slides';
-});
-
-/* V2.5: 企画書 A/B/C 選択＋微修正パネル (Fix#3)
-   - 注: この関数は buildPage() のテンプレートリテラル内。 バッククォート/＄{} 禁止。
-     文字列連結のみ。 改行リテラルは '\\n' (ブラウザに '\n' で届く)。 */
-/* ── Step25: 企画提案タブ ─────────────────────────────────── */
-window.step25Init = function() {
-  var post = window.APP && window.APP.selected;
-  var area = document.getElementById('v25ProposalArea');
-  if (!area) return;
-  if (!post || !post.id) {
-    area.innerHTML = '<div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">Step1で案件を選択してください</div>';
-    return;
-  }
-  area.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:16px;text-align:center;">読込中...</div>';
-  fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id))
-    .then(function(r){ return r.json(); })
-    .then(function(plan) {
-      var cands = plan && plan.aiPlan && plan.aiPlan.themeProposal && plan.aiPlan.themeProposal.candidates;
-      if (cands && cands.length) { window.renderV25Proposals(plan, post); }
-      else { area.innerHTML = '<div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">企画提案がまだありません。▶ V2.5 AUTO実行ボタンを押してください</div>'; }
-    })
-    .catch(function() {
-      area.innerHTML = '<div style="color:#64748b;font-size:12px;padding:24px;text-align:center;">企画提案がまだありません</div>';
-    });
-};
-
-window.runV25FromTab = async function() {
-  var post = window.APP && window.APP.selected;
-  if (!post || !post.id) { alert('Step1で案件を選択してください'); return; }
-  var statusEl = document.getElementById('v25TabStatus');
-  var btn = document.getElementById('v25RunBtn');
-  function setStatus(t) { if(statusEl) statusEl.textContent = t||''; }
-  if (btn) btn.disabled = true;
-  try {
-    setStatus('実行中...');
-    var result = await window.runJob({
-      startUrl: '/api/v25/autopilot/start',
-      statusUrl: '/api/v25/autopilot/status',
-      kind: 'v25-autopilot',
-      key: 'v25_autopilot:' + post.id,
-      intervalMs: 3000,
-      timeoutMs: 40 * 60 * 1000,
-      body: { postId: post.id, count: 7, sprint: !!window.appSprint, attachImages: true },
-      onProgress: function(job) {
-        var p = job.progress != null && job.total ? ' '+job.progress+'/'+job.total : '';
-        setStatus((job.step||'running')+p);
-      },
-    });
-    var pc = result && result.cost || {};
-    setStatus((result&&result.proposals||0)+'案 ¥'+(pc.totalJpy||0));
-    var plan = await fetch('/api/v25/plan?postId=' + encodeURIComponent(post.id)).then(function(r){ return r.json(); }).catch(function(){ return null; });
-    window.renderV25Proposals(plan, post);
-  } catch(e) {
-    console.error('[v25 tab]', e);
-    setStatus('失敗: '+(e.message||e));
-    alert('V2.5 AUTO失敗: '+(e.message||e));
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-};
-
-window.renderV25Proposals = function(plan, post) {
-  var area = document.getElementById('v25ProposalArea');
-  if (!area) return;
-  var tp = (plan && plan.aiPlan && plan.aiPlan.themeProposal) || {};
-  var cands = tp.candidates || [];
-  if (!cands.length) { area.innerHTML = '<div style="color:#64748b;padding:20px;text-align:center;">企画提案なし</div>'; return; }
-  var selected = tp.selected || 0;
-  var LAB = ['A', 'B', 'C', 'D', 'E'];
-  var LEN = { short:'短尺', standard:'標準', long:'長尺' };
-  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function outlineToText(o){ return (o||[]).map(function(s){ return (s.slideType||'insight')+' | '+(s.headline||'')+(s.point?' | '+s.point:''); }).join('\\n'); }
-  function textToOutline(t){ return String(t||'').split('\\n').map(function(line){ var p=line.split('|').map(function(x){return x.trim();}); if(!p[0]&&!p[1]) return null; return {slideType:p[0]||'insight',headline:p[1]||'',point:p[2]||''}; }).filter(Boolean); }
-
-  function render() {
-    var c = cands[selected] || {};
-    var html = '';
-    // A/B/C cards
-    html += '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">';
-    for (var i=0; i<cands.length; i++) {
-      var cc = cands[i]||{};
-      var on = (i===selected);
-      var border = on ? '#f59e0b' : '#334155';
-      var bg = on ? '#1f2937' : '#111827';
-      html += '<div class="v25pCard" data-idx="'+i+'" style="flex:1;min-width:200px;cursor:pointer;border:2px solid '+border+';background:'+bg+';border-radius:8px;padding:10px;">';
-      html += '<div style="font-weight:700;color:#fcd34d;margin-bottom:4px;font-size:12px;">案'+LAB[i]+' · '+(LEN[cc.videoLengthType]||cc.videoLengthType||'')+' · '+(cc.recommendedSlideCount||(cc.slideOutline?cc.slideOutline.length:'?'))+'枚</div>';
-      html += '<div style="font-size:12px;color:#e5e7eb;margin-bottom:3px;">'+esc((cc.hookQuestion||'').slice(0,70))+'</div>';
-      html += '<div style="font-size:11px;color:#94a3b8;">'+esc((cc.angle||'').slice(0,50))+'</div>';
-      html += '</div>';
-    }
-    html += '</div>';
-    // Edit area
-    var c2 = cands[selected]||{};
-    html += '<div style="border-top:1px solid #334155;padding-top:12px;">';
-    html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">▼ 案'+LAB[selected]+' 微修正（編集すると V2 がこの内容で構成）</div>';
-    html += '<label style="font-size:11px;color:#94a3b8;">フック</label>';
-    html += '<input id="v25p_hook" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;" value="'+esc(c2.hookQuestion)+'">';
-    html += '<label style="font-size:11px;color:#94a3b8;">切り口</label>';
-    html += '<input id="v25p_angle" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;" value="'+esc(c2.angle)+'">';
-    html += '<label style="font-size:11px;color:#94a3b8;">結論</label>';
-    html += '<textarea id="v25p_answer" rows="2" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;">'+esc(c2.answer)+'</textarea>';
-    html += '<label style="font-size:11px;color:#94a3b8;">スライド構成（slideType | 見出し | 補足）</label>';
-    html += '<textarea id="v25p_outline" rows="7" style="width:100%;margin:2px 0 8px;padding:6px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:11px;font-family:monospace;">'+esc(outlineToText(c2.slideOutline))+'</textarea>';
-    html += '<div style="border-top:1px solid #1e3a5f;padding-top:10px;margin-top:4px;">';
-    html += '<label style="font-size:11px;color:#60a5fa;font-weight:700;">追加エンティティ（比較対象変更等。"名前:role" 形式）</label>';
-    html += '<div style="display:flex;gap:6px;margin:4px 0 8px;">';
-    html += '<input id="v25p_entity" style="flex:1;padding:5px 8px;background:#111827;border:1px solid #334155;border-radius:5px;color:#e5e7eb;font-size:12px;" placeholder="例: Malo Gusto:player">';
-    html += '<button id="v25pFetchBtn" style="background:#1d4ed8;color:#fff;border:none;border-radius:5px;padding:5px 10px;cursor:pointer;font-size:11px;">SIに取得</button>';
-    html += '</div>';
-    html += '<label style="font-size:11px;color:#94a3b8;">修正指示（構成生成AIへの最優先指示）</label>';
-    html += '<textarea id="v25p_note" rows="2" style="width:100%;margin:4px 0 10px;padding:6px;background:#111827;border:1px solid #1e3a5f;border-radius:5px;color:#e5e7eb;font-size:12px;" placeholder="例: 比較スライドはCucurellaではなくMalo Gusto(RSB)と比較すること"></textarea>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">';
-    html += '<button id="v25pGoBtn" class="btn" style="font-size:13px;font-weight:700;">▶ 脚本構成を生成</button>';
-    html += '</div>';
-    html += '</div>';
-    area.innerHTML = html;
-
-    // wire card selection
-    area.querySelectorAll('.v25pCard').forEach(function(el) {
-      el.addEventListener('click', function() {
-        var idx = parseInt(el.getAttribute('data-idx'),10);
-        if (idx === selected) return;
-        captureEdits(); selected = idx; render();
-      });
-    });
-    // wire entity fetch
-    area.querySelector('#v25pFetchBtn').addEventListener('click', async function() {
-      var entityText = (area.querySelector('#v25p_entity')||{}).value||'';
-      if (!entityText.trim()) return;
-      var items = entityText.trim().split(/\s+/).filter(Boolean).map(function(t){ var p=t.split(':'); return {box:'entity',label:p[0].trim(),role:p[1]?p[1].trim():'player'}; });
-      var statusEl = document.getElementById('v25TabStatus');
-      if(statusEl) statusEl.textContent = '取得中...';
-      try {
-        await fetch('/api/v2/fetch-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({postId:post.id,items:items})});
-        if(statusEl) statusEl.textContent = '取得完了: '+items.map(function(x){return x.label;}).join(', ');
-      } catch(e) { if(statusEl) statusEl.textContent = '取得失敗'; }
-    });
-    // wire generate button
-    area.querySelector('#v25pGoBtn').addEventListener('click', generateStructure);
-  }
-
-  function val(id){ var el=area.querySelector('#'+id); return el?el.value:''; }
-  function captureEdits() {
-    var c = cands[selected];
-    if(!c) return;
-    c.hookQuestion = val('v25p_hook');
-    c.angle = val('v25p_angle');
-    c.answer = val('v25p_answer');
-    c.slideOutline = textToOutline(val('v25p_outline'));
-    c.structureNote = val('v25p_note');
-  }
-
-  async function generateStructure() {
-    captureEdits();
-    var editedCandidate = { hookQuestion:val('v25p_hook'), angle:val('v25p_angle'), answer:val('v25p_answer'), slideOutline:textToOutline(val('v25p_outline')), structureNote:val('v25p_note') };
-    var statusEl = document.getElementById('v25TabStatus');
-    function setStatus(t){ if(statusEl) statusEl.textContent = t||''; }
-    setStatus('脚本構成生成中...');
-    var btn = area.querySelector('#v25pGoBtn');
-    if(btn) btn.disabled = true;
-    try {
-      var jobRes = await window.runJob({
-        startUrl: '/api/v25/structure',
-        statusUrl: '/api/v25/structure/status',
-        kind: 'v25-structure',
-        key: 'v25_structure:' + post.id,
-        intervalMs: 3000,
-        timeoutMs: 20*60*1000,
-        body: { postId:post.id, selectedIndex:selected, editedCandidate:editedCandidate, sprint:!!window.appSprint, attachImages:true },
-        onProgress: function(job){ setStatus('構成生成: '+(job.step||'...')); },
-      });
-      var sc = jobRes && jobRes.cost || {};
-      setStatus('構成完了 '+( jobRes&&jobRes.moduleCount||0)+'枚 ¥'+(sc.totalJpy||0));
-      window.APP.modules = jobRes && jobRes.modules || [];
-      if (window.APP.s3) window.APP.s3.modules = window.APP.modules;
-      window.goStep(3);
-      if (typeof window.step3Init === 'function') window.step3Init();
-    } catch(e) {
-      console.error('[v25 structure]', e);
-      setStatus('構成生成失敗');
-      alert('脚本構成生成に失敗: '+(e.message||e));
-      if(btn) btn.disabled = false;
-    }
-  }
-
-  render();
-};
-
-/* 後方互換: overlay版 showV25PlanPanel → step25 にリダイレクト */
-window.showV25PlanPanel = function(plan, post, defaultModules) {
-  window.goStep(25);
-  window.renderV25Proposals(plan, post);
-};
-
-/* ── V2.5 ③ 脚本構成確認パネル（後方互換・企画提案タブから呼ばれなくなったが残置）── */
-window.showV25StructurePanel = function(modules, post) {
-  if (!modules || !modules.length) { window.goStep(3); return; }
-  var postId = post && post.id;
-  if (!postId) { window.goStep(3); return; }
-  var statusEl = document.getElementById('v25AutoStatus');
-  function setStatus(t) { if (statusEl) statusEl.textContent = t || ''; }
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  var TYPE_CLR = { opening:'#4b5563',ending:'#4b5563',stats:'#1d4ed8',comparison:'#6d28d9',profile:'#047857',history:'#b45309',insight:'#7c3aed',reaction:'#c2410c',matchcard:'#0e7490',ranking:'#b91c1c' };
-  var overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.80);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:12px;max-width:900px;width:100%;padding:20px;';
-  overlay.appendChild(box);
-  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
-  function render() {
-    var html = '';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-    html += '<div style="font-size:15px;font-weight:700;color:#fcd34d;">③ 脚本構成確認 <span style="font-size:12px;color:#94a3b8;font-weight:400;">— ' + modules.length + 'スライド</span></div>';
-    html += '<button id="v25scClose" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;">✕</button>';
-    html += '</div>';
-    html += '<div style="font-size:11px;color:#64748b;margin-bottom:12px;">scriptDir（脚本の方向性）を確認・修正してから④脚本生成へ。変更なしでそのまま進んでもOK。</div>';
-    for (var i = 0; i < modules.length; i++) {
-      var m = modules[i];
-      var clr = TYPE_CLR[m.type] || '#374151';
-      html += '<div style="border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:8px;background:#0a0f1a;">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
-      html += '<span style="background:' + clr + ';color:#fff;font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;white-space:nowrap;">' + esc(m.type) + '</span>';
-      html += '<input data-si="' + i + '" data-f="title" style="flex:1;padding:4px 8px;background:#111827;border:1px solid #374151;border-radius:4px;color:#e5e7eb;font-size:13px;font-weight:600;" value="' + esc(m.title || '') + '">';
-      html += '</div>';
-      html += '<textarea data-si="' + i + '" data-f="scriptDir" rows="2" style="width:100%;padding:6px;background:#111827;border:1px solid #374151;border-radius:4px;color:#94a3b8;font-size:12px;resize:vertical;">' + esc(m.scriptDir || '') + '</textarea>';
-      html += '</div>';
-    }
-    html += '<div style="border-top:1px solid #1e293b;padding-top:10px;margin-top:4px;">';
-    html += '<label style="font-size:11px;color:#94a3b8;">追加指示（全スライド共通 / ナレーションのトーン・禁止事項など）</label>';
-    html += '<textarea id="v25sc_note" rows="2" style="width:100%;margin:4px 0 10px;padding:6px;background:#111827;border:1px solid #1e3a5f;border-radius:6px;color:#e5e7eb;font-size:12px;" placeholder="例: テンション高め・数字を具体的に・断定は避ける"></textarea>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
-    html += '<button id="v25scV2" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;">V2で編集</button>';
-    html += '<button id="v25scGo" style="background:#f59e0b;color:#111827;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer;">④ 全スライド脚本生成</button>';
-    html += '</div>';
-    box.innerHTML = html;
-    box.querySelector('#v25scClose').addEventListener('click', function(){ close(); window.goStep(3); });
-    box.querySelector('#v25scV2').addEventListener('click', function(){ close(); window.APP.modules = modules; if(window.APP.s3) window.APP.s3.modules = modules; window.goStep(3); });
-    box.querySelector('#v25scGo').addEventListener('click', generateNarration);
-  }
-  function collectEdits() {
-    var mods = modules.map(function(m){ return Object.assign({}, m); });
-    box.querySelectorAll('[data-si]').forEach(function(el){
-      var idx = parseInt(el.getAttribute('data-si'),10);
-      var f = el.getAttribute('data-f');
-      if (mods[idx] != null) mods[idx][f] = el.value;
-    });
-    return mods;
-  }
-  async function generateNarration() {
-    var edited = collectEdits();
-    var note = (box.querySelector('#v25sc_note') || {}).value || '';
-    close();
-    setStatus('脚本生成中...');
-    try {
-      await fetch('/api/v25/save-modules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: postId, modules: edited }) });
-      var postData = Object.assign({}, (window.APP && window.APP.selected) || {});
-      if (note) postData.customNote = note;
-      // generate-scenario のジョブは job.modules がトップレベル (job.result 不在)
-      // runJob は job.result を返すため使わず直接ポーリング
-      var startR = await fetch('/api/v3/generate-scenario', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: postId, modules: edited, post: postData, sprint: false }),
-      });
-      var startD = await startR.json();
-      if (!startD.jobId) throw new Error('jobId not returned');
-      var scJobId = startD.jobId;
-      var deadline = Date.now() + 15 * 60 * 1000;
-      var narratedModules = null;
-      while (true) {
-        if (Date.now() > deadline) throw new Error('narration timeout');
-        await new Promise(function(resolve){ setTimeout(resolve, 3500); });
-        var pollR = await fetch('/api/v3/scenario-status?jobId=' + encodeURIComponent(scJobId));
-        if (pollR.status === 404) throw new Error('narration job vanished');
-        var job = await pollR.json();
-        setStatus('脚本生成: ' + (job.step || '...'));
-        if (job.status === 'error') throw new Error(job.error || 'narration error');
-        if (job.status === 'done') { narratedModules = job.modules || edited; break; }
-      }
-      setStatus('脚本生成完了');
-      window.showV25NarrationPanel(narratedModules, post);
-    } catch(e) {
-      console.error('[v25 narration]', e);
-      setStatus('脚本生成失敗: ' + (e.message || e));
-      alert('脚本生成失敗: ' + (e.message || e));
-      window.APP.modules = edited; if(window.APP.s3) window.APP.s3.modules = edited; window.goStep(3);
-    }
-  }
-  render();
-  document.body.appendChild(overlay);
-};
-
-/* ── V2.5 ⑤ 脚本確認パネル ── */
-window.showV25NarrationPanel = function(modules, post) {
-  if (!modules || !modules.length) { window.goStep(4); return; }
-  var postId = post && post.id;
-  var statusEl = document.getElementById('v25AutoStatus');
-  function setStatus(t) { if (statusEl) statusEl.textContent = t || ''; }
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  var overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.80);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:16px;';
-  var box = document.createElement('div');
-  box.style.cssText = 'background:#0f172a;color:#e5e7eb;border:1px solid #334155;border-radius:12px;max-width:900px;width:100%;padding:20px;';
-  overlay.appendChild(box);
-  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
-  function render() {
-    var totalChr = modules.reduce(function(s,m){ return s + (m.narration||'').length; }, 0);
-    var html = '';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-    html += '<div style="font-size:15px;font-weight:700;color:#34d399;">⑤ 脚本確認 <span style="font-size:12px;color:#94a3b8;font-weight:400;">— ' + modules.length + 'スライド / 合計 ' + totalChr + '字</span></div>';
-    html += '<button id="v25nrClose" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:5px 11px;cursor:pointer;">✕</button>';
-    html += '</div>';
-    html += '<div style="font-size:11px;color:#64748b;margin-bottom:12px;">ナレーションを確認・修正して動画生成へ。</div>';
-    for (var i = 0; i < modules.length; i++) {
-      var m = modules[i];
-      var charN = (m.narration||'').length;
-      var warn = charN < 50 ? ' style="color:#f87171;"' : '';
-      html += '<div style="border:1px solid #1e293b;border-radius:8px;padding:10px;margin-bottom:8px;background:#0a0f1a;">';
-      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">';
-      html += '<span style="font-size:10px;color:#94a3b8;background:#1e293b;padding:2px 6px;border-radius:4px;">' + esc(m.type) + '</span>';
-      html += '<span style="font-size:13px;font-weight:600;flex:1;">' + esc(m.title||'') + '</span>';
-      html += '<span' + warn + ' style="font-size:10px;color:#6b7280;">' + charN + '字</span>';
-      html += '</div>';
-      html += '<textarea data-ni="' + i + '" rows="3" style="width:100%;padding:6px;background:#111827;border:1px solid #374151;border-radius:4px;color:#e5e7eb;font-size:12px;resize:vertical;">' + esc(m.narration||'') + '</textarea>';
-      html += '</div>';
-    }
-    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">';
-    html += '<button id="v25nrV2" style="background:#334155;color:#e5e7eb;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;">V2で続けて編集</button>';
-    html += '<button id="v25nrGo" style="background:#10b981;color:#111827;border:none;border-radius:6px;padding:8px 20px;font-weight:700;cursor:pointer;">動画生成へ →</button>';
-    html += '</div>';
-    box.innerHTML = html;
-    box.querySelector('#v25nrClose').addEventListener('click', close);
-    box.querySelector('#v25nrV2').addEventListener('click', function(){
-      var mods = collectFinal();
-      close();
-      window.APP.modules = mods; if(window.APP.s3) window.APP.s3.modules = mods;
-      window.goStep(3);
-    });
-    box.querySelector('#v25nrGo').addEventListener('click', goVideo);
-  }
-  function collectFinal() {
-    var mods = modules.map(function(m){ return Object.assign({}, m); });
-    box.querySelectorAll('textarea[data-ni]').forEach(function(el){
-      var idx = parseInt(el.getAttribute('data-ni'),10);
-      if (mods[idx]) mods[idx].narration = el.value;
-    });
-    return mods;
-  }
-  async function goVideo() {
-    var finalMods = collectFinal();
-    if (postId) {
-      await fetch('/api/v25/save-modules', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ postId: postId, modules: finalMods }) }).catch(function(){});
-    }
-    close();
-    window.APP.modules = finalMods;
-    if (window.APP.s3) window.APP.s3.modules = finalMods;
-    setStatus('Step4（TTS・動画生成）へ');
-    window.goStep(4);
-  }
-  render();
-  document.body.appendChild(overlay);
-};
 
 window.selectLead = function(idx) {
   const item = window.APP.saved[idx];
