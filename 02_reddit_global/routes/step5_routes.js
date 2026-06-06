@@ -364,50 +364,54 @@ router.get('/v5/case-images', (req, res) => {
 const compositor = require('../scripts/v2_video/thumb_compositor');
 const { callAI } = require('../scripts/ai_client');
 
-// AIにフォントパターンとテキスト内容を渡してレイアウトを決めてもらう
-async function _selectLayers(title, texts) {
+// AIにフォントパターン選択 + 英語背景プロンプト生成を一括依頼
+async function _selectLayersAndBgPrompt(title, subject, texts) {
   const patternList = compositor.patternsForPrompt();
-  const system = `あなたはYouTubeサムネイルのタイポグラフィ専門家です。
-与えられた動画情報をもとに、テキストレイヤーの配置をJSONで返してください。
+  const system = `あなたはYouTubeサムネイルの専門家です。
+与えられた動画情報をもとに以下の2つをJSONで返してください。
 
-【キャンバスサイズ】1280×720px
-【テキスト配置エリア】x: 40〜700px（左側60%。右側は人物写真のスペース）
-【y座標の目安】上端60px〜下端680px
+1. bgPrompt: Gemini画像生成用の英語プロンプト
+   - 人物名は使わず外見・行動で描写（例: "a confident middle-aged male manager in a suit"）
+   - 場所・シーン・照明を英語で詳細に
+   - 末尾に必ず "No text or letters in the image. Left 40% darker for text overlay. Cinematic 16:9." を付ける
+
+2. layers: テキストレイヤー配置
+   キャンバス: 1280×720px / テキストエリア: x:40〜700, y:60〜680
 
 【フォントパターン一覧】
 ${patternList}
 
 【出力形式】JSONのみ、前置き不要:
 {
+  "bgPrompt": "English background scene description...",
   "layers": [
-    { "text": "テキスト内容（\\nで改行可）", "pattern": 番号, "x": x座標, "y": y座標, "fontSize": px数 }
+    { "text": "テキスト（\\nで改行可）", "pattern": 番号, "x": x座標, "y": y座標, "fontSize": px数 }
   ]
 }
 
-【ルール】
-- layers は2〜4個まで
-- 主役テキストはパターン1〜6（大テキスト）を使う
-- バッジ（13〜15）はあれば1個まで
-- y座標が重ならないよう適切にスペースを取る
-- メインの煽り文を最も大きく目立たせる
-- 日本語YouTube視聴者向けに「速報サッカー」スタイルで`;
+【layersルール】
+- 2〜4個。主役はパターン1〜6。バッジは13〜15で1個まで
+- y座標が重ならないよう十分スペースを取る（大テキストは fontSize の1.3倍以上の間隔）
+- メインの煽り文を最も大きく（fontSize 80以上）`;
 
   const userMsg = `動画タイトル: ${title}
+背景シーン: ${subject}
 テキスト内容:
 ${Object.entries(texts).filter(([,v])=>v).map(([k,v])=>`${k}: ${v}`).join('\n')}`;
 
   const raw = await callAI({
     forceProvider: 'deepseek',
-    max_tokens: 1000,
+    max_tokens: 1200,
     system,
     messages: [{ role: 'user', content: userMsg }],
   });
 
   const m = raw.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('AIレイアウト応答のJSONパース失敗: ' + raw.slice(0, 100));
+  if (!m) throw new Error('AIレイアウト応答のJSONパース失敗: ' + raw.slice(0, 150));
   const parsed = JSON.parse(m[0]);
   if (!Array.isArray(parsed.layers) || !parsed.layers.length) throw new Error('layers配列が空');
-  return parsed.layers;
+  if (!parsed.bgPrompt) throw new Error('bgPrompt が空');
+  return { layers: parsed.layers, bgPrompt: parsed.bgPrompt };
 }
 
 router.post('/v5/gen-thumb-full', async (req, res) => {
@@ -424,29 +428,26 @@ router.post('/v5/gen-thumb-full', async (req, res) => {
   fs.mkdirSync(outDir, { recursive: true });
   const ts = Date.now();
 
-  // ① AI でフォントパターン選択
-  let layers;
+  // ① AI でフォントパターン選択 + 英語bgPrompt生成
+  let layers, bgPrompt;
   try {
-    layers = await _selectLayers(
-      title || subject,
-      { ctx, main, punch, badge }
+    const result = await _selectLayersAndBgPrompt(
+      title || subject, subject, { ctx, main, punch, badge }
     );
+    layers   = result.layers;
+    bgPrompt = result.bgPrompt;
+    console.log(`[gen-thumb-full] bgPrompt: ${bgPrompt.slice(0, 80)}...`);
   } catch (e) {
-    // フォールバック: シンプルな2レイヤー
+    // フォールバック
     layers = [
-      { text: ctx || '', pattern: 10, x: 46, y: 80, fontSize: 38 },
-      { text: main,      pattern: 2,  x: 46, y: 280, fontSize: 88 },
-      ...(punch ? [{ text: punch, pattern: 6, x: 46, y: 420, fontSize: 72 }] : []),
+      ...(ctx   ? [{ text: ctx,   pattern: 10, x: 46, y: 80,  fontSize: 38 }] : []),
+                  { text: main,   pattern: 2,  x: 46, y: 280, fontSize: 88 },
+      ...(punch ? [{ text: punch, pattern: 6,  x: 46, y: 420, fontSize: 72 }] : []),
       ...(badge ? [{ text: badge, pattern: 13, x: 46, y: 510, fontSize: 30 }] : []),
     ].filter(l => l.text);
-    console.warn('[gen-thumb-full] AI layout failed, using fallback:', e.message);
+    bgPrompt = `A dramatic cinematic scene: ${subject}. No text or letters. Left 40% darker for text overlay. 16:9.`;
+    console.warn('[gen-thumb-full] AI failed, using fallback:', e.message);
   }
-
-  // ② Gemini 3.1 Flash Image で背景生成（テキストなし）
-  const bgPrompt = `YouTubeサムネイル用の背景画像。${subject}。`
-    + `重要: テキスト・文字は一切入れないこと。`
-    + `左側40〜50%は暗め（後でテキストを重ねる）。`
-    + `映画的でドラマティックな照明。16:9横型構図。`;
 
   let bgPath;
   try {
