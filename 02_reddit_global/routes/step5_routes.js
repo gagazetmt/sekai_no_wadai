@@ -798,143 +798,126 @@ scoreの基準:
   res.json({ images: results });
 });
 
-let _vertexAuthClient = null;
-async function _getVertexAccessToken() {
-  if (!_vertexAuthClient) {
-    const { GoogleAuth } = require('google-auth-library');
-    _vertexAuthClient = await new GoogleAuth({
-      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    }).getClient();
-  }
-  const tokenInfo = await _vertexAuthClient.getAccessToken();
-  return tokenInfo?.token;
+function _openRouterImagePart(absPath) {
+  const ext = path.extname(absPath).toLowerCase();
+  const mimeType = ext === '.png' ? 'image/png'
+    : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  return {
+    type: 'image_url',
+    image_url: {
+      url: `data:${mimeType};base64,${fs.readFileSync(absPath).toString('base64')}`,
+    },
+  };
 }
 
-// ─── 選手画像の前景を維持し、Vertex Imagen 3 で背景を置換 ──
-router.post('/v5/gen-bg-from-face', async (req, res) => {
-  const { localPath, sceneDesc, postId } = req.body || {};
-  if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
-  const projectId = process.env.GCP_PROJECT_ID;
-  const location = process.env.GCP_LOCATION || 'us-central1';
-  if (!projectId) return res.status(500).json({ error: 'GCP_PROJECT_ID not set' });
-
-  const absPath = path.isAbsolute(localPath) ? localPath : path.join(ROOT_DIR, localPath.replace(/^\//, ''));
-  if (!fs.existsSync(absPath)) return res.status(400).json({ error: 'image not found: ' + absPath });
-
-  const cleanedScene = String(sceneDesc)
-    .replace(/^\s*この画像の人物が[、,\s]*/u, '')
-    .replace(/^\s*この人物が[、,\s]*/u, '')
-    .replace(/[。.\s]+$/u, '')
-    .trim();
-  if (!cleanedScene) return res.status(400).json({ error: 'シーン説明が空です' });
-
-  let backgroundScene = cleanedScene;
-  const fixedBackground = /空港|搭乗|入国|出国|ESTA|パスポート/.test(cleanedScene)
-    ? 'a realistic airport check-in area'
-    : /会見|記者|就任|移籍/.test(cleanedScene)
-      ? 'a realistic football press conference room'
-      : /スタジアム|ピッチ|試合|ゴール/.test(cleanedScene)
-        ? 'a realistic football stadium beside the pitch'
-        : /病院|負傷|怪我|検査/.test(cleanedScene)
-          ? 'a clean professional sports medical facility'
-          : '';
-  if (fixedBackground) {
-    backgroundScene = fixedBackground;
-  } else try {
-    const raw = await callAI({
-      forceProvider: 'deepseek',
-      max_tokens: 500,
-      system: `Convert the Japanese thumbnail scene request into one concise English BACKGROUND description for image editing.
-Return JSON only: {"background":"..."}
-Describe only location, environment, props, lighting, and atmosphere.
-Do not describe changing the foreground person's face, pose, body, expression, clothing, or identity.
-Do not include names, readable text, signs, violence, weapons, fire, or fantasy elements.`,
-      messages: [{ role: 'user', content: cleanedScene }],
-      label: 'thumb_scene_translate',
+async function _generateGemini31Thumb({ prompt, referencePaths }) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+  const content = [
+    { type: 'text', text: prompt },
+    ...referencePaths.map(_openRouterImagePart),
+  ];
+  let lastDetail = '';
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+      model: 'google/gemini-3.1-flash-image-preview',
+      messages: [{ role: 'user', content }],
+      modalities: ['image', 'text'],
+      image_config: { aspect_ratio: '16:9' },
+    }, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://sekai-no-wadai.local',
+        'X-Title': 'Soccer Thumbnail Step5',
+      },
+      timeout: 300000,
+      validateStatus: () => true,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
     });
-    const match = String(raw || '').match(/\{[\s\S]*\}/);
-    const translated = match ? String(JSON.parse(match[0]).background || '').trim() : '';
-    if (translated) backgroundScene = translated;
+    if (response.status !== 200) {
+      lastDetail = `OpenRouter ${response.status}: ${JSON.stringify(response.data).slice(0, 700)}`;
+      continue;
+    }
+    const imageUrl = response.data?.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!imageUrl || !imageUrl.startsWith('data:')) {
+      lastDetail = `attempt ${attempt}: ${JSON.stringify(response.data).slice(0, 500)}`;
+      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 1500));
+      continue;
+    }
+    return {
+      buffer: Buffer.from(imageUrl.slice(imageUrl.indexOf(',') + 1), 'base64'),
+      costUsd: Number(response.data?.usage?.cost || 0),
+    };
+  }
+  throw new Error(`Gemini 3.1が画像を返しませんでした: ${lastDetail}`);
+}
+
+// ─── Gemini 3.1 Flash ImageでYouTubeサムネ背景をA/B生成 ──
+router.post('/v5/gen-bg-from-face', async (req, res) => {
+  const { localPath, referencePaths = [], sceneDesc, postId } = req.body || {};
+  if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
+  const requested = [localPath, ...referencePaths].filter(Boolean);
+  const absPaths = [];
+  for (const item of requested) {
+    const absPath = path.isAbsolute(item) ? item : path.join(ROOT_DIR, String(item).replace(/^\//, ''));
+    if (!fs.existsSync(absPath) || !absPath.startsWith(ROOT_DIR)) continue;
+    if (!absPaths.includes(absPath)) absPaths.push(absPath);
+    if (absPaths.length >= 3) break;
+  }
+  if (!absPaths.length) return res.status(400).json({ error: '参照画像が見つかりません' });
+
+  const scene = String(sceneDesc).trim();
+  const identityRule = `添付画像は同じ中心人物の参照です。1枚目の顔を最優先し、目、眉、鼻、頬骨、顎、髪型を維持して別人化させないでください。`;
+  const shared = `日本のサッカーYouTube用に、リアルな実写フォトスタイルの高品質な16:9サムネイル背景を生成してください。
+${identityRule}
+案件シーン: ${scene}
+主役の顔と上半身を大きく、強い表情とドラマチックなスタジアム照明で描く。
+強いコントラスト、逆光、火花、チームカラーの光を使う。
+日本語テキストは後から合成するため、画像内に文字、字幕、透かしを生成しない。`;
+  const prompts = [
+    `${shared}
+【A案】主役を画面右側に大きく配置し、左側45%を暗く整理された文字スペースとして空ける。スマートフォンで主役の顔が強く見える構図。`,
+    `${shared}
+【B案】画面を斜めに分割した対立構図。主役を右側手前に大きく、左側に対立チームやクラブを象徴するスタジアム、紋章風の視覚要素、サポーターを配置する。中央から左下に文字を置ける暗い領域を確保する。`,
+  ];
+
+  let generated;
+  try {
+    generated = [];
+    for (const prompt of prompts) {
+      generated.push(await _generateGemini31Thumb({
+        prompt,
+        referencePaths: absPaths,
+      }));
+    }
   } catch (e) {
-    console.warn('[gen-bg-from-face/translate]', e.message);
-  }
-  if (!/^[\x20-\x7e]+$/.test(backgroundScene)) {
-    backgroundScene = 'a realistic professional football stadium interior';
-  }
-
-  const model = process.env.VERTEX_IMAGEN_EDIT_MODEL || 'imagen-3.0-capability-001';
-  const baseImage = await sharp(absPath)
-    .resize(1280, 720, {
-      fit: 'contain',
-      position: 'centre',
-      background: { r: 120, g: 120, b: 120, alpha: 1 },
-    })
-    .flatten({ background: '#787878' })
-    .png()
-    .toBuffer();
-  const token = await _getVertexAccessToken();
-  if (!token) return res.status(500).json({ error: 'Vertex OAuth token acquisition failed' });
-
-  const prompt = `A realistic sports news photograph with the same foreground adult football player, with ${backgroundScene} in the background. Preserve the foreground person. Natural cinematic lighting. No text, letters, signs, logos, or watermarks.`;
-  const vertexUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
-  const genRes = await axios.post(vertexUrl, {
-    instances: [{
-      prompt,
-      referenceImages: [
-        {
-          referenceType: 'REFERENCE_TYPE_RAW',
-          referenceId: 1,
-          referenceImage: { bytesBase64Encoded: baseImage.toString('base64') },
-        },
-        {
-          referenceType: 'REFERENCE_TYPE_MASK',
-          referenceId: 2,
-          maskImageConfig: {
-            maskMode: 'MASK_MODE_BACKGROUND',
-            dilation: 0,
-          },
-        },
-      ],
-    }],
-    parameters: {
-      editConfig: { baseSteps: 75 },
-      editMode: 'EDIT_MODE_BGSWAP',
-      sampleCount: 1,
-      personGeneration: 'allow_adult',
-      safetySetting: 'block_only_high',
-      includeRaiReason: true,
-      outputOptions: { mimeType: 'image/png' },
-    },
-  }, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 180000,
-    validateStatus: () => true,
-  });
-
-  if (genRes.status !== 200) {
-    const detail = JSON.stringify(genRes.data).slice(0, 700);
-    console.warn('[gen-bg-from-face/vertex]', genRes.status, detail);
-    return res.status(500).json({ error: `Vertex Imagen ${genRes.status}: ${detail}` });
-  }
-
-  const prediction = (genRes.data?.predictions || []).find(p => p.bytesBase64Encoded);
-  if (!prediction) {
-    const detail = JSON.stringify(genRes.data).slice(0, 700);
-    console.warn('[gen-bg-from-face/vertex]', detail);
-    return res.status(500).json({ error: `Vertex Imagenが画像を返しませんでした: ${detail}` });
+    console.warn('[gen-bg-from-face/gemini31]', e.message);
+    return res.status(500).json({ error: e.message });
   }
 
   const safePostId = _thumbPostId(postId || 'genbg');
   const outDir = path.join(THUMB_OUT_BASE, safePostId);
   fs.mkdirSync(outDir, { recursive: true });
-  const outFile = `bg_${Date.now()}.png`;
-  const outPath = path.join(outDir, outFile);
-  fs.writeFileSync(outPath, Buffer.from(prediction.bytesBase64Encoded, 'base64'));
-
-  res.json({ ok: true, url: `/v2_thumbs/${safePostId}/${outFile}`, localPath: outPath });
+  const stamp = Date.now();
+  const results = generated.map((item, index) => {
+    const variant = index === 0 ? 'A' : 'B';
+    const outFile = `gemini31_${stamp}_${variant}.png`;
+    const outPath = path.join(outDir, outFile);
+    fs.writeFileSync(outPath, item.buffer);
+    return {
+      variant,
+      url: `/v2_thumbs/${safePostId}/${outFile}`,
+      localPath: outPath,
+      costUsd: item.costUsd,
+    };
+  });
+  res.json({
+    ok: true,
+    results,
+    estimatedCostUsd: results.reduce((sum, item) => sum + item.costUsd, 0),
+  });
 });
 
 // v2_thumbs/ 全体を再帰的に走査してギャラリー一覧を返す
@@ -1048,6 +1031,14 @@ function getUI() {
     .s5face-card img { width:100%; height:100%; object-fit:cover; }
     .s5face-card .s5score { position:absolute; bottom:0; left:0; right:0;
                             background:rgba(0,0,0,.78); font-size:10px; color:#fff; padding:2px 5px; }
+    .s5variant-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+    .s5variant { border:3px solid var(--border); border-radius:7px; overflow:hidden;
+                 cursor:pointer; background:#000; transition:border-color .15s, box-shadow .15s; }
+    .s5variant:hover { border-color:var(--c); }
+    .s5variant.selected { border-color:var(--c); box-shadow:0 0 14px rgba(255,77,77,.45); }
+    .s5variant img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover; }
+    .s5variant-label { padding:5px 8px; font-size:11px; font-weight:bold; color:#fff; background:#111827; }
+    @media(max-width:700px) { .s5variant-grid { grid-template-columns:1fr; } }
   </style>
 
   <!-- ① 顔選出 -->
@@ -1066,8 +1057,8 @@ function getUI() {
   <!-- ② 背景生成 -->
   <div class="s5card" id="s5-bg-card" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-      <strong style="color:var(--c); font-size:13px;">② 背景生成（Vertex Imagen）</strong>
-      <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">背景生成</button>
+      <strong style="color:var(--c); font-size:13px;">② サムネ背景A/B生成（Gemini 3.1 Flash）</strong>
+      <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">2案生成</button>
       <span id="s5-bg-status" style="font-size:11px; color:var(--muted);"></span>
     </div>
     <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
@@ -1081,7 +1072,7 @@ function getUI() {
           placeholder="レアルマドリーの会長選挙の景品となっている場面">
         <div id="s5-scene-presets" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;"></div>
         <div style="font-size:10px; color:var(--muted); margin-top:5px; line-height:1.5;">
-          人物名不要。顔画像参照でフィルター回避。テキストなしで背景生成。
+          顔参照は上位3枚を自動使用。A案とB案を生成後、採用する背景を選択します。
         </div>
       </div>
     </div>
@@ -1148,7 +1139,7 @@ function getUI() {
 (function() {
   if (window.__s5Init) return; window.__s5Init = true;
 
-  const STATE = { selectedFacePath: null, bgLocalPath: null, selectedThumb: null };
+  const STATE = { selectedFacePath: null, faceImages: [], bgLocalPath: null, selectedThumb: null };
   const _v  = id => (document.getElementById(id) || {}).value?.trim() || '';
   const _el = id => document.getElementById(id);
   const _pid = () => window.APP && window.APP.selected ? window.APP.selected.id : null;
@@ -1157,6 +1148,7 @@ function getUI() {
     const post = window.APP && window.APP.selected;
     _el('s5-postlabel').textContent = post ? '案件: ' + (post.title || post.id) : '案件未選択';
     STATE.selectedFacePath = STATE.bgLocalPath = STATE.selectedThumb = null;
+    STATE.faceImages = [];
     ['s5-bg-card','s5-text-card','s5-result-card'].forEach(id => _el(id).style.display = 'none');
     _el('s5-face-grid').innerHTML = '';
     _el('s5-face-status').textContent = '';
@@ -1220,6 +1212,7 @@ function getUI() {
         body: JSON.stringify({ postId: id }),
       });
       const imgs = r.images || [];
+      STATE.faceImages = imgs;
       if (!imgs.length) { _el('s5-face-status').textContent = '画像なし（images/{postId}/ を確認）'; return; }
       _el('s5-face-status').textContent = imgs.length + ' 枚スコア完了 — 顔をクリックして選択';
       _el('s5-face-grid').innerHTML = imgs.map(img => \`
@@ -1251,25 +1244,47 @@ function getUI() {
     const scene = _v('s5-scene');
     if (!scene) { alert('シーン説明を入力してください'); return; }
     const btn = _el('s5-bg-btn'); btn.disabled = true;
-    _el('s5-bg-status').textContent = '⏳ Vertex Imagen で生成中...（30〜90秒）';
+    _el('s5-bg-status').textContent = '⏳ Gemini 3.1 FlashでA/B生成中...（30〜120秒）';
     _el('s5-bg-preview').innerHTML = '';
     _el('s5-text-card').style.display = 'none';
     try {
       const r = await window.fetchJson('/api/v5/gen-bg-from-face', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ localPath: STATE.selectedFacePath, sceneDesc: scene, postId: _pid() || 'thumb' }),
+        body: JSON.stringify({
+          localPath: STATE.selectedFacePath,
+          referencePaths: STATE.faceImages.map(x => x.localPath).filter(Boolean).slice(0, 3),
+          sceneDesc: scene,
+          postId: _pid() || 'thumb',
+        }),
       });
-      STATE.bgLocalPath = r.localPath;
+      const results = r.results || [];
+      if (!results.length) throw new Error('生成画像がありません');
+      STATE.bgLocalPath = null;
       _el('s5-bg-preview').innerHTML = \`
-        <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">生成された背景 ↓</div>
-        <img src="\${r.url}" style="width:100%;border-radius:6px;border:1px solid var(--border);" alt="">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">採用する案をクリックしてください</div>
+        <div class="s5variant-grid">
+          \${results.map((item, i) => \`
+            <div class="s5variant" onclick="s5SelectVariant('\${item.localPath}','\${item.url}',this)">
+              <img src="\${item.url}" alt="案\${item.variant}">
+              <div class="s5variant-label">案\${item.variant}　\${i===0?'右主役＋左文字':'斜め対立構図'}</div>
+            </div>
+          \`).join('')}
+        </div>
       \`;
-      _el('s5-bg-status').textContent = '✅ 完了 → テキストを設定して合成へ';
-      _el('s5-text-card').style.display = '';
-      _el('s5-text-card').scrollIntoView({ behavior:'smooth', block:'start' });
+      const yen = Math.round(Number(r.estimatedCostUsd || 0) * 150);
+      _el('s5-bg-status').textContent = '✅ 2案完成' + (yen ? '（約¥' + yen + '）' : '') + ' → 1案選択';
     } catch(e) {
       _el('s5-bg-status').textContent = 'エラー: ' + e.message;
     } finally { btn.disabled = false; }
+  };
+
+  window.s5SelectVariant = function(localPath, url, card) {
+    STATE.bgLocalPath = localPath;
+    document.querySelectorAll('.s5variant').forEach(c => c.classList.remove('selected'));
+    if (card) card.classList.add('selected');
+    _el('s5-bg-status').textContent = '✅ 選択済み → テキストを設定して合成へ';
+    _el('s5-text-card').style.display = '';
+    _el('s5-text-card').scrollIntoView({ behavior:'smooth', block:'start' });
   };
 
   // ③ SVG合成
