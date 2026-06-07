@@ -18,6 +18,7 @@ const path       = require('path');
 const axios      = require('axios');
 const router     = express.Router();
 const costTracker = require('../scripts/cost_tracker');
+const sharp      = require('sharp');
 
 const ROOT_DIR        = path.join(__dirname, '..');
 const THUMB_OUT_BASE  = path.join(ROOT_DIR, 'data', 'v2_thumbs');
@@ -797,20 +798,29 @@ scoreの基準:
   res.json({ images: results });
 });
 
-// ─── 選手画像の前景を維持し、Gemini 2.5 Flash Image で背景を置換 ──
+let _vertexAuthClient = null;
+async function _getVertexAccessToken() {
+  if (!_vertexAuthClient) {
+    const { GoogleAuth } = require('google-auth-library');
+    _vertexAuthClient = await new GoogleAuth({
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    }).getClient();
+  }
+  const tokenInfo = await _vertexAuthClient.getAccessToken();
+  return tokenInfo?.token;
+}
+
+// ─── 選手画像の前景を維持し、Vertex Imagen 3 で背景を置換 ──
 router.post('/v5/gen-bg-from-face', async (req, res) => {
   const { localPath, sceneDesc, postId } = req.body || {};
   if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+  const projectId = process.env.GCP_PROJECT_ID;
+  const location = process.env.GCP_LOCATION || 'us-central1';
+  if (!projectId) return res.status(500).json({ error: 'GCP_PROJECT_ID not set' });
 
   const absPath = path.isAbsolute(localPath) ? localPath : path.join(ROOT_DIR, localPath.replace(/^\//, ''));
   if (!fs.existsSync(absPath)) return res.status(400).json({ error: 'image not found: ' + absPath });
 
-  const mimeType = /\.png$/i.test(absPath)
-    ? 'image/png'
-    : /\.webp$/i.test(absPath) ? 'image/webp' : 'image/jpeg';
-  const imgData  = fs.readFileSync(absPath).toString('base64');
   const cleanedScene = String(sceneDesc)
     .replace(/^\s*この画像の人物が[、,\s]*/u, '')
     .replace(/^\s*この人物が[、,\s]*/u, '')
@@ -852,62 +862,69 @@ Do not include names, readable text, signs, violence, weapons, fire, or fantasy 
     backgroundScene = 'a realistic professional football stadium interior';
   }
 
-  const model = process.env.GEMINI_IMAGE_EDIT_MODEL || 'gemini-2.5-flash-image';
-  const prompts = [
-    `Edit the provided sports portrait. Keep the foreground person unchanged and replace only the background with ${backgroundScene}. Wide 16:9 composition. No text.`,
-    `Preserve the foreground subject exactly as provided. Change only the background to ${backgroundScene}. Realistic sports news photograph, wide 16:9, no letters or signs.`,
-  ];
+  const model = process.env.VERTEX_IMAGEN_EDIT_MODEL || 'imagen-3.0-capability-001';
+  const baseImage = await sharp(absPath)
+    .resize(1280, 720, {
+      fit: 'contain',
+      position: 'centre',
+      background: { r: 120, g: 120, b: 120, alpha: 1 },
+    })
+    .flatten({ background: '#787878' })
+    .png()
+    .toBuffer();
+  const token = await _getVertexAccessToken();
+  if (!token) return res.status(500).json({ error: 'Vertex OAuth token acquisition failed' });
 
-  const diagnostics = [];
-  let imgPart = null;
-  for (let attempt = 0; attempt < prompts.length && !imgPart; attempt++) {
-    let genRes;
-    try {
-      genRes = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+  const prompt = `A realistic sports news photograph with the same foreground adult football player, with ${backgroundScene} in the background. Preserve the foreground person. Natural cinematic lighting. No text, letters, signs, logos, or watermarks.`;
+  const vertexUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+  const genRes = await axios.post(vertexUrl, {
+    instances: [{
+      prompt,
+      referenceImages: [
         {
-          contents: [{
-            parts: [
-              { text: prompts[attempt] },
-              { inlineData: { mimeType, data: imgData } },
-            ],
-          }],
-          generationConfig: {
-            responseModalities: ['IMAGE', 'TEXT'],
-            imageConfig: { aspectRatio: '16:9' },
+          referenceType: 'REFERENCE_TYPE_RAW',
+          referenceId: 1,
+          referenceImage: { bytesBase64Encoded: baseImage.toString('base64') },
+        },
+        {
+          referenceType: 'REFERENCE_TYPE_MASK',
+          referenceId: 2,
+          maskImageConfig: {
+            maskMode: 'MASK_MODE_BACKGROUND',
+            dilation: 0,
           },
         },
-        { timeout: 120000, validateStatus: () => true }
-      );
-    } catch (e) {
-      diagnostics.push(`attempt ${attempt + 1}: network ${e.message}`);
-      continue;
-    }
+      ],
+    }],
+    parameters: {
+      editConfig: { baseSteps: 75 },
+      editMode: 'EDIT_MODE_BGSWAP',
+      sampleCount: 1,
+      personGeneration: 'allow_adult',
+      safetySetting: 'block_only_high',
+      includeRaiReason: true,
+      outputOptions: { mimeType: 'image/png' },
+    },
+  }, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 180000,
+    validateStatus: () => true,
+  });
 
-    if (genRes.status !== 200) {
-      diagnostics.push(`attempt ${attempt + 1}: HTTP ${genRes.status} ${JSON.stringify(genRes.data).slice(0, 240)}`);
-      continue;
-    }
-
-    const candidate = genRes.data?.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    imgPart = parts.find(p => p.inlineData?.data || p.inline_data?.data) || null;
-    if (!imgPart) {
-      const text = parts.find(p => p.text)?.text || '';
-      const reason = candidate?.finishReason
-        || candidate?.finishMessage
-        || genRes.data?.promptFeedback?.blockReason
-        || genRes.data?.promptFeedback?.blockReasonMessage
-        || '画像データなし';
-      diagnostics.push(`attempt ${attempt + 1}: ${reason}${text ? ` / ${text.slice(0, 160)}` : ''}`);
-    }
+  if (genRes.status !== 200) {
+    const detail = JSON.stringify(genRes.data).slice(0, 700);
+    console.warn('[gen-bg-from-face/vertex]', genRes.status, detail);
+    return res.status(500).json({ error: `Vertex Imagen ${genRes.status}: ${detail}` });
   }
 
-  if (!imgPart) {
-    console.warn('[gen-bg-from-face]', diagnostics.join(' | '));
-    return res.status(500).json({
-      error: `Geminiが画像を返しませんでした: ${diagnostics.join(' | ').slice(0, 500)}`,
-    });
+  const prediction = (genRes.data?.predictions || []).find(p => p.bytesBase64Encoded);
+  if (!prediction) {
+    const detail = JSON.stringify(genRes.data).slice(0, 700);
+    console.warn('[gen-bg-from-face/vertex]', detail);
+    return res.status(500).json({ error: `Vertex Imagenが画像を返しませんでした: ${detail}` });
   }
 
   const safePostId = _thumbPostId(postId || 'genbg');
@@ -915,8 +932,7 @@ Do not include names, readable text, signs, violence, weapons, fire, or fantasy 
   fs.mkdirSync(outDir, { recursive: true });
   const outFile = `bg_${Date.now()}.png`;
   const outPath = path.join(outDir, outFile);
-  const generatedData = imgPart.inlineData?.data || imgPart.inline_data?.data;
-  fs.writeFileSync(outPath, Buffer.from(generatedData, 'base64'));
+  fs.writeFileSync(outPath, Buffer.from(prediction.bytesBase64Encoded, 'base64'));
 
   res.json({ ok: true, url: `/v2_thumbs/${safePostId}/${outFile}`, localPath: outPath });
 });
@@ -1050,7 +1066,7 @@ function getUI() {
   <!-- ② 背景生成 -->
   <div class="s5card" id="s5-bg-card" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-      <strong style="color:var(--c); font-size:13px;">② 背景生成（Gemini）</strong>
+      <strong style="color:var(--c); font-size:13px;">② 背景生成（Vertex Imagen）</strong>
       <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">背景生成</button>
       <span id="s5-bg-status" style="font-size:11px; color:var(--muted);"></span>
     </div>
@@ -1235,7 +1251,7 @@ function getUI() {
     const scene = _v('s5-scene');
     if (!scene) { alert('シーン説明を入力してください'); return; }
     const btn = _el('s5-bg-btn'); btn.disabled = true;
-    _el('s5-bg-status').textContent = '⏳ Gemini で生成中...（30〜90秒）';
+    _el('s5-bg-status').textContent = '⏳ Vertex Imagen で生成中...（30〜90秒）';
     _el('s5-bg-preview').innerHTML = '';
     _el('s5-text-card').style.display = 'none';
     try {
