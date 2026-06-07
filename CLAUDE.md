@@ -112,6 +112,7 @@
 - **`memory/user_origin_story.md`** — 副業遍歴と Claude Code との出会い。Amazon輸入→ブログアフィリ→YouTube→現在 の **7年R&Dプログラム**。「ランチャー」概念の起源、Xシャドウバン時の感情、仕事との関係まで含む。**雑談・心情吐露の文脈で必須**
 - **`mission_control.md`** — 副業全体の方針・優先テーマ・ロードマップ。戦略判断や優先順位決めの前提として参照する
 - **`memory/session_handover.md`** — 直近セッションの引き継ぎ。作業再開時・状況確認時に参照する
+- **`memory/launcher_architecture.md`** — 現行V2.5ランチャー全体の恒久設計。各Stepの責任範囲、データ契約、AIモデル、Step5画像生成、Step6投稿フローを確認する
 
 これらは元々ローカル PC のグローバル auto-memory にだけ存在していたものを、VPS / claude.ai/code でも参照できるようリポにコピーしたもの。
 

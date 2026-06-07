@@ -896,48 +896,42 @@ window._vpEditPlanScript = function(idx, value) {
   }
 };
 
-/* バランスルール（サーバー viewpoint_routes.js のカード並べ替えと同一ルール）:
-   insight は最大 _VP_INSIGHT_MAX 枚 / insight を3連続させない / visual 型を優先。
-   ルールは _vpInsightGate に集約し、量産おまかせ(_vpBalancedMiddle)と
-   生成前修復(_vpRepairPlanBalance)の両方から呼ぶ。 */
-window._VP_INSIGHT_MAX = 4;
-window._vpIsVisualType = function(t) {
-  return { profile:1, stats:1, history:1, timeline:1, picture:1, comparison:1, matchcard:1 }[t] === 1;
-};
-
-/* hookScore をそのまま採用（サーバー確定値）。表示HOOKと並び順を一致させる。 */
 window._vpCardScore = function(card) {
   var n = Number(card && card.hookScore);
   if (!isFinite(n) || n <= 0) n = 50;
+  if (card && card.confidence === 'high') n += 5;
+  if (card && card.confidence === 'low') n -= 8;
   return Math.max(0, Math.min(100, n));
 };
 
-/* insight ゲート: 採用済み picked 列に candidate を足してよいか判定（共有ルール） */
-window._vpInsightGate = function(picked, candidate, insightCount) {
-  if (candidate.slideType !== 'insight') return true;
-  if (insightCount >= window._VP_INSIGHT_MAX) return false;
-  var last = picked[picked.length - 1];
-  var prev = picked[picked.length - 2];
-  if (last && prev && last.slideType === 'insight' && prev.slideType === 'insight') return false;
-  return true;
-};
-
 window._vpBalancedMiddle = function(source, targetCount) {
-  var cards = (source || []).filter(function(c) { return c && !window._vpIsFixed(c.slideType); })
-    .slice().sort(function(a, b) { return window._vpCardScore(b) - window._vpCardScore(a); });
+  var cards = (source || []).filter(function(c) { return c && !window._vpIsFixed(c.slideType); });
   var picked = [];
   var used = {};
   var insightCount = 0;
+  var visualTypes = { profile:1, stats:1, history:1, timeline:1, picture:1, comparison:1, matchcard:1 };
+  cards = cards.slice().sort(function(a, b) { return window._vpCardScore(b) - window._vpCardScore(a); });
+  function canPick(c) {
+    if (!c || used[c.id]) return false;
+    if (c.slideType === 'insight' && insightCount >= 4) return false;
+    var last = picked[picked.length - 1];
+    var prev = picked[picked.length - 2];
+    if (c.slideType === 'insight' && last && prev && last.slideType === 'insight' && prev.slideType === 'insight') return false;
+    return true;
+  }
   function push(c) {
-    if (!c || used[c.id]) return;
-    if (picked.length >= targetCount) return;
-    if (!window._vpInsightGate(picked, c, insightCount)) return;
+    if (!canPick(c)) return false;
     picked.push(window._vpClone(c));
     used[c.id] = true;
     if (c.slideType === 'insight') insightCount++;
+    return true;
   }
-  cards.filter(function(c) { return window._vpIsVisualType(c.slideType); }).forEach(push);
-  cards.forEach(push);
+  cards.filter(function(c) { return visualTypes[c.slideType]; }).forEach(function(c) {
+    if (picked.length < targetCount) push(c);
+  });
+  cards.forEach(function(c) {
+    if (picked.length < targetCount) push(c);
+  });
   return picked;
 };
 
@@ -949,19 +943,22 @@ window._vpRepairPlanBalance = function(plan) {
   var out = [];
   var stash = [];
   var insightCount = 0;
-  middle.forEach(function(c) {
-    if (window._vpInsightGate(out, c, insightCount)) {
-      out.push(c);
-      if (c.slideType === 'insight') insightCount++;
-    } else {
+  for (var i = 0; i < middle.length; i++) {
+    var c = middle[i];
+    if (c.slideType === 'insight' && insightCount >= 4) { stash.push(c); continue; }
+    var last = out[out.length - 1];
+    var prev = out[out.length - 2];
+    if (c.slideType === 'insight' && last && prev && last.slideType === 'insight' && prev.slideType === 'insight') {
       stash.push(c);
+      continue;
     }
-  });
+    out.push(c);
+    if (c.slideType === 'insight') insightCount++;
+  }
   stash.forEach(function(c) {
-    if (window._vpInsightGate(out, c, insightCount)) {
-      out.push(c);
-      if (c.slideType === 'insight') insightCount++;
-    }
+    if (c.slideType === 'insight' && insightCount >= 4) return;
+    out.push(c);
+    if (c.slideType === 'insight') insightCount++;
   });
   return [window._vpClone(opening)].concat(out.map(window._vpClone), [window._vpClone(ending)]);
 };
@@ -977,8 +974,67 @@ window.autoBuildViewpointPlan = function() {
   if (status) status.textContent = '量産向けに強い企画ピースを自動で組みました。必要なら順番と指示文だけ微調整してください';
 };
 
-/* 画像紐付け・narration/dataSlots 補完はサーバー(step3 attachImagesToModules /
-   repairViewpointModules)に集約済み。旧クライアント実装は廃止。 */
+window._vpAttachImagesFromSelections = function(modules, selections) {
+  var all = selections || {};
+  var labels = Object.keys(all);
+  if (!labels.length) return modules;
+  var firstPool = null;
+  for (var p = 0; p < labels.length && !firstPool; p++) {
+    var arr0 = all[labels[p]];
+    if (Array.isArray(arr0) && arr0.length) firstPool = arr0[0];
+  }
+  return (modules || []).map(function(m) {
+    if (!m || (Array.isArray(m.images) && m.images.length)) return m;
+    var cands = [];
+    if (typeof m.mainKey === 'string' && m.mainKey.indexOf('entity:') === 0) {
+      cands.push(m.mainKey);
+      cands.push(m.mainKey.slice(7));
+    }
+    if (m.secondary) {
+      cands.push(m.secondary);
+      if (String(m.secondary).indexOf(':') < 0) cands.push('entity:' + m.secondary);
+    }
+    var picked = null;
+    for (var i = 0; i < cands.length && !picked; i++) {
+      var arr = all[cands[i]];
+      if (Array.isArray(arr) && arr.length) picked = arr[0];
+    }
+    if (!picked && (m.type === 'opening' || m.type === 'ending' || m.type === 'insight' || m.type === 'picture')) {
+      picked = firstPool;
+    }
+    if (picked) m.images = [picked];
+    return m;
+  });
+};
+
+window._vpRepairFinalModules = function(modules) {
+  return (modules || []).map(function(m) {
+    if (!m) return m;
+    var out = Object.assign({}, m);
+    var bullets = Array.isArray(out.viewpointBullets) ? out.viewpointBullets.filter(Boolean).slice(0, 6) : [];
+    if (!out.narration && out.scriptDir) out.narration = out.scriptDir;
+    if (out.type === 'insight') {
+      if (!Array.isArray(out.catchphrases) || !out.catchphrases.length) {
+        out.catchphrases = bullets.map(function(b) { return { text: String(b).slice(0, 18), chunkText: String(b) }; }).slice(0, 6);
+      }
+      if (!Array.isArray(out.narrationChunks) || !out.narrationChunks.length) {
+        out.narrationChunks = bullets.length ? bullets : null;
+      }
+    }
+    if ((out.type === 'profile' || out.type === 'stats' || out.type === 'history') &&
+        (!Array.isArray(out.dataSlots) || !out.dataSlots.length) && out.dataPreview) {
+      var parts = String(out.dataPreview).split(/\s*[/／・,、]\s*/).filter(Boolean).slice(0, 6);
+      out.dataSlots = parts.map(function(p, i) {
+        var kv = String(p).split(/[:：]/);
+        return { label: (kv[0] || ('項目' + (i + 1))).slice(0, 12), value: (kv[1] || kv[0] || '').slice(0, 36) };
+      });
+    }
+    if (out.type === 'picture' && (!Array.isArray(out.images) || !out.images.length) && out.mainKey) {
+      out.imagePromptHint = out.title || out.scriptDir || out.mainKey;
+    }
+    return out;
+  });
+};
 
 window.step25Init = function() {
   var postId = window.APP && window.APP.selected && window.APP.selected.id;
@@ -1119,13 +1175,24 @@ window.generateFromViewpoints = function() {
         window.fetchJson('/api/v3/scenario-status?jobId=' + jobId).then(function(j) {
           if (j.status === 'error') { alert('脚本生成失敗: ' + (j.error || '')); return; }
           if (j.status === 'done' && j.modules && j.modules.length) {
-            // 画像紐付け・narration/dataSlots 補完・永続化はサーバー(generate-scenario)が完了済み。
-            // クライアントは結果を受け取って STEP4 へ遷移するだけ。
-            window.APP.modules = j.modules;
-            if (window.APP.s3) window.APP.s3.modules = j.modules;
-            if (status) status.textContent = 'STEP4へ移動します...';
-            window.goStep(4);
-            if (typeof window.step4Init === 'function') window.step4Init();
+            if (status) status.textContent = '脚本生成完了。画像とデータを反映しています...';
+            window.fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(postId))
+              .catch(function() { return { selections: {} }; })
+              .then(function(sel) {
+                var finalModules = window._vpAttachImagesFromSelections(j.modules, (sel && sel.selections) || {});
+                finalModules = window._vpRepairFinalModules(finalModules);
+                window.APP.modules = finalModules;
+                if (window.APP.s3) window.APP.s3.modules = finalModules;
+                return window.fetchJson('/api/save-modules', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ postId: postId, modules: finalModules }),
+                }).catch(function() {});
+              })
+              .then(function() {
+                if (status) status.textContent = 'STEP4へ移動します...';
+                window.goStep(4);
+                if (typeof window.step4Init === 'function') window.step4Init();
+              });
             return;
           }
           tick2++;
@@ -1166,51 +1233,43 @@ window.toggleSidebar = function(open) {
 /* ── サイドバー描画 ── */
 /* ── Autopilot パネル表示切替 ── */
 function _apPanelToggle() {
-  const panel = document.getElementById('apPanel');
+  var panel = document.getElementById('apPanel');
   if (panel) panel.style.display = window.APP.selected ? 'block' : 'none';
 }
 
 /* ── Autopilot 実行 ── */
 window.runAutopilot = async function(mode) {
-  const post = window.APP.selected;
+  var post = window.APP.selected;
   if (!post?.id) { alert('先に案件を選択してください'); return; }
-
-  const statusEl = document.getElementById('apStatus');
-  const modeLabel = { semi:'SemiAuto', S:'FullAuto(S)', M:'FullAuto(M)', L:'FullAuto(L)' }[mode] || mode;
-  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
-
-  // ボタン無効化
-  const btns = document.querySelectorAll('#apPanel button');
-  btns.forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
-
+  var statusEl = document.getElementById('apStatus');
+  var modeLabel = { semi:'SemiAuto', S:'FullAuto(S)', M:'FullAuto(M)', L:'FullAuto(L)' }[mode] || mode;
+  var setStatus = function(msg) { if (statusEl) statusEl.textContent = msg; };
+  var btns = document.querySelectorAll('#apPanel button');
+  btns.forEach(function(b) { b.disabled = true; b.style.opacity = '.5'; });
   try {
     setStatus('⏳ ' + modeLabel + ' 起動中...');
-    const r = await fetchJson('/api/v25/autopilot/vp-start', {
+    var r = await fetchJson('/api/v25/autopilot/vp-start', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ postId: post.id, mode }),
+      body: JSON.stringify({ postId: post.id, mode: mode }),
     });
     if (!r?.jobId) throw new Error('jobId 受信失敗');
-
-    // ポーリング（最大20分 / 3秒間隔）
-    const MAX_TICKS = 400;
-    const STEP_LABELS = {
+    var STEP_LABELS = {
       'suggest-labels': '① ラベル提案・記事収集中',
       'fetch-all':      '② データ取得中',
       'viewpoints':     '③ 企画ピース生成中（Sonnet）',
       'scenario':       '④ 脚本生成中（DeepSeek）',
     };
-    for (let tick = 0; tick < MAX_TICKS; tick++) {
-      await new Promise(res => setTimeout(res, 3000));
-      const j = await fetchJson('/api/v25/autopilot/vp-status?jobId=' + encodeURIComponent(r.jobId));
+    for (var tick = 0; tick < 400; tick++) {
+      await new Promise(function(res) { setTimeout(res, 3000); });
+      var j = await fetchJson('/api/v25/autopilot/vp-status?jobId=' + encodeURIComponent(r.jobId));
       if (!j) continue;
       if (j.status === 'done') {
         setStatus('✅ 完了！' + (j.message || ''));
-        // カードを vpState に渡してから画面遷移
         if (j.navigateTo === '25' && Array.isArray(j.cards)) {
           window._vpState = window._vpState || {};
           window._vpState.cards = j.cards;
           if (j.briefing) window._vpState.briefing = j.briefing;
-          window._vpState.plan  = [];
+          window._vpState.plan = [];
           window.goStep(25);
           if (typeof window.autoBuildViewpointPlan === 'function') {
             setTimeout(window.autoBuildViewpointPlan, 300);
@@ -1220,17 +1279,13 @@ window.runAutopilot = async function(mode) {
         }
         break;
       }
-      if (j.status === 'error') {
-        setStatus('❌ エラー: ' + (j.error || '不明'));
-        break;
-      }
-      const label = STEP_LABELS[j.step] || j.message || '処理中';
-      setStatus('⏳ ' + label + ' (' + ((tick+1)*3) + 's)');
+      if (j.status === 'error') { setStatus('❌ エラー: ' + (j.error || '不明')); break; }
+      setStatus('⏳ ' + (STEP_LABELS[j.step] || j.message || '処理中') + ' (' + ((tick+1)*3) + 's)');
     }
-  } catch (e) {
+  } catch(e) {
     setStatus('❌ ' + e.message);
   } finally {
-    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
   }
 };
 
