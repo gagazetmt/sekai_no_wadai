@@ -35,7 +35,8 @@ const { createJob, readJob, updateJob } = require('./_job_helper');
 
 const router = express.Router();
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const SI_DIR = path.join(DATA_DIR, 'si_data');
+const SI_DIR   = path.join(DATA_DIR, 'si_data');
+const SEL_DIR  = path.join(DATA_DIR, 'image_selections');
 if (!fs.existsSync(SI_DIR)) fs.mkdirSync(SI_DIR, { recursive: true });
 
 // ─── ユーティリティ ───────────────────────────────────────
@@ -655,6 +656,8 @@ router.post('/v3/suggest-labels', (req, res) => {
       const refineResult = await _runRefineLabelsFromArticles(post, suggested, { sprint });
       const result = refineResult.refined || suggested;
       result.searches = _finalSearchesForUi(suggested, refineResult);
+      // Phase1 entities は AI が関連度順に並べているため先頭3件をそのまま topEntities に
+      result.topEntities = (suggested.entities || []).slice(0, 3).map(e => e.name).filter(Boolean);
       result._flow = {
         mode: 'query_articles_refined_labels',
         articleCount: refineResult.articles?.length || 0,
@@ -1077,6 +1080,55 @@ router.get('/v3/fetch-all-status', (req, res) => {
   const j = readJob(req.query.jobId);
   if (!j) return res.status(404).json({ error: 'job not found' });
   res.json(j);
+});
+
+// ─── /v3/auto-fetch-images : suggest-labels 後の上位ラベル画像自動取得 ─
+//   _applySuggestResult が si-data を保存した直後に呼ばれる。
+//   この時点で si-data に role が入っているため fetchImagesForLabel が正しく role を解決できる。
+//   画像取得後、stock→x_by_name→wikimedia 優先で最大10枚を image_selections.json に自動保存。
+//   → step4 のギャラリープールに即反映される。
+router.post('/v3/auto-fetch-images', (req, res) => {
+  const { postId, entityNames } = req.body || {};
+  if (!postId || !Array.isArray(entityNames) || !entityNames.length) {
+    return res.json({ ok: true, kicked: 0 });
+  }
+  const names = entityNames.slice(0, 3).filter(n => typeof n === 'string' && n.trim());
+  res.json({ ok: true, kicked: names.length });
+  setImmediate(async () => {
+    console.log(`[auto-fetch-images] ${postId} / ${names.join(', ')}`);
+    const _safeId = (s) => (s || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_');
+    const selFile = path.join(SEL_DIR, _safeId(postId) + '.json');
+    if (!fs.existsSync(SEL_DIR)) fs.mkdirSync(SEL_DIR, { recursive: true });
+
+    for (const name of names) {
+      const label = `entity:${name}`;
+      try {
+        const result = await fetchImagesForLabel(postId, label);
+        if (!result?.images) continue;
+
+        // stock 優先 → x_by_name → wikimedia で最大10枚をギャラリーに自動保存
+        const merged = [
+          ...(result.images.stock     || []),
+          ...(result.images.x_by_name || []),
+          ...(result.images.wikimedia || []),
+        ].filter(Boolean).slice(0, 10);
+
+        if (merged.length) {
+          let selData = {};
+          try { selData = JSON.parse(fs.readFileSync(selFile, 'utf8')); } catch (_) {}
+          const sel = selData.selections || {};
+          // 既存より多い場合のみ上書き（手動選択を優先して減らさない）
+          if (!sel[label] || sel[label].length < merged.length) {
+            sel[label] = merged;
+            fs.writeFileSync(selFile, JSON.stringify({ postId, selections: sel, savedAt: new Date().toISOString() }, null, 2));
+            console.log(`[auto-fetch-images] ${label}: ${merged.length}枚をギャラリーに保存`);
+          }
+        }
+      } catch (e) {
+        console.warn(`[auto-fetch-images:${name}]`, e.message);
+      }
+    }
+  });
 });
 
 // curated 取得用キーワード組成
@@ -1643,13 +1695,24 @@ function getUI() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ postId: post.id, siData: si }),
     });
+    // si-data 保存直後に topEntities の画像をバックグラウンド自動取得
+    // (この時点で si-data に role が入っているため fetchImagesForLabel が role を正解)
+    if (Array.isArray(result.topEntities) && result.topEntities.length) {
+      fetchJson('/api/v3/auto-fetch-images', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, entityNames: result.topEntities }),
+      }).catch(function() {});
+    }
     // ユーザーが今もこの案件を見てる時だけ画面更新。別案件に切替済なら触らない
     if (window.APP.selected?.id === post.id) {
       window.APP.s2.siData = si;
       _renderBoxes();
     }
     const total = (result.entities?.length || 0) + (result.matches?.length || 0) + (result.searches?.length || 0);
-    _msg('✅ ' + total + ' 件追加 (entities ' + (result.entities?.length||0) + ' / matches ' + (result.matches?.length||0) + ' / searches ' + (result.searches?.length||0) + ')');
+    const autoMsg = (result.topEntities && result.topEntities.length)
+      ? ' / 上位' + result.topEntities.length + '件の画像を自動取得中...'
+      : '';
+    _msg('✅ ' + total + ' 件追加 (entities ' + (result.entities?.length||0) + ' / matches ' + (result.matches?.length||0) + ' / searches ' + (result.searches?.length||0) + ')' + autoMsg);
   }
 
   async function _pollSuggestJob(jobId, post, btn) {

@@ -96,6 +96,16 @@ function loadPlayerRecords() {
   });
 }
 
+function playerSourcePriority(item) {
+  const localPath = String(item?.localPath || '').replace(/\\/g, '/').toLowerCase();
+  const provider = String(item?.source || '').toLowerCase();
+  if (/players_official\/(premier-league|la-liga|bundesliga|serie-a|ligue-1)\//.test(localPath)) return 0;
+  if (/official/.test(provider)) return 0;
+  if (/sofascore-profile/.test(provider)) return 1;
+  if (/warehouse/.test(provider)) return 2;
+  return 3;
+}
+
 // === 個別マッチャー ===
 
 function matchPlayers(query, opts = {}) {
@@ -109,6 +119,8 @@ function matchPlayers(query, opts = {}) {
   }
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
+    const sourceDiff = playerSourcePriority(a.item) - playerSourcePriority(b.item);
+    if (sourceDiff !== 0) return sourceDiff;
     const bs = readImageScore(b.item.localPath);
     const as = readImageScore(a.item.localPath);
     const bv = Number(bs.visionScore || 0);

@@ -302,16 +302,24 @@ router.post('/v3/generate-viewpoints', express.json(), (req, res) => {
   writeJob(jobId, { jobId, postId, status: 'queued', step: 'init', createdAt: new Date().toISOString() });
   res.json({ ok: true, jobId });
   setImmediate(async () => {
-    try {
-      writeJob(jobId, { jobId, postId, status: 'running', step: 'generating' });
-      const { cards, briefing } = await _runGenerateViewpoints(postId);
-      writeJob(jobId, { jobId, postId, status: 'done', step: 'done', cards, briefing, count: cards.length,
-        finishedAt: new Date().toISOString() });
-      console.log(`[viewpoints] ${cards.length} cards generated for ${postId} | hook: ${briefing.hookQuestion.slice(0,40)}`);
-    } catch (e) {
-      console.error('[viewpoints]', e.message);
-      writeJob(jobId, { jobId, postId, status: 'error', error: e.message });
+    let lastError = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        writeJob(jobId, { jobId, postId, status: 'running', step: 'generating',
+          message: attempt > 1 ? `生成中（リトライ ${attempt}/2）` : '生成中' });
+        const { cards, briefing } = await _runGenerateViewpoints(postId);
+        writeJob(jobId, { jobId, postId, status: 'done', step: 'done', cards, briefing, count: cards.length,
+          finishedAt: new Date().toISOString() });
+        console.log(`[viewpoints] attempt${attempt} 成功: ${cards.length} cards | hook: ${briefing.hookQuestion.slice(0,40)}`);
+        return;
+      } catch (e) {
+        lastError = e;
+        console.warn(`[viewpoints] attempt${attempt} 失敗: ${e.message}`);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 3000));
+      }
     }
+    console.error('[viewpoints] 2回試行後も失敗:', lastError.message);
+    writeJob(jobId, { jobId, postId, status: 'error', error: lastError.message });
   });
 });
 
@@ -321,4 +329,4 @@ router.get('/v3/viewpoints-status', (req, res) => {
   res.json(j);
 });
 
-module.exports = { router };
+module.exports = { router, _runGenerateViewpoints };

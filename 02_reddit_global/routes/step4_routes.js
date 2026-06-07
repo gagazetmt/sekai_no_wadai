@@ -21,6 +21,7 @@ const { saveApprovedModules, pickApprovedExamples, formatForPrompt: formatApprov
 const router    = express.Router();
 const DATA_DIR  = path.join(__dirname, '..', 'data');
 const SI_DIR    = path.join(DATA_DIR, 'si_data');
+const SEL_DIR   = path.join(DATA_DIR, 'image_selections');
 const VIDEO_DIR = path.join(DATA_DIR, 'v2_videos');
 const JOB_DIR   = path.join(DATA_DIR, 'v2_jobs');
 
@@ -2017,6 +2018,30 @@ function getUI() {
     _msg('↔ スライド ' + (idx+1) + ' ↔ ' + (j+1) + ' を入れ替え');
   };
 
+  /* ── 全スライドに画像を自動割り当て ─────────────── */
+  window.s4AutoAssignImages = async function() {
+    const post = window.APP.selected;
+    if (!post?.id) return alert('案件を選択してください');
+    try {
+      const r = await fetchJson('/api/v4/assign-preset-images', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id }),
+      });
+      if (!r.ok) throw new Error(r.error || '失敗');
+      // modules と selections を再読み込みして描画更新
+      const j = await fetchJson('/api/v2/modules?postId=' + encodeURIComponent(post.id));
+      window.APP.s4.modules = j.modules || [];
+      window.APP.modules = window.APP.s4.modules;
+      const s = await fetchJson('/api/v35/get-selection?postId=' + encodeURIComponent(post.id));
+      window.APP.s4.imageSelections = s.selections || {};
+      _renderTabs();
+      _renderEditor();
+      alert('✅ ' + r.assigned + '件割り当て / ' + r.skipped + '件はスキップ（設定済み）');
+    } catch (e) {
+      alert('❌ エラー: ' + e.message);
+    }
+  };
+
   /* ── スライド丸ごと削除 ───────────────────────── */
   window.s4DeleteSlide = async function(idx) {
     const mods = window.APP.s4.modules || [];
@@ -2309,7 +2334,9 @@ function getUI() {
 
     /* Step 3.5 で選択した画像のギャラリー（全ラベルの選定済画像を1プールで共有表示） */
     //   - 全 selections をフラットに展開して、どのスライドからでも全画像を選べる
-    let galleryHtml = '';
+    /* 🤖 全スライド一括自動割り当てボタン */
+    const autoAssignBtn = '<button onclick="s4AutoAssignImages()" style="background:#1e3a5f;color:#7dc8ff;border:1px solid #2a4a6f;border-radius:4px;cursor:pointer;font-size:10px;padding:3px 10px;margin-bottom:8px;display:block;width:100%;">🤖 全スライドに画像を自動割り当て（未設定のみ）</button>';
+    let galleryHtml = autoAssignBtn;
     const allSelections = window.APP.s4.imageSelections || {};
     const seen = new Set();
     const pool = []; // [{ path, fromLabel }]
@@ -3992,5 +4019,60 @@ function getUI() {
 })();
 </script>`;
 }
+
+// ─── /v4/assign-preset-images : 全スライドに画像を自動割り当て ──────────────
+//   image_selections.json の各ラベル画像を modules の mainKey と照合して
+//   m.images が空のスライドに先頭画像を自動セットする（手動設定済みは維持）
+router.post('/v4/assign-preset-images', (req, res) => {
+  const { postId } = req.body || {};
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+
+  const _safeId = (s) => (s || 'unknown').replace(/[\/\?%*:|"<>\.]/g, '_');
+  const mp  = path.join(DATA_DIR, _safeId(postId) + '_modules.json');
+  const sp  = path.join(SEL_DIR,  _safeId(postId) + '.json');
+
+  const modulesData = safeJson(mp, { modules: [] });
+  const modules = modulesData.modules || [];
+  const selData = safeJson(sp, { selections: {} });
+  const sel = selData.selections || {};
+
+  let assigned = 0;
+  let skipped  = 0;
+
+  modules.forEach(mod => {
+    // 既にimages設定済みなら維持
+    if (Array.isArray(mod.images) && mod.images.length) { skipped++; return; }
+
+    // mainKey → label キーで selections を引く（"entity:Lionel Messi" 等）
+    const key = mod.mainKey || '';
+    const imgs = sel[key];
+    if (Array.isArray(imgs) && imgs.length) {
+      mod.images = [imgs[0]];
+      assigned++;
+      return;
+    }
+
+    // mainKey に entity: プレフィクスがない場合もフォールバック検索
+    if (!key.includes(':')) return;
+    const entityName = key.split(':').slice(1).join(':').trim();
+    if (!entityName) return;
+    const fallbackKey = Object.keys(sel).find(k => {
+      const n = k.split(':').slice(1).join(':').trim().toLowerCase();
+      return n === entityName.toLowerCase();
+    });
+    if (fallbackKey && Array.isArray(sel[fallbackKey]) && sel[fallbackKey].length) {
+      mod.images = [sel[fallbackKey][0]];
+      assigned++;
+    }
+  });
+
+  try {
+    fs.writeFileSync(mp, JSON.stringify(modulesData, null, 2));
+    console.log(`[assign-preset-images] ${postId}: ${assigned}件割り当て / ${skipped}件スキップ`);
+    res.json({ ok: true, assigned, skipped, total: modules.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 module.exports = { router, getUI };

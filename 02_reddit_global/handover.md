@@ -1,6 +1,134 @@
 # Codex Mia V3 Handover
 
-Last updated: 2026-06-03 JST
+Last updated: 2026-06-06 JST
+
+## 2026-06-06 JST In Progress - Commercial Thumbnail Font Layer Strategy
+
+### 2026-06-06 Implementation Update
+
+- Added a first working version of the commercial font-layer maker inside the existing Step5 thumbnail editor (`data/v2_thumbs/_editor/index.html`).
+- UI location: left sidebar, directly above the normal "テキストボックス" add controls.
+- Added 20 reusable typography presets inspired by the Sokuhosoccer-style structure plus broader high-CTR Japanese soccer thumbnail patterns:
+  - slanted gold impact
+  - red breaking-news white type
+  - royal blue/gold
+  - black/yellow warning tape
+  - chrome white
+  - orange fire drama
+  - green rescue/revival
+  - pink shock
+  - silver tactical analysis
+  - red/white direct Japanese headline
+  - top-left stamp + bottom gold
+  - right-side reverse composition
+  - ice-blue transfer
+  - luxury black/gold
+  - clean white/blue
+  - red/black conflict
+  - mass-market pop yellow
+  - purple/gold premium
+  - scoreboard badge-heavy
+  - newspaper white/gold
+- Each preset creates multiple editor layers at once:
+  - main title
+  - main badge
+  - subtitle
+  - punch/sub line
+  - supporting badge shapes where needed
+- Added text rotation support for generated text layers and template-code export.
+- Added local "背景色で選ぶ" preset selection based on editor background base color.
+- Added Gemini Vision selection path:
+  - editor screenshots current canvas with `html2canvas`
+  - POSTs image + preset candidates to `/api/v5/analyze-font-layer`
+  - Gemini returns `recommendedPresetId`, base tone, safe zone, and reason
+  - editor applies the recommended preset
+  - failures fall back to local background-color selection
+- Added `/api/v5/analyze-font-layer` in `routes/step5_routes.js`.
+- Verification:
+  - extracted editor script parsed with Node `vm.Script`
+  - `node --check routes/step5_routes.js`
+  - `node --check local_v2_launcher.js`
+  - `node -e "require('./routes/step5_routes'); console.log('step5 require ok')"`
+
+### Current Direction
+
+- Thumbnail automation is shifting from full AI-rendered text to a split pipeline:
+  - AI/image generation creates or improves the background scene.
+  - Code renders the Japanese typography as a separate commercial-quality overlay layer.
+- Club logos, crests, national flags, and competition-style logo elements are allowed and should be used when they improve soccer thumbnail recognition. Do not globally exclude logos from thumbnail generation prompts.
+- The target is not a generic editor with fixed font/color settings. The target is a font-layer maker that creates one impactful text-art block per thumbnail.
+
+### Proposed Pipeline
+
+1. Select the best official-X source image using Gemini Vision.
+   - Score face visibility, face size, sharpness, expression, subject obstruction, and watermark/license risk.
+2. Generate a dramatic background/scene from the selected person image.
+   - Example direction: a player or manager in an airport-entry/refusal-style scene when editorially appropriate.
+   - Keep generated background and Japanese text rendering separate.
+3. Judge the generated background.
+   - Check subject integrity, scene readability, empty text zones, brightness, and YouTube-thumbnail impact.
+4. Analyze recent Sokuhosoccer thumbnails as style references.
+   - Study layout, font scale, slant, stroke, shadow, color hierarchy, badge use, and text block composition.
+   - Use structural inspiration only; avoid direct copying.
+5. Render the Japanese text as a separate layer.
+   - Use preset-based commercial typography packages rather than asking the image model to draw Japanese text.
+   - Composite the font layer onto the approved background.
+
+### Preset Strategy Under Discussion
+
+- Prepare around 20 reusable typography presets ahead of time.
+- Each preset defines styles for:
+  - mainTitle
+  - mainBadge
+  - subtitle
+  - subBadge
+  - miscText
+- In production, Gemini Vision analyzes the background and returns:
+  - base color / accent colors
+  - face and key-object boxes
+  - logo/crest boxes
+  - safe zones for text
+  - recommended preset family
+- Code then selects a preset, adapts colors to the background, lays out the text block, and renders it via Canvas/SVG/HTML into a transparent PNG layer.
+- This should be cheaper and more stable than generating typography from scratch every time, because AI only performs image analysis and preset selection.
+
+### Open Implementation Tasks
+
+- Create `thumbnail_text_presets.json` with initial 20 style packages.
+- Add Gemini Vision background analysis that returns subject boxes, safe zones, and color profile.
+- Build a preset selector that maps image analysis + topic type to the best font layer package.
+- Build a font layer renderer that can output transparent PNG overlays and final composited thumbnails.
+- Keep existing Step5 thumbnail editor as manual fallback while this automated font-layer maker is developed.
+
+
+## 2026-06-06 JST Update - Step5 Thumbnail Finalization
+
+### Completed
+
+- Read the current V3/V2.5 handover and confirmed the remaining gap is thumbnail workflow integration rather than the main launcher flow.
+- Step5 thumbnail UI now exposes a one-click auto flow:
+  - classify theme
+  - extract thumbnail text
+  - build prompt
+  - generate 2 images
+  - auto-select the best result
+- Wired existing `/api/v5/auto-thumb` into the Step5 UI.
+- Exposed the newly available thumbnail providers in the manual generation UI:
+  - Imagen 4 / Fast / Ultra
+  - GPT-image-1 Low / Medium / High
+  - Vertex Imagen 4 / Fast / Ultra
+- Fixed stale Step5 status DOM references that could break prompt copy or legacy single-step actions.
+- Unified thumbnail output directory sanitization so auto-generated thumbnails appear in the saved thumbnail list and Step6 selection flow.
+
+### Verification
+
+- `node --check routes/step5_routes.js`
+- `node --check local_v2_launcher.js`
+- `node -e "require('./routes/step5_routes'); console.log('step5 require ok')"`
+
+### Note
+
+- `node local_v2_launcher.js` loaded all routes and printed the normal `V2 Pro RED @ http://localhost:3004` startup log in this local shell, but the process exited immediately after the startup log in the Codex runner. No Step5 syntax or require error was observed.
 
 ## 2026-06-03 JST Update - V2.5 Pivot Implementation
 
@@ -1743,3 +1871,216 @@ Verification:
 - Local `GET /recipes` returned HTML.
 - Local `GET /api/v3/recipe-slot-options` returned the expanded slot list.
 - Local `GET /api/v3/recipes` returned recipes with the new labeling fields.
+
+## 2026-06-06 JST In Progress - Thumbnail Typography Preset System Handover
+
+The user is handing this work to Claude for the next implementation pass.
+
+### Final Product Direction
+
+- Keep AI-generated backgrounds and Japanese typography as separate layers.
+- Gemini Vision should identify:
+  - face/head bounding boxes
+  - important objects and logos
+  - background colors
+  - usable typography zones
+- Only the face/head must be treated as a strict no-cover zone.
+- Text may overlap the subject's arms, torso, clothing, passport, and other scene elements when this improves impact.
+- Do not over-prioritize empty space. The thumbnail must read as one dense commercial composition.
+- Club crests, flags, and relevant logos are allowed. Do not globally prohibit logos in image-generation prompts.
+
+### Required Preset Hierarchy
+
+The desired hierarchy is:
+
+```text
+top-level composition family
+  -> color variations
+```
+
+Top-level families must be structurally different, for example:
+
+- Sokuhosoccer-style large gold headline
+- breaking-news layout
+- analysis/explainer layout
+- 2ch/overseas-reaction layout
+- versus/conflict layout
+- newspaper/front-page layout
+- scoreboard layout
+
+Differences must include more than colors:
+
+- badge geometry: rectangle, pill, circle, stamp, tape, etc.
+- number of lines and hierarchy
+- line-by-line font sizes
+- slant and baseline
+- alignment and text-block silhouette
+- outline/highlight/shadow treatment
+- overlap strategy
+
+Do not add another set of superficially similar slanted layouts. A previous attempt to add 10 near-identical layout types was rejected and removed.
+
+### Critical Reference Image
+
+The user supplied a Sokuhosoccer-style Chelsea/Xabi Alonso thumbnail as the typography target.
+
+Reference characteristics:
+
+- The Japanese font is extremely heavy and slightly horizontally condensed.
+- The complete multiline headline behaves as one large text-art object.
+- The block occupies much of the lower-left area and overlaps the subject's torso/arm.
+- Each line has a different scale:
+  - first/setup line: medium
+  - main name/topic line: largest
+  - later supporting lines: progressively smaller
+- Lines are tightly packed.
+- The whole block has a slight diagonal/slanted composition.
+- Gold lettering is not a flat color:
+  - metallic gold gradient/texture
+  - pale inner highlight
+  - dark inner edge
+  - thick black outer outline
+  - subtle depth/shadow
+- The goal is not ordinary bold text with a stroke. It must resemble a commercial title graphic.
+
+The latest user feedback was explicit:
+
+> Existing tests are too weak. The reference is much thicker and more prominent.
+
+### Embolo Test Case
+
+Story:
+
+- Breel Embolo's ESTA was canceled shortly before travel.
+- He was later cleared to join Switzerland in the United States.
+- Avoid wording that falsely implies the final denial is still active.
+
+Recommended accurate text ingredients:
+
+- `搭乗2時間前`
+- `エンボロ`
+- `ESTA突然取消`
+- `渡航危機の全貌`
+- `W杯直前`
+
+Preferred generated airport background:
+
+`data/v2_thumbs/_embolo_font_test/cmp_gemini25_1780671808778.png`
+
+This is a square generated airport/customs scene with:
+
+- shocked player centered
+- hands on head
+- passport/denied visual
+- Swiss flag and immigration setting
+
+For 16:9 output, crop the square image vertically. Cover/remove the AI-generated text already baked into the top and bottom of the source before adding the real typography layer.
+
+Other downloaded candidates are in:
+
+`data/v2_thumbs/_embolo_font_test/`
+
+### Existing Local Implementation
+
+Editor:
+
+`data/v2_thumbs/_editor/index.html`
+
+Current features:
+
+- 20 typography/color presets in `IMPACT_TEXT_PRESETS`
+- palettes in `IMPACT_PALETTES`
+- one-click multiline application
+- background color recommendation
+- Gemini image-analysis recommendation
+- text rotation support
+
+Step5 integration:
+
+`routes/step5_routes.js`
+
+Includes:
+
+- `/api/v5/analyze-font-layer`
+- Gemini Vision analysis for safe zones/background tone/preset recommendation
+- commercial font preset controls positioned beside the Step5 editor
+
+Preview utilities:
+
+- `scripts/v2_thumb/render_font_preset_preview.js`
+- `scripts/v2_thumb/render_embolo_font_test.js`
+- `scripts/v2_thumb/render_embolo_airport_bold_test.js`
+
+Generated previews:
+
+- `data/v2_thumbs/_font_preset_preview/contact_sheet.png`
+- `data/v2_thumbs/_embolo_font_test/contact_sheet.png`
+- `data/v2_thumbs/_embolo_font_test/airport_bold_contact_sheet.png`
+
+### What Was Rejected
+
+The existing 20 presets mostly provide useful color variety, but their typography is still too generic.
+
+Rejected characteristics:
+
+- ordinary system bold font plus outline
+- text placed only in empty space
+- excessive avoidance of the person
+- similar rectangular badges across presets
+- same slant/layout with palette changes
+- small text block with weak screen occupancy
+- flat yellow/gold instead of metallic dimensional gold
+
+The latest airport bold test improved occupancy but still does not reproduce the supplied reference typography. Treat it as a diagnostic, not the target result.
+
+### Next Implementation Task
+
+Build one high-quality Sokuhosoccer-style composition family first before expanding other families.
+
+Required first preset:
+
+```text
+family: commercial_gold_headline
+layout: lower-left multiline block
+face policy: never cover face/head
+body policy: torso/arm overlap allowed
+line hierarchy: medium / very large / medium / medium
+rotation: slight negative angle
+fill: metallic gold with highlight and texture
+outline: layered pale-gold inner edge + thick black outer edge
+shadow: hard offset/depth plus subtle blur
+spacing: tight line height and controlled character spacing
+output: transparent PNG text layer plus final composite
+```
+
+Implementation should support a single JSON description that controls:
+
+- roles: `mainTitle`, `mainBadge`, `subtitle`, `subBadge`, `miscText`
+- per-line size and width compression
+- rotation/skew
+- line spacing
+- gradient stops
+- texture/noise overlay
+- multiple strokes/outlines
+- extrusion/shadow
+- badge shape
+- anchor and overlap policy
+
+The renderer should use Canvas/SVG/HTML and render Japanese text itself. Do not ask an image model to draw final Japanese typography.
+
+### Acceptance Criteria
+
+Before integrating more presets, render the Embolo airport test and compare visually with the supplied Chelsea/Xabi reference.
+
+The first family is acceptable only if:
+
+- the main text block is immediately dominant at thumbnail size
+- Japanese glyphs look substantially heavier than the current tests
+- the block overlaps the body without covering the face
+- line sizes visibly differ
+- lines form one cohesive diagonal object
+- gold treatment has visible depth and highlight
+- no text is clipped
+- the output remains editable as separate layers/preset JSON
+
+Do not proceed to 20 more variants until this single family passes user review.

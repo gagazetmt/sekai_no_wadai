@@ -9,7 +9,8 @@ const path = require('path');
 
 const { createJob, readJob, updateJob } = require('./_job_helper');
 const { _runSuggestLabels, _runFetchAll, _runRefineLabelsFromArticles } = require('./step2_routes');
-const { _runProposeModules } = require('./step3_routes');
+const { _runProposeModules, _runScenarioJob } = require('./step3_routes');
+const { _runGenerateViewpoints } = require('./viewpoint_routes');
 const { generateAIPlan } = require('../v3_launcher/v3_planner');
 const { fetchAndAssignSlideImages } = require('../v3_launcher/v3_image_fetcher');
 const { getBindingMeta, buildDataSlotsFromMeta, resolveCustomSlotKeys } = require('../scripts/v2_story/binding_meta');
@@ -466,6 +467,128 @@ router.post('/v25/save-modules', express.json(), (req, res) => {
   if (!postId || !Array.isArray(modules)) return res.status(400).json({ error: 'postId + modules[] required' });
   fs.writeFileSync(modulesPath(postId), JSON.stringify({ postId, modules, savedAt: new Date().toISOString(), source: 'v25_structure_edit' }, null, 2));
   res.json({ ok: true, count: modules.length });
+});
+
+// ══════════════════════════════════════════════════════════════════
+// Autopilot V2 — viewpoints ベースパイプライン（SemiAuto / FullAuto S/M/L）
+// ══════════════════════════════════════════════════════════════════
+
+// mode 別カード選定：企画ピース → modules 配列に変換
+// Sonnet が hookScore を付けてるので hookScore 降順で重要度が決まる
+function _vpBuildPlanFromCards(cards, mode) {
+  const opening  = cards.find(c => c.slideType === 'opening');
+  const ending   = cards.find(c => c.slideType === 'ending');
+  const reaction = cards.find(c => c.slideType === 'reaction');
+
+  // hookScore 降順でミドル（opening/ending/reaction を除く）
+  const middles = cards
+    .filter(c => !['opening','ending','reaction'].includes(c.slideType))
+    .sort((a, b) => (b.hookScore || 0) - (a.hookScore || 0));
+
+  // "概要" = insight カードの中で最高 hookScore のもの
+  const overviewIdx = middles.findIndex(c => c.slideType === 'insight');
+  const overview    = middles[Math.max(overviewIdx, 0)];
+  const rest        = middles.filter(c => c !== overview);
+
+  // TOC は viewpoints には含まれないので合成カードとして追加（M/L のみ）
+  const toc = { id:'toc', slideType:'toc', type:'toc', mainKey:'toc',
+    secondary:null, recipeKey:null, title:'動画の見どころ',
+    scriptDir:'今回の動画の全体像と注目ポイントを予告する', hookScore:0,
+    insightSubtype:'none', bullets:[], dataPreview:'', dataSource:'' };
+
+  let mid = [];
+  if (mode === 'S') {
+    // op→概要→[0-1extra]→(reaction)→ed  計2-3ミドル
+    mid = [overview, ...rest.slice(0, 1)].filter(Boolean);
+  } else if (mode === 'M') {
+    // op→toc→概要→[1-2extra]→(reaction)→ed  計3-5ミドル
+    mid = [toc, overview, ...rest.slice(0, 2)].filter(Boolean);
+  } else {
+    // op→toc→概要→[3-5extra]→(reaction)→ed  計5-8ミドル
+    mid = [toc, overview, ...rest.slice(0, 5)].filter(Boolean);
+  }
+
+  if (reaction) mid.push(reaction);
+
+  return [opening, ...mid, ending]
+    .filter(Boolean)
+    .map(c => ({ ...c, type: c.type || c.slideType }));
+}
+
+// /v25/autopilot/vp-start — SemiAuto/FullAuto(S/M/L) を一発で走らせる
+// mode: 'semi' | 'S' | 'M' | 'L'
+router.post('/v25/autopilot/vp-start', express.json(), (req, res) => {
+  const { postId, mode } = req.body || {};
+  if (!postId || !['semi','S','M','L'].includes(mode)) {
+    return res.status(400).json({ error: 'postId + mode (semi|S|M|L) required' });
+  }
+  const jobId = createJob('vpap', { postId, mode, status: 'queued', step: 'init',
+    message: 'Autopilot起動待ち', createdAt: new Date().toISOString() });
+  res.json({ ok: true, jobId });
+
+  setImmediate(async () => {
+    try {
+      const project = readProject(postId);
+      if (!project) throw new Error('案件が見つかりません: ' + postId);
+      const post = normalizeProjectPost(project);
+
+      // ① ラベル提案（DeepSeek / Sonnet fallback）
+      updateJob(jobId, { status:'running', step:'suggest-labels', message:'ラベル提案・記事収集中...' });
+      const suggested    = await _runSuggestLabels(post);
+      const refineResult = await _runRefineLabelsFromArticles(post, suggested);
+      const refined      = refineResult.refined || suggested;
+      const labels       = filterLabelItems(refined, project);
+
+      // si-data 初期化 + storyFacts 保存
+      const siFile = siPath(postId);
+      let si = safeJson(siFile, null);
+      if (!si || si.version !== 'v3') {
+        si = { postId, createdAt: new Date().toISOString(), version:'v3',
+               boxes:{ entity:{items:[]}, match:{items:[]}, search:{items:[]} } };
+      }
+      si.storyFacts = Array.isArray(refineResult.storyFacts) ? refineResult.storyFacts : [];
+      fs.writeFileSync(siFile, JSON.stringify(si, null, 2));
+
+      // ② データ取得（SofaScore / TM / Wikipedia / FotMob）
+      updateJob(jobId, { status:'running', step:'fetch-all',
+        message:'データ取得中（' + labels.length + '件）...' });
+      await _runFetchAll({ postId, items: labels });
+
+      // ③ 企画ピース生成（Sonnet 固定）
+      updateJob(jobId, { status:'running', step:'viewpoints', message:'企画ピース生成中（Sonnet）...' });
+      const { cards, briefing } = await _runGenerateViewpoints(postId);
+
+      if (mode === 'semi') {
+        // 企画ビルダーへ誘導（カードはクライアントが表示）
+        updateJob(jobId, { status:'done', step:'done', navigateTo:'25',
+          cards, briefing, message:'完了 → 企画ビルダーで確認してください' });
+        return;
+      }
+
+      // ④ カード選定 + 脚本生成（DeepSeek Sprint）
+      const modules = _vpBuildPlanFromCards(cards, mode);
+      updateJob(jobId, { status:'running', step:'scenario',
+        message:'脚本生成中（DeepSeek）... ' + modules.length + 'スライド',
+        moduleCount: modules.length });
+
+      const scJobId = 'sc_ap_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+      await _runScenarioJob(scJobId, postId, modules, post,
+        { sprint:'deepseek', seedPlan: briefing });
+
+      updateJob(jobId, { status:'done', step:'done', navigateTo:'4',
+        moduleCount: modules.length, message:'完了 → Step4で脚本を確認してください' });
+
+    } catch (e) {
+      console.error('[autopilot/vp]', e.message);
+      updateJob(jobId, { status:'error', error: e.message });
+    }
+  });
+});
+
+router.get('/v25/autopilot/vp-status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
 });
 
 module.exports = { router, runV25Job };
