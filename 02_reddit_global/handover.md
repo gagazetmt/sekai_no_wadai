@@ -1,6 +1,82 @@
 # Codex Mia V3 Handover
 
-Last updated: 2026-06-03 JST
+Last updated: 2026-06-07 JST
+
+## 2026-06-07 JST Update - Step5 Gemini 3.1 Thumbnail Pipeline
+
+### Product Decision
+
+- Step5 now generates two selectable, text-included finished thumbnail candidates.
+- Image generation uses OpenRouter model `google/gemini-3.1-flash-image-preview`.
+- Do not switch this flow back to Vertex Imagen without a new quality comparison.
+  - Vertex Imagen was usable for scene generation but scored much lower than Gemini Flash for Japanese soccer thumbnails.
+  - Direct Google AI Studio image calls often returned `OTHER` or an empty image response for the same real-person request.
+  - OpenRouter routing to Gemini 3.1 Flash Image produced the best tested balance of face reference, Japanese typography, and thumbnail composition.
+- Current approximate generation cost is about USD 0.136 for two images, roughly JPY 20-21 at JPY 150/USD.
+
+### Current Step5 Flow
+
+1. When Step5 opens, Gemini 2.5 Flash reads the case context and auto-fills the thumbnail brief.
+   - Source data includes `data/{postId}_modules.json`.
+   - It also reads V2.5 plan entities and retrieved article titles/snippets from `data/v25_plans/{postId}.json`.
+   - It returns four scene candidates plus:
+     - context line
+     - badge
+     - main text
+     - punch line
+     - short editorial reason
+   - UI button `AI再提案` regenerates the brief.
+2. Face scoring checks acquired case images and stock images.
+   - Official league/player stock must remain included.
+   - Official sources are prioritized, followed by other stock and acquired X/case images.
+   - The selected face plus up to three top reference images are sent to image generation.
+3. `POST /api/v5/gen-bg-from-face` generates candidates sequentially.
+   - Sequential generation is intentional. Parallel A/B calls produced more empty OpenRouter responses.
+   - Each variant retries up to three times when Gemini returns HTTP 200 without image data.
+4. Gemini creates two 16:9 finished thumbnails with Japanese text.
+   - A: main person large on the right, text emphasis on the left.
+   - B: diagonal/opposition layout using club colors, stadium, supporters, or crest-like elements.
+   - Both use the entered context, badge, main text, and punch line.
+5. Clicking A or B selects it as the finished thumbnail.
+   - The selected filename is saved through `/api/v5/select-thumb`.
+   - Step6 reads the same selected thumbnail metadata.
+6. The legacy SVG compositor remains available as a fallback for correcting generated Japanese text.
+
+### Prompt Guardrails
+
+- The case-information model may choose the editorial conflict and visual emphasis, but it must not invent actions.
+- For unconfirmed transfers, do not depict:
+  - signing a contract
+  - airport travel
+  - an unveiling or press conference
+  - wearing the destination club shirt
+  - meeting a manager or president
+- Use an editorial collage instead:
+  - current player image
+  - current club and interested club colors/stadium/crest
+  - strong lighting and a clean text zone
+- Avoid phones, newspapers, screens, signs, and documents that cause unreadable generated text.
+
+### Main Implementation
+
+- `routes/step5_routes.js`
+  - `_collectThumbnailStoryContext()`: modules, V2.5 entities/articles, briefing
+  - `/v5/suggest-bg-prompts`: Gemini 2.5 Flash JSON thumbnail brief
+  - `_generateGemini31Thumb()`: OpenRouter Gemini 3.1 Flash Image call and retry
+  - `/v5/gen-bg-from-face`: A/B finished-thumbnail generation
+  - Step5 UI: auto-fill, AI regeneration, A/B selection
+- Relevant commits:
+  - `13a1ae0` selectable Gemini 3.1 A/B backgrounds
+  - `f95ffa9` Japanese text included in A/B outputs
+  - `6aa2ccc` automatic brief generation from case context
+
+### Verification
+
+- Tested with the Alexis Mac Allister / Real Madrid case.
+- Auto brief successfully produced case-specific Japanese text and four grounded visual candidates.
+- A/B image generation successfully returned two 16:9 PNG files with Japanese text.
+- `soccer-yt-v2` is online on VPS port 3004.
+- Permanent launcher architecture is recorded in `memory/launcher_architecture.md`.
 
 ## 2026-06-03 JST Update - V2.5 Pivot Implementation
 
