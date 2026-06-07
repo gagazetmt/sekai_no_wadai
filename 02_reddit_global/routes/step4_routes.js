@@ -1525,13 +1525,14 @@ const _slideBuilders = (() => {
     ranking:    require('../scripts/v2_video/slides/ranking').buildRankingHTML,
     timeline:   require('../scripts/v2_video/slides/timeline').buildTimelineHTML,
     picture:    require('../scripts/v2_video/slides/picture').buildPictureHTML,
-    mapImagesToModule: require('../scripts/v2_video/slides/_common').mapImagesToModule,
+    mapImagesToModule:        require('../scripts/v2_video/slides/_common').mapImagesToModule,
+    mapImagesToModulePreview: require('../scripts/v2_video/slides/_common').mapImagesToModulePreview,
   };
 })();
 
 function _buildSlideForPreview(mod) {
-  const { OPB, EDB, mapImagesToModule } = _slideBuilders;
-  const m = mapImagesToModule(mod);
+  const { OPB, EDB, mapImagesToModulePreview } = _slideBuilders;
+  const m = mapImagesToModulePreview(mod); // URL版: base64変換しないのでブラウザpreviewが軽量
   const opVar = OPB[m.variant] ? m.variant : 'v1';
   const edVar = EDB[m.variant] ? m.variant : 'v1';
   switch (m.type) {
@@ -3316,7 +3317,7 @@ function getUI() {
       if (y) y.textContent = (adj.offsetY || 0) + '%';
     }
     clearTimeout(_imgAdjTimer);
-    _imgAdjTimer = setTimeout(_saveAndReload, 300);  // スライダー操作中の連発を debounce
+    _imgAdjTimer = setTimeout(_saveAndReload, 600);  // スライダー操作中の連発を debounce（画像preview負荷軽減）
   };
 
   window.s4ResetImageAdjust = function(side) {

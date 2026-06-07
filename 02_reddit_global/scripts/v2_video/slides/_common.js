@@ -63,8 +63,12 @@ function hasNewline(s) {
 }
 
 // 画像を base64 で埋め込み（Puppeteer の file:// アクセス回避）
+// ブラウザpreview用: `/` 始まりのパスはURLとしてそのまま返す（base64変換なし）
+//   → mapImagesToModulePreview と組み合わせて使う
 function imgDataUri(imgPath) {
   if (!imgPath) return null;
+  if (imgPath.startsWith('data:')) return imgPath; // already base64
+  if (imgPath.startsWith('/'))     return imgPath; // HTTP URL, let browser fetch directly
   try {
     // 絶対パスじゃなければプロジェクトルート基準で解決
     const abs = path.isAbsolute(imgPath)
@@ -178,6 +182,39 @@ function mapImagesToModule(mod) {
       break;
     case 'matchcard':
       // 既存運用維持
+      break;
+    default:
+      if (!m.bgImage) m.bgImage = imgs[0];
+  }
+  return m;
+}
+
+// ブラウザpreview用: 画像をURLパスとして渡す（base64変換しない）
+//   imgDataUri が `/` 始まりのパスをそのまま返すため、
+//   スライドビルダーが imgDataUri(m.bgImage) しても軽量なURLが返る
+function mapImagesToModulePreview(mod) {
+  if (!mod) return mod;
+  const imgs = (Array.isArray(mod.images) ? mod.images : [])
+    .map(p => {
+      const clean = String(p || '').replace(/^\/+/, '');
+      return clean ? '/' + clean : null;
+    })
+    .filter(Boolean);
+  if (!imgs.length) return mod;
+  const m = { ...mod, images: imgs };
+  switch (mod.type) {
+    case 'opening': case 'ending': case 'insight': case 'reaction':
+    case 'stats':   case 'history':
+      if (!m.bgImage) m.bgImage = imgs[0];
+      break;
+    case 'profile':
+      if (!m.bgImage)   m.bgImage   = imgs[0];
+      if (!m.awayImage) m.awayImage = imgs[1];
+      if (!m.homeImage) m.homeImage = imgs[2];
+      break;
+    case 'comparison':
+      if (!m.leftImage)  m.leftImage  = imgs[0];
+      if (!m.rightImage) m.rightImage = imgs[1];
       break;
     default:
       if (!m.bgImage) m.bgImage = imgs[0];
@@ -769,7 +806,7 @@ function fitFont(text, baseFontPx, innerWidthPx, opts = {}) {
 }
 
 module.exports = {
-  W, H, PALETTE, esc, escBr, hasNewline, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule,
+  W, H, PALETTE, esc, escBr, hasNewline, imgDataUri, wrapHTML, splitSubtitle, buildSubtitleBar, subtitleArgFromMod, mapImagesToModule, mapImagesToModulePreview,
   LEAD_PAD_SEC, TAIL_PAD_SEC,
   I18N, TEAM_ABBR, PLAYER_NAMES,
   _t, _abbr, _player, _fmtDate,
