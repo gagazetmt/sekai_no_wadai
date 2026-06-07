@@ -2355,6 +2355,10 @@ function getUI() {
       });
     });
     const cardImgs = Array.isArray(m.images) ? m.images : [];
+    // m.images にあるがプールにない画像をプール先頭に追加（ギャラリー外から設定された場合でも変更・解除できるように）
+    cardImgs.slice().reverse().forEach(function(p) {
+      if (p && !seen.has(p)) { seen.add(p); pool.unshift({ path: p, fromLabel: '📌 現在の設定' }); }
+    });
     const uploadBtn = '<button class="s4-upload-btn" style="background:#7c3aed;color:#fff;border:none;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:10px;font-weight:bold;margin-left:8px;">📤 アップロード</button>';
     if (pool.length) {
       galleryHtml = ''
