@@ -1569,11 +1569,17 @@ router.get('/v2/preview-slide', (req, res) => {
 });
 
 // ─── /v2/preview-slide-inline : POST body で module を直接受け取り（disk read 無し・最速） ──
+//   Blob URLでiframeに読み込む際、/images/... の相対パスがブラウザで解決できないため
+//   <base href> を埋め込んでサーバーのoriginに向ける
 router.post('/v2/preview-slide-inline', (req, res) => {
   const { module: mod } = req.body || {};
   if (!mod) return res.status(400).send('<!doctype html><title>err</title><body>module required</body>');
   try {
-    res.set('Content-Type', 'text/html; charset=utf-8').send(_buildSlideForPreview(mod));
+    const origin = req.protocol + '://' + req.get('host');
+    let html = _buildSlideForPreview(mod);
+    // <head> の直後に <base> タグを挿入 → /images/... が origin に解決される
+    html = html.replace('<head>', '<head><base href="' + origin + '/">');
+    res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
 });
 
