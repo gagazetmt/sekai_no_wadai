@@ -3374,15 +3374,17 @@ function getUI() {
     _saveAndReload();
   };
 
+  /* モバイル判定（タッチデバイス = プレビュー自動更新を無効化してメモリを節約）*/
+  var _isMobile = (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0)
+    || (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width:768px)').matches);
+
   /* ── プレビュー更新ヘルパ（インライン化により、保存と並行）──
-     新版の _reloadPreview は disk read を経由せず、
-     mod を直接 POST → HTML を返す。
-     保存とプレビューを並行起動して体感速度を改善。 */
+     モバイルではプレビュー自動更新を無効化（OOMクラッシュ対策）。
+     「プレビュー」ボタンで手動更新する。 */
   async function _saveAndReload() {
     _collectInputs();
-    // 保存とプレビューを並行（プレビューは disk 経由じゃないので待つ必要無し）
-    _saveModulesQuiet();   // fire-and-forget（チェーンで直列化されるので race 無し）
-    _reloadPreview();      // 即時プレビュー
+    _saveModulesQuiet();        // fire-and-forget（チェーンで直列化されるので race 無し）
+    if (!_isMobile) _reloadPreview();  // PC のみ自動プレビュー
   }
 
   /* ── 入力監視 → 短い debounce で即時プレビュー反映 ── */

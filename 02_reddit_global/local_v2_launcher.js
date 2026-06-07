@@ -1238,9 +1238,12 @@ function _apPanelToggle() {
 }
 
 /* ── Autopilot 実行 ── */
+window._apRunning = false; // 並走防止フラグ
 window.runAutopilot = async function(mode) {
   var post = window.APP.selected;
   if (!post?.id) { alert('先に案件を選択してください'); return; }
+  if (window._apRunning) { alert('⚠️ Autopilotが既に実行中です。完了を待ってから再実行してください。'); return; }
+  window._apRunning = true;
   var statusEl = document.getElementById('apStatus');
   var modeLabel = { semi:'SemiAuto', S:'FullAuto(S)', M:'FullAuto(M)', L:'FullAuto(L)' }[mode] || mode;
   var setStatus = function(msg) { if (statusEl) statusEl.textContent = msg; };
@@ -1285,6 +1288,7 @@ window.runAutopilot = async function(mode) {
   } catch(e) {
     setStatus('❌ ' + e.message);
   } finally {
+    window._apRunning = false;
     btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
   }
 };
