@@ -105,6 +105,18 @@ function _collectThumbnailStoryContext(postId) {
   if (fs.existsSync(pf)) {
     try {
       const plan = JSON.parse(fs.readFileSync(pf, 'utf8'));
+      const entities = plan.refined?.entities || plan.suggested?.entities || [];
+      if (entities.length) {
+        lines.push(`主要登場人物・クラブ: ${entities.slice(0, 12).map(x => `${x.name}(${x.role || 'entity'})`).join(', ')}`);
+      }
+      const articles = Array.isArray(plan.articles) ? plan.articles : [];
+      if (articles.length) {
+        const articleDigest = articles.slice(0, 8).map((article, i) => {
+          const text = article.snippet || article.fullText || '';
+          return `${i + 1}. ${article.title || '記事'}: ${String(text).replace(/\s+/g, ' ').slice(0, 420)}`;
+        });
+        lines.push(`取得記事:\n${articleDigest.join('\n')}`);
+      }
       const briefing = plan.briefing
         || plan.aiPlan?.briefing
         || plan.result?.briefing
@@ -119,7 +131,7 @@ function _collectThumbnailStoryContext(postId) {
     } catch (_) {}
   }
 
-  return lines.join('\n').slice(0, 5000);
+  return lines.join('\n').slice(0, 9000);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -601,7 +613,7 @@ router.post('/v5/composite-thumb', async (req, res) => {
 
 // ─── ① 顔スコアリング ───────────────────────────────────────────
 // images/{postId}/ 以下の全画像を Gemini Vision で採点し、顔スコア順に返す
-// AIがシーン説明プリセットを提案
+// AIが案件全体を読んで、シーンとサムネ文字をまとめて提案
 router.post('/v5/suggest-bg-prompts', async (req, res) => {
   const { postId } = req.body || {};
   const { callAI } = require('../scripts/ai_client');
@@ -609,15 +621,32 @@ router.post('/v5/suggest-bg-prompts', async (req, res) => {
 
   try {
     const raw = await callAI({
-      forceProvider: 'deepseek', max_tokens: 1000,
+      forceProvider: 'gemini', model: 'gemini-2.5-flash', max_tokens: 1600,
+      label: 'step5-thumbnail-brief',
       system: `あなたはサッカー報道専門のYouTubeサムネイル・ディレクターです。
-渡された動画情報から、事件の核心が一目で伝わる背景シーンを設計してください。
-JSONのみ返答（前置き不要）: {"prompts":["...", "...", "...", "..."]}
+渡された取得記事、動画構成、完成台本を読み、事件の核心が一目で伝わる完成サムネイル・ブリーフを設計してください。
+JSONのみ返答（前置き不要）:
+{"ctx":"...","badge":"...","main":"...","punch":"...","prompts":["...","...","...","..."],"reason":"..."}
 
 ルール:
+- 記事・構成・台本で裏付けられた事実だけを使い、憶測を事実として断定しない
+- mainは中心人物の実名または中心クラブ名を必ず含む最重要フック。日本語18文字以内
+- 「この人物」「中心選手」「標的のMF」のように固有名詞をぼかした文字案は禁止
+- punchは事件の変化・疑問・危機を表す。日本語18文字以内
+- ctxは前提が伝わる補助行。日本語18文字以内
+- badgeは「衝撃」「急展開」「電撃」など2〜6文字。煽りが不適切なら空文字
+- mainとpunchで同じ情報を繰り返さない
+- 読点や説明文を詰め込まず、スマートフォンで一瞬で読める言葉にする
 - 4案提案する
-- 各案は必ず、動画情報に書かれた実際のニュース・試合・移籍・会見などを一場面に変換する
+- promptsの各案は120文字以内
+- 各案は案件の中心人物・現在所属・対立相手・関心クラブなど、記事にある要素だけで報道用コラージュを設計する
 - 動画情報にない設定、職業、場所、出来事を創作しない
+- 移籍報道では、移籍先ユニフォームの着用、契約書への署名、空港移動、入団会見、監督や会長との面会を、記事で確認できない限り描かない
+- 未確定ニュースは、中心人物の現在の姿を大きく置き、現在クラブと関心クラブの色・スタジアム・紋章を左右に配した「報道用の象徴的コラージュ」で表現する
+- スマートフォン、新聞、看板、契約書など、生成画像内に読めない文字が発生する小道具は使わない
+- 人物に架空の行動や感情を演技させない。顔参照を保った胸上ポートレート、試合中の自然な姿、既存会見風の自然な姿だけを使う
+- 各promptは必ず「この人物を」で始め、人物配置、背景のクラブ要素、照明、文字を置く余白だけを書く
+- 良い例: 「この人物を現在所属クラブのユニフォーム姿で画面右に大きく配置。背景を赤いホームスタジアムと白・金の関心クラブを象徴する光で左右分割し、左側に文字用の暗い余白を確保する。」
 - 抽象的な「決意」「苦悩」だけで済ませず、空港、スタジアム、会見場、ベンチなど案件に合う具体的な場所と行動を書く
 - 人物名、クラブ名、大会名などの固有名詞は出力しない。「この人物が〜」で始める
 - 画像内の看板、モニター、書類にも文字や固有名詞を描かせない
@@ -630,16 +659,40 @@ JSONのみ返答（前置き不要）: {"prompts":["...", "...", "...", "..."]}
         content: `以下の案件だけを根拠にしてください。\n\n${context || '案件情報を取得できませんでした。一般案を作らず、サッカー報道の場面に限定してください。'}`,
       }],
     });
-    const m = raw.match(/\{[\s\S]*\}/);
-    const parsed = m ? JSON.parse(m[0]) : {};
+    const cleaned = String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error(`AIブリーフにJSONがありません: ${cleaned.slice(0, 300)}`);
+    let parsed;
+    try {
+      parsed = JSON.parse(m[0]);
+    } catch (parseError) {
+      throw new Error(`AIブリーフJSON解析失敗: ${parseError.message}; raw=${cleaned.slice(0, 500)}`);
+    }
+    const clip = (value, max) => Array.from(String(value || '').trim()).slice(0, max).join('');
     const prompts = (Array.isArray(parsed.prompts) ? parsed.prompts : [])
-      .map(p => String(p || '').trim())
+      .map(p => {
+        if (typeof p === 'string') return p.trim();
+        if (!p || typeof p !== 'object') return '';
+        const known = p.scene || p.description || p.prompt || p.text || p.visual;
+        if (known) return String(known).trim();
+        const fallback = Object.values(p).find(value => typeof value === 'string' && value.trim().length >= 20);
+        return String(fallback || '').trim();
+      })
       .filter(Boolean)
       .slice(0, 4);
-    res.json({ prompts });
+    res.json({
+      prompts,
+      brief: {
+        ctx: clip(parsed.ctx, 18),
+        badge: clip(parsed.badge, 6),
+        main: clip(parsed.main, 18),
+        punch: clip(parsed.punch, 18),
+        reason: clip(parsed.reason, 160),
+      },
+    });
   } catch (e) {
     console.warn('[suggest-bg-prompts]', e.message);
-    res.json({ prompts: [] });
+    res.json({ prompts: [], brief: {} });
   }
 });
 
@@ -1074,6 +1127,7 @@ function getUI() {
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
       <strong style="color:var(--c); font-size:13px;">② テキスト込みサムネA/B生成（Gemini 3.1 Flash）</strong>
       <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">完成サムネを2案生成</button>
+      <button onclick="s5ReloadBrief()" class="s5btn-sub" id="s5-brief-btn">AI再提案</button>
       <span id="s5-bg-status" style="font-size:11px; color:var(--muted);"></span>
     </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
@@ -1104,6 +1158,7 @@ function getUI() {
         <input type="text" id="s5-scene" class="s5input"
           placeholder="レアルマドリーの会長選挙の景品となっている場面">
         <div id="s5-scene-presets" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;"></div>
+        <div id="s5-brief-reason" style="font-size:10px; color:var(--muted); margin-top:6px; line-height:1.5;"></div>
         <div style="font-size:10px; color:var(--muted); margin-top:5px; line-height:1.5;">
           顔参照は上位3枚を自動使用。日本語テキストを含むA案とB案から完成サムネを選択します。
         </div>
@@ -1169,8 +1224,10 @@ function getUI() {
     _el('s5-face-status').textContent = '';
     _el('s5-scene').value = '';
     _el('s5-scene-presets').innerHTML = '';
+    ['s5-ctx','s5-badge','s5-main','s5-punch'].forEach(id => { if (_el(id)) _el(id).value = ''; });
+    if (_el('s5-brief-reason')) _el('s5-brief-reason').textContent = '';
     if (post) {
-      // 顔スコアリングを待たずに、案件に沿ったシーン案を先に用意する
+      // 顔スコアリングを待たず、記事・構成・台本から完成サムネブリーフを作る
       _loadScenePresets(post.id);
       try {
         const m = await window.fetchJson('/api/v6/get-meta?postId=' + encodeURIComponent(post.id));
@@ -1186,15 +1243,25 @@ function getUI() {
   async function _loadScenePresets(id) {
     const box = _el('s5-scene-presets');
     if (!box) return;
-    box.innerHTML = '<span style="font-size:10px;color:var(--muted);">AIがシーン案を考え中...</span>';
+    const briefBtn = _el('s5-brief-btn');
+    if (briefBtn) briefBtn.disabled = true;
+    box.innerHTML = '<span style="font-size:10px;color:var(--muted);">AIが記事・構成・台本を読んでいます...</span>';
     try {
       const r = await window.fetchJson('/api/v5/suggest-bg-prompts', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ postId: id }),
       });
       const prompts = r.prompts || [];
+      const brief = r.brief || {};
+      if (_el('s5-ctx')) _el('s5-ctx').value = brief.ctx || '';
+      if (_el('s5-badge')) _el('s5-badge').value = brief.badge || '';
+      if (_el('s5-main')) _el('s5-main').value = brief.main || '';
+      if (_el('s5-punch')) _el('s5-punch').value = brief.punch || '';
+      if (_el('s5-brief-reason')) {
+        _el('s5-brief-reason').textContent = brief.reason ? 'AI判断: ' + brief.reason : '';
+      }
       if (!prompts.length) {
-        box.innerHTML = '<span style="font-size:10px;color:#f59e0b;">シーン案を生成できませんでした。再読み込みしてください。</span>';
+        box.innerHTML = '<span style="font-size:10px;color:#f59e0b;">AIブリーフを生成できませんでした。AI再提案を押してください。</span>';
         return;
       }
       // 案件変更前の古い提案を残さず、最新案件の1件目を自動入力
@@ -1209,9 +1276,16 @@ function getUI() {
           onmouseout="this.style.borderColor='var(--border)'">\${p}</button>
       \`).join('');
     } catch(e) {
-      box.innerHTML = '<span style="font-size:10px;color:#ef4444;">シーン案エラー: ' + e.message + '</span>';
+      box.innerHTML = '<span style="font-size:10px;color:#ef4444;">AIブリーフエラー: ' + e.message + '</span>';
+    } finally {
+      if (briefBtn) briefBtn.disabled = false;
     }
   }
+  window.s5ReloadBrief = function() {
+    const id = _pid();
+    if (!id) { alert('案件を選択してください'); return; }
+    _loadScenePresets(id);
+  };
   window._s5UsePreset = p => { const el = _el('s5-scene'); if (el) el.value = p; };
 
   // ① 顔スコアリング
