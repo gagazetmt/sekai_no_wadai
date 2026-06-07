@@ -125,15 +125,17 @@ function walkPlayer(d) {
     });
   }
 
-  // ─ シーズン履歴（全シーズン × 大会、出場0除外、新→旧）─
-  // walker priority: 直近5シーズン高 / 6〜10 中 / それ以前は低
+  // ─ シーズン履歴（シーズン × 大会ごとに個別アコーディオン）─
+  // 各シーズンを独立したカテゴリとして扱うことで step4 で選びやすくする
   if (Array.isArray(d.seasonHistory) && d.seasonHistory.length) {
     d.seasonHistory.forEach((s, i) => {
-      const isRecent5 = i < 5;
+      const isRecent2  = i < 2;
+      const isRecent5  = i < 5;
       const isRecent10 = i < 10;
-      const basePri = isRecent5 ? 8 - i : (isRecent10 ? 4 : 2);
-      const cat = isRecent5 ? 'シーズン履歴(直近5年)' : (isRecent10 ? 'シーズン履歴(直近10年)' : 'シーズン履歴(過去)');
+      const basePri = isRecent2 ? 9 - i : (isRecent5 ? 7 - i : (isRecent10 ? 4 : 2));
+      // シーズン × 大会を独立カテゴリに（例: "25/26 Premier League"）
       const seasonLabel = `${s.seasonName || '?'} ${s.tournamentName || ''}`.trim();
+      const cat = seasonLabel;
       const stats = s.stats || {};
       const summary = [
         stats.appearances != null ? stats.appearances + '試合' : null,
@@ -141,22 +143,24 @@ function walkPlayer(d) {
         stats.assists     != null ? stats.assists + 'A' : null,
         stats.rating      != null ? '評定' + stats.rating : null,
       ].filter(Boolean).join(' ');
-      push(`season_${i+1}_summary`, seasonLabel, summary, cat, basePri);
-      // 直近10シーズン: apps/goals/assists を個別スロット化（推移スライド用）
-      if (isRecent10) {
-        push(`season_${i+1}_apps`,    `${seasonLabel} 試合`,    fmtNum(stats.appearances), cat, basePri - 1);
-        push(`season_${i+1}_goals`,   `${seasonLabel} ゴール`,   fmtNum(stats.goals),       cat, basePri - 1);
-        push(`season_${i+1}_assists`, `${seasonLabel} アシスト`, fmtNum(stats.assists),     cat, basePri - 1);
-      }
-      // 直近5シーズンのみ詳細スタッツも細粒度化
-      if (isRecent5) {
-        push(`season_${i+1}_rating`,    `${seasonLabel} 評定`,       fmtFloat(stats.rating, 2),          cat, basePri - 1);
-        push(`season_${i+1}_shots`,     `${seasonLabel} 枠内シュート`, fmtNum(stats.shotsOnTarget),         cat, basePri - 2);
-        push(`season_${i+1}_dribbles`,  `${seasonLabel} ドリブル成功`, fmtNum(stats.successfulDribbles),    cat, basePri - 2);
-        push(`season_${i+1}_chances`,   `${seasonLabel} チャンスメイク`, fmtNum(stats.bigChancesCreated),   cat, basePri - 2);
-        push(`season_${i+1}_keypasses`, `${seasonLabel} キーパス`,    fmtNum(stats.keyPasses),             cat, basePri - 2);
-        if (stats.expectedGoals != null) push(`season_${i+1}_xG`, `${seasonLabel} xG`, fmtFloat(stats.expectedGoals, 2), cat, basePri - 2);
-      }
+      push(`season_${i+1}_summary`,  seasonLabel,                summary,                       cat, basePri);
+      push(`season_${i+1}_apps`,     `${seasonLabel} 試合数`,     fmtNum(stats.appearances),     cat, basePri - 1);
+      push(`season_${i+1}_goals`,    `${seasonLabel} ゴール`,     fmtNum(stats.goals),           cat, basePri - 1);
+      push(`season_${i+1}_assists`,  `${seasonLabel} アシスト`,   fmtNum(stats.assists),         cat, basePri - 1);
+      push(`season_${i+1}_rating`,   `${seasonLabel} 評定`,       fmtFloat(stats.rating, 2),     cat, basePri - 1);
+      push(`season_${i+1}_minutes`,  `${seasonLabel} 出場分`,     fmtNum(stats.minutesPlayed),   cat, basePri - 2);
+      if (stats.expectedGoals  != null) push(`season_${i+1}_xG`,         `${seasonLabel} xG`,          fmtFloat(stats.expectedGoals, 2),  cat, basePri - 2);
+      if (stats.shotsOnTarget  != null) push(`season_${i+1}_shots`,      `${seasonLabel} 枠内シュート`,  fmtNum(stats.shotsOnTarget),       cat, basePri - 2);
+      if (stats.totalShots     != null) push(`season_${i+1}_totalshots`,  `${seasonLabel} 総シュート`,   fmtNum(stats.totalShots),          cat, basePri - 3);
+      if (stats.keyPasses      != null) push(`season_${i+1}_keypasses`,   `${seasonLabel} キーパス`,     fmtNum(stats.keyPasses),           cat, basePri - 2);
+      if (stats.bigChancesCreated != null) push(`season_${i+1}_chances`,  `${seasonLabel} チャンスメイク`, fmtNum(stats.bigChancesCreated),   cat, basePri - 2);
+      if (stats.successfulDribbles != null) push(`season_${i+1}_dribbles`, `${seasonLabel} ドリブル成功`, fmtNum(stats.successfulDribbles),  cat, basePri - 2);
+      if (stats.tackles        != null) push(`season_${i+1}_tackles`,     `${seasonLabel} タックル`,     fmtNum(stats.tackles),             cat, basePri - 2);
+      if (stats.interceptions  != null) push(`season_${i+1}_intercept`,   `${seasonLabel} インターセプト`, fmtNum(stats.interceptions),      cat, basePri - 2);
+      if (stats.aerialDuelsWon != null) push(`season_${i+1}_aerial`,      `${seasonLabel} 空中戦勝利`,   fmtNum(stats.aerialDuelsWon),      cat, basePri - 3);
+      if (stats.saves          != null) push(`season_${i+1}_saves`,       `${seasonLabel} セーブ`,       fmtNum(stats.saves),               cat, basePri - 2);
+      if (stats.cleanSheets    != null) push(`season_${i+1}_cs`,          `${seasonLabel} クリーンシート`, fmtNum(stats.cleanSheets),         cat, basePri - 2);
+      if (stats.yellowCards    != null) push(`season_${i+1}_yellow`,      `${seasonLabel} 警告`,         fmtNum(stats.yellowCards),         cat, basePri - 3);
     });
   }
 

@@ -285,10 +285,12 @@ async function fetchSofaScorePlayer(playerNameEn) {
     if (!statsRaw?.__err) {
       const statsData   = statsRaw;
       const allSeasons  = statsData.seasons || [];
-      const latestYear  = allSeasons[0]?.year;
+      // 出場0のシーズン（次季の空エントリ等）を除外した上で最新年を探す
+      const meaningfulSeasons = allSeasons.filter(s => (s.statistics?.appearances || 0) > 0);
+      const latestYear  = meaningfulSeasons[0]?.year;
       const currentList = latestYear
-        ? allSeasons.filter(s => s.year === latestYear)
-        : allSeasons;
+        ? meaningfulSeasons.filter(s => s.year === latestYear)
+        : meaningfulSeasons;
       const DOMESTIC = [17, 8, 23, 35, 34, 37, 44]; // PL, LaLiga, SerieA, Bundesliga, Ligue1, Eredivisie, Süper Lig
       const UCL      = [7];
       let preferred = null;
@@ -296,7 +298,7 @@ async function fetchSofaScorePlayer(playerNameEn) {
         preferred = currentList.find(s => s.uniqueTournament?.id === tid);
         if (preferred) break;
       }
-      preferred = preferred || currentList[0] || allSeasons[0];
+      preferred = preferred || currentList[0] || meaningfulSeasons[0];
       const uclEntry = currentList.find(s => UCL.includes(s.uniqueTournament?.id));
       uclStats = (uclEntry && uclEntry.uniqueTournament?.id !== preferred?.uniqueTournament?.id)
         ? {
@@ -320,31 +322,51 @@ async function fetchSofaScorePlayer(playerNameEn) {
       const allSeasons = statsRaw.seasons || [];
       seasonHistory = allSeasons
         .filter(s => (s.statistics?.appearances || 0) > 0 && s.uniqueTournament?.name)
-        .map(s => ({
-          seasonName:     s.season?.year || s.year,
-          seasonId:       s.season?.id,
-          tournamentName: s.uniqueTournament?.name,
-          tournamentId:   s.uniqueTournament?.id,
-          teamName:       s.team?.name,
-          teamId:         s.team?.id,
-          stats: {
-            appearances:        s.statistics?.appearances ?? null,
-            goals:              s.statistics?.goals ?? null,
-            assists:            s.statistics?.assists ?? null,
-            rating:             s.statistics?.rating ? parseFloat(Number(s.statistics.rating).toFixed(2)) : null,
-            minutesPlayed:      s.statistics?.minutesPlayed ?? null,
-            expectedGoals:      s.statistics?.expectedGoals ? parseFloat(Number(s.statistics.expectedGoals).toFixed(2)) : null,
-            keyPasses:          s.statistics?.keyPasses ?? null,
-            bigChancesCreated:  s.statistics?.bigChancesCreated ?? null,
-            successfulDribbles: s.statistics?.successfulDribbles ?? null,
-            totalShots:         s.statistics?.totalShots ?? null,
-            shotsOnTarget:      s.statistics?.shotsOnTarget ?? null,
-            yellowCards:        s.statistics?.yellowCards ?? null,
-            redCards:           s.statistics?.redCards ?? null,
-            cleanSheets:        s.statistics?.cleanSheet ?? null,
-            saves:              s.statistics?.saves ?? null,
-          },
-        }))
+        .map(s => {
+          // seasonStats と同じ全フィールドを取得（省略なし）
+          const st = s.statistics || {};
+          const _f  = (v) => v != null ? Number(v) : null;
+          const _pf = (v, d = 2) => v != null ? parseFloat(Number(v).toFixed(d)) : null;
+          const stats = {
+            appearances:        _f(st.appearances),
+            goals:              _f(st.goals),
+            assists:            _f(st.assists),
+            rating:             _pf(st.rating),
+            minutesPlayed:      _f(st.minutesPlayed),
+            expectedGoals:      _pf(st.expectedGoals),
+            keyPasses:          _f(st.keyPasses),
+            bigChancesCreated:  _f(st.bigChancesCreated),
+            successfulDribbles: _f(st.successfulDribbles),
+            totalShots:         _f(st.totalShots),
+            shotsOnTarget:      _f(st.shotsOnTarget),
+            yellowCards:        _f(st.yellowCards),
+            redCards:           _f(st.redCards),
+            cleanSheets:        _f(st.cleanSheet),
+            saves:              _f(st.saves),
+            // 今季スタッツと同じ項目を追加
+            tackles:            _f(st.tackles),
+            interceptions:      _f(st.interceptions),
+            aerialDuelsWon:     _f(st.aerialDuelsWon),
+            aerialDuelsTotal:   _f(st.aerialDuels),
+            totalDuelsWon:      _f(st.totalDuelsWon),
+            groundDuelsWon:     _f(st.groundDuelsWon),
+            accuratePasses:     _f(st.accuratePasses),
+            totalPasses:        _f(st.totalPasses),
+            accurateLongBalls:  _f(st.accurateLongBalls),
+            chancesCreated:     _f(st.chancesCreated ?? st.bigChancesCreated),
+            goalConversion:     _pf(st.goalConversionPercentage, 1),
+            cleanSheetPercentage: _pf(st.cleanSheetPercentage, 1),
+          };
+          return {
+            seasonName:     s.season?.year || s.year,
+            seasonId:       s.season?.id,
+            tournamentName: s.uniqueTournament?.name,
+            tournamentId:   s.uniqueTournament?.id,
+            teamName:       s.team?.name,
+            teamId:         s.team?.id,
+            stats,
+          };
+        })
         .sort((a, b) => {
           // 新しい順（year は "24/25" や 2024 形式）
           const ay = String(a.seasonName || '').slice(0, 4);
