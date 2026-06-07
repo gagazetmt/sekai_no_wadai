@@ -856,8 +856,13 @@ async function _generateGemini31Thumb({ prompt, referencePaths }) {
 
 // ─── Gemini 3.1 Flash ImageでYouTubeサムネ背景をA/B生成 ──
 router.post('/v5/gen-bg-from-face', async (req, res) => {
-  const { localPath, referencePaths = [], sceneDesc, postId } = req.body || {};
-  if (!localPath || !sceneDesc) return res.status(400).json({ error: 'localPath / sceneDesc required' });
+  const {
+    localPath, referencePaths = [], sceneDesc, postId,
+    ctx = '', main = '', punch = '', badge = '',
+  } = req.body || {};
+  if (!localPath || !sceneDesc || !String(main).trim()) {
+    return res.status(400).json({ error: 'localPath / sceneDesc / main required' });
+  }
   const requested = [localPath, ...referencePaths].filter(Boolean);
   const absPaths = [];
   for (const item of requested) {
@@ -869,13 +874,22 @@ router.post('/v5/gen-bg-from-face', async (req, res) => {
   if (!absPaths.length) return res.status(400).json({ error: '参照画像が見つかりません' });
 
   const scene = String(sceneDesc).trim();
+  const exactText = [
+    ctx && `コンテキスト: 「${String(ctx).trim()}」`,
+    `メインキャッチ: 「${String(main).trim()}」`,
+    punch && `サブキャッチ: 「${String(punch).trim()}」`,
+    badge && `バッジ: 「${String(badge).trim()}」`,
+  ].filter(Boolean).join('\n');
   const identityRule = `添付画像は同じ中心人物の参照です。1枚目の顔を最優先し、目、眉、鼻、頬骨、顎、髪型を維持して別人化させないでください。`;
-  const shared = `日本のサッカーYouTube用に、リアルな実写フォトスタイルの高品質な16:9サムネイル背景を生成してください。
+  const shared = `日本のサッカーYouTube用に、リアルな実写フォトスタイルの高品質な16:9完成サムネイルを生成してください。
 ${identityRule}
 案件シーン: ${scene}
 主役の顔と上半身を大きく、強い表情とドラマチックなスタジアム照明で描く。
 強いコントラスト、逆光、火花、チームカラーの光を使う。
-日本語テキストは後から合成するため、画像内に文字、字幕、透かしを生成しない。`;
+以下の日本語を一字一句そのまま、読みやすく画像内へ描画する:
+${exactText}
+日本のYouTubeサムネイルらしい極太ゴシック体。太い黒縁と白縁の二重フチ、影、立体感、赤・黄・白・金の高コントラスト配色を使う。
+文字の欠落、別表記、英訳、文字化け、余計な文章は禁止。指定した文字以外の字幕や透かしは生成しない。`;
   const prompts = [
     `${shared}
 【A案】主役を画面右側に大きく配置し、左側45%を暗く整理された文字スペースとして空ける。スマートフォンで主役の顔が強く見える構図。`,
@@ -909,6 +923,7 @@ ${identityRule}
     return {
       variant,
       url: `/v2_thumbs/${safePostId}/${outFile}`,
+      file: outFile,
       localPath: outPath,
       costUsd: item.costUsd,
     };
@@ -1054,12 +1069,30 @@ function getUI() {
     <div class="s5face-grid" id="s5-face-grid"></div>
   </div>
 
-  <!-- ② 背景生成 -->
+  <!-- ② テキスト込み完成サムネ生成 -->
   <div class="s5card" id="s5-bg-card" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-      <strong style="color:var(--c); font-size:13px;">② サムネ背景A/B生成（Gemini 3.1 Flash）</strong>
-      <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">2案生成</button>
+      <strong style="color:var(--c); font-size:13px;">② テキスト込みサムネA/B生成（Gemini 3.1 Flash）</strong>
+      <button onclick="s5GenBg()" class="s5btn" id="s5-bg-btn">完成サムネを2案生成</button>
       <span id="s5-bg-status" style="font-size:11px; color:var(--muted);"></span>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+      <div>
+        <label class="s5label">コンテキスト行（小・上）任意</label>
+        <input type="text" id="s5-ctx" class="s5input" placeholder="レアル・マドリーが本気">
+      </div>
+      <div>
+        <label class="s5label">バッジ 任意</label>
+        <input type="text" id="s5-badge" class="s5input" placeholder="衝撃">
+      </div>
+      <div>
+        <label class="s5label">メイン文字（大）※必須</label>
+        <input type="text" id="s5-main" class="s5input" placeholder="マック・アリスター強奪か？！">
+      </div>
+      <div>
+        <label class="s5label">パンチライン（大・下）任意</label>
+        <input type="text" id="s5-punch" class="s5input" placeholder="契約延長交渉なし">
+      </div>
     </div>
     <div style="display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;">
       <div>
@@ -1072,37 +1105,19 @@ function getUI() {
           placeholder="レアルマドリーの会長選挙の景品となっている場面">
         <div id="s5-scene-presets" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;"></div>
         <div style="font-size:10px; color:var(--muted); margin-top:5px; line-height:1.5;">
-          顔参照は上位3枚を自動使用。A案とB案を生成後、採用する背景を選択します。
+          顔参照は上位3枚を自動使用。日本語テキストを含むA案とB案から完成サムネを選択します。
         </div>
       </div>
     </div>
     <div id="s5-bg-preview" style="margin-top:12px;"></div>
   </div>
 
-  <!-- ③ テキストレイヤー（SVG） -->
+  <!-- 文字崩れ時の旧SVG合成（通常フローでは非表示） -->
   <div class="s5card" id="s5-text-card" style="display:none;">
     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
       <strong style="color:var(--c); font-size:13px;">③ テキストレイヤー（SVG合成）</strong>
       <button onclick="s5GenFinal()" class="s5btn" id="s5-final-btn">完成サムネを生成</button>
       <span id="s5-final-status" style="font-size:11px; color:var(--muted);"></span>
-    </div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
-      <div>
-        <label class="s5label">コンテキスト行（小・上）任意</label>
-        <input type="text" id="s5-ctx" class="s5input" placeholder="チェルシー監督就任">
-      </div>
-      <div>
-        <label class="s5label">バッジ 任意</label>
-        <input type="text" id="s5-badge" class="s5input" placeholder="電撃就任">
-      </div>
-      <div>
-        <label class="s5label">メイン文字（大）※必須</label>
-        <input type="text" id="s5-main" class="s5input" placeholder="シャビアロンソ">
-      </div>
-      <div>
-        <label class="s5label">パンチライン（大・下）任意</label>
-        <input type="text" id="s5-punch" class="s5input" placeholder="低迷する王者を救えるか！？">
-      </div>
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <div style="flex:1; min-width:140px;">
@@ -1130,7 +1145,7 @@ function getUI() {
     <img id="s5-result-img" style="width:100%; border-radius:6px; border:2px solid var(--c);" alt="">
     <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
       <button onclick="s5AdoptThumb()" class="s5btn" style="flex:1;">✅ このサムネを採用してStep6へ</button>
-      <button onclick="s5GenFinal()" class="s5btn-sub" style="flex:1;">↻ 再生成</button>
+      <button onclick="s5GenBg()" class="s5btn-sub" style="flex:1;">↻ A/Bを再生成</button>
     </div>
   </div>
 </div>
@@ -1243,8 +1258,10 @@ function getUI() {
     if (!STATE.selectedFacePath) { alert('顔画像を選んでください'); return; }
     const scene = _v('s5-scene');
     if (!scene) { alert('シーン説明を入力してください'); return; }
+    const main = _v('s5-main');
+    if (!main) { alert('メイン文字を入力してください'); return; }
     const btn = _el('s5-bg-btn'); btn.disabled = true;
-    _el('s5-bg-status').textContent = '⏳ Gemini 3.1 FlashでA/B生成中...（30〜120秒）';
+    _el('s5-bg-status').textContent = '⏳ Gemini 3.1 Flashでテキスト込みA/B生成中...（30〜120秒）';
     _el('s5-bg-preview').innerHTML = '';
     _el('s5-text-card').style.display = 'none';
     try {
@@ -1255,6 +1272,10 @@ function getUI() {
           referencePaths: STATE.faceImages.map(x => x.localPath).filter(Boolean).slice(0, 3),
           sceneDesc: scene,
           postId: _pid() || 'thumb',
+          ctx: _v('s5-ctx'),
+          main,
+          punch: _v('s5-punch'),
+          badge: _v('s5-badge'),
         }),
       });
       const results = r.results || [];
@@ -1264,9 +1285,9 @@ function getUI() {
         <div style="font-size:10px;color:var(--muted);margin-bottom:6px;">採用する案をクリックしてください</div>
         <div class="s5variant-grid">
           \${results.map((item, i) => \`
-            <div class="s5variant" onclick="s5SelectVariant('\${item.localPath}','\${item.url}',this)">
+            <div class="s5variant" onclick="s5SelectVariant('\${item.localPath}','\${item.url}','\${item.file}',this)">
               <img src="\${item.url}" alt="案\${item.variant}">
-              <div class="s5variant-label">案\${item.variant}　\${i===0?'右主役＋左文字':'斜め対立構図'}</div>
+              <div class="s5variant-label">案\${item.variant}　\${i===0?'右主役＋左テキスト':'斜め対立＋テキスト'}</div>
             </div>
           \`).join('')}
         </div>
@@ -1278,13 +1299,15 @@ function getUI() {
     } finally { btn.disabled = false; }
   };
 
-  window.s5SelectVariant = function(localPath, url, card) {
+  window.s5SelectVariant = function(localPath, url, file, card) {
     STATE.bgLocalPath = localPath;
+    STATE.selectedThumb = file;
     document.querySelectorAll('.s5variant').forEach(c => c.classList.remove('selected'));
     if (card) card.classList.add('selected');
-    _el('s5-bg-status').textContent = '✅ 選択済み → テキストを設定して合成へ';
-    _el('s5-text-card').style.display = '';
-    _el('s5-text-card').scrollIntoView({ behavior:'smooth', block:'start' });
+    _el('s5-bg-status').textContent = '✅ テキスト込み完成サムネを選択済み';
+    _el('s5-result-img').src = url + '?t=' + Date.now();
+    _el('s5-result-card').style.display = '';
+    _el('s5-result-card').scrollIntoView({ behavior:'smooth', block:'start' });
   };
 
   // ③ SVG合成
@@ -1316,8 +1339,15 @@ function getUI() {
     } finally { btn.disabled = false; }
   };
 
-  window.s5AdoptThumb = function() {
+  window.s5AdoptThumb = async function() {
     if (!STATE.selectedThumb) return;
+    const id = _pid();
+    if (id) {
+      await window.fetchJson('/api/v5/select-thumb', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ postId:id, thumbFile:STATE.selectedThumb }),
+      });
+    }
     _el('s5-selected-status').textContent = '✅ 採用: ' + STATE.selectedThumb;
     _el('s5-selected-status').style.color = 'var(--success, #22c55e)';
     if (window.goStep) window.goStep(6);
