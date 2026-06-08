@@ -1061,7 +1061,23 @@ window.step25Init = function() {
     var ab = document.getElementById('vpAutoBtn');
     if (rb) rb.style.display = '';
     if (ab) ab.style.display = '';
+    return;
   }
+  /* メモリにカードがなければ localStorage から復元（モバイルリロード対策）*/
+  try {
+    var cached = localStorage.getItem('vp_cards_' + postId);
+    if (cached) {
+      var parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length) {
+        window._vpState.cards = parsed;
+        window._vpRenderAll();
+        var rb2 = document.getElementById('vpRegenBtn');
+        var ab2 = document.getElementById('vpAutoBtn');
+        if (rb2) rb2.style.display = '';
+        if (ab2) ab2.style.display = '';
+      }
+    }
+  } catch(_) {}
 };
 
 window.generateViewpoints = function() {
@@ -1102,6 +1118,7 @@ window.generateViewpoints = function() {
           if (r2.status === 'error') throw new Error(r2.error || '生成失敗');
           if (r2.status === 'done') {
             window._vpState.cards = r2.cards || [];
+            try { localStorage.setItem('vp_cards_' + postId, JSON.stringify(window._vpState.cards)); } catch(_) {}
             window._vpState.generating = false;
             window._vpResetPlan();
             if (btn) btn.disabled = false;
@@ -1271,6 +1288,7 @@ window.runAutopilot = async function(mode) {
         if (j.navigateTo === '25' && Array.isArray(j.cards)) {
           window._vpState = window._vpState || {};
           window._vpState.cards = j.cards;
+          try { localStorage.setItem('vp_cards_' + post.id, JSON.stringify(j.cards)); } catch(_) {}
           if (j.briefing) window._vpState.briefing = j.briefing;
           window._vpState.plan = [];
           window.goStep(25);
