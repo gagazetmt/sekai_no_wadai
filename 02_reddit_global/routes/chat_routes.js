@@ -62,23 +62,40 @@ function getDeepseek() {
   return _deepseek;
 }
 
+let _brave = null;
+function getBrave() {
+  if (!_brave) {
+    _brave = new OpenAI({
+      apiKey:  process.env.BRAVE_API_KEY,
+      baseURL: 'https://api.search.brave.com/res/v1',
+    });
+  }
+  return _brave;
+}
+
 const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント兼ランチャー操作エージェント「リサーチミア」。
 役割①: 案件選定や原稿編集の合間に最新かつ正確なデータを即時提供する。
 役割②: ランチャーのスライド編集・記事検索を直接操作できるエージェントとして機能する。
 
 ━━━ 🔥 ツール使用ルール (絶対遵守) ━━━
 
-【データ取得ツール】
-- 選手 (Bellingham / 久保 / Neymar 等) → search_player
-- 監督 (Arteta / Guardiola 等) → search_manager
-- クラブ (Arsenal / Real Madrid 等) → search_team
-- リーグ・大会 (Premier League / CL 等) → search_tournament
-- 最新ニュース・W杯情報・最新移籍・試合結果 → web_search（Brave検索）
+【ツール選択ルール（必ず守る）】
 
-【ランチャー操作ツール】
-- 「スライドを確認して」「何枚ある？」 → get_slides
-- 「〇〇スライドの△△を変更して」「ナレーションを書き換えて」 → get_slides で確認してから update_slide
-- update_slide 実行後は「Step4 を開いて確認してください」と案内する
+■ 内部データ×スライド操作 → SofaScore/TM + ランチャーツール
+  - 選手スタッツ・成績数値 → search_player
+  - 監督データ → search_manager
+  - クラブ情報 → search_team
+  - リーグ順位・得点王 → search_tournament
+  - スライド確認 → get_slides
+  - スライド書き換え → get_slides で確認後 → update_slide
+
+■ 最新ニュース・速報（深掘り不要） → web_search
+  - 「〇〇の試合結果は？」「最新移籍情報」「W杯の組み合わせ」など
+
+■ 調査・分析・根拠が必要な質問 → research_answers
+  - 「〇〇の戦術的弱点を調べて」「なぜ〇〇なのか分析して」
+  - 「記事を読んで〇〇について教えて」「〇〇を深掘りして」
+  - 記事の中身まで読んでBraveが回答を生成するので精度が高い
 
 【禁止事項】
 - 数値(試合数/ゴール/勝率/順位)を学習データだけで回答 → 必ず tool 呼ぶ
@@ -147,12 +164,26 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'web_search',
-      description: 'Braveでウェブ検索。W杯・最新移籍・試合結果・戦術分析など学習データにない最新情報を調べる時に使う。',
+      description: 'Braveで素早くウェブ検索。試合結果・最新ニュース・移籍速報など深掘り不要な情報取得に使う。スニペット形式で返す。',
       parameters: {
         type: 'object',
         properties: {
           query: { type: 'string', description: '検索クエリ（日本語または英語）' },
           count: { type: 'number', description: '取得件数（デフォルト5・最大10）' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'research_answers',
+      description: 'Brave Answers APIで深い調査。記事を熟読して根拠付きの回答を生成する。戦術分析・選手評価・背景調査など「なぜ？」「どうして？」系の質問に使う。web_searchより精度が高い。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '調査したい内容（日本語または英語）' },
         },
         required: ['query'],
       },
@@ -196,7 +227,7 @@ async function executeTool(name, args, currentPostId, currentSlideIdx) {
   /* ── ランチャー操作ツール ── */
   if (name === 'web_search') {
     const apiKey = process.env.BRAVE_API_KEY;
-    if (!apiKey) return { error: 'BRAVE_API_KEY が .env に未設定です。設定後に再試行してください。' };
+    if (!apiKey) return { error: 'BRAVE_API_KEY が .env に未設定です。' };
     const count = Math.min(Number(args.count) || 5, 10);
     try {
       const url = 'https://api.search.brave.com/res/v1/web/search?q='
@@ -211,6 +242,24 @@ async function executeTool(name, args, currentPostId, currentSlideIdx) {
       return { query: args.query, results };
     } catch (e) {
       return { error: 'Brave検索失敗: ' + e.message };
+    }
+  }
+
+  if (name === 'research_answers') {
+    const apiKey = process.env.BRAVE_API_KEY;
+    if (!apiKey) return { error: 'BRAVE_API_KEY が .env に未設定です。' };
+    try {
+      const client = getBrave();
+      const resp = await client.chat.completions.create({
+        model: 'brave',
+        messages: [{ role: 'user', content: args.query || '' }],
+        // @ts-ignore
+        extra_body: { enable_citations: true, enable_research: true },
+      });
+      const answer = resp.choices?.[0]?.message?.content || '(回答なし)';
+      return { query: args.query, answer };
+    } catch (e) {
+      return { error: 'Brave Answers失敗: ' + e.message };
     }
   }
 
