@@ -682,8 +682,6 @@ window.goStep = function(n) {
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
     if (nav)     nav.className         = 'step-nav' + (i === n ? ' active' : '');
   });
-  /* モバイルリロード復元用: アクティブステップを保存 */
-  try { localStorage.setItem('v2_active_step', String(n)); } catch (_) {}
   /* 各 Step の初期化関数を呼び出す */
   const fn = window['step' + n + 'Init'];
   if (typeof fn === 'function') fn();
@@ -1246,15 +1244,11 @@ window.runAutopilot = async function(mode) {
   if (!post?.id) { alert('先に案件を選択してください'); return; }
   if (window._apRunning) { alert('⚠️ Autopilotが既に実行中です。完了を待ってから再実行してください。'); return; }
   window._apRunning = true;
-  var startedPostId = post.id;
   var statusEl = document.getElementById('apStatus');
   var modeLabel = { semi:'SemiAuto', S:'FullAuto(S)', M:'FullAuto(M)', L:'FullAuto(L)' }[mode] || mode;
   var setStatus = function(msg) { if (statusEl) statusEl.textContent = msg; };
   var btns = document.querySelectorAll('#apPanel button');
   btns.forEach(function(b) { b.disabled = true; b.style.opacity = '.5'; });
-
-  /* ── ① ジョブ起動（数秒のみUIロック）── */
-  var jobId = null;
   try {
     setStatus('⏳ ' + modeLabel + ' 起動中...');
     var r = await fetchJson('/api/v25/autopilot/vp-start', {
@@ -1262,55 +1256,40 @@ window.runAutopilot = async function(mode) {
       body: JSON.stringify({ postId: post.id, mode: mode }),
     });
     if (!r?.jobId) throw new Error('jobId 受信失敗');
-    jobId = r.jobId;
-  } catch(e) {
-    setStatus('❌ ' + e.message);
-    window._apRunning = false;
-    btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
-    return;
-  }
-
-  /* ── ② 起動成功 → UIロック即解除してバックグラウンドへ ── */
-  btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
-  setStatus('🔄 ' + modeLabel + ' 実行中（バックグラウンド）...');
-
-  var STEP_LABELS = {
-    'suggest-labels': '① ラベル・記事収集中',
-    'fetch-all':      '② データ取得中',
-    'viewpoints':     '③ 企画ピース生成中',
-    'scenario':       '④ 脚本生成中',
-  };
-
-  /* ── ③ バックグラウンドポーリング（10秒間隔・最大20分）── */
-  try {
-    for (var tick = 0; tick < 120; tick++) {
-      await new Promise(function(res) { setTimeout(res, 10000); });
-      var j = await fetchJson('/api/v25/autopilot/vp-status?jobId=' + encodeURIComponent(jobId));
+    var STEP_LABELS = {
+      'suggest-labels': '① ラベル提案・記事収集中',
+      'fetch-all':      '② データ取得中',
+      'viewpoints':     '③ 企画ピース生成中（Sonnet）',
+      'scenario':       '④ 脚本生成中（DeepSeek）',
+    };
+    for (var tick = 0; tick < 400; tick++) {
+      await new Promise(function(res) { setTimeout(res, 3000); });
+      var j = await fetchJson('/api/v25/autopilot/vp-status?jobId=' + encodeURIComponent(r.jobId));
       if (!j) continue;
       if (j.status === 'done') {
-        /* 状態のみ更新、画面遷移は行わない */
+        setStatus('✅ 完了！' + (j.message || ''));
         if (j.navigateTo === '25' && Array.isArray(j.cards)) {
           window._vpState = window._vpState || {};
           window._vpState.cards = j.cards;
           if (j.briefing) window._vpState.briefing = j.briefing;
           window._vpState.plan = [];
-          if (typeof window.autoBuildViewpointPlan === 'function' && window.APP.selected?.id === startedPostId) {
+          window.goStep(25);
+          if (typeof window.autoBuildViewpointPlan === 'function') {
             setTimeout(window.autoBuildViewpointPlan, 300);
           }
-        }
-        var isSameCase = window.APP.selected?.id === startedPostId;
-        if (j.navigateTo === '25') {
-          setStatus(isSameCase ? '✅ 完了！→ 3. 企画ビルダー を確認してください' : '✅ ' + modeLabel + ' 完了（案件を開いて確認してください）');
-        } else {
-          setStatus(isSameCase ? '✅ 脚本生成完了！→ 4. 脚本編集 を確認してください' : '✅ ' + modeLabel + ' 完了（案件を開いて確認してください）');
+        } else if (j.navigateTo === '4') {
+          window.goStep(4);
         }
         break;
       }
       if (j.status === 'error') { setStatus('❌ エラー: ' + (j.error || '不明')); break; }
-      setStatus('🔄 ' + (STEP_LABELS[j.step] || j.message || '処理中') + ' (' + ((tick+1)*10) + 's)');
+      setStatus('⏳ ' + (STEP_LABELS[j.step] || j.message || '処理中') + ' (' + ((tick+1)*3) + 's)');
     }
+  } catch(e) {
+    setStatus('❌ ' + e.message);
   } finally {
     window._apRunning = false;
+    btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
   }
 };
 
@@ -1397,15 +1376,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   /* localStorage から前回の選択を復元（リロード対策）*/
   window._restoreSelectedFromStorage();
   renderSidebar();
-  /* アクティブステップ復元（案件選択済みの時のみ・モバイルリロード対策）*/
-  let _bootStep = 1;
-  if (window.APP.selected) {
-    try {
-      const _saved = parseInt(localStorage.getItem('v2_active_step') || '1', 10);
-      if ([1, 2, 25, 35, 4, 5, 6].includes(_saved)) _bootStep = _saved;
-    } catch (_) {}
-  }
-  goStep(_bootStep);
+  goStep(1);  /* Step1 を表示 */
   /* 各 Step の IIFE が読込時に registerJobResumer 済 (この時点で揃ってる)
      未完了ジョブを resume → モバイル復帰時に「サーバー側で完了 → 戻ってきたら結果表示」が成立 */
   window.resumeStoredJobs();

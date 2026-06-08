@@ -1572,13 +1572,23 @@ router.get('/v2/preview-slide', (req, res) => {
 //   Blob URLでiframeに読み込む際、/images/... の相対パスがブラウザで解決できないため
 //   <base href> を埋め込んでサーバーのoriginに向ける
 router.post('/v2/preview-slide-inline', (req, res) => {
-  const { module: mod } = req.body || {};
+  const { module: mod, staticMode } = req.body || {};
   if (!mod) return res.status(400).send('<!doctype html><title>err</title><body>module required</body>');
   try {
     const origin = req.protocol + '://' + req.get('host');
     let html = _buildSlideForPreview(mod);
-    // <head> の直後に <base> タグを挿入 → /images/... が origin に解決される
     html = html.replace('<head>', '<head><base href="' + origin + '/">');
+    if (staticMode) {
+      // モバイル静的プレビュー: 全アニメーションを即完了状態にして全要素を表示済みにする
+      const staticCss = '<style>*,*::before,*::after{'
+        + 'animation-duration:0.001ms!important;'
+        + 'animation-delay:0ms!important;'
+        + 'animation-iteration-count:1!important;'
+        + 'transition-duration:0.001ms!important;'
+        + 'transition-delay:0ms!important;'
+        + '}</style>';
+      html = html.replace('</head>', staticCss + '</head>');
+    }
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   } catch (e) { res.status(500).send('<!doctype html><title>err</title><body>' + e.message + '</body>'); }
 });
@@ -3909,8 +3919,7 @@ function getUI() {
   let _lastPreviewBlobUrl = null;
   let _reloadInFlight = false;
   let _reloadAgainNeeded = false;
-  async function _reloadPreview(force) {
-    if (_isMobile && !force) return;   // モバイルは手動ボタン(force=true)のみ
+  async function _reloadPreview() {
     if (_reloadInFlight) { _reloadAgainNeeded = true; return; }
     const i = window.APP.s4.activeTab;
     const mod = window.APP.s4.modules[i];
@@ -3921,7 +3930,7 @@ function getUI() {
       const res = await fetch('/api/v2/preview-slide-inline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module: mod }),
+        body: JSON.stringify({ module: mod, staticMode: _isMobile }),
       });
       const html = await res.text();
       const blob = new Blob([html], { type: 'text/html' });
@@ -3938,7 +3947,7 @@ function getUI() {
   }
   window.s4ReloadPreview = function() {
     _collectInputs();
-    _reloadPreview(true);  // 手動ボタン: モバイルでも実行
+    _reloadPreview();
   };
   window.s4OpenPreview = function() {
     _collectInputs();
