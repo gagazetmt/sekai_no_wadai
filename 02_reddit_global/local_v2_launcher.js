@@ -1244,11 +1244,15 @@ window.runAutopilot = async function(mode) {
   if (!post?.id) { alert('先に案件を選択してください'); return; }
   if (window._apRunning) { alert('⚠️ Autopilotが既に実行中です。完了を待ってから再実行してください。'); return; }
   window._apRunning = true;
+  var startedPostId = post.id;
   var statusEl = document.getElementById('apStatus');
   var modeLabel = { semi:'SemiAuto', S:'FullAuto(S)', M:'FullAuto(M)', L:'FullAuto(L)' }[mode] || mode;
   var setStatus = function(msg) { if (statusEl) statusEl.textContent = msg; };
   var btns = document.querySelectorAll('#apPanel button');
   btns.forEach(function(b) { b.disabled = true; b.style.opacity = '.5'; });
+
+  /* ── ① ジョブ起動（数秒のみUIロック）── */
+  var jobId = null;
   try {
     setStatus('⏳ ' + modeLabel + ' 起動中...');
     var r = await fetchJson('/api/v25/autopilot/vp-start', {
@@ -1256,40 +1260,55 @@ window.runAutopilot = async function(mode) {
       body: JSON.stringify({ postId: post.id, mode: mode }),
     });
     if (!r?.jobId) throw new Error('jobId 受信失敗');
-    var STEP_LABELS = {
-      'suggest-labels': '① ラベル提案・記事収集中',
-      'fetch-all':      '② データ取得中',
-      'viewpoints':     '③ 企画ピース生成中（Sonnet）',
-      'scenario':       '④ 脚本生成中（DeepSeek）',
-    };
-    for (var tick = 0; tick < 400; tick++) {
-      await new Promise(function(res) { setTimeout(res, 3000); });
-      var j = await fetchJson('/api/v25/autopilot/vp-status?jobId=' + encodeURIComponent(r.jobId));
+    jobId = r.jobId;
+  } catch(e) {
+    setStatus('❌ ' + e.message);
+    window._apRunning = false;
+    btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
+    return;
+  }
+
+  /* ── ② 起動成功 → UIロック即解除してバックグラウンドへ ── */
+  btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
+  setStatus('🔄 ' + modeLabel + ' 実行中（バックグラウンド）...');
+
+  var STEP_LABELS = {
+    'suggest-labels': '① ラベル・記事収集中',
+    'fetch-all':      '② データ取得中',
+    'viewpoints':     '③ 企画ピース生成中',
+    'scenario':       '④ 脚本生成中',
+  };
+
+  /* ── ③ バックグラウンドポーリング（10秒間隔・最大20分）── */
+  try {
+    for (var tick = 0; tick < 120; tick++) {
+      await new Promise(function(res) { setTimeout(res, 10000); });
+      var j = await fetchJson('/api/v25/autopilot/vp-status?jobId=' + encodeURIComponent(jobId));
       if (!j) continue;
       if (j.status === 'done') {
-        setStatus('✅ 完了！' + (j.message || ''));
+        /* 状態のみ更新、画面遷移は行わない */
         if (j.navigateTo === '25' && Array.isArray(j.cards)) {
           window._vpState = window._vpState || {};
           window._vpState.cards = j.cards;
           if (j.briefing) window._vpState.briefing = j.briefing;
           window._vpState.plan = [];
-          window.goStep(25);
-          if (typeof window.autoBuildViewpointPlan === 'function') {
+          if (typeof window.autoBuildViewpointPlan === 'function' && window.APP.selected?.id === startedPostId) {
             setTimeout(window.autoBuildViewpointPlan, 300);
           }
-        } else if (j.navigateTo === '4') {
-          window.goStep(4);
+        }
+        var isSameCase = window.APP.selected?.id === startedPostId;
+        if (j.navigateTo === '25') {
+          setStatus(isSameCase ? '✅ 完了！→ 3. 企画ビルダー を確認してください' : '✅ ' + modeLabel + ' 完了（案件を開いて確認してください）');
+        } else {
+          setStatus(isSameCase ? '✅ 脚本生成完了！→ 4. 脚本編集 を確認してください' : '✅ ' + modeLabel + ' 完了（案件を開いて確認してください）');
         }
         break;
       }
       if (j.status === 'error') { setStatus('❌ エラー: ' + (j.error || '不明')); break; }
-      setStatus('⏳ ' + (STEP_LABELS[j.step] || j.message || '処理中') + ' (' + ((tick+1)*3) + 's)');
+      setStatus('🔄 ' + (STEP_LABELS[j.step] || j.message || '処理中') + ' (' + ((tick+1)*10) + 's)');
     }
-  } catch(e) {
-    setStatus('❌ ' + e.message);
   } finally {
     window._apRunning = false;
-    btns.forEach(function(b) { b.disabled = false; b.style.opacity = '1'; });
   }
 };
 

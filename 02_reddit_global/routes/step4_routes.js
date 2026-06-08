@@ -3909,7 +3909,8 @@ function getUI() {
   let _lastPreviewBlobUrl = null;
   let _reloadInFlight = false;
   let _reloadAgainNeeded = false;
-  async function _reloadPreview() {
+  async function _reloadPreview(force) {
+    if (_isMobile && !force) return;   // モバイルは手動ボタン(force=true)のみ
     if (_reloadInFlight) { _reloadAgainNeeded = true; return; }
     const i = window.APP.s4.activeTab;
     const mod = window.APP.s4.modules[i];
@@ -3937,7 +3938,7 @@ function getUI() {
   }
   window.s4ReloadPreview = function() {
     _collectInputs();
-    _reloadPreview();
+    _reloadPreview(true);  // 手動ボタン: モバイルでも実行
   };
   window.s4OpenPreview = function() {
     _collectInputs();
