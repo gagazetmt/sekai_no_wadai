@@ -62,27 +62,29 @@ function getDeepseek() {
   return _deepseek;
 }
 
-const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント「リサーチミア」。
-役割: 案件選定や原稿編集の合間に**最新かつ正確なデータ**を即時提供する。
+const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント兼ランチャー操作エージェント「リサーチミア」。
+役割①: 案件選定や原稿編集の合間に最新かつ正確なデータを即時提供する。
+役割②: ランチャーのスライド編集・記事検索を直接操作できるエージェントとして機能する。
 
 ━━━ 🔥 ツール使用ルール (絶対遵守) ━━━
-**選手 / 監督 / チーム / 大会の名前が質問に含まれる場合、必ず該当ツールを呼んで取得**:
-  - 選手 (Bellingham / 三笘 / Neymar 等) → search_player
-  - 監督 (Arteta / Guardiola / Ancelotti 等) → search_manager
-  - クラブ (Arsenal / Real Madrid 等) → search_team
-  - リーグ・大会 (Premier League / Champions League 等) → search_tournament
 
-**禁止事項**:
-- 自分の学習データだけで数値 (試合数 / ゴール / 勝率 / 順位 等) を回答するのは**禁止**。 必ず tool を呼ぶ
-- 「だいたい〇〇試合」「約〇〇ゴール」のような曖昧な数値はハルシネーションの元
-- tool 取得失敗時のみ AI 学習データから推定し、 必ず「**(取得失敗のため推定値)**」と明示
+【データ取得ツール】
+- 選手 (Bellingham / 久保 / Neymar 等) → search_player
+- 監督 (Arteta / Guardiola 等) → search_manager
+- クラブ (Arsenal / Real Madrid 等) → search_team
+- リーグ・大会 (Premier League / CL 等) → search_tournament
+- 最新ニュース・W杯情報・最新移籍・試合結果 → web_search（Brave検索）
 
-**判断基準**:
-- 数値・成績・順位・移籍履歴 → 100% tool 使用
-- 一般論・歴史・戦術解説 → tool 不要 (学習データから回答可)
-- 曖昧な質問は確認してから動く (例: 「アンチェロッティ」→ レアル時代？ナポリ時代？)
+【ランチャー操作ツール】
+- 「スライドを確認して」「何枚ある？」 → get_slides
+- 「〇〇スライドの△△を変更して」「ナレーションを書き換えて」 → get_slides で確認してから update_slide
+- update_slide 実行後は「Step4 を開いて確認してください」と案内する
 
-【出力】日本語で簡潔。 数字は表 or 箇条書きで読みやすく。`;
+【禁止事項】
+- 数値(試合数/ゴール/勝率/順位)を学習データだけで回答 → 必ず tool 呼ぶ
+- tool 取得失敗時のみ推定し、必ず「(取得失敗のため推定値)」と明示
+
+【出力】日本語で簡潔。数字は表 or 箇条書き。スライド操作後は何を変更したか明示。`;
 
 const TOOLS = [
   {
@@ -141,26 +143,135 @@ const TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: 'Braveでウェブ検索。W杯・最新移籍・試合結果・戦術分析など学習データにない最新情報を調べる時に使う。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: '検索クエリ（日本語または英語）' },
+          count: { type: 'number', description: '取得件数（デフォルト5・最大10）' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_slides',
+      description: '現在の案件のスライド一覧を取得。スライド番号・タイプ・タイトル・ナレーション冒頭・データスロットを返す。スライド編集前に必ず呼ぶ。',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_slide',
+      description: '指定スライドのフィールドを書き換える。title / narration / dataSlots を変更できる。実行後はStep4で確認を促す。',
+      parameters: {
+        type: 'object',
+        properties: {
+          slideIdx: { type: 'number', description: 'スライドのインデックス（0始まり）' },
+          field:    { type: 'string', description: '変更フィールド: title / narration / dataSlots' },
+          value:    { description: '新しい値。dataSlots は [{label, value}] 形式の配列' },
+        },
+        required: ['slideIdx', 'field', 'value'],
+      },
+    },
+  },
 ];
 
 // ─── tool 実行 ────────────────────────────────────────────────
 //   🆕 currentPostId が渡された時は、 先に si_data からキャッシュ確認 →
 //      ヒットすればそれを返却 (fetcher / Webshare 帯域消費スキップ)
-async function executeTool(name, args, currentPostId) {
+async function executeTool(name, args, currentPostId, currentSlideIdx) {
+
+  /* ── ランチャー操作ツール ── */
+  if (name === 'web_search') {
+    const apiKey = process.env.BRAVE_API_KEY;
+    if (!apiKey) return { error: 'BRAVE_API_KEY が .env に未設定です。設定後に再試行してください。' };
+    const count = Math.min(Number(args.count) || 5, 10);
+    try {
+      const url = 'https://api.search.brave.com/res/v1/web/search?q='
+        + encodeURIComponent(args.query || '') + '&count=' + count;
+      const resp = await fetch(url, {
+        headers: { 'Accept': 'application/json', 'X-Subscription-Token': apiKey },
+      });
+      const data = await resp.json();
+      const results = (data.web?.results || []).map(r => ({
+        title: r.title, url: r.url, snippet: r.description,
+      }));
+      return { query: args.query, results };
+    } catch (e) {
+      return { error: 'Brave検索失敗: ' + e.message };
+    }
+  }
+
+  if (name === 'get_slides') {
+    const pid = currentPostId;
+    if (!pid) return { error: '案件が選択されていません' };
+    const file = path.join(DATA_DIR, _safeId(pid) + '_modules.json');
+    if (!fs.existsSync(file)) return { error: 'スライドデータがありません（Step3を先に実行してください）' };
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const modules = data.modules || [];
+      return {
+        total: modules.length,
+        currentSlideIdx: currentSlideIdx ?? null,
+        slides: modules.map((m, i) => ({
+          idx: i,
+          type: m.type,
+          title: m.title || '',
+          narration_head: (m.narration || '').slice(0, 80) + (m.narration?.length > 80 ? '…' : ''),
+          dataSlots: m.dataSlots || [],
+        })),
+      };
+    } catch (e) {
+      return { error: 'ファイル読み込み失敗: ' + e.message };
+    }
+  }
+
+  if (name === 'update_slide') {
+    const pid = currentPostId;
+    if (!pid) return { error: '案件が選択されていません' };
+    const file = path.join(DATA_DIR, _safeId(pid) + '_modules.json');
+    if (!fs.existsSync(file)) return { error: 'スライドデータがありません' };
+    try {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      const modules = data.modules || [];
+      const idx = Number(args.slideIdx);
+      if (!modules[idx]) return { error: `スライド${idx}は存在しません（全${modules.length}枚）` };
+      const field = args.field;
+      if (!['title', 'narration', 'dataSlots'].includes(field)) {
+        return { error: `変更できるフィールドは title / narration / dataSlots のみです` };
+      }
+      modules[idx][field] = args.value;
+      data.modules = modules;
+      fs.writeFileSync(file, JSON.stringify(data, null, 2));
+      return { ok: true, message: `スライド${idx}（${modules[idx].type}）の${field}を更新しました。Step4を開いて確認してください。` };
+    } catch (e) {
+      return { error: '書き込み失敗: ' + e.message };
+    }
+  }
+
+  /* ── 既存の検索ツール ── */
   const q = String(args?.name || '').trim();
   if (!q) return { error: 'name は必須' };
 
-  // 🆕 cache check (現案件 si_data)
+  // cache check (現案件 si_data)
   if (currentPostId) {
     const si = _loadSi(currentPostId);
     const cached = _findEntityInSi(si, q, name);
     if (cached) {
       console.log(`[chat] cache HIT ${name}(${q}) ← si_data/${currentPostId}`);
-      // si_data の entity object をそのまま返す + 出典タグ
-      return {
-        _source: 'cache (現案件 si_data から / fetcher 不使用)',
-        ...cached,
-      };
+      return { _source: 'cache (現案件 si_data から / fetcher 不使用)', ...cached };
     }
     console.log(`[chat] cache MISS ${name}(${q}) → fetcher へ`);
   }
@@ -199,7 +310,7 @@ const MAX_ITER = 5;
 router.post('/chat/ask', async (req, res) => {
   const t0 = Date.now();
   try {
-    const { messages: userMessages, currentPostId } = req.body;
+    const { messages: userMessages, currentPostId, currentSlideIdx } = req.body;
     if (!Array.isArray(userMessages) || userMessages.length === 0) {
       return res.status(400).json({ error: 'messages 配列が必須' });
     }
@@ -244,7 +355,7 @@ router.post('/chat/ask', async (req, res) => {
         toolCallsLog.push({ tool, args });
         let result;
         try {
-          result = await executeTool(tool, args, currentPostId);
+          result = await executeTool(tool, args, currentPostId, currentSlideIdx);
         } catch (e) {
           console.warn(`[chat] tool error: ${e.message}`);
           result = { error: e.message };
@@ -333,6 +444,7 @@ function getUI() {
   background: #1e3a5f; color: #93c5fd; align-self: flex-start;
   font-size: 11px; font-family: ui-monospace, monospace;
   padding: 6px 10px; border-radius: 6px; opacity: 0.85;
+  max-width: 95%; word-break: break-word; overflow-x: auto;
 }
 .chat-input-wrap {
   padding: 10px; background: #1f2937; border-top: 1px solid #374151;
@@ -372,11 +484,12 @@ function getUI() {
     bottom: 0; right: 0; left: 0; top: 0;
     width: 100vw;
     height: 100vh;
-    height: 100dvh;  /* iOS Safari: URL バー領域で枠外にならないように動的 vh を使う */
+    height: 100dvh;
     max-width: 100vw;
     max-height: 100vh;
     max-height: 100dvh;
     border-radius: 0;
+    overflow-x: hidden;
   }
   .chat-header { border-radius: 0; }
   .chat-input-wrap { border-radius: 0; }
@@ -454,12 +567,13 @@ function getUI() {
     render(true);
 
     try {
-      // 🆕 現在開いてる案件の postId を渡す (chat 側で si_data 参照キャッシュに使う)
-      const _curPostId = (window.APP && window.APP.selected && window.APP.selected.id) || null;
+      const _curPostId   = (window.APP && window.APP.selected && window.APP.selected.id) || null;
+      const _curSlideIdx = (window.APP && window.APP.s4 && typeof window.APP.s4.activeTab === 'number')
+        ? window.APP.s4.activeTab : null;
       const res = await fetch('/api/chat/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history.slice(-20), currentPostId: _curPostId }),  // 直近20ターン + 案件 ID
+        body: JSON.stringify({ messages: history.slice(-20), currentPostId: _curPostId, currentSlideIdx: _curSlideIdx }),
       });
       const data = await res.json();
       if (data.error) {
@@ -481,7 +595,7 @@ function getUI() {
 
   function render(loading) {
     if (history.length === 0 && !loading) {
-      msgsEl.innerHTML = '<div class="chat-empty">サッカーに関する質問なんでも聞いて！<br>選手・監督・チーム・大会のデータは AI が SofaScore/Transfermarkt から自動取得して回答するよ。</div>';
+      msgsEl.innerHTML = '<div class="chat-empty">【データ取得】選手・監督・チーム・大会の成績を即調査<br>【ウェブ検索】最新ニュース・W杯情報をBraveで検索<br>【スライド操作】「このスライドのナレーション書き換えて」など直接編集可</div>';
       return;
     }
     msgsEl.innerHTML = history.map(m => {
