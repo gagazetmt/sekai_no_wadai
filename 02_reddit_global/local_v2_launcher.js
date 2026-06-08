@@ -682,6 +682,8 @@ window.goStep = function(n) {
     if (content) content.style.display = (i === n) ? 'block'  : 'none';
     if (nav)     nav.className         = 'step-nav' + (i === n ? ' active' : '');
   });
+  /* モバイルリロード復元用: アクティブステップを保存 */
+  try { localStorage.setItem('v2_active_step', String(n)); } catch (_) {}
   /* 各 Step の初期化関数を呼び出す */
   const fn = window['step' + n + 'Init'];
   if (typeof fn === 'function') fn();
@@ -1395,7 +1397,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   /* localStorage から前回の選択を復元（リロード対策）*/
   window._restoreSelectedFromStorage();
   renderSidebar();
-  goStep(1);  /* Step1 を表示 */
+  /* アクティブステップ復元（案件選択済みの時のみ・モバイルリロード対策）*/
+  let _bootStep = 1;
+  if (window.APP.selected) {
+    try {
+      const _saved = parseInt(localStorage.getItem('v2_active_step') || '1', 10);
+      if ([1, 2, 25, 35, 4, 5, 6].includes(_saved)) _bootStep = _saved;
+    } catch (_) {}
+  }
+  goStep(_bootStep);
   /* 各 Step の IIFE が読込時に registerJobResumer 済 (この時点で揃ってる)
      未完了ジョブを resume → モバイル復帰時に「サーバー側で完了 → 戻ってきたら結果表示」が成立 */
   window.resumeStoredJobs();
