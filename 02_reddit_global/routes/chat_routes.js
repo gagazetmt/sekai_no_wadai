@@ -62,15 +62,15 @@ function getDeepseek() {
   return _deepseek;
 }
 
-let _brave = null;
-function getBrave() {
-  if (!_brave) {
-    _brave = new OpenAI({
-      apiKey:  process.env.BRAVE_API_KEY,
+let _braveAnswers = null;
+function getBraveAnswers() {
+  if (!_braveAnswers) {
+    _braveAnswers = new OpenAI({
+      apiKey:  process.env.BRAVE_ANSWERS_API_KEY,
       baseURL: 'https://api.search.brave.com/res/v1',
     });
   }
-  return _brave;
+  return _braveAnswers;
 }
 
 const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント兼ランチャー操作エージェント「リサーチミア」。
@@ -246,10 +246,10 @@ async function executeTool(name, args, currentPostId, currentSlideIdx) {
   }
 
   if (name === 'research_answers') {
-    const apiKey = process.env.BRAVE_API_KEY;
-    if (!apiKey) return { error: 'BRAVE_API_KEY が .env に未設定です。' };
+    const apiKey = process.env.BRAVE_ANSWERS_API_KEY;
+    if (!apiKey) return { error: 'BRAVE_ANSWERS_API_KEY が .env に未設定です。' };
     try {
-      const client = getBrave();
+      const client = getBraveAnswers();
       const resp = await client.chat.completions.create({
         model: 'brave',
         messages: [{ role: 'user', content: args.query || '' }],
