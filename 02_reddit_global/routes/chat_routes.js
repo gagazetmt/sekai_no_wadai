@@ -523,25 +523,19 @@ function getUI() {
   line-height: 1.6;
 }
 
-/* スマホ対応: 768px 以下では全画面風に表示 (シェルの mobile breakpoint と揃える) */
-@media (max-width: 768px) {
+/* スマホ対応: 480px 以下のみ幅を広げる（フルスクリーンは避ける） */
+@media (max-width: 480px) {
   .chat-fab {
     bottom: 10px; right: 10px;
     width: 52px; height: 52px; font-size: 24px;
   }
   .chat-panel {
-    bottom: 0; right: 0; left: 0; top: 0;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
-    max-width: 100vw;
-    max-height: 100vh;
-    max-height: 100dvh;
-    border-radius: 0;
-    overflow-x: hidden;
+    bottom: 10px; right: 10px; left: 10px;
+    width: calc(100vw - 20px);
+    height: 72dvh;
+    max-width: calc(100vw - 20px);
+    max-height: 72dvh;
   }
-  .chat-header { border-radius: 0; }
-  .chat-input-wrap { border-radius: 0; }
   .chat-msg { max-width: 92%; font-size: 14px; }
   .chat-input { font-size: 14px; }
 }
