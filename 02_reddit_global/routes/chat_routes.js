@@ -523,7 +523,8 @@ function getUI() {
   line-height: 1.6;
 }
 
-/* スマホ対応: 480px 以下のみ幅を広げる（フルスクリーンは避ける） */
+/* スマホ対応: 480px 以下のみ幅を広げる（フルスクリーンは避ける）
+   dvh はiOS Safariキーボード表示時に正しく縮まないため固定高さを使う */
 @media (max-width: 480px) {
   .chat-fab {
     bottom: 10px; right: 10px;
@@ -531,10 +532,12 @@ function getUI() {
   }
   .chat-panel {
     bottom: 10px; right: 10px; left: 10px;
+    top: auto;
     width: calc(100vw - 20px);
-    height: 72dvh;
     max-width: calc(100vw - 20px);
-    max-height: 72dvh;
+    height: 340px;
+    max-height: 340px;
+    overflow-x: hidden;
   }
   .chat-msg { max-width: 92%; font-size: 14px; }
   .chat-input { font-size: 14px; }
