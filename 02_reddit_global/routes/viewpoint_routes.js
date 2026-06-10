@@ -116,6 +116,41 @@ async function _runGenerateViewpoints(postId) {
     })
     .join('\n') || '(storyFactsなし)';
 
+  // ── ディープリサーチデータ（si.deepResearch が存在する場合のみ）──
+  const deepResearch  = si.deepResearch || null;
+  const constraintList = deepResearch?.constraintList || null;
+
+  const constraintBlock = constraintList ? (() => {
+    const lines = [];
+    if (constraintList.unavailable?.length) {
+      lines.push('【出場不可（負傷・選外・停止）— これらの選手を「鍵」「核」にするカードは絶対に生成禁止】');
+      constraintList.unavailable.forEach(it =>
+        lines.push(`  ✗ ${it.name}（${it.reason}）— 根拠: ${it.evidence}`)
+      );
+    }
+    if (constraintList.limited?.length) {
+      lines.push('【コンディション注意 — 「絶好調」「躍動」等の表現禁止。現状を正確に反映すること】');
+      constraintList.limited.forEach(it =>
+        lines.push(`  △ ${it.name}（${it.reason}）— 根拠: ${it.evidence}`)
+      );
+    }
+    return lines.join('\n');
+  })() : '';
+
+  const deepFactBlock = constraintList?.keyFacts?.length
+    ? '【ディープリサーチ抽出: 現在の重要事実（最新記事ベース）】\n' +
+      constraintList.keyFacts.map((f, i) => `${i+1}. ${f}`).join('\n')
+    : '';
+
+  const deepSummaryBlock = deepResearch?.extractions?.length
+    ? '【ディープリサーチ: 記事別事実サマリ（catchiness順上位10件）】\n' +
+      [...deepResearch.extractions]
+        .sort((a, b) => (b.catchiness||0) - (a.catchiness||0))
+        .slice(0, 10)
+        .map((e, i) => `${i+1}. (${e.catchiness||50}) [${e.host}] ${e.key_fact||''}\n   ${String(e.summary||'').slice(0,200)}`)
+        .join('\n')
+    : '';
+
   // ── プロンプト ──
   const prompt = `あなたはサッカーYouTube動画の構成エキスパートです。
 以下の案件データから、ユーザーが企画書に組み込む「企画ピース」を12〜18枚生成してください。
@@ -140,6 +175,7 @@ ${articleBlock}
 【記事熟読で抽出した storyFacts（hookScore と insight の最重要材料）】
 ${storyFactBlock}
 
+${constraintBlock ? constraintBlock + '\n' : ''}${deepFactBlock ? deepFactBlock + '\n' : ''}${deepSummaryBlock ? deepSummaryBlock + '\n' : ''}
 【利用可能レシピ一覧】
 ${RECIPE_CATALOG}
 
@@ -147,6 +183,7 @@ ${RECIPE_CATALOG}
 1. opening を必ず1枚目に（固定・選択解除不可）
 2. ending を必ず最後に（固定・選択解除不可）
 3. ${hasComments ? 'Reddit コメントがあるので reaction カードを1枚生成する' : 'Reddit コメントがないので reaction カードは生成しない'}
+3b. 【絶対禁止】「出場不可」に記載された選手を「鍵」「核」「主役」として企画に使わない。言及するなら「不在の影響」「穴を埋める選手」の文脈のみ
 4. confidence:
    - high  → sofa:ok または wiki:ok で確認済みのデータ
    - medium → 記事のみ確認（SofaScore未確認）

@@ -1907,4 +1907,70 @@ function getUI() {
 </script>`;
 }
 
+// ─── /v3/deep-research : 30記事2キューリサーチ + 校正AI ────────
+// body: { postId, searches[] }
+// searches は suggest-labels の result.searches を渡す
+router.post('/v3/deep-research', (req, res) => {
+  const { postId, searches } = req.body || {};
+  if (!postId) return res.status(400).json({ error: 'postId required' });
+
+  const jobId = createJob('dr', { postId, kind: 'deep-research', step: 'init' });
+  res.json({ ok: true, jobId });
+
+  setImmediate(async () => {
+    try {
+      const { runDeepResearch } = require('../scripts/modules/article_researcher');
+
+      const si = safeJson(siPath(postId), emptySiData(postId));
+      const sp = safeJson(path.join(DATA_DIR, 'saved_projects.json'), []);
+      const proj = (Array.isArray(sp) ? sp : []).find(p => p.id === postId) || {};
+      const postTitle = proj.titleJa || proj.title || '';
+
+      // searchesが未指定なら siData の articleLearning から復元
+      const effectiveSearches = (Array.isArray(searches) && searches.length)
+        ? searches
+        : (si.articleLearning?.searches || si.articleHits?.map(a => a.title) || []);
+
+      updateJob(jobId, { status: 'running', step: 'search', message: '記事候補を収集中' });
+
+      const result = await runDeepResearch(effectiveSearches, si, {
+        postTitle,
+        onProgress: (patch) => updateJob(jobId, { status: 'running', ...patch }),
+      });
+
+      // siData に保存
+      try {
+        const saveSi = safeJson(siPath(postId), emptySiData(postId));
+        saveSi.deepResearch = result;
+        fs.writeFileSync(siPath(postId), JSON.stringify(saveSi, null, 2));
+      } catch (e) {
+        console.warn('[deep-research] siData保存失敗:', e.message);
+      }
+
+      updateJob(jobId, {
+        status: 'done',
+        step: 'complete',
+        message: `完了: ${result.articleCount}本読了 / unavailable=${result.constraintList.unavailable.length}件 / エンティティ提案${result.suggestedEntities.length}件`,
+        result: {
+          articleCount:      result.articleCount,
+          constraintList:    result.constraintList,
+          validationNotes:   result.validationNotes,
+          suggestedEntities: result.suggestedEntities,
+          validatedAt:       result.validatedAt,
+        },
+      });
+    } catch (e) {
+      console.error(`[Step2/deep-research:${jobId}]`, e.message);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
+});
+
+// ─── /v3/deep-research-status : ジョブ進捗ポーリング ──────────
+router.get('/v3/deep-research-status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'job not found' });
+  res.json(j);
+});
+
 module.exports = { router, getUI, _runSuggestLabels, _runFetchAll, _runRefineLabelsFromArticles, _gatherArticles };
