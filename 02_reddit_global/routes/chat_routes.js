@@ -5,8 +5,9 @@
 // SofaScore / Transfermarkt 等の生データを参照させる。
 //
 // エンドポイント:
-//   POST /api/chat/ask { messages, provider? } → { text, toolCalls }
-//   GET  /api/chat/ui                          → 右下フローティング HTML (シェル組込)
+//   POST /api/chat/ask        { messages, currentPostId? } → { text, toolCalls } (非ストリーム・後方互換)
+//   POST /api/chat/ask-stream { messages, currentPostId? } → SSE ストリーム
+//   GET  /api/chat/ui                                      → 右下フローティング HTML (シェル組込)
 
 const express = require('express');
 const router  = express.Router();
@@ -20,10 +21,14 @@ const { searchTransfermarktManager, fetchTransfermarktManager } = require('../sc
 const { fetchSofaScoreTeam }      = require('../scripts/modules/fetchers/sofascore_team');
 const { fetchSofaScoreTournament } = require('../scripts/modules/fetchers/sofascore_tournament');
 
-// 🆕 現案件の si_data からキャッシュ参照 (fetcher 呼び出し前のヒット判定)
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const SI_DIR   = path.join(DATA_DIR, 'si_data');
+// ─── データファイルパス ────────────────────────────────────────
+const DATA_DIR   = path.join(__dirname, '..', 'data');
+const SI_DIR     = path.join(DATA_DIR, 'si_data');
+const SAVED_FILE = path.join(DATA_DIR, 'saved_projects.json');
+
 function _safeId(s) { return String(s || '').replace(/[\/\?%*:|"<>\.]/g, '_'); }
+
+// 現案件の si_data からキャッシュ参照
 function _loadSi(postId) {
   if (!postId) return null;
   const file = path.join(SI_DIR, _safeId(postId) + '.json');
@@ -32,6 +37,16 @@ function _loadSi(postId) {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch { return null; }
 }
+
+// saved_projects.json から案件情報を取得
+function _loadProject(postId) {
+  if (!postId) return null;
+  try {
+    const list = JSON.parse(fs.readFileSync(SAVED_FILE, 'utf8'));
+    return Array.isArray(list) ? list.find(p => p.id === postId) || null : null;
+  } catch { return null; }
+}
+
 const _TOOL_TO_ROLE = {
   search_player:     'player',
   search_manager:    'manager',
@@ -73,7 +88,7 @@ function getBraveAnswers() {
   return _braveAnswers;
 }
 
-const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント兼ランチャー操作エージェント「リサーチミア」。
+const BASE_SYSTEM_PROMPT = `あなたはサッカー専門アシスタント兼ランチャー操作エージェント「リサーチミア」。
 役割①: 案件選定や原稿編集の合間に最新かつ正確なデータを即時提供する。
 役割②: ランチャーのスライド編集・記事検索を直接操作できるエージェントとして機能する。
 
@@ -102,6 +117,18 @@ const SYSTEM_PROMPT = `あなたはサッカー専門アシスタント兼ラン
 - tool 取得失敗時のみ推定し、必ず「(取得失敗のため推定値)」と明示
 
 【出力】日本語で簡潔。数字は表 or 箇条書き。スライド操作後は何を変更したか明示。`;
+
+// 現在の案件情報をシステムプロンプトに注入して返す
+function buildSystemPrompt(currentPostId) {
+  let prompt = BASE_SYSTEM_PROMPT;
+  const proj = _loadProject(currentPostId);
+  if (proj) {
+    const note = String(proj.raw?.customNote || '').trim();
+    prompt += `\n\n━━━ 📋 現在の作業案件 ━━━\n案件ID: ${proj.id}\nタイトル: ${proj.title}`;
+    if (note) prompt += `\n説明・補足メモ:\n${note}`;
+  }
+  return prompt;
+}
 
 const TOOLS = [
   {
@@ -220,8 +247,6 @@ const TOOLS = [
 ];
 
 // ─── tool 実行 ────────────────────────────────────────────────
-//   🆕 currentPostId が渡された時は、 先に si_data からキャッシュ確認 →
-//      ヒットすればそれを返却 (fetcher / Webshare 帯域消費スキップ)
 async function executeTool(name, args, currentPostId, currentSlideIdx) {
 
   /* ── ランチャー操作ツール ── */
@@ -355,7 +380,7 @@ function safeStringify(obj) {
 
 const MAX_ITER = 5;
 
-// ─── POST /api/chat/ask ───────────────────────────────────────
+// ─── POST /api/chat/ask（後方互換・非ストリーム）─────────────────
 router.post('/chat/ask', async (req, res) => {
   const t0 = Date.now();
   try {
@@ -365,7 +390,7 @@ router.post('/chat/ask', async (req, res) => {
     }
 
     const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: buildSystemPrompt(currentPostId) },
       ...userMessages.map(m => ({ role: m.role, content: String(m.content || '') })),
     ];
 
@@ -395,7 +420,6 @@ router.post('/chat/ask', async (req, res) => {
         break;
       }
 
-      // 各 tool call を並列実行
       const results = await Promise.all(toolCalls.map(async tc => {
         let args = {};
         try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { /* ignore */ }
@@ -426,6 +450,118 @@ router.post('/chat/ask', async (req, res) => {
   }
 });
 
+// ─── POST /api/chat/ask-stream（SSEストリーミング）────────────────
+// SSE プロトコル:
+//   data: {"text":"..."}         → テキストチャンク（逐次）
+//   data: {"tool":"name"}        → ツール呼び出し中通知
+//   data: {"done":true,"toolCalls":[...]} → 完了
+//   data: {"error":"..."}        → エラー
+router.post('/chat/ask-stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const send = (obj) => {
+    if (!res.writableEnded) res.write('data: ' + JSON.stringify(obj) + '\n\n');
+  };
+
+  try {
+    const { messages: userMessages, currentPostId, currentSlideIdx } = req.body;
+    if (!Array.isArray(userMessages) || userMessages.length === 0) {
+      send({ error: 'messages 配列が必須' });
+      return res.end();
+    }
+
+    const messages = [
+      { role: 'system', content: buildSystemPrompt(currentPostId) },
+      ...userMessages.map(m => ({ role: m.role, content: String(m.content || '') })),
+    ];
+
+    const client = getDeepseek();
+    const toolCallsLog = [];
+
+    for (let iter = 0; iter < MAX_ITER; iter++) {
+      const stream = await client.chat.completions.create({
+        model:       'deepseek-v4-flash',
+        messages,
+        tools:       TOOLS,
+        tool_choice: 'auto',
+        max_tokens:  2000,
+        stream:      true,
+      });
+
+      // ストリームを受け取りながらツール呼び出しを収集
+      const pendingToolCalls = [];
+      let contentBuffer = '';
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+
+        // テキストチャンク → 即送信
+        if (delta.content) {
+          contentBuffer += delta.content;
+          send({ text: delta.content });
+        }
+
+        // ツール呼び出しデルタを蓄積
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            if (!pendingToolCalls[idx]) {
+              pendingToolCalls[idx] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+            }
+            if (tc.id) pendingToolCalls[idx].id += tc.id;
+            if (tc.function?.name)      pendingToolCalls[idx].function.name      += tc.function.name;
+            if (tc.function?.arguments) pendingToolCalls[idx].function.arguments += tc.function.arguments;
+          }
+        }
+      }
+
+      const validToolCalls = pendingToolCalls.filter(Boolean);
+
+      // ツール呼び出しなし → ストリーミング完了
+      if (validToolCalls.length === 0) break;
+
+      // アシスタントメッセージをコンテキストに追加
+      messages.push({
+        role: 'assistant',
+        content: contentBuffer || null,
+        tool_calls: validToolCalls,
+      });
+
+      // ツール通知を送りながら並列実行
+      send({ tool: validToolCalls.map(t => t.function.name).join(', ') });
+
+      const results = await Promise.all(validToolCalls.map(async tc => {
+        let args = {};
+        try { args = JSON.parse(tc.function?.arguments || '{}'); } catch { /* ignore */ }
+        const tool = tc.function?.name || 'unknown';
+        console.log(`[chat-stream] iter=${iter} tool=${tool} args=${JSON.stringify(args)}`);
+        toolCallsLog.push({ tool, args });
+        let result;
+        try {
+          result = await executeTool(tool, args, currentPostId, currentSlideIdx);
+        } catch (e) {
+          result = { error: e.message };
+        }
+        return { tool_call_id: tc.id, content: safeStringify(result) };
+      }));
+
+      for (const r of results) {
+        messages.push({ role: 'tool', tool_call_id: r.tool_call_id, content: r.content });
+      }
+    }
+
+    send({ done: true, toolCalls: toolCallsLog });
+  } catch (e) {
+    console.error('[chat/ask-stream] error:', e);
+    send({ error: e.message });
+  } finally {
+    if (!res.writableEnded) res.end();
+  }
+});
+
 // ─── getUI: シェル組み込み用 HTML/CSS/JS ───────────────────────
 // 右下フローティングボタン → 展開でチャットパネル
 // 履歴は localStorage に保持（タブ閉じても残る）
@@ -444,13 +580,11 @@ function getUI() {
 }
 .chat-fab:hover { transform: scale(1.08); }
 .chat-panel {
-  /* right: 10px + max-width: calc(100vw - 20px) で左右どちらにも 10px の余白を確保
-     (right が大きいと、 max-width クランプ時に左へはみ出るので 10px に揃える) */
   position: fixed; bottom: 10px; right: 10px; z-index: 9999;
   width: 400px; height: 560px;
   max-width: calc(100vw - 20px);
   max-height: calc(100vh - 20px);
-  max-height: calc(100dvh - 20px);  /* iOS Safari URL バー対応 (100vh は URL バー込みで枠外になる) */
+  max-height: calc(100dvh - 20px);
   background: #1f2937; border: 1px solid #374151; border-radius: 12px;
   display: none; flex-direction: column;
   box-shadow: 0 12px 32px rgba(0,0,0,0.4);
@@ -478,7 +612,7 @@ function getUI() {
 .chat-msg {
   padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5;
   max-width: 85%; word-wrap: break-word; word-break: break-word;
-  overflow-wrap: anywhere;  /* 長い URL や英単語が枠外に出るのを防止 */
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 .chat-msg-user {
@@ -523,8 +657,6 @@ function getUI() {
   line-height: 1.6;
 }
 
-/* スマホ対応: 480px 以下のみ幅を広げる（フルスクリーンは避ける）
-   dvh はiOS Safariキーボード表示時に正しく縮まないため固定高さを使う */
 @media (max-width: 480px) {
   .chat-fab {
     bottom: 10px; right: 10px;
@@ -566,8 +698,8 @@ function getUI() {
 <script>
 (function() {
   const STORAGE_KEY = 'soccer_yt_chat_history_v1';
-  const fab    = document.getElementById('chatFab');
-  const panel  = document.getElementById('chatPanel');
+  const fab     = document.getElementById('chatFab');
+  const panel   = document.getElementById('chatPanel');
   const closeBtn = document.getElementById('chatCloseBtn');
   const clearBtn = document.getElementById('chatClearBtn');
   const sendBtn  = document.getElementById('chatSendBtn');
@@ -606,41 +738,118 @@ function getUI() {
     if (busy) return;
     const text = input.value.trim();
     if (!text) return;
+
     history.push({ role: 'user', content: text });
     saveHistory();
     input.value = '';
     busy = true; sendBtn.disabled = true;
-    render(true);
+
+    // 空のアシスタントバブルを先に追加（ストリーミング受け取り先）
+    const asstIdx = history.length;
+    history.push({ role: 'assistant', content: '' });
+    render();
+
+    const _curPostId   = (window.APP && window.APP.selected && window.APP.selected.id) || null;
+    const _curSlideIdx = (window.APP && window.APP.s4 && typeof window.APP.s4.activeTab === 'number')
+      ? window.APP.s4.activeTab : null;
 
     try {
-      const _curPostId   = (window.APP && window.APP.selected && window.APP.selected.id) || null;
-      const _curSlideIdx = (window.APP && window.APP.s4 && typeof window.APP.s4.activeTab === 'number')
-        ? window.APP.s4.activeTab : null;
-      const res = await fetch('/api/chat/ask', {
+      const response = await fetch('/api/chat/ask-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history.slice(-20), currentPostId: _curPostId, currentSlideIdx: _curSlideIdx }),
+        body: JSON.stringify({
+          messages: history.slice(0, asstIdx).slice(-20),
+          currentPostId:   _curPostId,
+          currentSlideIdx: _curSlideIdx,
+        }),
       });
-      const data = await res.json();
-      if (data.error) {
-        history.push({ role: 'assistant', content: '⚠️ ' + data.error });
-      } else {
-        const tcSuffix = (data.toolCalls && data.toolCalls.length)
-          ? '\\n\\n_📡 ツール使用: ' + data.toolCalls.map(t => t.tool).join(', ') + '_'
-          : '';
-        history.push({ role: 'assistant', content: (data.text || '(空)') + tcSuffix });
+
+      if (!response.ok) {
+        history[asstIdx].content = '⚠️ サーバーエラー: ' + response.status;
+        render();
+        return;
       }
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let toolNames = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        // SSE の行を処理
+        const lines = buf.split('\\n');
+        buf = lines.pop(); // 未完行を次回に持ち越し
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let data;
+          try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (data.text) {
+            history[asstIdx].content += data.text;
+            updateLastMsg(history[asstIdx].content);
+          }
+          if (data.tool) {
+            toolNames = toolNames.concat(data.tool.split(', '));
+            showToolStatus(toolNames);
+          }
+          if (data.done) {
+            if (data.toolCalls && data.toolCalls.length) {
+              const uniq = [...new Set(data.toolCalls.map(t => t.tool))];
+              history[asstIdx].content += '\\n\\n_📡 ツール使用: ' + uniq.join(', ') + '_';
+              updateLastMsg(history[asstIdx].content);
+            }
+          }
+          if (data.error) {
+            history[asstIdx].content = '⚠️ ' + data.error;
+            updateLastMsg(history[asstIdx].content);
+          }
+        }
+      }
+
     } catch (e) {
-      history.push({ role: 'assistant', content: '⚠️ 通信エラー: ' + e.message });
+      history[asstIdx].content = '⚠️ 通信エラー: ' + e.message;
+      updateLastMsg(history[asstIdx].content);
     } finally {
       busy = false; sendBtn.disabled = false;
       saveHistory();
-      render();
+      removeToolStatus();
+      render(); // 最終状態で全再描画（履歴確定）
     }
   }
 
-  function render(loading) {
-    if (history.length === 0 && !loading) {
+  // 最後のアシスタントバブルを DOM 直接更新（全再描画せずに済む）
+  function updateLastMsg(content) {
+    const el = msgsEl.querySelector('.chat-msg-asst:last-of-type');
+    if (el) {
+      el.textContent = content;
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+  }
+
+  // ツール実行中インジケーター
+  function showToolStatus(names) {
+    let el = document.getElementById('chatToolStatus');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'chatToolStatus';
+      el.className = 'chat-loading';
+      msgsEl.appendChild(el);
+    }
+    el.textContent = '🔧 ' + names.join(', ') + ' を実行中…';
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+  function removeToolStatus() {
+    const el = document.getElementById('chatToolStatus');
+    if (el) el.remove();
+  }
+
+  function render() {
+    if (history.length === 0) {
       msgsEl.innerHTML = '<div class="chat-empty">【データ取得】選手・監督・チーム・大会の成績を即調査<br>【ウェブ検索】最新ニュース・W杯情報をBraveで検索<br>【スライド操作】「このスライドのナレーション書き換えて」など直接編集可</div>';
       return;
     }
@@ -648,9 +857,6 @@ function getUI() {
       const cls = m.role === 'user' ? 'chat-msg-user' : 'chat-msg-asst';
       return '<div class="chat-msg ' + cls + '">' + escapeHtml(m.content) + '</div>';
     }).join('');
-    if (loading) {
-      msgsEl.innerHTML += '<div class="chat-loading">⏳ 考え中… (データ取得時は10秒程度かかります)</div>';
-    }
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
