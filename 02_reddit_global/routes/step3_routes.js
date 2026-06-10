@@ -554,12 +554,47 @@ router.get('/v3/propose-modules-status', (req, res) => {
   res.json(j);
 });
 
+// ─── /api/s3/brave-supplement : 脚本生成前の Brave Search 補完 ──────────
+// 入力: { postId, modules, postTitle }
+// 出力: { ok, snippets: [{ idx, query, text }] }
+router.post('/s3/brave-supplement', async (req, res) => {
+  const { modules: mods, postTitle } = req.body;
+  if (!Array.isArray(mods) || !mods.length) return res.json({ ok: true, snippets: [] });
+  const apiKey = process.env.BRAVE_API_KEY;
+  if (!apiKey) return res.json({ ok: true, snippets: [], warn: 'BRAVE_API_KEY 未設定' });
+  const snippets = [];
+  const targets = mods
+    .map((m, idx) => ({ m, idx }))
+    .filter(({ m }) => m.scriptDir || m.title || m.customLabel)
+    .slice(0, 6);
+  await Promise.allSettled(targets.map(async ({ m, idx }) => {
+    const label = m.mainKey === 'custom' ? (m.customLabel || '') : (m.mainKey || '');
+    const query = [postTitle, m.title, label, m.scriptDir].filter(Boolean).join(' ').slice(0, 200);
+    try {
+      const url = 'https://api.search.brave.com/res/v1/web/search?q='
+        + encodeURIComponent(query) + '&count=3';
+      const resp = await fetch(url, {
+        headers: { 'Accept': 'application/json', 'X-Subscription-Token': apiKey },
+      });
+      const data = await resp.json();
+      const results = (data.web?.results || []).slice(0, 3);
+      if (results.length) {
+        const text = results.map(r => `${r.title}: ${r.description || ''}`).join(' / ');
+        snippets.push({ idx, query, text: text.slice(0, 400) });
+      }
+    } catch (e) {
+      console.warn('[s3/brave-supplement] 検索失敗:', query, e.message);
+    }
+  }));
+  res.json({ ok: true, snippets });
+});
+
 // ─── /api/v3/generate-scenario : 全カード一括生成（非同期ジョブ起動）──
-// 入力: { postId, modules: [{mainKey, type, secondary?, scriptDir}], post }
+// 入力: { postId, modules: [{mainKey, type, secondary?, scriptDir, title?, customLabel?}], post, braveSnippets? }
 // 出力: { ok, jobId } 即返却。実処理はバックグラウンドで走行
 //   → クライアントは /v3/scenario-status?jobId= を3秒間隔ポーリング
 router.post('/v3/generate-scenario', (req, res) => {
-  const { postId, modules: mods, post: postIn, sprint, briefing } = req.body;
+  const { postId, modules: mods, post: postIn, sprint, briefing, braveSnippets } = req.body;
   if (!postId || !Array.isArray(mods) || !mods.length) {
     return res.status(400).json({ error: 'postId + modules[] required' });
   }
@@ -572,7 +607,8 @@ router.post('/v3/generate-scenario', (req, res) => {
   res.json({ ok: true, jobId });
   // briefing（viewpointで生成した動画の指針）をseedPlanとして渡す
   const seedPlan = briefing && typeof briefing === 'object' ? briefing : null;
-  _runScenarioJob(jobId, postId, mods, postIn, { sprint, seedPlan }).catch(e => {
+  const _braveSnippets = Array.isArray(braveSnippets) ? braveSnippets : [];
+  _runScenarioJob(jobId, postId, mods, postIn, { sprint, seedPlan, braveSnippets: _braveSnippets }).catch(e => {
     console.error('[Step3 v3] job例外:', e.message, e.stack);
     writeJob(jobId, {
       jobId, postId, status: 'error', error: e.message,
@@ -603,6 +639,13 @@ async function _runScenarioJob(jobId, postId, mods, postIn, opts = {}) {
   try {
     const si       = safeJson(siPath(postId), { boxes: { entity: { items: [] }, match: { items: [] }, search: { items: [] } } });
     const todayJst = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+
+    // Brave Search 補完スニペット（クライアントから受け取り）
+    const _braveSnippets = Array.isArray(opts.braveSnippets) ? opts.braveSnippets : [];
+    const braveBlock = _braveSnippets.length
+      ? '\n[Brave Search 補完情報（最新ニュース）]\n' +
+        _braveSnippets.map(s => `カード#${s.idx + 1} 検索「${s.query}」:\n${s.text}`).join('\n---\n') + '\n'
+      : '';
 
     // post 情報（タイトル+コメント）はクライアント送ってこれてもwindow.APP.selected経由で来ない可能性がある
     // 必須でないが、付加情報として使う
@@ -946,11 +989,15 @@ async function _runScenarioJob(jobId, postId, mods, postIn, opts = {}) {
 
     // ── outline ブロック化（idx は 1 始まり = 1..mods.length）──
     const outlineLines = mods.map((m, i) => {
-      let tags = `main="${m.mainKey}"`;
+      const mainKeyDisplay = m.mainKey === 'custom'
+        ? `custom:${m.customLabel || m.title || 'カスタムスライド'}`
+        : m.mainKey;
+      let tags = `main="${mainKeyDisplay}"`;
       if (m.secondary) tags += ` secondary="${m.secondary}"`;
       if (m.hookScore) tags += ` hookScore="${m.hookScore}"`;
       if (m.insightSubtype && m.insightSubtype !== 'none') tags += ` insightSubtype="${m.insightSubtype}"`;
-      return `idx=${i+1}: type=${m.type} ${tags}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
+      const titleLine = m.title ? `\n   title: ${m.title}` : '';
+      return `idx=${i+1}: type=${m.type} ${tags}${titleLine}\n   scriptDir: ${m.scriptDir || '(指示なし)'}`;
     }).join('\n');
 
     // ── レシピマッチカードのメタを集める（AIに recipeKey または customSlotKeys を選ばせる）──
@@ -1047,7 +1094,7 @@ ${matchBlock}
 
 [search 一覧]
 ${searchBlock}
-${h2hBlock ? `\n[H2H 一覧 — 対戦史型 history カード専用 / サーバ確定データ]\n${h2hBlock}\n` : ''}${_curatedBlock(si)}━━━━━━━━━━━━━━━━
+${h2hBlock ? `\n[H2H 一覧 — 対戦史型 history カード専用 / サーバ確定データ]\n${h2hBlock}\n` : ''}${_curatedBlock(si)}${braveBlock}━━━━━━━━━━━━━━━━
 
 【outline (${mods.length}枚)】
 ${outlineLines}
@@ -1763,7 +1810,8 @@ function getUI() {
 /* Step3 outline 行のレイアウト（PC + スマホ対応）*/
 #s3OutlineList .s3-row {
   display: grid;
-  grid-template-columns: 30px 200px 160px 180px 1fr 28px 28px 28px;
+  grid-template-columns: 30px 200px 160px 180px 28px 28px 28px;
+  grid-template-rows: auto auto auto;
   gap: 6px;
   align-items: start;
   margin-bottom: 6px;
@@ -1771,23 +1819,34 @@ function getUI() {
   background: #0d1220;
   border-radius: 6px;
 }
-/* タブレット〜スマホ: 主タグ・タイプ・従タグを 1段目、脚本指示を 2段目（全幅）に */
+#s3OutlineList .s3-row > span:first-child { grid-row: 1; grid-column: 1; }
+#s3OutlineList .s3-row .s3-main        { grid-row: 1; grid-column: 2; }
+#s3OutlineList .s3-row .s3-type        { grid-row: 1; grid-column: 3; }
+#s3OutlineList .s3-row .s3-secondary,
+#s3OutlineList .s3-row .s3-custom-label,
+#s3OutlineList .s3-row > span:nth-child(4) { grid-row: 1; grid-column: 4; }
+#s3OutlineList .s3-row > button:nth-of-type(1) { grid-row: 1; grid-column: 5; }
+#s3OutlineList .s3-row > button:nth-of-type(2) { grid-row: 1; grid-column: 6; }
+#s3OutlineList .s3-row > button:nth-of-type(3) { grid-row: 1; grid-column: 7; }
+#s3OutlineList .s3-row .s3-title  { grid-row: 2; grid-column: 1 / -1; }
+#s3OutlineList .s3-row .s3-script { grid-row: 3; grid-column: 1 / -1; }
+/* タブレット〜スマホ */
 @media (max-width: 900px) {
   #s3OutlineList .s3-row {
     grid-template-columns: 28px 1fr 1fr 28px 28px 28px;
-    grid-template-rows: auto auto auto;
     row-gap: 4px;
   }
   #s3OutlineList .s3-row > span:first-child { grid-row: 1; grid-column: 1; }
-  #s3OutlineList .s3-row .s3-main { grid-row: 1; grid-column: 2 / 4; }
-  #s3OutlineList .s3-row .s3-type { grid-row: 2; grid-column: 2 / 3; }
+  #s3OutlineList .s3-row .s3-main        { grid-row: 1; grid-column: 2 / 4; }
+  #s3OutlineList .s3-row .s3-type        { grid-row: 2; grid-column: 2 / 3; }
   #s3OutlineList .s3-row .s3-secondary,
+  #s3OutlineList .s3-row .s3-custom-label,
   #s3OutlineList .s3-row > span:nth-child(4) { grid-row: 2; grid-column: 3 / 4; }
-  #s3OutlineList .s3-row .s3-script { grid-row: 3; grid-column: 1 / -1; min-height: 80px; }
-  #s3OutlineList .s3-row > button { grid-row: 1; }
-  #s3OutlineList .s3-row > button:nth-of-type(1) { grid-column: 4; }
-  #s3OutlineList .s3-row > button:nth-of-type(2) { grid-column: 5; }
-  #s3OutlineList .s3-row > button:nth-of-type(3) { grid-column: 6; }
+  #s3OutlineList .s3-row > button:nth-of-type(1) { grid-row: 1; grid-column: 4; }
+  #s3OutlineList .s3-row > button:nth-of-type(2) { grid-row: 1; grid-column: 5; }
+  #s3OutlineList .s3-row > button:nth-of-type(3) { grid-row: 1; grid-column: 6; }
+  #s3OutlineList .s3-row .s3-title  { grid-row: 3; grid-column: 1 / -1; }
+  #s3OutlineList .s3-row .s3-script { grid-row: 4; grid-column: 1 / -1; min-height: 80px; }
 }
 </style>
 <div id="step3" class="step-container" style="display:none">
@@ -1798,6 +1857,7 @@ function getUI() {
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span id="s3Title" style="font-size:14px;font-weight:bold;flex:1;color:#7dc8ff;min-width:200px">案件を選択してください</span>
       <button class="btn btn-sm" id="s3BtnAddRow" style="background:#10b981;color:#fff;">＋ 行追加</button>
+      <button class="btn btn-sm" id="s3BtnAddCustom" style="background:#f59e0b;color:#fff;">＋ カスタム</button>
       <button class="btn btn-sm" id="s3BtnPropose" style="background:#a855f7;color:#fff;">✨ 構成おまかせ</button>
       <button class="btn btn-primary" id="s3BtnGenerate" style="font-size:13px;padding:8px 18px;">✨ 脚本生成（一括）</button>
       <span id="s3Msg" style="font-size:12px;color:#8a9aba;"></span>
@@ -1882,25 +1942,34 @@ function getUI() {
 
     // 各行 HTML
     el.innerHTML = mods.map(function(m, idx) {
+      const isCustom   = m.mainKey === 'custom';
       const mainOpts   = _buildMainOptions(m.mainKey);
       const typeOpts   = _buildTypeOptions(m);
       const typeLocked = _isTypeLocked(m);
       const showSec    = _needsSecondary(m);
-      const secCol     = showSec
+      // 主タグ列: custom 時はテキスト入力に差し替え
+      const mainCol = isCustom
+        ? '<select class="inp s3-main" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnMainChange(' + idx + ')">' + mainOpts + '</select>'
+        : '<select class="inp s3-main" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnMainChange(' + idx + ')">' + mainOpts + '</select>';
+      // 従タグ列: comparison → secondary / custom → customLabel テキスト入力 / 他 → dash
+      const secCol = showSec
         ? '<select class="inp s3-secondary" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnSecondaryChange(' + idx + ')">' + _buildSecondaryOptions(m.mainKey, m.secondary || '') + '</select>'
-        : '<span style="font-size:10px;color:#3a4560;align-self:center;text-align:center;">—</span>';
+        : (isCustom
+           ? '<input class="inp s3-custom-label" data-idx="' + idx + '" value="' + _esc(m.customLabel || '') + '" placeholder="カスタム名（自由記述）" style="font-size:11px;padding:5px 6px;" oninput="s3OnCustomLabelInput(' + idx + ')">'
+           : '<span style="font-size:10px;color:#3a4560;align-self:center;text-align:center;">—</span>');
       return ''
         + '<div class="s3-row" data-idx="' + idx + '">'
-        + '<span style="font-size:10px;color:#8a9aba;text-align:center;padding-top:8px;">#' + (idx+1) + '</span>'
-        + '<select class="inp s3-main" data-idx="' + idx + '" style="font-size:11px;padding:5px 6px;" onchange="s3OnMainChange(' + idx + ')">' + mainOpts + '</select>'
+        + '<span style="font-size:10px;color:#8a9aba;text-align:center;padding-top:8px;">#' + (idx+1) + (isCustom ? '<br><span style="color:#f59e0b;font-size:9px;">custom</span>' : '') + '</span>'
+        + mainCol
         + '<select class="inp s3-type" data-idx="' + idx + '"' + (typeLocked ? ' disabled' : '')
         + ' style="font-size:11px;padding:5px 6px;' + (typeLocked ? 'color:#5a6a8a;background:#0a0d18;' : '') + '" onchange="s3OnTypeChange(' + idx + ')">' + typeOpts + '</select>'
         + secCol
-        + '<textarea class="inp s3-script" data-idx="' + idx + '" placeholder="脚本指示（このスライドで何を伝えるか具体的に）"'
-        + ' style="font-size:11px;padding:5px 8px;min-height:54px;resize:vertical;" oninput="s3OnScriptInput(' + idx + ')">' + _esc(m.scriptDir||'') + '</textarea>'
         + '<button class="btn btn-sm" onclick="s3MoveRow(' + idx + ',-1)" style="background:#475569;color:#fff;padding:4px 6px;font-size:11px;height:fit-content;">↑</button>'
         + '<button class="btn btn-sm" onclick="s3MoveRow(' + idx + ',1)"  style="background:#475569;color:#fff;padding:4px 6px;font-size:11px;height:fit-content;">↓</button>'
         + '<button class="btn btn-sm" onclick="s3RemoveRow(' + idx + ')"  style="background:#ef4444;color:#fff;padding:4px 6px;font-size:11px;height:fit-content;">×</button>'
+        + '<input class="inp s3-title" data-idx="' + idx + '" value="' + _esc(m.title || '') + '" placeholder="スライドタイトル（任意）" style="font-size:11px;padding:5px 8px;" oninput="s3OnTitleInput(' + idx + ')">'
+        + '<textarea class="inp s3-script" data-idx="' + idx + '" placeholder="脚本指示（このスライドで何を伝えるか具体的に）"'
+        + ' style="font-size:11px;padding:5px 8px;min-height:54px;resize:vertical;" oninput="s3OnScriptInput(' + idx + ')">' + _esc(m.scriptDir||'') + '</textarea>'
         + '</div>';
     }).join('');
   }
@@ -1951,6 +2020,7 @@ function getUI() {
     tags.forEach(function(t) {
       opts.push('<option value="' + _esc(t.key) + '"' + (t.key === currentKey ? ' selected' : '') + '>' + _esc(t.label) + '</option>');
     });
+    opts.push('<option value="custom"' + (currentKey === 'custom' ? ' selected' : '') + '>🆕 カスタム（自由記述）</option>');
     return opts.join('');
   }
 
@@ -1987,6 +2057,16 @@ function getUI() {
     const ta = document.querySelectorAll('.s3-script')[idx];
     m.scriptDir = ta.value;
   };
+  window.s3OnTitleInput = function(idx) {
+    const m = window.APP.s3.modules[idx];
+    const el = document.querySelector('.s3-title[data-idx="' + idx + '"]');
+    if (el) m.title = el.value;
+  };
+  window.s3OnCustomLabelInput = function(idx) {
+    const m = window.APP.s3.modules[idx];
+    const el = document.querySelector('.s3-custom-label[data-idx="' + idx + '"]');
+    if (el) m.customLabel = el.value;
+  };
   window.s3MoveRow = function(idx, delta) {
     _collectInputs();
     const arr = window.APP.s3.modules;
@@ -2002,16 +2082,27 @@ function getUI() {
   };
 
   function _collectInputs() {
-    const ta = document.querySelectorAll('.s3-script');
-    ta.forEach(function(el, i) {
+    document.querySelectorAll('.s3-script').forEach(function(el, i) {
       if (window.APP.s3.modules[i]) window.APP.s3.modules[i].scriptDir = el.value;
+    });
+    document.querySelectorAll('.s3-title').forEach(function(el, i) {
+      if (window.APP.s3.modules[i]) window.APP.s3.modules[i].title = el.value;
+    });
+    document.querySelectorAll('.s3-custom-label').forEach(function(el) {
+      const i = Number(el.dataset.idx);
+      if (window.APP.s3.modules[i]) window.APP.s3.modules[i].customLabel = el.value;
     });
   }
 
   /* ── 行追加 ── */
   document.getElementById('s3BtnAddRow').addEventListener('click', function() {
     _collectInputs();
-    window.APP.s3.modules.push({ mainKey: '', secondary: null, type: '', scriptDir: '' });
+    window.APP.s3.modules.push({ mainKey: '', secondary: null, type: '', scriptDir: '', title: '' });
+    _renderOutline();
+  });
+  document.getElementById('s3BtnAddCustom').addEventListener('click', function() {
+    _collectInputs();
+    window.APP.s3.modules.push({ mainKey: 'custom', customLabel: '', type: 'insight', scriptDir: '', title: '' });
     _renderOutline();
   });
 
@@ -2184,6 +2275,23 @@ function getUI() {
     btn.disabled = true;
     btn.style.opacity = '0.5';
     const origLabel = btn.textContent;
+
+    // ─── ① Brave Search 補完 ──────────────────────────────
+    let braveSnippets = [];
+    btn.textContent = '🔍 Brave補完中...';
+    _msg('🔍 Brave で最新情報を補完中...');
+    try {
+      const br = await fetchJson('/api/s3/brave-supplement', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: post.id, modules: mods, postTitle: post.titleJa || post.title }),
+      });
+      braveSnippets = (br && Array.isArray(br.snippets)) ? br.snippets : [];
+      _msg('✅ Brave補完: ' + braveSnippets.length + '件取得 → 脚本生成中...');
+    } catch (e) {
+      _msg('⚠ Brave補完スキップ (' + e.message + ') → 脚本生成継続');
+    }
+
+    // ─── ② generate-scenario ────────────────────────────────
     btn.textContent = '⏳ 生成中...';
     _msg('⏳ ジョブ起動中...');
     let jobId;
@@ -2192,7 +2300,8 @@ function getUI() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           postId: post.id, modules: mods, post,
-          sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false,  // 2026-05-18: SPRINT 対応
+          sprint: localStorage.getItem('v2_sprint_mode') === '1' ? 'deepseek' : false,
+          braveSnippets,
         }),
       });
       jobId = j.jobId;
