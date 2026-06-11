@@ -151,6 +151,21 @@ async function _runGenerateViewpoints(postId) {
         .join('\n')
     : '';
 
+  // ── アナライズブック（si.analyzeBook が存在する場合に最優先で使用）──
+  const analyzeBook = si.analyzeBook || null;
+  const analyzeBookBlock = analyzeBook?.topics?.length ? (() => {
+    const lines = ['【アナライズブック（全記事×全データ統合レポート）— 企画ピース生成の最重要インプット】'];
+    lines.push(`\n▼ 全体概観: ${analyzeBook.situationOverview || ''}`);
+    analyzeBook.topics.forEach((t, i) => {
+      lines.push(`\n▼ 論点${i+1}: ${t.title}`);
+      lines.push(t.report || '');
+      if (t.keyData?.length) lines.push('  Key: ' + t.keyData.join(' / '));
+    });
+    if (analyzeBook.entitySummary) lines.push(`\n▼ データまとめ: ${analyzeBook.entitySummary}`);
+    if (analyzeBook.wikiContext)   lines.push(`\n▼ Wikipedia文脈: ${analyzeBook.wikiContext}`);
+    return lines.join('\n');
+  })() : '';
+
   // ── プロンプト ──
   const prompt = `あなたはサッカーYouTube動画の構成エキスパートです。
 以下の案件データから、ユーザーが企画書に組み込む「企画ピース」を12〜18枚生成してください。
@@ -166,16 +181,10 @@ ${bodyExcerpt || '(なし)'}
 
 ${hasComments ? `【Reddit上位コメント（reaction カード用）】\n${topComments}\n` : ''}
 
-【取得済みエンティティデータ（これが confidence:high の根拠）】
+${analyzeBookBlock ? analyzeBookBlock + '\n\n' : ''}${constraintBlock ? constraintBlock + '\n\n' : ''}【取得済みエンティティデータ（confidence:high の根拠 / アナライズブックがあれば補完として参照）】
 ${entityBlocks}
 
-【関連記事（confidence:medium の根拠）】
-${articleBlock}
-
-【記事熟読で抽出した storyFacts（hookScore と insight の最重要材料）】
-${storyFactBlock}
-
-${constraintBlock ? constraintBlock + '\n' : ''}${deepFactBlock ? deepFactBlock + '\n' : ''}${deepSummaryBlock ? deepSummaryBlock + '\n' : ''}
+${!analyzeBookBlock ? `【関連記事（confidence:medium の根拠）】\n${articleBlock}\n\n【記事熟読で抽出した storyFacts】\n${storyFactBlock}\n${deepFactBlock ? deepFactBlock + '\n' : ''}${deepSummaryBlock ? deepSummaryBlock + '\n' : ''}` : `【記事ベース補足情報】\n${storyFactBlock}`}
 【利用可能レシピ一覧】
 ${RECIPE_CATALOG}
 

@@ -583,7 +583,7 @@ router.post('/v25/autopilot/vp-start', express.json(), (req, res) => {
       // ② fetch-all + deep-research を並列実行（どちらもI/O重いので並列が効果的）
       updateJob(jobId, { status:'running', step:'fetch-deep',
         message:'データ取得 + ディープリサーチ（並列）...' });
-      const { runDeepResearch } = require('../scripts/modules/article_researcher');
+      const { runDeepResearch, buildAnalyzeBook } = require('../scripts/modules/article_researcher');
       const drSearches = [...(suggested.searches || [])].filter(Boolean);
       const [, drResult] = await Promise.all([
         _runFetchAll({ postId, items: labels }),
@@ -603,7 +603,19 @@ router.post('/v25/autopilot/vp-start', express.json(), (req, res) => {
           + ' entities=' + drResult.suggestedEntities.length);
       }
 
-      // ③ 企画ピース生成（Sonnet固定 / deepResearch制約リストをviewpoint_routesが自動適用）
+      // ③ アナライズブック生成（記事 + entityデータ両方揃ったここで統合）
+      updateJob(jobId, { status:'running', step:'analyze-book', message:'アナライズブック生成中...' });
+      const latestSiForBook = safeJson(siFile, fetchedSi);
+      const drExtractions = drResult?.extractions || [];
+      const analyzeBook = await buildAnalyzeBook(drExtractions, latestSiForBook, post.titleJa || post.title)
+        .catch(e => { console.warn('[vp-start] analyzeBook失敗(続行):', e.message); return null; });
+      if (analyzeBook) {
+        latestSiForBook.analyzeBook = analyzeBook;
+        fs.writeFileSync(siFile, JSON.stringify(latestSiForBook, null, 2));
+        console.log('[vp-start] analyzeBook生成: topics=' + analyzeBook.topics.length);
+      }
+
+      // ④ 企画ピース生成（Sonnet固定 / analyzeBook + deepResearch制約リストを自動適用）
       updateJob(jobId, { status:'running', step:'viewpoints', message:'企画ピース生成中（Sonnet）...' });
       const { cards, briefing } = await _runGenerateViewpoints(postId);
 

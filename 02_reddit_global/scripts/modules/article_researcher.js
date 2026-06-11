@@ -450,4 +450,136 @@ async function runDeepResearch(searches, siData, opts = {}) {
   };
 }
 
-module.exports = { runDeepResearch };
+// ─── エンティティデータをテキスト化（アナライズブック用）────────
+function _buildEntityText(siData) {
+  const items = siData?.boxes?.entity?.items || [];
+  if (!items.length) return '(エンティティデータなし)';
+  return items.map(it => {
+    const name = it.label || '?';
+    const role = it.role || '?';
+    const lines = [`【${name} / ${role}】`];
+    // Wikipedia抜粋
+    if (it.wiki?.ok && it.wiki.extract) {
+      lines.push(`Wikipedia: ${String(it.wiki.extract).slice(0, 200)}`);
+    }
+    // SofaScoreスタッツ（文字列化）
+    if (it.sofa?.ok) {
+      const stats = it.sofa.stats || it.sofa.playerStats || it.sofa.teamStats;
+      if (stats && typeof stats === 'object') {
+        const entries = Object.entries(stats).slice(0, 8)
+          .map(([k, v]) => `${k}: ${v}`).join(' / ');
+        if (entries) lines.push(`Stats: ${entries}`);
+      }
+    }
+    // TM怪我
+    const inj = it.tm?.injuries;
+    if (Array.isArray(inj) && inj.length) {
+      const active = inj.find(i => !i.returnDate || new Date(i.returnDate) > new Date());
+      if (active) lines.push(`怪我: ${active.injury || '詳細不明'} / 復帰: ${active.returnDate || '未定'}`);
+    }
+    // TM試合成績サマリ（player）
+    if (it.tm?.seasonSummaries?.length) {
+      const latest = it.tm.seasonSummaries[0];
+      if (latest) lines.push(`今季TM: ${JSON.stringify(latest).slice(0, 120)}`);
+    }
+    return lines.join('\n');
+  }).join('\n\n');
+}
+
+// ─── アナライズブック生成 ─────────────────────────────────────
+// 全記事extractions + entity data → 論点別レポートに統合
+// runDeepResearch と _runFetchAll の両方が完了した後に呼ぶこと
+// @param {object[]} extractions  - runDeepResearchのallExtractions
+// @param {object}   siData       - fetch-all完了後の最新siData
+// @param {string}   postTitle    - 案件タイトル
+// @returns {object} analyzeBook
+async function buildAnalyzeBook(extractions, siData, postTitle) {
+  if (!extractions?.length) return _fallbackBook();
+
+  // 記事サマリブロック（catchiness順上位20件）
+  const topExtractions = [...extractions]
+    .sort((a, b) => (b.catchiness || 0) - (a.catchiness || 0))
+    .slice(0, 20);
+
+  const articleBlock = topExtractions.map((e, i) =>
+    `[${i+1}] [${e.host}] angle:${e.angle||'?'} (${e.catchiness||50})\n` +
+    `事実: ${e.key_fact || ''}\n` +
+    `概要: ${String(e.summary || '').slice(0, 500)}`
+  ).join('\n\n---\n\n').slice(0, 24000);
+
+  const entityBlock = _buildEntityText(siData).slice(0, 6000);
+
+  const prompt = `あなたはサッカーコンテンツのリサーチアナリストです。
+以下の【記事リサーチ結果】と【取得済みデータ】を全て読んだ上で、
+YouTube動画の企画・脚本に直接使えるアナライズブックを作成してください。
+
+【動画案件】
+${postTitle}
+
+【記事リサーチ結果（${topExtractions.length}本・catchiness順）】
+${articleBlock}
+
+【取得済みデータ（SofaScore/TM/Wikipedia）】
+${entityBlock}
+
+【作成ルール】
+- topics: 記事を横断して浮かび上がる論点を3〜5件。各論点に対して複数ソースを統合したレポートを書く
+  - title: 論点タイトル（15〜25字）
+  - report: 横断的まとめ（400〜600字）。単なる箇条書きでなく、「なぜ今重要か」「何が対立しているか」「どんなデータが裏付けるか」を繋げて書く
+  - keyData: この論点を支える具体的な数字・事実（3件以内）
+- entitySummary: 主要選手・チームのスタッツと状況を300字でまとめる（TM/SofaScoreデータ優先）
+- wikiContext: Wikipedia由来の重要な歴史的文脈・背景（200字）
+- situationOverview: 今この案件が注目される理由を一文で（80字以内）
+
+JSONのみ（コードブロック不要）:
+{
+  "situationOverview": "...",
+  "topics": [
+    {
+      "title": "三笘不在と左サイドの穴",
+      "report": "...(400〜600字)...",
+      "keyData": ["左サイド突破成功率チーム最高", "代替候補3名のスタッツ比較", "直近2試合での左からの失点"]
+    }
+  ],
+  "entitySummary": "...",
+  "wikiContext": "..."
+}`;
+
+  try {
+    const raw = await callAI({
+      forceProvider: 'deepseek',
+      model: 'deepseek-v4-flash',
+      max_tokens: 4000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const m = raw && raw.match(/\{[\s\S]*\}/);
+    if (!m) return _fallbackBook();
+    const parsed = JSON.parse(m[0]);
+    return _normalizeBook(parsed);
+  } catch (e) {
+    console.warn('[article_researcher] buildAnalyzeBook失敗:', e.message);
+    return _fallbackBook();
+  }
+}
+
+function _fallbackBook() {
+  return { situationOverview: '', topics: [], entitySummary: '', wikiContext: '', generatedAt: new Date().toISOString() };
+}
+
+function _normalizeBook(raw) {
+  return {
+    situationOverview: String(raw.situationOverview || '').slice(0, 120),
+    topics: Array.isArray(raw.topics)
+      ? raw.topics.slice(0, 5).map(t => ({
+          title:   String(t.title   || '').slice(0, 40),
+          report:  String(t.report  || '').slice(0, 800),
+          keyData: Array.isArray(t.keyData) ? t.keyData.slice(0, 3).map(s => String(s).slice(0, 80)) : [],
+        }))
+      : [],
+    entitySummary: String(raw.entitySummary || '').slice(0, 500),
+    wikiContext:   String(raw.wikiContext   || '').slice(0, 400),
+    generatedAt:   new Date().toISOString(),
+  };
+}
+
+module.exports = { runDeepResearch, buildAnalyzeBook };
