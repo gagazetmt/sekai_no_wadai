@@ -1,0 +1,130 @@
+// v4_launcher/slides/v4_picture.js
+// V3 picture.js をベースに文字を大きくしたV4版
+// 縦モード（左タイトル大 + 右画像）をデフォルトにする
+'use strict';
+
+const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('../../scripts/v2_video/slides/_common');
+
+const SUB_BAR_HEIGHT = 110;
+
+function buildV4PictureHTML(mod) {
+  const m = mod || {};
+  const imgPath = (Array.isArray(m.images) && m.images.length) ? m.images[0] : null;
+  const imgSrc  = imgPath ? imgDataUri(imgPath) : '';
+  const orientation = (m.orientation === 'horizontal') ? 'horizontal' : 'vertical';
+  const subtitleArg = subtitleArgFromMod(m);
+  const subBarHTML  = buildSubtitleBar(subtitleArg, { height: SUB_BAR_HEIGHT });
+  const title = String(m.title || '');
+
+  let bodyHTML;
+  let wrapClass = '';
+
+  if (orientation === 'horizontal') {
+    bodyHTML = `
+      <div class="pic-area-h">
+        ${imgSrc ? `<img class="pic-img pic-img-h" src="${imgSrc}" alt="">` : '<div class="pic-empty">画像なし</div>'}
+      </div>`;
+  } else {
+    wrapClass = 'pic-vertical-mode';
+    bodyHTML = `
+      <div class="pic-area-v">
+        <div class="pic-text">
+          ${title ? `<div class="pic-title">${esc(title)}</div>` : ''}
+        </div>
+        ${imgSrc ? `<img class="pic-img pic-img-v" src="${imgSrc}" alt="">` : '<div class="pic-empty">画像なし</div>'}
+      </div>`;
+  }
+
+  const extraStyles = `
+.bg-base {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 25% 20%, rgba(245,158,11,0.12), transparent 55%),
+    radial-gradient(circle at 75% 80%, rgba(245,158,11,0.06), transparent 55%),
+    linear-gradient(135deg, #0a1428 0%, #060e1c 50%, #0d1830 100%);
+}
+.grid-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(245,158,11,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,158,11,0.04) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* ── 横画像 ── */
+.pic-area-h {
+  position: absolute;
+  top: 40px; left: 60px; right: 60px;
+  bottom: ${SUB_BAR_HEIGHT + 40}px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pic-img-h { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+
+/* ── 縦画像（V4デフォルト）── */
+.pic-area-v {
+  position: absolute;
+  top: 40px; left: 60px; right: 60px;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: stretch;
+}
+.pic-text {
+  display: flex; align-items: center;
+  padding-bottom: ${SUB_BAR_HEIGHT + 40}px;
+  min-width: 0;
+}
+
+/* V4: タイトルを大きく（V3 96px → 120px）*/
+.pic-title {
+  font-size: 120px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1.15;
+  border-left: 16px solid #f59e0b;
+  padding-left: 40px;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  word-break: break-word;
+  white-space: pre-line;
+}
+.pic-img-v {
+  align-self: center;
+  max-height: calc(100% - 40px);
+  max-width: 100%;
+  width: auto; object-fit: contain;
+  margin: 20px 0;
+}
+
+/* 縦モード: 字幕バーを左カラム幅のみに */
+.pic-vertical-mode .v2-sub-bar-wrapper,
+.pic-vertical-mode .v2-sub-bar { right: 50% !important; }
+
+/* 画像グロー（V3と同じ）*/
+.pic-img {
+  border-radius: 14px;
+  box-shadow:
+    0 0 60px rgba(245,158,11,0.55),
+    0 0 120px rgba(245,158,11,0.25),
+    inset 0 0 0 2px rgba(245,158,11,0.35);
+  animation: picGlow 3.2s ease-in-out infinite;
+}
+@keyframes picGlow {
+  0%,100% { box-shadow: 0 0 60px rgba(245,158,11,0.55), 0 0 120px rgba(245,158,11,0.25), inset 0 0 0 2px rgba(245,158,11,0.35); }
+  50%     { box-shadow: 0 0 100px rgba(245,158,11,0.85), 0 0 200px rgba(245,158,11,0.40), inset 0 0 0 2px rgba(251,191,36,0.60); }
+}
+.pic-empty { color: #6b7280; font-size: 28px; padding: 60px; text-align: center; border: 2px dashed #374151; border-radius: 14px; }
+`;
+
+  const slideBody = `
+<div class="bg-base"></div>
+<div class="grid-overlay"></div>
+<div class="${wrapClass}">
+${bodyHTML}
+${subBarHTML}
+</div>`;
+
+  return wrapHTML({ slideBody, extraStyles });
+}
+
+module.exports = { buildV4PictureHTML };

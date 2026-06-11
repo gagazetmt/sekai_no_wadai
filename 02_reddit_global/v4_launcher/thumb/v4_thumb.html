@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: #111;
+    font-family: 'Noto Sans JP', 'HGP創英角ゴシックUB', 'Hiragino Sans', 'BIZ UDGothic', 'Yu Gothic', sans-serif;
+    position: relative;
+  }
+
+  /* ── 上部：選手写真エリア（上60%）── */
+  .photo-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 430px;
+    background-image: var(--bg-image, none);
+    background-size: cover;
+    background-position: var(--bg-position, center top);
+    overflow: hidden;
+  }
+
+  /* 写真下端をフェードして黄色エリアに自然につなぐ */
+  .photo-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background: linear-gradient(to bottom, transparent, #FFD700);
+  }
+
+  /* ── 右上コメントボックス ── */
+  .comment-box {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--accent-color, #FF6B35);
+    padding: 10px 16px;
+    border-radius: 6px;
+    max-width: 320px;
+    text-align: right;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+    z-index: 10;
+    line-height: 1.3;
+  }
+
+  .comment-text {
+    font-size: 26px;
+    font-weight: 900;
+    color: #fff;
+    display: block;
+    letter-spacing: -0.5px;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+  }
+
+  /* ── 下部：黄色エリア（下40%）── */
+  .yellow-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 300px;
+    background: #FFD700;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 12px 30px;
+  }
+
+  .title-line {
+    display: block;
+    font-size: var(--title-size, 96px);
+    font-weight: 900;
+    color: #111;
+    line-height: 1.05;
+    letter-spacing: -3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* コメントなしモード */
+  .comment-box.hidden { display: none; }
+</style>
+</head>
+<body>
+  <!-- 上部：選手写真 -->
+  <div class="photo-area">
+    <div class="photo-fade"></div>
+  </div>
+
+  <!-- 右上コメント -->
+  <div class="comment-box {{COMMENT_HIDDEN}}">
+    <span class="comment-text">{{COMMENT}}</span>
+  </div>
+
+  <!-- 下部：黄色 + タイトル -->
+  <div class="yellow-area">
+    <span class="title-line">{{LINE1}}</span>
+    <span class="title-line">{{LINE2}}</span>
+  </div>
+</body>
+</html>
