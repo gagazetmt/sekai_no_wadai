@@ -14,9 +14,9 @@ const fs      = require('fs');
 const { createJob, readJob, updateJob } = require('../routes/_job_helper');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
-const { runScout, SCOUT_FILE } = require('./scripts/v4_scout');
-const { buildNetaBook }        = require('./scripts/v4_neta');
-const { generateV4Video }      = require('./scripts/v4_video');
+const { runScout, SCOUT_FILE }   = require('./scripts/v4_scout');
+const { buildNetaBook, getCachedBook } = require('./scripts/v4_neta');
+const { generateV4Video }        = require('./scripts/v4_video');
 
 const app  = express();
 const PORT = process.env.V4_PORT || 3005;
@@ -55,16 +55,26 @@ app.get('/api/scout/latest', (req, res) => {
   } catch (_) { res.json({ topics: [], scoutedAt: null }); }
 });
 
+// ── ② ネタブック（キャッシュ確認）──────────────────────────────
+app.get('/api/neta/cached', (req, res) => {
+  const { topic } = req.query;
+  if (!topic) return res.json({ cached: false });
+  const book = getCachedBook(topic);
+  if (book) return res.json({ cached: true, book });
+  res.json({ cached: false });
+});
+
 // ── ② ネタブック生成 ─────────────────────────────────────────
+// force=true → キャッシュ無視して再生成
 app.post('/api/neta', (req, res) => {
-  const { topic, hook, url } = req.body || {};
+  const { topic, hook, url, force } = req.body || {};
   if (!topic) return res.status(400).json({ error: 'topic required' });
   const jobId = createJob('nb4', { kind: 'v4-neta', step: 'running' });
   res.json({ ok: true, jobId });
   setImmediate(async () => {
     try {
       updateJob(jobId, { status: 'running', message: '記事収集・ネタブック生成中...' });
-      const book = await buildNetaBook({ topic, hook, url });
+      const book = await buildNetaBook({ topic, hook, url }, { force: !!force });
       updateJob(jobId, { status: 'done', book });
     } catch (e) {
       console.error('[v4/neta]', e.message);

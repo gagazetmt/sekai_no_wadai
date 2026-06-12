@@ -446,7 +446,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   <!-- ネタブック生成ボタン -->
   <div class="flex-row" style="margin-bottom:14px;">
     <button class="btn btn-red" id="btnNeta" onclick="startNeta()">📝 ネタブック生成</button>
-    <button class="btn btn-ghost" id="btnRegenNeta" onclick="startNeta()" style="display:none;">🔄 再生成</button>
+    <button class="btn btn-ghost" id="btnRegenNeta" onclick="startNeta(true)" style="display:none;">🔄 再取得</button>
   </div>
 
   <div id="netaStatus"></div>
@@ -781,7 +781,7 @@ function renderGrid(topics) {
   }).join('');
 }
 
-function selectTopic(idx) {
+async function selectTopic(idx) {
   const t = S.topics[idx];
   if (!t) return;
   S.selectedTopic = t;
@@ -804,6 +804,23 @@ function selectTopic(idx) {
   document.getElementById('netaStatus').innerHTML = '';
   document.getElementById('netaBody').style.display = 'none';
   document.getElementById('btnRegenNeta').style.display = 'none';
+
+  // キャッシュ確認
+  try {
+    const r = await api('/api/neta/cached?topic=' + encodeURIComponent(t.topic));
+    if (r.cached && r.book) {
+      S.netaBook = r.book;
+      sb('netaStatus', 'done', '保存済みのネタブックを読み込みました');
+      renderNetaBook(r.book);
+      document.getElementById('btnNeta').style.display = 'none';
+      document.getElementById('btnRegenNeta').style.display = 'inline-flex';
+      document.getElementById('tab3').disabled = false;
+    } else {
+      document.getElementById('btnNeta').style.display = 'inline-flex';
+    }
+  } catch (_) {
+    document.getElementById('btnNeta').style.display = 'inline-flex';
+  }
 }
 
 // ═════════════════════════════════ STEP 2: ネタブック
@@ -812,18 +829,19 @@ function toggleSec(key) {
   el?.classList.toggle('open');
 }
 
-async function startNeta() {
+async function startNeta(force = false) {
   if (!S.selectedTopic) return;
   document.getElementById('btnNeta').disabled = true;
   document.getElementById('btnRegenNeta').style.display = 'none';
   document.getElementById('netaBody').style.display = 'none';
-  sb('netaStatus', 'running', '記事を検索してネタブックを生成中...');
+  sb('netaStatus', 'running', force ? '再取得中...' : '記事を検索してネタブックを生成中...');
 
   try {
     const { jobId } = await api('/api/neta', {
       topic: S.selectedTopic.topic,
       hook:  S.selectedTopic.hook,
       url:   S.selectedTopic.url,
+      force,
     });
 
     poll('/api/neta/status?jobId=' + jobId, 2000, j => {

@@ -22,12 +22,50 @@ const { fetchSerper }         = require('../../scripts/modules/fetchers/brave_se
 const { fetchArticleContent } = require('../../scripts/modules/fetchers/article_fetcher');
 const { callAI }              = require('../../scripts/ai_client');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const NETA_DIR = path.join(DATA_DIR, 'neta_books');
+const DATA_DIR   = path.join(__dirname, '..', 'data');
+const NETA_DIR   = path.join(DATA_DIR, 'neta_books');
+const INDEX_FILE = path.join(NETA_DIR, '_index.json');
 if (!fs.existsSync(NETA_DIR)) fs.mkdirSync(NETA_DIR, { recursive: true });
 
 const ARTICLE_CHARS  = 2000;
 const REACTION_CHARS = 300;
+
+// V4_NETA_MODEL=sonnet → Anthropic Sonnet / それ以外 → DeepSeek Chat（デフォルト）
+const NETA_MODEL = (process.env.V4_NETA_MODEL || 'deepseek').toLowerCase();
+
+// ── キャッシュ管理 ──────────────────────────────────────────────
+function _topicKey(topic) {
+  return String(topic || '').toLowerCase()
+    .replace(/[\s　。、！？!?.,:;]+/g, '')
+    .slice(0, 50);
+}
+
+function _loadIndex() {
+  try { return JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8')); }
+  catch (_) { return {}; }
+}
+
+function _saveIndex(idx) {
+  fs.writeFileSync(INDEX_FILE, JSON.stringify(idx, null, 2));
+}
+
+/** キャッシュされたネタブックを返す。なければ null */
+function getCachedBook(topic) {
+  const key  = _topicKey(topic);
+  const idx  = _loadIndex();
+  const file = idx[key];
+  if (!file) return null;
+  const full = path.join(NETA_DIR, file);
+  if (!fs.existsSync(full)) { delete idx[key]; _saveIndex(idx); return null; }
+  try { return JSON.parse(fs.readFileSync(full, 'utf8')); }
+  catch (_) { return null; }
+}
+
+function _cacheBook(topic, book, filename) {
+  const idx = _loadIndex();
+  idx[_topicKey(topic)] = filename;
+  _saveIndex(idx);
+}
 
 // ── 記事3本を取得 ─────────────────────────────────────────────
 async function _fetchArticles(topic, existingUrl = '') {
@@ -140,10 +178,14 @@ JSONのみ:
   "tone_check": "ok"
 }`;
 
+  const aiOpts = NETA_MODEL === 'sonnet'
+    ? { forceProvider: 'anthropic', model: 'claude-sonnet-4-6', max_tokens: 3000 }
+    : { forceProvider: 'deepseek',  model: 'deepseek-chat',     max_tokens: 3000 };
+  console.log(`[v4_neta] モデル: ${NETA_MODEL === 'sonnet' ? 'claude-sonnet-4-6' : 'deepseek-chat'}`);
+
   const raw = await callAI({
-    forceProvider: 'deepseek',
-    model: 'deepseek-chat',
-    max_tokens: 3000,
+    ...aiOpts,
+    label: 'v4-neta',
     messages: [{ role: 'user', content: prompt }],
   });
 
@@ -187,8 +229,19 @@ JSONのみ:
 }
 
 // ── メイン ────────────────────────────────────────────────────
-async function buildNetaBook(topicData) {
+// force: true → キャッシュを無視して再生成
+async function buildNetaBook(topicData, { force = false } = {}) {
   const { topic, hook = '', url = '' } = topicData;
+
+  // キャッシュチェック（force=false のときのみ）
+  if (!force) {
+    const cached = getCachedBook(topic);
+    if (cached) {
+      console.log('[v4_neta] キャッシュ使用:', topic);
+      return cached;
+    }
+  }
+
   console.log('[v4_neta] 開始:', topic);
 
   // 記事 + 反応素材 を並列取得
@@ -216,15 +269,17 @@ async function buildNetaBook(topicData) {
     createdAt:   new Date().toISOString(),
   };
 
-  const safeId = topic.replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, '_').slice(0, 40);
-  const outPath = path.join(NETA_DIR, `neta_${safeId}_${Date.now()}.json`);
+  const safeId  = topic.replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, '_').slice(0, 40);
+  const fname   = `neta_${safeId}_${Date.now()}.json`;
+  const outPath = path.join(NETA_DIR, fname);
   fs.writeFileSync(outPath, JSON.stringify(book, null, 2));
+  _cacheBook(topic, book, fname);
   console.log('[v4_neta] 保存:', outPath);
 
   return book;
 }
 
-module.exports = { buildNetaBook };
+module.exports = { buildNetaBook, getCachedBook };
 
 // ── CLI テスト ────────────────────────────────────────────────
 if (require.main === module) {
