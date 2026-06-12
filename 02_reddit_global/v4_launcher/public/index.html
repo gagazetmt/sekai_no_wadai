@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>V4 SCOUT</title>
+<style>
+/* ══════════════════════════════════ RESET & TOKENS */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #080808;
+  --s1:      #111111;
+  --s2:      #1a1a1a;
+  --s3:      #222222;
+  --border:  #2a2a2a;
+  --border2: #383838;
+  --text:    #f0f0f0;
+  --muted:   #777;
+  --muted2:  #555;
+  --red:     #e80000;
+  --red2:    #c60000;
+  --yellow:  #ffee00;
+  --green:   #00c853;
+  --cx:      #1d9bf0;   /* X blue */
+  --cy:      #ff6b00;   /* Yahoo orange */
+  --cr:      #ff4500;   /* Reddit */
+  --radius:  10px;
+  --rad-sm:  6px;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Hiragino Sans', 'Yu Gothic UI', 'Noto Sans JP', sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ══════════════════════════════════ HEADER */
+#hdr {
+  position: sticky; top: 0; z-index: 200;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; height: 52px;
+  background: var(--red);
+  box-shadow: 0 2px 16px rgba(0,0,0,.8);
+}
+#hdr .logo { font-size: 17px; font-weight: 900; letter-spacing: .5px; }
+#hdr .v-badge {
+  background: #fff3; color: #fff;
+  font-size: 10px; font-weight: 900;
+  padding: 2px 7px; border-radius: 20px; letter-spacing: 1px;
+}
+#hdr .live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--yellow);
+  animation: pulse 1.4s ease-in-out infinite;
+  display: none;
+}
+#hdr .live-dot.on { display: block; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+#hdr .scouted-meta { margin-left: auto; font-size: 11px; color: rgba(255,255,255,.65); white-space: nowrap; }
+
+/* ══════════════════════════════════ STEP NAV */
+#nav {
+  display: flex; background: var(--s1);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#nav::-webkit-scrollbar { display: none; }
+.nav-tab {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 13px 12px;
+  font-size: 12px; font-weight: 700;
+  background: none; border: none; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  cursor: pointer; white-space: nowrap; transition: .15s;
+}
+.nav-tab .step-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 900;
+  background: var(--s3); color: var(--muted);
+  transition: .15s; flex-shrink: 0;
+}
+.nav-tab.active { color: var(--yellow); border-bottom-color: var(--yellow); }
+.nav-tab.active .step-num { background: var(--yellow); color: #111; }
+.nav-tab.done { color: var(--green); }
+.nav-tab.done .step-num { background: var(--green); color: #111; }
+.nav-tab:disabled { opacity: .3; cursor: not-allowed; }
+
+/* ══════════════════════════════════ PAGES */
+main { padding: 14px; max-width: 860px; margin: 0 auto; }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ══════════════════════════════════ ACTION BAR */
+.action-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
+
+/* ══════════════════════════════════ SOURCE FILTER */
+.src-filters {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.src-chip {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
+  border: 1px solid var(--border2);
+  background: var(--s2); color: var(--muted);
+  cursor: pointer; transition: .15s;
+}
+.src-chip:hover { border-color: #555; color: var(--text); }
+.src-chip.active { color: #111; border-color: transparent; }
+.src-chip .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.src-chip[data-src="all"].active  { background: var(--yellow); }
+.src-chip[data-src="X"].active    { background: var(--cx); }
+.src-chip[data-src="Yahoo"].active { background: var(--cy); }
+.src-chip[data-src="Reddit"].active { background: var(--cr); }
+.src-count {
+  background: rgba(255,255,255,.12); border-radius: 10px;
+  padding: 0 5px; font-size: 10px; font-weight: 900;
+}
+
+/* ══════════════════════════════════ TOPIC GRID */
+#topicGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+@media (max-width: 360px) { #topicGrid { grid-template-columns: 1fr; } }
+
+.tc {
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .15s, transform .1s;
+}
+.tc::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 3px;
+}
+.tc[data-src="X"]::before     { background: var(--cx); }
+.tc[data-src="Yahoo"]::before  { background: var(--cy); }
+.tc[data-src="Reddit"]::before { background: var(--cr); }
+.tc:hover { border-color: var(--border2); transform: translateY(-1px); }
+.tc.selected { border-color: var(--yellow); background: #1a1800; }
+.tc.selected::after {
+  content: '✓';
+  position: absolute; top: 8px; right: 10px;
+  font-size: 14px; font-weight: 900; color: var(--yellow);
+}
+
+.tc-head { display: flex; align-items: center; gap: 7px; margin-bottom: 9px; }
+.tc-src {
+  font-size: 10px; font-weight: 900; letter-spacing: .5px;
+  padding: 2px 7px; border-radius: 10px;
+  background: var(--s3); color: var(--muted);
+}
+.tc[data-src="X"]      .tc-src { background: rgba(29,155,240,.18); color: var(--cx); }
+.tc[data-src="Yahoo"]  .tc-src { background: rgba(255,107,0,.18);  color: var(--cy); }
+.tc[data-src="Reddit"] .tc-src { background: rgba(255,69,0,.18);   color: var(--cr); }
+.tc-score {
+  margin-left: auto;
+  font-size: 13px; font-weight: 900;
+  color: var(--yellow);
+}
+.tc-topic {
+  font-size: 15px; font-weight: 900;
+  line-height: 1.4; margin-bottom: 7px;
+}
+.tc-hook {
+  font-size: 12px; color: var(--muted);
+  padding: 5px 8px;
+  background: var(--s2);
+  border-radius: 5px;
+  border-left: 2px solid var(--red);
+  line-height: 1.5;
+}
+.tc-time { font-size: 10px; color: var(--muted2); margin-top: 7px; }
+
+/* ══════════════════════════════════ SCAN ANIMATION */
+#scanAnim {
+  display: none;
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+  margin-bottom: 14px;
+}
+#scanAnim.on { display: block; }
+.scan-title { font-size: 13px; font-weight: 900; color: var(--yellow); margin-bottom: 14px; }
+.scan-sources { display: flex; flex-direction: column; gap: 8px; }
+.scan-row { display: flex; align-items: center; gap: 10px; }
+.scan-label { font-size: 12px; font-weight: 700; width: 70px; flex-shrink: 0; }
+.scan-bar {
+  flex: 1; height: 4px; background: var(--s3); border-radius: 2px; overflow: hidden;
+}
+.scan-fill {
+  height: 100%; width: 0%; border-radius: 2px;
+  transition: width 1.5s ease;
+}
+.scan-fill.x      { background: var(--cx); }
+.scan-fill.yahoo  { background: var(--cy); }
+.scan-fill.reddit { background: var(--cr); }
+.scan-status { font-size: 11px; color: var(--muted); width: 50px; text-align: right; flex-shrink: 0; }
+
+/* ══════════════════════════════════ SELECTED TOPIC BANNER */
+#selBanner {
+  background: linear-gradient(135deg, #1a0000 0%, #0d0d0d 100%);
+  border: 1px solid var(--red);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  display: none;
+}
+#selBanner.on { display: block; }
+#selBanner .sel-label { font-size: 10px; color: var(--red); font-weight: 900; letter-spacing: 1px; margin-bottom: 5px; }
+#selBanner .sel-topic { font-size: 17px; font-weight: 900; line-height: 1.3; margin-bottom: 4px; }
+#selBanner .sel-hook  { font-size: 12px; color: var(--muted); }
+
+/* ══════════════════════════════════ NETA BOOK */
+.neta-section {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.neta-hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .1s;
+}
+.neta-hd:hover { background: var(--s2); }
+.neta-icon { font-size: 16px; }
+.neta-title { font-size: 13px; font-weight: 900; flex: 1; }
+.neta-arrow { font-size: 11px; color: var(--muted); transition: transform .2s; }
+.neta-section.open .neta-arrow { transform: rotate(90deg); }
+.neta-body { display: none; padding: 0 14px 12px; }
+.neta-section.open .neta-body { display: block; }
+.neta-text { font-size: 14px; line-height: 1.7; color: #ccc; margin-bottom: 8px; }
+textarea.neta-edit {
+  width: 100%; background: var(--s2);
+  border: 1px solid var(--border2); border-radius: var(--rad-sm);
+  color: var(--text); padding: 10px; font-size: 13px; line-height: 1.6;
+  font-family: inherit; resize: vertical; min-height: 80px;
+  transition: border-color .15s;
+}
+textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
+
+.reaction-list { display: flex; flex-direction: column; gap: 6px; }
+.reaction-item {
+  background: var(--s2); border-radius: var(--rad-sm);
+  padding: 8px 10px; font-size: 13px; color: #bbb;
+  border-left: 2px solid var(--border2); line-height: 1.5;
+}
+
+/* ══════════════════════════════════ STATUS STATES */
+.sb {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 13px; border-radius: var(--rad-sm);
+  font-size: 13px; margin-bottom: 12px;
+}
+.sb.running { background: #12100a; border: 1px solid #3a2a00; color: #ffcc44; }
+.sb.done    { background: #091209; border: 1px solid #144d14; color: var(--green); }
+.sb.error   { background: #120909; border: 1px solid #4d1414; color: #ff6b6b; }
+.sb .spin {
+  width: 15px; height: 15px; flex-shrink: 0;
+  border: 2px solid #3a2a00; border-top-color: var(--yellow);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══════════════════════════════════ VIDEO STAGES */
+.stages {
+  display: flex; gap: 0;
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  margin-bottom: 14px;
+}
+.stage {
+  flex: 1; padding: 12px 8px;
+  text-align: center; font-size: 11px; font-weight: 700;
+  color: var(--muted); border-right: 1px solid var(--border);
+  position: relative; transition: .25s;
+}
+.stage:last-child { border-right: none; }
+.stage .s-icon { font-size: 18px; display: block; margin-bottom: 4px; }
+.stage.done   { color: var(--green); background: #091209; }
+.stage.active { color: var(--yellow); background: #12100a; }
+.stage.active::after {
+  content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+  background: var(--yellow); animation: stageBar 1.5s ease-in-out infinite;
+}
+@keyframes stageBar { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+video { width: 100%; border-radius: var(--radius); background: #000; }
+
+/* ══════════════════════════════════ BUTTONS */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 18px; border-radius: var(--rad-sm);
+  font-size: 13px; font-weight: 900;
+  border: none; cursor: pointer; transition: .15s;
+  line-height: 1;
+}
+.btn-red  { background: var(--red); color: #fff; }
+.btn-red:hover  { background: var(--red2); }
+.btn-yellow { background: var(--yellow); color: #111; }
+.btn-yellow:hover { filter: brightness(.9); }
+.btn-ghost {
+  background: var(--s2); color: var(--text);
+  border: 1px solid var(--border2);
+}
+.btn-ghost:hover { border-color: #555; }
+.btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ══════════════════════════════════ EMPTY */
+.empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+.empty .e-icon { font-size: 44px; margin-bottom: 12px; }
+.empty p { font-size: 13px; line-height: 1.6; }
+
+/* ══════════════════════════════════ UTILS */
+.sep { height: 1px; background: var(--border); margin: 14px 0; }
+.mt8 { margin-top: 8px; }
+.mt14 { margin-top: 14px; }
+.flex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HEADER -->
+<div id="hdr">
+  <span class="logo">⚽ V4 SCOUT</span>
+  <span class="v-badge">2ch型</span>
+  <div class="live-dot" id="liveDot"></div>
+  <span class="scouted-meta" id="scoutedMeta"></span>
+</div>
+
+<!-- ═══════════ STEP NAV -->
+<div id="nav">
+  <button class="nav-tab active" data-step="1" onclick="goStep(1)">
+    <span class="step-num">1</span>ネタ収集
+  </button>
+  <button class="nav-tab" data-step="2" id="tab2" onclick="goStep(2)" disabled>
+    <span class="step-num">2</span>ネタブック
+  </button>
+  <button class="nav-tab" data-step="3" id="tab3" onclick="goStep(3)" disabled>
+    <span class="step-num">3</span>動画生成
+  </button>
+</div>
+
+<main>
+
+<!-- ═══════════════════════ STEP 1: ネタ収集 -->
+<div class="page active" id="page1">
+
+  <!-- アクションバー -->
+  <div class="action-bar">
+    <button class="btn btn-red" id="btnScout" onclick="startScout()">🔍 今すぐスカウト</button>
+    <button class="btn btn-ghost" onclick="loadLatest()">📋 前回の結果</button>
+    <span id="topicCount" style="font-size:12px;color:var(--muted);margin-left:4px;"></span>
+  </div>
+
+  <!-- スキャンアニメ -->
+  <div id="scanAnim">
+    <div class="scan-title">📡 スキャン中...</div>
+    <div class="scan-sources">
+      <div class="scan-row">
+        <span class="scan-label" style="color:var(--cx)">X</span>
+        <div class="scan-bar"><div class="scan-fill x" id="fillX"></div></div>
+        <span class="scan-status" id="statX">待機</span>
+      </div>
+      <div class="scan-row">
+        <span class="scan-label" style="color:var(--cy)">Yahoo</span>
+        <div class="scan-bar"><div class="scan-fill yahoo" id="fillY"></div></div>
+        <span class="scan-status" id="statY">待機</span>
+      </div>
+      <div class="scan-row">
+        <span class="scan-label" style="color:var(--cr)">Reddit</span>
+        <div class="scan-bar"><div class="scan-fill reddit" id="fillR"></div></div>
+        <span class="scan-status" id="statR">待機</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ソースフィルター -->
+  <div class="src-filters" id="srcFilters" style="display:none;">
+    <div class="src-chip active" data-src="all" onclick="filterSrc('all')">
+      <span class="dot" style="background:var(--yellow)"></span>
+      全件 <span class="src-count" id="cntAll">0</span>
+    </div>
+    <div class="src-chip" data-src="X" onclick="filterSrc('X')">
+      <span class="dot" style="background:var(--cx)"></span>
+      X <span class="src-count" id="cntX">0</span>
+    </div>
+    <div class="src-chip" data-src="Yahoo" onclick="filterSrc('Yahoo')">
+      <span class="dot" style="background:var(--cy)"></span>
+      Yahoo <span class="src-count" id="cntY">0</span>
+    </div>
+    <div class="src-chip" data-src="Reddit" onclick="filterSrc('Reddit')">
+      <span class="dot" style="background:var(--cr)"></span>
+      Reddit <span class="src-count" id="cntR">0</span>
+    </div>
+  </div>
+
+  <!-- トピックグリッド -->
+  <div id="topicGrid">
+    <div class="empty">
+      <div class="e-icon">📡</div>
+      <p>「今すぐスカウト」で<br>最新ネタを収集します</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ STEP 2: ネタブック -->
+<div class="page" id="page2">
+
+  <!-- 選択案件バナー -->
+  <div id="selBanner">
+    <div class="sel-label">選択中の案件</div>
+    <div class="sel-topic" id="selTopic">—</div>
+    <div class="sel-hook"  id="selHook"></div>
+  </div>
+
+  <!-- ネタブック生成ボタン -->
+  <div class="flex-row" style="margin-bottom:14px;">
+    <button class="btn btn-red" id="btnNeta" onclick="startNeta()">📝 ネタブック生成</button>
+    <button class="btn btn-ghost" id="btnRegenNeta" onclick="startNeta()" style="display:none;">🔄 再生成</button>
+  </div>
+
+  <div id="netaStatus"></div>
+
+  <!-- ネタブック本体（アコーディオン） -->
+  <div id="netaBody" style="display:none;">
+
+    <div class="neta-section open" id="sec-overview">
+      <div class="neta-hd" onclick="toggleSec('overview')">
+        <span class="neta-icon">📰</span>
+        <span class="neta-title">概要</span>
+        <span class="neta-arrow">›</span>
+      </div>
+      <div class="neta-body">
+        <div class="neta-text" id="disp-overview"></div>
+        <textarea class="neta-edit" id="edit-overview" rows="3"></textarea>
+      </div>
+    </div>
+
+    <div class="neta-section open" id="sec-scenario1">
+      <div class="neta-hd" onclick="toggleSec('scenario1')">
+        <span class="neta-icon">💡</span>
+        <span class="neta-title">補足シナリオ①（驚き・意外な事実）</span>
+        <span class="neta-arrow">›</span>
+      </div>
+      <div class="neta-body">
+        <div class="neta-text" id="disp-scenario1"></div>
+        <textarea class="neta-edit" id="edit-scenario1" rows="2"></textarea>
+      </div>
+    </div>
+
+    <div class="neta-section open" id="sec-scenario2">
+      <div class="neta-hd" onclick="toggleSec('scenario2')">
+        <span class="neta-icon">😏</span>
+        <span class="neta-title">補足シナリオ②（別角度・共感）</span>
+        <span class="neta-arrow">›</span>
+      </div>
+      <div class="neta-body">
+        <div class="neta-text" id="disp-scenario2"></div>
+        <textarea class="neta-edit" id="edit-scenario2" rows="2"></textarea>
+      </div>
+    </div>
+
+    <div class="neta-section" id="sec-reactions">
+      <div class="neta-hd" onclick="toggleSec('reactions')">
+        <span class="neta-icon">💬</span>
+        <span class="neta-title">ネット民の反応</span>
+        <span class="neta-arrow">›</span>
+      </div>
+      <div class="neta-body">
+        <div class="reaction-list" id="reactionList"></div>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <button class="btn btn-yellow" style="width:100%;justify-content:center;padding:14px;" onclick="goToVideo()">
+      ▶ この内容で動画生成
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════ STEP 3: 動画生成 -->
+<div class="page" id="page3">
+
+  <!-- ステージプログレス -->
+  <div class="stages" id="stages">
+    <div class="stage" id="stg-tts">
+      <span class="s-icon">🎙️</span>TTS生成
+    </div>
+    <div class="stage" id="stg-slide">
+      <span class="s-icon">🖼️</span>スライド
+    </div>
+    <div class="stage" id="stg-render">
+      <span class="s-icon">🎬</span>動画合成
+    </div>
+    <div class="stage" id="stg-done">
+      <span class="s-icon">✅</span>完成
+    </div>
+  </div>
+
+  <div id="videoStatus"></div>
+  <div id="videoResult"></div>
+</div>
+
+</main>
+
+<script>
+// ═════════════════════════════════ STATE
+const S = {
+  topics: [],
+  selectedTopic: null,
+  netaBook: null,
+  activeFilter: 'all',
+};
+
+// ═════════════════════════════════ UTILS
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+async function api(url, body) {
+  const r = await fetch(url, body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : {});
+  return r.json();
+}
+function poll(url, ms, onDone, onTick) {
+  const id = setInterval(async () => {
+    const j = await api(url).catch(() => null);
+    if (!j) return;
+    onTick?.(j);
+    if (j.status === 'done' || j.status === 'error') { clearInterval(id); onDone(j); }
+  }, ms);
+}
+function sb(elId, state, msg) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const icon = state === 'running'
+    ? '<div class="spin"></div>'
+    : state === 'done' ? '✅' : '❌';
+  el.innerHTML = `<div class="sb ${state}">${icon} ${esc(msg)}</div>`;
+}
+
+// ═════════════════════════════════ NAV
+function goStep(n) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page' + n)?.classList.add('active');
+  document.querySelector(`.nav-tab[data-step="${n}"]`)?.classList.add('active');
+}
+
+// ═════════════════════════════════ STEP 1: スカウト
+function startScanAnim() {
+  document.getElementById('scanAnim').classList.add('on');
+  document.getElementById('srcFilters').style.display = 'none';
+  document.getElementById('liveDot').classList.add('on');
+
+  // 順番にバーを伸ばす演出
+  setTimeout(() => {
+    document.getElementById('fillX').style.width = '70%';
+    document.getElementById('statX').textContent = '取得中';
+  }, 300);
+  setTimeout(() => {
+    document.getElementById('fillY').style.width = '60%';
+    document.getElementById('statY').textContent = '取得中';
+  }, 700);
+  setTimeout(() => {
+    document.getElementById('fillR').style.width = '80%';
+    document.getElementById('statR').textContent = '取得中';
+  }, 1100);
+}
+function stopScanAnim(counts) {
+  document.getElementById('liveDot').classList.remove('on');
+  document.getElementById('scanAnim').classList.remove('on');
+  if (counts) {
+    document.getElementById('fillX').style.width = '100%';
+    document.getElementById('fillY').style.width = '100%';
+    document.getElementById('fillR').style.width = '100%';
+    document.getElementById('statX').textContent = counts.x + '件';
+    document.getElementById('statY').textContent = counts.y + '件';
+    document.getElementById('statR').textContent = counts.r + '件';
+  }
+  // バーをリセット（少し遅延）
+  setTimeout(() => {
+    ['fillX','fillY','fillR'].forEach(id => document.getElementById(id).style.transition = 'none');
+    setTimeout(() => {
+      ['fillX','fillY','fillR'].forEach(id => {
+        document.getElementById(id).style.width = '0%';
+        document.getElementById(id).style.transition = 'width 1.5s ease';
+      });
+      ['statX','statY','statR'].forEach(id => document.getElementById(id).textContent = '待機');
+    }, 50);
+  }, 2000);
+}
+
+async function startScout() {
+  document.getElementById('btnScout').disabled = true;
+  document.getElementById('topicGrid').innerHTML = '';
+  startScanAnim();
+
+  try {
+    const { jobId } = await api('/api/scout', {});
+    poll('/api/scout/status?jobId=' + jobId, 2000, j => {
+      document.getElementById('btnScout').disabled = false;
+      if (j.status === 'done') {
+        stopScanAnim();
+        renderTopics(j.topics || []);
+      } else {
+        stopScanAnim();
+        document.getElementById('topicGrid').innerHTML =
+          `<div class="empty"><div class="e-icon">❌</div><p>${esc(j.error || 'エラーが発生しました')}</p></div>`;
+      }
+    });
+  } catch (e) {
+    document.getElementById('btnScout').disabled = false;
+    stopScanAnim();
+  }
+}
+
+async function loadLatest() {
+  try {
+    const data = await api('/api/scout/latest');
+    if (!data.topics?.length) {
+      document.getElementById('topicGrid').innerHTML =
+        '<div class="empty"><div class="e-icon">📡</div><p>まだスカウト結果がありません<br>「今すぐスカウト」で収集してください</p></div>';
+      return;
+    }
+    if (data.scoutedAt) {
+      const d = new Date(data.scoutedAt);
+      document.getElementById('scoutedMeta').textContent = d.toLocaleDateString('ja-JP',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    }
+    renderTopics(data.topics);
+  } catch (_) {}
+}
+
+function renderTopics(topics) {
+  S.topics = topics;
+  S.activeFilter = 'all';
+
+  // カウント集計
+  const counts = { all: topics.length, X: 0, Yahoo: 0, Reddit: 0 };
+  topics.forEach(t => {
+    const src = String(t.source || '');
+    if (src.startsWith('X'))      counts.X++;
+    else if (src.startsWith('Y')) counts.Yahoo++;
+    else if (src.startsWith('R')) counts.Reddit++;
+  });
+
+  document.getElementById('cntAll').textContent   = counts.all;
+  document.getElementById('cntX').textContent     = counts.X;
+  document.getElementById('cntY').textContent     = counts.Yahoo;
+  document.getElementById('cntR').textContent     = counts.Reddit;
+  document.getElementById('topicCount').textContent = topics.length + '件';
+  document.getElementById('srcFilters').style.display = 'flex';
+
+  // チップのアクティブ設定
+  document.querySelectorAll('.src-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector('.src-chip[data-src="all"]').classList.add('active');
+
+  renderGrid(topics);
+}
+
+function filterSrc(src) {
+  S.activeFilter = src;
+  document.querySelectorAll('.src-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.src-chip[data-src="${src}"]`)?.classList.add('active');
+
+  const filtered = src === 'all'
+    ? S.topics
+    : S.topics.filter(t => String(t.source || '').startsWith(src[0]));
+  renderGrid(filtered);
+}
+
+function renderGrid(topics) {
+  const grid = document.getElementById('topicGrid');
+  if (!topics.length) {
+    grid.innerHTML = '<div class="empty"><div class="e-icon">🔍</div><p>このソースの案件はありません</p></div>';
+    return;
+  }
+
+  // このソースに対応するcssクラス
+  function srcClass(src) {
+    const s = String(src || '');
+    if (s.startsWith('X'))      return 'X';
+    if (s.startsWith('Y'))      return 'Yahoo';
+    if (s.startsWith('R'))      return 'Reddit';
+    return '';
+  }
+
+  function timeStr(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d)) return '';
+    const now = Date.now();
+    const diff = Math.floor((now - d) / 60000);
+    if (diff < 60) return diff + '分前';
+    if (diff < 1440) return Math.floor(diff / 60) + '時間前';
+    return d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' });
+  }
+
+  grid.innerHTML = topics.map((t, i) => {
+    const sc = srcClass(t.source);
+    // S.topicsでの全体インデックスを探す
+    const fullIdx = S.topics.indexOf(t);
+    const idx = fullIdx >= 0 ? fullIdx : i;
+    return `
+    <div class="tc${S.selectedTopic === t ? ' selected' : ''}"
+         data-src="${sc}" data-idx="${idx}" onclick="selectTopic(${idx})">
+      <div class="tc-head">
+        <span class="tc-src">${esc(t.source)}</span>
+        <span class="tc-score">${t.score || 0}pt</span>
+      </div>
+      <div class="tc-topic">${esc(t.topic)}</div>
+      ${t.hook ? `<div class="tc-hook">${esc(t.hook)}</div>` : ''}
+      ${t.date ? `<div class="tc-time">${timeStr(t.date)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectTopic(idx) {
+  const t = S.topics[idx];
+  if (!t) return;
+  S.selectedTopic = t;
+
+  // グリッド内ハイライト更新
+  document.querySelectorAll('.tc').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.tc[data-idx="${idx}"]`)?.classList.add('selected');
+
+  // バナー
+  document.getElementById('selBanner').classList.add('on');
+  document.getElementById('selTopic').textContent = t.topic;
+  document.getElementById('selHook').textContent  = t.hook || '';
+
+  // Step2 解放 & 遷移
+  document.getElementById('tab2').disabled = false;
+  document.getElementById('tab2').classList.add('done');
+  goStep(2);
+
+  // Step2 リセット
+  document.getElementById('netaStatus').innerHTML = '';
+  document.getElementById('netaBody').style.display = 'none';
+  document.getElementById('btnRegenNeta').style.display = 'none';
+}
+
+// ═════════════════════════════════ STEP 2: ネタブック
+function toggleSec(key) {
+  const el = document.getElementById('sec-' + key);
+  el?.classList.toggle('open');
+}
+
+async function startNeta() {
+  if (!S.selectedTopic) return;
+  document.getElementById('btnNeta').disabled = true;
+  document.getElementById('btnRegenNeta').style.display = 'none';
+  document.getElementById('netaBody').style.display = 'none';
+  sb('netaStatus', 'running', '記事を検索してネタブックを生成中...');
+
+  try {
+    const { jobId } = await api('/api/neta', {
+      topic: S.selectedTopic.topic,
+      hook:  S.selectedTopic.hook,
+      url:   S.selectedTopic.url,
+    });
+
+    poll('/api/neta/status?jobId=' + jobId, 2000, j => {
+      document.getElementById('btnNeta').disabled = false;
+      if (j.status === 'done') {
+        S.netaBook = j.book;
+        sb('netaStatus', 'done', 'ネタブック完成');
+        renderNetaBook(j.book);
+        document.getElementById('btnRegenNeta').style.display = 'inline-flex';
+        document.getElementById('tab3').disabled = false;
+      } else {
+        sb('netaStatus', 'error', j.error || 'エラーが発生しました');
+        document.getElementById('btnRegenNeta').style.display = 'inline-flex';
+      }
+    });
+  } catch (e) {
+    document.getElementById('btnNeta').disabled = false;
+    sb('netaStatus', 'error', e.message);
+  }
+}
+
+function renderNetaBook(book) {
+  // 表示テキストセット
+  document.getElementById('disp-overview').innerHTML   = esc(book.overview   || '');
+  document.getElementById('disp-scenario1').innerHTML  = esc(book.scenario1  || '');
+  document.getElementById('disp-scenario2').innerHTML  = esc(book.scenario2  || '');
+  // 編集用textarea
+  document.getElementById('edit-overview').value   = book.overview   || '';
+  document.getElementById('edit-scenario1').value  = book.scenario1  || '';
+  document.getElementById('edit-scenario2').value  = book.scenario2  || '';
+  // 反応リスト
+  const rl = document.getElementById('reactionList');
+  rl.innerHTML = (book.reactions || []).slice(0, 5).map(r =>
+    `<div class="reaction-item">${esc(r.text || r)}</div>`
+  ).join('');
+
+  document.getElementById('netaBody').style.display = 'block';
+}
+
+// ═════════════════════════════════ STEP 3: 動画生成
+function setStage(name) {
+  const order = ['tts', 'slide', 'render', 'done'];
+  const idx = order.indexOf(name);
+  order.forEach((s, i) => {
+    const el = document.getElementById('stg-' + s);
+    if (!el) return;
+    el.className = 'stage' + (i < idx ? ' done' : i === idx ? ' active' : '');
+  });
+}
+
+async function goToVideo() {
+  if (!S.netaBook) return;
+
+  // 編集内容を反映
+  S.netaBook.overview   = document.getElementById('edit-overview').value;
+  S.netaBook.scenario1  = document.getElementById('edit-scenario1').value;
+  S.netaBook.scenario2  = document.getElementById('edit-scenario2').value;
+
+  goStep(3);
+  document.getElementById('videoResult').innerHTML = '';
+  document.getElementById('videoStatus').innerHTML = '';
+  setStage('tts');
+
+  try {
+    const { jobId } = await api('/api/video', { book: S.netaBook });
+
+    poll('/api/video/status?jobId=' + jobId, 3000, j => {
+      if (j.status === 'done') {
+        setStage('done');
+        sb('videoStatus', 'done', '動画が完成しました！');
+        const vp = j.result?.videoPath;
+        if (vp) {
+          const fn = vp.split('/').pop();
+          document.getElementById('videoResult').innerHTML = `
+            <div style="margin-top:10px;">
+              <video controls playsinline src="/v2_videos/${fn}"></video>
+              <div style="font-size:11px;color:var(--muted);margin-top:6px;">${esc(fn)}</div>
+            </div>`;
+        }
+      } else if (j.status === 'error') {
+        setStage('done');
+        sb('videoStatus', 'error', j.error || 'エラーが発生しました');
+      }
+    }, j => {
+      // 進捗メッセージでステージ更新
+      const msg = String(j.message || '').toLowerCase();
+      if (msg.includes('tts') || msg.includes('音声'))       setStage('tts');
+      else if (msg.includes('slide') || msg.includes('スライド')) setStage('slide');
+      else if (msg.includes('render') || msg.includes('動画'))   setStage('render');
+    });
+  } catch (e) {
+    sb('videoStatus', 'error', e.message);
+  }
+}
+
+// ═════════════════════════════════ INIT
+window.addEventListener('DOMContentLoaded', loadLatest);
+</script>
+</body>
+</html>
