@@ -1,128 +1,87 @@
 // v4_launcher/slides/v4_picture.js
-// V3 picture.js をベースに文字を大きくしたV4版
-// 縦モード（左タイトル大 + 右画像）をデフォルトにする
+// V4解説スライド: 2chレス風
+//   板ヘッダー(スレタイ常駐) + レスカード(番号+名無し+本文デカ文字) + 写真フレーム画像
 'use strict';
 
-const { PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod } = require('../../scripts/v2_video/slides/_common');
+const { esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod, fitFont } = require('../../scripts/v2_video/slides/_common');
+const { C2CH, colorBrackets, resHeaderHTML, boardBarHTML, THEME_CSS } = require('./_v4_theme');
 
 const SUB_BAR_HEIGHT = 110;
 
 function buildV4PictureHTML(mod) {
   const m = mod || {};
-  const imgPath = (Array.isArray(m.images) && m.images.length) ? m.images[0] : null;
-  const imgSrc  = imgPath ? imgDataUri(imgPath) : '';
-  const orientation = (m.orientation === 'horizontal') ? 'horizontal' : 'vertical';
-  const subtitleArg = subtitleArgFromMod(m);
-  const subBarHTML  = buildSubtitleBar(subtitleArg, { height: SUB_BAR_HEIGHT });
-  const title = String(m.title || '');
+  const title       = String(m.title || '');
+  const threadTitle = String(m.threadTitle || '');
+  const resNo       = Number(m.resNo) || 2;
+  const imgPath     = (Array.isArray(m.images) && m.images.length) ? m.images[0] : null;
+  const imgSrc      = imgPath ? imgDataUri(imgPath) : '';
 
-  let bodyHTML;
-  let wrapClass = '';
-
-  if (orientation === 'horizontal') {
-    bodyHTML = `
-      <div class="pic-area-h">
-        ${imgSrc ? `<img class="pic-img pic-img-h" src="${imgSrc}" alt="">` : '<div class="pic-empty">画像なし</div>'}
-      </div>`;
-  } else {
-    wrapClass = 'pic-vertical-mode';
-    bodyHTML = `
-      <div class="pic-area-v">
-        <div class="pic-text">
-          ${title ? `<div class="pic-title">${esc(title)}</div>` : ''}
-        </div>
-        ${imgSrc ? `<img class="pic-img pic-img-v" src="${imgSrc}" alt="">` : '<div class="pic-empty">画像なし</div>'}
-      </div>`;
-  }
+  // レス本文（スライドタイトル）のフォントサイズ自動調整
+  const bodyWidth = imgSrc ? 880 : 1640;
+  const fit = fitFont(title, 96, bodyWidth, { maxLines: 3, minFontPx: 52, charWidth: 1.0 });
 
   const extraStyles = `
-.bg-base {
-  position: absolute; inset: 0;
-  background:
-    radial-gradient(circle at 25% 20%, rgba(245,158,11,0.12), transparent 55%),
-    radial-gradient(circle at 75% 80%, rgba(245,158,11,0.06), transparent 55%),
-    linear-gradient(135deg, #0a1428 0%, #060e1c 50%, #0d1830 100%);
-}
-.grid-overlay {
-  position: absolute; inset: 0; pointer-events: none;
-  background-image:
-    linear-gradient(rgba(245,158,11,0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(245,158,11,0.04) 1px, transparent 1px);
-  background-size: 80px 80px;
-}
-
-/* ── 横画像 ── */
-.pic-area-h {
+${THEME_CSS}
+.pc-area {
   position: absolute;
-  top: 40px; left: 60px; right: 60px;
-  bottom: ${SUB_BAR_HEIGHT + 40}px;
-  display: flex; align-items: center; justify-content: center;
-}
-.pic-img-h { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
-
-/* ── 縦画像（V4デフォルト）── */
-.pic-area-v {
-  position: absolute;
-  top: 40px; left: 60px; right: 60px;
-  bottom: 0;
+  top: 86px; bottom: ${SUB_BAR_HEIGHT}px;
+  left: 0; right: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
-  align-items: stretch;
+  grid-template-columns: ${imgSrc ? '55fr 45fr' : '1fr'};
+  align-items: center;
+  padding: 0 70px;
+  gap: 50px;
 }
-.pic-text {
-  display: flex; align-items: center;
-  padding-bottom: ${SUB_BAR_HEIGHT + 40}px;
+.pc-card {
+  background: ${C2CH.bgPaper};
+  border: 1px solid ${C2CH.line};
+  border-left: 10px solid ${C2CH.maroon};
+  border-radius: 6px;
+  padding: 38px 46px 46px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
   min-width: 0;
+  opacity: 0;
+  transform: translateX(-30px);
+  animation: pcCardIn .5s cubic-bezier(.2,1.2,.4,1) .2s forwards;
 }
-
-/* V4: タイトルを大きく（V3 96px → 120px）*/
-.pic-title {
-  font-size: 120px;
+.pc-res-head { margin-bottom: 22px; }
+.pc-body {
+  font-size: ${fit.fontSize}px;
   font-weight: 900;
-  color: #ffffff;
-  line-height: 1.15;
-  border-left: 16px solid #f59e0b;
-  padding-left: 40px;
-  text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  color: ${C2CH.text};
+  line-height: 1.3;
   word-break: break-word;
   white-space: pre-line;
 }
-.pic-img-v {
-  align-self: center;
-  max-height: calc(100% - 40px);
-  max-width: 100%;
-  width: auto; object-fit: contain;
-  margin: 20px 0;
+.pc-anchor {
+  color: ${C2CH.blue};
+  font-size: 28px; font-weight: 700;
+  margin-bottom: 12px;
 }
+.pc-photo {
+  justify-self: center;
+  transform: rotate(-2deg);
+  opacity: 0;
+  animation: pcPhotoIn .55s cubic-bezier(.2,1.3,.4,1) .5s forwards;
+}
+.pc-photo img { max-width: 600px; max-height: 560px; width: auto; height: auto; }
 
-/* 縦モード: 字幕バーを左カラム幅のみに */
-.pic-vertical-mode .v2-sub-bar-wrapper,
-.pic-vertical-mode .v2-sub-bar { right: 50% !important; }
-
-/* 画像グロー（V3と同じ）*/
-.pic-img {
-  border-radius: 14px;
-  box-shadow:
-    0 0 60px rgba(245,158,11,0.55),
-    0 0 120px rgba(245,158,11,0.25),
-    inset 0 0 0 2px rgba(245,158,11,0.35);
-  animation: picGlow 3.2s ease-in-out infinite;
-}
-@keyframes picGlow {
-  0%,100% { box-shadow: 0 0 60px rgba(245,158,11,0.55), 0 0 120px rgba(245,158,11,0.25), inset 0 0 0 2px rgba(245,158,11,0.35); }
-  50%     { box-shadow: 0 0 100px rgba(245,158,11,0.85), 0 0 200px rgba(245,158,11,0.40), inset 0 0 0 2px rgba(251,191,36,0.60); }
-}
-.pic-empty { color: #6b7280; font-size: 28px; padding: 60px; text-align: center; border: 2px dashed #374151; border-radius: 14px; }
+@keyframes pcCardIn  { to { opacity: 1; transform: translateX(0); } }
+@keyframes pcPhotoIn { to { opacity: 1; transform: rotate(-2deg) translateY(0); } from { opacity: 0; transform: rotate(-2deg) translateY(-30px); } }
 `;
 
   const slideBody = `
-<div class="bg-base"></div>
-<div class="grid-overlay"></div>
-<div class="${wrapClass}">
-${bodyHTML}
-${subBarHTML}
-</div>`;
+<div class="board-bg"></div>
+${boardBarHTML(esc(threadTitle))}
+<div class="pc-area">
+  <div class="pc-card">
+    <div class="pc-res-head">${resHeaderHTML(resNo, title + resNo, { fontPx: 27, offsetMin: resNo * 3 })}</div>
+    <div class="pc-anchor">&gt;&gt;1</div>
+    <div class="pc-body">${colorBrackets(esc(title))}</div>
+  </div>
+  ${imgSrc ? `<div class="pc-photo"><div class="photo-frame"><img src="${imgSrc}" alt=""></div></div>` : ''}
+</div>
+${buildSubtitleBar(subtitleArgFromMod(m), { height: SUB_BAR_HEIGHT })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

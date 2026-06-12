@@ -124,6 +124,45 @@ app.get('/api/video/status', (req, res) => {
   res.json(j);
 });
 
+// ── ④ 完全自動: (スカウト→)ネタブック→動画 ─────────────────
+//   body.topic あり → その案件で neta→video
+//   body.topic なし → スカウト実行 → トップ案件で neta→video
+app.post('/api/fullauto', (req, res) => {
+  const { topic, hook, url } = req.body || {};
+  const jobId = createJob('fa4', { kind: 'v4-fullauto', step: 'running' });
+  res.json({ ok: true, jobId });
+  setImmediate(async () => {
+    try {
+      let t = topic ? { topic, hook: hook || '', url: url || '' } : null;
+
+      if (!t) {
+        updateJob(jobId, { status: 'running', stage: 'scout', message: 'X / Yahoo / Reddit をスカウト中...' });
+        const topics = await runScout({ maxTopics: 7 });
+        if (!topics?.length) throw new Error('スカウト結果が0件でした');
+        t = topics[0];  // 最高スコア案件を自動採用
+        updateJob(jobId, { status: 'running', stage: 'scout', message: `案件決定: ${t.topic}`, topic: t.topic });
+      }
+
+      updateJob(jobId, { status: 'running', stage: 'neta', message: `ネタブック生成中: ${t.topic}`, topic: t.topic });
+      const book = await buildNetaBook({ topic: t.topic, hook: t.hook, url: t.url });
+
+      updateJob(jobId, { status: 'running', stage: 'video', message: 'TTS・スライド・動画合成中...', topic: t.topic, book });
+      const result = await generateV4Video(book);
+
+      updateJob(jobId, { status: 'done', stage: 'done', message: '完成', topic: t.topic, book, result });
+    } catch (e) {
+      console.error('[v4/fullauto]', e.message);
+      updateJob(jobId, { status: 'error', error: e.message });
+    }
+  });
+});
+
+app.get('/api/fullauto/status', (req, res) => {
+  const j = readJob(req.query.jobId);
+  if (!j) return res.status(404).json({ error: 'not found' });
+  res.json(j);
+});
+
 // ── 起動 ─────────────────────────────────────────────────────
 app.listen(PORT, () => console.log(`🚀 V4ランチャー起動: http://localhost:${PORT}`));
 module.exports = app;

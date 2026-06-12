@@ -1,32 +1,39 @@
 // v4_launcher/slides/v4_reaction.js
-// V3 reaction.js をベースに文字を大きくしたV4版
-// 変更点: コメント最大5件 / フォント大きく / コメント幅を広く
+// V4リアクション: 本物の2chレス欄スタイル
+//   レス番号+名無しヘッダー+本文 / 最高スコア=赤レス /
+//   音声と同期して読まれてるレスが黄色マーカーでハイライト
 'use strict';
 
 const {
-  PALETTE, esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod,
-  LEAD_PAD_SEC, TAIL_PAD_SEC, imageAdjustCss, fitFont,
+  esc, imgDataUri, wrapHTML, buildSubtitleBar, subtitleArgFromMod,
+  LEAD_PAD_SEC, TAIL_PAD_SEC, fitFont,
 } = require('../../scripts/v2_video/slides/_common');
+const { C2CH, fakeId, colorBrackets, boardBarHTML, THEME_CSS, threadDateStr } = require('./_v4_theme');
 
-const CMT_BG    = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
-const CMT_BG_HL = ['#FFD700', '#5BB8F5', '#5ED45E', '#B86FFF', '#FF9F43', '#FF70A6'];
+const SUB_BAR_HEIGHT = 110;
 
-// V4: 56px ベース、最大幅 620px まで (V3は44px/480px)
-function _commentFit(text) {
-  return fitFont(text, 56, 620, { maxLines: 3, minFontPx: 32 });
+// レス番号列を決定論的に生成（14 から不規則に増える）
+function _resNumbers(comments, seedBase = 14) {
+  let cur = seedBase;
+  return comments.map(c => {
+    let h = 0;
+    const s = String(c.text || '');
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    cur += 3 + (h % 19);
+    return cur;
+  });
 }
 
 function buildV4ReactionHTML(mod) {
-  const bg     = imgDataUri(mod.bgImage);
-  const imgAdj = imageAdjustCss(mod.imageAdjust);
-  const title  = mod.title || '海外の声';
-  // V4: 最大5件
-  const comments = (Array.isArray(mod.comments) ? mod.comments : []).slice(0, 5);
-
+  const m = mod || {};
+  const threadTitle = String(m.threadTitle || m.title || '');
+  const comments = (Array.isArray(m.comments) ? m.comments : []).slice(0, 5);
   const maxScore = Math.max(0, ...comments.map(c => c.score || 0));
+  const resNums  = _resNumbers(comments);
 
-  const audio    = Array.isArray(mod.audio) ? mod.audio : [];
-  const narrCount = Math.max(0, audio.length - comments.length);
+  // ── 音声同期タイミング（既存ロジック踏襲）──────────────────
+  const audio      = Array.isArray(m.audio) ? m.audio : [];
+  const narrCount  = Math.max(0, audio.length - comments.length);
   const chunkStarts = audio.map((_, i) =>
     LEAD_PAD_SEC + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
   const totalSec = audio.length
@@ -36,7 +43,7 @@ function buildV4ReactionHTML(mod) {
   const STAGGER  = 0.65;
   const FIRST_AT = 0.5;
 
-  const commentTiming = comments.map((_, i) => {
+  const timing = comments.map((_, i) => {
     const ci = narrCount + i;
     if (audio.length && ci < audio.length) {
       const s = chunkStarts[ci];
@@ -46,104 +53,75 @@ function buildV4ReactionHTML(mod) {
     return { delay: FIRST_AT + i * STAGGER, hasActive: false };
   });
 
-  const activeStyles = commentTiming.map((t, i) => {
+  // 読み上げ中レス: 黄色マーカー + わずかに拡大
+  const activeStyles = timing.map((t, i) => {
     if (!t.hasActive) return '';
     const fadeIn = 0.20, fadeOut = 0.25;
-    const p = (sec) => Math.max(0, Math.min(100, sec / totalSec * 100));
-    const preStartPct = p(t.activeStart - fadeIn);
-    const startPct    = p(t.activeStart);
-    const endPct      = p(t.activeEnd);
-    const postEndPct  = p(t.activeEnd + fadeOut);
+    const p = sec => Math.max(0, Math.min(100, sec / totalSec * 100));
     return `
-@keyframes commentActive_${i} {
-  0%, ${preStartPct.toFixed(2)}%     { transform: rotate(var(--rot,0deg)) scale(1);    box-shadow: 4px 4px 0 rgba(0,0,0,0.5); }
-  ${startPct.toFixed(2)}%, ${endPct.toFixed(2)}% { transform: rotate(var(--rot,0deg)) scale(1.06); box-shadow: 6px 6px 0 rgba(0,0,0,0.7), 0 0 36px rgba(252,211,77,0.55); }
-  ${postEndPct.toFixed(2)}%, 100%    { transform: rotate(var(--rot,0deg)) scale(1);    box-shadow: 4px 4px 0 rgba(0,0,0,0.5); }
+@keyframes resActive_${i} {
+  0%, ${p(t.activeStart - fadeIn).toFixed(2)}% { background: transparent; transform: scale(1); }
+  ${p(t.activeStart).toFixed(2)}%, ${p(t.activeEnd).toFixed(2)}% { background: rgba(255,235,59,0.45); transform: scale(1.015); }
+  ${p(t.activeEnd + fadeOut).toFixed(2)}%, 100% { background: transparent; transform: scale(1); }
 }
-.c-card.active-${i} { animation: commentActive_${i} ${totalSec.toFixed(2)}s linear forwards; }`;
+.res-item.active-${i} { animation: resItemIn .4s ease-out forwards, resActive_${i} ${totalSec.toFixed(2)}s linear forwards; }`;
   }).join('\n');
 
   const extraStyles = `
-.bg-img {
-  position: absolute; inset: 0;
-  ${bg ? `background-image: url('${bg}');` : `background: linear-gradient(160deg, ${PALETTE.surface} 0%, ${PALETTE.bg} 100%);`}
-  background-size: ${imgAdj.isDefault ? 'cover' : `${100 * imgAdj.zoom}%`};
-  background-position: ${imgAdj.bgPosition};
-  filter: brightness(0.45);
-}
-.bg-overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(6,14,28,0.40) 0%, rgba(6,14,28,0.78) 100%);
-}
-.r-title {
+${THEME_CSS}
+.res-list {
   position: absolute;
-  top: 50px; left: 80px; right: 80px;
-  font-size: 64px;
-  font-weight: 900;
-  color: ${PALETTE.accent};
-  letter-spacing: 2px;
-  text-shadow: 0 2px 14px rgba(0,0,0,0.9);
-  z-index: 5;
-}
-/* V4: コメントエリアを上に詰める / gap を広めに */
-.comments-area {
-  position: absolute;
-  top: 160px; bottom: 130px;
-  left: 60px; right: 60px;
+  top: 110px; bottom: ${SUB_BAR_HEIGHT + 16}px;
+  left: 80px; right: 80px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  gap: 24px;
-  z-index: 5;
+  justify-content: center;
+  gap: 8px;
 }
-.c-slot {
+.res-item {
+  padding: 18px 26px 22px;
+  border-bottom: 1px solid ${C2CH.line};
+  border-radius: 6px;
   opacity: 0;
-  width: fit-content;
-  max-width: 90%;
-  animation: slideDown 0.45s ease-out forwards;
+  transform: translateY(-16px);
+  animation: resItemIn .4s ease-out forwards;
+  transform-origin: left center;
 }
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-22px); }
-  to   { opacity: 1; transform: translateY(0); }
+.res-item:last-child { border-bottom: none; }
+.res-item .rh { font-size: 25px; margin-bottom: 10px; color: ${C2CH.meta}; }
+.res-item .rh .n  { color: ${C2CH.maroon}; font-weight: 900; }
+.res-item .rh .nm { color: ${C2CH.name}; font-weight: 900; }
+.res-body {
+  font-weight: 900;
+  color: ${C2CH.text};
+  line-height: 1.32;
+  word-break: break-word;
 }
-.c-card {
-  border: 3px solid #000;
-  border-radius: 14px;
-  padding: 18px 32px;
-  box-shadow: 4px 4px 0 rgba(0,0,0,0.5);
-  position: relative;
-  transform: rotate(var(--rot, 0deg));
-}
-.c-card.hl { border-width: 5px; box-shadow: 5px 5px 0 rgba(0,0,0,0.6); }
-.c-text { color: #111; font-weight: 700; line-height: 1.35; overflow-wrap: break-word; }
-.c-card.hl .c-text { color: #000; font-weight: 900; }
+.res-body.aka { color: ${C2CH.red}; }
+@keyframes resItemIn { to { opacity: 1; transform: translateY(0); } }
 ${activeStyles}`;
 
-  const cardsHtml = comments.length
+  const itemsHTML = comments.length
     ? comments.map((c, i) => {
-        const text  = c.text || '';
-        const trim  = text.length > 100 ? text.slice(0, 98) + '…' : text;
-        const isHL  = (c.score || 0) === maxScore && maxScore > 0 && comments.length > 1;
-        const side  = i % 2 === 0 ? 'flex-start' : 'flex-end';
-        const bgC   = isHL ? CMT_BG_HL[i % CMT_BG_HL.length] : CMT_BG[i % CMT_BG.length];
-        const fz    = _commentFit(trim).fontSize;
-        const t     = commentTiming[i];
-        const rot   = (((i * 1.7) % 5) - 2).toFixed(1);
+        const text = String(c.text || '');
+        const trim = text.length > 90 ? text.slice(0, 88) + '…' : text;
+        const isAka = (c.score || 0) === maxScore && maxScore > 0 && comments.length > 1;
+        const fz  = fitFont(trim, 54, 1680, { maxLines: 2, minFontPx: 34, charWidth: 1.0 }).fontSize;
+        const t   = timing[i];
         const activeClass = t.hasActive ? ` active-${i}` : '';
-        return `<div class="c-slot" style="align-self:${side};animation-delay:${t.delay.toFixed(2)}s;">
-  <div class="c-card${isHL ? ' hl' : ''}${activeClass}" style="background:${bgC};--rot:${rot}deg;">
-    <div class="c-text" style="font-size:${fz}px;">${esc(trim).replace(/\n/g, '<br>')}</div>
-  </div>
+        return `
+<div class="res-item${activeClass}" style="animation-delay:${t.delay.toFixed(2)}s;">
+  <div class="rh"><span class="n">${resNums[i]}</span> : <span class="nm">風吹けば名無し</span> ${threadDateStr(resNums[i])} ID:${fakeId(text)}</div>
+  <div class="res-body${isAka ? ' aka' : ''}" style="font-size:${fz}px;">${colorBrackets(esc(trim)).replace(/\n/g, '<br>')}</div>
 </div>`;
       }).join('')
-    : '<div style="text-align:center;color:#fff;font-size:32px;padding-top:60px">コメントなし</div>';
+    : `<div style="text-align:center;color:${C2CH.meta};font-size:32px;">コメントなし</div>`;
 
   const slideBody = `
-<div class="bg-img"></div>
-<div class="bg-overlay"></div>
-<div class="r-title">&#x1F4AC; ${esc(title)}</div>
-<div class="comments-area">${cardsHtml}</div>
-${buildSubtitleBar(subtitleArgFromMod(mod), { height: 110, maxLineLen: 32 })}`;
+<div class="board-bg"></div>
+${boardBarHTML(esc(threadTitle))}
+<div class="res-list">${itemsHTML}</div>
+${buildSubtitleBar(subtitleArgFromMod(m), { height: SUB_BAR_HEIGHT, maxLineLen: 32 })}`;
 
   return wrapHTML({ slideBody, extraStyles });
 }

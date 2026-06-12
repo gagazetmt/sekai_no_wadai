@@ -433,6 +433,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   <!-- アクションバー -->
   <div class="action-bar">
     <button class="btn btn-red" id="btnScout" onclick="startScout()">🔍 今すぐスカウト</button>
+    <button class="btn btn-yellow" id="btnFullAuto" onclick="startFullAuto()">⚡ 完全自動</button>
     <button class="btn btn-ghost" onclick="loadLatest()">📋 前回の結果</button>
     <span id="topicCount" style="font-size:12px;color:var(--muted);margin-left:4px;"></span>
   </div>
@@ -940,7 +941,11 @@ function renderGrid(topics) {
       </div>
       <div class="tc-topic">${esc(t.topic)}</div>
       ${t.hook ? `<div class="tc-hook">${esc(t.hook)}</div>` : ''}
-      ${t.date ? `<div class="tc-time">${timeStr(t.date)}</div>` : ''}
+      <div style="display:flex;align-items:center;margin-top:8px;gap:8px;">
+        ${t.date ? `<div class="tc-time" style="margin-top:0;">${timeStr(t.date)}</div>` : ''}
+        <button class="btn btn-yellow" style="margin-left:auto;padding:6px 12px;font-size:11px;"
+          onclick="event.stopPropagation(); fullAutoTopic(${idx})">⚡ 全自動</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1071,14 +1076,79 @@ function renderNetaBook(book) {
 }
 
 // ═════════════════════════════════ STEP 3: 動画生成
+const STAGE_LABELS = {
+  video:    [['🎙️','TTS生成'], ['🖼️','スライド'], ['🎬','動画合成'], ['✅','完成']],
+  fullauto: [['🔍','スカウト'], ['📝','ネタブック'], ['🎬','動画生成'], ['✅','完成']],
+};
+const STAGE_IDS = ['tts', 'slide', 'render', 'done'];
+
+function setStageLabels(mode) {
+  const labels = STAGE_LABELS[mode] || STAGE_LABELS.video;
+  STAGE_IDS.forEach((s, i) => {
+    const el = document.getElementById('stg-' + s);
+    if (el) el.innerHTML = `<span class="s-icon">${labels[i][0]}</span>${labels[i][1]}`;
+  });
+}
+
 function setStage(name) {
-  const order = ['tts', 'slide', 'render', 'done'];
-  const idx = order.indexOf(name);
-  order.forEach((s, i) => {
+  const idx = STAGE_IDS.indexOf(name);
+  STAGE_IDS.forEach((s, i) => {
     const el = document.getElementById('stg-' + s);
     if (!el) return;
     el.className = 'stage' + (i < idx ? ' done' : i === idx ? ' active' : '');
   });
+}
+
+function showVideoResult(result) {
+  const vp = result?.videoPath;
+  if (!vp) return;
+  const fn = vp.split('/').pop();
+  document.getElementById('videoResult').innerHTML = `
+    <div style="margin-top:10px;">
+      <video controls playsinline src="/v2_videos/${fn}"></video>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">${esc(fn)}</div>
+    </div>`;
+}
+
+// ─── ⚡ 完全自動 ─────────────────────────────────────────────
+const FA_STAGE_MAP = { scout: 'tts', neta: 'slide', video: 'render', done: 'done' };
+
+async function runFullAuto(body) {
+  goStep(3);
+  document.getElementById('tab3').disabled = false;
+  document.getElementById('videoResult').innerHTML = '';
+  setStageLabels('fullauto');
+  setStage('tts');
+  sb('videoStatus', 'running', body.topic ? `全自動開始: ${body.topic}` : '全自動開始: スカウトから実行...');
+
+  try {
+    const { jobId } = await api('/api/fullauto', body);
+    poll('/api/fullauto/status?jobId=' + jobId, 4000, j => {
+      if (j.status === 'done') {
+        setStage('done');
+        document.getElementById('stg-done').className = 'stage done';
+        sb('videoStatus', 'done', `完成！ ${j.topic || ''}`);
+        showVideoResult(j.result);
+      } else {
+        sb('videoStatus', 'error', j.error || 'エラーが発生しました');
+      }
+    }, j => {
+      if (j.stage && FA_STAGE_MAP[j.stage]) setStage(FA_STAGE_MAP[j.stage]);
+      if (j.message) sb('videoStatus', 'running', j.message);
+    });
+  } catch (e) {
+    sb('videoStatus', 'error', e.message);
+  }
+}
+
+function startFullAuto() {
+  runFullAuto({});  // topic なし → スカウトから
+}
+
+function fullAutoTopic(idx) {
+  const t = S.topics[idx];
+  if (!t) return;
+  runFullAuto({ topic: t.topic, hook: t.hook || '', url: t.url || '' });
 }
 
 async function goToVideo() {
@@ -1098,6 +1168,7 @@ async function goToVideo() {
   goStep(3);
   document.getElementById('videoResult').innerHTML = '';
   document.getElementById('videoStatus').innerHTML = '';
+  setStageLabels('video');
   setStage('tts');
 
   try {
@@ -1106,18 +1177,10 @@ async function goToVideo() {
     poll('/api/video/status?jobId=' + jobId, 3000, j => {
       if (j.status === 'done') {
         setStage('done');
+        document.getElementById('stg-done').className = 'stage done';
         sb('videoStatus', 'done', '動画が完成しました！');
-        const vp = j.result?.videoPath;
-        if (vp) {
-          const fn = vp.split('/').pop();
-          document.getElementById('videoResult').innerHTML = `
-            <div style="margin-top:10px;">
-              <video controls playsinline src="/v2_videos/${fn}"></video>
-              <div style="font-size:11px;color:var(--muted);margin-top:6px;">${esc(fn)}</div>
-            </div>`;
-        }
+        showVideoResult(j.result);
       } else if (j.status === 'error') {
-        setStage('done');
         sb('videoStatus', 'error', j.error || 'エラーが発生しました');
       }
     }, j => {

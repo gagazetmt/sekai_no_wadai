@@ -44,6 +44,7 @@ const { mapImagesToModule, LEAD_PAD_SEC, TAIL_PAD_SEC }   = require('./slides/_c
 // V4スライド（フォント大化版）
 const { buildV4PictureHTML }  = require('../../v4_launcher/slides/v4_picture');
 const { buildV4ReactionHTML } = require('../../v4_launcher/slides/v4_reaction');
+const { buildV4OpeningHTML }  = require('../../v4_launcher/slides/v4_opening');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const W = 1920, H = 1080, FPS = 30;
@@ -267,6 +268,7 @@ function buildSlideHTML(mod) {
     case 'picture':      return buildPictureHTML(m);
     case 'v4_picture':  return buildV4PictureHTML(m);
     case 'v4_reaction': return buildV4ReactionHTML(m);
+    case 'v4_opening':  return buildV4OpeningHTML(m);
     default:            return buildUniversalHTML(m);
   }
 }

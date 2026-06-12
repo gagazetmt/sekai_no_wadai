@@ -40,17 +40,28 @@ function _findImage(entityName) {
 }
 
 // ── ネタブック → modules.json ─────────────────────────────────
+// 2chスレッド風: opening(スレタイ) → 解説レス → レス欄
 // null フィールドはスキップ → 2〜6 スライドの動的構成
 function buildModules(book) {
   const imagePath = _findImage(book.mainEntity);
   const images = imagePath ? [imagePath] : [];
+  const threadTitle = book.title || book.hook || book.topic;
   const modules = [];
 
-  // ② 概要紹介（必須）
+  // ① オープニング: スレタイをデカ文字で（ナレーションはタイトル読み上げ）
+  modules.push({
+    type: 'v4_opening',
+    title: threadTitle,
+    images,
+    narration: threadTitle,
+  });
+
+  // ② 概要紹介（必須）— >>1 の本文ポジション
   modules.push({
     type: 'v4_picture',
-    orientation: 'vertical',
-    title: book.title || book.hook || book.topic,
+    title: 'これマジ？何があったか整理するで',
+    threadTitle,
+    resNo: 2,
     images,
     narration: book.overview,
   });
@@ -59,8 +70,9 @@ function buildModules(book) {
   if (book.supplement1) {
     modules.push({
       type: 'v4_picture',
-      orientation: 'vertical',
-      title: '実は...',
+      title: '実はこんな事実があるんや',
+      threadTitle,
+      resNo: 5,
       images,
       narration: book.supplement1,
     });
@@ -70,20 +82,22 @@ function buildModules(book) {
   if (book.supplement2) {
     modules.push({
       type: 'v4_picture',
-      orientation: 'vertical',
-      title: 'ちなみに...',
+      title: 'ちなみにこれも知っとくべき',
+      threadTitle,
+      resNo: 8,
       images,
       narration: book.supplement2,
     });
   }
 
-  // ⑤ コメント集①（optional）
+  // ⑤ コメント集①（optional）— 2chレス欄
   if (book.comments1?.length) {
     modules.push({
       type: 'v4_reaction',
       title: 'ネット民の反応',
+      threadTitle,
       comments: book.comments1.map((text, i) => ({ text, score: 100 - i * 10 })),
-      narration: 'みなさんの反応はこちらです',
+      narration: 'スレ民の反応がこちら',
     });
   }
 
@@ -91,13 +105,14 @@ function buildModules(book) {
   if (book.comments2?.length) {
     modules.push({
       type: 'v4_reaction',
-      title: 'さらに反応...',
+      title: 'さらに反応',
+      threadTitle,
       comments: book.comments2.map((text, i) => ({ text, score: 90 - i * 10 })),
-      narration: 'まだまだ反応が続きます',
+      narration: 'まだまだ反応は続く',
     });
   }
 
-  console.log(`[v4_video] スライド構成: ${modules.length}枚`);
+  console.log(`[v4_video] スライド構成: ${modules.length}枚 (opening + ${modules.length - 1})`);
   return modules;
 }
 
