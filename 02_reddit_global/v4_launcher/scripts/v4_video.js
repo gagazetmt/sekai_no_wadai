@@ -28,14 +28,16 @@ if (!fs.existsSync(JOBS_DIR)) fs.mkdirSync(JOBS_DIR, { recursive: true });
 function safeId(s) { return String(s||'').replace(/[^\w]/g, '_').slice(0, 40); }
 
 // ── 画像を entity 名から自動検索 ─────────────────────────────
+//   ⚠️ imgDataUri は '/' 始まりを Web URL とみなして素通しするため、
+//   プロジェクトルート相対パス（先頭スラッシュなし）で返す → base64 化される
 function _findImage(entityName) {
   if (!entityName) return null;
   const hits = matchPlayers(entityName, { limit: 1 });
-  if (hits.length) return path.join(BASE_DIR, hits[0].url.replace(/^\//, ''));
+  if (hits.length) return hits[0].url.replace(/^\//, '');
   const mgr = matchManagers(entityName, { limit: 1 });
-  if (mgr.length) return path.join(BASE_DIR, mgr[0].url.replace(/^\//, ''));
+  if (mgr.length) return mgr[0].url.replace(/^\//, '');
   const club = matchClubs(entityName, { limit: 1 });
-  if (club.length) return path.join(BASE_DIR, club[0].url.replace(/^\//, ''));
+  if (club.length) return club[0].url.replace(/^\//, '');
   return null;
 }
 
