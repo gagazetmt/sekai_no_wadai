@@ -41,6 +41,9 @@ const { buildRankingHTML }    = require('./slides/ranking');
 const { buildTimelineHTML }   = require('./slides/timeline');
 const { buildPictureHTML }    = require('./slides/picture');
 const { mapImagesToModule, LEAD_PAD_SEC, TAIL_PAD_SEC }   = require('./slides/_common');
+// V4スライド（フォント大化版）
+const { buildV4PictureHTML }  = require('../../v4_launcher/slides/v4_picture');
+const { buildV4ReactionHTML } = require('../../v4_launcher/slides/v4_reaction');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
 const W = 1920, H = 1080, FPS = 30;
@@ -261,7 +264,9 @@ function buildSlideHTML(mod) {
     case 'reaction':    return buildReactionHTML(m);
     case 'ranking':     return buildRankingHTML(m);
     case 'timeline':    return buildTimelineHTML(m);
-    case 'picture':     return buildPictureHTML(m);
+    case 'picture':      return buildPictureHTML(m);
+    case 'v4_picture':  return buildV4PictureHTML(m);
+    case 'v4_reaction': return buildV4ReactionHTML(m);
     default:            return buildUniversalHTML(m);
   }
 }
