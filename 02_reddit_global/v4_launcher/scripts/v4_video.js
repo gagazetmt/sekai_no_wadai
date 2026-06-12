@@ -162,9 +162,11 @@ async function generateV4Video(book) {
   await _runRender(postId, jobId);
 
   // 出力ファイルを確認
+  // render.js は postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20) でファイル名を作る
+  const shortId = postId.replace(/[/\\?%*:|"<>.]/g, '_').slice(-20);
   const videoDir = path.join(DATA_DIR, 'v2_videos');
   const videos = fs.existsSync(videoDir)
-    ? fs.readdirSync(videoDir).filter(f => f.startsWith(postId) && f.endsWith('.mp4'))
+    ? fs.readdirSync(videoDir).filter(f => f.startsWith(shortId) && f.endsWith('.mp4'))
     : [];
 
   const result = {
