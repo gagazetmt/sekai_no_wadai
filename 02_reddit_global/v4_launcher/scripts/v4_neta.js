@@ -107,18 +107,119 @@ async function _fetchArticles(topic, existingUrl = '') {
   return articles.slice(0, 3);
 }
 
-// ── 反応スニペット収集（国内 + Reddit） ──────────────────────
-async function _fetchReactionSnippets(topic) {
-  const [jaRes, enRes] = await Promise.all([
-    fetchSerper(topic + ' 反応 コメント', '', 'ja', null, { num: 5 }).catch(() => ({ organic: [] })),
-    fetchSerper(topic + ' reaction reddit', '', 'en', null, { num: 4 }).catch(() => ({ organic: [] })),
+// ═══════════════════════════════════════════════════════════════
+// コメント倉庫
+//   収集: Reddit / ヤフコメ(スニペット) / X ツイート
+//   保存: data/neta_books/_comments_{topicKey}.json
+//   選定: リネカが倉庫から選ぶ。足りない場合のみ生成・意訳OK
+// ═══════════════════════════════════════════════════════════════
+
+const REDDIT_COOKIE = process.env.REDDIT_SESSION_COOKIE || '';
+const X_API_KEY     = process.env.TWITTER_API_IO_KEY    || '';
+const COMMENTS_DIR  = NETA_DIR;  // 同じディレクトリに _comments_ プレフィクスで保存
+
+// ── Reddit スレッドの生コメント ──────────────────────────────
+async function _fromReddit(sourceUrl) {
+  if (!sourceUrl || !sourceUrl.includes('reddit.com')) return [];
+  try {
+    const apiUrl = sourceUrl.replace(/\/$/, '') + '.json?limit=50&sort=top';
+    const res = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)',
+        ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.[1]?.data?.children || [])
+      .filter(c => c.kind === 't1' && c.data?.body && c.data.body !== '[deleted]')
+      .map(c => String(c.data.body).replace(/\n+/g, ' ').trim())
+      .filter(t => t.length >= 15 && t.length <= 280)
+      .slice(0, 25);
+  } catch (e) {
+    console.warn('[comments] Reddit 失敗:', e.message);
+    return [];
+  }
+}
+
+// ── Yahoo ニュース記事コメント（スニペット経由）──────────────
+async function _fromYahoo(topic) {
+  try {
+    const res = await fetchSerper(
+      `site:news.yahoo.co.jp ${topic}`, '', 'ja', null, { num: 6 }
+    );
+    // スニペットに「というコメントが相次いだ」等の引用文が混じることがある
+    const snippets = (res?.organic || []).map(r => r.snippet).filter(Boolean);
+    // 短めの発言っぽい文を抽出（"。"区切りで分解）
+    const candidates = [];
+    for (const s of snippets) {
+      const sents = s.split(/[。！？!?]/).map(x => x.trim()).filter(x => x.length >= 10 && x.length <= 100);
+      candidates.push(...sents);
+    }
+    return [...new Set(candidates)].slice(0, 15);
+  } catch (e) {
+    console.warn('[comments] Yahoo 失敗:', e.message);
+    return [];
+  }
+}
+
+// ── X ツイート（twitterapi.io）────────────────────────────────
+async function _fromX(topic) {
+  if (!X_API_KEY) return [];
+  try {
+    // 日本語ツイート検索
+    const q = topic.slice(0, 40) + ' -is:retweet lang:ja';
+    const res = await fetch(
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
+      new URLSearchParams({ query: q, queryType: 'Top' }),
+      { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) }
+    );
+    const data = await res.json();
+    const tweets = data?.data?.tweets || data?.tweets || [];
+    return tweets
+      .map(t => String(t.text || '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, ' ').trim())
+      .filter(t => t.length >= 15 && t.length <= 200)
+      .slice(0, 20);
+  } catch (e) {
+    console.warn('[comments] X 失敗:', e.message);
+    return [];
+  }
+}
+
+// ── コメント倉庫を構築・保存 ─────────────────────────────────
+async function _buildCommentWarehouse(topic, sourceUrl) {
+  const key      = _topicKey(topic);
+  const savePath = path.join(COMMENTS_DIR, `_comments_${key}.json`);
+
+  // キャッシュがあればそのまま返す
+  if (fs.existsSync(savePath)) {
+    try {
+      const cached = JSON.parse(fs.readFileSync(savePath, 'utf8'));
+      console.log(`[comments] キャッシュ使用: reddit=${cached.reddit?.length} yahoo=${cached.yahoo?.length} x=${cached.x?.length}`);
+      return cached;
+    } catch (_) {}
+  }
+
+  // 3ソース並列取得
+  const [reddit, yahoo, x] = await Promise.all([
+    _fromReddit(sourceUrl),
+    _fromYahoo(topic),
+    _fromX(topic),
   ]);
-  const ja = (jaRes?.organic || []).map(r => r.snippet).filter(Boolean).slice(0, 3).join('\n');
-  const en = (enRes?.organic || []).map(r => r.snippet).filter(Boolean).slice(0, 3).join('\n');
-  return {
-    jaReactions: ja.slice(0, REACTION_CHARS),
-    enReactions: en.slice(0, REACTION_CHARS),
+
+  const warehouse = {
+    topic, topicKey: key,
+    reddit,
+    yahoo,
+    x,
+    total: reddit.length + yahoo.length + x.length,
+    collectedAt: new Date().toISOString(),
   };
+
+  fs.writeFileSync(savePath, JSON.stringify(warehouse, null, 2));
+  console.log(`[comments] 倉庫構築: reddit=${reddit.length} yahoo=${yahoo.length} x=${x.length} 計${warehouse.total}件`);
+  return warehouse;
 }
 
 // ── リネカ: ネタブック 1 発生成 ──────────────────────────────
@@ -144,26 +245,37 @@ const RINEKA_SYSTEM = `あなたはリネカ。サッカー専門のクリエイ
 3. **コメント**: 視聴者の感情が証明できる言葉のみ。でっち上げ禁止。
 4. **主語の一貫性**: 遠藤の話なら最後まで遠藤。板倉や守田は登場しない。`;
 
-async function _generateNetaBook(topic, hook, articles, reactions) {
+async function _generateNetaBook(topic, hook, articles, warehouse) {
   const articleBlock = articles.map((a, i) =>
     `【記事${i+1}】[${a.host}] ${a.title}\n${a.fullText}`
   ).join('\n\n---\n\n');
 
-  const reactionBlock = [
-    reactions.jaReactions ? `【国内反応スニペット】\n${reactions.jaReactions}` : '',
-    reactions.enReactions ? `【海外反応スニペット】\n${reactions.enReactions}` : '',
-  ].filter(Boolean).join('\n\n');
+  // コメント倉庫ブロック
+  const warehouseLines = [];
+  if (warehouse.reddit?.length)
+    warehouseLines.push(`【Reddit（生コメント ${warehouse.reddit.length}件）】\n` + warehouse.reddit.map((c,i) => `${i+1}. ${c}`).join('\n'));
+  if (warehouse.yahoo?.length)
+    warehouseLines.push(`【ヤフコメ/国内反応（${warehouse.yahoo.length}件）】\n` + warehouse.yahoo.map((c,i) => `${i+1}. ${c}`).join('\n'));
+  if (warehouse.x?.length)
+    warehouseLines.push(`【X ツイート（${warehouse.x.length}件）】\n` + warehouse.x.map((c,i) => `${i+1}. ${c}`).join('\n'));
+  const warehouseBlock = warehouseLines.length
+    ? warehouseLines.join('\n\n')
+    : '（コメント素材なし）';
+
+  const hasRealComments = (warehouse.total || 0) >= 3;
 
   const prompt = `## 今回の案件
 
 【案件】${topic}
 ${hook ? `【フックヒント（このトーンで作る）】${hook}` : ''}
 
-## 素材
+## 記事素材
 
 ${articleBlock}
 
-${reactionBlock}
+## コメント倉庫（実際に収集した生の反応）
+
+${warehouseBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 ## 出力（JSONのみ）
@@ -176,10 +288,16 @@ ${reactionBlock}
 | overview | 何が起きたか。感情軸を一言で示す導入も含める | 150〜250字 | ✅ |
 | supplement1 | 感情軸を深める背景・数字・キャリア・言葉 | 100〜200字 | 素材あれば |
 | supplement2 | 同じ感情軸の別の切り口（似てるなら null） | 100〜200字 | 素材あれば |
-| comments1 | 感情を共有している反応 3〜4件（1件25字以内） | — | 反応あれば |
+| comments1 | コメント 3〜4件（1件40字以内） | — | 反応あれば |
 | comments2 | ①と明確に違うトーンの反応 3〜4件 | — | 対比できれば |
 | mainEntity | 主役の英語フルネーム（画像検索用） | — | ✅ |
 | tone_check | "ok" / "ng" | — | ✅ |
+
+**コメントの使い方:**
+${hasRealComments
+  ? '- コメント倉庫に生の反応がある。**できる限り倉庫の言葉をそのまま使う**\n- 倉庫に使える言葉が足りない場合のみ、同じ感情トーンで自然に補完してよい'
+  : '- 今回は生コメントが不足。感情軸に合ったコメントを自然に生成してよい'}
+- 感情軸とズレたコメントは倉庫にあっても使わない
 
 {
   "title": "...",
@@ -259,29 +377,30 @@ async function buildNetaBook(topicData, { force = false } = {}) {
 
   console.log('[v4_neta] 開始:', topic);
 
-  // 記事 + 反応素材 を並列取得
-  const [articles, reactions] = await Promise.all([
+  // 記事取得 + コメント倉庫構築 を並列
+  const [articles, warehouse] = await Promise.all([
     _fetchArticles(topic, url),
-    _fetchReactionSnippets(topic),
+    _buildCommentWarehouse(topic, url),
   ]);
-  console.log(`[v4_neta] 記事: ${articles.length}本 / 国内反応: ${reactions.jaReactions.length}字 / 海外: ${reactions.enReactions.length}字`);
+  console.log(`[v4_neta] 記事: ${articles.length}本 / コメント倉庫: ${warehouse.total}件`);
 
   // AI ネタブック生成（1 API call）
-  const neta = await _generateNetaBook(topic, hook, articles, reactions);
+  const neta = await _generateNetaBook(topic, hook, articles, warehouse);
   console.log(`[v4_neta] 生成完了 s1:${!!neta.supplement1} s2:${!!neta.supplement2} c1:${!!neta.comments1} c2:${!!neta.comments2}`);
 
   const book = {
     topic,
     hook,
-    title:       neta.title,
-    overview:    neta.overview,
-    supplement1: neta.supplement1,
-    supplement2: neta.supplement2,
-    comments1:   neta.comments1,
-    comments2:   neta.comments2,
-    mainEntity:  neta.mainEntity,
-    articles:    articles.map(a => ({ title: a.title, url: a.url, host: a.host })),
-    createdAt:   new Date().toISOString(),
+    title:            neta.title,
+    overview:         neta.overview,
+    supplement1:      neta.supplement1,
+    supplement2:      neta.supplement2,
+    comments1:        neta.comments1,
+    comments2:        neta.comments2,
+    mainEntity:       neta.mainEntity,
+    commentWarehouse: { total: warehouse.total, reddit: warehouse.reddit?.length, yahoo: warehouse.yahoo?.length, x: warehouse.x?.length },
+    articles:         articles.map(a => ({ title: a.title, url: a.url, host: a.host })),
+    createdAt:        new Date().toISOString(),
   };
 
   const safeId  = topic.replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, '_').slice(0, 40);
