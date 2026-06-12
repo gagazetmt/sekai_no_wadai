@@ -76,6 +76,10 @@ async function _fetchX() {
 async function _fetchYahoo() {
   try {
     const res = await fetchSerper('site:news.yahoo.co.jp サッカー 最新', '', 'ja', null, { num: 25 });
+    if (!res?.ok) {
+      console.warn('[scout] Yahoo 失敗:', res?.error || 'unknown');
+      return [];
+    }
     return (res?.organic || []).map(r => ({
       title:  (r.title || '').trim(),
       source: 'Yahoo',
@@ -100,7 +104,8 @@ async function _fetchReddit() {
       const res = await fetch(`https://www.reddit.com/r/${sub}/top.json?t=day&limit=25`, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; V4Scout/1.0)',
-          ...(REDDIT_COOKIE ? { Cookie: `reddit_session=${REDDIT_COOKIE}` } : {}),
+          // REDDIT_SESSION_COOKIE は .env に "reddit_session=xxxx" 形式で入ってる
+          ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
         },
         signal: AbortSignal.timeout(12000),
       });
@@ -198,8 +203,8 @@ JSONのみ:
 
   try {
     const raw = await callAI({
-      forceProvider: 'deepseek', model: 'deepseek-v4-flash',
-      max_tokens: 2000,
+      forceProvider: 'deepseek', model: 'deepseek-chat',
+      max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     });
     const m = raw && raw.match(/\{[\s\S]*\}/);
