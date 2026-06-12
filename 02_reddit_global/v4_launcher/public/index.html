@@ -275,6 +275,61 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
   padding: 6px 0 8px; line-height: 1.5;
 }
 
+/* ══ コメント倉庫 UI ══════════════════════════════════════════ */
+.cw-wrap { display: flex; flex-direction: column; gap: 10px; }
+
+.cw-panel {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--rad-sm); overflow: hidden;
+}
+.cw-panel-hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--s2); border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 900;
+}
+.cw-panel-hd .cw-count {
+  background: var(--s3); color: var(--muted);
+  font-size: 10px; padding: 1px 6px; border-radius: 10px;
+}
+.cw-panel.selected .cw-panel-hd { border-bottom-color: rgba(255,238,0,.3); }
+.cw-panel.selected { border-color: rgba(255,238,0,.25); }
+
+.cw-list { padding: 6px; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.cw-list:empty::after { content: '（なし）'; font-size: 12px; color: var(--muted); padding: 8px; display: block; }
+
+.cw-item {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--s2); border-radius: var(--rad-sm);
+  padding: 6px 8px; font-size: 13px;
+}
+.cw-item .cw-text { flex: 1; line-height: 1.4; color: #ccc; }
+.cw-item .cw-src {
+  font-size: 9px; font-weight: 900; letter-spacing: .5px;
+  padding: 1px 5px; border-radius: 4px; flex-shrink: 0;
+}
+.cw-src.sx  { background: rgba(29,155,240,.25); color: #1d9bf0; }
+.cw-src.sy  { background: rgba(255,107,0,.25);  color: #ff8c33; }
+.cw-src.sr  { background: rgba(255,69,0,.25);   color: #ff6535; }
+.cw-src.s5  { background: rgba(0,200,83,.2);    color: #00c853; }
+.cw-src.sai { background: rgba(200,200,200,.15); color: #888; }
+
+.cw-btn {
+  width: 22px; height: 22px; border-radius: 50%; border: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 900; cursor: pointer; flex-shrink: 0;
+  line-height: 1;
+}
+.cw-btn.add { background: rgba(0,200,83,.2); color: var(--green); }
+.cw-btn.add:hover { background: rgba(0,200,83,.35); }
+.cw-btn.del { background: rgba(232,0,0,.18); color: #ff6b6b; }
+.cw-btn.del:hover { background: rgba(232,0,0,.3); }
+.cw-btn.up, .cw-btn.dn {
+  background: var(--s3); color: var(--muted); font-size: 11px;
+}
+.cw-btn.up:hover, .cw-btn.dn:hover { color: var(--text); }
+.cw-btn:disabled { opacity: .25; cursor: default; }
+
 /* ══════════════════════════════════ STATUS STATES */
 .sb {
   display: flex; align-items: center; gap: 10px;
@@ -508,31 +563,37 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       </div>
     </div>
 
-    <!-- ⑤ コメント集1 -->
-    <div class="neta-section" id="sec-comments1">
-      <div class="neta-hd" onclick="toggleSec('comments1')">
+    <!-- ⑤⑥ コメント倉庫 -->
+    <div class="neta-section open" id="sec-comments">
+      <div class="neta-hd" onclick="toggleSec('comments')">
         <span class="neta-icon">💬</span>
-        <span class="neta-title">⑤ コメント集① <span class="neta-badge" id="badge-c1">省略</span></span>
+        <span class="neta-title">⑤⑥ コメント <span class="neta-badge" id="badge-cmt">読込中</span></span>
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
-        <div class="neta-empty-note" id="empty-c1" style="display:none;">反応素材が不足していました。手入力できます。</div>
-        <div class="reaction-list" id="reactionList1"></div>
-        <textarea class="neta-edit" id="edit-comments1" rows="3" placeholder="コメントを1行1件で入力（任意）"></textarea>
-      </div>
-    </div>
+        <div class="cw-wrap">
 
-    <!-- ⑥ コメント集2 -->
-    <div class="neta-section" id="sec-comments2">
-      <div class="neta-hd" onclick="toggleSec('comments2')">
-        <span class="neta-icon">🗨️</span>
-        <span class="neta-title">⑥ コメント集② <span class="neta-badge" id="badge-c2">省略</span></span>
-        <span class="neta-arrow">›</span>
-      </div>
-      <div class="neta-body">
-        <div class="neta-empty-note" id="empty-c2" style="display:none;">①と対比できる反応がありませんでした。手入力できます。</div>
-        <div class="reaction-list" id="reactionList2"></div>
-        <textarea class="neta-edit" id="edit-comments2" rows="3" placeholder="コメントを1行1件で入力（任意）"></textarea>
+          <!-- 選択済み -->
+          <div class="cw-panel selected">
+            <div class="cw-panel-hd">
+              ✅ 選択済み
+              <span class="cw-count" id="selCount">0</span>
+              <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">↑↓ 順番変更</span>
+            </div>
+            <div class="cw-list" id="selList"></div>
+          </div>
+
+          <!-- 倉庫 -->
+          <div class="cw-panel">
+            <div class="cw-panel-hd">
+              📦 倉庫
+              <span class="cw-count" id="poolCount">0</span>
+              <span style="margin-left:auto;font-size:10px;color:var(--muted);font-weight:400">+ で選択済みへ</span>
+            </div>
+            <div class="cw-list" id="poolList"></div>
+          </div>
+
+        </div>
       </div>
     </div>
 
@@ -576,7 +637,110 @@ const S = {
   selectedTopic: null,
   netaBook: null,
   activeFilter: 'all',
+  // コメント倉庫
+  selComments: [],   // [{id,text,source}] 選択済み
+  poolComments: [],  // [{id,text,source}] 倉庫待機
 };
+
+// ─── コメント倉庫ヘルパー ─────────────────────────────────────
+let _cwIdSeq = 0;
+function _cwId() { return 'cw' + (++_cwIdSeq); }
+
+function srcClass(src) {
+  if (!src) return 'sai';
+  const s = String(src).toLowerCase();
+  if (s === 'x')      return 'sx';
+  if (s === 'yahoo')  return 'sy';
+  if (s === 'reddit') return 'sr';
+  if (s === '5ch')    return 's5';
+  return 'sai';
+}
+function srcLabel(src) {
+  if (!src) return 'AI';
+  const s = String(src).toLowerCase();
+  if (s === 'x')      return 'X';
+  if (s === 'yahoo')  return 'Y';
+  if (s === 'reddit') return 'R';
+  if (s === '5ch')    return '5';
+  return 'AI';
+}
+
+function renderCommentWarehouse() {
+  const selEl  = document.getElementById('selList');
+  const poolEl = document.getElementById('poolList');
+  if (!selEl || !poolEl) return;
+
+  // 選択済み
+  selEl.innerHTML = S.selComments.map((c, i) => `
+    <div class="cw-item" data-id="${c.id}">
+      <span class="cw-src ${srcClass(c.source)}">${srcLabel(c.source)}</span>
+      <span class="cw-text">${esc(c.text)}</span>
+      <button class="cw-btn up" onclick="cwMoveUp('${c.id}')" ${i===0?'disabled':''}>↑</button>
+      <button class="cw-btn dn" onclick="cwMoveDn('${c.id}')" ${i===S.selComments.length-1?'disabled':''}>↓</button>
+      <button class="cw-btn del" onclick="cwRemove('${c.id}')">−</button>
+    </div>`).join('');
+
+  // 倉庫
+  poolEl.innerHTML = S.poolComments.map(c => `
+    <div class="cw-item" data-id="${c.id}">
+      <span class="cw-src ${srcClass(c.source)}">${srcLabel(c.source)}</span>
+      <span class="cw-text">${esc(c.text)}</span>
+      <button class="cw-btn add" onclick="cwAdd('${c.id}')">＋</button>
+    </div>`).join('');
+
+  document.getElementById('selCount').textContent  = S.selComments.length;
+  document.getElementById('poolCount').textContent = S.poolComments.length;
+  const total = S.selComments.length + S.poolComments.length;
+  const badge = document.getElementById('badge-cmt');
+  if (badge) {
+    badge.textContent = total ? `選択${S.selComments.length} / 倉庫${S.poolComments.length}` : '素材なし';
+    badge.className = 'neta-badge' + (S.selComments.length ? ' filled' : '');
+  }
+}
+
+function cwRemove(id) {
+  const idx = S.selComments.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const [item] = S.selComments.splice(idx, 1);
+  S.poolComments.unshift(item);
+  renderCommentWarehouse();
+}
+function cwAdd(id) {
+  const idx = S.poolComments.findIndex(c => c.id === id);
+  if (idx < 0) return;
+  const [item] = S.poolComments.splice(idx, 1);
+  S.selComments.push(item);
+  renderCommentWarehouse();
+}
+function cwMoveUp(id) {
+  const i = S.selComments.findIndex(c => c.id === id);
+  if (i < 1) return;
+  [S.selComments[i-1], S.selComments[i]] = [S.selComments[i], S.selComments[i-1]];
+  renderCommentWarehouse();
+}
+function cwMoveDn(id) {
+  const i = S.selComments.findIndex(c => c.id === id);
+  if (i < 0 || i >= S.selComments.length-1) return;
+  [S.selComments[i], S.selComments[i+1]] = [S.selComments[i+1], S.selComments[i]];
+  renderCommentWarehouse();
+}
+
+async function loadCommentWarehouse(topic) {
+  try {
+    const wh = await api('/api/neta/warehouse?topic=' + encodeURIComponent(topic));
+    // 倉庫の全コメントをフラット化
+    const allPool = [
+      ...(wh.reddit || []).map(t => ({ id: _cwId(), text: t, source: 'reddit' })),
+      ...(wh.yahoo  || []).map(t => ({ id: _cwId(), text: t, source: 'yahoo'  })),
+      ...(wh.x      || []).map(t => ({ id: _cwId(), text: t, source: 'x'      })),
+    ];
+
+    // 選択済み(AI選定)との分離
+    const selTexts = new Set(S.selComments.map(c => c.text));
+    S.poolComments = allPool.filter(c => !selTexts.has(c.text));
+    renderCommentWarehouse();
+  } catch (_) {}
+}
 
 // ═════════════════════════════════ UTILS
 function esc(s) {
@@ -815,6 +979,7 @@ async function selectTopic(idx) {
       document.getElementById('btnNeta').style.display = 'none';
       document.getElementById('btnRegenNeta').style.display = 'inline-flex';
       document.getElementById('tab3').disabled = false;
+      loadCommentWarehouse(t.topic);
     } else {
       document.getElementById('btnNeta').style.display = 'inline-flex';
     }
@@ -852,6 +1017,7 @@ async function startNeta(force = false) {
         renderNetaBook(j.book);
         document.getElementById('btnRegenNeta').style.display = 'inline-flex';
         document.getElementById('tab3').disabled = false;
+        loadCommentWarehouse(S.selectedTopic.topic);
       } else {
         sb('netaStatus', 'error', j.error || 'エラーが発生しました');
         document.getElementById('btnRegenNeta').style.display = 'inline-flex';
@@ -895,25 +1061,11 @@ function renderNetaBook(book) {
   document.getElementById('edit-supplement2').value  = s2 || '';
   if (s2) document.getElementById('sec-supplement2').classList.add('open');
 
-  // ⑤ コメント集①
-  const c1 = book.comments1 || null;
-  setBadge('badge-c1', !!c1);
-  document.getElementById('empty-c1').style.display = c1 ? 'none' : 'block';
-  document.getElementById('reactionList1').innerHTML = c1
-    ? c1.map(t => `<div class="reaction-item">${esc(t)}</div>`).join('')
-    : '';
-  document.getElementById('edit-comments1').value = c1 ? c1.join('\n') : '';
-  if (c1) document.getElementById('sec-comments1').classList.add('open');
-
-  // ⑥ コメント集②
-  const c2 = book.comments2 || null;
-  setBadge('badge-c2', !!c2);
-  document.getElementById('empty-c2').style.display = c2 ? 'none' : 'block';
-  document.getElementById('reactionList2').innerHTML = c2
-    ? c2.map(t => `<div class="reaction-item">${esc(t)}</div>`).join('')
-    : '';
-  document.getElementById('edit-comments2').value = c2 ? c2.join('\n') : '';
-  if (c2) document.getElementById('sec-comments2').classList.add('open');
+  // ⑤⑥ コメント倉庫初期化（AIが選定したものを選択済みに）
+  const aiSel = [...(book.comments1 || []), ...(book.comments2 || [])];
+  S.selComments  = aiSel.map(t => ({ id: _cwId(), text: t, source: null }));
+  S.poolComments = [];
+  renderCommentWarehouse();
 
   document.getElementById('netaBody').style.display = 'block';
 }
@@ -929,22 +1081,19 @@ function setStage(name) {
   });
 }
 
-function commentsFromTextarea(id) {
-  const val = document.getElementById(id)?.value || '';
-  const arr = val.split('\n').map(s => s.trim()).filter(Boolean);
-  return arr.length >= 2 ? arr : null;
-}
-
 async function goToVideo() {
   if (!S.netaBook) return;
 
-  // 編集内容を反映
+  // テキスト編集を反映
   S.netaBook.title       = document.getElementById('edit-title').value.trim() || S.netaBook.title;
   S.netaBook.overview    = document.getElementById('edit-overview').value.trim();
   S.netaBook.supplement1 = document.getElementById('edit-supplement1').value.trim() || null;
   S.netaBook.supplement2 = document.getElementById('edit-supplement2').value.trim() || null;
-  S.netaBook.comments1   = commentsFromTextarea('edit-comments1');
-  S.netaBook.comments2   = commentsFromTextarea('edit-comments2');
+
+  // コメント倉庫の選択済みを反映（4件以内ならcomments1のみ、超えたらcomments2に分割）
+  const sel = S.selComments.map(c => c.text).filter(Boolean);
+  S.netaBook.comments1 = sel.length ? sel.slice(0, 4) : null;
+  S.netaBook.comments2 = sel.length > 4 ? sel.slice(4, 8) : null;
 
   goStep(3);
   document.getElementById('videoResult').innerHTML = '';

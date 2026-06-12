@@ -413,7 +413,11 @@ async function buildNetaBook(topicData, { force = false } = {}) {
   return book;
 }
 
-module.exports = { buildNetaBook, getCachedBook };
+function getWarehousePath(topic) {
+  return path.join(COMMENTS_DIR, `_comments_${_topicKey(topic)}.json`);
+}
+
+module.exports = { buildNetaBook, getCachedBook, getWarehousePath };
 
 // ── CLI テスト ────────────────────────────────────────────────
 if (require.main === module) {

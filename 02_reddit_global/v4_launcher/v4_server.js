@@ -14,9 +14,9 @@ const fs      = require('fs');
 const { createJob, readJob, updateJob } = require('../routes/_job_helper');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
-const { runScout, SCOUT_FILE }   = require('./scripts/v4_scout');
-const { buildNetaBook, getCachedBook } = require('./scripts/v4_neta');
-const { generateV4Video }        = require('./scripts/v4_video');
+const { runScout, SCOUT_FILE }                       = require('./scripts/v4_scout');
+const { buildNetaBook, getCachedBook, getWarehousePath } = require('./scripts/v4_neta');
+const { generateV4Video }                            = require('./scripts/v4_video');
 
 const app  = express();
 const PORT = process.env.V4_PORT || 3005;
@@ -53,6 +53,17 @@ app.get('/api/scout/latest', (req, res) => {
     if (!fs.existsSync(SCOUT_FILE)) return res.json({ topics: [], scoutedAt: null });
     res.json(JSON.parse(fs.readFileSync(SCOUT_FILE, 'utf8')));
   } catch (_) { res.json({ topics: [], scoutedAt: null }); }
+});
+
+// ── ② コメント倉庫取得 ───────────────────────────────────────
+app.get('/api/neta/warehouse', (req, res) => {
+  const { topic } = req.query;
+  if (!topic) return res.json({ total: 0, reddit: [], yahoo: [], x: [] });
+  try {
+    const p = getWarehousePath(topic);
+    if (!fs.existsSync(p)) return res.json({ total: 0, reddit: [], yahoo: [], x: [] });
+    res.json(JSON.parse(fs.readFileSync(p, 'utf8')));
+  } catch (_) { res.json({ total: 0, reddit: [], yahoo: [], x: [] }); }
 });
 
 // ── ② ネタブック（キャッシュ確認）──────────────────────────────
