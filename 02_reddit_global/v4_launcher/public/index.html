@@ -262,6 +262,18 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
   padding: 8px 10px; font-size: 13px; color: #bbb;
   border-left: 2px solid var(--border2); line-height: 1.5;
 }
+.neta-badge {
+  font-size: 9px; font-weight: 900; padding: 1px 6px;
+  border-radius: 10px; letter-spacing: .5px;
+  background: var(--s3); color: var(--muted);
+  vertical-align: middle; margin-left: 4px;
+}
+.neta-badge.required { background: rgba(232,0,0,.2); color: var(--red); }
+.neta-badge.filled   { background: rgba(0,200,83,.15); color: var(--green); }
+.neta-empty-note {
+  font-size: 12px; color: var(--muted); font-style: italic;
+  padding: 6px 0 8px; line-height: 1.5;
+}
 
 /* ══════════════════════════════════ STATUS STATES */
 .sb {
@@ -442,50 +454,85 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   <!-- ネタブック本体（アコーディオン） -->
   <div id="netaBody" style="display:none;">
 
+    <!-- ① タイトル -->
+    <div class="neta-section open" id="sec-title">
+      <div class="neta-hd" onclick="toggleSec('title')">
+        <span class="neta-icon">🏷️</span>
+        <span class="neta-title">① タイトル <span class="neta-badge required">必須</span></span>
+        <span class="neta-arrow">›</span>
+      </div>
+      <div class="neta-body">
+        <div class="neta-text" id="disp-title"></div>
+        <textarea class="neta-edit" id="edit-title" rows="2"></textarea>
+      </div>
+    </div>
+
+    <!-- ② 概要紹介 -->
     <div class="neta-section open" id="sec-overview">
       <div class="neta-hd" onclick="toggleSec('overview')">
         <span class="neta-icon">📰</span>
-        <span class="neta-title">概要</span>
+        <span class="neta-title">② 概要紹介 <span class="neta-badge required">必須</span></span>
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
         <div class="neta-text" id="disp-overview"></div>
-        <textarea class="neta-edit" id="edit-overview" rows="3"></textarea>
+        <textarea class="neta-edit" id="edit-overview" rows="4"></textarea>
       </div>
     </div>
 
-    <div class="neta-section open" id="sec-scenario1">
-      <div class="neta-hd" onclick="toggleSec('scenario1')">
+    <!-- ③ 補足紹介1 -->
+    <div class="neta-section" id="sec-supplement1">
+      <div class="neta-hd" onclick="toggleSec('supplement1')">
         <span class="neta-icon">💡</span>
-        <span class="neta-title">補足シナリオ①（驚き・意外な事実）</span>
+        <span class="neta-title">③ 補足紹介① <span class="neta-badge" id="badge-s1">省略</span></span>
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
-        <div class="neta-text" id="disp-scenario1"></div>
-        <textarea class="neta-edit" id="edit-scenario1" rows="2"></textarea>
+        <div class="neta-empty-note" id="empty-s1" style="display:none;">AIが素材不足と判断し省略しました。手入力できます。</div>
+        <div class="neta-text" id="disp-supplement1"></div>
+        <textarea class="neta-edit" id="edit-supplement1" rows="3" placeholder="補足①を追加（任意）"></textarea>
       </div>
     </div>
 
-    <div class="neta-section open" id="sec-scenario2">
-      <div class="neta-hd" onclick="toggleSec('scenario2')">
+    <!-- ④ 補足紹介2 -->
+    <div class="neta-section" id="sec-supplement2">
+      <div class="neta-hd" onclick="toggleSec('supplement2')">
         <span class="neta-icon">😏</span>
-        <span class="neta-title">補足シナリオ②（別角度・共感）</span>
+        <span class="neta-title">④ 補足紹介② <span class="neta-badge" id="badge-s2">省略</span></span>
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
-        <div class="neta-text" id="disp-scenario2"></div>
-        <textarea class="neta-edit" id="edit-scenario2" rows="2"></textarea>
+        <div class="neta-empty-note" id="empty-s2" style="display:none;">AIが素材不足と判断し省略しました。手入力できます。</div>
+        <div class="neta-text" id="disp-supplement2"></div>
+        <textarea class="neta-edit" id="edit-supplement2" rows="3" placeholder="補足②を追加（任意）"></textarea>
       </div>
     </div>
 
-    <div class="neta-section" id="sec-reactions">
-      <div class="neta-hd" onclick="toggleSec('reactions')">
+    <!-- ⑤ コメント集1 -->
+    <div class="neta-section" id="sec-comments1">
+      <div class="neta-hd" onclick="toggleSec('comments1')">
         <span class="neta-icon">💬</span>
-        <span class="neta-title">ネット民の反応</span>
+        <span class="neta-title">⑤ コメント集① <span class="neta-badge" id="badge-c1">省略</span></span>
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
-        <div class="reaction-list" id="reactionList"></div>
+        <div class="neta-empty-note" id="empty-c1" style="display:none;">反応素材が不足していました。手入力できます。</div>
+        <div class="reaction-list" id="reactionList1"></div>
+        <textarea class="neta-edit" id="edit-comments1" rows="3" placeholder="コメントを1行1件で入力（任意）"></textarea>
+      </div>
+    </div>
+
+    <!-- ⑥ コメント集2 -->
+    <div class="neta-section" id="sec-comments2">
+      <div class="neta-hd" onclick="toggleSec('comments2')">
+        <span class="neta-icon">🗨️</span>
+        <span class="neta-title">⑥ コメント集② <span class="neta-badge" id="badge-c2">省略</span></span>
+        <span class="neta-arrow">›</span>
+      </div>
+      <div class="neta-body">
+        <div class="neta-empty-note" id="empty-c2" style="display:none;">①と対比できる反応がありませんでした。手入力できます。</div>
+        <div class="reaction-list" id="reactionList2"></div>
+        <textarea class="neta-edit" id="edit-comments2" rows="3" placeholder="コメントを1行1件で入力（任意）"></textarea>
       </div>
     </div>
 
@@ -798,20 +845,57 @@ async function startNeta() {
   }
 }
 
+function setBadge(id, filled) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = filled ? '入り' : '省略';
+  el.className = 'neta-badge' + (filled ? ' filled' : '');
+}
+
 function renderNetaBook(book) {
-  // 表示テキストセット
-  document.getElementById('disp-overview').innerHTML   = esc(book.overview   || '');
-  document.getElementById('disp-scenario1').innerHTML  = esc(book.scenario1  || '');
-  document.getElementById('disp-scenario2').innerHTML  = esc(book.scenario2  || '');
-  // 編集用textarea
-  document.getElementById('edit-overview').value   = book.overview   || '';
-  document.getElementById('edit-scenario1').value  = book.scenario1  || '';
-  document.getElementById('edit-scenario2').value  = book.scenario2  || '';
-  // 反応リスト
-  const rl = document.getElementById('reactionList');
-  rl.innerHTML = (book.reactions || []).slice(0, 5).map(r =>
-    `<div class="reaction-item">${esc(r.text || r)}</div>`
-  ).join('');
+  // ① タイトル
+  document.getElementById('disp-title').innerHTML = `<strong style="font-size:16px;color:var(--yellow)">${esc(book.title || '')}</strong>`;
+  document.getElementById('edit-title').value = book.title || '';
+
+  // ② 概要
+  document.getElementById('disp-overview').innerHTML = esc(book.overview || '');
+  document.getElementById('edit-overview').value = book.overview || '';
+
+  // ③ 補足①
+  const s1 = book.supplement1 || null;
+  setBadge('badge-s1', !!s1);
+  document.getElementById('empty-s1').style.display  = s1 ? 'none' : 'block';
+  document.getElementById('disp-supplement1').innerHTML = esc(s1 || '');
+  document.getElementById('edit-supplement1').value  = s1 || '';
+  if (s1) document.getElementById('sec-supplement1').classList.add('open');
+
+  // ④ 補足②
+  const s2 = book.supplement2 || null;
+  setBadge('badge-s2', !!s2);
+  document.getElementById('empty-s2').style.display  = s2 ? 'none' : 'block';
+  document.getElementById('disp-supplement2').innerHTML = esc(s2 || '');
+  document.getElementById('edit-supplement2').value  = s2 || '';
+  if (s2) document.getElementById('sec-supplement2').classList.add('open');
+
+  // ⑤ コメント集①
+  const c1 = book.comments1 || null;
+  setBadge('badge-c1', !!c1);
+  document.getElementById('empty-c1').style.display = c1 ? 'none' : 'block';
+  document.getElementById('reactionList1').innerHTML = c1
+    ? c1.map(t => `<div class="reaction-item">${esc(t)}</div>`).join('')
+    : '';
+  document.getElementById('edit-comments1').value = c1 ? c1.join('\n') : '';
+  if (c1) document.getElementById('sec-comments1').classList.add('open');
+
+  // ⑥ コメント集②
+  const c2 = book.comments2 || null;
+  setBadge('badge-c2', !!c2);
+  document.getElementById('empty-c2').style.display = c2 ? 'none' : 'block';
+  document.getElementById('reactionList2').innerHTML = c2
+    ? c2.map(t => `<div class="reaction-item">${esc(t)}</div>`).join('')
+    : '';
+  document.getElementById('edit-comments2').value = c2 ? c2.join('\n') : '';
+  if (c2) document.getElementById('sec-comments2').classList.add('open');
 
   document.getElementById('netaBody').style.display = 'block';
 }
@@ -827,13 +911,22 @@ function setStage(name) {
   });
 }
 
+function commentsFromTextarea(id) {
+  const val = document.getElementById(id)?.value || '';
+  const arr = val.split('\n').map(s => s.trim()).filter(Boolean);
+  return arr.length >= 2 ? arr : null;
+}
+
 async function goToVideo() {
   if (!S.netaBook) return;
 
   // 編集内容を反映
-  S.netaBook.overview   = document.getElementById('edit-overview').value;
-  S.netaBook.scenario1  = document.getElementById('edit-scenario1').value;
-  S.netaBook.scenario2  = document.getElementById('edit-scenario2').value;
+  S.netaBook.title       = document.getElementById('edit-title').value.trim() || S.netaBook.title;
+  S.netaBook.overview    = document.getElementById('edit-overview').value.trim();
+  S.netaBook.supplement1 = document.getElementById('edit-supplement1').value.trim() || null;
+  S.netaBook.supplement2 = document.getElementById('edit-supplement2').value.trim() || null;
+  S.netaBook.comments1   = commentsFromTextarea('edit-comments1');
+  S.netaBook.comments2   = commentsFromTextarea('edit-comments2');
 
   goStep(3);
   document.getElementById('videoResult').innerHTML = '';

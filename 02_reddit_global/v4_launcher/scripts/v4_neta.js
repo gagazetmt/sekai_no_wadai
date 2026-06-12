@@ -1,41 +1,44 @@
 // v4_launcher/scripts/v4_neta.js
-// ネタブック生成: 案件1件 → 記事3本読む → 概要+補足シナリオ2本+反応集を生成
+// ネタブック生成: 案件1件 → 記事3本+反応素材 → 6フィールド構造で生成
 //
 // 出力（ネタブック）:
-//   topic       : 案件タイトル
-//   hook        : フック文（2ch煽り）
-//   overview    : 概要説明（2〜3文）
-//   scenario1   : 補足シナリオ①（視聴者が知らない事実・驚き）
-//   scenario2   : 補足シナリオ②（別角度・共感・クスッ）
-//   reactions   : Reddit/Yahoo反応集（5件）
+//   title       : 2ch風タイトル（必須）
+//   overview    : 概要紹介（必須）
+//   supplement1 : 補足紹介① (null = AI判断で省略)
+//   supplement2 : 補足紹介② (null = AI判断で省略)
+//   comments1   : コメント集① (null = AI判断で省略)
+//   comments2   : コメント集② (null = AI判断で省略)
 //   mainEntity  : 主役の選手/チーム名（画像検索用）
+//
+// AI が素材を見て「埋める価値があるセクションだけ」埋める。
+// 全体で 1200 字以内を目安とする。
 'use strict';
 
 const path = require('path');
 const fs   = require('fs');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), quiet: true });
 
-const { fetchSerper }        = require('../../scripts/modules/fetchers/brave_search_module');
+const { fetchSerper }         = require('../../scripts/modules/fetchers/brave_search_module');
 const { fetchArticleContent } = require('../../scripts/modules/fetchers/article_fetcher');
-const { callAI }             = require('../../scripts/ai_client');
+const { callAI }              = require('../../scripts/ai_client');
 
-const DATA_DIR   = path.join(__dirname, '..', 'data');
-const NETA_DIR   = path.join(DATA_DIR, 'neta_books');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const NETA_DIR = path.join(DATA_DIR, 'neta_books');
 if (!fs.existsSync(NETA_DIR)) fs.mkdirSync(NETA_DIR, { recursive: true });
 
-const ARTICLE_CHARS = 2000;  // 記事1本あたりの最大文字数
+const ARTICLE_CHARS  = 2000;
+const REACTION_CHARS = 300;
 
-// ── 記事3本を取得してフルテキスト読み込み ────────────────────
+// ── 記事3本を取得 ─────────────────────────────────────────────
 async function _fetchArticles(topic, existingUrl = '') {
-  // EN + JA の2クエリ並列
   const enQ = topic.replace(/[ぁ-ん]|[ァ-ン]|[一-龥]/g, '').trim() || topic;
   const [enRes, jaRes] = await Promise.all([
-    fetchSerper(enQ + ' latest',   '', 'en', null, { num: 8 }).catch(() => ({ organic: [] })),
+    fetchSerper(enQ + ' latest',    '', 'en', null, { num: 8 }).catch(() => ({ organic: [] })),
     fetchSerper(topic + ' 最新情報', '', 'ja', null, { num: 8 }).catch(() => ({ organic: [] })),
   ]);
 
   const BLOCKED = new Set(['youtube.com','youtu.be','tiktok.com','instagram.com','twitter.com','x.com']);
-  const seen = new Set([existingUrl]);
+  const seen = new Set([existingUrl].filter(Boolean));
   const candidates = [];
 
   for (const r of [...(enRes.organic||[]), ...(jaRes.organic||[])]) {
@@ -47,7 +50,6 @@ async function _fetchArticles(topic, existingUrl = '') {
     if (candidates.length >= 6) break;
   }
 
-  // 上位3本のフルテキスト取得
   const articles = [];
   for (const c of candidates.slice(0, 5)) {
     try {
@@ -58,150 +60,162 @@ async function _fetchArticles(topic, existingUrl = '') {
       }
     } catch (_) {}
   }
-
   // 取れなかった分はスニペットで補完
   for (const c of candidates) {
     if (articles.length >= 3) break;
-    if (!articles.find(a => a.url === c.url)) {
+    if (!articles.find(a => a.url === c.url))
       articles.push({ ...c, fullText: c.snippet });
-    }
   }
-
   return articles.slice(0, 3);
 }
 
-// ── DeepSeek: 記事からネタブック生成（誹謗中傷チェック込み）──
-async function _generateNetaBook(topic, hook, articles) {
+// ── 反応スニペット収集（国内 + Reddit） ──────────────────────
+async function _fetchReactionSnippets(topic) {
+  const [jaRes, enRes] = await Promise.all([
+    fetchSerper(topic + ' 反応 コメント', '', 'ja', null, { num: 5 }).catch(() => ({ organic: [] })),
+    fetchSerper(topic + ' reaction reddit', '', 'en', null, { num: 4 }).catch(() => ({ organic: [] })),
+  ]);
+  const ja = (jaRes?.organic || []).map(r => r.snippet).filter(Boolean).slice(0, 3).join('\n');
+  const en = (enRes?.organic || []).map(r => r.snippet).filter(Boolean).slice(0, 3).join('\n');
+  return {
+    jaReactions: ja.slice(0, REACTION_CHARS),
+    enReactions: en.slice(0, REACTION_CHARS),
+  };
+}
+
+// ── DeepSeek: ネタブック 1 発生成 ─────────────────────────────
+async function _generateNetaBook(topic, hook, articles, reactions) {
   const articleBlock = articles.map((a, i) =>
     `【記事${i+1}】[${a.host}] ${a.title}\n${a.fullText}`
   ).join('\n\n---\n\n');
 
-  const prompt = `あなたは2chサッカー動画のコンテンツライターです。
-以下の記事を読んで、120秒の動画用ネタブックを作ってください。
+  const reactionBlock = [
+    reactions.jaReactions ? `【国内反応スニペット】\n${reactions.jaReactions}` : '',
+    reactions.enReactions ? `【海外反応スニペット】\n${reactions.enReactions}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  const prompt = `あなたは2ch風サッカー動画チャンネルのコンテンツライターです。
+以下の記事・反応素材を読んで、ショート動画用のネタブックを作ってください。
 
 【案件】${topic}
-【フック】${hook}
+${hook ? `【フックヒント】${hook}` : ''}
 
-【記事】
 ${articleBlock}
 
-【ネタブックの形式】
-- overview: 案件の概要（2〜3文・60〜100字）。「何が起きたか」を伝える
-- scenario1: 補足シナリオ①（40〜80字）
-  ・記事から発見した「視聴者が知らなかった事実」
-  ・「えっそうなの！？」と思わせる数字・背景・文脈
-  ・例:「ちなみに○○は今季リーグ最多のシュート数を記録しながら、得点は最下位クラスなんですよね」
-- scenario2: 補足シナリオ②（40〜80字）
-  ・別角度から。共感・クスッとくる笑い・皮肉
-  ・例:「そのクラブ、去年も全く同じことして炎上してましたよね」
-- mainEntity: 主役の選手名またはクラブ名（画像検索用・英語フルネーム推奨）
-- tone_check: "ok" または "ng"（誹謗中傷・差別・悪意ある攻撃が含まれれば "ng"）
-  ・NGの判定基準: 選手の人格否定、差別、プライベートへの攻撃
-  ・OKの判定基準: ネタ化されてる欠点、公式記録の数字、記事に書いてある事実
+${reactionBlock}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+## 出力ルール
+
+全体合計 **1200字以内**。
+各セクションは「素材として使える内容がある場合のみ」埋める。ない場合は null にする。
+
+| フィールド | 内容 | 文字数目安 | 必須? |
+|---|---|---|---|
+| title | 2ch風タイトル。煽り・驚き・笑いのどれか | 〜40字 | ✅必須 |
+| overview | 「何が起きたか」を伝える概要 | 150〜250字 | ✅必須 |
+| supplement1 | 記事にある「視聴者が知らない驚きの事実・数字・背景」 | 100〜200字 | 素材あれば |
+| supplement2 | 別角度（共感・皮肉・クスッ）の補足 | 100〜200字 | 素材あれば |
+| comments1 | コメント集①（国内or海外の反応 3〜4件、1件25字以内） | — | 反応あれば |
+| comments2 | コメント集②（①と明らかに異なるトーンや立場 3〜4件） | — | 対比できるなら |
+| mainEntity | 主役の選手名/チーム名（画像検索用・英語フルネーム推奨） | — | ✅必須 |
+| tone_check | "ok" / "ng"（人格否定・差別・プライベート攻撃は ng） | — | ✅必須 |
+
+## 判断基準
+
+- supplement1/2 が似たような内容になるなら、どちらか 1 つだけ埋める
+- comments1/2 は reactions セクションから自然に抽出できる文のみ使う。でっち上げ禁止
+- comments2 は comments1 と明確にトーンや視点が違う場合だけ入れる
+- 1200字を超えそうなら supplement を削ってでも title・overview を充実させる
 
 JSONのみ:
 {
+  "title": "...",
   "overview": "...",
-  "scenario1": "...",
-  "scenario2": "...",
-  "mainEntity": "Ibrahima Konate",
+  "supplement1": "...",
+  "supplement2": null,
+  "comments1": ["...", "...", "..."],
+  "comments2": null,
+  "mainEntity": "Wataru Endo",
   "tone_check": "ok"
 }`;
 
   const raw = await callAI({
     forceProvider: 'deepseek',
-    model: 'deepseek-v4-flash',
-    max_tokens: 1500,
+    model: 'deepseek-chat',
+    max_tokens: 3000,
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const m = raw && raw.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('ネタブック生成失敗: JSON未検出');
-  const parsed = JSON.parse(m[0]);
+  const m = raw && raw.match(/\{[\s\S]*?\n\}/);
+  const m2 = m || (raw && raw.match(/\{[\s\S]*\}/));
+  if (!m2) throw new Error('ネタブック生成失敗: JSON未検出');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(m2[0]);
+  } catch (e) {
+    // JSON が壊れていたら最小構造でフォールバック
+    throw new Error('ネタブックJSON parse失敗: ' + e.message);
+  }
 
   if (parsed.tone_check === 'ng') {
     throw new Error('tone_check: NG（誹謗中傷判定）');
   }
 
+  // null/undefined/空文字 の正規化
+  function clean(v, maxLen) {
+    const s = String(v || '').trim();
+    return s ? s.slice(0, maxLen) : null;
+  }
+  function cleanArr(v, maxItem, maxLen) {
+    if (!Array.isArray(v) || !v.length) return null;
+    const arr = v.map(x => String(x||'').trim()).filter(Boolean).map(x => x.slice(0, maxLen));
+    return arr.length >= 2 ? arr.slice(0, maxItem) : null;
+  }
+
   return {
-    overview:    String(parsed.overview    || '').slice(0, 150),
-    scenario1:   String(parsed.scenario1   || '').slice(0, 120),
-    scenario2:   String(parsed.scenario2   || '').slice(0, 120),
-    mainEntity:  String(parsed.mainEntity  || '').slice(0, 60),
+    title:       clean(parsed.title, 60)        || topic,
+    overview:    clean(parsed.overview, 300)     || '（概要未生成）',
+    supplement1: clean(parsed.supplement1, 250),
+    supplement2: clean(parsed.supplement2, 250),
+    comments1:   cleanArr(parsed.comments1, 5, 40),
+    comments2:   cleanArr(parsed.comments2, 5, 40),
+    mainEntity:  clean(parsed.mainEntity, 80)    || '',
     tone_check:  'ok',
   };
 }
 
-// ── Reddit/Yahoo反応を取得 ────────────────────────────────────
-async function _fetchReactions(topic) {
-  const jaQ = topic + ' 反応 コメント';
-  try {
-    const res = await fetchSerper(jaQ, '', 'ja', null, { num: 6 });
-    const snippets = (res?.organic || []).slice(0, 3)
-      .map(r => r.snippet || '').filter(Boolean);
-
-    if (!snippets.length) return _defaultReactions();
-
-    // スニペットから反応っぽい文を抽出（DeepSeek）
-    const raw = await callAI({
-      forceProvider: 'deepseek',
-      model: 'deepseek-v4-flash',
-      max_tokens: 800,
-      messages: [{
-        role: 'user',
-        content: `以下のスニペットから、サッカーファンの反応コメントっぽい文を5件抽出してください。
-2ch/Yahoo風の短いコメントとして自然なもの。存在しなければ作らず、あるものだけ。
-
-${snippets.join('\n')}
-
-JSONのみ: {"reactions": ["コメント1","コメント2","コメント3","コメント4","コメント5"]}`
-      }],
-    });
-    const mm = raw && raw.match(/\{[\s\S]*\}/);
-    if (!mm) return _defaultReactions();
-    const p = JSON.parse(mm[0]);
-    const reactions = Array.isArray(p.reactions)
-      ? p.reactions.filter(Boolean).slice(0, 5)
-      : [];
-    return reactions.length >= 2 ? reactions : _defaultReactions();
-  } catch (_) {
-    return _defaultReactions();
-  }
-}
-
-function _defaultReactions() {
-  return ['反応収集中...', 'もう少しお待ちください', '', '', ''];
-}
-
-// ── メイン: ネタブック生成 ─────────────────────────────────────
+// ── メイン ────────────────────────────────────────────────────
 async function buildNetaBook(topicData) {
   const { topic, hook = '', url = '' } = topicData;
   console.log('[v4_neta] 開始:', topic);
 
-  // 1. 記事取得
-  const articles = await _fetchArticles(topic, url);
-  console.log(`[v4_neta] 記事取得: ${articles.length}本`);
+  // 記事 + 反応素材 を並列取得
+  const [articles, reactions] = await Promise.all([
+    _fetchArticles(topic, url),
+    _fetchReactionSnippets(topic),
+  ]);
+  console.log(`[v4_neta] 記事: ${articles.length}本 / 国内反応: ${reactions.jaReactions.length}字 / 海外: ${reactions.enReactions.length}字`);
 
-  // 2. ネタブック生成（tone_checkはここで判定）
-  const neta = await _generateNetaBook(topic, hook, articles);
-  console.log('[v4_neta] 生成完了 tone:', neta.tone_check);
-
-  // 3. 反応取得（並列可能だが記事取得と順番にして負荷分散）
-  const reactions = await _fetchReactions(topic);
+  // AI ネタブック生成（1 API call）
+  const neta = await _generateNetaBook(topic, hook, articles, reactions);
+  console.log(`[v4_neta] 生成完了 s1:${!!neta.supplement1} s2:${!!neta.supplement2} c1:${!!neta.comments1} c2:${!!neta.comments2}`);
 
   const book = {
     topic,
     hook,
-    overview:   neta.overview,
-    scenario1:  neta.scenario1,
-    scenario2:  neta.scenario2,
-    mainEntity: neta.mainEntity,
-    reactions:  reactions.map((text, i) => ({ text, score: 100 - i * 10 })),
-    articles:   articles.map(a => ({ title: a.title, url: a.url, host: a.host })),
-    createdAt:  new Date().toISOString(),
+    title:       neta.title,
+    overview:    neta.overview,
+    supplement1: neta.supplement1,
+    supplement2: neta.supplement2,
+    comments1:   neta.comments1,
+    comments2:   neta.comments2,
+    mainEntity:  neta.mainEntity,
+    articles:    articles.map(a => ({ title: a.title, url: a.url, host: a.host })),
+    createdAt:   new Date().toISOString(),
   };
 
-  // 保存
   const safeId = topic.replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, '_').slice(0, 40);
   const outPath = path.join(NETA_DIR, `neta_${safeId}_${Date.now()}.json`);
   fs.writeFileSync(outPath, JSON.stringify(book, null, 2));
@@ -212,17 +226,17 @@ async function buildNetaBook(topicData) {
 
 module.exports = { buildNetaBook };
 
-// ── CLIテスト ─────────────────────────────────────────────────
+// ── CLI テスト ────────────────────────────────────────────────
 if (require.main === module) {
-  buildNetaBook({
-    topic: 'コナテ、リバプールとの契約延長しなかった理由',
-    hook:  'えっこれマジ？リバポ大ピンチwwww',
-  }).then(book => {
+  const topic = process.argv[2] || '遠藤航、W杯直前に離脱＆代表引退';
+  buildNetaBook({ topic, hook: '' }).then(book => {
     console.log('\n=== ネタブック ===');
-    console.log('概要:', book.overview);
-    console.log('シナリオ①:', book.scenario1);
-    console.log('シナリオ②:', book.scenario2);
+    console.log('①タイトル:', book.title);
+    console.log('②概要:', book.overview);
+    console.log('③補足1:', book.supplement1 || '（省略）');
+    console.log('④補足2:', book.supplement2 || '（省略）');
+    console.log('⑤コメント1:', book.comments1 ? book.comments1.join(' / ') : '（省略）');
+    console.log('⑥コメント2:', book.comments2 ? book.comments2.join(' / ') : '（省略）');
     console.log('主役:', book.mainEntity);
-    console.log('反応:', book.reactions.map(r => r.text).join(' / '));
   }).catch(console.error);
 }

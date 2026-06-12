@@ -40,43 +40,65 @@ function _findImage(entityName) {
 }
 
 // ── ネタブック → modules.json ─────────────────────────────────
+// null フィールドはスキップ → 2〜6 スライドの動的構成
 function buildModules(book) {
   const imagePath = _findImage(book.mainEntity);
   const images = imagePath ? [imagePath] : [];
+  const modules = [];
 
-  return [
-    // スライド1: フック + 概要
-    {
-      type: 'v4_picture',
-      orientation: 'vertical',
-      title: book.hook || book.topic,
-      images,
-      narration: book.overview,
-    },
-    // スライド2: 補足シナリオ①
-    {
+  // ② 概要紹介（必須）
+  modules.push({
+    type: 'v4_picture',
+    orientation: 'vertical',
+    title: book.title || book.hook || book.topic,
+    images,
+    narration: book.overview,
+  });
+
+  // ③ 補足紹介①（optional）
+  if (book.supplement1) {
+    modules.push({
       type: 'v4_picture',
       orientation: 'vertical',
       title: '実は...',
       images,
-      narration: book.scenario1,
-    },
-    // スライド3: 補足シナリオ②
-    {
+      narration: book.supplement1,
+    });
+  }
+
+  // ④ 補足紹介②（optional）
+  if (book.supplement2) {
+    modules.push({
       type: 'v4_picture',
       orientation: 'vertical',
       title: 'ちなみに...',
       images,
-      narration: book.scenario2,
-    },
-    // スライド4: リアクション
-    {
+      narration: book.supplement2,
+    });
+  }
+
+  // ⑤ コメント集①（optional）
+  if (book.comments1?.length) {
+    modules.push({
       type: 'v4_reaction',
       title: 'ネット民の反応',
-      comments: book.reactions || [],
+      comments: book.comments1.map((text, i) => ({ text, score: 100 - i * 10 })),
       narration: 'みなさんの反応はこちらです',
-    },
-  ];
+    });
+  }
+
+  // ⑥ コメント集②（optional）
+  if (book.comments2?.length) {
+    modules.push({
+      type: 'v4_reaction',
+      title: 'さらに反応...',
+      comments: book.comments2.map((text, i) => ({ text, score: 90 - i * 10 })),
+      narration: 'まだまだ反応が続きます',
+    });
+  }
+
+  console.log(`[v4_video] スライド構成: ${modules.length}枚`);
+  return modules;
 }
 
 // ── render.js 子プロセス実行 ──────────────────────────────────
