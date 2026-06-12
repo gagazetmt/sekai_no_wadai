@@ -1,6 +1,153 @@
-# Codex Mia V3 Handover
+﻿# Codex Mia V3 Handover
 
-Last updated: 2026-06-07 JST
+Last updated: 2026-06-08 JST
+
+---
+
+## 2026-06-08 JST Update - Mobile Step1 Reversion Root Cause Notes
+
+**Canonical handover note:** Going forward, update this file as the latest handover source. Do not rely on `C:\Users\USER\Documents\速報サッカー\handover.md`; that file is older and described the previous Step5 4-slot thumbnail direction.
+
+### User-reported current bugs
+
+1. On mobile, zooming the launcher screen can force the UI back to the initial Step1 screen.
+2. On mobile, editing the Step4 insight text can force the UI back to Step1.
+3. While FullAuto is running for one case, touching another case can force the UI back to Step1.
+
+### Confirmed code-level findings
+
+- The launcher always calls `goStep(1)` on page boot in `local_v2_launcher.js` inside `DOMContentLoaded`.
+  - It restores `v2_selected_id`, but it does not restore the active step.
+  - Therefore any mobile Safari/Chrome tab reload, crash recovery, memory-pressure reload, or page reinitialization lands on Step1 even when the selected case exists.
+- Step4 still performs a heavy preview load on initialization.
+  - `routes/step4_routes.js` `step4Init()` calls `_reloadPreview()` unconditionally.
+  - `_reloadPreview()` builds a 1920x1080 preview HTML Blob and assigns it to an iframe.
+  - Mobile auto-preview after input was disabled, but the initial Blob iframe still exists on mobile and can contribute to memory pressure during zoom, keyboard open, resize, and editing.
+- Step4 text input saves aggressively.
+  - `s4OnInput()` debounces at 350ms and calls `_saveAndReload()`.
+  - On mobile `_reloadPreview()` is skipped after input, but `_collectInputs()` and `_saveModulesQuiet()` still run.
+  - `_saveModulesQuiet()` POSTs the full `window.APP.s4.modules` array to `/api/save-modules` on each debounced edit.
+  - This is likely too heavy for mobile when combined with the existing preview iframe and virtual keyboard resize.
+- Insight `catchphrases` inputs are inconsistent.
+  - The generated `.s4-phrase` input does not have `oninput="s4OnInput()"` in the current Step4 renderer, unlike title/narration/dataSlots.
+  - This is probably a separate save/consistency bug, but it can make insight editing behavior feel unreliable.
+- FullAuto front-end polling is not case-safe.
+  - `runAutopilot()` captures the starting `post` but, when the job finishes, it unconditionally calls `goStep(25)` or `goStep(4)`.
+  - It does not check whether `window.APP.selected.id` still equals the job's original `post.id`.
+  - If the user switches to another case during FullAuto, the old job can hijack the current screen.
+- FullAuto does not use the existing `runJob` / `resumeStoredJobs` localStorage recovery mechanism.
+  - If the mobile browser reloads during FullAuto, the normal boot path runs and lands on Step1.
+  - Other routes have resumable job helpers, but this FullAuto path is manually polling via `fetchJson`.
+
+### Most likely root causes by symptom
+
+1. **Mobile zoom -> Step1**
+   - Not caused by an explicit zoom handler.
+   - Most likely: zoom causes heavy mobile relayout / Safari memory pressure while Step4 preview iframe is present -> page reload/crash recovery -> launcher boot calls `goStep(1)`.
+
+2. **Mobile insight edit -> Step1**
+   - Most likely: input opens keyboard and fires `s4OnInput()` -> full modules collection/save runs while large preview iframe is still in memory -> mobile tab reload/crash recovery -> boot calls `goStep(1)`.
+   - If the edited field is `catchphrases`, also note the missing `oninput` handler on `.s4-phrase`, which should be fixed separately.
+
+3. **FullAuto running while another case is touched -> Step1**
+   - Two likely contributors:
+     - Old FullAuto job completion can call `goStep(4)`/`goStep(25)` without checking the active case, hijacking the UI.
+     - If mobile reloads during the long-running job, the boot path lands on Step1 because active step is not restored and FullAuto has no resumable localStorage job record.
+
+### Recommended fix plan, no code applied yet
+
+1. **Persist and restore active step**
+   - Store `v2_active_step` whenever `goStep(n)` runs.
+   - On boot, after restoring `v2_selected_id`, navigate to the saved active step if a selected case exists.
+   - Fall back to Step1 only when there is no selected case or the saved step is invalid.
+   - This is the main safety net: even if mobile reloads, the user does not get dumped to Step1.
+
+2. **Mobile Step4 preview should be manual-only**
+   - In `step4Init()`, skip `_reloadPreview()` when `_isMobile` is true.
+   - Show an empty/lightweight preview placeholder and let the existing `更新` button generate the preview manually.
+   - Also consider clearing/revoking the previous Blob URL when leaving Step4 or when mobile preview is disabled.
+
+3. **Throttle mobile Step4 editing**
+   - On mobile, change `s4OnInput()` debounce from 350ms to roughly 1500ms, or save on `blur` for large textareas.
+   - Prefer saving only the active module/slide if an endpoint can be added safely; otherwise keep full save but reduce frequency.
+   - Keep `_collectInputs()` guarded and avoid re-rendering editor during normal typing.
+
+4. **Fix insight catchphrase input consistency**
+   - Add `oninput="s4OnInput()"` or an equivalent event listener to `.s4-phrase` inputs.
+   - Confirm whether user means narration, dataSlots, or catchphrases when saying "insight text" during QA.
+
+5. **Make FullAuto case-safe**
+   - Capture `const startedPostId = post.id` in `runAutopilot()`.
+   - Before any completion navigation, check `window.APP.selected?.id === startedPostId`.
+   - If the user is now editing another case, do not call `goStep`; only show a notification/status such as "別案件のFullAutoが完了".
+
+6. **Make FullAuto resumable**
+   - Either convert the FullAuto client path to `runJob`, or store `{ jobId, postId, mode }` in localStorage and resume polling on reload.
+   - On resume, do not auto-navigate unless the currently selected case matches the job's `postId`.
+
+### Suggested implementation order
+
+1. Active step persistence/restore.
+2. Mobile Step4 initial preview skip/manual preview only.
+3. FullAuto startedPostId guard.
+4. Mobile Step4 input debounce/blur strategy.
+5. FullAuto localStorage recovery.
+6. `.s4-phrase` input save consistency.
+
+---
+## 🚨 URGENT: Step4 Mobile Crash — Insight Textbox Editing Forces Navigate to Step1
+
+**Status:** Unresolved as of 2026-06-08. Handed over to Codex for investigation.
+
+### Symptom
+- On mobile (iPhone/Safari or Chrome), editing the **insight textbox** in Step4 slide editor
+  triggers an immediate navigation back to Step1.
+- Also reported: "問題が繰り返し起きました" (browser tab crash) during Step4 editing.
+
+### What was already tried (did NOT fix it)
+1. **Preview HTML base64 removal** (`_common.js`: `imgDataUri` now returns URL for `/`-prefixed paths;
+   `mapImagesToModulePreview` added; `_buildSlideForPreview` uses it) — reduces blob size but crash persists.
+2. **Mobile auto-preview disabled** (`step4_routes.js`: `_isMobile` flag added;
+   `_saveAndReload` skips `_reloadPreview()` on mobile) — still crashes on textbox edit.
+3. **Autopilot concurrency lock** (`local_v2_launcher.js`: `_apRunning` flag) — unrelated.
+
+### Most likely root cause (not yet confirmed)
+When the user types in a textbox in Step4, `oninput="s4OnInput()"` fires, which debounces and calls
+`_saveAndReload()`. On mobile this only calls `_saveModulesQuiet()` (POST `/api/save-modules`).
+**Hypothesis:** The POST fails (server error, timeout, or body-parser OOM), an unhandled rejection
+propagates, and some error handler navigates to Step1.
+
+Alternatively: a **JavaScript exception** in the Step4 editor itself (possibly from `_collectInputs()`
+reading a DOM element that no longer exists, or from `_renderEditor()` being called during a state
+inconsistency) crashes the step, and the global error handler resets to Step1.
+
+### Where to look
+
+1. **`routes/step4_routes.js`** — search for `goStep(1)` or any navigation-on-error logic in the
+   Step4 client-side JS (near the bottom of the file, ~line 1870–3990).
+2. **`routes/step4_routes.js` — `_collectInputs()`** — may throw if a DOM element is missing on
+   mobile layout.
+3. **`local_v2_launcher.js`** — global error handler or `goStep` logic that might trigger on
+   uncaught exceptions.
+4. **`routes/step3_routes.js` — `save-modules` endpoint** (line ~180) — check if it can fail in a
+   way that causes navigation.
+
+### Suggested investigation steps
+1. Add `window.onerror = function(msg, src, line) { alert('ERR: '+msg+' '+line); }` temporarily
+   to catch the JS exception location on mobile.
+2. Check if `_collectInputs()` in step4 has any code that could throw on mobile layout
+   (missing DOM elements, null references).
+3. Check if there's a `catch` block anywhere in Step4 that calls `goStep(1)`.
+4. Check if `fetchJson` failure in `_saveModulesQuiet` propagates up despite the try/catch.
+
+### Related commits (today 2026-06-08)
+- `430e3a1` fix(step4): preview base64 → URL (browser memory fix)
+- `de11410` fix(step4): base tag for Blob URL image resolution
+- `70b93a8` fix(mobile): autopilot lock + mobile preview auto-update disabled
+
+---
+
+
 
 ## 2026-06-07 JST Update - Step5 Gemini 3.1 Thumbnail Pipeline
 
@@ -1819,3 +1966,6 @@ Verification:
 - Local `GET /recipes` returned HTML.
 - Local `GET /api/v3/recipe-slot-options` returned the expanded slot list.
 - Local `GET /api/v3/recipes` returned recipes with the new labeling fields.
+
+
+
