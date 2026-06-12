@@ -406,7 +406,9 @@ async function main() {
   //   opening 直後（無ければ先頭）に toc を 1枚挿入。
   //   tocItems は opening/toc/ending を除く全スライドの title から自動抽出。
   //   章2件未満ならスキップ。既に toc を含む案件はそのまま尊重。
-  if (!modules.some(m => m && m.type === 'toc')) {
+  //   v4_* スライド構成（2chまとめ型ショート動画）は固定5枚構成のため TOC なし。
+  const _isV4Modules = modules.some(m => m && /^v4_/.test(String(m.type || '')));
+  if (!_isV4Modules && !modules.some(m => m && m.type === 'toc')) {
     const chapters = modules
       .filter(m => m && !['opening', 'toc', 'ending'].includes(m.type))
       .map(m => String(m.title || '').trim())

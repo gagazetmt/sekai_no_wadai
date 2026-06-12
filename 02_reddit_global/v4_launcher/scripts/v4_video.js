@@ -42,15 +42,20 @@ function _findImage(entityName) {
 }
 
 // ── ネタブック → modules.json ─────────────────────────────────
-// 2chスレッド風: opening(スレタイ) → 解説レス → レス欄
-// null フィールドはスキップ → 2〜6 スライドの動的構成
+// 固定5枚構成:
+//   ① v4_opening  タイトルコール
+//   ② v4_picture  概要説明
+//   ③ v4_picture  補足説明（supplement1 + supplement2 統合）
+//   ④ v4_reaction コメント集①
+//   ⑤ v4_reaction コメント集②
+// 素材不足のスライドのみ脱落（gracefully degrade）
 function buildModules(book) {
   const imagePath = _findImage(book.mainEntity);
   const images = imagePath ? [imagePath] : [];
   const threadTitle = book.title || book.hook || book.topic;
   const modules = [];
 
-  // ① オープニング: スレタイをデカ文字で（ナレーションはタイトル読み上げ）
+  // ① タイトルコール
   modules.push({
     type: 'v4_opening',
     title: threadTitle,
@@ -58,7 +63,7 @@ function buildModules(book) {
     narration: threadTitle,
   });
 
-  // ② 概要紹介（必須）— >>1 の本文ポジション
+  // ② 概要説明
   modules.push({
     type: 'v4_picture',
     title: 'これマジ？何があったか整理するで',
@@ -68,53 +73,48 @@ function buildModules(book) {
     narration: book.overview,
   });
 
-  // ③ 補足紹介①（optional）
-  if (book.supplement1) {
+  // ③ 補足説明（supplement1 + supplement2 を1枚に統合）
+  const supplement = [book.supplement1, book.supplement2].filter(Boolean).join(' ');
+  if (supplement) {
     modules.push({
       type: 'v4_picture',
       title: '実はこんな事実があるんや',
       threadTitle,
       resNo: 5,
       images,
-      narration: book.supplement1,
+      narration: supplement,
     });
   }
 
-  // ④ 補足紹介②（optional）
-  if (book.supplement2) {
-    modules.push({
-      type: 'v4_picture',
-      title: 'ちなみにこれも知っとくべき',
-      threadTitle,
-      resNo: 8,
-      images,
-      narration: book.supplement2,
-    });
+  // ④⑤ コメント集（comments2 が無く comments1 が5件以上なら半分に分割）
+  let c1 = Array.isArray(book.comments1) ? book.comments1.filter(Boolean) : [];
+  let c2 = Array.isArray(book.comments2) ? book.comments2.filter(Boolean) : [];
+  if (!c2.length && c1.length >= 5) {
+    const half = Math.ceil(c1.length / 2);
+    c2 = c1.slice(half);
+    c1 = c1.slice(0, half);
   }
 
-  // ⑤ コメント集①（optional）— 2chレス欄
-  if (book.comments1?.length) {
+  if (c1.length) {
     modules.push({
       type: 'v4_reaction',
       title: 'ネット民の反応',
       threadTitle,
-      comments: book.comments1.map((text, i) => ({ text, score: 100 - i * 10 })),
+      comments: c1.map((text, i) => ({ text, score: 100 - i * 10 })),
       narration: 'スレ民の反応がこちら',
     });
   }
-
-  // ⑥ コメント集②（optional）
-  if (book.comments2?.length) {
+  if (c2.length) {
     modules.push({
       type: 'v4_reaction',
       title: 'さらに反応',
       threadTitle,
-      comments: book.comments2.map((text, i) => ({ text, score: 90 - i * 10 })),
+      comments: c2.map((text, i) => ({ text, score: 90 - i * 10 })),
       narration: 'まだまだ反応は続く',
     });
   }
 
-  console.log(`[v4_video] スライド構成: ${modules.length}枚 (opening + ${modules.length - 1})`);
+  console.log(`[v4_video] スライド構成: ${modules.length}枚 (①タイトル ②概要${supplement ? ' ③補足' : ''}${c1.length ? ' ④反応1' : ''}${c2.length ? ' ⑤反応2' : ''})`);
   return modules;
 }
 
