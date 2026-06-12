@@ -132,6 +132,9 @@ function audioDirFor(postId) {
   return dir;
 }
 
+// reaction 系判定（v4_reaction も V2 reaction と同じ TTS/voice 処理を通す）
+function _isReactionType(t) { return t === 'reaction' || t === 'v4_reaction'; }
+
 // 1スライド分の TTS 生成タスク (chunk配列) を作る。実生成は呼び出し側で並列化
 function buildSlideTtsTasks(mod, idx, postId) {
   if (Array.isArray(mod.audio) && mod.audio.length) return []; // 既に生成済
@@ -139,7 +142,7 @@ function buildSlideTtsTasks(mod, idx, postId) {
   // narration 空でも opening (title 読み上げ) / reaction (comments) / toc (items) は対象
   const titleAvailable = mod.type === 'opening' && String(mod.title || '').trim();
   const tocItemsAvailable = mod.type === 'toc' && Array.isArray(mod.tocItems) && mod.tocItems.length;
-  if (!narr && mod.type !== 'reaction' && !titleAvailable && !tocItemsAvailable) return [];
+  if (!narr && !_isReactionType(mod.type) && !titleAvailable && !tocItemsAvailable) return [];
   const chunks = tts.buildChunksForModule(mod);
   if (!chunks.length) return [];
 
@@ -154,7 +157,7 @@ function buildSlideTtsTasks(mod, idx, postId) {
   // ttsCfg は読み取り専用扱いで、reaction の場合 speed を +10% override（コメント読み上げ高速化）
   //   2026-05-08: 相棒指示で reaction 全体に適用（前置きナレも含む）
   const ttsCfg = { ...(mod.tts || {}) };
-  if (mod.type === 'reaction' && ttsCfg.speed == null) {
+  if (_isReactionType(mod.type) && ttsCfg.speed == null) {
     // 通常 default 1.03 → reaction では 1.13 で 10% 早め
     ttsCfg.speed = 1.13;
   }
@@ -167,7 +170,7 @@ function buildSlideTtsTasks(mod, idx, postId) {
   //   chunk[0] (前置きナレ) はメイン voice、chunk[1+] (各コメント) がランダム
   let reactionVoices = null;
   let reactionStyleInstructions = null;
-  if (mod.type === 'reaction' && provider === 'gemini') {
+  if (_isReactionType(mod.type) && provider === 'gemini') {
     const commentChunkCount = Math.max(0, chunks.length - 1);
     if (Array.isArray(mod.reactionVoices) && mod.reactionVoices.length >= commentChunkCount) {
       reactionVoices = mod.reactionVoices.slice(0, commentChunkCount);
@@ -520,10 +523,10 @@ async function main() {
       // reaction: legacy では除外（chunk 毎ランダム voice 維持のため個別 TTS）
       //   INTEGRATED モード時は narration + comments[] を 1 chunk 統合してナレーター voice で combined に含める
       //   (ランダム voice 演出は犠牲、 INTEGRATED の simplicity 優先。将来 amix で復活予定)
-      if (m.type === 'reaction' && !INTEGRATED_AUDIO_MODE) return;
+      if (_isReactionType(m.type) && !INTEGRATED_AUDIO_MODE) return;
       if (Array.isArray(m.audio) && m.audio.length) return;
       let narr;
-      if (m.type === 'reaction') {
+      if (_isReactionType(m.type)) {
         const comments = (Array.isArray(m.comments) ? m.comments : [])
           .map(c => String(c?.text || '').trim()).filter(Boolean).slice(0, 7);
         narr = [String(m.narration || '').trim(), ...comments].filter(Boolean).join('。 ');
@@ -793,7 +796,7 @@ async function main() {
         console.log(`  ⏭️ m${mi} (${m.type}) skip (NORMALIZE_SKIP_TYPES)`);
         continue;
       }
-      const isReaction = m.type === 'reaction';
+      const isReaction = _isReactionType(m.type);
       for (let i = 0; i < m.audio.length; i++) {
         const audio = m.audio[i];
         if (!audio.file) continue;

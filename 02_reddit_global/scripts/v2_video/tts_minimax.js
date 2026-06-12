@@ -577,7 +577,7 @@ function buildChunksForModule(mod) {
   //   narration 全文を 1 chunk として返す → Gemini TTS が一気通貫で生成 → 声色完全統一
   //   ただし catchphrase / 字幕の同期は Gemini ASR で取得した word timestamps に依存（render.js 側で取得）
   //   reaction はコメント別音声化が必要なので除外
-  if (process.env.TTS_ONE_CHUNK_PER_SLIDE === '1' && mod.type !== 'reaction') {
+  if (process.env.TTS_ONE_CHUNK_PER_SLIDE === '1' && mod.type !== 'reaction' && mod.type !== 'v4_reaction') {
     return narr ? [narr] : [];
   }
 
@@ -585,7 +585,7 @@ function buildChunksForModule(mod) {
   //   chunk 数 = catchphrase 出現タイミングのアンカーになるため削減不可
   let baseChunks = splitIntoChunks(narr);
 
-  if (mod.type === 'reaction') {
+  if (mod.type === 'reaction' || mod.type === 'v4_reaction') {
     // 2026-05-17: 前段 narration は 1 chunk に強制統合（相棒指示）
     //   旧: splitIntoChunks で 50字超だと 2 chunks 化 → render.js の c>=1 判定で
     //       narration 2 chunk目が reaction voice に誤適用されるバグあり
