@@ -396,7 +396,8 @@ async function main() {
     console.error('modules not found:', mp);
     process.exit(1);
   }
-  const { modules = [] } = JSON.parse(fs.readFileSync(mp, 'utf8'));
+  const modulePayload = JSON.parse(fs.readFileSync(mp, 'utf8'));
+  const { modules = [] } = modulePayload;
   if (!modules.length) {
     updateJob(jobId, { status: 'error', error: 'modules empty' });
     process.exit(1);
@@ -407,7 +408,11 @@ async function main() {
   //   tocItems は opening/toc/ending を除く全スライドの title から自動抽出。
   //   章2件未満ならスキップ。既に toc を含む案件はそのまま尊重。
   //   v4_* スライド構成（2chまとめ型ショート動画）は固定5枚構成のため TOC なし。
-  const _isV4Modules = modules.some(m => m && /^v4_/.test(String(m.type || '')));
+  const _isV4Modules =
+    modulePayload.source === 'v4' ||
+    modulePayload.disableToc === true ||
+    String(postId || '').startsWith('v4_') ||
+    modules.some(m => m && /^v4_/.test(String(m.type || '')));
   if (!_isV4Modules && !modules.some(m => m && m.type === 'toc')) {
     const chapters = modules
       .filter(m => m && !['opening', 'toc', 'ending'].includes(m.type))

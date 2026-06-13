@@ -1,5 +1,5 @@
 // v4_launcher/scripts/v4_neta.js
-// ネタブック生成: 案件1件 → 記事3本+反応素材 → 6フィールド構造で生成
+// ネタブック生成: 案件1件 → 記事3本+反応素材 → V4構成付きネタブックを生成
 //
 // 出力（ネタブック）:
 //   title       : 2ch風タイトル（必須）
@@ -9,6 +9,12 @@
 //   comments1   : コメント集① (null = AI判断で省略)
 //   comments2   : コメント集② (null = AI判断で省略)
 //   mainEntity  : 主役の選手/チーム名（画像検索用）
+//   structurePattern : standard / interleaved / rapid
+//   supplementType   : picture / insight / stats / profile / comparison /
+//                      timeline / ranking / matchcard
+//   supplementData   : 補足スライド固有の表示データ
+//   commentAngle1/2  : コメントスライドの切り口
+//   endingPunch      : EDで読むオチの一言
 //
 // AI が素材を見て「埋める価値があるセクションだけ」埋める。
 // 全体で 1200 字以内を目安とする。
@@ -16,6 +22,7 @@
 
 const path = require('path');
 const fs   = require('fs');
+const { fetchBookAssets } = require('./v4_assets');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), quiet: true });
 
 const { fetchSerper }         = require('../../scripts/modules/fetchers/brave_search_module');
@@ -32,6 +39,11 @@ const REACTION_CHARS = 300;
 
 // V4_NETA_MODEL=sonnet → Anthropic Sonnet / それ以外 → DeepSeek Chat（デフォルト）
 const NETA_MODEL = (process.env.V4_NETA_MODEL || 'deepseek').toLowerCase();
+const STRUCTURE_PATTERNS = new Set(['standard', 'interleaved', 'rapid']);
+const SUPPLEMENT_TYPES = new Set([
+  'picture', 'insight', 'stats', 'profile',
+  'comparison', 'timeline', 'ranking', 'matchcard',
+]);
 
 // ── キャッシュ管理 ──────────────────────────────────────────────
 function _topicKey(topic) {
@@ -109,7 +121,7 @@ async function _fetchArticles(topic, existingUrl = '') {
 
 // ═══════════════════════════════════════════════════════════════
 // コメント倉庫
-//   収集: Reddit / ヤフコメ(スニペット) / X ツイート
+//   収集: Reddit 生コメント / Yahoo 実コメント欄 / X 元投稿への返信
 //   保存: data/neta_books/_comments_{topicKey}.json
 //   選定: リネカが倉庫から選ぶ。足りない場合のみ生成・意訳OK
 // ═══════════════════════════════════════════════════════════════
@@ -117,6 +129,55 @@ async function _fetchArticles(topic, existingUrl = '') {
 const REDDIT_COOKIE = process.env.REDDIT_SESSION_COOKIE || '';
 const X_API_KEY     = process.env.TWITTER_API_IO_KEY    || '';
 const COMMENTS_DIR  = NETA_DIR;  // 同じディレクトリに _comments_ プレフィクスで保存
+const COMMENT_WAREHOUSE_VERSION = 5;
+
+function _cleanCommentText(value, maxLen = 280) {
+  return String(value || '')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/@\w+/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
+function _uniqueComments(values, limit) {
+  const seen = new Set();
+  const out = [];
+  for (const value of values || []) {
+    const text = _cleanCommentText(value);
+    const key = text.toLowerCase().replace(/[\s。、！？!?.,・「」『』（）()]+/g, '');
+    if (text.length < 8 || key.length < 6 || /[\uFFFD]/.test(text) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+function _isLikelyYahooComment(value) {
+  const text = String(value || '').trim();
+  if (!text || /[\uFFFD]/.test(text)) return false;
+
+  // Yahooコメントページ内に混ざる関連記事の見出しを除外する。
+  if (
+    /(?:代表|監督|選手|MF|FW|DF|GK|会長|社長).{0,24}(?:が|は)(?:述懐|告白|明か|語っ|発言|断言|回想|説明)[^。！？]{0,12}[「『]/.test(text)
+  ) return false;
+
+  return true;
+}
+
+function _isLikelyXReaction(value) {
+  const text = _cleanCommentText(value);
+  if (!text) return false;
+
+  const reactionSignal =
+    /思う|思っ|残念|嬉し|悲し|切な|悔し|すご|凄|ヤバ|やば|ありがとう|お疲れ|べき|だろう|かな|最高|腹が立|応援|期待|心配|驚|納得|好き|嫌い|頑張/;
+  const newsSummary =
+    /(?:発表|表明|公表|報道|判明|明らかに|離脱|就任|退任|移籍)(?:しました|した|となりました|となった)/;
+
+  return !newsSummary.test(text) || reactionSignal.test(text);
+}
 
 // ── Reddit スレッドの生コメント ──────────────────────────────
 async function _fromReddit(sourceUrl) {
@@ -143,33 +204,42 @@ async function _fromReddit(sourceUrl) {
   }
 }
 
-// ── Yahoo ニュース記事コメント（スニペット経由）──────────────
+// ── Yahoo ニュースの実コメント欄 ─────────────────────────────
 async function _fromYahoo(topic) {
   try {
     const res = await fetchSerper(
       `site:news.yahoo.co.jp ${topic}`, '', 'ja', null, { num: 6 }
     );
-    // スニペットに「というコメントが相次いだ」等の引用文が混じることがある
-    const snippets = (res?.organic || []).map(r => r.snippet).filter(Boolean);
-    // 短めの発言っぽい文を抽出（"。"区切りで分解）
-    const candidates = [];
-    for (const s of snippets) {
-      const sents = s.split(/[。！？!?]/).map(x => x.trim()).filter(x => x.length >= 10 && x.length <= 100);
-      candidates.push(...sents);
+    const urls = [...new Set(
+      (res?.organic || [])
+        .map(r => r.link)
+        .filter(url => /^https?:\/\/news\.yahoo\.co\.jp\//i.test(String(url || '')))
+    )].slice(0, 4);
+
+    const comments = [];
+    for (const url of urls) {
+      try {
+        const article = await fetchArticleContent(url);
+        if (Array.isArray(article?.comments)) {
+          comments.push(...article.comments.filter(_isLikelyYahooComment));
+        }
+        if (comments.length >= 20) break;
+      } catch (_) {}
     }
-    return [...new Set(candidates)].slice(0, 15);
+    return _uniqueComments(comments, 15);
   } catch (e) {
     console.warn('[comments] Yahoo 失敗:', e.message);
     return [];
   }
 }
 
-// ── X ツイート（twitterapi.io）────────────────────────────────
-async function _fromX(topic) {
-  if (!X_API_KEY) return [];
+// ── X 元投稿への返信（twitterapi.io）─────────────────────────
+async function _fromX(sourceUrl) {
+  if (!X_API_KEY || !sourceUrl || !/(?:x|twitter)\.com\//i.test(sourceUrl)) return [];
+  const sourceId = String(sourceUrl).match(/status\/(\d+)/)?.[1];
+  if (!sourceId) return [];
   try {
-    // 日本語ツイート検索
-    const q = topic.slice(0, 40) + ' -is:retweet lang:ja';
+    const q = `conversation_id:${sourceId} -is:retweet`;
     const res = await fetch(
       'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
       new URLSearchParams({ query: q, queryType: 'Top' }),
@@ -177,10 +247,16 @@ async function _fromX(topic) {
     );
     const data = await res.json();
     const tweets = data?.data?.tweets || data?.tweets || [];
-    return tweets
-      .map(t => String(t.text || '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, ' ').trim())
-      .filter(t => t.length >= 15 && t.length <= 200)
-      .slice(0, 20);
+    const replies = tweets
+      .filter(t => String(t.id || t.id_str || t.tweetId || t.tweet_id || '') !== sourceId)
+      .filter(t => {
+        const replyTo = t.inReplyToId || t.in_reply_to_status_id_str || t.in_reply_to_tweet_id;
+        const isReply = t.isReply ?? t.is_reply;
+        return replyTo != null || isReply === true || String(t.conversationId || t.conversation_id || '') === sourceId;
+      })
+      .map(t => t.text || t.full_text || '')
+      .filter(_isLikelyXReaction);
+    return _uniqueComments(replies, 20);
   } catch (e) {
     console.warn('[comments] X 失敗:', e.message);
     return [];
@@ -196,8 +272,11 @@ async function _buildCommentWarehouse(topic, sourceUrl) {
   if (fs.existsSync(savePath)) {
     try {
       const cached = JSON.parse(fs.readFileSync(savePath, 'utf8'));
-      console.log(`[comments] キャッシュ使用: reddit=${cached.reddit?.length} yahoo=${cached.yahoo?.length} x=${cached.x?.length}`);
-      return cached;
+      if (cached.version === COMMENT_WAREHOUSE_VERSION) {
+        console.log(`[comments] キャッシュ使用: reddit=${cached.reddit?.length} yahoo=${cached.yahoo?.length} x=${cached.x?.length}`);
+        return cached;
+      }
+      console.log('[comments] 旧キャッシュを再構築:', path.basename(savePath));
     } catch (_) {}
   }
 
@@ -205,10 +284,11 @@ async function _buildCommentWarehouse(topic, sourceUrl) {
   const [reddit, yahoo, x] = await Promise.all([
     _fromReddit(sourceUrl),
     _fromYahoo(topic),
-    _fromX(topic),
+    _fromX(sourceUrl),
   ]);
 
   const warehouse = {
+    version: COMMENT_WAREHOUSE_VERSION,
     topic, topicKey: key,
     reddit,
     yahoo,
@@ -291,7 +371,29 @@ ${warehouseBlock}
 | comments1 | コメント 3〜4件（1件40字以内） | — | 反応あれば |
 | comments2 | さらに別のコメント 3〜4件（①と違うトーン優先、なければ続きでよい） | — | 倉庫に5件以上あれば |
 | mainEntity | 主役の英語フルネーム（画像検索用） | — | ✅ |
+| structurePattern | standard / interleaved / rapid から最適な型 | — | ✅ |
+| supplementType | 補足に最適なスライド型。補足不要なら null | — | 補足時 |
+| supplementTitle | 補足スライドの短い見出し | 〜24字 | 補足時 |
+| supplementData | 下記スキーマに従う表示データ。記事で確認できる事実だけ | — | 型次第 |
+| commentAngle1 | コメント①の切り口 | 〜18字 | コメント時 |
+| commentAngle2 | コメント②の切り口 | 〜18字 | コメント時 |
+| endingPunch | EDで読むオチの一言。CTAや挨拶は禁止 | 〜32字 | ✅ |
 | tone_check | "ok" / "ng" | — | ✅ |
+
+**構成型:**
+- standard: OP → 概要 → 補足 → コメント1 → コメント2 → ED
+- interleaved: OP → 概要 → コメント1 → 補足 → コメント2 → ED
+- rapid: OP → 概要 → コメント1 → コメント2 → ED。補足を入れない方が速い案件
+
+**補足スライド型:**
+- picture: 概要の延長。supplementData は {}
+- insight: 要点を短句で見せる。supplementData.catchphrases は2〜5件
+- stats/profile: 選手の数値・プロフィール。supplementData.dataSlots は label/value を4〜8件
+- comparison: 比較。leftName/rightName と dataSlots(label/leftValue/rightValue)
+- timeline: 推移。series(name, points[{x,y}])。記事に複数時点の数値がある場合だけ
+- ranking: 順位。items(rank,name,value,subtext)。記事に順位根拠がある場合だけ
+- matchcard: 試合結果・試合内容。homeTeam/awayTeam/homeScore/awayScore が確認できる場合だけ
+- 必要データを記事で確認できない型は選ばず、picture または insight にする
 
 **コメントの使い方:**
 ${hasRealComments
@@ -307,6 +409,15 @@ ${hasRealComments
   "comments1": ["...", "...", "..."],
   "comments2": null,
   "mainEntity": "Wataru Endo",
+  "structurePattern": "standard",
+  "supplementType": "insight",
+  "supplementTitle": "遠藤が残したもの",
+  "supplementData": {
+    "catchphrases": ["主将としてチームを牽引", "代表で積み重ねた信頼"]
+  },
+  "commentAngle1": "感謝の声",
+  "commentAngle2": "惜しむ声",
+  "endingPunch": "最後まで、遠藤らしい決断だった。",
   "tone_check": "ok"
 }`;
 
@@ -322,13 +433,14 @@ ${hasRealComments
     messages: [{ role: 'user', content: prompt }],
   });
 
-  const m = raw && raw.match(/\{[\s\S]*?\n\}/);
-  const m2 = m || (raw && raw.match(/\{[\s\S]*\}/));
-  if (!m2) throw new Error('ネタブック生成失敗: JSON未検出');
+  const jsonText = raw && raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+  if (!jsonText || !jsonText.startsWith('{') || !jsonText.endsWith('}')) {
+    throw new Error('ネタブック生成失敗: JSON未検出');
+  }
 
   let parsed;
   try {
-    parsed = JSON.parse(m2[0]);
+    parsed = JSON.parse(jsonText);
   } catch (e) {
     // JSON が壊れていたら最小構造でフォールバック
     throw new Error('ネタブックJSON parse失敗: ' + e.message);
@@ -348,6 +460,16 @@ ${hasRealComments
     const arr = v.map(x => String(x||'').trim()).filter(Boolean).map(x => x.slice(0, maxLen));
     return arr.length >= 2 ? arr.slice(0, maxItem) : null;
   }
+  function cleanObject(v) {
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  }
+
+  const structurePattern = STRUCTURE_PATTERNS.has(parsed.structurePattern)
+    ? parsed.structurePattern
+    : 'standard';
+  const supplementType = SUPPLEMENT_TYPES.has(parsed.supplementType)
+    ? parsed.supplementType
+    : null;
 
   return {
     title:       clean(parsed.title, 60)        || topic,
@@ -357,6 +479,13 @@ ${hasRealComments
     comments1:   cleanArr(parsed.comments1, 5, 40),
     comments2:   cleanArr(parsed.comments2, 5, 40),
     mainEntity:  clean(parsed.mainEntity, 80)    || '',
+    structurePattern,
+    supplementType,
+    supplementTitle: clean(parsed.supplementTitle, 40),
+    supplementData: cleanObject(parsed.supplementData),
+    commentAngle1: clean(parsed.commentAngle1, 30) || 'ネットの反応',
+    commentAngle2: clean(parsed.commentAngle2, 30) || 'さらに反応',
+    endingPunch: clean(parsed.endingPunch, 50) || 'この話、まだ動きそうだ。',
     tone_check:  'ok',
   };
 }
@@ -398,10 +527,50 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     comments1:        neta.comments1,
     comments2:        neta.comments2,
     mainEntity:       neta.mainEntity,
+    structurePattern: neta.structurePattern,
+    supplementType:   neta.supplementType,
+    supplementTitle:  neta.supplementTitle,
+    supplementData:   neta.supplementData,
+    commentAngle1:    neta.commentAngle1,
+    commentAngle2:    neta.commentAngle2,
+    endingPunch:      neta.endingPunch,
     commentWarehouse: { total: warehouse.total, reddit: warehouse.reddit?.length, yahoo: warehouse.yahoo?.length, x: warehouse.x?.length },
     articles:         articles.map(a => ({ title: a.title, url: a.url, host: a.host })),
     createdAt:        new Date().toISOString(),
   };
+
+  try {
+    const assets = await fetchBookAssets(book);
+    book.dataLabels = assets.labels;
+    book.fetchedData = assets.dataRows;
+    book.assetImages = assets.images;
+    book.selectedImages = assets.images.slice(0, 3).map(image => image.url).filter(Boolean);
+    book.assetWarnings = assets.warnings;
+    if (
+      ['stats', 'profile'].includes(book.supplementType) &&
+      assets.dataRows.length &&
+      (!Array.isArray(book.supplementData?.dataSlots) || !book.supplementData.dataSlots.length)
+    ) {
+      book.supplementData = {
+        ...(book.supplementData || {}),
+        dataSlots: assets.dataRows.slice(0, 8).map(row => ({
+          label: row.label,
+          value: row.value,
+          source: row.source,
+          key: row.key,
+        })),
+      };
+    }
+    console.log(
+      `[v4_neta] データ取得: labels=${assets.labels.length} rows=${assets.dataRows.length} images=${assets.images.length}`,
+    );
+  } catch (e) {
+    book.dataLabels = [];
+    book.fetchedData = [];
+    book.assetImages = [];
+    book.assetWarnings = [e.message];
+    console.warn('[v4_neta] データ・画像取得失敗:', e.message);
+  }
 
   const safeId  = topic.replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, '_').slice(0, 40);
   const fname   = `neta_${safeId}_${Date.now()}.json`;
@@ -417,7 +586,12 @@ function getWarehousePath(topic) {
   return path.join(COMMENTS_DIR, `_comments_${_topicKey(topic)}.json`);
 }
 
-module.exports = { buildNetaBook, getCachedBook, getWarehousePath };
+module.exports = {
+  buildNetaBook,
+  buildCommentWarehouse: _buildCommentWarehouse,
+  getCachedBook,
+  getWarehousePath,
+};
 
 // ── CLI テスト ────────────────────────────────────────────────
 if (require.main === module) {

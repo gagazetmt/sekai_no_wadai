@@ -1,13 +1,12 @@
 // v4_launcher/scripts/v4_video.js
 // ネタブック → V4動画生成パイプライン
 //
-// 動画構成（120秒前後）:
-//   1. v4_picture: フック + 概要       （約25秒）
-//   2. v4_picture: 補足シナリオ①      （約25秒）
-//   3. v4_picture: 補足シナリオ②      （約25秒）
-//   4. v4_reaction: ネット民の反応     （約40秒）
+// 動画構成（2〜3分 / 4〜6枚）:
+//   standard:    opening → picture → supplement → reaction → reaction → ending
+//   interleaved: opening → picture → reaction → supplement → reaction → ending
+//   rapid:       opening → picture → reaction → reaction → ending
 //
-// render.js を子プロセスで呼び出し。V3インフラ（TTS/ffmpeg/BGM）をフル再利用。
+// V3既存スライドと render.js（TTS/ffmpeg/BGM）を再利用する。
 'use strict';
 
 const path   = require('path');
@@ -41,89 +40,232 @@ function _findImage(entityName) {
   return null;
 }
 
-// ── ネタブック → modules.json ─────────────────────────────────
-// 固定5枚構成:
-//   ① v4_opening  タイトルコール
-//   ② v4_picture  概要説明
-//   ③ v4_picture  補足説明（supplement1 + supplement2 統合）
-//   ④ v4_reaction コメント集①
-//   ⑤ v4_reaction コメント集②
-// 素材不足のスライドのみ脱落（gracefully degrade）
-function buildModules(book) {
-  const imagePath = _findImage(book.mainEntity);
-  const images = imagePath ? [imagePath] : [];
-  const threadTitle = book.title || book.hook || book.topic;
-  const modules = [];
+function _selectedImage(book) {
+  const selected = Array.isArray(book?.selectedImages)
+    ? book.selectedImages.find(Boolean)
+    : null;
+  return selected ? String(selected).replace(/^\//, '') : null;
+}
 
-  // ① タイトルコール
-  modules.push({
-    type: 'v4_opening',
-    title: threadTitle,
-    images,
-    narration: threadTitle,
-  });
+function _imagePreset(book) {
+  const selected = Array.isArray(book?.selectedImages) ? book.selectedImages : [];
+  const assets = Array.isArray(book?.assetImages) ? book.assetImages.map(image => image?.url) : [];
+  const paths = [...selected, ...assets]
+    .filter(Boolean)
+    .map(value => String(value).replace(/^\//, ''));
+  return [...new Set(paths)].slice(0, 3);
+}
 
-  // ② 概要説明
-  modules.push({
-    type: 'v4_picture',
-    title: 'これマジ？何があったか整理するで',
-    threadTitle,
-    resNo: 2,
-    images,
-    narration: book.overview,
-  });
+const STRUCTURE_PATTERNS = new Set(['standard', 'interleaved', 'rapid']);
+const SUPPLEMENT_TYPES = new Set([
+  'picture', 'insight', 'stats', 'profile',
+  'comparison', 'timeline', 'ranking', 'matchcard',
+]);
 
-  // ③ 補足説明（supplement1 + supplement2 を1枚に統合）
-  const supplement = [book.supplement1, book.supplement2].filter(Boolean).join(' ');
-  if (supplement) {
-    modules.push({
-      type: 'v4_picture',
-      title: '実はこんな事実があるんや',
-      threadTitle,
-      resNo: 5,
-      images,
-      narration: supplement,
+function _cleanText(v, fallback = '') {
+  const s = String(v || '').trim();
+  return s || fallback;
+}
+
+function _compactText(value, maxChars) {
+  const text = _cleanText(value).replace(/\s+/g, ' ');
+  if (Array.from(text).length <= maxChars) return text;
+  const sentences = text.split(/(?<=[。！？!?])/).filter(Boolean);
+  let out = '';
+  for (const sentence of sentences) {
+    if (Array.from(out + sentence).length > maxChars) break;
+    out += sentence;
+  }
+  if (out) return out.trim();
+  return Array.from(text).slice(0, maxChars).join('').replace(/[、,\s]+$/, '') + '。';
+}
+
+function _comments(v) {
+  return Array.isArray(v) ? v.map(x => _cleanText(x)).filter(Boolean) : [];
+}
+
+function _hasStructuredData(type, data) {
+  if (!data || typeof data !== 'object') return false;
+  if (type === 'stats' || type === 'profile') {
+    return Array.isArray(data.dataSlots) && data.dataSlots.some(x => x?.label && x?.value);
+  }
+  if (type === 'comparison') {
+    return !!(data.leftName && data.rightName &&
+      Array.isArray(data.dataSlots) &&
+      data.dataSlots.some(x => x?.label && x?.leftValue != null && x?.rightValue != null));
+  }
+  if (type === 'timeline') {
+    return Array.isArray(data.series) &&
+      data.series.some(s => Array.isArray(s?.points) && s.points.length >= 2);
+  }
+  if (type === 'ranking') {
+    return Array.isArray(data.items) && data.items.some(x => x?.name && x?.value);
+  }
+  if (type === 'matchcard') {
+    return !!(data.homeTeam && data.awayTeam);
+  }
+  return true;
+}
+
+function _buildSupplement(book, imagePath) {
+  const narration = _compactText(
+    [book.supplement1, book.supplement2].filter(Boolean).join(' '),
+    150,
+  );
+  if (!narration) return null;
+
+  const data = book.supplementData && typeof book.supplementData === 'object'
+    ? book.supplementData
+    : {};
+  let type = SUPPLEMENT_TYPES.has(book.supplementType) ? book.supplementType : 'picture';
+  if (!_hasStructuredData(type, data)) {
+    console.warn(`[v4_video] ${type} は表示データ不足のため insight に降格`);
+    type = 'insight';
+  }
+
+  const title = _cleanText(book.supplementTitle, 'ここがポイント');
+  const base = {
+    type,
+    title,
+    narration,
+    images: imagePath ? [imagePath] : [],
+    bgImage: imagePath || null,
+  };
+
+  if (type === 'insight') {
+    const phrases = Array.isArray(data.catchphrases)
+      ? data.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
+      : [];
+    base.catchphrases = (phrases.length ? phrases : [book.supplement1, book.supplement2])
+      .filter(Boolean)
+      .slice(0, 6);
+  } else if (type === 'stats' || type === 'profile') {
+    base.siBinding = _cleanText(data.entity, book.mainEntity);
+    base.dataSlots = data.dataSlots.slice(0, 8);
+  } else if (type === 'comparison') {
+    base.siBindingLeft = data.leftName;
+    base.siBindingRight = data.rightName;
+    base.leftImage = imagePath || null;
+    base.rightImage = null;
+    base.dataSlots = data.dataSlots.slice(0, 7);
+  } else if (type === 'timeline') {
+    base.subtitle = _cleanText(data.subtitle);
+    base.xLabel = _cleanText(data.xLabel);
+    base.yLabel = _cleanText(data.yLabel);
+    base.invertY = !!data.invertY;
+    base.series = data.series.slice(0, 4);
+  } else if (type === 'ranking') {
+    base.subtitle = _cleanText(data.subtitle);
+    base.items = data.items.slice(0, 5);
+  } else if (type === 'matchcard') {
+    Object.assign(base, {
+      homeTeam: data.homeTeam,
+      awayTeam: data.awayTeam,
+      homeScore: data.homeScore,
+      awayScore: data.awayScore,
+      matchDate: data.matchDate,
+      matchData: data.matchData,
     });
   }
 
-  // ④⑤ コメント集（comments2 が無く comments1 が5件以上なら半分に分割）
-  let c1 = Array.isArray(book.comments1) ? book.comments1.filter(Boolean) : [];
-  let c2 = Array.isArray(book.comments2) ? book.comments2.filter(Boolean) : [];
+  return base;
+}
+
+function _buildReaction(title, comments) {
+  if (!comments.length) return null;
+  return {
+    type: 'reaction',
+    title,
+    comments: comments.slice(0, 4).map((text, i) => ({
+      text: _compactText(text, 36),
+      score: 100 - i * 10,
+    })),
+    narration: '',
+  };
+}
+
+// ── ネタブック → modules.json ─────────────────────────────────
+function buildModules(book) {
+  const preset = _imagePreset(book);
+  const fallbackImage = _selectedImage(book) || _findImage(book.mainEntity);
+  if (!preset.length && fallbackImage) preset.push(fallbackImage);
+  const imagePath = preset[0] || null;
+  const overviewImage = preset[1] || imagePath;
+  const supplementImage = preset[2] || overviewImage || imagePath;
+  const images = imagePath ? [imagePath] : [];
+  const threadTitle = book.title || book.hook || book.topic;
+  const pattern = STRUCTURE_PATTERNS.has(book.structurePattern)
+    ? book.structurePattern
+    : 'standard';
+
+  let c1 = _comments(book.comments1);
+  let c2 = _comments(book.comments2);
   if (!c2.length && c1.length >= 5) {
     const half = Math.ceil(c1.length / 2);
     c2 = c1.slice(half);
     c1 = c1.slice(0, half);
   }
 
-  if (c1.length) {
-    modules.push({
-      type: 'v4_reaction',
-      title: 'ネット民の反応',
-      threadTitle,
-      comments: c1.map((text, i) => ({ text, score: 100 - i * 10 })),
-      narration: 'スレ民の反応がこちら',
-    });
+  const opening = {
+    type: 'opening',
+    title: threadTitle,
+    images,
+    bgImage: imagePath || null,
+    narration: threadTitle,
+  };
+  const overview = {
+    type: 'picture',
+    title: '何が起きた？',
+    images: overviewImage ? [overviewImage] : images,
+    bgImage: overviewImage || imagePath || null,
+    narration: _compactText(book.overview, 190),
+  };
+  const supplement = pattern === 'rapid' ? null : _buildSupplement(book, supplementImage);
+  const reaction1 = _buildReaction(_cleanText(book.commentAngle1, 'ネットの反応'), c1);
+  const reaction2 = _buildReaction(_cleanText(book.commentAngle2, 'さらに反応'), c2);
+  const ending = {
+    type: 'ending',
+    title: _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
+    narration: _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
+    bgImage: imagePath || null,
+    endingCta: { text: '　' },
+  };
+
+  const middle = pattern === 'interleaved'
+    ? [overview, reaction1, supplement, reaction2]
+    : [overview, supplement, reaction1, reaction2];
+  const modules = [opening, ...middle.filter(Boolean), ending];
+
+  // 反応が少ない案件でも4枚を下回らないよう、補足を復帰させる。
+  if (modules.length < 4 && !supplement) {
+    const fallbackSupplement = _buildSupplement(book, imagePath);
+    if (fallbackSupplement) modules.splice(2, 0, fallbackSupplement);
   }
-  if (c2.length) {
-    modules.push({
-      type: 'v4_reaction',
-      title: 'さらに反応',
-      threadTitle,
-      comments: c2.map((text, i) => ({ text, score: 90 - i * 10 })),
-      narration: 'まだまだ反応は続く',
+  if (modules.length < 4) {
+    modules.splice(2, 0, {
+      type: 'insight',
+      title: '今回の要点',
+      narration: _compactText(book.overview, 120),
+      bgImage: imagePath || null,
+      catchphrases: [_cleanText(book.overview, threadTitle).slice(0, 42)],
     });
   }
 
-  console.log(`[v4_video] スライド構成: ${modules.length}枚 (①タイトル ②概要${supplement ? ' ③補足' : ''}${c1.length ? ' ④反応1' : ''}${c2.length ? ' ⑤反応2' : ''})`);
+  console.log(`[v4_video] 構成=${pattern} / ${modules.length}枚 / ${modules.map(m => m.type).join(' → ')}`);
   return modules;
 }
 
 // ── render.js 子プロセス実行 ──────────────────────────────────
-function _runRender(postId, jobId) {
+function _runRender(postId, jobId, { customTts = false } = {}) {
   return new Promise((resolve, reject) => {
+    const tempoEnv = {
+      TTS_TARGET_CPS: process.env.V4_TTS_TARGET_CPS || '9.0',
+    };
     const proc = spawn('node', [RENDER_JS, postId, jobId], {
       cwd: BASE_DIR,
-      env: { ...process.env },
+      env: customTts
+        ? { ...process.env, ...tempoEnv, AUDIO_MODE: 'legacy', TTS_COMBINED_MODE: '0' }
+        : { ...process.env, ...tempoEnv },
     });
     proc.stdout.on('data', d => process.stdout.write(d));
     proc.stderr.on('data', d => process.stderr.write(d));
@@ -137,7 +279,7 @@ function _writeJob(jobId, data) {
 }
 
 // ── メイン: 動画生成 ──────────────────────────────────────────
-async function generateV4Video(book) {
+async function generateV4Video(book, providedModules = null) {
   const postId = 'v4_' + safeId(book.topic) + '_' + Date.now();
   const jobId  = 'v4job_' + Date.now();
 
@@ -166,17 +308,26 @@ async function generateV4Video(book) {
   fs.writeFileSync(savedFile, JSON.stringify(saved, null, 2));
 
   // modules.json 生成
-  const modules = buildModules(book);
+  const modules = Array.isArray(providedModules) && providedModules.length
+    ? JSON.parse(JSON.stringify(providedModules))
+    : buildModules(book);
   fs.writeFileSync(
     path.join(MODULES_DIR, postId + '_modules.json'),
-    JSON.stringify({ postId, modules, savedAt: new Date().toISOString(), source: 'v4' }, null, 2)
+    JSON.stringify({
+      postId,
+      modules,
+      savedAt: new Date().toISOString(),
+      source: 'v4',
+      disableToc: true,
+    }, null, 2)
   );
 
   // ジョブ初期化
   _writeJob(jobId, { jobId, status: 'running', postId, createdAt: new Date().toISOString() });
 
   // render.js 実行
-  await _runRender(postId, jobId);
+  const customTts = modules.some(module => module?.tts?.provider || module?.tts?.voiceId);
+  await _runRender(postId, jobId, { customTts });
 
   // 出力ファイルを確認
   // render.js は postId.replace(/[\/\?%*:|"<>\.]/g,'_').slice(-20) でファイル名を作る
@@ -197,7 +348,7 @@ async function generateV4Video(book) {
   return result;
 }
 
-module.exports = { generateV4Video };
+module.exports = { buildModules, generateV4Video };
 
 // ── CLIテスト ─────────────────────────────────────────────────
 if (require.main === module) {

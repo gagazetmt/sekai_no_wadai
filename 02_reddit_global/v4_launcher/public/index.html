@@ -24,6 +24,7 @@
   --cx:      #1d9bf0;   /* X blue */
   --cy:      #ff6b00;   /* Yahoo orange */
   --cr:      #ff4500;   /* Reddit */
+  --c5:      #b58cff;   /* 5ch */
   --radius:  10px;
   --rad-sm:  6px;
 }
@@ -121,6 +122,7 @@ main { padding: 14px; max-width: 860px; margin: 0 auto; }
 .src-chip[data-src="X"].active    { background: var(--cx); }
 .src-chip[data-src="Yahoo"].active { background: var(--cy); }
 .src-chip[data-src="Reddit"].active { background: var(--cr); }
+.src-chip[data-src="5ch"].active { background: var(--c5); }
 .src-count {
   background: rgba(255,255,255,.12); border-radius: 10px;
   padding: 0 5px; font-size: 10px; font-weight: 900;
@@ -151,6 +153,7 @@ main { padding: 14px; max-width: 860px; margin: 0 auto; }
 .tc[data-src="X"]::before     { background: var(--cx); }
 .tc[data-src="Yahoo"]::before  { background: var(--cy); }
 .tc[data-src="Reddit"]::before { background: var(--cr); }
+.tc[data-src="5ch"]::before { background: var(--c5); }
 .tc:hover { border-color: var(--border2); transform: translateY(-1px); }
 .tc.selected { border-color: var(--yellow); background: #1a1800; }
 .tc.selected::after {
@@ -168,6 +171,7 @@ main { padding: 14px; max-width: 860px; margin: 0 auto; }
 .tc[data-src="X"]      .tc-src { background: rgba(29,155,240,.18); color: var(--cx); }
 .tc[data-src="Yahoo"]  .tc-src { background: rgba(255,107,0,.18);  color: var(--cy); }
 .tc[data-src="Reddit"] .tc-src { background: rgba(255,69,0,.18);   color: var(--cr); }
+.tc[data-src="5ch"] .tc-src { background: rgba(181,140,255,.18); color: var(--c5); }
 .tc-score {
   margin-left: auto;
   font-size: 13px; font-weight: 900;
@@ -246,7 +250,6 @@ main { padding: 14px; max-width: 860px; margin: 0 auto; }
 .neta-section.open .neta-arrow { transform: rotate(90deg); }
 .neta-body { display: none; padding: 0 14px 12px; }
 .neta-section.open .neta-body { display: block; }
-.neta-text { font-size: 14px; line-height: 1.7; color: #ccc; margin-bottom: 8px; }
 textarea.neta-edit {
   width: 100%; background: var(--s2);
   border: 1px solid var(--border2); border-radius: var(--rad-sm);
@@ -273,6 +276,77 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
 .neta-empty-note {
   font-size: 12px; color: var(--muted); font-style: italic;
   padding: 6px 0 8px; line-height: 1.5;
+}
+
+/* ══ 取得データ・画像ギャラリー ═══════════════════════════════ */
+.asset-panel {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 13px 14px;
+  margin-top: 10px;
+}
+.asset-panel-hd {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 900; margin-bottom: 10px;
+}
+.asset-panel-hd .asset-count {
+  font-size: 10px; color: var(--muted);
+  background: var(--s3); padding: 1px 7px; border-radius: 10px;
+}
+.data-label-list { display: flex; flex-wrap: wrap; gap: 7px; }
+.data-label-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--s2); border: 1px solid var(--border2);
+  border-radius: 18px; padding: 6px 10px;
+  font-size: 12px; color: #ddd;
+}
+.data-label-chip .source {
+  color: var(--yellow); font-size: 9px; font-weight: 900;
+  letter-spacing: .4px;
+}
+.fetched-data-list { display: flex; flex-direction: column; gap: 6px; }
+.fetched-data-row {
+  display: grid; grid-template-columns: minmax(100px, .8fr) minmax(0, 1.5fr);
+  gap: 10px; padding: 8px 10px;
+  background: var(--s2); border-radius: var(--rad-sm);
+  font-size: 12px; line-height: 1.45;
+}
+.fetched-data-row .label { color: var(--muted); }
+.fetched-data-row .value { color: #eee; overflow-wrap: anywhere; }
+.gallery-search {
+  display: grid; grid-template-columns: 1fr auto; gap: 7px;
+  margin-bottom: 10px;
+}
+.gallery-search input {
+  min-width: 0; background: var(--s2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--rad-sm);
+  padding: 9px 10px; font: inherit;
+}
+.gallery-search input:focus { outline: none; border-color: var(--yellow); }
+.image-gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 8px;
+}
+.gallery-item {
+  position: relative; aspect-ratio: 4 / 3; overflow: hidden;
+  border: 2px solid var(--border2); border-radius: var(--rad-sm);
+  background: #050505; cursor: pointer;
+}
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery-item.selected { border-color: var(--yellow); box-shadow: 0 0 0 1px var(--yellow); }
+.gallery-item .gallery-role {
+  position: absolute; left: 4px; bottom: 4px;
+  max-width: calc(100% - 8px); padding: 2px 5px;
+  border-radius: 3px; background: rgba(0,0,0,.75);
+  color: #ddd; font-size: 9px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.gallery-item.selected::after {
+  content: '使用'; position: absolute; top: 4px; right: 4px;
+  padding: 2px 6px; border-radius: 10px;
+  background: var(--yellow); color: #111; font-size: 9px; font-weight: 900;
+}
+.asset-empty {
+  color: var(--muted); font-size: 12px; padding: 10px 2px;
 }
 
 /* ══ コメント倉庫 UI ══════════════════════════════════════════ */
@@ -347,6 +421,62 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ══════════════════════════════════ VIDEO STAGES */
+.confirm-tabs {
+  display: flex; gap: 6px; overflow-x: auto;
+  padding-bottom: 8px; margin-bottom: 10px;
+  scrollbar-width: thin;
+}
+.confirm-tab {
+  flex: 0 0 auto; padding: 8px 11px;
+  border: 1px solid var(--border2); border-radius: var(--rad-sm);
+  background: var(--s2); color: var(--muted);
+  font-size: 11px; font-weight: 900; cursor: pointer;
+}
+.confirm-tab.active { background: var(--yellow); color: #111; border-color: var(--yellow); }
+.confirm-layout {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 1.15fr);
+  gap: 12px; align-items: start;
+}
+.confirm-panel {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 13px;
+}
+.confirm-label {
+  display: block; color: var(--muted); font-size: 10px;
+  font-weight: 900; letter-spacing: .5px; margin: 10px 0 5px;
+}
+.confirm-input, .confirm-select, .confirm-textarea {
+  width: 100%; background: var(--s2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--rad-sm);
+  padding: 9px 10px; font: inherit;
+}
+.confirm-textarea { min-height: 125px; resize: vertical; line-height: 1.6; }
+.confirm-input:focus, .confirm-select:focus, .confirm-textarea:focus {
+  outline: none; border-color: var(--yellow);
+}
+.confirm-actions { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 10px; }
+.confirm-preview {
+  position: relative; width: 100%; aspect-ratio: 16 / 9;
+  overflow: hidden; border-radius: var(--rad-sm);
+  background: #000; border: 1px solid var(--border2);
+}
+.confirm-preview iframe {
+  position: absolute; inset: 0; width: 1920px; height: 1080px;
+  border: 0; transform-origin: top left;
+}
+.tts-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.tts-status { color: var(--muted); font-size: 12px; margin-top: 8px; min-height: 18px; }
+.confirm-summary {
+  font-size: 12px; color: var(--muted); margin-bottom: 10px; line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .confirm-layout { grid-template-columns: 1fr; }
+  .tts-grid { grid-template-columns: 1fr 1fr; }
+}
+
 .stages {
   display: flex; gap: 0;
   background: var(--s1); border: 1px solid var(--border);
@@ -421,7 +551,10 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
     <span class="step-num">2</span>ネタブック
   </button>
   <button class="nav-tab" data-step="3" id="tab3" onclick="goStep(3)" disabled>
-    <span class="step-num">3</span>動画生成
+    <span class="step-num">3</span>生成前確認
+  </button>
+  <button class="nav-tab" data-step="4" id="tab4" onclick="goStep(4)" disabled>
+    <span class="step-num">4</span>動画生成
   </button>
 </div>
 
@@ -457,6 +590,11 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <div class="scan-bar"><div class="scan-fill reddit" id="fillR"></div></div>
         <span class="scan-status" id="statR">待機</span>
       </div>
+      <div class="scan-row">
+        <span class="scan-label" style="color:var(--c5)">5ch</span>
+        <div class="scan-bar"><div class="scan-fill" id="fill5" style="background:var(--c5)"></div></div>
+        <span class="scan-status" id="stat5">待機</span>
+      </div>
     </div>
   </div>
 
@@ -477,6 +615,10 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
     <div class="src-chip" data-src="Reddit" onclick="filterSrc('Reddit')">
       <span class="dot" style="background:var(--cr)"></span>
       Reddit <span class="src-count" id="cntR">0</span>
+    </div>
+    <div class="src-chip" data-src="5ch" onclick="filterSrc('5ch')">
+      <span class="dot" style="background:var(--c5)"></span>
+      5ch <span class="src-count" id="cnt5">0</span>
     </div>
   </div>
 
@@ -518,7 +660,6 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
-        <div class="neta-text" id="disp-title"></div>
         <textarea class="neta-edit" id="edit-title" rows="2"></textarea>
       </div>
     </div>
@@ -531,7 +672,6 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <span class="neta-arrow">›</span>
       </div>
       <div class="neta-body">
-        <div class="neta-text" id="disp-overview"></div>
         <textarea class="neta-edit" id="edit-overview" rows="4"></textarea>
       </div>
     </div>
@@ -545,7 +685,6 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       </div>
       <div class="neta-body">
         <div class="neta-empty-note" id="empty-s1" style="display:none;">AIが素材不足と判断し省略しました。手入力できます。</div>
-        <div class="neta-text" id="disp-supplement1"></div>
         <textarea class="neta-edit" id="edit-supplement1" rows="3" placeholder="補足①を追加（任意）"></textarea>
       </div>
     </div>
@@ -559,7 +698,6 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       </div>
       <div class="neta-body">
         <div class="neta-empty-note" id="empty-s2" style="display:none;">AIが素材不足と判断し省略しました。手入力できます。</div>
-        <div class="neta-text" id="disp-supplement2"></div>
         <textarea class="neta-edit" id="edit-supplement2" rows="3" placeholder="補足②を追加（任意）"></textarea>
       </div>
     </div>
@@ -598,17 +736,116 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       </div>
     </div>
 
+    <div class="asset-panel">
+      <div class="asset-panel-hd">
+        🏷️ データ取得ラベル
+        <span class="asset-count" id="dataLabelCount">0</span>
+      </div>
+      <div class="data-label-list" id="dataLabelList"></div>
+    </div>
+
+    <div class="asset-panel">
+      <div class="asset-panel-hd">
+        📊 取得データ
+        <span class="asset-count" id="fetchedDataCount">0</span>
+      </div>
+      <div class="fetched-data-list" id="fetchedDataList"></div>
+    </div>
+
+    <div class="asset-panel">
+      <div class="asset-panel-hd">
+        🖼️ 画像ギャラリー
+        <span class="asset-count" id="imageGalleryCount">0</span>
+      </div>
+      <div class="gallery-search">
+        <input id="imageGalleryQuery" placeholder="選手名・チーム名" onkeydown="if(event.key==='Enter')loadImageGallery()">
+        <button class="btn btn-ghost" onclick="loadImageGallery()">検索</button>
+      </div>
+      <div class="image-gallery" id="imageGallery"></div>
+    </div>
+
     <div class="sep"></div>
 
-    <button class="btn btn-yellow" style="width:100%;justify-content:center;padding:14px;" onclick="goToVideo()">
-      ▶ この内容で動画生成
+    <button class="btn btn-yellow" style="width:100%;justify-content:center;padding:14px;" onclick="goToConfirm()">
+      ▶ スライド・TTS確認へ
     </button>
   </div>
 </div>
 
-<!-- ═══════════════════════ STEP 3: 動画生成 -->
+<!-- ═══════════════════════ STEP 3: 生成前確認 -->
 <div class="page" id="page3">
+  <div class="confirm-summary" id="confirmSummary">ネタブックからスライドを準備します。</div>
+  <div class="confirm-tabs" id="confirmTabs"></div>
 
+  <div class="confirm-layout">
+    <div class="confirm-panel">
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="moveConfirmSlide(-1)">← 前へ移動</button>
+        <button class="btn btn-ghost" onclick="moveConfirmSlide(1)">次へ移動 →</button>
+      </div>
+
+      <label class="confirm-label">スライド型</label>
+      <select class="confirm-select" id="confirmType" onchange="updateConfirmModule()"></select>
+
+      <label class="confirm-label">タイトル</label>
+      <input class="confirm-input" id="confirmTitle" oninput="updateConfirmModule(false)">
+
+      <label class="confirm-label">ナレーション</label>
+      <textarea class="confirm-textarea" id="confirmNarration" oninput="updateConfirmModule(false)"></textarea>
+
+      <div id="confirmReactionWrap" style="display:none;">
+        <label class="confirm-label">コメント（1行1件）</label>
+        <textarea class="confirm-textarea" id="confirmComments" oninput="updateConfirmModule(false)"></textarea>
+      </div>
+
+      <label class="confirm-label">画像URL</label>
+      <input class="confirm-input" id="confirmImage" placeholder="/images_stock/..." oninput="updateConfirmModule(false)">
+    </div>
+
+    <div class="confirm-panel">
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="reloadConfirmPreview()">プレビュー更新</button>
+      </div>
+      <div class="confirm-preview" id="confirmPreviewWrap">
+        <iframe id="confirmPreviewFrame" scrolling="no"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="confirm-panel mt14">
+    <div style="font-size:13px;font-weight:900;margin-bottom:8px;">🎙️ TTS設定（全スライド共通）</div>
+    <div class="tts-grid">
+      <div>
+        <label class="confirm-label">プロバイダ</label>
+        <select class="confirm-select" id="confirmTtsProvider" onchange="loadConfirmTtsPresets(this.value)"></select>
+      </div>
+      <div>
+        <label class="confirm-label">音声</label>
+        <select class="confirm-select" id="confirmTtsVoice"></select>
+      </div>
+      <div>
+        <label class="confirm-label">モデル</label>
+        <select class="confirm-select" id="confirmTtsModel"></select>
+      </div>
+      <div>
+        <label class="confirm-label">速度</label>
+        <input class="confirm-input" id="confirmTtsSpeed" type="number" min="0.5" max="2" step="0.05" value="1">
+      </div>
+    </div>
+    <label class="confirm-label">読み方・雰囲気（Gemini用）</label>
+    <textarea class="confirm-textarea" id="confirmTtsStyle" style="min-height:72px;"></textarea>
+    <div class="confirm-actions mt8">
+      <button class="btn btn-ghost" id="btnTtsPreview" onclick="previewConfirmTts()">▶ 現在のナレーションを試聴</button>
+      <button class="btn btn-yellow" onclick="startConfirmedVideo()">この設定で動画生成</button>
+      <button class="btn btn-ghost" onclick="goStep(2)">ネタブックへ戻る</button>
+    </div>
+    <div class="tts-status" id="confirmTtsStatus"></div>
+    <audio id="confirmTtsAudio" controls style="width:100%;display:none;"></audio>
+  </div>
+</div>
+
+<!-- ═══════════════════════ STEP 4: 動画生成 -->
+<div class="page" id="page4">
   <!-- ステージプログレス -->
   <div class="stages" id="stages">
     <div class="stage" id="stg-tts">
@@ -641,6 +878,12 @@ const S = {
   // コメント倉庫
   selComments: [],   // [{id,text,source}] 選択済み
   poolComments: [],  // [{id,text,source}] 倉庫待機
+  galleryImages: [],
+  selectedImages: [],
+  assetsPromise: null,
+  confirmModules: [],
+  confirmActive: 0,
+  ttsPresets: {},
 };
 
 // ─── コメント倉庫ヘルパー ─────────────────────────────────────
@@ -743,9 +986,179 @@ async function loadCommentWarehouse(topic) {
   } catch (_) {}
 }
 
+// ─── データ取得ラベル・取得データ・画像ギャラリー ─────────────
+function dataSource(label, slot) {
+  const raw = `${slot?.source || ''} ${slot?.key || ''} ${label || ''}`.toLowerCase();
+  if (raw.includes('sofascore')) return 'SOFASCORE';
+  if (raw.includes('transfermarkt') || raw.includes('市場価値') || raw.includes('移籍金')) return 'TRANSFERMARKT';
+  if (raw.includes('wiki')) return 'WIKI';
+  return 'AI候補';
+}
+
+function collectDataRows(book) {
+  const fetched = Array.isArray(book?.fetchedData) ? book.fetchedData : [];
+  const data = book?.supplementData;
+  const rows = [];
+  const add = (label, value, slot = null) => {
+    if (value == null || value === '' || typeof value === 'object') return;
+    rows.push({ label: String(label || 'データ'), value: String(value), slot });
+  };
+
+  fetched.forEach(slot => add(slot?.label, slot?.value, slot));
+  if (!data || typeof data !== 'object') return rows.slice(0, 24);
+  if (Array.isArray(data.dataSlots)) {
+    data.dataSlots.forEach(slot => {
+      const value = slot?.value ?? (
+        slot?.leftValue != null || slot?.rightValue != null
+          ? `${slot?.leftValue ?? '-'} / ${slot?.rightValue ?? '-'}`
+          : null
+      );
+      add(slot?.label || slot?.key, value, slot);
+    });
+  }
+  if (Array.isArray(data.items)) {
+    data.items.forEach(item => add(item?.name, item?.value, item));
+  }
+  if (Array.isArray(data.series)) {
+    data.series.forEach(series => {
+      const value = Array.isArray(series?.points)
+        ? series.points.map(point => `${point?.x ?? ''}: ${point?.y ?? ''}`).join(' / ')
+        : '';
+      add(series?.name || '推移', value, series);
+    });
+  }
+  [
+    ['ホーム', data.homeTeam],
+    ['アウェイ', data.awayTeam],
+    ['スコア', data.homeScore != null || data.awayScore != null
+      ? `${data.homeScore ?? '-'} - ${data.awayScore ?? '-'}`
+      : null],
+    ['試合日', data.matchDate],
+  ].forEach(([label, value]) => add(label, value));
+
+  return rows.slice(0, 24);
+}
+
+function renderDataAssets(book) {
+  const rows = collectDataRows(book);
+  const explicit = Array.isArray(book?.dataLabels) ? book.dataLabels : [];
+  const labels = explicit.length
+    ? explicit.slice(0, 3).map(item => typeof item === 'string'
+      ? { label: item, source: dataSource(item) }
+      : { label: item.label || item.name || item.key, source: dataSource(item.label, item) })
+    : rows.slice(0, 3).map(row => ({
+      label: row.label,
+      source: dataSource(row.label, row.slot),
+    }));
+
+  document.getElementById('dataLabelCount').textContent = labels.length;
+  document.getElementById('dataLabelList').innerHTML = labels.length
+    ? labels.map(item => `<div class="data-label-chip"><span class="source">${esc(item.source)}</span>${esc(item.label)}</div>`).join('')
+    : '<div class="asset-empty">この案件ではデータ取得ラベルなし</div>';
+
+  document.getElementById('fetchedDataCount').textContent = rows.length;
+  document.getElementById('fetchedDataList').innerHTML = rows.length
+    ? rows.map(row => `<div class="fetched-data-row"><span class="label">${esc(row.label)}</span><span class="value">${esc(row.value)}</span></div>`).join('')
+    : '<div class="asset-empty">取得済みデータなし</div>';
+}
+
+function renderImageGallery() {
+  const grid = document.getElementById('imageGallery');
+  document.getElementById('imageGalleryCount').textContent = S.galleryImages.length;
+  grid.innerHTML = S.galleryImages.length
+    ? S.galleryImages.map((image, index) => {
+      const selected = S.selectedImages.includes(image.url);
+      return `<button type="button" class="gallery-item${selected ? ' selected' : ''}" onclick="selectGalleryImage(${index})" title="${esc(image.name || image.role || '')}">
+        <img src="${esc(image.url)}" loading="lazy" alt="">
+        <span class="gallery-role">${esc(image.name || image.role || '画像')}</span>
+      </button>`;
+    }).join('')
+    : '<div class="asset-empty">該当するストック画像がありません</div>';
+}
+
+async function loadImageGallery(query) {
+  const input = document.getElementById('imageGalleryQuery');
+  const q = String(query || input?.value || S.netaBook?.mainEntity || '').trim();
+  if (input && q) input.value = q;
+  if (!q) {
+    S.galleryImages = [];
+    renderImageGallery();
+    return;
+  }
+  document.getElementById('imageGallery').innerHTML = '<div class="asset-empty">画像を検索中...</div>';
+  try {
+    const result = await api('/api/neta/images?q=' + encodeURIComponent(q));
+    S.galleryImages = Array.isArray(result.images) ? result.images : [];
+    renderImageGallery();
+  } catch (_) {
+    S.galleryImages = [];
+    renderImageGallery();
+  }
+}
+
+async function loadDataAssets(book) {
+  if (!book?.mainEntity) return;
+  document.getElementById('dataLabelList').innerHTML =
+    '<div class="asset-empty">取得ラベルを準備中...</div>';
+  document.getElementById('fetchedDataList').innerHTML =
+    '<div class="asset-empty">SofaScore / Transfermarkt / Wikipediaを取得中...</div>';
+  document.getElementById('imageGallery').innerHTML =
+    '<div class="asset-empty">ラベルから画像を検索中...</div>';
+  try {
+    const result = await api('/api/neta/assets', { book });
+    if (!result.ok) throw new Error(result.error || 'データ取得失敗');
+    book.dataLabels = Array.isArray(result.labels) ? result.labels : [];
+    book.fetchedData = Array.isArray(result.dataRows) ? result.dataRows : [];
+    if (Array.isArray(result.images) && result.images.length) {
+      S.galleryImages = result.images;
+      if (!S.selectedImages.length) {
+        S.selectedImages = result.images.slice(0, 3).map(image => image.url).filter(Boolean);
+        book.selectedImages = [...S.selectedImages];
+      }
+    }
+    if (['stats', 'profile'].includes(book.supplementType) && book.fetchedData.length) {
+      book.supplementData = book.supplementData && typeof book.supplementData === 'object'
+        ? book.supplementData
+        : {};
+      if (!Array.isArray(book.supplementData.dataSlots) || !book.supplementData.dataSlots.length) {
+        book.supplementData.dataSlots = book.fetchedData.slice(0, 8).map(row => ({
+          label: row.label,
+          value: row.value,
+          source: row.source,
+          key: row.key,
+        }));
+      }
+    }
+    renderDataAssets(book);
+    renderImageGallery();
+  } catch (e) {
+    renderDataAssets(book);
+    if (!S.galleryImages.length) renderImageGallery();
+    document.getElementById('fetchedDataList').innerHTML =
+      `<div class="asset-empty">取得失敗: ${esc(e.message)}</div>`;
+  }
+}
+
+function selectGalleryImage(index) {
+  const image = S.galleryImages[index];
+  if (!image?.url) return;
+  if (S.selectedImages.includes(image.url)) {
+    S.selectedImages = S.selectedImages.filter(url => url !== image.url);
+  } else {
+    S.selectedImages = [...S.selectedImages, image.url].slice(-3);
+  }
+  renderImageGallery();
+}
+
 // ═════════════════════════════════ UTILS
 function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  return String(s || '')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;')
+    .replace(/\n/g,'<br>');
 }
 async function api(url, body) {
   const r = await fetch(url, body
@@ -797,6 +1210,10 @@ function startScanAnim() {
     document.getElementById('fillR').style.width = '80%';
     document.getElementById('statR').textContent = '取得中';
   }, 1100);
+  setTimeout(() => {
+    document.getElementById('fill5').style.width = '75%';
+    document.getElementById('stat5').textContent = '取得中';
+  }, 1400);
 }
 function stopScanAnim(counts) {
   document.getElementById('liveDot').classList.remove('on');
@@ -805,19 +1222,21 @@ function stopScanAnim(counts) {
     document.getElementById('fillX').style.width = '100%';
     document.getElementById('fillY').style.width = '100%';
     document.getElementById('fillR').style.width = '100%';
+    document.getElementById('fill5').style.width = '100%';
     document.getElementById('statX').textContent = counts.x + '件';
     document.getElementById('statY').textContent = counts.y + '件';
     document.getElementById('statR').textContent = counts.r + '件';
+    document.getElementById('stat5').textContent = counts.fivech + '件';
   }
   // バーをリセット（少し遅延）
   setTimeout(() => {
-    ['fillX','fillY','fillR'].forEach(id => document.getElementById(id).style.transition = 'none');
+    ['fillX','fillY','fillR','fill5'].forEach(id => document.getElementById(id).style.transition = 'none');
     setTimeout(() => {
-      ['fillX','fillY','fillR'].forEach(id => {
+      ['fillX','fillY','fillR','fill5'].forEach(id => {
         document.getElementById(id).style.width = '0%';
         document.getElementById(id).style.transition = 'width 1.5s ease';
       });
-      ['statX','statY','statR'].forEach(id => document.getElementById(id).textContent = '待機');
+      ['statX','statY','statR','stat5'].forEach(id => document.getElementById(id).textContent = '待機');
     }, 50);
   }, 2000);
 }
@@ -867,18 +1286,20 @@ function renderTopics(topics) {
   S.activeFilter = 'all';
 
   // カウント集計
-  const counts = { all: topics.length, X: 0, Yahoo: 0, Reddit: 0 };
+  const counts = { all: topics.length, X: 0, Yahoo: 0, Reddit: 0, '5ch': 0 };
   topics.forEach(t => {
     const src = String(t.source || '');
     if (src.startsWith('X'))      counts.X++;
     else if (src.startsWith('Y')) counts.Yahoo++;
     else if (src.startsWith('R')) counts.Reddit++;
+    else if (src.startsWith('5ch')) counts['5ch']++;
   });
 
   document.getElementById('cntAll').textContent   = counts.all;
   document.getElementById('cntX').textContent     = counts.X;
   document.getElementById('cntY').textContent     = counts.Yahoo;
   document.getElementById('cntR').textContent     = counts.Reddit;
+  document.getElementById('cnt5').textContent     = counts['5ch'];
   document.getElementById('topicCount').textContent = topics.length + '件';
   document.getElementById('srcFilters').style.display = 'flex';
 
@@ -913,6 +1334,7 @@ function renderGrid(topics) {
     if (s.startsWith('X'))      return 'X';
     if (s.startsWith('Y'))      return 'Yahoo';
     if (s.startsWith('R'))      return 'Reddit';
+    if (s.startsWith('5ch'))    return '5ch';
     return '';
   }
 
@@ -983,7 +1405,6 @@ async function selectTopic(idx) {
       renderNetaBook(r.book);
       document.getElementById('btnNeta').style.display = 'none';
       document.getElementById('btnRegenNeta').style.display = 'inline-flex';
-      document.getElementById('tab3').disabled = false;
       loadCommentWarehouse(t.topic);
     } else {
       document.getElementById('btnNeta').style.display = 'inline-flex';
@@ -1021,7 +1442,6 @@ async function startNeta(force = false) {
         sb('netaStatus', 'done', 'ネタブック完成');
         renderNetaBook(j.book);
         document.getElementById('btnRegenNeta').style.display = 'inline-flex';
-        document.getElementById('tab3').disabled = false;
         loadCommentWarehouse(S.selectedTopic.topic);
       } else {
         sb('netaStatus', 'error', j.error || 'エラーが発生しました');
@@ -1043,18 +1463,15 @@ function setBadge(id, filled) {
 
 function renderNetaBook(book) {
   // ① タイトル
-  document.getElementById('disp-title').innerHTML = `<strong style="font-size:16px;color:var(--yellow)">${esc(book.title || '')}</strong>`;
   document.getElementById('edit-title').value = book.title || '';
 
   // ② 概要
-  document.getElementById('disp-overview').innerHTML = esc(book.overview || '');
   document.getElementById('edit-overview').value = book.overview || '';
 
   // ③ 補足①
   const s1 = book.supplement1 || null;
   setBadge('badge-s1', !!s1);
   document.getElementById('empty-s1').style.display  = s1 ? 'none' : 'block';
-  document.getElementById('disp-supplement1').innerHTML = esc(s1 || '');
   document.getElementById('edit-supplement1').value  = s1 || '';
   if (s1) document.getElementById('sec-supplement1').classList.add('open');
 
@@ -1062,7 +1479,6 @@ function renderNetaBook(book) {
   const s2 = book.supplement2 || null;
   setBadge('badge-s2', !!s2);
   document.getElementById('empty-s2').style.display  = s2 ? 'none' : 'block';
-  document.getElementById('disp-supplement2').innerHTML = esc(s2 || '');
   document.getElementById('edit-supplement2').value  = s2 || '';
   if (s2) document.getElementById('sec-supplement2').classList.add('open');
 
@@ -1072,10 +1488,244 @@ function renderNetaBook(book) {
   S.poolComments = [];
   renderCommentWarehouse();
 
+  S.selectedImages = Array.isArray(book.selectedImages)
+    ? book.selectedImages.filter(Boolean).slice(0, 3)
+    : [];
+  S.galleryImages = [];
+  renderDataAssets(book);
+  document.getElementById('imageGalleryQuery').value = book.mainEntity || '';
+  S.assetsPromise = loadDataAssets(book).finally(() => {
+    S.assetsPromise = null;
+  });
+
   document.getElementById('netaBody').style.display = 'block';
 }
 
-// ═════════════════════════════════ STEP 3: 動画生成
+// ═════════════════════════════════ STEP 3: 生成前確認
+const CONFIRM_TYPES = [
+  'opening', 'picture', 'insight', 'stats', 'profile', 'comparison',
+  'timeline', 'ranking', 'matchcard', 'reaction', 'ending',
+];
+let _confirmPreviewUrl = null;
+
+function syncNetaBookEdits() {
+  if (!S.netaBook) return;
+  S.netaBook.title = document.getElementById('edit-title').value.trim() || S.netaBook.title;
+  S.netaBook.overview = document.getElementById('edit-overview').value.trim();
+  S.netaBook.supplement1 = document.getElementById('edit-supplement1').value.trim() || null;
+  S.netaBook.supplement2 = document.getElementById('edit-supplement2').value.trim() || null;
+  const selected = S.selComments.map(comment => comment.text).filter(Boolean);
+  S.netaBook.comments1 = selected.length ? selected.slice(0, 4) : null;
+  S.netaBook.comments2 = selected.length > 4 ? selected.slice(4, 8) : null;
+  S.netaBook.selectedImages = [...S.selectedImages];
+}
+
+async function goToConfirm() {
+  if (!S.netaBook) return;
+  if (S.assetsPromise) {
+    document.getElementById('confirmSummary').textContent = 'データ・画像取得の完了を待っています...';
+    await S.assetsPromise;
+  }
+  syncNetaBookEdits();
+  document.getElementById('confirmSummary').textContent = 'スライドを準備中...';
+  try {
+    const result = await api('/api/confirm/modules', { book: S.netaBook });
+    if (!result.ok || !Array.isArray(result.modules)) {
+      throw new Error(result.error || 'スライド準備に失敗しました');
+    }
+    S.confirmModules = result.modules;
+    S.confirmActive = 0;
+    document.getElementById('tab3').disabled = false;
+    document.getElementById('tab3').classList.add('done');
+    document.getElementById('tab4').disabled = true;
+    goStep(3);
+    renderConfirmEditor();
+    await loadConfirmTtsPresets('gemini');
+  } catch (e) {
+    sb('netaStatus', 'error', e.message);
+  }
+}
+
+function renderConfirmTabs() {
+  const tabs = document.getElementById('confirmTabs');
+  tabs.innerHTML = S.confirmModules.map((module, index) => `
+    <button class="confirm-tab${index === S.confirmActive ? ' active' : ''}" onclick="selectConfirmSlide(${index})">
+      ${index + 1}. ${esc(module.type || 'slide')}
+    </button>`).join('');
+  document.getElementById('confirmSummary').textContent =
+    `${S.confirmModules.length}枚構成 / 編集内容がそのまま動画に反映されます`;
+}
+
+function renderConfirmEditor() {
+  renderConfirmTabs();
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  const typeSelect = document.getElementById('confirmType');
+  typeSelect.innerHTML = CONFIRM_TYPES.map(type =>
+    `<option value="${type}"${type === module.type ? ' selected' : ''}>${type}</option>`
+  ).join('');
+  document.getElementById('confirmTitle').value = module.title || '';
+  document.getElementById('confirmNarration').value = module.narration || '';
+  const comments = Array.isArray(module.comments)
+    ? module.comments.map(comment => typeof comment === 'string' ? comment : comment?.text).filter(Boolean)
+    : [];
+  document.getElementById('confirmComments').value = comments.join('\n');
+  document.getElementById('confirmReactionWrap').style.display =
+    module.type === 'reaction' ? 'block' : 'none';
+  document.getElementById('confirmImage').value =
+    module.images?.[0] || module.bgImage || '';
+  reloadConfirmPreview();
+}
+
+function selectConfirmSlide(index) {
+  if (!S.confirmModules[index]) return;
+  updateConfirmModule(false);
+  S.confirmActive = index;
+  renderConfirmEditor();
+}
+
+function updateConfirmModule(refresh = true) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  module.type = document.getElementById('confirmType').value || module.type;
+  module.title = document.getElementById('confirmTitle').value;
+  module.narration = document.getElementById('confirmNarration').value;
+  const image = document.getElementById('confirmImage').value.trim().replace(/^\/+/, '');
+  module.images = image ? [image] : [];
+  module.bgImage = image || null;
+  if (module.type === 'reaction') {
+    module.comments = document.getElementById('confirmComments').value
+      .split('\n').map(text => text.trim()).filter(Boolean)
+      .slice(0, 7).map((text, index) => ({ text, score: 100 - index * 10 }));
+  }
+  document.getElementById('confirmReactionWrap').style.display =
+    module.type === 'reaction' ? 'block' : 'none';
+  renderConfirmTabs();
+  if (refresh) reloadConfirmPreview();
+}
+
+function moveConfirmSlide(direction) {
+  updateConfirmModule(false);
+  const from = S.confirmActive;
+  const to = from + direction;
+  if (to < 0 || to >= S.confirmModules.length) return;
+  [S.confirmModules[from], S.confirmModules[to]] = [S.confirmModules[to], S.confirmModules[from]];
+  S.confirmActive = to;
+  renderConfirmEditor();
+}
+
+async function reloadConfirmPreview() {
+  updateConfirmModule(false);
+  const module = S.confirmModules[S.confirmActive];
+  const frame = document.getElementById('confirmPreviewFrame');
+  const wrap = document.getElementById('confirmPreviewWrap');
+  if (!module || !frame || !wrap) return;
+  try {
+    const response = await fetch('/api/confirm/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module }),
+    });
+    const html = await response.text();
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    frame.src = url;
+    frame.style.transform = `scale(${(wrap.clientWidth || 1) / 1920})`;
+    if (_confirmPreviewUrl) URL.revokeObjectURL(_confirmPreviewUrl);
+    _confirmPreviewUrl = url;
+  } catch (_) {}
+}
+
+async function loadConfirmTtsPresets(provider) {
+  try {
+    const presets = await api('/api/confirm/tts-presets?provider=' + encodeURIComponent(provider || 'gemini'));
+    if (!presets.ok) throw new Error(presets.error || 'TTS設定取得失敗');
+    S.ttsPresets[presets.provider] = presets;
+    const providerSelect = document.getElementById('confirmTtsProvider');
+    providerSelect.innerHTML = (presets.providers || []).map(item =>
+      `<option value="${esc(item.id)}"${item.id === presets.provider ? ' selected' : ''}>${esc(item.label)}</option>`
+    ).join('');
+    document.getElementById('confirmTtsVoice').innerHTML = (presets.voices || []).map(item =>
+      `<option value="${esc(item.id)}"${item.id === presets.defaultVoice ? ' selected' : ''}>${esc(item.label)}</option>`
+    ).join('');
+    document.getElementById('confirmTtsModel').innerHTML = (presets.models || []).map(item =>
+      `<option value="${esc(item.id)}"${item.id === presets.defaultModel ? ' selected' : ''}>${esc(item.label || item.id)}</option>`
+    ).join('');
+    document.getElementById('confirmTtsStyle').value = presets.styleInstructions || '';
+    document.getElementById('confirmTtsSpeed').value = presets.provider === 'minimax' ? '1' : '1.03';
+  } catch (e) {
+    document.getElementById('confirmTtsStatus').textContent = 'TTS設定エラー: ' + e.message;
+  }
+}
+
+function currentTtsConfig() {
+  return {
+    provider: document.getElementById('confirmTtsProvider').value || 'gemini',
+    voiceId: document.getElementById('confirmTtsVoice').value || undefined,
+    model: document.getElementById('confirmTtsModel').value || undefined,
+    speed: Number(document.getElementById('confirmTtsSpeed').value || 1),
+    styleInstructions: document.getElementById('confirmTtsStyle').value.trim() || undefined,
+  };
+}
+
+async function previewConfirmTts() {
+  updateConfirmModule(false);
+  const module = S.confirmModules[S.confirmActive];
+  const reactionText = module?.type === 'reaction' && Array.isArray(module.comments)
+    ? module.comments.map(comment => typeof comment === 'string' ? comment : comment?.text)
+      .filter(Boolean).join('。')
+    : '';
+  const text = String(module?.narration || reactionText || module?.title || '').trim();
+  const status = document.getElementById('confirmTtsStatus');
+  const button = document.getElementById('btnTtsPreview');
+  const audio = document.getElementById('confirmTtsAudio');
+  if (!text) {
+    status.textContent = '試聴するナレーションがありません';
+    return;
+  }
+  button.disabled = true;
+  status.textContent = '試聴音声を生成中...';
+  audio.style.display = 'none';
+  try {
+    const started = await api('/api/confirm/tts-preview', {
+      ...currentTtsConfig(),
+      text,
+    });
+    if (!started.jobId) throw new Error(started.error || '試聴開始失敗');
+    for (let attempt = 0; attempt < 60; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const job = await api('/api/confirm/tts-preview-status?jobId=' + encodeURIComponent(started.jobId));
+      if (job.status === 'done' && job.result?.base64) {
+        audio.src = `data:${job.result.mime || 'audio/mpeg'};base64,${job.result.base64}`;
+        audio.style.display = 'block';
+        await audio.play().catch(() => {});
+        status.textContent = '試聴できます';
+        return;
+      }
+      if (job.status === 'error') throw new Error(job.error || 'TTS生成失敗');
+    }
+    throw new Error('TTS試聴がタイムアウトしました');
+  } catch (e) {
+    status.textContent = '試聴失敗: ' + e.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function startConfirmedVideo() {
+  if (!S.netaBook || !S.confirmModules.length) return;
+  updateConfirmModule(false);
+  const tts = currentTtsConfig();
+  S.confirmModules.forEach(module => {
+    module.tts = { ...(module.tts || {}), ...tts };
+    module.audio = [];
+  });
+  document.getElementById('tab4').disabled = false;
+  document.getElementById('tab4').classList.add('done');
+  goStep(4);
+  await runVideoGeneration(S.confirmModules);
+}
+
+// ═════════════════════════════════ STEP 4: 動画生成
 const STAGE_LABELS = {
   video:    [['🎙️','TTS生成'], ['🖼️','スライド'], ['🎬','動画合成'], ['✅','完成']],
   fullauto: [['🔍','スカウト'], ['📝','ネタブック'], ['🎬','動画生成'], ['✅','完成']],
@@ -1114,8 +1764,8 @@ function showVideoResult(result) {
 const FA_STAGE_MAP = { scout: 'tts', neta: 'slide', video: 'render', done: 'done' };
 
 async function runFullAuto(body) {
-  goStep(3);
-  document.getElementById('tab3').disabled = false;
+  goStep(4);
+  document.getElementById('tab4').disabled = false;
   document.getElementById('videoResult').innerHTML = '';
   setStageLabels('fullauto');
   setStage('tts');
@@ -1151,28 +1801,15 @@ function fullAutoTopic(idx) {
   runFullAuto({ topic: t.topic, hook: t.hook || '', url: t.url || '' });
 }
 
-async function goToVideo() {
+async function runVideoGeneration(modules = null) {
   if (!S.netaBook) return;
-
-  // テキスト編集を反映
-  S.netaBook.title       = document.getElementById('edit-title').value.trim() || S.netaBook.title;
-  S.netaBook.overview    = document.getElementById('edit-overview').value.trim();
-  S.netaBook.supplement1 = document.getElementById('edit-supplement1').value.trim() || null;
-  S.netaBook.supplement2 = document.getElementById('edit-supplement2').value.trim() || null;
-
-  // コメント倉庫の選択済みを反映（4件以内ならcomments1のみ、超えたらcomments2に分割）
-  const sel = S.selComments.map(c => c.text).filter(Boolean);
-  S.netaBook.comments1 = sel.length ? sel.slice(0, 4) : null;
-  S.netaBook.comments2 = sel.length > 4 ? sel.slice(4, 8) : null;
-
-  goStep(3);
   document.getElementById('videoResult').innerHTML = '';
   document.getElementById('videoStatus').innerHTML = '';
   setStageLabels('video');
   setStage('tts');
 
   try {
-    const { jobId } = await api('/api/video', { book: S.netaBook });
+    const { jobId } = await api('/api/video', { book: S.netaBook, modules });
 
     poll('/api/video/status?jobId=' + jobId, 3000, j => {
       if (j.status === 'done') {
