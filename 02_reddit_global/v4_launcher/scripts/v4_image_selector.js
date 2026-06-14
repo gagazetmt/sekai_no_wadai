@@ -19,7 +19,7 @@ const fs   = require('fs');
 const BASE_DIR   = path.join(__dirname, '..', '..');  // 02_reddit_global/
 const BATCH      = 4;   // Gemini 1バッチあたりの画像数（多すぎると精度低下）
 const MAX_IMGS   = 12;  // スコアリング対象の上限
-const GEMINI_MODEL = 'gemini-1.5-flash-8b';  // 軽量・無料枠大・vision 対応
+const GEMINI_MODEL = process.env.GEMINI_CHAT_MODEL || 'gemini-2.0-flash-lite';  // vision 対応・軽量
 
 // ── 画像を Gemini inline_data（base64）に変換 ────────────────
 async function _toGeminiPart(img) {
