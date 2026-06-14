@@ -304,6 +304,15 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
   background: var(--s3); color: var(--muted);
 }
 
+/* ══ Step3 画像ギャラリー ══════════════════════════════════════ */
+.confirm-gallery {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px; max-height: 200px; overflow-y: auto;
+  margin-top: 6px;
+}
+.confirm-gallery .gallery-item { aspect-ratio: 4/3; }
+.confirm-gallery-empty { font-size: 11px; color: var(--muted); padding: 6px 0; }
+
 /* ══ 取得データ・画像ギャラリー ═══════════════════════════════ */
 .asset-panel {
   background: var(--s1); border: 1px solid var(--border);
@@ -828,7 +837,8 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       </div>
 
       <label class="confirm-label">画像URL</label>
-      <input class="confirm-input" id="confirmImage" placeholder="/images_stock/..." oninput="updateConfirmModule(false)">
+      <input class="confirm-input" id="confirmImage" placeholder="/images_stock/..." oninput="updateConfirmModule(false); renderConfirmGallery();">
+      <div class="confirm-gallery" id="confirmGallery"></div>
     </div>
 
     <div class="confirm-panel">
@@ -898,7 +908,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 </main>
 
 <script>
-const CLIENT_VERSION = '20260614-3';
+const CLIENT_VERSION = '20260614-4';
 // ═════════════════════════════════ STATE
 const S = {
   topics: [],
@@ -1632,6 +1642,35 @@ function renderConfirmTabs() {
     `${S.confirmModules.length}枚構成 / 編集内容がそのまま動画に反映されます`;
 }
 
+function renderConfirmGallery() {
+  const grid = document.getElementById('confirmGallery');
+  if (!grid) return;
+  const current = String(document.getElementById('confirmImage')?.value || '').trim().replace(/^\/+/, '');
+  if (!S.galleryImages.length) {
+    grid.innerHTML = '<div class="confirm-gallery-empty">Step2で画像を取得してください</div>';
+    return;
+  }
+  grid.innerHTML = S.galleryImages.map((image, index) => {
+    const imgPath = String(image.url || '').replace(/^\/+/, '');
+    const sel = current && (imgPath === current || image.url === current);
+    return `<button type="button" class="gallery-item${sel ? ' selected' : ''}"
+      onclick="pickConfirmImage('${esc(image.url || '')}')"
+      title="${esc(image.name || image.role || '')}">
+      <img src="${esc(image.url)}" loading="lazy" alt="">
+      <span class="gallery-role">${esc(image.name || image.role || '画像')}</span>
+    </button>`;
+  }).join('');
+}
+
+function pickConfirmImage(url) {
+  const clean = String(url || '').replace(/^\/+/, '');
+  const inp = document.getElementById('confirmImage');
+  if (inp) inp.value = clean;
+  updateConfirmModule(false);
+  renderConfirmGallery();
+  reloadConfirmPreview();
+}
+
 function renderConfirmEditor() {
   renderConfirmTabs();
   const module = S.confirmModules[S.confirmActive];
@@ -1650,6 +1689,7 @@ function renderConfirmEditor() {
     module.type === 'reaction' ? 'block' : 'none';
   document.getElementById('confirmImage').value =
     module.images?.[0] || module.bgImage || '';
+  renderConfirmGallery();
   reloadConfirmPreview();
 }
 

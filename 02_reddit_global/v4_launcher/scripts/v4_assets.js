@@ -14,6 +14,14 @@ const {
   matchClubs,
 } = require('../../scripts/modules/stock_match');
 
+// "Morocco national football team" → "Morocco"
+function cleanTeamName(name) {
+  return String(name || '')
+    .replace(/\s+national\s+(?:football|soccer|futsal|beach\s+soccer)?\s*team\b/gi, '')
+    .replace(/\s+FC$|\s+CF$|\s+SC$/i, '')
+    .trim();
+}
+
 function inferEntityType(book) {
   const explicit = book?.entityType || book?.supplementData?.entityType;
   if (['player', 'team', 'manager'].includes(explicit)) return explicit;
@@ -43,15 +51,24 @@ function normalizeLabels(book) {
   if (labels.length) return labels.slice(0, 3);
   if (!entity) return [];
 
-  // matchcard: 両チームを SofaScore で取得
+  // matchcard: 両チーム（名前クリーンアップ）+ キープレイヤー
   const matchHome = String(book?.supplementData?.homeTeam || '').trim();
   const matchAway = String(book?.supplementData?.awayTeam || '').trim();
   if (book?.supplementType === 'matchcard' && matchHome && matchAway) {
-    return [
-      { source: 'sofascore', entity: matchHome, type: 'team' },
-      { source: 'sofascore', entity: matchAway, type: 'team' },
-      { source: 'wikipedia', entity: matchHome, type: 'team' },
-    ];
+    const home = cleanTeamName(matchHome);
+    const away = cleanTeamName(matchAway);
+    const keyPlayer = String(book?.keyPlayer || '').trim();
+    return keyPlayer
+      ? [
+        { source: 'sofascore', entity: home, type: 'team' },
+        { source: 'sofascore', entity: away, type: 'team' },
+        { source: 'sofascore', entity: keyPlayer, type: 'player' },
+      ]
+      : [
+        { source: 'sofascore', entity: home, type: 'team' },
+        { source: 'sofascore', entity: away, type: 'team' },
+        { source: 'wikipedia', entity: home, type: 'team' },
+      ];
   }
 
   // subEntities があれば mainEntity + subEntity[0] の 2 エンティティを割り当て
