@@ -221,22 +221,32 @@ function normalizeLabels(book) {
   const entity = String(book?.mainEntity || '').trim();
   const type = inferEntityType(book);
   // ※ book.dataLabels（キャッシュ由来）は使わない
-  //   旧コードの sofascore ラベルが残っていると 403 で画像 0 になるため
   if (!entity) return [];
 
-  // 試合コンテキスト: supplementData に homeTeam/awayTeam があればスライド種別に関係なく試合ラベルを使用
-  // SofaScore team は Cloudflare 403 で不安定のため Wikipedia を使用
+  const keyPlayer    = String(book?.keyPlayer    || '').trim();
+  const keyManager   = String(book?.keyManager   || '').trim();
+  const otherPlayers = (Array.isArray(book?.otherPlayers) ? book.otherPlayers : [])
+    .map(p => String(p || '').trim()).filter(Boolean).slice(0, 2);
+
+  // keyPlayer ラベル（FotMob: 有名選手衝突を避けるため SofaScore より精度が高い）
+  const keyPlayerLabels = keyPlayer ? [
+    { source: 'fotmob',        entity: keyPlayer, type: 'player' },
+    { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
+  ] : [];
+  const keyManagerLabel  = keyManager   ? [{ source: 'sofascore', entity: keyManager,   type: 'manager' }] : [];
+  const otherPlayerLabels = otherPlayers.map(p => ({ source: 'fotmob', entity: p, type: 'player' }));
+
+  // 試合コンテキスト: supplementData に homeTeam/awayTeam があれば試合ラベルを使用
+  // SofaScore team は Cloudflare 403 のため Wikipedia を使用
   const matchHome = String(book?.supplementData?.homeTeam || '').trim();
   const matchAway = String(book?.supplementData?.awayTeam || '').trim();
-  const keyPlayer = String(book?.keyPlayer || '').trim();
   if (matchHome && matchAway) {
     return [
       { source: 'wikipedia', entity: matchHome, type: 'team' },
       { source: 'wikipedia', entity: matchAway, type: 'team' },
-      ...(keyPlayer ? [
-        { source: 'sofascore',     entity: keyPlayer, type: 'player' },
-        { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
-      ] : []),
+      ...keyPlayerLabels,
+      ...keyManagerLabel,
+      ...otherPlayerLabels,
     ];
   }
 
@@ -251,30 +261,28 @@ function normalizeLabels(book) {
     return [
       { source: mainSource, entity, type },
       { source: subSource,  entity: subs[0], type: subType },
-      ...(keyPlayer ? [
-        { source: 'sofascore',     entity: keyPlayer, type: 'player' },
-        { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
-      ] : []),
+      ...keyPlayerLabels,
+      ...keyManagerLabel,
+      ...otherPlayerLabels,
     ];
   }
 
-  // player: SofaScore(市場価値/国籍) + FotMob(リーグ/キャリア統計) + TM(負傷) + Wikipedia
-  // team: SofaScore team は 403 のため Wikipedia のみ。keyPlayer があれば SofaScore+TM を追加
-  const defaults = type === 'player'
-    ? [
+  // player: SofaScore(市場価値/国籍) + FotMob(キャリア統計) + TM(負傷) + Wikipedia
+  // team: SofaScore team は 403 のため Wikipedia のみ
+  if (type === 'player') {
+    return [
       { source: 'sofascore',     entity, type },
       { source: 'fotmob',        entity, type },
       { source: 'transfermarkt', entity, type },
       { source: 'wikipedia',     entity, type },
-    ]
-    : [
-      { source: 'wikipedia', entity, type },
-      ...(keyPlayer ? [
-        { source: 'sofascore',     entity: keyPlayer, type: 'player' },
-        { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
-      ] : []),
     ];
-  return defaults;
+  }
+  return [
+    { source: 'wikipedia', entity, type },
+    ...keyPlayerLabels,
+    ...keyManagerLabel,
+    ...otherPlayerLabels,
+  ];
 }
 
 function labelTitle(item) {
@@ -484,11 +492,10 @@ async function fetchBookAssets(book) {
     }
   }));
 
-  // matchcard: 両チームの公式X画像（未取得分）+ 試合関連画像を追加取得
+  // matchcard: 両チームの公式X画像（未取得分）を追加取得
   if (book?.supplementType === 'matchcard') {
     const rawHome = String(book?.supplementData?.homeTeam || '').trim();
     const rawAway = String(book?.supplementData?.awayTeam || '').trim();
-
     const homeHandle = _lookupXHandle(cleanTeamName(rawHome) || rawHome);
     const awayHandle = _lookupXHandle(cleanTeamName(rawAway) || rawAway);
     const officialImgs = await Promise.all([
@@ -496,14 +503,21 @@ async function fetchBookAssets(book) {
       awayHandle && !fetchedXHandles.has(awayHandle) ? _fetchXOfficialImages(awayHandle, 5) : [],
     ]);
     images.push(...officialImgs.flat());
+  }
 
-    // 試合クエリで補完
-    const xQuery = rawHome && rawAway
-      ? `${cleanTeamName(rawHome)} ${cleanTeamName(rawAway)}`
-      : String(book.mainEntity || book.topic || '').slice(0, 40);
+  // X トピック画像補完（全スライド種別）
+  {
+    const mainRaw = String(book?.mainEntity || book?.topic || '').trim();
+    const subRaw  = Array.isArray(book?.subEntities) && book.subEntities[0]
+      ? String(book.subEntities[0]).trim() : '';
+    const matchHomeRaw = String(book?.supplementData?.homeTeam || '').trim();
+    const matchAwayRaw = String(book?.supplementData?.awayTeam || '').trim();
+    const xQuery = (matchHomeRaw && matchAwayRaw)
+      ? `${cleanTeamName(matchHomeRaw)} ${cleanTeamName(matchAwayRaw)}`
+      : [cleanTeamName(mainRaw) || mainRaw, cleanTeamName(subRaw) || subRaw].filter(Boolean).join(' ');
     if (xQuery) {
-      const xImgs = await _fetchXTopicImages(xQuery, 8);
-      images.push(...xImgs);
+      const topicImgs = await _fetchXTopicImages(xQuery.slice(0, 50), 10);
+      images.push(...topicImgs);
     }
   }
 

@@ -370,8 +370,10 @@ ${warehouseBlock}
 | supplement2 | 同じ感情軸の別の切り口（似てるなら null） | 100〜200字 | 素材あれば |
 | comments1 | コメント 3〜4件（1件40字以内） | — | 反応あれば |
 | comments2 | さらに別のコメント 3〜4件（①と違うトーン優先、なければ続きでよい） | — | 倉庫に5件以上あれば |
-| mainEntity | 主役の英語名（選手→フルネーム / 試合→勝利チームまたは注目チーム名。"national football team" 等は不要） | — | ✅ |
-| keyPlayer | 試合で最も目立った選手の英語フルネーム（ゴール・アシスト・MVP等）。試合案件でなければ null | — | 試合時 |
+| mainEntity | 主役の英語名（選手→フルネーム / 試合→国名のみ例: "Morocco" "Brazil"。"national football team"は不要） | — | ✅ |
+| keyPlayer | **試合ネタ必須**。ゴール・MVP・最も目立った選手の英語フルネーム（例: "Hicham Boudaoui"）。日本語・年齢・国籍は含めない | — | 試合時 |
+| keyManager | 試合・チームネタ推奨。主役チームの監督英語フルネーム（例: "Walid Regragui"）。不明なら null | — | 試合・チーム時 |
+| otherPlayers | keyPlayer 以外の注目選手 1〜2件の英語フルネーム配列（例: ["Achraf Hakimi", "Yassine Bounou"]）。なければ null | — | 試合・チーム時 |
 | subEntities | 副役1〜2件（試合→対戦相手チーム名 / 複数選手→2番手）英語名リスト | — | 試合・比較時 |
 | structurePattern | standard / interleaved / rapid から最適な型 | — | ✅ |
 | supplementType | 補足に最適なスライド型。補足不要なら null | — | 補足時 |
@@ -412,6 +414,8 @@ ${hasRealComments
   "comments2": null,
   "mainEntity": "Wataru Endo",
   "keyPlayer": null,
+  "keyManager": null,
+  "otherPlayers": null,
   "subEntities": null,
   "structurePattern": "standard",
   "supplementType": "insight",
@@ -486,8 +490,12 @@ ${hasRealComments
     supplement2: clean(parsed.supplement2, 250),
     comments1:   cleanArr(parsed.comments1, 5, 40),
     comments2:   cleanArr(parsed.comments2, 5, 40),
-    mainEntity:  clean(parsed.mainEntity, 80)    || '',
-    keyPlayer:   clean(parsed.keyPlayer, 80),
+    mainEntity:   clean(parsed.mainEntity, 80)    || '',
+    keyPlayer:    clean(parsed.keyPlayer, 80),
+    keyManager:   clean(parsed.keyManager, 80),
+    otherPlayers: Array.isArray(parsed.otherPlayers)
+      ? parsed.otherPlayers.map(p => String(p || '').trim()).filter(Boolean).slice(0, 2)
+      : null,
     subEntities: subEntities?.length ? subEntities : null,
     structurePattern,
     supplementType,
@@ -537,8 +545,10 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     comments1:        neta.comments1,
     comments2:        neta.comments2,
     mainEntity:       neta.mainEntity,
-    keyPlayer:        neta.keyPlayer   || null,
-    subEntities:      neta.subEntities || null,
+    keyPlayer:        neta.keyPlayer    || null,
+    keyManager:       neta.keyManager   || null,
+    otherPlayers:     neta.otherPlayers || null,
+    subEntities:      neta.subEntities  || null,
     structurePattern: neta.structurePattern,
     supplementType:   neta.supplementType,
     supplementTitle:  neta.supplementTitle,
