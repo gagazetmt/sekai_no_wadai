@@ -4,6 +4,7 @@ const { fetchWikipediaSafe } = require('../../scripts/modules/fetchers/wikipedia
 const { fetchSofaScorePlayer } = require('../../scripts/modules/fetchers/sofascore_player');
 const { fetchSofaScoreTeam } = require('../../scripts/modules/fetchers/sofascore_team');
 const { fetchSofaScoreManager } = require('../../scripts/modules/fetchers/sofascore_manager');
+const { searchFotMob, fetchFotMobCareer } = require('../../scripts/modules/fetchers/fotmob_career');
 const { searchTransfermarktPlayer } = require('../../scripts/modules/fetchers/transfermarkt_player_games');
 const { fetchPlayerInjuries } = require('../../scripts/modules/fetchers/transfermarkt_player_injuries');
 const { curlGetJson } = require('../../scripts/modules/fetchers/_curl_cffi_caller');
@@ -15,6 +16,37 @@ const {
 } = require('../../scripts/modules/stock_match');
 
 const X_API_KEY = process.env.TWITTER_API_IO_KEY || '';
+
+// ── FotMob 選手データ取得（SofaScore 403 代替）───────────────
+async function fetchFotMob(item) {
+  try {
+    const hit = await searchFotMob(item.entity, {});
+    if (!hit?.id) return { rows: [], images: [], warning: `FotMob: ${item.entity} が見つかりません` };
+    const career = await fetchFotMobCareer(hit.id);
+    if (!career) return { rows: [], images: [], warning: `FotMob: ${item.entity} キャリア取得失敗` };
+    const rows = [];
+    const add = (label, value, key) => {
+      if (value != null && value !== '') rows.push({ label, value: String(value), source: 'FotMob', key, entity: item.entity });
+    };
+    add('選手', career.name || item.entity, 'name');
+    add('所属', career.primaryTeam?.teamName, 'team');
+    add('リーグ', career.mainLeague?.leagueName, 'league');
+    add('シーズン', career.mainLeague?.season, 'season');
+    if (career.birthDate?.utcTime) {
+      const age = Math.floor((Date.now() - new Date(career.birthDate.utcTime)) / (365.25 * 24 * 3600 * 1000));
+      add('年齢', `${age}歳`, 'age');
+    }
+    const pos = career.positionDescription?.positions?.[0]?.strPosSh?.label;
+    add('ポジション', pos, 'position');
+    // FotMob 選手画像（ID がわかれば確実に存在する）
+    const imgUrl = `https://images.fotmob.com/image_resources/playerimages/${hit.id}.png`;
+    const images = [{ url: imgUrl, source: 'fotmob', role: 'player', name: career.name || item.entity }];
+    console.log(`[v4_assets] FotMob ${item.entity} rows=${rows.length}`);
+    return { rows, images };
+  } catch (e) {
+    return { rows: [], images: [], warning: `FotMob: ${item.entity} 失敗: ${e.message}` };
+  }
+}
 
 // ── Wikipedia 記事内画像一覧（複数枚）────────────────────────
 async function _fetchWikiExtraImages(entityName, maxImages = 8) {
@@ -137,7 +169,7 @@ function normalizeLabels(book) {
     return [
       { source: 'wikipedia', entity: matchHome, type: 'team' },
       { source: 'wikipedia', entity: matchAway, type: 'team' },
-      ...(keyPlayer ? [{ source: 'sofascore', entity: keyPlayer, type: 'player' }] : []),
+      ...(keyPlayer ? [{ source: 'fotmob', entity: keyPlayer, type: 'player' }] : []),
     ].slice(0, 3);
   }
 
@@ -154,11 +186,17 @@ function normalizeLabels(book) {
     ];
   }
 
-  const defaults = [
-    { source: 'sofascore', entity, type },
-    ...(type === 'player' ? [{ source: 'transfermarkt', entity, type }] : []),
-    { source: 'wikipedia', entity, type },
-  ];
+  // SofaScore API は現在 CF 403 で不安定のため FotMob を player の主ソースに
+  const defaults = type === 'player'
+    ? [
+      { source: 'fotmob', entity, type },
+      { source: 'transfermarkt', entity, type },
+      { source: 'wikipedia', entity, type },
+    ]
+    : [
+      { source: 'sofascore', entity, type },
+      { source: 'wikipedia', entity, type },
+    ];
   return defaults.slice(0, 3);
 }
 
@@ -329,6 +367,7 @@ async function fetchWiki(item) {
 async function fetchBookAssets(book) {
   const labels = normalizeLabels(book);
   const tasks = labels.map(async (item) => {
+    if (item.source === 'fotmob') return fetchFotMob(item);
     if (item.source.includes('sofa')) return fetchSofa({ ...item, source: 'sofascore' });
     if (item.source.includes('transfer') || item.source === 'tm') {
       return fetchTransfermarkt({ ...item, source: 'transfermarkt' });
@@ -374,11 +413,12 @@ async function fetchBookAssets(book) {
   }).sort((a, b) => {
     const priority = image => {
       if (image.stockProvider === 'official-index') return 0;
-      if (image.stockProvider === 'sofascore-profile') return 1;
-      if (image.source === 'stock' && Number(image.visionScore || 0) >= 90) return 2;
-      if (image.source === 'wikipedia') return 3;
-      if (image.source === 'x') return 4;
-      return 5;
+      if (image.source === 'fotmob') return 1;
+      if (image.stockProvider === 'sofascore-profile') return 2;
+      if (image.source === 'stock' && Number(image.visionScore || 0) >= 90) return 3;
+      if (image.source === 'wikipedia') return 4;
+      if (image.source === 'x') return 5;
+      return 6;
     };
     return priority(a) - priority(b) ||
       Number(b.visionScore || 0) - Number(a.visionScore || 0);

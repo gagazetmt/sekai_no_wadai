@@ -26,7 +26,7 @@ const {
 
 const app  = express();
 const PORT = process.env.V4_PORT || 3005;
-const CLIENT_VERSION = '20260614-7';
+const CLIENT_VERSION = '20260614-8';
 app.use(express.json({ limit: '2mb' }));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') {
