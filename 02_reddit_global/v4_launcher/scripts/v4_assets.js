@@ -38,6 +38,16 @@ async function fetchFotMob(item) {
     }
     const pos = career.positionDescription?.positions?.[0]?.strPosSh?.label;
     add('ポジション', pos, 'position');
+    // playerCareer からキャリア通算（直近クラブ優先）
+    const careerArr = Array.isArray(career.playerCareer)
+      ? career.playerCareer
+      : (career.playerCareer?.careerItems?.senior?.teamEntries || []);
+    const current = careerArr.find(e => e.current) || careerArr[0];
+    if (current) {
+      if (current.appearances != null) add('通算出場', `${current.appearances}試合`, 'careerApps');
+      if (current.goals != null)       add('通算ゴール', `${current.goals}G`, 'careerGoals');
+      if (current.assists != null)     add('通算アシスト', `${current.assists}A`, 'careerAssists');
+    }
     // FotMob 選手画像（ID がわかれば確実に存在する）
     const imgUrl = `https://images.fotmob.com/image_resources/playerimages/${hit.id}.png`;
     const images = [{ url: imgUrl, source: 'fotmob', role: 'player', name: career.name || item.entity }];
@@ -252,18 +262,20 @@ function normalizeLabels(book) {
     ];
   }
 
-  // SofaScore API は現在 CF 403 で不安定のため FotMob を player の主ソースに
+  // player: SofaScore page fallback(市場価値/国籍) + FotMob(リーグ/キャリア統計) + TM(負傷) + Wikipedia
+  // SofaScore API は 403 だが www.sofascore.com page fallback で市場価値・国籍が取れる
   const defaults = type === 'player'
     ? [
-      { source: 'fotmob', entity, type },
-      { source: 'transfermarkt', entity, type },
-      { source: 'wikipedia', entity, type },
+      { source: 'sofascore',     entity, type },  // 市場価値・国籍（page fallback）
+      { source: 'fotmob',        entity, type },  // リーグ・キャリア通算
+      { source: 'transfermarkt', entity, type },  // 負傷履歴
+      { source: 'wikipedia',     entity, type },  // 概要テキスト
     ]
     : [
       { source: 'sofascore', entity, type },
       { source: 'wikipedia', entity, type },
     ];
-  return defaults.slice(0, 3);
+  return defaults;  // player は 4 ラベル、team は 2 ラベル
 }
 
 function labelTitle(item) {
