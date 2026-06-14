@@ -67,8 +67,9 @@ function hasNewline(s) {
 //   → mapImagesToModulePreview と組み合わせて使う
 function imgDataUri(imgPath) {
   if (!imgPath) return null;
-  if (imgPath.startsWith('data:')) return imgPath; // already base64
-  if (imgPath.startsWith('/'))     return imgPath; // HTTP URL, let browser fetch directly
+  if (imgPath.startsWith('data:'))    return imgPath; // already base64
+  if (imgPath.startsWith('/'))        return imgPath; // HTTP URL, let browser fetch directly
+  if (imgPath.startsWith('https://') || imgPath.startsWith('http://')) return imgPath; // 外部URL素通し
   try {
     // 絶対パスじゃなければプロジェクトルート基準で解決
     const abs = path.isAbsolute(imgPath)

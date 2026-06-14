@@ -86,6 +86,82 @@ async function _fetchWikiExtraImages(entityName, maxImages = 8) {
   } catch (_) { return []; }
 }
 
+// ── 公式 X アカウントのハンドル辞書 ─────────────────────────
+const OFFICIAL_X_HANDLES = {
+  // 代表チーム
+  'morocco':   'EnMaroc',
+  'brazil':    'CBF_Futebol',
+  'france':    'equipedefrance',
+  'germany':   'DFB_Team',
+  'spain':     'SeFutbol',
+  'england':   'England',
+  'argentina': 'Argentina',
+  'portugal':  'selecaoportugal',
+  'japan':     'jfa_samuraiblue',
+  'netherlands': 'onsoranje',
+  'italy':     'Azzurri',
+  'usa':       'USMNT',
+  // クラブ
+  'real madrid':      'realmadriden',
+  'barcelona':        'FCBarcelona',
+  'manchester city':  'ManCity',
+  'manchester united':'ManUtd',
+  'liverpool':        'LFC',
+  'arsenal':          'Arsenal',
+  'chelsea':          'ChelseaFC',
+  'tottenham':        'SpursOfficial',
+  'psg':              'PSG_English',
+  'juventus':         'juventusen',
+  'inter':            'Inter_en',
+  'ac milan':         'ACMilanEN',
+  'atletico madrid':  'atletienglish',
+  'borussia dortmund':'BVB',
+  'bayern munich':    'FCBayernEN',
+};
+
+function _lookupXHandle(entityName) {
+  const key = String(entityName || '').toLowerCase()
+    .replace(/\s+national\s+(?:football|soccer)?\s*team/gi, '')
+    .trim();
+  return OFFICIAL_X_HANDLES[key] || null;
+}
+
+// ── 公式 X アカウントから最新画像を取得 ──────────────────────
+async function _fetchXOfficialImages(handle, maxImages = 6) {
+  if (!X_API_KEY || !handle) return [];
+  try {
+    const q = `from:${handle} has:images -is:retweet`;
+    const res = await fetch(
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
+      new URLSearchParams({ query: q, queryType: 'Latest' }),
+      { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(10000) },
+    );
+    const data = await res.json();
+    const tweets = data?.data?.tweets || data?.tweets || [];
+    const images = [];
+    for (const t of tweets.slice(0, 30)) {
+      const mediaList = [
+        ...(Array.isArray(t.extendedEntities?.media) ? t.extendedEntities.media : []),
+        ...(Array.isArray(t.extended_entities?.media) ? t.extended_entities.media : []),
+        ...(Array.isArray(t.entities?.media) ? t.entities.media : []),
+      ];
+      for (const m of mediaList) {
+        const url = m?.media_url_https || m?.url || m?.media_url || '';
+        if (url && /\.(jpg|jpeg|png|webp)/i.test(url)) {
+          images.push({ url, source: 'x_official', role: 'official', name: `@${handle}` });
+          if (images.length >= maxImages) break;
+        }
+      }
+      if (images.length >= maxImages) break;
+    }
+    if (images.length) console.log(`[v4_assets] X公式@${handle}: ${images.length}件`);
+    return images;
+  } catch (e) {
+    console.warn(`[v4_assets] X公式@${handle} 失敗:`, e.message);
+    return [];
+  }
+}
+
 // ── X 試合/トピック関連画像（twitterAPI.io）──────────────────
 async function _fetchXTopicImages(topic, maxImages = 6) {
   if (!X_API_KEY) return [];
@@ -392,10 +468,21 @@ async function fetchBookAssets(book) {
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
 
-  // matchcard: X で試合関連画像を追加取得（英語クエリ）
+  // matchcard: 公式 X アカウント + 試合関連画像を追加取得
   if (book?.supplementType === 'matchcard') {
     const rawHome = String(book?.supplementData?.homeTeam || '').trim();
     const rawAway = String(book?.supplementData?.awayTeam || '').trim();
+
+    // 公式アカウントから取得（両チーム）
+    const homeHandle = _lookupXHandle(cleanTeamName(rawHome) || rawHome);
+    const awayHandle = _lookupXHandle(cleanTeamName(rawAway) || rawAway);
+    const officialImgs = await Promise.all([
+      homeHandle ? _fetchXOfficialImages(homeHandle, 5) : [],
+      awayHandle ? _fetchXOfficialImages(awayHandle, 5) : [],
+    ]);
+    images.push(...officialImgs.flat());
+
+    // 試合クエリで補完
     const xQuery = rawHome && rawAway
       ? `${cleanTeamName(rawHome)} ${cleanTeamName(rawAway)}`
       : String(book.mainEntity || book.topic || '').slice(0, 40);
@@ -414,11 +501,12 @@ async function fetchBookAssets(book) {
     const priority = image => {
       if (image.stockProvider === 'official-index') return 0;
       if (image.source === 'fotmob') return 1;
-      if (image.stockProvider === 'sofascore-profile') return 2;
-      if (image.source === 'stock' && Number(image.visionScore || 0) >= 90) return 3;
-      if (image.source === 'wikipedia') return 4;
-      if (image.source === 'x') return 5;
-      return 6;
+      if (image.source === 'x_official') return 2;
+      if (image.stockProvider === 'sofascore-profile') return 3;
+      if (image.source === 'stock' && Number(image.visionScore || 0) >= 90) return 4;
+      if (image.source === 'wikipedia') return 5;
+      if (image.source === 'x') return 6;
+      return 7;
     };
     return priority(a) - priority(b) ||
       Number(b.visionScore || 0) - Number(a.visionScore || 0);
