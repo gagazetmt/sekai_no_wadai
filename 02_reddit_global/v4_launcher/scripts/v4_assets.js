@@ -223,18 +223,8 @@ function inferEntityType(book) {
 function normalizeLabels(book) {
   const entity = String(book?.mainEntity || '').trim();
   const type = inferEntityType(book);
-  const explicit = Array.isArray(book?.dataLabels) ? book.dataLabels : [];
-  const labels = explicit.map((item) => {
-    if (typeof item === 'string') return { source: item, entity, type };
-    return {
-      source: String(item?.source || item?.provider || '').toLowerCase(),
-      entity: String(item?.entity || item?.name || entity).trim(),
-      type: item?.type || type,
-      label: item?.label || '',
-    };
-  }).filter(item => item.source && item.entity);
-
-  if (labels.length) return labels.slice(0, 3);
+  // ※ book.dataLabels（キャッシュ由来）は使わない
+  //   旧コードの sofascore ラベルが残っていると 403 で画像 0 になるため
   if (!entity) return [];
 
   // matchcard: SofaScore team は Cloudflare 403 で不安定のため Wikipedia を使用
