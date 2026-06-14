@@ -313,6 +313,31 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
 .confirm-gallery .gallery-item { aspect-ratio: 4/3; }
 .confirm-gallery-empty { font-size: 11px; color: var(--muted); padding: 6px 0; }
 
+/* スコアバッジ */
+.gallery-grade {
+  position: absolute; top: 3px; left: 3px;
+  font-size: 9px; font-weight: 900; padding: 1px 4px; border-radius: 3px;
+  line-height: 1.3;
+}
+.gallery-grade.A { background: var(--yellow); color: #111; }
+.gallery-grade.B { background: #555; color: #eee; }
+.gallery-grade.C { background: rgba(0,0,0,.5); color: #888; }
+
+/* XY/Zoom スライダー */
+.img-adj-wrap {
+  display: grid; grid-template-columns: auto 1fr 36px; gap: 4px 8px;
+  align-items: center; margin-top: 8px;
+}
+.img-adj-wrap label {
+  font-size: 10px; color: var(--muted); font-weight: 700; white-space: nowrap;
+}
+.img-adj-wrap input[type=range] {
+  width: 100%; accent-color: var(--yellow); cursor: pointer;
+}
+.img-adj-wrap .adj-val {
+  font-size: 10px; color: var(--text); text-align: right; min-width: 30px;
+}
+
 /* ══ 取得データ・画像ギャラリー ═══════════════════════════════ */
 .asset-panel {
   background: var(--s1); border: 1px solid var(--border);
@@ -839,6 +864,19 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       <label class="confirm-label">画像URL</label>
       <input class="confirm-input" id="confirmImage" placeholder="/images_stock/..." oninput="updateConfirmModule(false); renderConfirmGallery();">
       <div class="confirm-gallery" id="confirmGallery"></div>
+
+      <!-- XY / Zoom スライダー -->
+      <div class="img-adj-wrap" style="margin-top:10px;">
+        <label>水平 X</label>
+        <input type="range" id="adjOffsetX" min="-50" max="50" step="1" value="0" oninput="onAdjChange()">
+        <span class="adj-val" id="adjOffsetXVal">0%</span>
+        <label>垂直 Y</label>
+        <input type="range" id="adjOffsetY" min="-50" max="50" step="1" value="0" oninput="onAdjChange()">
+        <span class="adj-val" id="adjOffsetYVal">0%</span>
+        <label>ズーム</label>
+        <input type="range" id="adjZoom" min="80" max="200" step="5" value="100" oninput="onAdjChange()">
+        <span class="adj-val" id="adjZoomVal">1.0×</span>
+      </div>
     </div>
 
     <div class="confirm-panel">
@@ -908,7 +946,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 </main>
 
 <script>
-const CLIENT_VERSION = '20260614-8';
+const CLIENT_VERSION = '20260614-9';
 // ═════════════════════════════════ STATE
 const S = {
   topics: [],
@@ -920,6 +958,7 @@ const S = {
   poolComments: [],  // [{id,text,source}] 倉庫待機
   galleryImages: [],
   selectedImages: [],
+  imageXYMap: {},    // url → {offsetX, offsetY, zoom}
   assetsPromise: null,
   confirmModules: [],
   confirmActive: 0,
@@ -1108,9 +1147,13 @@ function renderImageGallery() {
   grid.innerHTML = S.galleryImages.length
     ? S.galleryImages.map((image, index) => {
       const selected = S.selectedImages.includes(image.url);
-      return `<button type="button" class="gallery-item${selected ? ' selected' : ''}" onclick="selectGalleryImage(${index})" title="${esc(image.name || image.role || '')}">
+      const grade    = image.thumbnailGrade || '';
+      const scoreTxt = image.score != null ? image.score.toFixed(1) : '';
+      const isThumbnail = S.netaBook?.thumbnail?.url === image.url;
+      return `<button type="button" class="gallery-item${selected ? ' selected' : ''}" onclick="selectGalleryImage(${index})" title="${esc(image.aiNotes || image.name || image.role || '')}">
         <img src="${esc(image.url)}" loading="lazy" alt="">
-        <span class="gallery-role">${esc(image.name || image.role || '画像')}</span>
+        ${grade ? `<span class="gallery-grade ${esc(grade)}">${esc(grade)}${scoreTxt ? ' ' + scoreTxt : ''}${isThumbnail ? ' ★' : ''}</span>` : ''}
+        <span class="gallery-role">${esc(image.contentType || image.name || image.role || '画像')}</span>
       </button>`;
     }).join('')
     : '<div class="asset-empty">該当するストック画像がありません</div>';
@@ -1151,9 +1194,27 @@ async function loadDataAssets(book) {
     book.fetchedData = Array.isArray(result.dataRows) ? result.dataRows : [];
     if (Array.isArray(result.images) && result.images.length) {
       S.galleryImages = result.images;
+      // XYMap: スコア付き画像から XY データを構築
+      S.imageXYMap = {};
+      result.images.forEach(img => {
+        if (img.url && (img.offsetX != null || img.offsetY != null)) {
+          S.imageXYMap[img.url] = {
+            offsetX: img.offsetX || 0,
+            offsetY: img.offsetY || 0,
+            zoom:    img.zoom    || 1.0,
+          };
+        }
+      });
+      // サムネ/スライドセットをネタブックに反映
+      if (result.thumbnail) {
+        book.thumbnail  = result.thumbnail;
+        book.slideImages = result.slideImages || [];
+      }
       if (!S.selectedImages.length) {
-        S.selectedImages = result.images.slice(0, 3).map(image => image.url).filter(Boolean);
-        book.selectedImages = [...S.selectedImages];
+        // slide セットの上位3枚を selectedImages に
+        const picks = (result.slideImages || result.images).slice(0, 3).map(i => i.url).filter(Boolean);
+        S.selectedImages = picks;
+        book.selectedImages = [...picks];
       }
     }
     if (['stats', 'profile'].includes(book.supplementType) && book.fetchedData.length) {
@@ -1604,6 +1665,14 @@ function syncNetaBookEdits() {
   S.netaBook.comments1 = selected.length ? selected.slice(0, 4) : null;
   S.netaBook.comments2 = selected.length > 4 ? selected.slice(4, 8) : null;
   S.netaBook.selectedImages = [...S.selectedImages];
+  // スコアリング済みデータを維持（v4_video.buildModules で使用）
+  if (!S.netaBook.thumbnail && S.galleryImages.length) {
+    const topA = S.galleryImages.find(i => i.thumbnailGrade === 'A') || S.galleryImages[0];
+    if (topA) {
+      S.netaBook.thumbnail = topA;
+      S.netaBook.slideImages = S.galleryImages.filter(i => i.thumbnailGrade !== 'C').slice(0, 6);
+    }
+  }
 }
 
 async function goToConfirm() {
@@ -1666,9 +1735,40 @@ function pickConfirmImage(url) {
   const clean = String(url || '').replace(/^\/+/, '');
   const inp = document.getElementById('confirmImage');
   if (inp) inp.value = clean;
+  // XY 自動セット（スコア済みデータがある場合）
+  const xy = S.imageXYMap[url] || S.imageXYMap[clean];
+  if (xy) {
+    const setSlider = (id, val, displayFn) => {
+      const el = document.getElementById(id);
+      const vEl = document.getElementById(id + 'Val');
+      if (el) el.value = val;
+      if (vEl) vEl.textContent = displayFn(val);
+    };
+    setSlider('adjOffsetX', xy.offsetX || 0, v => (v > 0 ? '+' : '') + v + '%');
+    setSlider('adjOffsetY', xy.offsetY || 0, v => (v > 0 ? '+' : '') + v + '%');
+    setSlider('adjZoom', Math.round((xy.zoom || 1.0) * 100), v => (v / 100).toFixed(2) + '×');
+  }
   updateConfirmModule(false);
   renderConfirmGallery();
   reloadConfirmPreview();
+}
+
+function onAdjChange() {
+  const ox   = Number(document.getElementById('adjOffsetX')?.value || 0);
+  const oy   = Number(document.getElementById('adjOffsetY')?.value || 0);
+  const zoom = Number(document.getElementById('adjZoom')?.value || 100) / 100;
+  const xv = document.getElementById('adjOffsetXVal');
+  const yv = document.getElementById('adjOffsetYVal');
+  const zv = document.getElementById('adjZoomVal');
+  if (xv) xv.textContent = (ox > 0 ? '+' : '') + ox + '%';
+  if (yv) yv.textContent = (oy > 0 ? '+' : '') + oy + '%';
+  if (zv) zv.textContent = zoom.toFixed(2) + '×';
+  // 現在のモジュールに imageAdjust を適用
+  const module = S.confirmModules[S.confirmActive];
+  if (module) {
+    module.imageAdjust = (ox === 0 && oy === 0 && zoom === 1.0) ? undefined : { offsetX: ox, offsetY: oy, zoom };
+    reloadConfirmPreview();
+  }
 }
 
 function renderConfirmEditor() {
@@ -1689,6 +1789,20 @@ function renderConfirmEditor() {
     module.type === 'reaction' ? 'block' : 'none';
   document.getElementById('confirmImage').value =
     module.images?.[0] || module.bgImage || '';
+  // imageAdjust をスライダーに反映
+  const adj = module.imageAdjust || {};
+  const ox   = adj.offsetX || 0;
+  const oy   = adj.offsetY || 0;
+  const zoom = Math.round((adj.zoom || 1.0) * 100);
+  const setSlider = (id, val, displayFn) => {
+    const el = document.getElementById(id);
+    const vEl = document.getElementById(id + 'Val');
+    if (el) el.value = val;
+    if (vEl) vEl.textContent = displayFn(val);
+  };
+  setSlider('adjOffsetX', ox,   v => (v > 0 ? '+' : '') + v + '%');
+  setSlider('adjOffsetY', oy,   v => (v > 0 ? '+' : '') + v + '%');
+  setSlider('adjZoom',    zoom, v => (v / 100).toFixed(2) + '×');
   renderConfirmGallery();
   reloadConfirmPreview();
 }
@@ -1709,6 +1823,11 @@ function updateConfirmModule(refresh = true) {
   const image = document.getElementById('confirmImage').value.trim().replace(/^\/+/, '');
   module.images = image ? [image] : [];
   module.bgImage = image || null;
+  // imageAdjust をスライダー値から同期
+  const ox   = Number(document.getElementById('adjOffsetX')?.value || 0);
+  const oy   = Number(document.getElementById('adjOffsetY')?.value || 0);
+  const zoom = Number(document.getElementById('adjZoom')?.value || 100) / 100;
+  module.imageAdjust = (ox === 0 && oy === 0 && zoom === 1.0) ? undefined : { offsetX: ox, offsetY: oy, zoom };
   if (module.type === 'reaction') {
     module.comments = document.getElementById('confirmComments').value
       .split('\n').map(text => text.trim()).filter(Boolean)

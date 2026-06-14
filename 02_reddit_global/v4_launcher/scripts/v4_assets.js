@@ -424,14 +424,34 @@ async function fetchBookAssets(book) {
       Number(b.visionScore || 0) - Number(a.visionScore || 0);
   }).slice(0, 24);
 
+  // ── 画像スコアリング + 最適セット選定 ──────────────────────
+  let scoredImages = uniqueImages;
+  let thumbnail    = uniqueImages[0] || null;
+  let slideImages  = uniqueImages.slice(0, 6);
+
+  if (uniqueImages.length) {
+    try {
+      const { scoreImages, selectImageSet } = require('./v4_image_selector');
+      const mood = String(book?.topic || '').match(/www|草|ww|笑|爆笑|バカ|バズ|笑える|面白/) ? 'funny' : 'cool';
+      scoredImages = await scoreImages(uniqueImages, { topic: book?.topic || '', mood });
+      const selected = selectImageSet(scoredImages);
+      thumbnail   = selected.thumbnail   || thumbnail;
+      slideImages = selected.slideImages.length ? selected.slideImages : slideImages;
+    } catch (e) {
+      console.warn('[v4_assets] 画像スコアリング失敗（フォールバック）:', e.message);
+    }
+  }
+
   return {
     ok: true,
     labels: labels.map(item => ({
       ...item,
       label: item.label || labelTitle(item),
     })),
-    dataRows: dataRows.slice(0, 24),
-    images: uniqueImages,
+    dataRows:    dataRows.slice(0, 24),
+    images:      scoredImages,
+    thumbnail,
+    slideImages,
     warnings,
   };
 }

@@ -184,14 +184,36 @@ function _buildReaction(title, comments) {
   };
 }
 
+// ── imageAdjust を画像メタから生成 ───────────────────────────
+function _imageAdjust(img) {
+  if (!img || (img.offsetX === undefined && img.offsetY === undefined)) return undefined;
+  return {
+    zoom:    img.zoom    || 1.15,  // デフォルトは少し寄り
+    offsetX: img.offsetX || 0,
+    offsetY: img.offsetY || 0,
+  };
+}
+
 // ── ネタブック → modules.json ─────────────────────────────────
 function buildModules(book) {
+  // スコアリング済み画像セットを優先。未スコアなら従来フォールバック。
+  const slideImgs = Array.isArray(book.slideImages) ? book.slideImages : [];
+  const thumb     = book.thumbnail || null;
+  const _pick = (idx) => {
+    const img = slideImgs[idx] || thumb;
+    return img ? { path: String(img.url || '').replace(/^\//, ''), adj: _imageAdjust(img) } : null;
+  };
+
+  // スコアリング済みがなければ従来方式
   const preset = _imagePreset(book);
   const fallbackImage = _selectedImage(book) || _findImage(book.mainEntity);
   if (!preset.length && fallbackImage) preset.push(fallbackImage);
-  const imagePath = preset[0] || null;
-  const overviewImage = preset[1] || imagePath;
-  const supplementImage = preset[2] || overviewImage || imagePath;
+
+  const thumbPick    = thumb ? { path: String(thumb.url || '').replace(/^\//, ''), adj: _imageAdjust(thumb) } : null;
+  const imagePath    = thumbPick?.path || preset[0] || null;
+  const imageAdj     = thumbPick?.adj  || undefined;
+  const overviewPick = _pick(1) || (preset[1] ? { path: preset[1], adj: undefined } : thumbPick);
+  const suppPick     = _pick(2) || (preset[2] ? { path: preset[2], adj: undefined } : overviewPick);
   const images = imagePath ? [imagePath] : [];
   const threadTitle = book.title || book.hook || book.topic;
   const pattern = STRUCTURE_PATTERNS.has(book.structurePattern)
@@ -210,25 +232,37 @@ function buildModules(book) {
     type: 'opening',
     title: threadTitle,
     images,
-    bgImage: imagePath || null,
-    narration: threadTitle,
+    bgImage:     imagePath || null,
+    imageAdjust: imageAdj,
+    narration:   threadTitle,
   };
   const overview = {
     type: 'picture',
     title: '何が起きた？',
-    images: overviewImage ? [overviewImage] : images,
-    bgImage: overviewImage || imagePath || null,
-    narration: _compactText(book.overview, 190),
+    images: overviewPick?.path ? [overviewPick.path] : images,
+    bgImage:     overviewPick?.path || imagePath || null,
+    imageAdjust: overviewPick?.adj,
+    narration:   _compactText(book.overview, 190),
   };
-  const supplement = pattern === 'rapid' ? null : _buildSupplement(book, supplementImage);
+  const supplement = pattern === 'rapid' ? null : _buildSupplement(book, suppPick?.path || null);
+  if (supplement && suppPick?.adj) supplement.imageAdjust = suppPick.adj;
   const reaction1 = _buildReaction(_cleanText(book.commentAngle1, 'ネットの反応'), c1);
   const reaction2 = _buildReaction(_cleanText(book.commentAngle2, 'さらに反応'), c2);
+  // 反応スライド: スタジアム/群衆/祝福系 画像を優先
+  const rxImg = slideImgs.find(i => ['stadium','celebration','team_group'].includes(i.contentType))
+             || slideImgs[3] || thumb;
+  const rxPath = rxImg ? String(rxImg.url || '').replace(/^\//, '') : imagePath;
+  const rxAdj  = _imageAdjust(rxImg);
+  if (reaction1) { reaction1.bgImage = rxPath; if (rxAdj) reaction1.imageAdjust = rxAdj; }
+  if (reaction2) { reaction2.bgImage = rxPath; if (rxAdj) reaction2.imageAdjust = rxAdj; }
+
   const ending = {
-    type: 'ending',
-    title: _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
-    narration: _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
-    bgImage: imagePath || null,
-    endingCta: { text: '　' },
+    type:        'ending',
+    title:       _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
+    narration:   _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
+    bgImage:     imagePath || null,
+    imageAdjust: imageAdj,
+    endingCta:   { text: '　' },
   };
 
   const middle = pattern === 'interleaved'
@@ -260,6 +294,9 @@ function _runRender(postId, jobId, { customTts = false } = {}) {
   return new Promise((resolve, reject) => {
     const tempoEnv = {
       TTS_TARGET_CPS: process.env.V4_TTS_TARGET_CPS || '9.0',
+      TTS_PROVIDER: 'voicevox',
+      AUDIO_MODE: 'legacy',
+      TTS_COMBINED_MODE: '0',
     };
     const proc = spawn('node', [RENDER_JS, postId, jobId], {
       cwd: BASE_DIR,
