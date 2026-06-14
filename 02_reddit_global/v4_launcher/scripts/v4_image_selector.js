@@ -1,6 +1,7 @@
 'use strict';
 // v4_image_selector.js
-// 画像セット最適化: Claude Haiku vision でスコアリング → サムネ1枚 + スライド6枚を選定
+// 画像セット最適化: Gemini Flash vision でスコアリング → サムネ1枚 + スライド6枚を選定
+// プロバイダ: Gemini REST API 直叩き（GEMINI_API_KEY）→ 無料枠が広く Anthropic 残高不要
 //
 // 出力画像ごとに付与するフィールド:
 //   score         : 1〜10 (視覚的インパクト + 動画への適合度)
@@ -14,56 +15,40 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { callAI } = require('../../scripts/ai_client');
 
-const BASE_DIR = path.join(__dirname, '..', '..');  // 02_reddit_global/
-const BATCH    = 5;   // 1回の Haiku vision 呼び出しで処理する画像数
-const MAX_IMGS = 12;  // スコアリング対象の上限（重い URL 画像は先に絞る）
+const BASE_DIR   = path.join(__dirname, '..', '..');  // 02_reddit_global/
+const BATCH      = 4;   // Gemini 1バッチあたりの画像数（多すぎると精度低下）
+const MAX_IMGS   = 12;  // スコアリング対象の上限
+const GEMINI_MODEL = 'gemini-1.5-flash-8b';  // 軽量・無料枠大・vision 対応
 
-// ── URL を Anthropic vision source に変換 ──────────────────────
-async function _toVisionSource(img) {
+// ── 画像を Gemini inline_data（base64）に変換 ────────────────
+async function _toGeminiPart(img) {
   const url = String(img.url || img.src || '');
   if (!url) return null;
-  // 外部 HTTPS → URL タイプでそのまま渡す（ダウンロード不要）
+  let data, mimeType;
   if (url.startsWith('https://')) {
-    return { type: 'url', url };
+    // 外部 URL → ダウンロードして base64 化
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      data = buf.toString('base64');
+      mimeType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+    } catch (_) { return null; }
+  } else {
+    // ローカルパス
+    const fullPath = path.join(BASE_DIR, url.replace(/^\//, ''));
+    if (!fs.existsSync(fullPath)) return null;
+    try {
+      data = fs.readFileSync(fullPath).toString('base64');
+      mimeType = /\.png$/i.test(url) ? 'image/png' : 'image/jpeg';
+    } catch (_) { return null; }
   }
-  // ローカルパス → base64 変換
-  const fullPath = path.join(BASE_DIR, url.replace(/^\//, ''));
-  if (!fs.existsSync(fullPath)) return null;
-  try {
-    const data = fs.readFileSync(fullPath).toString('base64');
-    const mime = /\.png$/i.test(url) ? 'image/png' : 'image/jpeg';
-    return { type: 'base64', media_type: mime, data };
-  } catch (_) { return null; }
+  return { inline_data: { mime_type: mimeType, data } };
 }
 
-// ── 1バッチのスコアリング ─────────────────────────────────────
-async function _scoreBatch(batch, topic, mood) {
-  const content = [];
-  const valid   = [];
-
-  for (const img of batch) {
-    const src = await _toVisionSource(img).catch(() => null);
-    if (!src) continue;
-    content.push({ type: 'image', source: src });
-    valid.push(img);
-  }
-  if (!valid.length) return [];
-
-  const moodNote = mood === 'funny'
-    ? '「笑える / 驚き / バズりそう」な画像を高評価。ネタ・リアクション系優先。'
-    : '「かっこいい / ドラマチック / 一目で伝わる」画像を高評価。迫力・臨場感優先。';
-
-  content.push({ type: 'text', text:
-`あなたは日本のサッカー YouTube 動画クリエイターです。
-案件: "${topic}"
-
-${valid.length}枚の画像を順番に評価してください。
-${moodNote}
-
-各画像について JSON で返答:
-{
+// ── スコアリングプロンプト ────────────────────────────────────
+const SCORE_SCHEMA = `{
   "images": [
     {
       "score": 8.5,
@@ -75,29 +60,72 @@ ${moodNote}
       "notes": "迫力あるシュートシーン"
     }
   ]
-}
+}`;
+
+function _makePrompt(count, topic, mood) {
+  const moodNote = mood === 'funny'
+    ? '「笑える/驚き/バズりそう」な画像を高評価。ネタ・リアクション系優先。'
+    : '「かっこいい/ドラマチック/一目で伝わる」画像を高評価。迫力・臨場感優先。';
+  return `あなたは日本のサッカー YouTube 動画クリエイターです。
+案件: "${topic}"
+
+${count}枚の画像を順番に評価してください。
+${moodNote}
+
+各画像について JSON で返答: ${SCORE_SCHEMA}
 
 score: 1〜10（小数可）
   10 = 完璧なサムネ候補・一目でクリックしたくなる
   7〜9 = 良質・動画に使える
   4〜6 = 普通・代替がなければ使う
   1〜3 = ぼやけ/無関係/ロゴのみ/文字ばかり → 使わない
-
 thumbnailGrade: A（サムネ最適）| B（スライド用に良い）| C（使えなくはない）
 contentType: player_portrait | player_action | team_group | stadium | celebration | logo | text_heavy | other
 orientation: portrait（縦長）| landscape（横長）
 focalX: 0〜100（被写体の水平位置 %、中央なら 50）
 focalY: 0〜100（被写体の垂直位置 %、顔が上部なら 20〜30）
-JSONのみ返答。` });
+JSONのみ返答。`;
+}
+
+// ── Gemini REST API 直叩き ────────────────────────────────────
+async function _callGeminiVision(parts, promptText) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY 未設定');
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const body = {
+    contents: [{
+      parts: [...parts, { text: promptText }],
+    }],
+    generationConfig: { maxOutputTokens: 700 },
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`Gemini ${res.status}: ${err.slice(0, 80)}`);
+  }
+  const data = await res.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// ── 1バッチのスコアリング ─────────────────────────────────────
+async function _scoreBatch(batch, topic, mood) {
+  const parts = [];
+  const valid = [];
+
+  // 並列でダウンロード・base64 変換
+  const results = await Promise.all(batch.map(img => _toGeminiPart(img).catch(() => null)));
+  results.forEach((part, i) => {
+    if (part) { parts.push(part); valid.push(batch[i]); }
+  });
+  if (!valid.length) return [];
 
   try {
-    const raw = await callAI({
-      forceProvider: 'anthropic',
-      model:         'claude-haiku-4-5-20251001',
-      max_tokens:    600,
-      label:         'v4-image-score',
-      messages:      [{ role: 'user', content }],
-    });
+    const raw = await _callGeminiVision(parts, _makePrompt(valid.length, topic, mood));
     const m = raw?.match(/\{[\s\S]*\}/);
     if (!m) return valid.map(img => _defaultScore(img));
     const parsed = JSON.parse(m[0]);
@@ -114,13 +142,13 @@ JSONのみ返答。` });
         orientation:    s.orientation || 'landscape',
         focalX,
         focalY,
-        offsetX: focalX - 50,   // → imageAdjust.offsetX
-        offsetY: focalY - 50,   // → imageAdjust.offsetY
+        offsetX: focalX - 50,
+        offsetY: focalY - 50,
         aiNotes: s.notes || '',
       };
     });
   } catch (e) {
-    console.warn('[v4_image_selector] バッチスコアリング失敗:', e.message);
+    console.warn('[v4_image_selector] Gemini vision 失敗:', e.message);
     return valid.map(img => _defaultScore(img));
   }
 }
