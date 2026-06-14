@@ -66,11 +66,18 @@ async function init() {
         });
       }
     }
-    // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（api.sofascore.com は通す）
-    await attachBlocker(_page, { allowHosts: ['api.sofascore.com'] });
+    // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（sofascore.com / api.sofascore.com は通す）
+    await attachBlocker(_page, { allowHosts: ['sofascore.com', 'api.sofascore.com'] });
     await _page.setUserAgent(UA);
     await _page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-    // www.sofascore.com 訪問は不要（上記コメント参照）。即 API 叩ける状態にする
+    // 2026-06-14: Webshare IP が SofaScore バックエンドで繰り返しブロックされるようになったため
+    // www.sofascore.com 訪問を復活（CF clearance cookie を取得してから API を叩く）
+    // ※ 2026-05-12 に「不要」として削除したが、バックエンド IP ブロックが強化されたため再導入
+    try {
+      await _page.goto('https://www.sofascore.com/', {
+        waitUntil: 'domcontentloaded', timeout: 20000,
+      });
+    } catch (_) { /* タイムアウトでも cookie 取得できていれば続行 */ }
     // プロセス終了時に自動 close
     process.once('exit',   () => { try { _browser?.close(); } catch (_) {} });
     process.once('SIGINT', () => { try { _browser?.close(); } catch (_) {} process.exit(); });
