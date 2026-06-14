@@ -370,7 +370,8 @@ ${warehouseBlock}
 | supplement2 | 同じ感情軸の別の切り口（似てるなら null） | 100〜200字 | 素材あれば |
 | comments1 | コメント 3〜4件（1件40字以内） | — | 反応あれば |
 | comments2 | さらに別のコメント 3〜4件（①と違うトーン優先、なければ続きでよい） | — | 倉庫に5件以上あれば |
-| mainEntity | 主役の英語フルネーム（画像検索用） | — | ✅ |
+| mainEntity | 主役の英語名（選手→フルネーム / 試合→物語の中心チームまたはスター選手名） | — | ✅ |
+| subEntities | 副役1〜2件（試合→対戦相手チーム名 / 複数選手→2番手）英語名リスト | — | 試合・比較時 |
 | structurePattern | standard / interleaved / rapid から最適な型 | — | ✅ |
 | supplementType | 補足に最適なスライド型。補足不要なら null | — | 補足時 |
 | supplementTitle | 補足スライドの短い見出し | 〜24字 | 補足時 |
@@ -409,6 +410,7 @@ ${hasRealComments
   "comments1": ["...", "...", "..."],
   "comments2": null,
   "mainEntity": "Wataru Endo",
+  "subEntities": null,
   "structurePattern": "standard",
   "supplementType": "insight",
   "supplementTitle": "遠藤が残したもの",
@@ -471,6 +473,10 @@ ${hasRealComments
     ? parsed.supplementType
     : null;
 
+  const subEntities = Array.isArray(parsed.subEntities)
+    ? parsed.subEntities.map(x => String(x || '').trim()).filter(Boolean).slice(0, 2)
+    : null;
+
   return {
     title:       clean(parsed.title, 60)        || topic,
     overview:    clean(parsed.overview, 300)     || '（概要未生成）',
@@ -479,6 +485,7 @@ ${hasRealComments
     comments1:   cleanArr(parsed.comments1, 5, 40),
     comments2:   cleanArr(parsed.comments2, 5, 40),
     mainEntity:  clean(parsed.mainEntity, 80)    || '',
+    subEntities: subEntities?.length ? subEntities : null,
     structurePattern,
     supplementType,
     supplementTitle: clean(parsed.supplementTitle, 40),
@@ -527,6 +534,7 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     comments1:        neta.comments1,
     comments2:        neta.comments2,
     mainEntity:       neta.mainEntity,
+    subEntities:      neta.subEntities || null,
     structurePattern: neta.structurePattern,
     supplementType:   neta.supplementType,
     supplementTitle:  neta.supplementTitle,

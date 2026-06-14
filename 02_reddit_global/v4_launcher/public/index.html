@@ -278,6 +278,32 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
   padding: 6px 0 8px; line-height: 1.5;
 }
 
+/* ══ スライド構成フロー ═══════════════════════════════════════ */
+.slide-flow {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--rad-sm); padding: 8px 12px;
+  margin-bottom: 10px;
+}
+.sf-node {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border-radius: 4px; padding: 4px 9px;
+  font-size: 11px; font-weight: 900; border: 1px solid;
+  line-height: 1.3; text-align: center; min-width: 44px;
+}
+.sf-node .sf-sub { font-size: 9px; font-weight: 400; opacity: .7; }
+.sf-node.op  { color: var(--red);    border-color: rgba(232,0,0,.35);    background: rgba(232,0,0,.09); }
+.sf-node.pic { color: #ccc;          border-color: var(--border2);        background: var(--s2); }
+.sf-node.sup { color: var(--cx);     border-color: rgba(29,155,240,.35);  background: rgba(29,155,240,.09); }
+.sf-node.rx  { color: var(--yellow); border-color: rgba(255,238,0,.35);   background: rgba(255,238,0,.09); }
+.sf-node.ed  { color: var(--red);    border-color: rgba(232,0,0,.35);     background: rgba(232,0,0,.09); }
+.sf-arrow { color: var(--muted2); font-size: 11px; flex-shrink: 0; }
+.sf-tag {
+  margin-left: auto; font-size: 9px; font-weight: 900; letter-spacing: .8px;
+  padding: 2px 8px; border-radius: 10px;
+  background: var(--s3); color: var(--muted);
+}
+
 /* ══ 取得データ・画像ギャラリー ═══════════════════════════════ */
 .asset-panel {
   background: var(--s1); border: 1px solid var(--border);
@@ -652,6 +678,9 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   <!-- ネタブック本体（アコーディオン） -->
   <div id="netaBody" style="display:none;">
 
+    <!-- 動画構成フロー -->
+    <div id="slideFlow" class="slide-flow" style="display:none;"></div>
+
     <!-- ① タイトル -->
     <div class="neta-section open" id="sec-title">
       <div class="neta-hd" onclick="toggleSec('title')">
@@ -869,6 +898,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 </main>
 
 <script>
+const CLIENT_VERSION = '20260614-3';
 // ═════════════════════════════════ STATE
 const S = {
   topics: [],
@@ -1166,10 +1196,19 @@ async function api(url, body) {
     : {});
   return r.json();
 }
-function poll(url, ms, onDone, onTick) {
+function poll(url, ms, onDone, onTick, onLost) {
+  let misses = 0;
   const id = setInterval(async () => {
     const j = await api(url).catch(() => null);
-    if (!j) return;
+    if (!j || j.error === 'not found') {
+      misses++;
+      if (misses >= 3) {
+        clearInterval(id);
+        onLost?.();
+      }
+      return;
+    }
+    misses = 0;
     onTick?.(j);
     if (j.status === 'done' || j.status === 'error') { clearInterval(id); onDone(j); }
   }, ms);
@@ -1243,7 +1282,6 @@ function stopScanAnim(counts) {
 
 async function startScout() {
   document.getElementById('btnScout').disabled = true;
-  document.getElementById('topicGrid').innerHTML = '';
   startScanAnim();
 
   try {
@@ -1258,10 +1296,16 @@ async function startScout() {
         document.getElementById('topicGrid').innerHTML =
           `<div class="empty"><div class="e-icon">❌</div><p>${esc(j.error || 'エラーが発生しました')}</p></div>`;
       }
+    }, null, async () => {
+      document.getElementById('btnScout').disabled = false;
+      stopScanAnim();
+      await loadLatest();
+      document.getElementById('scoutedMeta').textContent = '取得が中断されたため前回結果を表示';
     });
   } catch (e) {
     document.getElementById('btnScout').disabled = false;
     stopScanAnim();
+    await loadLatest();
   }
 }
 
@@ -1414,6 +1458,37 @@ async function selectTopic(idx) {
   }
 }
 
+// ─── スライド構成フロー ───────────────────────────────────────
+function renderSlideFlow(book) {
+  const el = document.getElementById('slideFlow');
+  if (!el) return;
+  const pattern = book.structurePattern || 'standard';
+  const suppType = book.supplementType || 'insight';
+  const hasSupp = !!(book.supplement1 || book.supplement2);
+
+  // slide定義: [cssClass, ラベル, サブラベル]
+  const OP  = ['op',  'OP',   'タイトル'];
+  const PIC = ['pic', '概要',  'picture'];
+  const SUP = ['sup', '補足',  suppType];
+  const RX1 = ['rx',  '反応①', (book.commentAngle1 || 'コメント')];
+  const RX2 = ['rx',  '反応②', (book.commentAngle2 || 'コメント')];
+  const ED  = ['ed',  'ED',   'エンディング'];
+
+  const flowMap = {
+    standard:    [OP, PIC, ...(hasSupp ? [SUP] : []), RX1, RX2, ED],
+    interleaved: [OP, PIC, RX1, ...(hasSupp ? [SUP] : []), RX2, ED],
+    rapid:       [OP, PIC, RX1, RX2, ED],
+  };
+  const flow = flowMap[pattern] || flowMap.standard;
+
+  el.innerHTML =
+    flow.map(([cls, label, sub]) =>
+      `<span class="sf-node ${cls}">${esc(label)}<span class="sf-sub">${esc(sub)}</span></span>`
+    ).join('<span class="sf-arrow">→</span>') +
+    `<span class="sf-tag">${pattern.toUpperCase()}</span>`;
+  el.style.display = 'flex';
+}
+
 // ═════════════════════════════════ STEP 2: ネタブック
 function toggleSec(key) {
   const el = document.getElementById('sec-' + key);
@@ -1498,6 +1573,7 @@ function renderNetaBook(book) {
     S.assetsPromise = null;
   });
 
+  renderSlideFlow(book);
   document.getElementById('netaBody').style.display = 'block';
 }
 
@@ -1540,7 +1616,7 @@ async function goToConfirm() {
     document.getElementById('tab4').disabled = true;
     goStep(3);
     renderConfirmEditor();
-    await loadConfirmTtsPresets('gemini');
+    await loadConfirmTtsPresets('voicevox');
   } catch (e) {
     sb('netaStatus', 'error', e.message);
   }
@@ -1637,7 +1713,7 @@ async function reloadConfirmPreview() {
 
 async function loadConfirmTtsPresets(provider) {
   try {
-    const presets = await api('/api/confirm/tts-presets?provider=' + encodeURIComponent(provider || 'gemini'));
+    const presets = await api('/api/confirm/tts-presets?provider=' + encodeURIComponent(provider || 'voicevox'));
     if (!presets.ok) throw new Error(presets.error || 'TTS設定取得失敗');
     S.ttsPresets[presets.provider] = presets;
     const providerSelect = document.getElementById('confirmTtsProvider');
@@ -1659,7 +1735,7 @@ async function loadConfirmTtsPresets(provider) {
 
 function currentTtsConfig() {
   return {
-    provider: document.getElementById('confirmTtsProvider').value || 'gemini',
+    provider: document.getElementById('confirmTtsProvider').value || 'voicevox',
     voiceId: document.getElementById('confirmTtsVoice').value || undefined,
     model: document.getElementById('confirmTtsModel').value || undefined,
     speed: Number(document.getElementById('confirmTtsSpeed').value || 1),
@@ -1833,7 +1909,20 @@ async function runVideoGeneration(modules = null) {
 }
 
 // ═════════════════════════════════ INIT
-window.addEventListener('DOMContentLoaded', loadLatest);
+async function verifyClientVersion() {
+  try {
+    const current = await api('/api/version?v=' + Date.now());
+    if (current.version && current.version !== CLIENT_VERSION) {
+      location.reload();
+      return false;
+    }
+  } catch (_) {}
+  return true;
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  if (await verifyClientVersion()) await loadLatest();
+});
 </script>
 </body>
 </html>

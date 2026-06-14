@@ -42,6 +42,31 @@ function normalizeLabels(book) {
 
   if (labels.length) return labels.slice(0, 3);
   if (!entity) return [];
+
+  // matchcard: 両チームを SofaScore で取得
+  const matchHome = String(book?.supplementData?.homeTeam || '').trim();
+  const matchAway = String(book?.supplementData?.awayTeam || '').trim();
+  if (book?.supplementType === 'matchcard' && matchHome && matchAway) {
+    return [
+      { source: 'sofascore', entity: matchHome, type: 'team' },
+      { source: 'sofascore', entity: matchAway, type: 'team' },
+      { source: 'wikipedia', entity: matchHome, type: 'team' },
+    ];
+  }
+
+  // subEntities があれば mainEntity + subEntity[0] の 2 エンティティを割り当て
+  const subs = Array.isArray(book?.subEntities)
+    ? book.subEntities.map(e => String(e || '').trim()).filter(Boolean).slice(0, 1)
+    : [];
+  if (subs.length) {
+    const subType = inferEntityType({ mainEntity: subs[0] });
+    return [
+      { source: 'sofascore', entity, type },
+      { source: 'sofascore', entity: subs[0], type: subType },
+      { source: 'wikipedia', entity, type },
+    ];
+  }
+
   const defaults = [
     { source: 'sofascore', entity, type },
     ...(type === 'player' ? [{ source: 'transfermarkt', entity, type }] : []),
@@ -61,9 +86,9 @@ function labelTitle(item) {
 
 function stockImages(entity) {
   return [
-    ...matchPlayers(entity, { limit: 12 }),
-    ...matchManagers(entity, { limit: 6 }),
-    ...matchClubs(entity, { limit: 10 }),
+    ...matchPlayers(entity, { limit: 6, threshold: 82 }),
+    ...matchManagers(entity, { limit: 3, threshold: 82 }),
+    ...matchClubs(entity, { limit: 4, threshold: 78 }),
   ];
 }
 

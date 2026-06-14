@@ -26,8 +26,21 @@ const {
 
 const app  = express();
 const PORT = process.env.V4_PORT || 3005;
+const CLIENT_VERSION = '20260614-3';
 app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path === '/index.html') {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/api/version', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ ok: true, version: CLIENT_VERSION, port: Number(PORT) });
+});
 // 動画・画像を V2 インフラと共有
 app.use('/v2_videos',    express.static(path.join(__dirname, '..', 'data', 'v2_videos')));
 app.use('/images_stock', express.static(path.join(__dirname, '..', 'images_stock')));
@@ -116,9 +129,9 @@ app.get('/api/neta/images', (req, res) => {
   if (!q) return res.json({ ok: true, images: [] });
   try {
     const images = [
-      ...matchPlayers(q, { limit: 18 }),
-      ...matchManagers(q, { limit: 8 }),
-      ...matchClubs(q, { limit: 12 }),
+      ...matchPlayers(q, { limit: 8, threshold: 78 }),
+      ...matchManagers(q, { limit: 4, threshold: 78 }),
+      ...matchClubs(q, { limit: 6, threshold: 75 }),
     ];
     const seen = new Set();
     const unique = images.filter((image) => {
