@@ -31,9 +31,17 @@ async function _fetchWikiExtraImages(entityName, maxImages = 8) {
     for (const page of pages) {
       const info = page.imageinfo?.[0];
       if (!info?.url) continue;
-      if (/\.svg$/i.test(info.url)) continue;
       if (!/\.(jpg|jpeg|png|webp)/i.test(info.url)) continue;
-      if ((info.width || 0) < 200 || (info.height || 0) < 150) continue;
+      if ((info.width || 0) < 250 || (info.height || 0) < 180) continue;
+      const fname = String(page.title || info.url).toLowerCase();
+      // ロゴ・旗・アイコン類を除外
+      if (/logo|badge|crest|emblem|seal|icon|flag|coat.of.arm|federation|ffm|confederation/i.test(fname)) continue;
+      // 乗り物・建物・非サッカー系を除外
+      if (/aircraft|airplane|boeing|airbus|varig|stadium_ext|map_of|location/i.test(fname)) continue;
+      // 横長すぎる（バナー画像）を除外
+      const w = info.width || 0;
+      const h = info.height || 0;
+      if (h > 0 && w / h > 4.5) continue;
       results.push({
         url: info.url,
         source: 'wikipedia',
@@ -345,10 +353,17 @@ async function fetchBookAssets(book) {
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
 
-  // matchcard: X で試合関連画像を追加取得
-  if (book?.supplementType === 'matchcard' && book?.topic) {
-    const xImgs = await _fetchXTopicImages(book.topic, 8);
-    images.push(...xImgs);
+  // matchcard: X で試合関連画像を追加取得（英語クエリ）
+  if (book?.supplementType === 'matchcard') {
+    const rawHome = String(book?.supplementData?.homeTeam || '').trim();
+    const rawAway = String(book?.supplementData?.awayTeam || '').trim();
+    const xQuery = rawHome && rawAway
+      ? `${cleanTeamName(rawHome)} ${cleanTeamName(rawAway)}`
+      : String(book.mainEntity || book.topic || '').slice(0, 40);
+    if (xQuery) {
+      const xImgs = await _fetchXTopicImages(xQuery, 8);
+      images.push(...xImgs);
+    }
   }
 
   const seen = new Set();
