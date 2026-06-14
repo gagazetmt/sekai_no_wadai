@@ -1,5 +1,8 @@
 'use strict';
 
+const path = require('path');
+const fs   = require('fs');
+
 const { fetchWikipediaSafe } = require('../../scripts/modules/fetchers/wikipedia');
 const { fetchSofaScorePlayer } = require('../../scripts/modules/fetchers/sofascore_player');
 const { fetchSofaScoreTeam } = require('../../scripts/modules/fetchers/sofascore_team');
@@ -96,44 +99,28 @@ async function _fetchWikiExtraImages(entityName, maxImages = 8) {
   } catch (_) { return []; }
 }
 
-// ── 公式 X アカウントのハンドル辞書 ─────────────────────────
-const OFFICIAL_X_HANDLES = {
-  // 代表チーム
-  'morocco':   'EnMaroc',
-  'brazil':    'CBF_Futebol',
-  'france':    'equipedefrance',
-  'germany':   'DFB_Team',
-  'spain':     'SeFutbol',
-  'england':   'England',
-  'argentina': 'Argentina',
-  'portugal':  'selecaoportugal',
-  'japan':     'jfa_samuraiblue',
-  'netherlands': 'onsoranje',
-  'italy':     'Azzurri',
-  'usa':       'USMNT',
-  // クラブ
-  'real madrid':      'realmadriden',
-  'barcelona':        'FCBarcelona',
-  'manchester city':  'ManCity',
-  'manchester united':'ManUtd',
-  'liverpool':        'LFC',
-  'arsenal':          'Arsenal',
-  'chelsea':          'ChelseaFC',
-  'tottenham':        'SpursOfficial',
-  'psg':              'PSG_English',
-  'juventus':         'juventusen',
-  'inter':            'Inter_en',
-  'ac milan':         'ACMilanEN',
-  'atletico madrid':  'atletienglish',
-  'borussia dortmund':'BVB',
-  'bayern munich':    'FCBayernEN',
-};
-
+// ── 公式 X アカウントのハンドル辞書（V3 team_x_accounts.json を共用）────
+let _teamXMap = null;
 function _lookupXHandle(entityName) {
-  const key = String(entityName || '').toLowerCase()
+  if (!_teamXMap) {
+    try {
+      const mapPath = path.join(__dirname, '..', '..', 'logos', 'team_x_accounts.json');
+      _teamXMap = JSON.parse(fs.readFileSync(mapPath, 'utf8')).teams || {};
+    } catch (_) { _teamXMap = {}; }
+  }
+  const key = String(entityName || '')
     .replace(/\s+national\s+(?:football|soccer)?\s*team/gi, '')
     .trim();
-  return OFFICIAL_X_HANDLES[key] || null;
+  if (!key) return null;
+  const kl = key.toLowerCase();
+  // 完全一致（大小文字無視）
+  const exactKey = Object.keys(_teamXMap).find(k => k.toLowerCase() === kl);
+  if (exactKey) return _teamXMap[exactKey].handle || null;
+  // 部分一致（長い方優先）
+  const partialKey = Object.keys(_teamXMap)
+    .sort((a, b) => b.length - a.length)
+    .find(k => { const kl2 = k.toLowerCase(); return kl2.includes(kl) || kl.includes(kl2); });
+  return partialKey ? _teamXMap[partialKey].handle || null : null;
 }
 
 // ── 公式 X アカウントから最新画像を取得 ──────────────────────
@@ -246,8 +233,11 @@ function normalizeLabels(book) {
     return [
       { source: 'wikipedia', entity: matchHome, type: 'team' },
       { source: 'wikipedia', entity: matchAway, type: 'team' },
-      ...(keyPlayer ? [{ source: 'fotmob', entity: keyPlayer, type: 'player' }] : []),
-    ].slice(0, 3);
+      ...(keyPlayer ? [
+        { source: 'sofascore',     entity: keyPlayer, type: 'player' },
+        { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
+      ] : []),
+    ];
   }
 
   // subEntities があれば mainEntity + subEntity[0] の 2 エンティティを割り当て
@@ -256,25 +246,33 @@ function normalizeLabels(book) {
     : [];
   if (subs.length) {
     const subType = inferEntityType({ mainEntity: subs[0] });
+    const mainSource = type === 'player' ? 'sofascore' : 'wikipedia';
+    const subSource  = subType === 'player' ? 'sofascore' : 'wikipedia';
     return [
-      { source: 'sofascore', entity, type },
-      { source: 'sofascore', entity: subs[0], type: subType },
-      { source: 'wikipedia', entity, type },
+      { source: mainSource, entity, type },
+      { source: subSource,  entity: subs[0], type: subType },
+      ...(keyPlayer ? [
+        { source: 'sofascore',     entity: keyPlayer, type: 'player' },
+        { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
+      ] : []),
     ];
   }
 
-  // player: SofaScore page fallback(市場価値/国籍) + FotMob(リーグ/キャリア統計) + TM(負傷) + Wikipedia
-  // team: SofaScore team は 403 のため Wikipedia のみ。keyPlayer があれば FotMob を追加
+  // player: SofaScore(市場価値/国籍) + FotMob(リーグ/キャリア統計) + TM(負傷) + Wikipedia
+  // team: SofaScore team は 403 のため Wikipedia のみ。keyPlayer があれば SofaScore+TM を追加
   const defaults = type === 'player'
     ? [
-      { source: 'sofascore',     entity, type },  // 市場価値・国籍（page fallback）
-      { source: 'fotmob',        entity, type },  // リーグ・キャリア通算
-      { source: 'transfermarkt', entity, type },  // 負傷履歴
-      { source: 'wikipedia',     entity, type },  // 概要テキスト
+      { source: 'sofascore',     entity, type },
+      { source: 'fotmob',        entity, type },
+      { source: 'transfermarkt', entity, type },
+      { source: 'wikipedia',     entity, type },
     ]
     : [
       { source: 'wikipedia', entity, type },
-      ...(keyPlayer ? [{ source: 'fotmob', entity: keyPlayer, type: 'player' }] : []),
+      ...(keyPlayer ? [
+        { source: 'sofascore',     entity: keyPlayer, type: 'player' },
+        { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
+      ] : []),
     ];
   return defaults;
 }
@@ -471,15 +469,20 @@ async function fetchBookAssets(book) {
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
 
-  // mainEntity に既知ハンドルがあれば常に公式X画像を取得（スライド種別不問）
+  // mainEntity + subEntities に既知ハンドルがあれば常に公式X画像を取得（スライド種別不問）
   const fetchedXHandles = new Set();
-  const mainEntityRaw = String(book?.mainEntity || '').trim();
-  const mainHandle = _lookupXHandle(cleanTeamName(mainEntityRaw) || mainEntityRaw);
-  if (mainHandle) {
-    const imgs = await _fetchXOfficialImages(mainHandle, 5);
-    images.push(...imgs);
-    fetchedXHandles.add(mainHandle);
-  }
+  const xTargets = [
+    String(book?.mainEntity || '').trim(),
+    ...(Array.isArray(book?.subEntities) ? book.subEntities.map(e => String(e || '').trim()).filter(Boolean) : []),
+  ].filter(Boolean).slice(0, 3);
+  await Promise.all(xTargets.map(async (entityStr) => {
+    const handle = _lookupXHandle(cleanTeamName(entityStr) || entityStr);
+    if (handle && !fetchedXHandles.has(handle)) {
+      fetchedXHandles.add(handle);
+      const imgs = await _fetchXOfficialImages(handle, 5);
+      images.push(...imgs);
+    }
+  }));
 
   // matchcard: 両チームの公式X画像（未取得分）+ 試合関連画像を追加取得
   if (book?.supplementType === 'matchcard') {
