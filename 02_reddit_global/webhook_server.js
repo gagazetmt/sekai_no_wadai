@@ -40,10 +40,7 @@ http.createServer((req, res) => {
     console.log("📦 Push検知 → git pull & pm2 restart 開始");
     res.writeHead(200); res.end("ok");
 
-    // 2026-05-21: V2 本番 (port 3004 / local_v2_launcher.js) を restart 対象に修正
-    //   旧: pm2 restart soccer-yt   ← V1 ランチャー (廃止予定)
-    //   新: pm2 restart soccer-yt-v2 ← V2 本番
-    const cmd = `cd ${REPO_DIR}/.. && git pull && cd ${REPO_DIR} && npm install --omit=dev && pm2 restart soccer-yt-v2`;
+    const cmd = `cd ${REPO_DIR}/.. && git pull && cd ${REPO_DIR} && npm install --omit=dev && pm2 restart soccer-yt-v4`;
     exec(cmd, (err, stdout, stderr) => {
       if (err) {
         console.error("❌ エラー:", err.message);
