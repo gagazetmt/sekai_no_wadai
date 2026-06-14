@@ -35,7 +35,7 @@ async function _fetchWikiExtraImages(entityName, maxImages = 8) {
       if ((info.width || 0) < 250 || (info.height || 0) < 180) continue;
       const fname = String(page.title || info.url).toLowerCase();
       // ロゴ・旗・アイコン類を除外
-      if (/logo|badge|crest|emblem|seal|icon|flag|coat.of.arm|federation|ffm|confederation/i.test(fname)) continue;
+      if (/logo|badge|crest|emblem|seal|icon|flag|coat.of.arm|federation|ffm|confederation|_fed_|_federation/i.test(fname)) continue;
       // 乗り物・建物・非サッカー系を除外
       if (/aircraft|airplane|boeing|airbus|varig|stadium_ext|map_of|location/i.test(fname)) continue;
       // 横長すぎる（バナー画像）を除外
