@@ -160,4 +160,48 @@ async function apiGetImage(urlPath) {
   });
 }
 
-module.exports = { init, close, apiGet, apiGetImage };
+// ── 選手ページ（www.sofascore.com）から __NEXT_DATA__ を取得 ─────
+//   api.sofascore.com が 403 の場合のフォールバック
+//   www.sofascore.com/player/{slug}/{id} → SSR 埋め込みの選手情報
+async function fetchPlayerPage(playerId, playerName) {
+  await init();
+  const slug = String(playerName || 'player')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return _serialize(async () => {
+    const url = `https://www.sofascore.com/player/${slug}/${playerId}`;
+    const res = await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+    if (!res || res.status() !== 200) return null;
+    const text = await _page.evaluate(() =>
+      document.getElementById('__NEXT_DATA__')?.textContent || ''
+    );
+    if (!text) return null;
+    try { return JSON.parse(text)?.props?.pageProps || null; }
+    catch (_) { return null; }
+  });
+}
+
+// ── チームページ（www.sofascore.com）から __NEXT_DATA__ を取得 ──
+async function fetchTeamPage(teamId, teamName) {
+  await init();
+  const slug = String(teamName || 'team')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return _serialize(async () => {
+    const url = `https://www.sofascore.com/team/football/${slug}/${teamId}`;
+    const res = await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+    if (!res || res.status() !== 200) return null;
+    const text = await _page.evaluate(() =>
+      document.getElementById('__NEXT_DATA__')?.textContent || ''
+    );
+    if (!text) return null;
+    try { return JSON.parse(text)?.props?.pageProps || null; }
+    catch (_) { return null; }
+  });
+}
+
+module.exports = { init, close, apiGet, apiGetImage, fetchPlayerPage, fetchTeamPage };

@@ -235,7 +235,28 @@ async function fetchSofaScorePlayer(playerNameEn) {
     ]);
 
     // ② 詳細情報（市場価値・契約）
-    const playerDetail = pdRaw?.__err ? {} : (pdRaw.player || {});
+    // api.sofascore.com が 403 の場合は www.sofascore.com/player/{slug}/{id} の
+    // __NEXT_DATA__ からフォールバック取得（Webshare IP ブロック対策）
+    let playerDetail = pdRaw?.__err ? {} : (pdRaw.player || {});
+    if (pdRaw?.__err || (!playerDetail.team && !playerDetail.proposedMarketValue)) {
+      try {
+        const { fetchPlayerPage } = require('./_sofa_via_puppeteer');
+        const pageProps = await fetchPlayerPage(playerId, player.name || playerNameEn);
+        const pp = pageProps?.player;
+        if (pp) {
+          playerDetail = {
+            name: pp.name,
+            position: pp.position,
+            team: pp.team,
+            country: pp.country,
+            dateOfBirthTimestamp: pp.dateOfBirthTimestamp,
+            proposedMarketValue: pp.proposedMarketValueRaw?.value || null,
+            proposedMarketValueRaw: pp.proposedMarketValueRaw,
+          };
+          console.log(`[SofaScore Player] ${playerNameEn} → page fallback 成功: ${pp.name} (${pp.team?.name})`);
+        }
+      } catch (_) {}
+    }
     const marketValue = playerDetail.proposedMarketValue || null;
     const contractUntil = playerDetail.contractUntilTimestamp
       ? new Date(playerDetail.contractUntilTimestamp * 1000).toISOString().slice(0, 7)
