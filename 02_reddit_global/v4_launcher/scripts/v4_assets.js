@@ -62,10 +62,10 @@ async function _fetchXTopicImages(topic, maxImages = 6) {
     for (const t of tweets.slice(0, 30)) {
       // media フィールドのバリエーション
       const mediaList = [
-        ...(Array.isArray(t.media) ? t.media : []),
-        ...(Array.isArray(t.photos) ? t.photos.map(u => ({ media_url_https: u })) : []),
+        ...(Array.isArray(t.extendedEntities?.media) ? t.extendedEntities.media : []),
         ...(Array.isArray(t.extended_entities?.media) ? t.extended_entities.media : []),
         ...(Array.isArray(t.entities?.media) ? t.entities.media : []),
+        ...(Array.isArray(t.media) ? t.media : []),
       ];
       for (const m of mediaList) {
         const url = m?.media_url_https || m?.url || m?.media_url || '';
@@ -121,24 +121,16 @@ function normalizeLabels(book) {
   if (labels.length) return labels.slice(0, 3);
   if (!entity) return [];
 
-  // matchcard: 両チーム（名前クリーンアップ）+ キープレイヤー
+  // matchcard: SofaScore team は Cloudflare 403 で不安定のため Wikipedia を使用
   const matchHome = String(book?.supplementData?.homeTeam || '').trim();
   const matchAway = String(book?.supplementData?.awayTeam || '').trim();
   if (book?.supplementType === 'matchcard' && matchHome && matchAway) {
-    const home = cleanTeamName(matchHome);
-    const away = cleanTeamName(matchAway);
     const keyPlayer = String(book?.keyPlayer || '').trim();
-    return keyPlayer
-      ? [
-        { source: 'sofascore', entity: home, type: 'team' },
-        { source: 'sofascore', entity: away, type: 'team' },
-        { source: 'sofascore', entity: keyPlayer, type: 'player' },
-      ]
-      : [
-        { source: 'sofascore', entity: home, type: 'team' },
-        { source: 'sofascore', entity: away, type: 'team' },
-        { source: 'wikipedia', entity: home, type: 'team' },
-      ];
+    return [
+      { source: 'wikipedia', entity: matchHome, type: 'team' },
+      { source: 'wikipedia', entity: matchAway, type: 'team' },
+      ...(keyPlayer ? [{ source: 'sofascore', entity: keyPlayer, type: 'player' }] : []),
+    ].slice(0, 3);
   }
 
   // subEntities があれば mainEntity + subEntity[0] の 2 エンティティを割り当て
