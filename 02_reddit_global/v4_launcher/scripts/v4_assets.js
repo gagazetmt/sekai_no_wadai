@@ -14,6 +14,76 @@ const {
   matchClubs,
 } = require('../../scripts/modules/stock_match');
 
+const X_API_KEY = process.env.TWITTER_API_IO_KEY || '';
+
+// ── Wikipedia 記事内画像一覧（複数枚）────────────────────────
+async function _fetchWikiExtraImages(entityName, maxImages = 8) {
+  try {
+    const title = encodeURIComponent(String(entityName || '').trim().replace(/ /g, '_'));
+    const url = 'https://en.wikipedia.org/w/api.php?action=query&generator=images'
+      + `&gimlimit=20&prop=imageinfo&iiprop=url|size|mime&format=json&titles=${title}`;
+    const body = await curlGetJson(url, {
+      referer: 'https://en.wikipedia.org/',
+      headers: { Accept: 'application/json' },
+    });
+    const pages = Object.values(body?.query?.pages || {});
+    const results = [];
+    for (const page of pages) {
+      const info = page.imageinfo?.[0];
+      if (!info?.url) continue;
+      if (/\.svg$/i.test(info.url)) continue;
+      if (!/\.(jpg|jpeg|png|webp)/i.test(info.url)) continue;
+      if ((info.width || 0) < 200 || (info.height || 0) < 150) continue;
+      results.push({
+        url: info.url,
+        source: 'wikipedia',
+        role: 'article',
+        name: String(page.title || '').replace(/^File:/i, '').replace(/\.[^.]+$/, ''),
+      });
+      if (results.length >= maxImages) break;
+    }
+    return results;
+  } catch (_) { return []; }
+}
+
+// ── X 試合/トピック関連画像（twitterAPI.io）──────────────────
+async function _fetchXTopicImages(topic, maxImages = 6) {
+  if (!X_API_KEY) return [];
+  try {
+    const q = `"${topic.slice(0, 40)}" has:images -is:retweet lang:en`;
+    const res = await fetch(
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
+      new URLSearchParams({ query: q, queryType: 'Latest' }),
+      { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(10000) },
+    );
+    const data = await res.json();
+    const tweets = data?.data?.tweets || data?.tweets || [];
+    const images = [];
+    for (const t of tweets.slice(0, 30)) {
+      // media フィールドのバリエーション
+      const mediaList = [
+        ...(Array.isArray(t.media) ? t.media : []),
+        ...(Array.isArray(t.photos) ? t.photos.map(u => ({ media_url_https: u })) : []),
+        ...(Array.isArray(t.extended_entities?.media) ? t.extended_entities.media : []),
+        ...(Array.isArray(t.entities?.media) ? t.entities.media : []),
+      ];
+      for (const m of mediaList) {
+        const url = m?.media_url_https || m?.url || m?.media_url || '';
+        if (url && /\.(jpg|jpeg|png|webp)/i.test(url)) {
+          images.push({ url, source: 'x', role: 'match', name: t.user?.name || 'X' });
+          if (images.length >= maxImages) break;
+        }
+      }
+      if (images.length >= maxImages) break;
+    }
+    if (images.length) console.log(`[v4_assets] X画像取得: ${images.length}件`);
+    return images;
+  } catch (e) {
+    console.warn('[v4_assets] X画像取得失敗:', e.message);
+    return [];
+  }
+}
+
 // "Morocco national football team" → "Morocco"
 function cleanTeamName(name) {
   return String(name || '')
@@ -244,9 +314,15 @@ async function fetchWiki(item) {
     wiki.extract && { label: 'Wikipedia要約', value: String(wiki.extract).slice(0, 220), source: 'Wikipedia', key: 'extract', entity: item.entity },
     wiki.url && { label: 'Wikipedia', value: wiki.url, source: 'Wikipedia', key: 'url', entity: item.entity },
   ].filter(Boolean);
-  const images = wiki.thumbnail
-    ? [{ source: 'wikipedia', role: item.type, name: wiki.title || item.entity, url: wiki.thumbnail }]
-    : [];
+  const images = [];
+  if (wiki.thumbnail) {
+    images.push({ source: 'wikipedia', role: item.type, name: wiki.title || item.entity, url: wiki.thumbnail });
+  }
+  // 記事内の追加画像も取得（2〜6枚）
+  const extraImgs = await _fetchWikiExtraImages(item.entity, 6);
+  for (const img of extraImgs) {
+    if (!images.find(i => i.url === img.url)) images.push(img);
+  }
   return { rows, images };
 }
 
@@ -276,6 +352,13 @@ async function fetchBookAssets(book) {
 
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
+
+  // matchcard: X で試合関連画像を追加取得
+  if (book?.supplementType === 'matchcard' && book?.topic) {
+    const xImgs = await _fetchXTopicImages(book.topic, 8);
+    images.push(...xImgs);
+  }
+
   const seen = new Set();
   const uniqueImages = images.filter((image) => {
     if (!image?.url || seen.has(image.url)) return false;
@@ -287,7 +370,8 @@ async function fetchBookAssets(book) {
       if (image.stockProvider === 'sofascore-profile') return 1;
       if (image.source === 'stock' && Number(image.visionScore || 0) >= 90) return 2;
       if (image.source === 'wikipedia') return 3;
-      return 4;
+      if (image.source === 'x') return 4;
+      return 5;
     };
     return priority(a) - priority(b) ||
       Number(b.visionScore || 0) - Number(a.visionScore || 0);
