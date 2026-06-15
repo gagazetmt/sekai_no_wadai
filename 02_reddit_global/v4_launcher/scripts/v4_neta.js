@@ -79,44 +79,72 @@ function _cacheBook(topic, book, filename) {
   _saveIndex(idx);
 }
 
-// ── 記事3本を取得 ─────────────────────────────────────────────
-async function _fetchArticles(topic, existingUrl = '') {
+// ── 信頼メディア + 最新ニュース検索（5件） ─────────────────────
+const TRUSTED_DOMAINS = new Set([
+  'fifa.com', 'uefa.com', 'bbc.com', 'bbc.co.uk', 'skysports.com',
+  'reuters.com', 'apnews.com', 'espn.com', 'marca.com', 'as.com',
+  'theathletic.com', 'goal.com', 'transfermarkt.com', 'transfermarkt.co.uk',
+  'news.yahoo.co.jp', 'nikkansports.com', 'sponichi.co.jp',
+  'football-zone.net', 'soccerking.jp', 'web.gekisaka.jp',
+  'number.bunshun.jp', 'theguardian.com', 'telegraph.co.uk',
+]);
+const BLOCKED_DOMAINS = new Set([
+  'youtube.com', 'youtu.be', 'tiktok.com', 'instagram.com',
+  'twitter.com', 'x.com', 'facebook.com',
+]);
+
+function _trustScore(host) {
+  if (!host) return 0.2;
+  if (TRUSTED_DOMAINS.has(host)) return 1.0;
+  if (/news\.yahoo\.co\.jp/.test(host)) return 0.95;
+  if (/\.edu$|\.gov$/.test(host)) return 0.8;
+  if (/wikipedia\.org$/.test(host)) return 0.7;
+  return 0.4;
+}
+
+async function _fetchLatestNews(topic, existingUrl = '') {
   const enQ = topic.replace(/[ぁ-ん]|[ァ-ン]|[一-龥]/g, '').trim() || topic;
   const [enRes, jaRes] = await Promise.all([
-    fetchSerper(enQ + ' latest',    '', 'en', null, { num: 8 }).catch(() => ({ organic: [] })),
-    fetchSerper(topic + ' 最新情報', '', 'ja', null, { num: 8 }).catch(() => ({ organic: [] })),
+    fetchSerper(enQ + ' latest news',     '', 'en', null, { num: 10 }).catch(() => ({ organic: [] })),
+    fetchSerper(topic + ' 最新 ニュース', '', 'ja', null, { num: 10 }).catch(() => ({ organic: [] })),
   ]);
 
-  const BLOCKED = new Set(['youtube.com','youtu.be','tiktok.com','instagram.com','twitter.com','x.com']);
   const seen = new Set([existingUrl].filter(Boolean));
   const candidates = [];
 
-  for (const r of [...(enRes.organic||[]), ...(jaRes.organic||[])]) {
+  for (const r of [...(enRes.organic || []), ...(jaRes.organic || [])]) {
     let host = '';
-    try { host = new URL(r.link||'').hostname.replace(/^www\./, ''); } catch(_) {}
-    if (BLOCKED.has(host) || seen.has(r.link)) continue;
+    try { host = new URL(r.link || '').hostname.replace(/^www\./, ''); } catch (_) {}
+    if (BLOCKED_DOMAINS.has(host) || seen.has(r.link)) continue;
     seen.add(r.link);
-    candidates.push({ title: r.title||'', url: r.link||'', snippet: r.snippet||'', host });
-    if (candidates.length >= 6) break;
+    const trust = _trustScore(host);
+    candidates.push({
+      title: r.title || '', url: r.link || '', snippet: r.snippet || '',
+      host, date: r.date || null, trustScore: trust, isTrusted: trust >= 0.7,
+    });
   }
 
+  // 信頼メディア優先 → Yahoo News 優先 → その他
+  candidates.sort((a, b) => b.trustScore - a.trustScore || (b.isTrusted ? 1 : 0) - (a.isTrusted ? 1 : 0));
+
+  // 上位 8 件から本文取得を試みる（目標 5 件）
   const articles = [];
-  for (const c of candidates.slice(0, 5)) {
+  for (const c of candidates.slice(0, 8)) {
     try {
       const res = await fetchArticleContent(c.url);
       if (res?.ok && res.content) {
         articles.push({ ...c, fullText: res.content.slice(0, ARTICLE_CHARS) });
-        if (articles.length >= 3) break;
+        if (articles.length >= 5) break;
       }
     } catch (_) {}
   }
-  // 取れなかった分はスニペットで補完
+  // 本文取得できなかった分はスニペットで補完
   for (const c of candidates) {
-    if (articles.length >= 3) break;
+    if (articles.length >= 5) break;
     if (!articles.find(a => a.url === c.url))
       articles.push({ ...c, fullText: c.snippet });
   }
-  return articles.slice(0, 3);
+  return articles.slice(0, 5);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -326,9 +354,10 @@ const RINEKA_SYSTEM = `あなたはリネカ。サッカー専門のクリエイ
 4. **主語の一貫性**: 遠藤の話なら最後まで遠藤。板倉や守田は登場しない。`;
 
 async function _generateNetaBook(topic, hook, articles, warehouse) {
-  const articleBlock = articles.map((a, i) =>
-    `【記事${i+1}】[${a.host}] ${a.title}\n${a.fullText}`
-  ).join('\n\n---\n\n');
+  const articleBlock = articles.map((a, i) => {
+    const trustTag = a.isTrusted ? '★信頼メディア' : '';
+    return `【ニュース${i+1}】[${a.host}] ${trustTag} ${a.title}\n${a.fullText}`;
+  }).join('\n\n---\n\n');
 
   // コメント倉庫ブロック
   const warehouseLines = [];
@@ -349,9 +378,11 @@ async function _generateNetaBook(topic, hook, articles, warehouse) {
 【案件】${topic}
 ${hook ? `【フックヒント（このトーンで作る）】${hook}` : ''}
 
-## 記事素材
+## ニュース素材（信頼メディア優先で最新5件を検索済み）
 
 ${articleBlock}
+
+**重要**: ★信頼メディアの情報を最優先で事実確認に使うこと。不明確な情報は「報道によると」等で留保する。
 
 ## コメント倉庫（実際に収集した生の反応）
 
@@ -368,8 +399,8 @@ ${warehouseBlock}
 | overview | 何が起きたか。感情軸を一言で示す導入も含める | 150〜250字 | ✅ |
 | supplement1 | 感情軸を深める背景・数字・キャリア・言葉 | 100〜200字 | 素材あれば |
 | supplement2 | 同じ感情軸の別の切り口（似てるなら null） | 100〜200字 | 素材あれば |
-| comments1 | コメント 3〜4件（1件40字以内） | — | 反応あれば |
-| comments2 | さらに別のコメント 3〜4件（①と違うトーン優先、なければ続きでよい） | — | 倉庫に5件以上あれば |
+| comments1 | コメント 3〜4件（1件40〜80字目安） | — | ✅必須 |
+| comments2 | 別カテゴリのコメント 3〜4件（1件40〜80字目安） | — | ✅必須 |
 | mainEntity | 主役の英語名（選手→フルネーム / 試合→国名のみ例: "Morocco" "Brazil"。"national football team"は不要） | — | ✅ |
 | keyPlayer | **試合ネタ必須**。ゴール・MVP・最も目立った選手の英語フルネーム（例: "Hicham Boudaoui"）。日本語・年齢・国籍は含めない | — | 試合時 |
 | keyManager | 試合・チームネタ推奨。主役チームの監督英語フルネーム（例: "Walid Regragui"）。不明なら null | — | 試合・チーム時 |
@@ -382,6 +413,7 @@ ${warehouseBlock}
 | commentAngle1 | コメント①の切り口 | 〜18字 | コメント時 |
 | commentAngle2 | コメント②の切り口 | 〜18字 | コメント時 |
 | endingPunch | EDで読むオチの一言。CTAや挨拶は禁止 | 〜32字 | ✅ |
+| assetLabels | 画像・データ取得用ラベル（最大5件） | — | ✅ |
 | tone_check | "ok" / "ng" | — | ✅ |
 
 **構成型:**
@@ -399,9 +431,26 @@ ${warehouseBlock}
 - matchcard: 試合結果・試合内容。homeTeam/awayTeam/homeScore/awayScore が確認できる場合だけ
 - 必要データを記事で確認できない型は選ばず、picture または insight にする
 
+**assetLabels（画像・データ取得用ラベル）:**
+- この案件に関連するキーパーソン・チームを最大5件提案する
+- 各ラベルに name（英語名）, type（player/team/nationalTeam/manager）, team（所属チーム英語名、該当時）を設定
+- 主役（mainEntity）は必ず含める
+- 所属クラブ、所属代表、対戦相手、関連監督なども含めて広く提案する
+- 例: [{"name":"Kaoru Mitoma","type":"player","team":"Brighton"},{"name":"Brighton","type":"team","league":"Premier League"},{"name":"Japan","type":"nationalTeam"},{"name":"Roberto De Zerbi","type":"manager","team":"Brighton"},{"name":"Tottenham","type":"team","league":"Premier League"}]
+
 **コメントの使い方:**
+- **comments1 と comments2 は両方とも必ず埋める**（null 禁止）
+- 2スライドはカテゴリで分ける。分け方の例:
+  - 国内反応（Yahoo/5ch） vs 海外反応（Reddit/X英語コメント）
+  - Aチームファンの意見 vs Bチームファンの意見
+  - 賞賛・期待 vs 批判・不安
+  - 選手への反応 vs 監督・チームへの反応
+- commentAngle1/2 でそのカテゴリ分けが伝わる見出しを付ける
+- **1件あたり40〜80字**が目安。短すぎるコメントばかりだと満足感がない。面白ければ短文もOKだが、全体バランスを取る
+- 外国語（Reddit/X英語）コメントは日本語に意訳OK
+- 日本語コメントも長すぎ・短すぎの場合は一部意訳・要約OK（元の感情トーンは維持）
 ${hasRealComments
-  ? '- コメント倉庫に生の反応がある。**できる限り倉庫の言葉をそのまま使う**\n- 倉庫に使える言葉が足りない場合のみ、同じ感情トーンで自然に補完してよい'
+  ? '- コメント倉庫に生の反応がある。倉庫の言葉をベースに使い、必要に応じて長さ調整・意訳する'
   : '- 今回は生コメントが不足。感情軸に合ったコメントを自然に生成してよい'}
 - 感情軸とズレたコメントは倉庫にあっても使わない
 
@@ -425,6 +474,11 @@ ${hasRealComments
   },
   "commentAngle1": "感謝の声",
   "commentAngle2": "惜しむ声",
+  "assetLabels": [
+    {"name": "Wataru Endo", "type": "player", "team": "Liverpool"},
+    {"name": "Liverpool", "type": "team", "league": "Premier League"},
+    {"name": "Japan", "type": "nationalTeam"}
+  ],
   "endingPunch": "最後まで、遠藤らしい決断だった。",
   "tone_check": "ok"
 }`;
@@ -483,13 +537,25 @@ ${hasRealComments
     ? parsed.subEntities.map(x => String(x || '').trim()).filter(Boolean).slice(0, 2)
     : null;
 
+  const assetLabels = Array.isArray(parsed.assetLabels)
+    ? parsed.assetLabels
+        .filter(l => l && l.name)
+        .map(l => ({
+          name: String(l.name || '').trim(),
+          type: String(l.type || 'player').trim(),
+          team: l.team ? String(l.team).trim() : null,
+          league: l.league ? String(l.league).trim() : null,
+        }))
+        .slice(0, 5)
+    : [];
+
   return {
     title:       clean(parsed.title, 60)        || topic,
     overview:    clean(parsed.overview, 300)     || '（概要未生成）',
     supplement1: clean(parsed.supplement1, 250),
     supplement2: clean(parsed.supplement2, 250),
-    comments1:   cleanArr(parsed.comments1, 5, 40),
-    comments2:   cleanArr(parsed.comments2, 5, 40),
+    comments1:   cleanArr(parsed.comments1, 5, 100),
+    comments2:   cleanArr(parsed.comments2, 5, 100),
     mainEntity:   clean(parsed.mainEntity, 80)    || '',
     keyPlayer:    clean(parsed.keyPlayer, 80),
     keyManager:   clean(parsed.keyManager, 80),
@@ -503,6 +569,7 @@ ${hasRealComments
     supplementData: cleanObject(parsed.supplementData),
     commentAngle1: clean(parsed.commentAngle1, 30) || 'ネットの反応',
     commentAngle2: clean(parsed.commentAngle2, 30) || 'さらに反応',
+    assetLabels,
     endingPunch: clean(parsed.endingPunch, 50) || 'この話、まだ動きそうだ。',
     tone_check:  'ok',
   };
@@ -524,12 +591,13 @@ async function buildNetaBook(topicData, { force = false } = {}) {
 
   console.log('[v4_neta] 開始:', topic);
 
-  // 記事取得 + コメント倉庫構築 を並列
+  // ニュース検索 + コメント倉庫構築 を並列
   const [articles, warehouse] = await Promise.all([
-    _fetchArticles(topic, url),
+    _fetchLatestNews(topic, url),
     _buildCommentWarehouse(topic, url),
   ]);
-  console.log(`[v4_neta] 記事: ${articles.length}本 / コメント倉庫: ${warehouse.total}件`);
+  const trustedCount = articles.filter(a => a.isTrusted).length;
+  console.log(`[v4_neta] ニュース: ${articles.length}件（信頼${trustedCount}件） / コメント倉庫: ${warehouse.total}件`);
 
   // AI ネタブック生成（1 API call）
   const neta = await _generateNetaBook(topic, hook, articles, warehouse);
@@ -549,6 +617,7 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     keyManager:       neta.keyManager   || null,
     otherPlayers:     neta.otherPlayers || null,
     subEntities:      neta.subEntities  || null,
+    assetLabels:      neta.assetLabels  || [],
     structurePattern: neta.structurePattern,
     supplementType:   neta.supplementType,
     supplementTitle:  neta.supplementTitle,

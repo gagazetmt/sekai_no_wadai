@@ -25,6 +25,33 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const X_API_KEY = process.env.TWITTER_API_IO_KEY;
 const REDDIT_COOKIE = process.env.REDDIT_SESSION_COOKIE || '';
 
+const FRESHNESS_HOURS = 12;
+
+function _isWithinHours(dateStr, hours) {
+  if (!dateStr) return true;
+  const s = String(dateStr).trim();
+  // ISO 日付
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return (Date.now() - d.getTime()) < hours * 3600 * 1000;
+  // Brave age 文字列 ("3 hours ago", "1 day ago", "2 days ago" 等)
+  const m = s.match(/(\d+)\s*(minute|hour|day|week|month|year)/i);
+  if (m) {
+    const n = Number(m[1]);
+    const unit = m[2].toLowerCase();
+    const ms = { minute: 60e3, hour: 3600e3, day: 86400e3, week: 604800e3, month: 2592e6, year: 31536e6 };
+    return n * (ms[unit] || 86400e3) < hours * 3600e3;
+  }
+  // 日本語 ("3時間前", "1日前")
+  const mj = s.match(/(\d+)\s*(分|時間|日|週間|ヶ月|か月|年)/);
+  if (mj) {
+    const n = Number(mj[1]);
+    const unit = mj[2];
+    const ms = { '分': 60e3, '時間': 3600e3, '日': 86400e3, '週間': 604800e3, 'ヶ月': 2592e6, 'か月': 2592e6, '年': 31536e6 };
+    return n * (ms[unit] || 86400e3) < hours * 3600e3;
+  }
+  return true;
+}
+
 // ─────────────────────────────────────────────────────────────
 // ① X (twitterAPI.io)
 // ─────────────────────────────────────────────────────────────
@@ -76,7 +103,7 @@ async function _fetchX() {
 // ─────────────────────────────────────────────────────────────
 async function _fetchYahoo() {
   try {
-    const res = await fetchSerper('site:news.yahoo.co.jp サッカー 最新', '', 'ja', null, { num: 25 });
+    const res = await fetchSerper('site:news.yahoo.co.jp サッカー 最新', '', 'ja', null, { num: 20 });
     if (!res?.ok) {
       console.warn('[scout] Yahoo 失敗:', res?.error || 'unknown');
       return [];
@@ -98,48 +125,64 @@ async function _fetchYahoo() {
 // ─────────────────────────────────────────────────────────────
 async function _fetchReddit() {
   const subreddits = ['soccer', 'JapanSoccer'];
+  const sorts = ['top', 'hot', 'rising', 'new'];
   const items = [];
 
   for (const sub of subreddits) {
-    try {
-      const res = await fetch(`https://www.reddit.com/r/${sub}/top.json?t=day&limit=25`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; V4Scout/1.0)',
-          // REDDIT_SESSION_COOKIE は .env に "reddit_session=xxxx" 形式で入ってる
-          ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
-        },
-        signal: AbortSignal.timeout(12000),
-      });
-      const data = await res.json();
-      const posts = data?.data?.children || [];
-      for (const p of posts) {
-        const d = p.data || {};
-        if (d.stickied || d.is_video) continue;
-        items.push({
-          title:  String(d.title || '').trim(),
-          source: `Reddit/r/${sub}`,
-          url:    `https://reddit.com${d.permalink || ''}`,
-          date:   d.created_utc ? new Date(d.created_utc * 1000).toISOString() : null,
-          score:  d.score || 0,
+    for (const sort of sorts) {
+      try {
+        const suffix = sort === 'top' ? 'top.json?t=day&limit=50' : `${sort}.json?limit=50`;
+        const res = await fetch(`https://www.reddit.com/r/${sub}/${suffix}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; V4Scout/1.0)',
+            ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
+          },
+          signal: AbortSignal.timeout(12000),
         });
-      }
-    } catch (e) { console.warn(`[scout] Reddit r/${sub} 失敗:`, e.message); }
+        const data = await res.json();
+        const posts = data?.data?.children || [];
+        for (const p of posts) {
+          const d = p.data || {};
+          if (d.stickied || d.is_video || Number(d.score || 0) < 5) continue;
+          items.push({
+            title:  String(d.title || '').trim(),
+            source: `Reddit/r/${sub}`,
+            url:    `https://reddit.com${d.permalink || ''}`,
+            date:   d.created_utc ? new Date(d.created_utc * 1000).toISOString() : null,
+            score:  d.score || 0,
+          });
+        }
+      } catch (e) { console.warn(`[scout] Reddit r/${sub}/${sort} 失敗:`, e.message); }
+    }
   }
 
-  return items;
+  return _dedup(items);
 }
 
 async function _fetch5ch() {
   try {
     const iso = new Date().toISOString().slice(0, 10);
     const candidates = await fetch5chCandidates(iso);
-    return candidates.map(item => ({
-      title: String(item.titleJa || item.title || '').trim(),
-      source: '5ch',
-      url: item.url || '',
-      date: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : null,
-      score: item.score || 0,
-    })).filter(item => item.title.length > 8);
+    return candidates.map(item => {
+      const title = String(item.titleJa || item.title || '')
+        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+        .replace(/&amp;/g, '&')
+        .trim();
+      const newsBonus = /移籍|退団|加入|獲得|負傷|離脱|引退|解任|就任|優勝|敗退|勝利|敗戦|ゴール|得点|W杯|ワールドカップ|CL|記録|発表|報道|決定|終了|炎上|契約|代表|監督|FIFA|プレミア/i.test(title)
+        ? 500
+        : 0;
+      return {
+        title,
+        source: '5ch',
+        url: item.url || '',
+        date: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : null,
+        score: Number(item.score || 0) + newsBonus,
+      };
+    }).filter(item => {
+      if (item.title.length <= 8) return false;
+      if (/スレ|応援|議論|雑談|ワッチョイ|女子|なでしこ|ファン|総合|無能|死ね|ゴミ|クソ/i.test(item.title)) return false;
+      return true;
+    }).sort((a, b) => (b.score || 0) - (a.score || 0));
   } catch (e) {
     console.warn('[scout] 5ch 失敗:', e.message);
     return [];
@@ -166,6 +209,34 @@ function _bigrams(value) {
   return set;
 }
 
+const EVENT_GROUPS = [
+  ['離脱', '欠場', '負傷', '怪我', '故障'],
+  ['引退', '現役終了'],
+  ['移籍', '加入', '獲得', '退団', '放出'],
+  ['解任', '辞任', '退任'],
+  ['就任', '新監督'],
+  ['優勝', '制覇'],
+  ['敗退', '敗戦', '黒星'],
+  ['勝利', '快勝', '白星'],
+  ['契約', '更新', '延長'],
+  ['ランキング', 'ランク', '順位'],
+  ['無料視聴', '無料', '視聴', '中継', '配信'],
+];
+
+function _entityTokens(value) {
+  const text = String(value || '').normalize('NFKC');
+  const stop = new Set([
+    '日本代表', 'サッカー', 'ワールドカップ', 'プレミア', 'ニュース',
+    '最新', '緊急', '悲報', '朗報', '速報', '発表', '話題',
+  ]);
+  const tokens = [
+    ...(text.match(/[一-龯々]{2,6}/g) || []),
+    ...(text.match(/[ァ-ヴー]{3,12}/g) || []),
+    ...(text.match(/[A-Za-zÀ-ÖØ-öø-ÿ]{4,}/g) || []).map(token => token.toLowerCase()),
+  ];
+  return new Set(tokens.filter(token => !stop.has(token)));
+}
+
 function _similarTitle(a, b) {
   const na = _normalizeTitle(a);
   const nb = _normalizeTitle(b);
@@ -176,7 +247,29 @@ function _similarTitle(a, b) {
   if (!aa.size || !bb.size) return false;
   let hits = 0;
   aa.forEach(value => { if (bb.has(value)) hits++; });
-  return hits / Math.min(aa.size, bb.size) >= 0.72;
+  if (hits / Math.min(aa.size, bb.size) >= 0.72) return true;
+
+  const entitiesA = _entityTokens(a);
+  const entitiesB = _entityTokens(b);
+  const commonEntity = [...entitiesA].some(left =>
+    [...entitiesB].some(right =>
+      left === right ||
+      (Math.min(left.length, right.length) >= 2 && (left.includes(right) || right.includes(left)))
+    )
+  );
+  const sharedAnchor = /W杯|ワールドカップ|日本代表|FIFA/i.test(String(a || '')) &&
+    /W杯|ワールドカップ|日本代表|FIFA/i.test(String(b || ''));
+  if (!commonEntity && !sharedAnchor) return false;
+  const lowerA = String(a || '').toLowerCase();
+  const lowerB = String(b || '').toLowerCase();
+  return EVENT_GROUPS.some(group =>
+    group.some(word => lowerA.includes(word.toLowerCase())) &&
+    group.some(word => lowerB.includes(word.toLowerCase()))
+  );
+}
+
+function _itemText(item) {
+  return [item?.topic, item?.hook, item?.title].filter(Boolean).join(' ');
 }
 
 function _dedup(items, existing = []) {
@@ -185,7 +278,7 @@ function _dedup(items, existing = []) {
   return items.filter(it => {
     if (!it.title) return false;
     if (it.url && seenUrls.has(it.url)) return false;
-    if (kept.some(prev => _similarTitle(prev.title, it.title))) return false;
+    if (kept.some(prev => _similarTitle(_itemText(prev), _itemText(it)))) return false;
     if (it.url) seenUrls.add(it.url);
     kept.push(it);
     return true;
@@ -315,12 +408,22 @@ async function runScout(opts = {}) {
     `[v4_scout] 取得: X=${xItems.length} Yahoo=${yahooItems.length} Reddit=${redditItems.length} 5ch=${fivechItems.length}`,
   );
 
+  // 12時間以内フィルタ（速報特化）
+  const filterFresh = items => items.filter(it => _isWithinHours(it.date, FRESHNESS_HOURS));
+  const freshX       = filterFresh(xItems);
+  const freshYahoo   = filterFresh(yahooItems);
+  const freshReddit  = filterFresh(redditItems);
+  const fresh5ch     = filterFresh(fivechItems);
+  console.log(
+    `[v4_scout] 12h フィルタ: X=${freshX.length} Yahoo=${freshYahoo.length} Reddit=${freshReddit.length} 5ch=${fresh5ch.length}`,
+  );
+
   // ソース内重複を先に落とし、各ソースの候補数を均等に保つ
   const sourcePools = {
-    X: _dedup(xItems),
-    Yahoo: _dedup(yahooItems),
-    Reddit: _dedup(redditItems),
-    '5ch': _dedup(fivechItems),
+    X: _dedup(freshX),
+    Yahoo: _dedup(freshYahoo),
+    Reddit: _dedup(freshReddit),
+    '5ch': _dedup(fresh5ch),
   };
   const all = Object.values(sourcePools).flat();
 
@@ -330,7 +433,7 @@ async function runScout(opts = {}) {
   const usedTitles = used.map(u => u.title).filter(Boolean);
   const fresh = all.filter(it => {
     if (it.url && usedUrls.has(it.url)) return false;
-    if (usedTitles.some(title => _similarTitle(title, it.title))) return false;
+    if (usedTitles.some(title => _similarTitle(title, _itemText(it)))) return false;
     return true;
   });
 

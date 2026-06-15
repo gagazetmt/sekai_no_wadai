@@ -159,6 +159,43 @@ async function _fetchXOfficialImages(handle, maxImages = 6) {
   }
 }
 
+// ── 公式 X アカウントからトピック関連画像（関連度高い15件）────
+async function _fetchXRelevantImages(handle, topicKeyword, maxImages = 15) {
+  if (!X_API_KEY || !handle || !topicKeyword) return [];
+  try {
+    const keyword = String(topicKeyword).slice(0, 30).replace(/"/g, '');
+    const q = `from:${handle} ${keyword} has:images -is:retweet`;
+    const res = await fetch(
+      'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
+      new URLSearchParams({ query: q, queryType: 'Top' }),
+      { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(10000) },
+    );
+    const data = await res.json();
+    const tweets = data?.data?.tweets || data?.tweets || [];
+    const images = [];
+    for (const t of tweets.slice(0, 40)) {
+      const mediaList = [
+        ...(Array.isArray(t.extendedEntities?.media) ? t.extendedEntities.media : []),
+        ...(Array.isArray(t.extended_entities?.media) ? t.extended_entities.media : []),
+        ...(Array.isArray(t.entities?.media) ? t.entities.media : []),
+      ];
+      for (const m of mediaList) {
+        const url = m?.media_url_https || m?.url || m?.media_url || '';
+        if (url && /\.(jpg|jpeg|png|webp)/i.test(url)) {
+          images.push({ url, source: 'x_official_relevant', role: 'relevant', name: `@${handle}` });
+          if (images.length >= maxImages) break;
+        }
+      }
+      if (images.length >= maxImages) break;
+    }
+    if (images.length) console.log(`[v4_assets] X関連@${handle}: ${images.length}件`);
+    return images;
+  } catch (e) {
+    console.warn(`[v4_assets] X関連@${handle} 失敗:`, e.message);
+    return [];
+  }
+}
+
 // ── X 試合/トピック関連画像（twitterAPI.io）──────────────────
 async function _fetchXTopicImages(topic, maxImages = 6) {
   if (!X_API_KEY) return [];
@@ -217,10 +254,46 @@ function inferEntityType(book) {
   return 'player';
 }
 
+function _labelsFromAssetLabels(assetLabels) {
+  const labels = [];
+  const seen = new Set();
+  for (const al of assetLabels) {
+    const name = String(al.name || '').trim();
+    const t = String(al.type || 'player').trim();
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+
+    if (t === 'player') {
+      labels.push(
+        { source: 'sofascore',     entity: name, type: 'player', team: al.team || null },
+        { source: 'fotmob',        entity: name, type: 'player', team: al.team || null },
+        { source: 'transfermarkt', entity: name, type: 'player', team: al.team || null },
+        { source: 'wikipedia',     entity: name, type: 'player', team: al.team || null },
+      );
+    } else if (t === 'manager') {
+      labels.push(
+        { source: 'sofascore', entity: name, type: 'manager', team: al.team || null },
+        { source: 'wikipedia', entity: name, type: 'manager', team: al.team || null },
+      );
+    } else {
+      // team / nationalTeam
+      labels.push(
+        { source: 'wikipedia', entity: name, type: 'team', league: al.league || null },
+      );
+    }
+  }
+  return labels;
+}
+
 function normalizeLabels(book) {
+  // assetLabels（リネカ提案）があればそちらを優先使用
+  if (Array.isArray(book?.assetLabels) && book.assetLabels.length) {
+    console.log(`[v4_assets] assetLabels 使用: ${book.assetLabels.length}件`);
+    return _labelsFromAssetLabels(book.assetLabels);
+  }
+
   const entity = String(book?.mainEntity || '').trim();
   const type = inferEntityType(book);
-  // ※ book.dataLabels（キャッシュ由来）は使わない
   if (!entity) return [];
 
   const keyPlayer    = String(book?.keyPlayer    || '').trim();
@@ -228,7 +301,6 @@ function normalizeLabels(book) {
   const otherPlayers = (Array.isArray(book?.otherPlayers) ? book.otherPlayers : [])
     .map(p => String(p || '').trim()).filter(Boolean).slice(0, 2);
 
-  // keyPlayer ラベル（FotMob: 有名選手衝突を避けるため SofaScore より精度が高い）
   const keyPlayerLabels = keyPlayer ? [
     { source: 'fotmob',        entity: keyPlayer, type: 'player' },
     { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
@@ -236,8 +308,6 @@ function normalizeLabels(book) {
   const keyManagerLabel  = keyManager   ? [{ source: 'sofascore', entity: keyManager,   type: 'manager' }] : [];
   const otherPlayerLabels = otherPlayers.map(p => ({ source: 'fotmob', entity: p, type: 'player' }));
 
-  // 試合コンテキスト: supplementData に homeTeam/awayTeam があれば試合ラベルを使用
-  // SofaScore team は Cloudflare 403 のため Wikipedia を使用
   const matchHome = String(book?.supplementData?.homeTeam || '').trim();
   const matchAway = String(book?.supplementData?.awayTeam || '').trim();
   if (matchHome && matchAway) {
@@ -250,7 +320,6 @@ function normalizeLabels(book) {
     ];
   }
 
-  // subEntities があれば mainEntity + subEntity[0] の 2 エンティティを割り当て
   const subs = Array.isArray(book?.subEntities)
     ? book.subEntities.map(e => String(e || '').trim()).filter(Boolean).slice(0, 1)
     : [];
@@ -267,8 +336,6 @@ function normalizeLabels(book) {
     ];
   }
 
-  // player: SofaScore(市場価値/国籍) + FotMob(キャリア統計) + TM(負傷) + Wikipedia
-  // team: SofaScore team は 403 のため Wikipedia のみ
   if (type === 'player') {
     return [
       { source: 'sofascore',     entity, type },
@@ -477,19 +544,44 @@ async function fetchBookAssets(book) {
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
 
-  // mainEntity + subEntities に既知ハンドルがあれば常に公式X画像を取得（スライド種別不問）
+  // assetLabels + mainEntity + subEntities から X 公式画像を取得
   const fetchedXHandles = new Set();
-  const xTargets = [
+  const topicKeyword = String(book?.mainEntity || book?.topic || '').slice(0, 30);
+
+  // assetLabels があれば、各ラベルの team/name から公式X画像を広範囲取得
+  const assetLabels = Array.isArray(book?.assetLabels) ? book.assetLabels : [];
+  const xHandleTargets = new Set();
+  for (const al of assetLabels) {
+    const name = String(al.name || '').trim();
+    const team = String(al.team || '').trim();
+    if (team) {
+      const h = _lookupXHandle(cleanTeamName(team) || team);
+      if (h) xHandleTargets.add(h);
+    }
+    if (al.type === 'team' || al.type === 'nationalTeam') {
+      const h = _lookupXHandle(cleanTeamName(name) || name);
+      if (h) xHandleTargets.add(h);
+    }
+  }
+  // 従来の mainEntity + subEntities からもハンドル探索
+  const legacyTargets = [
     String(book?.mainEntity || '').trim(),
     ...(Array.isArray(book?.subEntities) ? book.subEntities.map(e => String(e || '').trim()).filter(Boolean) : []),
   ].filter(Boolean).slice(0, 3);
-  await Promise.all(xTargets.map(async (entityStr) => {
-    const handle = _lookupXHandle(cleanTeamName(entityStr) || entityStr);
-    if (handle && !fetchedXHandles.has(handle)) {
-      fetchedXHandles.add(handle);
-      const imgs = await _fetchXOfficialImages(handle, 5);
-      images.push(...imgs);
-    }
+  for (const entityStr of legacyTargets) {
+    const h = _lookupXHandle(cleanTeamName(entityStr) || entityStr);
+    if (h) xHandleTargets.add(h);
+  }
+
+  // 各ハンドルから最新15件 + 関連度高い15件を並列取得
+  await Promise.all([...xHandleTargets].map(async (handle) => {
+    if (fetchedXHandles.has(handle)) return;
+    fetchedXHandles.add(handle);
+    const [latest, relevant] = await Promise.all([
+      _fetchXOfficialImages(handle, 15),
+      _fetchXRelevantImages(handle, topicKeyword, 15),
+    ]);
+    images.push(...latest, ...relevant);
   }));
 
   // matchcard: 両チームの公式X画像（未取得分）を追加取得
@@ -499,8 +591,8 @@ async function fetchBookAssets(book) {
     const homeHandle = _lookupXHandle(cleanTeamName(rawHome) || rawHome);
     const awayHandle = _lookupXHandle(cleanTeamName(rawAway) || rawAway);
     const officialImgs = await Promise.all([
-      homeHandle && !fetchedXHandles.has(homeHandle) ? _fetchXOfficialImages(homeHandle, 5) : [],
-      awayHandle && !fetchedXHandles.has(awayHandle) ? _fetchXOfficialImages(awayHandle, 5) : [],
+      homeHandle && !fetchedXHandles.has(homeHandle) ? _fetchXOfficialImages(homeHandle, 15) : [],
+      awayHandle && !fetchedXHandles.has(awayHandle) ? _fetchXOfficialImages(awayHandle, 15) : [],
     ]);
     images.push(...officialImgs.flat());
   }
@@ -530,6 +622,7 @@ async function fetchBookAssets(book) {
     const priority = image => {
       if (image.stockProvider === 'official-index') return 0;
       if (image.source === 'fotmob') return 1;
+      if (image.source === 'x_official_relevant') return 1.5;
       if (image.source === 'x_official') return 2;
       if (image.stockProvider === 'sofascore-profile') return 3;
       if (image.source === 'stock' && Number(image.visionScore || 0) >= 90) return 4;
@@ -539,7 +632,7 @@ async function fetchBookAssets(book) {
     };
     return priority(a) - priority(b) ||
       Number(b.visionScore || 0) - Number(a.visionScore || 0);
-  }).slice(0, 24);
+  }).slice(0, 40);
 
   // ── 画像スコアリング + 最適セット選定 ──────────────────────
   let scoredImages = uniqueImages;
