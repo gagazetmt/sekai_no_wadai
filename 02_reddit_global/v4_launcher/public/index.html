@@ -304,6 +304,65 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
   background: var(--s3); color: var(--muted);
 }
 
+/* ══ Step4 サムネプレビュー + メタデータ ══════════════════════ */
+.thumb-preview-wrap {
+  display: flex; justify-content: center;
+}
+.thumb-preview {
+  position: relative; width: 100%; max-width: 480px;
+  aspect-ratio: 16/9; border-radius: 6px; overflow: hidden;
+  background: #111;
+}
+.thumb-bg {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center 20%;
+  filter: brightness(.85);
+}
+.thumb-title {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: #e80000; padding: 10px 14px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.thumb-line {
+  font-size: 28px; font-weight: 900; color: #fff;
+  line-height: 1.15; letter-spacing: -1px;
+  -webkit-text-stroke: 2px #000; paint-order: stroke fill;
+}
+.thumb-line2 { font-size: 24px; }
+.thumb-comment-box {
+  position: absolute; top: 10px; right: 10px;
+  background: #fff; color: #111; font-size: 12px; font-weight: 900;
+  padding: 6px 10px; border-radius: 4px;
+  max-width: 160px; line-height: 1.4;
+  transform: rotate(2deg);
+  box-shadow: 2px 2px 6px rgba(0,0,0,.5);
+  white-space: pre-line;
+}
+.thumb-comment-box:empty { display: none; }
+.thumb-edit-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.yt-char-count {
+  font-size: 10px; color: var(--muted); text-align: right; margin-top: 2px;
+}
+.yt-tags-wrap {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
+}
+.yt-tag {
+  display: flex; align-items: center; gap: 4px;
+  background: var(--s2); border: 1px solid var(--border2);
+  border-radius: 14px; padding: 3px 10px;
+  font-size: 12px; color: var(--text);
+}
+.yt-tag .yt-tag-x {
+  cursor: pointer; font-size: 14px; color: var(--muted);
+  margin-left: 2px;
+}
+.yt-tag .yt-tag-x:hover { color: var(--red, #f44); }
+.yt-tag-add {
+  display: flex; gap: 6px; margin-top: 6px; align-items: center;
+}
+
 /* ══ Step3 画像ギャラリー ══════════════════════════════════════ */
 .confirm-gallery {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -1041,12 +1100,66 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 
   <div id="videoStatus"></div>
   <div id="videoResult"></div>
+
+  <!-- サムネイル + YouTubeメタデータ（動画完成後に表示） -->
+  <div id="thumbMetaPanel" style="display:none;">
+    <!-- サムネプレビュー -->
+    <div class="confirm-panel mt14">
+      <div style="font-size:13px;font-weight:900;margin-bottom:10px;">🖼️ サムネイル</div>
+      <div class="thumb-preview-wrap">
+        <div class="thumb-preview" id="thumbPreview">
+          <div class="thumb-bg" id="thumbBg"></div>
+          <div class="thumb-title">
+            <span class="thumb-line" id="thumbL1"></span>
+            <span class="thumb-line thumb-line2" id="thumbL2"></span>
+          </div>
+          <div class="thumb-comment-box" id="thumbCommentBox"></div>
+        </div>
+      </div>
+      <div class="thumb-edit-grid mt8">
+        <div>
+          <label class="confirm-label">1行目</label>
+          <input class="confirm-input" id="thumbEditL1" oninput="updateThumbPreview()">
+        </div>
+        <div>
+          <label class="confirm-label">2行目</label>
+          <input class="confirm-input" id="thumbEditL2" oninput="updateThumbPreview()">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label class="confirm-label">煽りコメント</label>
+          <input class="confirm-input" id="thumbEditComment" oninput="updateThumbPreview()">
+        </div>
+      </div>
+    </div>
+
+    <!-- YouTube投稿メタデータ -->
+    <div class="confirm-panel mt14">
+      <div style="font-size:13px;font-weight:900;margin-bottom:10px;">📺 YouTube投稿メタデータ</div>
+      <label class="confirm-label">タイトル</label>
+      <input class="confirm-input" id="ytEditTitle">
+      <div class="yt-char-count" id="ytTitleCount"></div>
+
+      <label class="confirm-label mt8">概要欄</label>
+      <textarea class="confirm-textarea" id="ytEditDesc" style="min-height:100px;"></textarea>
+
+      <label class="confirm-label mt8">タグ</label>
+      <div class="yt-tags-wrap" id="ytTagsWrap"></div>
+      <div class="yt-tag-add">
+        <input class="confirm-input" id="ytTagInput" placeholder="タグ追加..." style="flex:1;" onkeydown="if(event.key==='Enter'){addYtTag();event.preventDefault()}">
+        <button class="btn btn-ghost" onclick="addYtTag()">+</button>
+      </div>
+
+      <div class="confirm-actions mt8">
+        <button class="btn btn-ghost" onclick="copyYtMeta()">📋 メタデータをコピー</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 </main>
 
 <script>
-const CLIENT_VERSION = '20260615-2';
+const CLIENT_VERSION = '20260616-1';
 // ═════════════════════════════════ STATE
 const S = {
   topics: [],
@@ -2111,6 +2224,7 @@ function showVideoResult(result) {
       <video controls playsinline src="/v2_videos/${fn}"></video>
       <div style="font-size:11px;color:var(--muted);margin-top:6px;">${esc(fn)}</div>
     </div>`;
+  showThumbMetaPanel();
 }
 
 // ─── ⚡ 完全自動 ─────────────────────────────────────────────
@@ -2496,6 +2610,90 @@ function onConfirmTypeChange() {
   document.getElementById('confirmNarrationLabel').textContent = newType === 'ending' ? 'ナレーション（読み上げ）' : 'ナレーション';
   renderConfirmTabs();
   reloadConfirmPreview();
+}
+
+// ═════════════════════════════════ STEP 4: サムネ + メタデータ
+let _ytTags = [];
+
+function showThumbMetaPanel() {
+  const b = S.netaBook;
+  if (!b) return;
+  document.getElementById('thumbMetaPanel').style.display = '';
+
+  // サムネフィールド
+  document.getElementById('thumbEditL1').value = b.thumbLine1 || '';
+  document.getElementById('thumbEditL2').value = b.thumbLine2 || '';
+  document.getElementById('thumbEditComment').value = (b.thumbComment || '').replace(/\n/g, ' / ');
+
+  // サムネ背景画像
+  const thumbUrl = b.thumbnail?.url || '';
+  if (thumbUrl) {
+    document.getElementById('thumbBg').style.backgroundImage = `url('${thumbUrl}')`;
+  }
+  updateThumbPreview();
+
+  // YouTube メタデータ
+  document.getElementById('ytEditTitle').value = b.ytTitle || '';
+  document.getElementById('ytEditTitle').oninput = function() {
+    document.getElementById('ytTitleCount').textContent = this.value.length + ' / 100';
+  };
+  document.getElementById('ytEditTitle').oninput();
+  document.getElementById('ytEditDesc').value = b.ytDescription || '';
+  _ytTags = Array.isArray(b.ytTags) ? [...b.ytTags] : [];
+  renderYtTags();
+}
+
+function updateThumbPreview() {
+  const l1 = document.getElementById('thumbEditL1').value;
+  const l2 = document.getElementById('thumbEditL2').value;
+  const cm = document.getElementById('thumbEditComment').value;
+  document.getElementById('thumbL1').textContent = l1;
+  document.getElementById('thumbL2').textContent = l2;
+  document.getElementById('thumbCommentBox').textContent = cm.replace(/ \/ /g, '\n');
+  // sync back to netaBook
+  if (S.netaBook) {
+    S.netaBook.thumbLine1 = l1;
+    S.netaBook.thumbLine2 = l2;
+    S.netaBook.thumbComment = cm.replace(/ \/ /g, '\n');
+  }
+}
+
+function renderYtTags() {
+  const wrap = document.getElementById('ytTagsWrap');
+  wrap.innerHTML = _ytTags.map((t, i) =>
+    `<span class="yt-tag">${esc(t)}<span class="yt-tag-x" onclick="removeYtTag(${i})">&times;</span></span>`
+  ).join('');
+  if (S.netaBook) S.netaBook.ytTags = [..._ytTags];
+}
+
+function addYtTag() {
+  const inp = document.getElementById('ytTagInput');
+  const v = inp.value.trim();
+  if (!v) return;
+  _ytTags.push(v);
+  inp.value = '';
+  renderYtTags();
+}
+
+function removeYtTag(idx) {
+  _ytTags.splice(idx, 1);
+  renderYtTags();
+}
+
+function copyYtMeta() {
+  const title = document.getElementById('ytEditTitle').value;
+  const desc = document.getElementById('ytEditDesc').value;
+  const tags = _ytTags.join(', ');
+  const text = `タイトル:\n${title}\n\n概要欄:\n${desc}\n\nタグ:\n${tags}`;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('#thumbMetaPanel .confirm-actions .btn');
+    if (btn) { btn.textContent = '✅ コピー済み'; setTimeout(() => btn.textContent = '📋 メタデータをコピー', 2000); }
+  });
+  // sync back
+  if (S.netaBook) {
+    S.netaBook.ytTitle = title;
+    S.netaBook.ytDescription = desc;
+  }
 }
 
 // ═════════════════════════════════ INIT
