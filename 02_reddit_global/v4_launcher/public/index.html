@@ -359,6 +359,9 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
   border-radius: 18px; padding: 6px 10px;
   font-size: 12px; color: #ddd;
 }
+.data-label-chip.fetched {
+  border-color: var(--green); opacity: .7;
+}
 .data-label-chip .source {
   color: var(--yellow); font-size: 9px; font-weight: 900;
   letter-spacing: .4px;
@@ -879,8 +882,9 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 
     <div class="asset-panel">
       <div class="asset-panel-hd">
-        🏷️ データ取得ラベル
+        🏷️ アセットラベル
         <span class="asset-count" id="dataLabelCount">0</span>
+        <button class="btn btn-ghost" style="margin-left:auto;font-size:11px" onclick="fetchAllLabels()">全取得</button>
       </div>
       <div class="data-label-list" id="dataLabelList"></div>
     </div>
@@ -1042,7 +1046,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 </main>
 
 <script>
-const CLIENT_VERSION = '20260615-1';
+const CLIENT_VERSION = '20260615-2';
 // ═════════════════════════════════ STATE
 const S = {
   topics: [],
@@ -1216,20 +1220,25 @@ function collectDataRows(book) {
 
 function renderDataAssets(book) {
   const rows = collectDataRows(book);
-  const explicit = Array.isArray(book?.dataLabels) ? book.dataLabels : [];
-  const labels = explicit.length
-    ? explicit.slice(0, 3).map(item => typeof item === 'string'
-      ? { label: item, source: dataSource(item) }
-      : { label: item.label || item.name || item.key, source: dataSource(item.label, item) })
-    : rows.slice(0, 3).map(row => ({
-      label: row.label,
-      source: dataSource(row.label, row.slot),
-    }));
+  const al = Array.isArray(book?.assetLabels) ? book.assetLabels : [];
 
-  document.getElementById('dataLabelCount').textContent = labels.length;
-  document.getElementById('dataLabelList').innerHTML = labels.length
-    ? labels.map(item => `<div class="data-label-chip"><span class="source">${esc(item.source)}</span>${esc(item.label)}</div>`).join('')
-    : '<div class="asset-empty">この案件ではデータ取得ラベルなし</div>';
+  document.getElementById('dataLabelCount').textContent = al.length;
+  if (al.length) {
+    document.getElementById('dataLabelList').innerHTML = al.map((item, i) => {
+      const typeTag = item.type === 'player' ? '👤' : item.type === 'manager' ? '🧑‍💼' : '🏟️';
+      const fetched = item._fetched ? ' fetched' : '';
+      return `<div class="data-label-chip${fetched}" id="al-${i}">
+        <span class="source">${typeTag} ${esc(item.type || '')}</span>
+        ${esc(item.name || '')}${item.team ? ' <span style="color:var(--muted);font-size:10px">(' + esc(item.team) + ')</span>' : ''}
+        <button class="btn btn-ghost" style="font-size:10px;padding:1px 6px;margin-left:auto" onclick="fetchSingleLabelUI(${i})"${item._fetched ? ' disabled' : ''}>
+          ${item._fetched ? '✅' : '取得'}
+        </button>
+      </div>`;
+    }).join('');
+  } else {
+    document.getElementById('dataLabelList').innerHTML =
+      '<div class="asset-empty">この案件ではアセットラベルなし</div>';
+  }
 
   document.getElementById('fetchedDataCount').textContent = rows.length;
   document.getElementById('fetchedDataList').innerHTML = rows.length
@@ -1277,62 +1286,60 @@ async function loadImageGallery(query) {
 
 async function loadDataAssets(book) {
   if (!book?.mainEntity) return;
-  document.getElementById('dataLabelList').innerHTML =
-    '<div class="asset-empty">取得ラベルを準備中...</div>';
-  document.getElementById('fetchedDataList').innerHTML =
-    '<div class="asset-empty">SofaScore / Transfermarkt / Wikipediaを取得中...</div>';
-  document.getElementById('imageGallery').innerHTML =
-    '<div class="asset-empty">ラベルから画像を検索中...</div>';
+  renderDataAssets(book);
+  renderImageGallery();
+  loadImageGallery(book.mainEntity);
+}
+
+async function fetchSingleLabelUI(idx) {
+  const book = S.netaBook;
+  if (!book?.assetLabels?.[idx]) return;
+  const label = book.assetLabels[idx];
+  const chip = document.getElementById('al-' + idx);
+  if (chip) chip.style.opacity = '0.5';
   try {
-    const result = await api('/api/neta/assets', { book });
-    if (!result.ok) throw new Error(result.error || 'データ取得失敗');
-    book.dataLabels = Array.isArray(result.labels) ? result.labels : [];
-    book.fetchedData = Array.isArray(result.dataRows) ? result.dataRows : [];
+    const result = await api('/api/neta/fetch-label', { label, book });
+    if (!result.ok) throw new Error(result.error || '取得失敗');
+    label._fetched = true;
+    if (Array.isArray(result.dataRows) && result.dataRows.length) {
+      book.fetchedData = [...(book.fetchedData || []), ...result.dataRows];
+      if (['stats', 'profile'].includes(book.supplementType)) {
+        book.supplementData = book.supplementData || {};
+        if (!Array.isArray(book.supplementData.dataSlots)) book.supplementData.dataSlots = [];
+        result.dataRows.forEach(row => {
+          if (!book.supplementData.dataSlots.some(s => s.label === row.label)) {
+            book.supplementData.dataSlots.push({ label: row.label, value: row.value, source: row.source, key: row.key });
+          }
+        });
+      }
+    }
     if (Array.isArray(result.images) && result.images.length) {
-      S.galleryImages = result.images;
-      // XYMap: スコア付き画像から XY データを構築
-      S.imageXYMap = {};
+      S.galleryImages = [...S.galleryImages, ...result.images];
+      const seen = new Set();
+      S.galleryImages = S.galleryImages.filter(img => {
+        if (!img?.url || seen.has(img.url)) return false;
+        seen.add(img.url);
+        return true;
+      });
       result.images.forEach(img => {
         if (img.url && (img.offsetX != null || img.offsetY != null)) {
-          S.imageXYMap[img.url] = {
-            offsetX: img.offsetX || 0,
-            offsetY: img.offsetY || 0,
-            zoom:    img.zoom    || 1.0,
-          };
+          S.imageXYMap[img.url] = { offsetX: img.offsetX || 0, offsetY: img.offsetY || 0, zoom: img.zoom || 1.0 };
         }
       });
-      // サムネ/スライドセットをネタブックに反映
-      if (result.thumbnail) {
-        book.thumbnail  = result.thumbnail;
-        book.slideImages = result.slideImages || [];
-      }
-      if (!S.selectedImages.length) {
-        // slide セットの上位3枚を selectedImages に
-        const picks = (result.slideImages || result.images).slice(0, 3).map(i => i.url).filter(Boolean);
-        S.selectedImages = picks;
-        book.selectedImages = [...picks];
-      }
-    }
-    if (['stats', 'profile'].includes(book.supplementType) && book.fetchedData.length) {
-      book.supplementData = book.supplementData && typeof book.supplementData === 'object'
-        ? book.supplementData
-        : {};
-      if (!Array.isArray(book.supplementData.dataSlots) || !book.supplementData.dataSlots.length) {
-        book.supplementData.dataSlots = book.fetchedData.slice(0, 8).map(row => ({
-          label: row.label,
-          value: row.value,
-          source: row.source,
-          key: row.key,
-        }));
-      }
+      renderImageGallery();
     }
     renderDataAssets(book);
-    renderImageGallery();
   } catch (e) {
-    renderDataAssets(book);
-    if (!S.galleryImages.length) renderImageGallery();
-    document.getElementById('fetchedDataList').innerHTML =
-      `<div class="asset-empty">取得失敗: ${esc(e.message)}</div>`;
+    if (chip) chip.style.opacity = '1';
+    alert('取得失敗: ' + e.message);
+  }
+}
+
+async function fetchAllLabels() {
+  const book = S.netaBook;
+  if (!book?.assetLabels?.length) return;
+  for (let i = 0; i < book.assetLabels.length; i++) {
+    if (!book.assetLabels[i]._fetched) await fetchSingleLabelUI(i);
   }
 }
 
