@@ -622,10 +622,14 @@ async function fetchBookAssets(book) {
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
 
-  // matchcard: SofaScore から正確な試合データを取得
-  if (book?.supplementType === 'matchcard') {
-    let rawHome = String(book?.supplementData?.homeTeam || '').trim();
-    let rawAway = String(book?.supplementData?.awayTeam || '').trim();
+  // matchcard: 試合データを取得（supplement1Type/supplement2Type/旧supplementType いずれかが matchcard）
+  const matchcardSfx = book?.supplement1Type === 'matchcard' ? '1'
+    : book?.supplement2Type === 'matchcard' ? '2'
+    : book?.supplementType === 'matchcard' ? '' : null;
+  if (matchcardSfx !== null) {
+    const dataKey = matchcardSfx ? `supplement${matchcardSfx}Data` : 'supplementData';
+    let rawHome = String(book?.[dataKey]?.homeTeam || book?.supplementData?.homeTeam || '').trim();
+    let rawAway = String(book?.[dataKey]?.awayTeam || book?.supplementData?.awayTeam || '').trim();
     // フォールバック: supplementData が空なら assetLabels/topic から抽出
     if (!rawHome || !rawAway) {
       const teamLabels = (Array.isArray(book?.assetLabels) ? book.assetLabels : [])
@@ -656,13 +660,16 @@ async function fetchBookAssets(book) {
           matchResult = await fetchFotMobMatch(rawHome, rawAway);
         }
         if (matchResult?.ok) {
-          if (!book.supplementData) book.supplementData = {};
-          book.supplementData.homeTeam  = matchResult.homeTeam  || rawHome;
-          book.supplementData.awayTeam  = matchResult.awayTeam  || rawAway;
-          book.supplementData.homeScore = matchResult.homeScore ?? book.supplementData.homeScore;
-          book.supplementData.awayScore = matchResult.awayScore ?? book.supplementData.awayScore;
-          book.supplementData.matchDate = matchResult.matchDate || book.supplementData.matchDate;
-          book.supplementData.matchData = {
+          // 新フィールド（supplement1Data / supplement2Data）と旧フィールド（supplementData）両方に書き込む
+          const targetData = matchcardSfx ? `supplement${matchcardSfx}Data` : 'supplementData';
+          if (!book[targetData]) book[targetData] = {};
+          const sd = book[targetData];
+          sd.homeTeam  = matchResult.homeTeam  || rawHome;
+          sd.awayTeam  = matchResult.awayTeam  || rawAway;
+          sd.homeScore = matchResult.homeScore ?? sd.homeScore;
+          sd.awayScore = matchResult.awayScore ?? sd.awayScore;
+          sd.matchDate = matchResult.matchDate || sd.matchDate;
+          sd.matchData = {
             tournament: matchResult.tournament,
             venue:      matchResult.venue,
             scoreline:  matchResult.scoreline,
@@ -700,7 +707,11 @@ async function fetchBookAssets(book) {
               });
             });
           }
-          console.log(`[v4/assets] SofaScore Match OK: ${matchResult.scoreline}`);
+          // 後方互換: supplementData にも同期
+          if (matchcardSfx && targetData !== 'supplementData') {
+            book.supplementData = { ...sd };
+          }
+          console.log(`[v4/assets] Match OK: ${matchResult.scoreline} → ${targetData}`);
         } else {
           console.warn(`[v4/assets] SofaScore Match: ${matchResult?.error || '取得失敗'}`);
         }
@@ -751,9 +762,11 @@ async function fetchBookAssets(book) {
   }));
 
   // matchcard: 両チームの公式X画像（未取得分）を追加取得
-  if (book?.supplementType === 'matchcard') {
-    const rawHome = String(book?.supplementData?.homeTeam || '').trim();
-    const rawAway = String(book?.supplementData?.awayTeam || '').trim();
+  const isMatchcard = book?.supplement1Type === 'matchcard' || book?.supplement2Type === 'matchcard' || book?.supplementType === 'matchcard';
+  if (isMatchcard) {
+    const mcData = book?.supplement1Data || book?.supplement2Data || book?.supplementData || {};
+    const rawHome = String(mcData.homeTeam || '').trim();
+    const rawAway = String(mcData.awayTeam || '').trim();
     const homeHandle = _lookupXHandle(cleanTeamName(rawHome) || rawHome);
     const awayHandle = _lookupXHandle(cleanTeamName(rawAway) || rawAway);
     const officialImgs = await Promise.all([

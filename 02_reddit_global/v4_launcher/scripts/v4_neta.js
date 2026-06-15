@@ -9,10 +9,10 @@
 //   comments1   : コメント集① (null = AI判断で省略)
 //   comments2   : コメント集② (null = AI判断で省略)
 //   mainEntity  : 主役の選手/チーム名（画像検索用）
-//   structurePattern : standard / interleaved / rapid
-//   supplementType   : picture / insight / stats / profile / comparison /
-//                      timeline / ranking / matchcard
-//   supplementData   : 補足スライド固有の表示データ
+//   layoutType       : info_heavy / comment_heavy
+//   overviewType     : insight / picture
+//   supplement1Type  : matchcard / stats / comparison / timeline / history / insight / picture
+//   supplement2Type  : 同上（null = 省略）
 //   commentAngle1/2  : コメントスライドの切り口
 //   endingPunch      : EDで読むオチの一言
 //
@@ -39,10 +39,11 @@ const REACTION_CHARS = 300;
 
 // V4_NETA_MODEL=sonnet → Anthropic Sonnet / それ以外 → DeepSeek Chat（デフォルト）
 const NETA_MODEL = (process.env.V4_NETA_MODEL || 'deepseek').toLowerCase();
-const STRUCTURE_PATTERNS = new Set(['standard', 'interleaved', 'rapid']);
+const LAYOUT_TYPES = new Set(['info_heavy', 'comment_heavy']);
+const OVERVIEW_TYPES = new Set(['insight', 'picture']);
 const SUPPLEMENT_TYPES = new Set([
-  'picture', 'insight', 'stats', 'profile',
-  'comparison', 'timeline', 'ranking', 'matchcard',
+  'matchcard', 'stats', 'comparison', 'timeline',
+  'history', 'insight', 'picture',
 ]);
 
 // ── キャッシュ管理 ──────────────────────────────────────────────
@@ -463,10 +464,15 @@ ${warehouseBlock}
 | keyManager | 試合・チームネタ推奨。主役チームの監督英語フルネーム（例: "Walid Regragui"）。不明なら null | — | 試合・チーム時 |
 | otherPlayers | keyPlayer 以外の注目選手 1〜2件の英語フルネーム配列（例: ["Achraf Hakimi", "Yassine Bounou"]）。なければ null | — | 試合・チーム時 |
 | subEntities | 副役1〜2件（試合→対戦相手チーム名 / 複数選手→2番手）英語名リスト | — | 試合・比較時 |
-| structurePattern | standard / interleaved / rapid から最適な型 | — | ✅ |
-| supplementType | 補足に最適なスライド型。補足不要なら null | — | 補足時 |
-| supplementTitle | 補足スライドの短い見出し | 〜24字 | 補足時 |
-| supplementData | 下記スキーマに従う表示データ。記事で確認できる事実だけ | — | 型次第 |
+| layoutType | comment_heavy（②コメント重点型=基本）か info_heavy（①情報重点型）。②を7割採用 | — | ✅ |
+| overviewType | 概要スライドの型: insight（論点4つ以上）/ picture（画像中心） | — | ✅ |
+| overviewData | overviewType=insight の場合: {catchphrases:[...]} 4件以上。picture なら {} | — | ✅ |
+| supplement1Type | 補足1のスライド型（下記参照）。不要なら null | — | 補足時 |
+| supplement1Title | 補足1の短い見出し | 〜24字 | 補足時 |
+| supplement1Data | 補足1の表示データ（型に応じたスキーマ） | — | 補足時 |
+| supplement2Type | 補足2のスライド型。不要なら null | — | 補足時 |
+| supplement2Title | 補足2の短い見出し | 〜24字 | 補足時 |
+| supplement2Data | 補足2の表示データ（型に応じたスキーマ） | — | 補足時 |
 | commentAngle1 | コメント①の切り口 | 〜18字 | コメント時 |
 | commentAngle2 | コメント②の切り口 | 〜18字 | コメント時 |
 | endingPunch | EDで読むオチの一言。CTAや挨拶は禁止 | 〜32字 | ✅ |
@@ -479,33 +485,40 @@ ${warehouseBlock}
 | ytTags | YouTube検索タグ配列。5〜10件 | — | ✅ |
 | tone_check | "ok" / "ng" | — | ✅ |
 
-**構成型:**
-- standard: OP → 概要 → 補足 → コメント1 → コメント2 → ED
-- interleaved: OP → 概要 → コメント1 → 補足 → コメント2 → ED
-- rapid: OP → 概要 → コメント1 → コメント2 → ED。補足を入れない方が速い案件
+**レイアウト型（layoutType）:**
+- **comment_heavy**（②コメント重点型）: OP → 概要 → 補足1 → コメ1 → 補足2 → コメ2 → ED ← **基本はこちら（7割）**
+- **info_heavy**（①情報重点型）: OP → 概要 → 補足1 → 補足2 → コメ1 → コメ2 → ED
+- 補足1・補足2 は文脈上不要なら null で省略OK
 
-**補足スライド型（ルール順に判定。最初に該当した型を使う）:**
+**概要スライドの型（overviewType）:**
+- **insight** → 論点を4つ以上テキストボックスで表示。overviewData.catchphrases に4件以上
+- **picture** → 画像中心。overviewData は {}
 
-1. **matchcard**（試合結果・試合ネタ）→ スコアが記事にあれば必ずこれ。supplementData に homeTeam/awayTeam/homeScore/awayScore を埋める
-2. **stats/profile**（選手の活躍・パフォーマンス）→ 特定選手のゴール数・アシスト・評点など数値が話題の中心。supplementData.dataSlots は label/value を4〜8件
-3. **comparison**（比較ネタ）→ 2者を並べるネタ。leftName/rightName と dataSlots(label/leftValue/rightValue)
-4. **ranking**（順位・ランキング）→ 記事に順位の根拠がある場合。items(rank,name,value,subtext)
-5. **timeline**（推移）→ 記事に複数時点の数値がある場合。series(name, points[{x,y}])
-6. **insight**（要点まとめ）→ 上記いずれにも該当しないが補足を入れたい場合。supplementData.catchphrases は2〜5件
-7. **picture**（画像中心）→ 補足テキストがほぼ不要な場合。supplementData は {}
+**補足スライド型（supplement1Type / supplement2Type）:**
+各補足スロットで独立して選ぶ。ルール順に判定し、最初に該当した型を使う:
 
-⚠️ 判定ミス例: 試合結果なのに insight → NG。選手の活躍なのに picture → NG。必ずルール順に判定すること
+1. **matchcard**（試合結果・試合ネタ）→ スコアが記事にあれば必ずこれ。Data に homeTeam/awayTeam/homeScore/awayScore
+2. **stats**（選手の活躍にフォーカス）→ 数値が話題の中心。Data.dataSlots は label/value を4〜8件
+3. **comparison**（属性が同じ2者の比較）→ 同ポジション選手同士、監督同士など。leftName/rightName + dataSlots
+4. **timeline**（過去シーズンの推移等）→ 複数時点の数値。series(name, points[{x,y}])
+5. **history**（過去の対戦結果・事件の時系列）→ events: [{date, title, detail}] を3〜6件
+6. **insight**（論点まとめ）→ 論点を4つ以上出せる場合。Data.catchphrases は4〜6件
+7. **picture**（その他）→ 画像中心。Data は {}
 
-**matchcard の supplementData 例（必須フィールド）:**
+⚠️ 判定ミス例: 試合結果なのに insight → NG。選手の活躍なのに picture → NG
+
+**supplement1Data / supplement2Data の例:**
 \`\`\`json
-"supplementType": "matchcard",
-"supplementData": { "homeTeam": "Japan", "awayTeam": "Netherlands", "homeScore": 2, "awayScore": 1 }
+"supplement1Type": "matchcard",
+"supplement1Data": { "homeTeam": "Japan", "awayTeam": "Netherlands", "homeScore": 2, "awayScore": 1 }
 \`\`\`
-
-**stats/profile の supplementData 例:**
 \`\`\`json
-"supplementType": "stats",
-"supplementData": { "dataSlots": [{"label":"ゴール数","value":"15"},{"label":"アシスト","value":"8"}] }
+"supplement1Type": "stats",
+"supplement1Data": { "dataSlots": [{"label":"ゴール数","value":"15"},{"label":"アシスト","value":"8"}] }
+\`\`\`
+\`\`\`json
+"supplement2Type": "history",
+"supplement2Data": { "events": [{"date":"2024-03","title":"PSG戦","detail":"2-1で勝利"},{"date":"2024-06","title":"ドイツ戦","detail":"1-1"}] }
 \`\`\`
 
 **assetLabels（画像・データ取得用ラベル）:**
@@ -543,12 +556,19 @@ ${hasRealComments
   "keyManager": null,
   "otherPlayers": null,
   "subEntities": null,
-  "structurePattern": "standard",
-  "supplementType": "insight",
-  "supplementTitle": "遠藤が残したもの",
-  "supplementData": {
-    "catchphrases": ["主将としてチームを牽引", "代表で積み重ねた信頼"]
+  "layoutType": "comment_heavy",
+  "overviewType": "insight",
+  "overviewData": {
+    "catchphrases": ["キャプテンの決断", "W杯直前の衝撃", "代表57キャップの重み", "リバプールでの挑戦は続く"]
   },
+  "supplement1Type": "insight",
+  "supplement1Title": "遠藤が残したもの",
+  "supplement1Data": {
+    "catchphrases": ["主将としてチームを牽引", "代表で積み重ねた信頼", "アンカーの概念を変えた", "最後まで全力だった"]
+  },
+  "supplement2Type": null,
+  "supplement2Title": null,
+  "supplement2Data": null,
   "commentAngle1": "感謝の声",
   "commentAngle2": "惜しむ声",
   "assetLabels": [
@@ -609,11 +629,17 @@ ${hasRealComments
     return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
   }
 
-  const structurePattern = STRUCTURE_PATTERNS.has(parsed.structurePattern)
-    ? parsed.structurePattern
-    : 'standard';
-  const supplementType = SUPPLEMENT_TYPES.has(parsed.supplementType)
-    ? parsed.supplementType
+  const layoutType = LAYOUT_TYPES.has(parsed.layoutType)
+    ? parsed.layoutType
+    : 'comment_heavy';
+  const overviewType = OVERVIEW_TYPES.has(parsed.overviewType)
+    ? parsed.overviewType
+    : 'picture';
+  const supplement1Type = SUPPLEMENT_TYPES.has(parsed.supplement1Type)
+    ? parsed.supplement1Type
+    : null;
+  const supplement2Type = SUPPLEMENT_TYPES.has(parsed.supplement2Type)
+    ? parsed.supplement2Type
     : null;
 
   const subEntities = Array.isArray(parsed.subEntities)
@@ -646,10 +672,19 @@ ${hasRealComments
       ? parsed.otherPlayers.map(p => String(p || '').trim()).filter(Boolean).slice(0, 2)
       : null,
     subEntities: subEntities?.length ? subEntities : null,
-    structurePattern,
-    supplementType,
-    supplementTitle: clean(parsed.supplementTitle, 40),
-    supplementData: cleanObject(parsed.supplementData),
+    layoutType,
+    overviewType,
+    overviewData: cleanObject(parsed.overviewData),
+    supplement1Type,
+    supplement1Title: clean(parsed.supplement1Title, 40),
+    supplement1Data: cleanObject(parsed.supplement1Data),
+    supplement2Type,
+    supplement2Title: clean(parsed.supplement2Title, 40),
+    supplement2Data: cleanObject(parsed.supplement2Data),
+    // 後方互換: v4_assets / v4_video が参照する旧フィールド
+    structurePattern: layoutType === 'info_heavy' ? 'standard' : 'interleaved',
+    supplementType: supplement1Type || supplement2Type || null,
+    supplementData: cleanObject(parsed.supplement1Data || parsed.supplement2Data),
     commentAngle1: clean(parsed.commentAngle1, 30) || 'ネットの反応',
     commentAngle2: clean(parsed.commentAngle2, 30) || 'さらに反応',
     assetLabels,
@@ -707,9 +742,18 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     otherPlayers:     neta.otherPlayers || null,
     subEntities:      neta.subEntities  || null,
     assetLabels:      neta.assetLabels  || [],
+    layoutType:       neta.layoutType,
+    overviewType:     neta.overviewType,
+    overviewData:     neta.overviewData,
+    supplement1Type:  neta.supplement1Type,
+    supplement1Title: neta.supplement1Title,
+    supplement1Data:  neta.supplement1Data,
+    supplement2Type:  neta.supplement2Type,
+    supplement2Title: neta.supplement2Title,
+    supplement2Data:  neta.supplement2Data,
+    // 後方互換
     structurePattern: neta.structurePattern,
     supplementType:   neta.supplementType,
-    supplementTitle:  neta.supplementTitle,
     supplementData:   neta.supplementData,
     commentAngle1:    neta.commentAngle1,
     commentAngle2:    neta.commentAngle2,
@@ -732,6 +776,27 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     book.assetImages = assets.images;
     book.selectedImages = assets.images.slice(0, 3).map(image => image.url).filter(Boolean);
     book.assetWarnings = assets.warnings;
+    // supplement1 / supplement2 の stats 型にデータ補完
+    for (const sfx of ['supplement1', 'supplement2']) {
+      const typeKey = `${sfx}Type`;
+      const dataKey = `${sfx}Data`;
+      if (
+        book[typeKey] === 'stats' &&
+        assets.dataRows.length &&
+        (!Array.isArray(book[dataKey]?.dataSlots) || !book[dataKey].dataSlots.length)
+      ) {
+        book[dataKey] = {
+          ...(book[dataKey] || {}),
+          dataSlots: assets.dataRows.slice(0, 8).map(row => ({
+            label: row.label,
+            value: row.value,
+            source: row.source,
+            key: row.key,
+          })),
+        };
+      }
+    }
+    // 後方互換: supplementData も同期
     if (
       ['stats', 'profile'].includes(book.supplementType) &&
       assets.dataRows.length &&

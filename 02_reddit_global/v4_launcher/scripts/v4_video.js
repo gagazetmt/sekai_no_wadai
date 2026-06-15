@@ -1,10 +1,10 @@
 // v4_launcher/scripts/v4_video.js
 // ネタブック → V4動画生成パイプライン
 //
-// 動画構成（2〜3分 / 4〜6枚）:
-//   standard:    opening → picture → supplement → reaction → reaction → ending
-//   interleaved: opening → picture → reaction → supplement → reaction → ending
-//   rapid:       opening → picture → reaction → reaction → ending
+// 動画構成（2〜3分 / 4〜7枚）:
+//   comment_heavy: opening → overview → supp1 → reaction1 → supp2 → reaction2 → ending（基本）
+//   info_heavy:    opening → overview → supp1 → supp2 → reaction1 → reaction2 → ending
+//   supp1/supp2 は省略可能。旧 standard/interleaved/rapid も後方互換で動作
 //
 // V3既存スライドと render.js（TTS/ffmpeg/BGM）を再利用する。
 'use strict';
@@ -56,10 +56,11 @@ function _imagePreset(book) {
   return [...new Set(paths)].slice(0, 3);
 }
 
+const LAYOUT_TYPES = new Set(['info_heavy', 'comment_heavy']);
 const STRUCTURE_PATTERNS = new Set(['standard', 'interleaved', 'rapid']);
 const SUPPLEMENT_TYPES = new Set([
   'picture', 'insight', 'stats', 'profile',
-  'comparison', 'timeline', 'ranking', 'matchcard',
+  'comparison', 'timeline', 'ranking', 'matchcard', 'history',
 ]);
 
 function _cleanText(v, fallback = '') {
@@ -104,9 +105,34 @@ function _hasStructuredData(type, data) {
   if (type === 'matchcard') {
     return !!(data.homeTeam && data.awayTeam);
   }
+  if (type === 'history') {
+    return Array.isArray(data.events) && data.events.length >= 2;
+  }
   return true;
 }
 
+// 個別補足スライドを構築（sfxNum: 1 or 2）
+function _buildSupplementSlide(book, sfxNum, imagePath) {
+  const typeKey = `supplement${sfxNum}Type`;
+  const dataKey = `supplement${sfxNum}Data`;
+  const titleKey = `supplement${sfxNum}Title`;
+  const narrationKey = `supplement${sfxNum}`;
+
+  const narration = _compactText(book[narrationKey], 150);
+  if (!narration) return null;
+
+  const data = (book[dataKey] && typeof book[dataKey] === 'object') ? book[dataKey] : {};
+  let type = SUPPLEMENT_TYPES.has(book[typeKey]) ? book[typeKey] : 'picture';
+  if (!_hasStructuredData(type, data)) {
+    console.warn(`[v4_video] supplement${sfxNum} ${type} → insight に降格（データ不足）`);
+    type = 'insight';
+  }
+
+  const title = _cleanText(book[titleKey], 'ここがポイント');
+  return _assembleSupplementSlide(type, title, narration, data, book, imagePath);
+}
+
+// 旧形式互換: supplement1+supplement2 を結合して1枚の補足スライド
 function _buildSupplement(book, imagePath) {
   const narration = _compactText(
     [book.supplement1, book.supplement2].filter(Boolean).join(' '),
@@ -123,7 +149,11 @@ function _buildSupplement(book, imagePath) {
     type = 'insight';
   }
 
-  const title = _cleanText(book.supplementTitle, 'ここがポイント');
+  const title = _cleanText(book.supplementTitle || book.supplement1Title, 'ここがポイント');
+  return _assembleSupplementSlide(type, title, narration, data, book, imagePath);
+}
+
+function _assembleSupplementSlide(type, title, narration, data, book, imagePath) {
   const base = {
     type,
     title,
@@ -136,27 +166,27 @@ function _buildSupplement(book, imagePath) {
     const phrases = Array.isArray(data.catchphrases)
       ? data.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
       : [];
-    base.catchphrases = (phrases.length ? phrases : [book.supplement1, book.supplement2])
+    base.catchphrases = (phrases.length ? phrases : [narration])
       .filter(Boolean)
       .slice(0, 6);
   } else if (type === 'stats' || type === 'profile') {
     base.siBinding = _cleanText(data.entity, book.mainEntity);
-    base.dataSlots = data.dataSlots.slice(0, 8);
+    base.dataSlots = (data.dataSlots || []).slice(0, 8);
   } else if (type === 'comparison') {
     base.siBindingLeft = data.leftName;
     base.siBindingRight = data.rightName;
     base.leftImage = imagePath || null;
     base.rightImage = null;
-    base.dataSlots = data.dataSlots.slice(0, 7);
+    base.dataSlots = (data.dataSlots || []).slice(0, 7);
   } else if (type === 'timeline') {
     base.subtitle = _cleanText(data.subtitle);
     base.xLabel = _cleanText(data.xLabel);
     base.yLabel = _cleanText(data.yLabel);
     base.invertY = !!data.invertY;
-    base.series = data.series.slice(0, 4);
+    base.series = (data.series || []).slice(0, 4);
   } else if (type === 'ranking') {
     base.subtitle = _cleanText(data.subtitle);
-    base.items = data.items.slice(0, 5);
+    base.items = (data.items || []).slice(0, 5);
   } else if (type === 'matchcard') {
     Object.assign(base, {
       homeTeam: data.homeTeam,
@@ -166,6 +196,12 @@ function _buildSupplement(book, imagePath) {
       matchDate: data.matchDate,
       matchData: data.matchData,
     });
+  } else if (type === 'history') {
+    base.events = (data.events || []).slice(0, 6).map(e => ({
+      date: _cleanText(e.date),
+      title: _cleanText(e.title),
+      detail: _cleanText(e.detail),
+    }));
   }
 
   return base;
@@ -216,9 +252,14 @@ function buildModules(book) {
   const suppPick     = _pick(2) || (preset[2] ? { path: preset[2], adj: undefined } : overviewPick);
   const images = imagePath ? [imagePath] : [];
   const threadTitle = book.title || book.hook || book.topic;
-  const pattern = STRUCTURE_PATTERNS.has(book.structurePattern)
-    ? book.structurePattern
-    : 'standard';
+
+  // 新レイアウト: layoutType (info_heavy / comment_heavy)
+  // 旧互換: structurePattern (standard / interleaved / rapid)
+  const layout = LAYOUT_TYPES.has(book.layoutType)
+    ? book.layoutType
+    : (book.structurePattern === 'interleaved' ? 'comment_heavy'
+       : book.structurePattern === 'rapid' ? 'comment_heavy'
+       : 'info_heavy');
 
   let c1 = _comments(book.comments1);
   let c2 = _comments(book.comments2);
@@ -236,16 +277,37 @@ function buildModules(book) {
     imageAdjust: imageAdj,
     narration:   threadTitle,
   };
+
+  // 概要スライド: overviewType に応じて型を決定
+  const ovType = book.overviewType === 'insight' ? 'insight' : 'picture';
   const overview = {
-    type: 'picture',
+    type: ovType,
     title: '何が起きた？',
     images: overviewPick?.path ? [overviewPick.path] : images,
     bgImage:     overviewPick?.path || imagePath || null,
     imageAdjust: overviewPick?.adj,
     narration:   _compactText(book.overview, 190),
   };
-  const supplement = pattern === 'rapid' ? null : _buildSupplement(book, suppPick?.path || null);
-  if (supplement && suppPick?.adj) supplement.imageAdjust = suppPick.adj;
+  if (ovType === 'insight') {
+    const ovData = book.overviewData || {};
+    const phrases = Array.isArray(ovData.catchphrases)
+      ? ovData.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
+      : [];
+    overview.catchphrases = phrases.length >= 2 ? phrases.slice(0, 6) : [_compactText(book.overview, 42)];
+  }
+
+  // 補足1・補足2: 新フィールドがあれば個別ビルド、なければ旧互換
+  let supp1 = null;
+  let supp2 = null;
+  if (book.supplement1Type || book.supplement2Type) {
+    supp1 = _buildSupplementSlide(book, 1, suppPick?.path || null);
+    supp2 = _buildSupplementSlide(book, 2, suppPick?.path || null);
+  } else {
+    supp1 = _buildSupplement(book, suppPick?.path || null);
+  }
+  if (supp1 && suppPick?.adj) supp1.imageAdjust = suppPick.adj;
+  if (supp2 && suppPick?.adj) supp2.imageAdjust = suppPick.adj;
+
   const reaction1 = _buildReaction(_cleanText(book.commentAngle1, 'ネットの反応'), c1);
   const reaction2 = _buildReaction(_cleanText(book.commentAngle2, 'さらに反応'), c2);
   // 反応スライド: スタジアム/群衆/祝福系 画像を優先
@@ -267,13 +329,19 @@ function buildModules(book) {
     commentPrompt: 'あなたの予想をコメントで！',
   };
 
-  const middle = pattern === 'interleaved'
-    ? [overview, reaction1, supplement, reaction2]
-    : [overview, supplement, reaction1, reaction2];
+  // レイアウトに応じてスライド順序を決定
+  let middle;
+  if (layout === 'comment_heavy') {
+    // ②コメント重点型: 概要 → 補足1 → コメ1 → 補足2 → コメ2
+    middle = [overview, supp1, reaction1, supp2, reaction2];
+  } else {
+    // ①情報重点型: 概要 → 補足1 → 補足2 → コメ1 → コメ2
+    middle = [overview, supp1, supp2, reaction1, reaction2];
+  }
   const modules = [opening, ...middle.filter(Boolean), ending];
 
-  // 反応が少ない案件でも4枚を下回らないよう、補足を復帰させる。
-  if (modules.length < 4 && !supplement) {
+  // 4枚を下回らないよう安全弁
+  if (modules.length < 4) {
     const fallbackSupplement = _buildSupplement(book, imagePath);
     if (fallbackSupplement) modules.splice(2, 0, fallbackSupplement);
   }
@@ -287,7 +355,7 @@ function buildModules(book) {
     });
   }
 
-  console.log(`[v4_video] 構成=${pattern} / ${modules.length}枚 / ${modules.map(m => m.type).join(' → ')}`);
+  console.log(`[v4_video] layout=${layout} / ${modules.length}枚 / ${modules.map(m => m.type).join(' → ')}`);
   return modules;
 }
 
