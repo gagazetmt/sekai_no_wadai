@@ -208,26 +208,62 @@ function _isLikelyXReaction(value) {
 }
 
 // ── Reddit スレッドの生コメント ──────────────────────────────
-async function _fromReddit(sourceUrl) {
-  if (!sourceUrl || !sourceUrl.includes('reddit.com')) return [];
+async function _fromReddit(sourceUrl, topic = '') {
+  // ① ソースURLがredditならそのスレッドから取得
+  if (sourceUrl && sourceUrl.includes('reddit.com')) {
+    try {
+      const apiUrl = sourceUrl.replace(/\/$/, '') + '.json?limit=50&sort=top';
+      const res = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)',
+          ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
+        },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const comments = (data?.[1]?.data?.children || [])
+          .filter(c => c.kind === 't1' && c.data?.body && c.data.body !== '[deleted]')
+          .map(c => String(c.data.body).replace(/\n+/g, ' ').trim())
+          .filter(t => t.length >= 15 && t.length <= 280)
+          .slice(0, 25);
+        if (comments.length >= 3) return comments;
+      }
+    } catch (e) { console.warn('[comments] Reddit direct 失敗:', e.message); }
+  }
+  // ② topicベースでr/soccerを検索してコメント取得
+  if (!topic) return [];
   try {
-    const apiUrl = sourceUrl.replace(/\/$/, '') + '.json?limit=50&sort=top';
-    const res = await fetch(apiUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)',
-        ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
-      },
+    const enTopic = topic.replace(/[ぁ-ん]|[ァ-ヶ]|[一-龥]/g, '').trim() || topic;
+    const searchUrl = `https://www.reddit.com/r/soccer/search.json?q=${encodeURIComponent(enTopic)}&sort=new&restrict_sr=1&limit=5&t=week`;
+    const res = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)' },
       signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data?.[1]?.data?.children || [])
-      .filter(c => c.kind === 't1' && c.data?.body && c.data.body !== '[deleted]')
-      .map(c => String(c.data.body).replace(/\n+/g, ' ').trim())
-      .filter(t => t.length >= 15 && t.length <= 280)
-      .slice(0, 25);
+    const posts = data?.data?.children || [];
+    const allComments = [];
+    for (const post of posts.slice(0, 3)) {
+      const permalink = post.data?.permalink;
+      if (!permalink) continue;
+      try {
+        const threadRes = await fetch(`https://www.reddit.com${permalink}.json?limit=30&sort=top`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)' },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!threadRes.ok) continue;
+        const threadData = await threadRes.json();
+        const comments = (threadData?.[1]?.data?.children || [])
+          .filter(c => c.kind === 't1' && c.data?.body && c.data.body !== '[deleted]')
+          .map(c => String(c.data.body).replace(/\n+/g, ' ').trim())
+          .filter(t => t.length >= 15 && t.length <= 280);
+        allComments.push(...comments);
+      } catch (_) {}
+    }
+    return _uniqueComments(allComments, 25);
   } catch (e) {
-    console.warn('[comments] Reddit 失敗:', e.message);
+    console.warn('[comments] Reddit search 失敗:', e.message);
     return [];
   }
 }
@@ -262,31 +298,52 @@ async function _fromYahoo(topic) {
 }
 
 // ── X 元投稿への返信（twitterapi.io）─────────────────────────
-async function _fromX(sourceUrl) {
-  if (!X_API_KEY || !sourceUrl || !/(?:x|twitter)\.com\//i.test(sourceUrl)) return [];
-  const sourceId = String(sourceUrl).match(/status\/(\d+)/)?.[1];
-  if (!sourceId) return [];
+async function _fromX(sourceUrl, topic = '') {
+  if (!X_API_KEY) return [];
+  // ① ソースURLがXならconversation_idで返信取得
+  const sourceId = (sourceUrl && /(?:x|twitter)\.com\//i.test(sourceUrl))
+    ? String(sourceUrl).match(/status\/(\d+)/)?.[1]
+    : null;
+  if (sourceId) {
+    try {
+      const q = `conversation_id:${sourceId} -is:retweet`;
+      const res = await fetch(
+        'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
+        new URLSearchParams({ query: q, queryType: 'Top' }),
+        { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) }
+      );
+      const data = await res.json();
+      const tweets = data?.data?.tweets || data?.tweets || [];
+      const replies = tweets
+        .filter(t => String(t.id || t.id_str || t.tweetId || t.tweet_id || '') !== sourceId)
+        .filter(t => {
+          const replyTo = t.inReplyToId || t.in_reply_to_status_id_str || t.in_reply_to_tweet_id;
+          const isReply = t.isReply ?? t.is_reply;
+          return replyTo != null || isReply === true || String(t.conversationId || t.conversation_id || '') === sourceId;
+        })
+        .map(t => t.text || t.full_text || '')
+        .filter(_isLikelyXReaction);
+      const result = _uniqueComments(replies, 20);
+      if (result.length >= 3) return result;
+    } catch (e) { console.warn('[comments] X direct 失敗:', e.message); }
+  }
+  // ② topicベースでX上の反応ツイートを検索
+  if (!topic) return [];
   try {
-    const q = `conversation_id:${sourceId} -is:retweet`;
+    const jaQ = topic.slice(0, 60) + ' lang:ja -is:retweet';
     const res = await fetch(
       'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
-      new URLSearchParams({ query: q, queryType: 'Top' }),
+      new URLSearchParams({ query: jaQ, queryType: 'Top' }),
       { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) }
     );
     const data = await res.json();
     const tweets = data?.data?.tweets || data?.tweets || [];
-    const replies = tweets
-      .filter(t => String(t.id || t.id_str || t.tweetId || t.tweet_id || '') !== sourceId)
-      .filter(t => {
-        const replyTo = t.inReplyToId || t.in_reply_to_status_id_str || t.in_reply_to_tweet_id;
-        const isReply = t.isReply ?? t.is_reply;
-        return replyTo != null || isReply === true || String(t.conversationId || t.conversation_id || '') === sourceId;
-      })
+    const reactions = tweets
       .map(t => t.text || t.full_text || '')
       .filter(_isLikelyXReaction);
-    return _uniqueComments(replies, 20);
+    return _uniqueComments(reactions, 20);
   } catch (e) {
-    console.warn('[comments] X 失敗:', e.message);
+    console.warn('[comments] X search 失敗:', e.message);
     return [];
   }
 }
@@ -308,11 +365,11 @@ async function _buildCommentWarehouse(topic, sourceUrl) {
     } catch (_) {}
   }
 
-  // 3ソース並列取得
+  // 3ソース並列取得（topicベース検索フォールバック付き）
   const [reddit, yahoo, x] = await Promise.all([
-    _fromReddit(sourceUrl),
+    _fromReddit(sourceUrl, topic),
     _fromYahoo(topic),
-    _fromX(sourceUrl),
+    _fromX(sourceUrl, topic),
   ]);
 
   const warehouse = {
@@ -413,7 +470,7 @@ ${warehouseBlock}
 | commentAngle1 | コメント①の切り口 | 〜18字 | コメント時 |
 | commentAngle2 | コメント②の切り口 | 〜18字 | コメント時 |
 | endingPunch | EDで読むオチの一言。CTAや挨拶は禁止 | 〜32字 | ✅ |
-| assetLabels | 画像・データ取得用ラベル（最大5件） | — | ✅ |
+| assetLabels | 画像・データ取得用ラベル（最大8件） | — | ✅ |
 | thumbLine1 | サムネ1行目。衝撃・興味を引くパワーワード | 〜18字 | ✅ |
 | thumbLine2 | サムネ2行目。補足や結果。なければ null | 〜18字 | あれば |
 | thumbComment | サムネ右上の煽りコメント（2ch風1〜2行） | 〜30字 | ✅ |
@@ -439,8 +496,20 @@ ${warehouseBlock}
 
 ⚠️ 判定ミス例: 試合結果なのに insight → NG。選手の活躍なのに picture → NG。必ずルール順に判定すること
 
+**matchcard の supplementData 例（必須フィールド）:**
+\`\`\`json
+"supplementType": "matchcard",
+"supplementData": { "homeTeam": "Japan", "awayTeam": "Netherlands", "homeScore": 2, "awayScore": 1 }
+\`\`\`
+
+**stats/profile の supplementData 例:**
+\`\`\`json
+"supplementType": "stats",
+"supplementData": { "dataSlots": [{"label":"ゴール数","value":"15"},{"label":"アシスト","value":"8"}] }
+\`\`\`
+
 **assetLabels（画像・データ取得用ラベル）:**
-- この案件に関連するキーパーソン・チームを最大5件提案する
+- この案件に関連するキーパーソン・チームを最大8件提案する
 - 各ラベルに name（英語名）, type（player/team/nationalTeam/manager）, team（所属チーム英語名、該当時）を設定
 - 主役（mainEntity）は必ず含める
 - 所属クラブ、所属代表、対戦相手、関連監督なども含めて広く提案する
@@ -560,7 +629,7 @@ ${hasRealComments
           team: l.team ? String(l.team).trim() : null,
           league: l.league ? String(l.league).trim() : null,
         }))
-        .slice(0, 5)
+        .slice(0, 8)
     : [];
 
   return {
