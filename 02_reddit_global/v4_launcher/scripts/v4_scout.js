@@ -397,16 +397,21 @@ JSONのみ:
 // ─────────────────────────────────────────────────────────────
 async function runScout(opts = {}) {
   const perSource = opts.perSource || 5;
+  const onProgress = opts.onProgress || (() => {});
   console.log('[v4_scout] 開始:', new Date().toLocaleString('ja-JP'));
+
+  onProgress({ stage: 'fetch', message: '4部門を並列取得中...' });
 
   // 4部門並列取得
   const [xItems, yahooItems, redditItems, fivechItems] = await Promise.all([
     _fetchX(), _fetchYahoo(), _fetchReddit(), _fetch5ch(),
   ]);
 
+  const total = xItems.length + yahooItems.length + redditItems.length + fivechItems.length;
   console.log(
     `[v4_scout] 取得: X=${xItems.length} Yahoo=${yahooItems.length} Reddit=${redditItems.length} 5ch=${fivechItems.length}`,
   );
+  onProgress({ stage: 'filter', message: `${total}件取得 → フィルタ・重複排除中...` });
 
   // 12時間以内フィルタ（速報特化）
   const filterFresh = items => items.filter(it => _isWithinHours(it.date, FRESHNESS_HOURS));
@@ -438,6 +443,7 @@ async function runScout(opts = {}) {
   });
 
   console.log(`[v4_scout] 重複排除: ${all.length}件 → 新規${fresh.length}件`);
+  onProgress({ stage: 'ai', message: `新規${fresh.length}件 → AI選定中...` });
 
   // 各ソース最大15件をAIへ渡し、各5件を選定
   const balancedInput = ['X', 'Yahoo', 'Reddit', '5ch']

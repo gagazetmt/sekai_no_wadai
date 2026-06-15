@@ -17,7 +17,7 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true
 const { runScout, SCOUT_FILE }                       = require('./scripts/v4_scout');
 const { buildNetaBook, getCachedBook, getWarehousePath } = require('./scripts/v4_neta');
 const { buildModules, generateV4Video }              = require('./scripts/v4_video');
-const { fetchBookAssets }                            = require('./scripts/v4_assets');
+const { fetchBookAssets, fetchSingleLabel }           = require('./scripts/v4_assets');
 const {
   matchPlayers,
   matchManagers,
@@ -26,7 +26,7 @@ const {
 
 const app  = express();
 const PORT = process.env.V4_PORT || 3005;
-const CLIENT_VERSION = '20260615-1';
+const CLIENT_VERSION = '20260615-2';
 app.use(express.json({ limit: '2mb' }));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') {
@@ -89,8 +89,10 @@ app.post('/api/scout', (req, res) => {
   res.json({ ok: true, jobId });
   setImmediate(async () => {
     try {
-      updateJob(jobId, { status: 'running', message: 'X / Yahoo / Reddit を収集中...' });
-      const topics = await runScout({ perSource: 5 });
+      const topics = await runScout({
+        perSource: 5,
+        onProgress: (p) => updateJob(jobId, { status: 'running', stage: p.stage, message: p.message }),
+      });
       updateJob(jobId, { status: 'done', topics });
     } catch (e) {
       console.error('[v4/scout]', e.message);
@@ -153,6 +155,17 @@ app.post('/api/neta/assets', async (req, res) => {
   } catch (e) {
     console.error('[v4/assets]', e);
     res.status(500).json({ ok: false, error: e.message, labels: [], dataRows: [], images: [] });
+  }
+});
+
+app.post('/api/neta/fetch-label', async (req, res) => {
+  const { label, book } = req.body || {};
+  if (!label?.name) return res.status(400).json({ ok: false, error: 'label.name required' });
+  try {
+    res.json(await fetchSingleLabel(label, book || {}));
+  } catch (e) {
+    console.error('[v4/fetch-label]', e);
+    res.status(500).json({ ok: false, error: e.message, dataRows: [], images: [] });
   }
 });
 
