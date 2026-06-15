@@ -257,12 +257,14 @@ function buildModules(book) {
   if (reaction2) { reaction2.bgImage = rxPath; if (rxAdj) reaction2.imageAdjust = rxAdj; }
 
   const ending = {
-    type:        'ending',
-    title:       _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
-    narration:   _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
-    bgImage:     imagePath || null,
-    imageAdjust: imageAdj,
-    endingCta:   { text: '　' },
+    type:          'ending',
+    title:         _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
+    narration:     _cleanText(book.endingPunch, 'この話、まだ動きそうだ。'),
+    bgImage:       imagePath || null,
+    imageAdjust:   imageAdj,
+    endingCta:     { text: '　' },
+    nextTopic:     _cleanText(book.endingPunch, ''),
+    commentPrompt: 'あなたの予想をコメントで！',
   };
 
   const middle = pattern === 'interleaved'

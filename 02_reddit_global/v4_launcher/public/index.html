@@ -590,6 +590,84 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 .mt8 { margin-top: 8px; }
 .mt14 { margin-top: 14px; }
 .flex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ══ データバインドエディタ ═══════════════════════════════════ */
+.db-slots { display: flex; flex-direction: column; gap: 4px; }
+.db-row {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+}
+.db-row input.db-label, .db-row input.db-value {
+  flex: 1; min-width: 0; background: var(--s2); color: var(--text);
+  border: 1px solid var(--border2); border-radius: var(--rad-sm);
+  padding: 7px 8px; font: inherit; font-size: 12px;
+}
+.db-row input:focus { outline: none; border-color: var(--yellow); }
+.db-section-title {
+  font-size: 11px; font-weight: 900; color: var(--muted);
+  letter-spacing: .5px; margin: 10px 0 5px;
+}
+.db-add-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 6px; padding: 5px 10px; font-size: 11px;
+  background: var(--s2); color: var(--muted); border: 1px solid var(--border2);
+  border-radius: var(--rad-sm); cursor: pointer;
+}
+.db-add-btn:hover { color: var(--text); border-color: #555; }
+
+/* ══ リアクション個別コメントボックス ════════════════════════ */
+.rx-box {
+  background: var(--s2); border: 1px solid var(--border2);
+  border-radius: var(--rad-sm); padding: 8px; margin-bottom: 6px;
+}
+.rx-box-head {
+  display: flex; align-items: center; gap: 4px; margin-bottom: 5px;
+}
+.rx-box-num {
+  font-size: 10px; font-weight: 900; color: var(--yellow);
+  width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(255,238,0,.15);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.rx-textarea {
+  width: 100%; background: var(--s3); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 6px 8px; font: inherit; font-size: 12px;
+  resize: vertical; min-height: 38px; line-height: 1.5;
+}
+.rx-textarea:focus { outline: none; border-color: var(--yellow); }
+.rx-swap-list {
+  margin-top: 6px; max-height: 160px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--rad-sm);
+  background: var(--s1);
+}
+.rx-swap-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; cursor: pointer; font-size: 12px;
+  border-bottom: 1px solid var(--border); color: #ccc;
+  transition: background .1s;
+}
+.rx-swap-item:hover { background: var(--s2); }
+.rx-swap-item:last-child { border-bottom: none; }
+
+/* ══ エンディング編集 ════════════════════════════════════════ */
+.ending-hint {
+  font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5;
+  padding: 4px 0;
+}
+.ending-fields { margin-top: 2px; }
+
+/* ══ スライド追加/削除 ═══════════════════════════════════════ */
+.confirm-actions .btn-danger {
+  background: rgba(232,0,0,.15); color: #ff6b6b;
+  border: 1px solid rgba(232,0,0,.25);
+}
+.confirm-actions .btn-danger:hover { background: rgba(232,0,0,.25); }
+.confirm-actions .btn-add {
+  background: rgba(0,200,83,.12); color: var(--green);
+  border: 1px solid rgba(0,200,83,.25);
+}
+.confirm-actions .btn-add:hover { background: rgba(0,200,83,.22); }
 </style>
 </head>
 <body>
@@ -843,22 +921,40 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   <div class="confirm-layout">
     <div class="confirm-panel">
       <div class="confirm-actions">
-        <button class="btn btn-ghost" onclick="moveConfirmSlide(-1)">← 前へ移動</button>
-        <button class="btn btn-ghost" onclick="moveConfirmSlide(1)">次へ移動 →</button>
+        <button class="btn btn-ghost" onclick="moveConfirmSlide(-1)">← 前へ</button>
+        <button class="btn btn-ghost" onclick="moveConfirmSlide(1)">次へ →</button>
+        <button class="btn btn-add" onclick="addConfirmSlide()">＋ 追加</button>
+        <button class="btn btn-danger" onclick="deleteConfirmSlide()">🗑 削除</button>
       </div>
 
       <label class="confirm-label">スライド型</label>
-      <select class="confirm-select" id="confirmType" onchange="updateConfirmModule()"></select>
+      <select class="confirm-select" id="confirmType" onchange="onConfirmTypeChange()"></select>
 
-      <label class="confirm-label">タイトル</label>
+      <label class="confirm-label" id="confirmTitleLabel">タイトル</label>
       <input class="confirm-input" id="confirmTitle" oninput="updateConfirmModule(false)">
 
-      <label class="confirm-label">ナレーション</label>
+      <label class="confirm-label" id="confirmNarrationLabel">ナレーション</label>
       <textarea class="confirm-textarea" id="confirmNarration" oninput="updateConfirmModule(false)"></textarea>
 
+      <!-- データバインド（型によって動的表示） -->
+      <div id="confirmDataBind" style="display:none;"></div>
+
+      <!-- リアクション：個別コメントボックス -->
       <div id="confirmReactionWrap" style="display:none;">
-        <label class="confirm-label">コメント（1行1件）</label>
-        <textarea class="confirm-textarea" id="confirmComments" oninput="updateConfirmModule(false)"></textarea>
+        <label class="confirm-label">コメント</label>
+        <div id="confirmReactionBoxes"></div>
+        <button class="db-add-btn" onclick="addRxComment()">＋ コメント追加</button>
+      </div>
+
+      <!-- エンディング用フィールド -->
+      <div id="confirmEndingWrap" style="display:none;">
+        <div class="ending-fields">
+          <label class="confirm-label">次回予告テキスト</label>
+          <input class="confirm-input" id="confirmNextTopic" oninput="updateConfirmModule(false)" placeholder="次回も○○を徹底分析">
+          <label class="confirm-label">コメント誘導</label>
+          <input class="confirm-input" id="confirmCommentPrompt" oninput="updateConfirmModule(false)" placeholder="あなたの予想をコメントで！">
+        </div>
+        <div class="ending-hint">💡 エンディングの「タイトル」がオチの一言になります。視聴者の印象に残る締めを意識。</div>
       </div>
 
       <label class="confirm-label">画像URL</label>
@@ -946,7 +1042,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 </main>
 
 <script>
-const CLIENT_VERSION = '20260614-9';
+const CLIENT_VERSION = '20260615-1';
 // ═════════════════════════════════ STATE
 const S = {
   topics: [],
@@ -1781,12 +1877,27 @@ function renderConfirmEditor() {
   ).join('');
   document.getElementById('confirmTitle').value = module.title || '';
   document.getElementById('confirmNarration').value = module.narration || '';
-  const comments = Array.isArray(module.comments)
-    ? module.comments.map(comment => typeof comment === 'string' ? comment : comment?.text).filter(Boolean)
-    : [];
-  document.getElementById('confirmComments').value = comments.join('\n');
-  document.getElementById('confirmReactionWrap').style.display =
-    module.type === 'reaction' ? 'block' : 'none';
+
+  // スライド型に応じたUI切替
+  const isReaction = module.type === 'reaction';
+  const isEnding = module.type === 'ending';
+  document.getElementById('confirmReactionWrap').style.display = isReaction ? 'block' : 'none';
+  document.getElementById('confirmEndingWrap').style.display = isEnding ? 'block' : 'none';
+  document.getElementById('confirmTitleLabel').textContent = isEnding ? '締めコメント（オチ）' : 'タイトル';
+  document.getElementById('confirmNarrationLabel').textContent = isEnding ? 'ナレーション（読み上げ）' : 'ナレーション';
+
+  // リアクション：個別コメントボックス
+  if (isReaction) renderReactionBoxes(module);
+
+  // エンディング：次回予告・コメント誘導
+  if (isEnding) {
+    document.getElementById('confirmNextTopic').value = module.nextTopic || '';
+    document.getElementById('confirmCommentPrompt').value = module.commentPrompt || '';
+  }
+
+  // データバインド（型別フォーム）
+  renderDataBind(module);
+
   document.getElementById('confirmImage').value =
     module.images?.[0] || module.bgImage || '';
   // imageAdjust をスライダーに反映
@@ -1828,13 +1939,13 @@ function updateConfirmModule(refresh = true) {
   const oy   = Number(document.getElementById('adjOffsetY')?.value || 0);
   const zoom = Number(document.getElementById('adjZoom')?.value || 100) / 100;
   module.imageAdjust = (ox === 0 && oy === 0 && zoom === 1.0) ? undefined : { offsetX: ox, offsetY: oy, zoom };
-  if (module.type === 'reaction') {
-    module.comments = document.getElementById('confirmComments').value
-      .split('\n').map(text => text.trim()).filter(Boolean)
-      .slice(0, 7).map((text, index) => ({ text, score: 100 - index * 10 }));
+  // データバインド読み取り
+  readDataBind(module);
+  // エンディング用フィールド
+  if (module.type === 'ending') {
+    module.nextTopic = document.getElementById('confirmNextTopic')?.value || '';
+    module.commentPrompt = document.getElementById('confirmCommentPrompt')?.value || '';
   }
-  document.getElementById('confirmReactionWrap').style.display =
-    module.type === 'reaction' ? 'block' : 'none';
   renderConfirmTabs();
   if (refresh) reloadConfirmPreview();
 }
@@ -2065,6 +2176,319 @@ async function runVideoGeneration(modules = null) {
   } catch (e) {
     sb('videoStatus', 'error', e.message);
   }
+}
+
+// ─── テキストエスケープ（textarea用、改行保持） ────────────────
+function escTA(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ─── データバインドエディタ ────────────────────────────────────
+function renderDataBind(module) {
+  const el = document.getElementById('confirmDataBind');
+  if (!module || !el) return;
+  const t = module.type;
+
+  if (t === 'stats' || t === 'profile') {
+    const slots = Array.isArray(module.dataSlots) ? module.dataSlots : [];
+    el.innerHTML =
+      '<div class="db-section-title">📊 データバインド</div>' +
+      '<div class="db-slots" id="dbSlots">' +
+      slots.map((s, i) => '<div class="db-row">' +
+        '<input class="db-label" value="' + esc(s.label||'') + '" placeholder="ラベル" data-idx="' + i + '">' +
+        '<input class="db-value" value="' + esc(s.value||'') + '" placeholder="値" data-idx="' + i + '">' +
+        '<button class="cw-btn del" onclick="removeDataSlot(' + i + ')">−</button></div>'
+      ).join('') +
+      '</div><button class="db-add-btn" onclick="addDataSlot()">＋ 行追加</button>';
+    el.style.display = 'block';
+  } else if (t === 'matchcard') {
+    el.innerHTML =
+      '<div class="db-section-title">⚽ マッチカード</div>' +
+      '<div class="db-row"><span style="color:var(--muted);font-size:11px;width:50px;flex-shrink:0">HOME</span>' +
+        '<input class="db-value" id="dbHomeTeam" value="' + esc(module.homeTeam||'') + '" placeholder="ホームチーム">' +
+        '<input class="db-value" id="dbHomeScore" value="' + (module.homeScore??'') + '" placeholder="点" style="width:45px;flex:none"></div>' +
+      '<div class="db-row"><span style="color:var(--muted);font-size:11px;width:50px;flex-shrink:0">AWAY</span>' +
+        '<input class="db-value" id="dbAwayTeam" value="' + esc(module.awayTeam||'') + '" placeholder="アウェイチーム">' +
+        '<input class="db-value" id="dbAwayScore" value="' + (module.awayScore??'') + '" placeholder="点" style="width:45px;flex:none"></div>' +
+      '<div class="db-row"><span style="color:var(--muted);font-size:11px;width:50px;flex-shrink:0">日付</span>' +
+        '<input class="db-value" id="dbMatchDate" value="' + esc(module.matchDate||'') + '" placeholder="2026-06-15"></div>';
+    el.style.display = 'block';
+  } else if (t === 'comparison') {
+    const slots = Array.isArray(module.dataSlots) ? module.dataSlots : [];
+    el.innerHTML =
+      '<div class="db-section-title">🔄 比較データ</div>' +
+      '<div class="db-row" style="margin-bottom:8px">' +
+        '<input class="db-value" id="dbLeftName" value="' + esc(module.siBindingLeft||'') + '" placeholder="左側（名前）">' +
+        '<span style="color:var(--yellow);font-weight:900;padding:0 4px">vs</span>' +
+        '<input class="db-value" id="dbRightName" value="' + esc(module.siBindingRight||'') + '" placeholder="右側（名前）"></div>' +
+      '<div class="db-slots" id="dbSlots">' +
+      slots.map((s, i) => '<div class="db-row">' +
+        '<input class="db-value" value="' + esc(s.leftValue||'') + '" placeholder="左値" data-idx="' + i + '" data-field="left">' +
+        '<input class="db-label" value="' + esc(s.label||'') + '" placeholder="項目" data-idx="' + i + '" style="text-align:center">' +
+        '<input class="db-value" value="' + esc(s.rightValue||'') + '" placeholder="右値" data-idx="' + i + '" data-field="right">' +
+        '<button class="cw-btn del" onclick="removeDataSlot(' + i + ')">−</button></div>'
+      ).join('') +
+      '</div><button class="db-add-btn" onclick="addDataSlot()">＋ 行追加</button>';
+    el.style.display = 'block';
+  } else if (t === 'ranking') {
+    const items = Array.isArray(module.items) ? module.items : [];
+    el.innerHTML =
+      '<div class="db-section-title">🏆 ランキング</div>' +
+      '<div class="db-slots" id="dbSlots">' +
+      items.map((item, i) => '<div class="db-row">' +
+        '<span style="color:var(--yellow);font-weight:900;font-size:12px;width:20px;text-align:center;flex-shrink:0">' + (i+1) + '</span>' +
+        '<input class="db-label" value="' + esc(item.name||'') + '" placeholder="名前" data-idx="' + i + '">' +
+        '<input class="db-value" value="' + esc(item.value||'') + '" placeholder="値" data-idx="' + i + '">' +
+        '<button class="cw-btn del" onclick="removeDataSlot(' + i + ')">−</button></div>'
+      ).join('') +
+      '</div><button class="db-add-btn" onclick="addDataSlot()">＋ 行追加</button>';
+    el.style.display = 'block';
+  } else if (t === 'insight') {
+    const phrases = Array.isArray(module.catchphrases) ? module.catchphrases : [];
+    el.innerHTML =
+      '<div class="db-section-title">💡 キャッチフレーズ</div>' +
+      '<div class="db-slots" id="dbSlots">' +
+      phrases.map((p, i) => {
+        const txt = typeof p === 'string' ? p : (p?.text || '');
+        return '<div class="db-row">' +
+          '<input class="db-value" value="' + esc(txt) + '" placeholder="フレーズ' + (i+1) + '" data-idx="' + i + '" style="flex:1">' +
+          '<button class="cw-btn del" onclick="removeDataSlot(' + i + ')">−</button></div>';
+      }).join('') +
+      '</div><button class="db-add-btn" onclick="addDataSlot()">＋ 行追加</button>';
+    el.style.display = 'block';
+  } else if (t === 'timeline') {
+    const series = Array.isArray(module.series) ? module.series : [];
+    el.innerHTML =
+      '<div class="db-section-title">📈 タイムライン</div>' +
+      series.map((s, si) =>
+        '<div style="margin-bottom:8px;padding:6px;background:var(--s2);border-radius:var(--rad-sm);">' +
+        '<input class="db-value" value="' + esc(s.name||'') + '" placeholder="系列名" style="width:100%;margin-bottom:4px" data-series="' + si + '" data-field="name">' +
+        '<div class="db-slots">' +
+        (s.points||[]).map((p, pi) =>
+          '<div class="db-row">' +
+          '<input class="db-label" value="' + esc(p.x||'') + '" placeholder="X" style="width:80px" data-series="' + si + '" data-point="' + pi + '" data-field="x">' +
+          '<input class="db-value" value="' + esc(p.y??'') + '" placeholder="Y" style="width:80px" data-series="' + si + '" data-point="' + pi + '" data-field="y">' +
+          '</div>'
+        ).join('') +
+        '</div></div>'
+      ).join('');
+    el.style.display = 'block';
+  } else {
+    el.innerHTML = '';
+    el.style.display = 'none';
+  }
+}
+
+function readDataBind(module) {
+  if (!module) return;
+  const t = module.type;
+  if (t === 'stats' || t === 'profile') {
+    const rows = document.querySelectorAll('#dbSlots .db-row');
+    module.dataSlots = Array.from(rows).map(row => ({
+      label: row.querySelector('.db-label')?.value || '',
+      value: row.querySelector('.db-value')?.value || '',
+    })).filter(s => s.label || s.value);
+  } else if (t === 'matchcard') {
+    module.homeTeam  = document.getElementById('dbHomeTeam')?.value  || '';
+    module.awayTeam  = document.getElementById('dbAwayTeam')?.value  || '';
+    module.homeScore = document.getElementById('dbHomeScore')?.value ?? '';
+    module.awayScore = document.getElementById('dbAwayScore')?.value ?? '';
+    module.matchDate = document.getElementById('dbMatchDate')?.value || '';
+  } else if (t === 'comparison') {
+    module.siBindingLeft  = document.getElementById('dbLeftName')?.value  || '';
+    module.siBindingRight = document.getElementById('dbRightName')?.value || '';
+    const rows = document.querySelectorAll('#dbSlots .db-row');
+    module.dataSlots = Array.from(rows).map(row => {
+      const inputs = row.querySelectorAll('input');
+      return { leftValue: inputs[0]?.value || '', label: inputs[1]?.value || '', rightValue: inputs[2]?.value || '' };
+    }).filter(s => s.label);
+  } else if (t === 'ranking') {
+    const rows = document.querySelectorAll('#dbSlots .db-row');
+    module.items = Array.from(rows).map(row => ({
+      name:  row.querySelector('.db-label')?.value || '',
+      value: row.querySelector('.db-value')?.value || '',
+    })).filter(s => s.name);
+  } else if (t === 'insight') {
+    const rows = document.querySelectorAll('#dbSlots .db-row');
+    module.catchphrases = Array.from(rows)
+      .map(row => row.querySelector('.db-value')?.value || '').filter(Boolean);
+  } else if (t === 'timeline') {
+    const series = Array.isArray(module.series) ? module.series : [];
+    document.querySelectorAll('[data-series][data-field="name"]').forEach(inp => {
+      const si = Number(inp.dataset.series);
+      if (series[si]) series[si].name = inp.value;
+    });
+    document.querySelectorAll('[data-series][data-point]').forEach(inp => {
+      const si = Number(inp.dataset.series);
+      const pi = Number(inp.dataset.point);
+      const f  = inp.dataset.field;
+      if (series[si]?.points?.[pi] && f) series[si].points[pi][f] = inp.value;
+    });
+  }
+}
+
+function addDataSlot() {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  readDataBind(module);
+  const t = module.type;
+  if (t === 'stats' || t === 'profile') {
+    if (!Array.isArray(module.dataSlots)) module.dataSlots = [];
+    module.dataSlots.push({ label: '', value: '' });
+  } else if (t === 'comparison') {
+    if (!Array.isArray(module.dataSlots)) module.dataSlots = [];
+    module.dataSlots.push({ leftValue: '', label: '', rightValue: '' });
+  } else if (t === 'ranking') {
+    if (!Array.isArray(module.items)) module.items = [];
+    module.items.push({ name: '', value: '' });
+  } else if (t === 'insight') {
+    if (!Array.isArray(module.catchphrases)) module.catchphrases = [];
+    module.catchphrases.push('');
+  }
+  renderDataBind(module);
+}
+
+function removeDataSlot(i) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  readDataBind(module);
+  const t = module.type;
+  if (t === 'stats' || t === 'profile') module.dataSlots?.splice(i, 1);
+  else if (t === 'comparison') module.dataSlots?.splice(i, 1);
+  else if (t === 'ranking') module.items?.splice(i, 1);
+  else if (t === 'insight') module.catchphrases?.splice(i, 1);
+  renderDataBind(module);
+}
+
+// ─── リアクション個別コメントボックス ──────────────────────────
+function renderReactionBoxes(module) {
+  const wrap = document.getElementById('confirmReactionBoxes');
+  if (!wrap) return;
+  const comments = Array.isArray(module.comments) ? module.comments : [];
+
+  wrap.innerHTML = comments.map((c, i) => {
+    const text = typeof c === 'string' ? c : (c?.text || '');
+    return '<div class="rx-box" data-idx="' + i + '">' +
+      '<div class="rx-box-head">' +
+        '<span class="rx-box-num">' + (i+1) + '</span>' +
+        '<button class="cw-btn up" onclick="moveRxComment(' + i + ',-1)"' + (i===0?' disabled':'') + '>↑</button>' +
+        '<button class="cw-btn dn" onclick="moveRxComment(' + i + ',1)"' + (i===comments.length-1?' disabled':'') + '>↓</button>' +
+        '<button class="cw-btn del" onclick="removeRxComment(' + i + ')">−</button>' +
+        '<button class="btn btn-ghost" style="margin-left:auto;padding:3px 8px;font-size:10px;" onclick="toggleRxSwap(' + i + ')">🔄 倉庫</button>' +
+      '</div>' +
+      '<textarea class="rx-textarea" rows="2" oninput="updateRxText(' + i + ',this.value)">' + escTA(text) + '</textarea>' +
+      '<div class="rx-swap-list" id="rxSwap' + i + '" style="display:none;"></div>' +
+    '</div>';
+  }).join('');
+}
+
+function updateRxText(i, text) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module?.comments?.[i]) return;
+  if (typeof module.comments[i] === 'string') module.comments[i] = text;
+  else module.comments[i].text = text;
+}
+
+function moveRxComment(i, dir) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module?.comments) return;
+  const j = i + dir;
+  if (j < 0 || j >= module.comments.length) return;
+  [module.comments[i], module.comments[j]] = [module.comments[j], module.comments[i]];
+  renderReactionBoxes(module);
+}
+
+function removeRxComment(i) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module?.comments) return;
+  module.comments.splice(i, 1);
+  renderReactionBoxes(module);
+}
+
+function addRxComment() {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  if (!Array.isArray(module.comments)) module.comments = [];
+  module.comments.push({ text: '', score: 50 });
+  renderReactionBoxes(module);
+}
+
+function toggleRxSwap(i) {
+  const el = document.getElementById('rxSwap' + i);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const pool = S.poolComments || [];
+  if (!pool.length) {
+    el.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--muted)">倉庫にコメントがありません</div>';
+    el.style.display = 'block';
+    return;
+  }
+  el.innerHTML = pool.map((c, pi) =>
+    '<div class="rx-swap-item" onclick="swapRxComment(' + i + ',' + pi + ')">' +
+      '<span class="cw-src ' + srcClass(c.source) + '">' + srcLabel(c.source) + '</span>' +
+      '<span style="flex:1;line-height:1.4">' + esc(c.text) + '</span>' +
+    '</div>'
+  ).join('');
+  el.style.display = 'block';
+}
+
+function swapRxComment(commentIdx, poolIdx) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module?.comments) return;
+  const pool = S.poolComments || [];
+  if (!pool[poolIdx]) return;
+  const newText = pool[poolIdx].text;
+  if (typeof module.comments[commentIdx] === 'string') module.comments[commentIdx] = newText;
+  else if (module.comments[commentIdx]) module.comments[commentIdx].text = newText;
+  const el = document.getElementById('rxSwap' + commentIdx);
+  if (el) el.style.display = 'none';
+  renderReactionBoxes(module);
+}
+
+// ─── スライド追加・削除 ────────────────────────────────────────
+function addConfirmSlide() {
+  const newSlide = {
+    type: 'insight', title: '新しいスライド', narration: '',
+    images: [], bgImage: null, catchphrases: [],
+  };
+  const insertAt = S.confirmActive + 1;
+  S.confirmModules.splice(insertAt, 0, newSlide);
+  S.confirmActive = insertAt;
+  renderConfirmEditor();
+}
+
+function deleteConfirmSlide() {
+  if (S.confirmModules.length <= 2) return;
+  const module = S.confirmModules[S.confirmActive];
+  if (module?.type === 'opening' || module?.type === 'ending') return;
+  S.confirmModules.splice(S.confirmActive, 1);
+  if (S.confirmActive >= S.confirmModules.length) S.confirmActive = S.confirmModules.length - 1;
+  renderConfirmEditor();
+}
+
+function onConfirmTypeChange() {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  const newType = document.getElementById('confirmType').value;
+  if (newType === module.type) { updateConfirmModule(); return; }
+  readDataBind(module);
+  module.type = newType;
+  if ((newType === 'stats' || newType === 'profile') && !Array.isArray(module.dataSlots)) module.dataSlots = [];
+  if (newType === 'ranking' && !Array.isArray(module.items)) module.items = [];
+  if (newType === 'insight' && !Array.isArray(module.catchphrases)) module.catchphrases = [];
+  if (newType === 'reaction' && !Array.isArray(module.comments)) module.comments = [];
+  if (newType === 'matchcard') {
+    module.homeTeam = module.homeTeam || ''; module.awayTeam = module.awayTeam || '';
+    module.homeScore = module.homeScore ?? ''; module.awayScore = module.awayScore ?? '';
+  }
+  renderDataBind(module);
+  document.getElementById('confirmReactionWrap').style.display = newType === 'reaction' ? 'block' : 'none';
+  document.getElementById('confirmEndingWrap').style.display = newType === 'ending' ? 'block' : 'none';
+  if (newType === 'reaction') renderReactionBoxes(module);
+  document.getElementById('confirmTitleLabel').textContent = newType === 'ending' ? '締めコメント（オチ）' : 'タイトル';
+  document.getElementById('confirmNarrationLabel').textContent = newType === 'ending' ? 'ナレーション（読み上げ）' : 'ナレーション';
+  renderConfirmTabs();
+  reloadConfirmPreview();
 }
 
 // ═════════════════════════════════ INIT

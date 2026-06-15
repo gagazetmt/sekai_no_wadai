@@ -10,6 +10,7 @@ const { fetchSofaScoreManager } = require('../../scripts/modules/fetchers/sofasc
 const { searchFotMob, fetchFotMobCareer } = require('../../scripts/modules/fetchers/fotmob_career');
 const { searchTransfermarktPlayer } = require('../../scripts/modules/fetchers/transfermarkt_player_games');
 const { fetchPlayerInjuries } = require('../../scripts/modules/fetchers/transfermarkt_player_injuries');
+const { fetchSofaScoreMatch } = require('../../scripts/modules/fetchers/sofascore_match');
 const { curlGetJson } = require('../../scripts/modules/fetchers/_curl_cffi_caller');
 const { walkEntity } = require('../../scripts/v2_story/si_walker');
 const {
@@ -543,6 +544,68 @@ async function fetchBookAssets(book) {
 
   const entities = [...new Set(labels.map(item => item.entity).filter(Boolean))];
   entities.forEach(entity => images.push(...stockImages(entity)));
+
+  // matchcard: SofaScore から正確な試合データを取得
+  if (book?.supplementType === 'matchcard') {
+    const rawHome = String(book?.supplementData?.homeTeam || '').trim();
+    const rawAway = String(book?.supplementData?.awayTeam || '').trim();
+    if (rawHome && rawAway) {
+      try {
+        console.log(`[v4/assets] SofaScore Match: ${rawHome} vs ${rawAway}`);
+        const matchResult = await fetchSofaScoreMatch(rawHome, rawAway);
+        if (matchResult?.ok) {
+          if (!book.supplementData) book.supplementData = {};
+          book.supplementData.homeTeam  = matchResult.homeTeam  || rawHome;
+          book.supplementData.awayTeam  = matchResult.awayTeam  || rawAway;
+          book.supplementData.homeScore = matchResult.homeScore ?? book.supplementData.homeScore;
+          book.supplementData.awayScore = matchResult.awayScore ?? book.supplementData.awayScore;
+          book.supplementData.matchDate = matchResult.matchDate || book.supplementData.matchDate;
+          book.supplementData.matchData = {
+            tournament: matchResult.tournament,
+            venue:      matchResult.venue,
+            scoreline:  matchResult.scoreline,
+            goals:      matchResult.goals,
+            cards:      matchResult.cards,
+            stats:      matchResult.stats,
+            topPlayers: matchResult.topPlayers,
+            formations: matchResult.formations,
+            h2hSummary: matchResult.h2hSummary,
+          };
+          if (matchResult.homeLogo) {
+            images.push({ url: matchResult.homeLogo, source: 'sofascore-logo', name: rawHome + ' logo', role: 'team_logo' });
+          }
+          if (matchResult.awayLogo) {
+            images.push({ url: matchResult.awayLogo, source: 'sofascore-logo', name: rawAway + ' logo', role: 'team_logo' });
+          }
+          // 試合スタッツをデータ行にも追加
+          if (matchResult.stats) {
+            const statKeys = ['Ball possession', 'Total shots', 'Shots on target', 'Corner kicks', 'Fouls', 'Offsides'];
+            for (const key of statKeys) {
+              if (matchResult.stats[key]) {
+                dataRows.push({
+                  label: key, value: `${matchResult.stats[key].home} - ${matchResult.stats[key].away}`,
+                  source: 'SofaScore', key: 'matchStat', entity: `${rawHome} vs ${rawAway}`,
+                });
+              }
+            }
+          }
+          if (matchResult.topPlayers?.length) {
+            matchResult.topPlayers.forEach(p => {
+              dataRows.push({
+                label: `${p.name} (${p.team})`, value: `評価 ${p.rating}`,
+                source: 'SofaScore', key: 'topPlayer', entity: p.name,
+              });
+            });
+          }
+          console.log(`[v4/assets] SofaScore Match OK: ${matchResult.scoreline}`);
+        } else {
+          console.warn(`[v4/assets] SofaScore Match: ${matchResult?.error || '取得失敗'}`);
+        }
+      } catch (e) {
+        console.warn(`[v4/assets] SofaScore Match error: ${e.message}`);
+      }
+    }
+  }
 
   // assetLabels + mainEntity + subEntities から X 公式画像を取得
   const fetchedXHandles = new Set();
