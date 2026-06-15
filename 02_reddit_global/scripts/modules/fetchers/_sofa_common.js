@@ -13,7 +13,7 @@
 //   apiGet / apiGetLight / apiGetImage / BASE_URL の signature は維持
 //   既存 fetcher (sofascore_player / team / match / manager / tournament 等) は無修正で動く
 
-const sofa = require('./_sofa_via_puppeteer');
+const sofa = require('./_sofa_via_curlcffi');
 
 const BASE_URL = 'https://api.sofascore.com/api/v1';
 

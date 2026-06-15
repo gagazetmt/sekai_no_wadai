@@ -204,4 +204,24 @@ async function fetchTeamPage(teamId, teamName) {
   });
 }
 
-module.exports = { init, close, apiGet, apiGetImage, fetchPlayerPage, fetchTeamPage };
+// ── 試合ページ（www.sofascore.com）から __NEXT_DATA__ を取得 ─────
+//   api.sofascore.com が 403 の場合のフォールバック
+//   www.sofascore.com/football/match/{slug}/{id} → SSR 埋め込みの試合情報
+async function fetchMatchPage(matchUrl) {
+  await init();
+  return _serialize(async () => {
+    const res = await _page.goto(matchUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
+    if (!res || res.status() !== 200) {
+      console.log(`[SofaScore Match SSR] page status: ${res?.status() || 'null'}`);
+      return null;
+    }
+    const text = await _page.evaluate(() =>
+      document.getElementById('__NEXT_DATA__')?.textContent || ''
+    );
+    if (!text) return null;
+    try { return JSON.parse(text)?.props?.pageProps || null; }
+    catch (_) { return null; }
+  });
+}
+
+module.exports = { init, close, apiGet, apiGetImage, fetchPlayerPage, fetchTeamPage, fetchMatchPage };
