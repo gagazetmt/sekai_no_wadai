@@ -11,6 +11,7 @@ const { searchFotMob, fetchFotMobCareer } = require('../../scripts/modules/fetch
 const { searchTransfermarktPlayer } = require('../../scripts/modules/fetchers/transfermarkt_player_games');
 const { fetchPlayerInjuries } = require('../../scripts/modules/fetchers/transfermarkt_player_injuries');
 const { fetchSofaScoreMatch } = require('../../scripts/modules/fetchers/sofascore_match');
+const { fetchFotMobMatch }    = require('../../scripts/modules/fetchers/fotmob_match');
 const { curlGetJson } = require('../../scripts/modules/fetchers/_curl_cffi_caller');
 const { walkEntity } = require('../../scripts/v2_story/si_walker');
 const {
@@ -547,12 +548,37 @@ async function fetchBookAssets(book) {
 
   // matchcard: SofaScore から正確な試合データを取得
   if (book?.supplementType === 'matchcard') {
-    const rawHome = String(book?.supplementData?.homeTeam || '').trim();
-    const rawAway = String(book?.supplementData?.awayTeam || '').trim();
+    let rawHome = String(book?.supplementData?.homeTeam || '').trim();
+    let rawAway = String(book?.supplementData?.awayTeam || '').trim();
+    // フォールバック: supplementData が空なら assetLabels/topic から抽出
+    if (!rawHome || !rawAway) {
+      const teamLabels = (Array.isArray(book?.assetLabels) ? book.assetLabels : [])
+        .filter(l => l.type === 'team' || l.type === 'nationalTeam')
+        .map(l => String(l.name || '').trim())
+        .filter(Boolean);
+      if (teamLabels.length >= 2) {
+        if (!rawHome) rawHome = teamLabels[0];
+        if (!rawAway) rawAway = teamLabels[1];
+      } else {
+        const topic = String(book?.topic || '');
+        const vsMatch = topic.match(/(.+?)\s*(?:vs\.?|VS\.?|ー|対)\s*(.+)/);
+        if (vsMatch) {
+          if (!rawHome) rawHome = vsMatch[1].trim();
+          if (!rawAway) rawAway = vsMatch[2].trim();
+        }
+      }
+      if (rawHome || rawAway) {
+        console.log(`[v4/assets] matchcard fallback: ${rawHome} vs ${rawAway}`);
+      }
+    }
     if (rawHome && rawAway) {
       try {
-        console.log(`[v4/assets] SofaScore Match: ${rawHome} vs ${rawAway}`);
-        const matchResult = await fetchSofaScoreMatch(rawHome, rawAway);
+        console.log(`[v4/assets] Match data: ${rawHome} vs ${rawAway}`);
+        let matchResult = await fetchSofaScoreMatch(rawHome, rawAway);
+        if (!matchResult?.ok) {
+          console.log(`[v4/assets] SofaScore失敗 → FotMob fallback`);
+          matchResult = await fetchFotMobMatch(rawHome, rawAway);
+        }
         if (matchResult?.ok) {
           if (!book.supplementData) book.supplementData = {};
           book.supplementData.homeTeam  = matchResult.homeTeam  || rawHome;
@@ -571,11 +597,12 @@ async function fetchBookAssets(book) {
             formations: matchResult.formations,
             h2hSummary: matchResult.h2hSummary,
           };
+          const logoSource = matchResult._source === 'fotmob' ? 'fotmob-logo' : 'sofascore-logo';
           if (matchResult.homeLogo) {
-            images.push({ url: matchResult.homeLogo, source: 'sofascore-logo', name: rawHome + ' logo', role: 'team_logo' });
+            images.push({ url: matchResult.homeLogo, source: logoSource, name: rawHome + ' logo', role: 'team_logo' });
           }
           if (matchResult.awayLogo) {
-            images.push({ url: matchResult.awayLogo, source: 'sofascore-logo', name: rawAway + ' logo', role: 'team_logo' });
+            images.push({ url: matchResult.awayLogo, source: logoSource, name: rawAway + ' logo', role: 'team_logo' });
           }
           // 試合スタッツをデータ行にも追加
           if (matchResult.stats) {
@@ -729,8 +756,56 @@ async function fetchBookAssets(book) {
   };
 }
 
+async function fetchSingleLabel(assetLabel, book) {
+  const labels = _labelsFromAssetLabels([assetLabel]);
+  const tasks = labels.map(async (item) => {
+    if (item.source === 'fotmob') return fetchFotMob(item);
+    if (item.source.includes('sofa')) return fetchSofa({ ...item, source: 'sofascore' });
+    if (item.source.includes('transfer') || item.source === 'tm') {
+      return fetchTransfermarkt({ ...item, source: 'transfermarkt' });
+    }
+    if (item.source.includes('wiki')) return fetchWiki({ ...item, source: 'wikipedia' });
+    return { rows: [], images: [], warning: `未対応: ${item.source}` };
+  });
+  const settled = await Promise.allSettled(tasks);
+  const dataRows = [];
+  const images = [];
+  const warnings = [];
+  settled.forEach((r) => {
+    if (r.status === 'rejected') { warnings.push(r.reason?.message || '取得失敗'); return; }
+    dataRows.push(...(r.value.rows || []));
+    images.push(...(r.value.images || []));
+    if (r.value.warning) warnings.push(r.value.warning);
+  });
+
+  const name = String(assetLabel.name || '').trim();
+  images.push(...stockImages(name));
+
+  const handle = assetLabel.type === 'team' || assetLabel.type === 'nationalTeam'
+    ? _lookupXHandle(cleanTeamName(name) || name)
+    : (assetLabel.team ? _lookupXHandle(cleanTeamName(assetLabel.team) || assetLabel.team) : null);
+  if (handle) {
+    const topicKeyword = String(book?.mainEntity || book?.topic || '').slice(0, 30);
+    const [latest, relevant] = await Promise.all([
+      _fetchXOfficialImages(handle, 15),
+      _fetchXRelevantImages(handle, topicKeyword, 15),
+    ]);
+    images.push(...latest, ...relevant);
+  }
+
+  const seen = new Set();
+  const uniqueImages = images.filter(img => {
+    if (!img?.url || seen.has(img.url)) return false;
+    seen.add(img.url);
+    return true;
+  });
+
+  return { ok: true, label: name, dataRows, images: uniqueImages, warnings };
+}
+
 module.exports = {
   fetchBookAssets,
+  fetchSingleLabel,
   inferEntityType,
   normalizeLabels,
 };
