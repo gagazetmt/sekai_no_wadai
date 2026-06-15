@@ -14,7 +14,7 @@ const https = require('https');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), quiet: true });
 
 const { fetchSerper } = require('../../scripts/modules/fetchers/brave_search_module');
-const { fetch5chCandidates } = require('../../scripts/modules/fetchers/5ch_fetcher');
+const { fetch5chTitles } = require('../../scripts/modules/fetchers/5ch_fetcher');
 const { callAI }      = require('../../scripts/ai_client');
 
 const DATA_DIR   = path.join(__dirname, '..', 'data');
@@ -161,8 +161,7 @@ async function _fetchReddit() {
 
 async function _fetch5ch() {
   try {
-    const iso = new Date().toISOString().slice(0, 10);
-    const candidates = await fetch5chCandidates(iso);
+    const candidates = await fetch5chTitles();
     return candidates.map(item => {
       const title = String(item.titleJa || item.title || '')
         .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
