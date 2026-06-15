@@ -8,6 +8,8 @@ const { fetchSofaScorePlayer } = require('../../scripts/modules/fetchers/sofasco
 const { fetchSofaScoreTeam } = require('../../scripts/modules/fetchers/sofascore_team');
 const { fetchSofaScoreManager } = require('../../scripts/modules/fetchers/sofascore_manager');
 const { searchFotMob, fetchFotMobCareer } = require('../../scripts/modules/fetchers/fotmob_career');
+const { fetchFotMobPlayer } = require('../../scripts/modules/fetchers/fotmob_player');
+const { fetchFotMobManager } = require('../../scripts/modules/fetchers/fotmob_manager');
 const { searchTransfermarktPlayer } = require('../../scripts/modules/fetchers/transfermarkt_player_games');
 const { fetchPlayerInjuries } = require('../../scripts/modules/fetchers/transfermarkt_player_injuries');
 const { fetchSofaScoreMatch } = require('../../scripts/modules/fetchers/sofascore_match');
@@ -22,45 +24,115 @@ const {
 
 const X_API_KEY = process.env.TWITTER_API_IO_KEY || '';
 
-// ── FotMob 選手データ取得（SofaScore 403 代替）───────────────
+// ── FotMob データ取得（SofaScore 403 代替・選手/監督両対応）───
 async function fetchFotMob(item) {
   try {
-    const hit = await searchFotMob(item.entity, {});
-    if (!hit?.id) return { rows: [], images: [], warning: `FotMob: ${item.entity} が見つかりません` };
-    const career = await fetchFotMobCareer(hit.id);
-    if (!career) return { rows: [], images: [], warning: `FotMob: ${item.entity} キャリア取得失敗` };
-    const rows = [];
-    const add = (label, value, key) => {
-      if (value != null && value !== '') rows.push({ label, value: String(value), source: 'FotMob', key, entity: item.entity });
-    };
-    add('選手', career.name || item.entity, 'name');
-    add('所属', career.primaryTeam?.teamName, 'team');
-    add('リーグ', career.mainLeague?.leagueName, 'league');
-    add('シーズン', career.mainLeague?.season, 'season');
-    if (career.birthDate?.utcTime) {
-      const age = Math.floor((Date.now() - new Date(career.birthDate.utcTime)) / (365.25 * 24 * 3600 * 1000));
-      add('年齢', `${age}歳`, 'age');
-    }
-    const pos = career.positionDescription?.positions?.[0]?.strPosSh?.label;
-    add('ポジション', pos, 'position');
-    // playerCareer からキャリア通算（直近クラブ優先）
-    const careerArr = Array.isArray(career.playerCareer)
-      ? career.playerCareer
-      : (career.playerCareer?.careerItems?.senior?.teamEntries || []);
-    const current = careerArr.find(e => e.current) || careerArr[0];
-    if (current) {
-      if (current.appearances != null) add('通算出場', `${current.appearances}試合`, 'careerApps');
-      if (current.goals != null)       add('通算ゴール', `${current.goals}G`, 'careerGoals');
-      if (current.assists != null)     add('通算アシスト', `${current.assists}A`, 'careerAssists');
-    }
-    // FotMob 選手画像（ID がわかれば確実に存在する）
-    const imgUrl = `https://images.fotmob.com/image_resources/playerimages/${hit.id}.png`;
-    const images = [{ url: imgUrl, source: 'fotmob', role: 'player', name: career.name || item.entity }];
-    console.log(`[v4_assets] FotMob ${item.entity} rows=${rows.length}`);
-    return { rows, images };
+    if (item.type === 'manager') return _fetchFotMobManagerData(item);
+    return _fetchFotMobPlayerData(item);
   } catch (e) {
     return { rows: [], images: [], warning: `FotMob: ${item.entity} 失敗: ${e.message}` };
   }
+}
+
+async function _fetchFotMobPlayerData(item) {
+  const d = await fetchFotMobPlayer(item.entity);
+  if (!d?.ok) {
+    // フォールバック: career データのみ
+    return _fetchFotMobPlayerCareerOnly(item);
+  }
+  const rows = [];
+  const add = (label, value, key) => {
+    if (value != null && value !== '') rows.push({ label, value: String(value), source: 'FotMob', key, entity: item.entity });
+  };
+  add('選手', d.name, 'name');
+  add('所属', d.team, 'team');
+  add('リーグ', d.leagueName, 'league');
+  add('ポジション', d.position, 'position');
+  if (d.age != null) add('年齢', `${d.age}歳`, 'age');
+  add('国籍', d.nationality, 'nationality');
+  add('市場価値', d.marketValue, 'marketValue');
+  // 今季スタッツ
+  const ss = d.seasonStats;
+  if (ss) {
+    if (ss.appearances != null) add('出場', `${ss.appearances}試合`, 'apps');
+    if (ss.goals != null) add('ゴール', ss.goals, 'goals');
+    if (ss.assists != null) add('アシスト', ss.assists, 'assists');
+    if (ss.rating != null) add('平均評定', ss.rating, 'rating');
+    if (ss.expectedGoals != null) add('xG', ss.expectedGoals, 'xG');
+    if (ss.keyPasses != null) add('キーパス', ss.keyPasses, 'keyPasses');
+    if (ss.cleanSheets != null) add('クリーンシート', ss.cleanSheets, 'cleanSheets');
+    if (ss.saves != null) add('セーブ', ss.saves, 'saves');
+  }
+  // 今季スタッツなければキャリア通算
+  if (!ss && d.currentClub) {
+    const c = d.currentClub;
+    if (c.appearances != null) add('通算出場', `${c.appearances}試合`, 'careerApps');
+    if (c.goals != null) add('通算ゴール', `${c.goals}G`, 'careerGoals');
+    if (c.assists != null) add('通算アシスト', `${c.assists}A`, 'careerAssists');
+  }
+  // 代表通算
+  if (d.nationalTeam?.total?.appearances) {
+    add('代表通算試合', d.nationalTeam.total.appearances, 'nationalApps');
+  }
+  // 顔写真
+  const images = d.photo
+    ? [{ url: d.photo, source: 'fotmob', role: 'player', name: d.name || item.entity }]
+    : [];
+  console.log(`[v4_assets] FotMob player ${item.entity} rows=${rows.length}`);
+  return { rows, images };
+}
+
+async function _fetchFotMobPlayerCareerOnly(item) {
+  const hit = await searchFotMob(item.entity, {});
+  if (!hit?.id) return { rows: [], images: [], warning: `FotMob: ${item.entity} が見つかりません` };
+  const career = await fetchFotMobCareer(hit.id);
+  if (!career) return { rows: [], images: [], warning: `FotMob: ${item.entity} キャリア取得失敗` };
+  const rows = [];
+  const add = (label, value, key) => {
+    if (value != null && value !== '') rows.push({ label, value: String(value), source: 'FotMob', key, entity: item.entity });
+  };
+  add('選手', career.name || item.entity, 'name');
+  add('所属', career.primaryTeam?.teamName, 'team');
+  add('リーグ', career.mainLeague?.leagueName, 'league');
+  const pos = career.positionDescription?.positions?.[0]?.strPosSh?.label;
+  add('ポジション', pos, 'position');
+  const careerArr = Array.isArray(career.playerCareer) ? career.playerCareer : [];
+  const current = careerArr.find(e => e.current) || careerArr[0];
+  if (current) {
+    if (current.appearances != null) add('通算出場', `${current.appearances}試合`, 'careerApps');
+    if (current.goals != null) add('通算ゴール', `${current.goals}G`, 'careerGoals');
+    if (current.assists != null) add('通算アシスト', `${current.assists}A`, 'careerAssists');
+  }
+  const imgUrl = `https://images.fotmob.com/image_resources/playerimages/${hit.id}.png`;
+  const images = [{ url: imgUrl, source: 'fotmob', role: 'player', name: career.name || item.entity }];
+  console.log(`[v4_assets] FotMob career-only ${item.entity} rows=${rows.length}`);
+  return { rows, images };
+}
+
+async function _fetchFotMobManagerData(item) {
+  const d = await fetchFotMobManager(item.entity);
+  if (!d?.ok) return { rows: [], images: [], warning: `FotMob Manager: ${item.entity} 取得失敗` };
+  const rows = [];
+  const add = (label, value, key) => {
+    if (value != null && value !== '') rows.push({ label, value: String(value), source: 'FotMob', key, entity: item.entity });
+  };
+  add('監督', d.name, 'name');
+  add('国籍', d.nationality, 'nationality');
+  if (d.age != null) add('年齢', `${d.age}歳`, 'age');
+  add('現所属', d.currentTeam, 'currentTeam');
+  add('就任', d.currentTeamSince, 'since');
+  if (d.overallPerformance) {
+    const p = d.overallPerformance;
+    add('通算成績', `${p.total}試合 ${p.wins}勝${p.draws}分${p.losses}敗`, 'record');
+    if (p.winRate != null) add('勝率', `${p.winRate}%`, 'winRate');
+  }
+  if (d.trophyCount > 0) add('FotMobタイトル', `${d.trophyCount}回`, 'fmTrophies');
+  if (d.trophySummary?.total > 0) add('Wikiタイトル', `${d.trophySummary.total}回`, 'wikiTrophies');
+  const images = d.photo
+    ? [{ url: d.photo, source: 'fotmob', role: 'manager', name: d.name || item.entity }]
+    : [];
+  console.log(`[v4_assets] FotMob manager ${item.entity} rows=${rows.length}`);
+  return { rows, images };
 }
 
 // ── Wikipedia 記事内画像一覧（複数枚）────────────────────────
@@ -275,6 +347,7 @@ function _labelsFromAssetLabels(assetLabels) {
     } else if (t === 'manager') {
       labels.push(
         { source: 'sofascore', entity: name, type: 'manager', team: al.team || null },
+        { source: 'fotmob',    entity: name, type: 'manager', team: al.team || null },
         { source: 'wikipedia', entity: name, type: 'manager', team: al.team || null },
       );
     } else {
@@ -307,7 +380,10 @@ function normalizeLabels(book) {
     { source: 'fotmob',        entity: keyPlayer, type: 'player' },
     { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
   ] : [];
-  const keyManagerLabel  = keyManager   ? [{ source: 'sofascore', entity: keyManager,   type: 'manager' }] : [];
+  const keyManagerLabel  = keyManager   ? [
+    { source: 'sofascore', entity: keyManager, type: 'manager' },
+    { source: 'fotmob',    entity: keyManager, type: 'manager' },
+  ] : [];
   const otherPlayerLabels = otherPlayers.map(p => ({ source: 'fotmob', entity: p, type: 'player' }));
 
   const matchHome = String(book?.supplementData?.homeTeam || '').trim();

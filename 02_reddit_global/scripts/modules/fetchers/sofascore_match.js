@@ -8,8 +8,6 @@
 //  ⑥ /team/{homeId}/events/last/0 → H2H直近5試合（オプション、homeId/awayIdが取れたら）
 
 const { apiGet, apiGetImage } = require('./_sofa_common');
-const sofa = require('./_sofa_via_puppeteer');
-const { fetchBraveSearch } = require('./brave_search_module');
 
 // チーム名 → teamId を1件取得
 async function _findTeamId(teamName) {
@@ -70,201 +68,6 @@ async function searchMatch(homeTeam, awayTeam) {
   return finished[0] || sorted[0] || null;
 }
 
-// ════════════════════════════════════════════════════════════════
-// SSR フォールバック: api.sofascore.com 403 時に www ページから取得
-// ════════════════════════════════════════════════════════════════
-
-async function _findMatchUrlViaBrave(homeTeam, awayTeam) {
-  const queries = [
-    `sofascore ${homeTeam} vs ${awayTeam} football match`,
-    `site:sofascore.com ${homeTeam} ${awayTeam}`,
-  ];
-  for (const q of queries) {
-    const res = await fetchBraveSearch(q, 'sofamatch', 'en');
-    if (!res.ok || !res.organic?.length) continue;
-    const hit = res.organic.find(r =>
-      /sofascore\.com\/.+\/match\//.test(r.link)
-    );
-    if (hit) return hit.link;
-    const fallback = res.organic.find(r =>
-      r.link.includes('sofascore.com') && /\/[a-zA-Z0-9]{5,10}$/.test(r.link)
-    );
-    if (fallback) return fallback.link;
-  }
-  return null;
-}
-
-function _parseSSRIncidents(incidents, homeTeamName, awayTeamName) {
-  const goals = [], cards = [], subs = [];
-  for (const inc of (incidents || [])) {
-    if (inc.time == null || inc.time < 0) continue;
-    const timeStr = inc.addedTime && inc.addedTime > 0
-      ? `${inc.time}+${inc.addedTime}'` : `${inc.time}'`;
-    if (inc.incidentType === 'goal') {
-      goals.push({
-        time: inc.time, timeStr,
-        player: inc.player?.name || inc.playerName || '不明',
-        isHome: inc.isHome,
-        team: inc.isHome ? homeTeamName : awayTeamName,
-        type: inc.incidentClass === 'own' ? 'OG'
-            : inc.incidentClass === 'penalty' ? 'PK' : '通常',
-      });
-    } else if (inc.incidentType === 'card') {
-      cards.push({
-        time: inc.time, timeStr,
-        player: inc.player?.name || inc.playerName || '不明',
-        isHome: inc.isHome,
-        team: inc.isHome ? homeTeamName : awayTeamName,
-        color: inc.incidentClass === 'red' ? 'レッド'
-             : inc.incidentClass === 'yellowRed' ? '2枚目イエロー→退場' : 'イエロー',
-      });
-    } else if (inc.incidentType === 'substitution') {
-      subs.push({
-        time: inc.time, timeStr,
-        playerIn:  inc.playerIn?.name  || '不明',
-        playerOut: inc.playerOut?.name || '不明',
-        isHome: inc.isHome,
-        team: inc.isHome ? homeTeamName : awayTeamName,
-      });
-    }
-  }
-  goals.sort((a, b) => a.time - b.time);
-  cards.sort((a, b) => a.time - b.time);
-  subs.sort((a, b) => a.time - b.time);
-  return { goals, cards, subs };
-}
-
-async function _fetchMatchSSR(homeTeam, awayTeam) {
-  const matchUrl = await _findMatchUrlViaBrave(homeTeam, awayTeam);
-  if (!matchUrl) {
-    console.log(`[SofaScore Match SSR] Brave Search でマッチURL見つからず: ${homeTeam} vs ${awayTeam}`);
-    return null;
-  }
-  console.log(`[SofaScore Match SSR] URL: ${matchUrl}`);
-
-  const pp = await sofa.fetchMatchPage(matchUrl);
-  if (!pp) {
-    console.log('[SofaScore Match SSR] __NEXT_DATA__ 取得失敗');
-    return null;
-  }
-
-  // __NEXT_DATA__ 構造を探索（SofaScore は event / initialData 等キーが変わりうる）
-  const ev = pp.event || pp.initialData?.event || pp.data?.event || null;
-  if (!ev) {
-    console.log('[SofaScore Match SSR] event データ無し。keys:', Object.keys(pp).join(', '));
-    return null;
-  }
-
-  const matchId      = ev.id || null;
-  const homeTeamName = ev.homeTeam?.name || homeTeam;
-  const awayTeamName = ev.awayTeam?.name || awayTeam;
-  const homeTeamId   = ev.homeTeam?.id || null;
-  const awayTeamId   = ev.awayTeam?.id || null;
-  let homeScore      = ev.homeScore?.display ?? ev.homeScore?.normaltime ?? null;
-  let awayScore      = ev.awayScore?.display ?? ev.awayScore?.normaltime ?? null;
-  if (ev.status?.type === 'finished' && ev.homeScore?.penalties != null) {
-    homeScore = `${homeScore} (PK ${ev.homeScore.penalties}-${ev.awayScore.penalties})`;
-    awayScore = null;
-  }
-  const matchDate  = ev.startTimestamp ? new Date(ev.startTimestamp * 1000).toISOString().slice(0, 10) : null;
-  const tournament = ev.tournament?.name || null;
-  const venue      = ev.venue?.stadium?.name || ev.venue?.city?.name || null;
-
-  // incidents は pageProps 直下 or event 内
-  const rawInc = pp.incidents || pp.initialData?.incidents || ev.incidents || [];
-  const { goals, cards, subs } = _parseSSRIncidents(rawInc, homeTeamName, awayTeamName);
-
-  // SSR に statistics / lineups が含まれている場合（稀だが Next.js 版で埋め込みあり）
-  let stats = {};
-  const rawStats = pp.statistics || pp.initialData?.statistics || null;
-  if (rawStats) {
-    for (const group of (rawStats[0]?.groups || rawStats.statistics?.[0]?.groups || [])) {
-      for (const item of (group.statisticsItems || [])) {
-        if (!stats[item.name]) stats[item.name] = { home: item.home, away: item.away };
-      }
-    }
-  }
-
-  let formations = { home: null, away: null };
-  let lineup     = { home: [], away: [] };
-  let topPlayers = [];
-  const rawLineups = pp.lineups || pp.initialData?.lineups || null;
-  if (rawLineups) {
-    formations.home = rawLineups.home?.formation || null;
-    formations.away = rawLineups.away?.formation || null;
-    const POS_MAP = { G: 'goalkeeper', D: 'defender', M: 'midfielder', F: 'forward' };
-    for (const side of ['home', 'away']) {
-      lineup[side] = (rawLineups[side]?.players || [])
-        .filter(p => !p.substitute)
-        .map(p => ({
-          id: p.player?.id || null,
-          name: p.player?.name || '',
-          jersey: p.jerseyNumber || p.shirtNumber || null,
-          pos: POS_MAP[p.position] || 'midfielder',
-          photo: null,
-        }))
-        .filter(x => x.name);
-    }
-    const allP = [
-      ...(rawLineups.home?.players || []).map(p => ({ ...p, team: 'home' })),
-      ...(rawLineups.away?.players || []).map(p => ({ ...p, team: 'away' })),
-    ];
-    topPlayers = allP
-      .map(p => ({ name: p.player?.name, team: p.team, rating: p.statistics?.rating }))
-      .filter(p => p.name && p.rating)
-      .sort((a, b) => b.rating - a.rating)
-      .slice(0, 5)
-      .map(p => ({
-        name: p.name,
-        team: p.team === 'home' ? homeTeamName : awayTeamName,
-        rating: parseFloat(Number(p.rating).toFixed(1)),
-      }));
-  }
-
-  // チームロゴ取得（Puppeteer 経由、失敗時 null）
-  const [homeLogo, awayLogo] = await Promise.all([
-    homeTeamId ? sofa.apiGetImage(`/team/${homeTeamId}/image`).catch(() => null) : null,
-    awayTeamId ? sofa.apiGetImage(`/team/${awayTeamId}/image`).catch(() => null) : null,
-  ]);
-
-  const scoreline = awayScore != null
-    ? `${homeTeamName} ${homeScore ?? '?'} - ${awayScore} ${awayTeamName}`
-    : `${homeTeamName} ${homeScore ?? '?'} ${awayTeamName}`;
-
-  const hasStats = Object.keys(stats).length > 0;
-  const hasLineups = lineup.home.length > 0 || lineup.away.length > 0;
-  console.log(`[SofaScore Match SSR] ${scoreline} | goals:${goals.length} cards:${cards.length} subs:${subs.length} stats:${hasStats} lineups:${hasLineups}`);
-
-  return {
-    ok: true,
-    matchId,
-    homeTeam: homeTeamName,
-    awayTeam: awayTeamName,
-    homeTeamId,
-    awayTeamId,
-    homeLogo,
-    awayLogo,
-    homeScore: homeScore ?? null,
-    awayScore: awayScore ?? null,
-    matchDate,
-    tournament,
-    venue,
-    attendance: null,
-    scoreline,
-    goals,
-    cards,
-    subs,
-    stats,
-    formations,
-    lineup,
-    topPlayers,
-    playerStats: {},
-    h2hMatches: [],
-    h2hSummary: null,
-    _source: 'ssr',
-  };
-}
-
 // H2H 履歴を取得（直近 N 件）
 async function fetchRecentH2H(homeTeam, awayTeam, limit = 3) {
   const [homeEnt, awayEnt] = await Promise.all([
@@ -299,12 +102,9 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
   if (!homeTeam || !awayTeam) return { ok: false, error: 'ホーム/アウェイチーム名が必要です' };
 
   try {
-    // ① 試合検索（API → SSRフォールバック）
+    // ① 試合検索
     const match = await searchMatch(homeTeam, awayTeam);
     if (!match) {
-      console.log(`[SofaScore Match] API検索失敗 → SSR フォールバックへ`);
-      const ssrResult = await _fetchMatchSSR(homeTeam, awayTeam);
-      if (ssrResult) return ssrResult;
       return { ok: false, error: `SofaScore に "${homeTeam} vs ${awayTeam}" の試合が見つかりません` };
     }
     const matchId = match.id;
@@ -316,14 +116,6 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       apiGet(`/event/${matchId}/statistics`).catch(e => ({ __err: e })),
       apiGet(`/event/${matchId}/lineups`).catch(e => ({ __err: e })),
     ]);
-
-    // 全 API が 403 → SSR フォールバックの方がデータ多い
-    const allFailed = [detailRaw, incRaw, statsRaw, lineupRaw].every(r => r?.__err);
-    if (allFailed) {
-      console.log(`[SofaScore Match] 全API 403 → SSR フォールバックへ`);
-      const ssrResult = await _fetchMatchSSR(homeTeam, awayTeam);
-      if (ssrResult) return ssrResult;
-    }
 
     // ② 試合詳細（スコアと基本情報）
     let homeScore = null, awayScore = null, matchDate = null, tournament = null;
@@ -562,13 +354,6 @@ async function fetchSofaScoreMatch(homeTeam, awayTeam) {
       h2hSummary,
     };
   } catch (e) {
-    // API 403 → SSR フォールバック
-    if (e.status === 403 || e.response?.status === 403 || /403/.test(e.message)) {
-      console.log(`[SofaScore Match] API 403 → SSR フォールバックへ`);
-      const ssrResult = await _fetchMatchSSR(homeTeam, awayTeam);
-      if (ssrResult) return ssrResult;
-      return { ok: false, error: 'SofaScore API 403 + SSR fallback も失敗' };
-    }
     return { ok: false, error: e.message };
   }
 }
