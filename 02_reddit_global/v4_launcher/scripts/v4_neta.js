@@ -428,8 +428,9 @@ ${warehouseBlock}
 - comparison: 比較。leftName/rightName と dataSlots(label/leftValue/rightValue)
 - timeline: 推移。series(name, points[{x,y}])。記事に複数時点の数値がある場合だけ
 - ranking: 順位。items(rank,name,value,subtext)。記事に順位根拠がある場合だけ
-- matchcard: 試合結果・試合内容。homeTeam/awayTeam/homeScore/awayScore が確認できる場合だけ
+- matchcard: **試合ネタなら最優先で選ぶ**。supplementData に homeTeam/awayTeam/homeScore/awayScore を必ず埋める。「日本 2-2 オランダ」のようなスコア付き案件は必ず matchcard
 - 必要データを記事で確認できない型は選ばず、picture または insight にする
+- ⚠️ 試合結果の案件で matchcard 以外を選ぶのは禁止。スコアが記事から確認できるなら matchcard を使うこと
 
 **assetLabels（画像・データ取得用ラベル）:**
 - この案件に関連するキーパーソン・チームを最大5件提案する
