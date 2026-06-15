@@ -414,6 +414,12 @@ ${warehouseBlock}
 | commentAngle2 | コメント②の切り口 | 〜18字 | コメント時 |
 | endingPunch | EDで読むオチの一言。CTAや挨拶は禁止 | 〜32字 | ✅ |
 | assetLabels | 画像・データ取得用ラベル（最大5件） | — | ✅ |
+| thumbLine1 | サムネ1行目。衝撃・興味を引くパワーワード | 〜18字 | ✅ |
+| thumbLine2 | サムネ2行目。補足や結果。なければ null | 〜18字 | あれば |
+| thumbComment | サムネ右上の煽りコメント（2ch風1〜2行） | 〜30字 | ✅ |
+| ytTitle | YouTube動画タイトル。検索に強く、クリックしたくなるもの | 〜60字 | ✅ |
+| ytDescription | YouTube概要欄。動画内容の要約+ハッシュタグ | 100〜200字 | ✅ |
+| ytTags | YouTube検索タグ配列。5〜10件 | — | ✅ |
 | tone_check | "ok" / "ng" | — | ✅ |
 
 **構成型:**
@@ -421,16 +427,17 @@ ${warehouseBlock}
 - interleaved: OP → 概要 → コメント1 → 補足 → コメント2 → ED
 - rapid: OP → 概要 → コメント1 → コメント2 → ED。補足を入れない方が速い案件
 
-**補足スライド型:**
-- picture: 概要の延長。supplementData は {}
-- insight: 要点を短句で見せる。supplementData.catchphrases は2〜5件
-- stats/profile: 選手の数値・プロフィール。supplementData.dataSlots は label/value を4〜8件
-- comparison: 比較。leftName/rightName と dataSlots(label/leftValue/rightValue)
-- timeline: 推移。series(name, points[{x,y}])。記事に複数時点の数値がある場合だけ
-- ranking: 順位。items(rank,name,value,subtext)。記事に順位根拠がある場合だけ
-- matchcard: **試合ネタなら最優先で選ぶ**。supplementData に homeTeam/awayTeam/homeScore/awayScore を必ず埋める。「日本 2-2 オランダ」のようなスコア付き案件は必ず matchcard
-- 必要データを記事で確認できない型は選ばず、picture または insight にする
-- ⚠️ 試合結果の案件で matchcard 以外を選ぶのは禁止。スコアが記事から確認できるなら matchcard を使うこと
+**補足スライド型（ルール順に判定。最初に該当した型を使う）:**
+
+1. **matchcard**（試合結果・試合ネタ）→ スコアが記事にあれば必ずこれ。supplementData に homeTeam/awayTeam/homeScore/awayScore を埋める
+2. **stats/profile**（選手の活躍・パフォーマンス）→ 特定選手のゴール数・アシスト・評点など数値が話題の中心。supplementData.dataSlots は label/value を4〜8件
+3. **comparison**（比較ネタ）→ 2者を並べるネタ。leftName/rightName と dataSlots(label/leftValue/rightValue)
+4. **ranking**（順位・ランキング）→ 記事に順位の根拠がある場合。items(rank,name,value,subtext)
+5. **timeline**（推移）→ 記事に複数時点の数値がある場合。series(name, points[{x,y}])
+6. **insight**（要点まとめ）→ 上記いずれにも該当しないが補足を入れたい場合。supplementData.catchphrases は2〜5件
+7. **picture**（画像中心）→ 補足テキストがほぼ不要な場合。supplementData は {}
+
+⚠️ 判定ミス例: 試合結果なのに insight → NG。選手の活躍なのに picture → NG。必ずルール順に判定すること
 
 **assetLabels（画像・データ取得用ラベル）:**
 - この案件に関連するキーパーソン・チームを最大5件提案する
@@ -480,6 +487,12 @@ ${hasRealComments
     {"name": "Liverpool", "type": "team", "league": "Premier League"},
     {"name": "Japan", "type": "nationalTeam"}
   ],
+  "thumbLine1": "遠藤航が決断",
+  "thumbLine2": "代表引退の真相",
+  "thumbComment": "マジかよ...\n泣けるわ",
+  "ytTitle": "【速報】遠藤航、W杯直前に代表引退を発表…その決断の裏側とは",
+  "ytDescription": "遠藤航がW杯直前に日本代表からの引退を発表。キャプテンとしてチームを牽引してきた男の決断に、ファンからは感謝と惜しむ声が殺到。\\n\\n#遠藤航 #日本代表 #W杯 #サッカー",
+  "ytTags": ["遠藤航", "日本代表", "W杯", "代表引退", "サッカー", "ワールドカップ", "リバプール"],
   "endingPunch": "最後まで、遠藤らしい決断だった。",
   "tone_check": "ok"
 }`;
@@ -571,6 +584,12 @@ ${hasRealComments
     commentAngle1: clean(parsed.commentAngle1, 30) || 'ネットの反応',
     commentAngle2: clean(parsed.commentAngle2, 30) || 'さらに反応',
     assetLabels,
+    thumbLine1:    clean(parsed.thumbLine1, 24)    || '',
+    thumbLine2:    clean(parsed.thumbLine2, 24),
+    thumbComment:  clean(parsed.thumbComment, 40)  || '',
+    ytTitle:       clean(parsed.ytTitle, 80)        || '',
+    ytDescription: clean(parsed.ytDescription, 300) || '',
+    ytTags:        Array.isArray(parsed.ytTags) ? parsed.ytTags.map(t => String(t||'').trim()).filter(Boolean).slice(0, 10) : [],
     endingPunch: clean(parsed.endingPunch, 50) || 'この話、まだ動きそうだ。',
     tone_check:  'ok',
   };
@@ -625,6 +644,12 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     supplementData:   neta.supplementData,
     commentAngle1:    neta.commentAngle1,
     commentAngle2:    neta.commentAngle2,
+    thumbLine1:       neta.thumbLine1,
+    thumbLine2:       neta.thumbLine2,
+    thumbComment:     neta.thumbComment,
+    ytTitle:          neta.ytTitle,
+    ytDescription:    neta.ytDescription,
+    ytTags:           neta.ytTags,
     endingPunch:      neta.endingPunch,
     commentWarehouse: { total: warehouse.total, reddit: warehouse.reddit?.length, yahoo: warehouse.yahoo?.length, x: warehouse.x?.length },
     articles:         articles.map(a => ({ title: a.title, url: a.url, host: a.host })),
