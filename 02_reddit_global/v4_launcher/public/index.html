@@ -725,6 +725,13 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   border: 1px solid rgba(232,0,0,.25);
 }
 .confirm-actions .btn-danger:hover { background: rgba(232,0,0,.25); }
+.rebuild-wrap {
+  display: flex; gap: 6px; align-items: center;
+  margin-bottom: 10px; padding: 8px 10px;
+  background: rgba(255,255,255,.04); border-radius: var(--rad-sm);
+  border: 1px dashed rgba(255,255,255,.12);
+}
+.rebuild-wrap .btn { white-space: nowrap; }
 .confirm-actions .btn-add {
   background: rgba(0,200,83,.12); color: var(--green);
   border: 1px solid rgba(0,200,83,.25);
@@ -988,6 +995,11 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <button class="btn btn-ghost" onclick="moveConfirmSlide(1)">次へ →</button>
         <button class="btn btn-add" onclick="addConfirmSlide()">＋ 追加</button>
         <button class="btn btn-danger" onclick="deleteConfirmSlide()">🗑 削除</button>
+      </div>
+
+      <div class="rebuild-wrap">
+        <input class="confirm-input" id="rebuildInstruction" placeholder="例）history型で過去の実績を時系列で並べて" style="flex:1;">
+        <button class="btn btn-ghost" id="btnRebuild" onclick="rebuildCurrentSlide()">🔄 リビルド</button>
       </div>
 
       <label class="confirm-label">スライド型</label>
@@ -2063,6 +2075,27 @@ function updateConfirmModule(refresh = true) {
   }
   renderConfirmTabs();
   if (refresh) reloadConfirmPreview();
+}
+
+async function rebuildCurrentSlide() {
+  const instruction = document.getElementById('rebuildInstruction').value.trim();
+  if (!instruction) return;
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  updateConfirmModule(false);
+  const btn = document.getElementById('btnRebuild');
+  btn.disabled = true; btn.textContent = '🔄 リビルド中...';
+  try {
+    const result = await api('/api/confirm/rebuild', { module, instruction, book: S.netaBook });
+    if (!result.ok || !result.module) throw new Error(result.error || 'リビルド失敗');
+    S.confirmModules[S.confirmActive] = result.module;
+    document.getElementById('rebuildInstruction').value = '';
+    renderConfirmEditor();
+  } catch (e) {
+    alert('リビルド失敗: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔄 リビルド';
+  }
 }
 
 function moveConfirmSlide(direction) {

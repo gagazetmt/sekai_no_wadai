@@ -180,6 +180,66 @@ app.post('/api/confirm/modules', (req, res) => {
   }
 });
 
+app.post('/api/confirm/rebuild', async (req, res) => {
+  const { module, instruction, book } = req.body || {};
+  if (!module || !instruction) return res.status(400).json({ ok: false, error: 'module + instruction required' });
+  try {
+    const { callAI } = require('../scripts/ai_client');
+    const context = [
+      book?.topic   ? `案件: ${book.topic}` : '',
+      book?.overview ? `概要: ${book.overview}` : '',
+      book?.supplement1 ? `補足1: ${book.supplement1}` : '',
+      book?.supplement2 ? `補足2: ${book.supplement2}` : '',
+      (book?.fetchedData || []).length ? `取得データ: ${book.fetchedData.map(r => `${r.label}: ${r.value}`).join(' / ')}` : '',
+    ].filter(Boolean).join('\n');
+
+    const prompt = `あなたはサッカー動画のスライド構成担当です。
+以下のスライドをユーザーの指示に従ってリビルドしてください。
+
+【案件情報】
+${context}
+
+【現在のスライド】
+type: ${module.type}
+title: ${module.title || ''}
+narration: ${module.narration || ''}
+${module.catchphrases?.length ? `catchphrases: ${JSON.stringify(module.catchphrases)}` : ''}
+${module.dataSlots?.length ? `dataSlots: ${JSON.stringify(module.dataSlots)}` : ''}
+${module.overlayComments?.length ? `comments: ${module.overlayComments.map(c => c.text).join(' / ')}` : ''}
+
+【ユーザーの指示】
+${instruction}
+
+以下のJSONフォーマットで返してください。変更不要なフィールドはそのまま維持:
+{
+  "type": "スライド型（insight/stats/history/timeline/matchcard/reaction/picture/comparison/ranking/profile）",
+  "title": "スライドタイトル（20字以内）",
+  "narration": "ナレーション（150字以内。動画で読み上げる文章）",
+  "catchphrases": ["キャッチフレーズ1", "..."],
+  "dataSlots": [{"label":"項目名","value":"値"}],
+  "commentTransition": "コメント導入文"
+}
+
+JSONのみ:`;
+
+    const raw = await callAI({
+      forceProvider: 'deepseek', model: 'deepseek-chat', max_tokens: 1500,
+      label: 'confirm-rebuild',
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const m = raw && raw.match(/\{[\s\S]*\}/);
+    if (!m) throw new Error('AI応答からJSON未検出');
+    const rebuilt = JSON.parse(m[0]);
+    const merged = { ...module, ...rebuilt };
+    if (merged.images === undefined) merged.images = module.images || [];
+    if (merged.bgImage === undefined) merged.bgImage = module.bgImage || null;
+    if (merged.overlayComments === undefined) merged.overlayComments = module.overlayComments;
+    res.json({ ok: true, module: merged });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/confirm/preview', (req, res) => {
   const { module } = req.body || {};
   if (!module) return res.status(400).send('<!doctype html><body>module required</body>');
