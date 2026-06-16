@@ -493,16 +493,21 @@ function buildSubtitleBar(textOrChunks, options = {}) {
 }
 
 // modから「字幕の入力」を作る。audioチャンクがあれば配列、無ければ narration 文字列。
+// overlayComments 付きスライド: ナレーションチャンクのみ字幕対象（transition・コメントは除外）
 function subtitleArgFromMod(mod) {
   if (mod && Array.isArray(mod.audio) && mod.audio.length) {
-    // 2 chunk 以上 → chunk タイミング連動字幕
-    if (mod.audio.length > 1) return mod.audio;
-    // 1 chunk + durationSec + text あり → 原文を分割して時間配分（buildSubtitleBar 側で処理）
-    //   words があれば ASR 同期、無ければ文字数比 fallback
-    if (mod.audio.length === 1
-        && Number(mod.audio[0]?.durationSec) > 0
-        && String(mod.audio[0]?.text || '').trim()) {
-      return mod.audio;
+    let audioForSub = mod.audio;
+    if (Array.isArray(mod.overlayComments) && mod.overlayComments.length) {
+      const narrText = String(mod.narration || '').trim();
+      const narrCount = narrText ? 1 : 0;
+      audioForSub = mod.audio.slice(0, narrCount);
+      if (!audioForSub.length) return mod?.narration || '';
+    }
+    if (audioForSub.length > 1) return audioForSub;
+    if (audioForSub.length === 1
+        && Number(audioForSub[0]?.durationSec) > 0
+        && String(audioForSub[0]?.text || '').trim()) {
+      return audioForSub;
     }
   }
   return mod?.narration || '';
