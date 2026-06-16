@@ -365,8 +365,8 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
 
 /* ══ Step3 画像ギャラリー ══════════════════════════════════════ */
 .confirm-gallery {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 6px; max-height: 200px; overflow-y: auto;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 8px; max-height: 340px; overflow-y: auto;
   margin-top: 6px;
 }
 .confirm-gallery .gallery-item { aspect-ratio: 4/3; }
@@ -1020,9 +1020,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <div class="ending-hint">💡 エンディングの「タイトル」がオチの一言になります。視聴者の印象に残る締めを意識。</div>
       </div>
 
-      <label class="confirm-label">画像URL</label>
-      <input class="confirm-input" id="confirmImage" placeholder="/images_stock/..." oninput="updateConfirmModule(false); renderConfirmGallery();">
-      <div class="confirm-gallery" id="confirmGallery"></div>
+      <input type="hidden" id="confirmImage">
 
       <!-- XY / Zoom スライダー -->
       <div class="img-adj-wrap" style="margin-top:10px;">
@@ -1049,34 +1047,16 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
   </div>
 
   <div class="confirm-panel mt14">
-    <div style="font-size:13px;font-weight:900;margin-bottom:8px;">🎙️ TTS設定（全スライド共通）</div>
-    <div class="tts-grid">
-      <div>
-        <label class="confirm-label">プロバイダ</label>
-        <select class="confirm-select" id="confirmTtsProvider" onchange="loadConfirmTtsPresets(this.value)"></select>
-      </div>
-      <div>
-        <label class="confirm-label">音声</label>
-        <select class="confirm-select" id="confirmTtsVoice"></select>
-      </div>
-      <div>
-        <label class="confirm-label">モデル</label>
-        <select class="confirm-select" id="confirmTtsModel"></select>
-      </div>
-      <div>
-        <label class="confirm-label">速度</label>
-        <input class="confirm-input" id="confirmTtsSpeed" type="number" min="0.5" max="2" step="0.05" value="1">
-      </div>
+    <div class="asset-panel-hd" style="margin-bottom:8px;">
+      🖼️ 画像ギャラリー
+      <span class="asset-count" id="confirmGalleryCount">0</span>
     </div>
-    <label class="confirm-label">読み方・雰囲気（Gemini用）</label>
-    <textarea class="confirm-textarea" id="confirmTtsStyle" style="min-height:72px;"></textarea>
-    <div class="confirm-actions mt8">
-      <button class="btn btn-ghost" id="btnTtsPreview" onclick="previewConfirmTts()">▶ 現在のナレーションを試聴</button>
-      <button class="btn btn-yellow" onclick="startConfirmedVideo()">この設定で動画生成</button>
-      <button class="btn btn-ghost" onclick="goStep(2)">ネタブックへ戻る</button>
-    </div>
-    <div class="tts-status" id="confirmTtsStatus"></div>
-    <audio id="confirmTtsAudio" controls style="width:100%;display:none;"></audio>
+    <div class="confirm-gallery" id="confirmGallery"></div>
+  </div>
+
+  <div class="confirm-actions mt14" style="justify-content:center;gap:10px;">
+    <button class="btn btn-yellow" style="padding:14px 28px;" onclick="startConfirmedVideo()">▶ この構成で動画生成</button>
+    <button class="btn btn-ghost" onclick="goStep(2)">ネタブックへ戻る</button>
   </div>
 </div>
 
@@ -1389,10 +1369,13 @@ async function loadImageGallery(query) {
   document.getElementById('imageGallery').innerHTML = '<div class="asset-empty">画像を検索中...</div>';
   try {
     const result = await api('/api/neta/images?q=' + encodeURIComponent(q));
-    S.galleryImages = Array.isArray(result.images) ? result.images : [];
+    const stockImgs = Array.isArray(result.images) ? result.images : [];
+    const seen = new Set(S.galleryImages.map(i => i.url).filter(Boolean));
+    for (const img of stockImgs) {
+      if (img?.url && !seen.has(img.url)) { S.galleryImages.push(img); seen.add(img.url); }
+    }
     renderImageGallery();
   } catch (_) {
-    S.galleryImages = [];
     renderImageGallery();
   }
 }
@@ -1853,7 +1836,15 @@ function renderNetaBook(book) {
   S.selectedImages = Array.isArray(book.selectedImages)
     ? book.selectedImages.filter(Boolean).slice(0, 3)
     : [];
-  S.galleryImages = [];
+  S.galleryImages = Array.isArray(book.assetImages) && book.assetImages.length
+    ? book.assetImages : [];
+  if (book.assetImages?.length) {
+    book.assetImages.forEach(img => {
+      if (img.url && (img.offsetX != null || img.offsetY != null)) {
+        S.imageXYMap[img.url] = { offsetX: img.offsetX || 0, offsetY: img.offsetY || 0, zoom: img.zoom || 1.0 };
+      }
+    });
+  }
   renderDataAssets(book);
   document.getElementById('imageGalleryQuery').value = book.mainEntity || '';
   S.assetsPromise = loadDataAssets(book).finally(() => {
@@ -1911,7 +1902,6 @@ async function goToConfirm() {
     document.getElementById('tab4').disabled = true;
     goStep(3);
     renderConfirmEditor();
-    await loadConfirmTtsPresets('voicevox');
   } catch (e) {
     sb('netaStatus', 'error', e.message);
   }
@@ -1930,6 +1920,8 @@ function renderConfirmTabs() {
 function renderConfirmGallery() {
   const grid = document.getElementById('confirmGallery');
   if (!grid) return;
+  const countEl = document.getElementById('confirmGalleryCount');
+  if (countEl) countEl.textContent = S.galleryImages.length;
   const current = String(document.getElementById('confirmImage')?.value || '').trim().replace(/^\/+/, '');
   if (!S.galleryImages.length) {
     grid.innerHTML = '<div class="confirm-gallery-empty">Step2で画像を取得してください</div>';
@@ -1938,11 +1930,14 @@ function renderConfirmGallery() {
   grid.innerHTML = S.galleryImages.map((image, index) => {
     const imgPath = String(image.url || '').replace(/^\/+/, '');
     const sel = current && (imgPath === current || image.url === current);
+    const grade    = image.thumbnailGrade || '';
+    const scoreTxt = image.score != null ? image.score.toFixed(1) : '';
     return `<button type="button" class="gallery-item${sel ? ' selected' : ''}"
       onclick="pickConfirmImage('${esc(image.url || '')}')"
-      title="${esc(image.name || image.role || '')}">
+      title="${esc(image.aiNotes || image.name || image.role || '')}">
       <img src="${esc(image.url)}" loading="lazy" alt="">
-      <span class="gallery-role">${esc(image.name || image.role || '画像')}</span>
+      ${grade ? `<span class="gallery-grade ${esc(grade)}">${esc(grade)}${scoreTxt ? ' ' + scoreTxt : ''}</span>` : ''}
+      <span class="gallery-role">${esc(image.contentType || image.name || image.role || '画像')}</span>
     </button>`;
   }).join('');
 }
@@ -2125,11 +2120,11 @@ async function loadConfirmTtsPresets(provider) {
 
 function currentTtsConfig() {
   return {
-    provider: document.getElementById('confirmTtsProvider').value || 'voicevox',
-    voiceId: document.getElementById('confirmTtsVoice').value || undefined,
-    model: document.getElementById('confirmTtsModel').value || undefined,
-    speed: Number(document.getElementById('confirmTtsSpeed').value || 1),
-    styleInstructions: document.getElementById('confirmTtsStyle').value.trim() || undefined,
+    provider: 'voicevox',
+    voiceId: undefined,
+    model: undefined,
+    speed: 1.03,
+    styleInstructions: undefined,
   };
 }
 

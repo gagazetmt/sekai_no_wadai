@@ -781,6 +781,8 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     book.dataLabels = assets.labels;
     book.fetchedData = assets.dataRows;
     book.assetImages = assets.images;
+    book.thumbnail = assets.thumbnail || null;
+    book.slideImages = assets.slideImages || [];
     book.selectedImages = assets.images.slice(0, 3).map(image => image.url).filter(Boolean);
     book.assetWarnings = assets.warnings;
     // supplement1 / supplement2 の stats 型にデータ補完
