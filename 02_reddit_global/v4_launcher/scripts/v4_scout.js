@@ -61,7 +61,7 @@ async function _fetchX() {
 
   const queries = [
     { q: 'サッカー OR 日本代表 OR W杯 -is:retweet lang:ja', label: 'X/JP' },
-    { q: 'soccer transfer injury news -is:retweet lang:en',  label: 'X/EN' },
+    { q: 'World Cup OR football OR soccer -is:retweet lang:en', label: 'X/EN' },
   ];
 
   for (const { q, label } of queries) {
@@ -71,7 +71,7 @@ async function _fetchX() {
       }), { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) });
       const data = await res.json();
       const tweets = data?.data?.tweets || data?.tweets || [];
-      for (const t of tweets.slice(0, 20)) {
+      for (const t of tweets.slice(0, 50)) {
         const text = String(t.text || '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, ' ').trim();
         if (text.length < 20) continue;
         items.push({ title: text.slice(0, 120), source: label, url: `https://x.com/i/web/status/${t.id || ''}`, date: t.created_at || null });
