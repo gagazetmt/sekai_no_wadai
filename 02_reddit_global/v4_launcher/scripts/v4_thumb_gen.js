@@ -19,13 +19,19 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+// カラーマークアップ: {red:テキスト} {blue:テキスト} {white:テキスト} → <span class="red">テキスト</span>
+function applyColorMarkup(text) {
+  return esc(text).replace(/\{(red|blue|white):([^}]+)\}/g, '<span class="$1">$2</span>');
+}
+
 /**
  * @param {object} opts
  * @param {string}  opts.bgImage      - 背景画像パス（絶対パス or URL）
- * @param {string}  opts.line1        - タイトル1行目
+ * @param {string}  opts.line1        - タイトル1行目（{red:テキスト} でカラー指定可）
  * @param {string}  opts.line2        - タイトル2行目（省略可）
- * @param {string}  opts.comment      - 右上ボックスのコメント（\n で改行）
- * @param {string}  opts.accentColor  - ボックスカラー（デフォルト: #FFD700）
+ * @param {string}  opts.label1       - サブラベル1（赤枠・白背景）
+ * @param {string}  opts.label2       - サブラベル2（省略可）
+ * @param {string}  opts.accentColor  - テキストボックス背景色（デフォルト: #FFD700）
  * @param {string}  opts.bgPosition   - 背景位置（デフォルト: center top）
  * @param {number}  opts.bgBrightness - 背景輝度 0〜1（デフォルト: 0.88）
  * @param {number}  opts.titleSize    - タイトルフォントサイズ px（デフォルト: 92）
@@ -37,7 +43,8 @@ async function generateV4Thumb(opts = {}) {
     bgImage      = '',
     line1        = '',
     line2        = '',
-    comment      = '',
+    label1       = '',
+    label2       = '',
     accentColor  = '#FFD700',
     bgPosition   = 'center top',
     bgBrightness = 0.88,
@@ -45,16 +52,17 @@ async function generateV4Thumb(opts = {}) {
     outputPath   = path.join(OUT_DIR, `thumb_${Date.now()}.png`),
   } = opts;
 
-  // 背景画像のURL変換（ローカルファイルは file:// に）
+  // 旧API互換: comment → label1
+  const resolvedLabel1 = label1 || opts.comment || '';
+  const resolvedLabel2 = label2 || '';
+
   let bgUrl = bgImage;
   if (bgImage && !bgImage.startsWith('http') && !bgImage.startsWith('file://')) {
     bgUrl = 'file:///' + bgImage.replace(/\\/g, '/');
   }
 
-  // HTMLテンプレート読み込み → プレースホルダー置換
   let html = fs.readFileSync(TEMPLATE_PATH, 'utf8');
 
-  // CSS変数をstyle属性でbodyに渡す
   const cssVars = [
     `--bg-image: url('${bgUrl}')`,
     `--bg-position: ${bgPosition}`,
@@ -65,12 +73,13 @@ async function generateV4Thumb(opts = {}) {
 
   html = html
     .replace('<body>', `<body style="${cssVars}">`)
-    .replace('{{LINE1}}',  esc(line1))
-    .replace('{{LINE2}}',  esc(line2))
-    .replace('{{COMMENT}}', esc(comment).replace(/\n/g, '<br>'))
-    .replace('{{COMMENT_HIDDEN}}', comment ? '' : 'hidden');
+    .replace('{{LINE1}}',  applyColorMarkup(line1))
+    .replace('{{LINE2}}',  applyColorMarkup(line2))
+    .replace('{{LABEL1}}', esc(resolvedLabel1))
+    .replace('{{LABEL2}}', esc(resolvedLabel2))
+    .replace('{{LABEL1_HIDDEN}}', resolvedLabel1 ? '' : 'hidden')
+    .replace('{{LABEL2_HIDDEN}}', resolvedLabel2 ? '' : 'hidden');
 
-  // Puppeteerでレンダリング
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--font-render-hinting=none'],
@@ -79,7 +88,6 @@ async function generateV4Thumb(opts = {}) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
-    // フォント読み込み待機
     await page.evaluateHandle('document.fonts.ready');
     await page.screenshot({ path: outputPath, type: 'png' });
   } finally {
@@ -96,9 +104,10 @@ if (require.main === module) {
   (async () => {
     const testOut = await generateV4Thumb({
       bgImage:     process.argv[2] || '',
-      line1:       'リバポがコナテと契約延長',
-      line2:       'しなかった理由が判明',
-      comment:     'そういうことかい\nこれマドリーもやばくね',
+      line1:       '{red:モドリッチ}引退決断',
+      line2:       'ミランに{blue:失望}していた',
+      label1:      '悲報',
+      label2:      '海外の反応',
       accentColor: '#FFD700',
       titleSize:   92,
     });
