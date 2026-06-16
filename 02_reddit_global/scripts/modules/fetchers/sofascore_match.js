@@ -35,15 +35,25 @@ async function searchMatch(homeTeam, awayTeam) {
 
   if (homeEnt && awayEnt) {
     try {
-      // home の直近イベント → awayId と対戦したものだけ抽出 → 新しい順
-      const evRes = await apiGet(`/team/${homeEnt.id}/events/last/0`);
-      const h2hEvents = (evRes.events || [])
+      // last（終了済み）+ next（ライブ/予定）の両方を取得
+      const [lastRes, nextRes] = await Promise.all([
+        apiGet(`/team/${homeEnt.id}/events/last/0`).catch(() => ({ events: [] })),
+        apiGet(`/team/${homeEnt.id}/events/next/0`).catch(() => ({ events: [] })),
+      ]);
+      const allEvents = [...(lastRes.events || []), ...(nextRes.events || [])];
+      const h2hEvents = allEvents
         .filter(e =>
           (e.homeTeam?.id === homeEnt.id && e.awayTeam?.id === awayEnt.id) ||
           (e.homeTeam?.id === awayEnt.id && e.awayTeam?.id === homeEnt.id)
         )
         .sort((a, b) => (b.startTimestamp || 0) - (a.startTimestamp || 0));
 
+      // inprogress（ライブ）を最優先、次にfinished
+      const live = h2hEvents.find(e => e.status?.type === 'inprogress');
+      if (live) {
+        console.log(`[SofaScore Match] LIVE検出: ${homeTeam} vs ${awayTeam}`);
+        return live;
+      }
       if (h2hEvents.length) {
         console.log(`[SofaScore Match] H2H戦略2で発見: ${homeTeam} vs ${awayTeam} → ${new Date(h2hEvents[0].startTimestamp*1000).toISOString().slice(0,10)}`);
         return h2hEvents[0];
@@ -62,7 +72,12 @@ async function searchMatch(homeTeam, awayTeam) {
     .filter(e => e.startTimestamp)
     .sort((a, b) => b.startTimestamp - a.startTimestamp);
 
-  // finished を優先（upcoming だとまだスコア無いため）
+  // inprogress（ライブ）→ finished → その他の優先順
+  const live = sorted.find(e => e.status?.type === 'inprogress');
+  if (live) {
+    console.log(`[SofaScore Match] 戦略1 LIVE検出`);
+    return live;
+  }
   const finished = sorted.filter(e => e.status?.type === 'finished');
   console.log(`[SofaScore Match] 戦略1 fallback: ${sorted.length}件中 finished ${finished.length}件`);
   return finished[0] || sorted[0] || null;
