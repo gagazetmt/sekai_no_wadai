@@ -477,9 +477,10 @@ ${warehouseBlock}
 | commentAngle2 | コメント②の切り口 | 〜18字 | コメント時 |
 | endingPunch | EDで読むオチの一言。CTAや挨拶は禁止 | 〜32字 | ✅ |
 | assetLabels | 画像・データ取得用ラベル（最大8件） | — | ✅ |
-| thumbLine1 | サムネ1行目。衝撃・興味を引くパワーワード | 〜18字 | ✅ |
-| thumbLine2 | サムネ2行目。補足や結果。なければ null | 〜18字 | あれば |
-| thumbComment | サムネ右上の煽りコメント（2ch風1〜2行） | 〜30字 | ✅ |
+| thumbLine1 | サムネ1行目。{red:注目語} {blue:感情語} でカラー強調。衝撃ワード | 〜18字 | ✅ |
+| thumbLine2 | サムネ2行目。同じくカラー強調可。なければ null | 〜18字 | あれば |
+| thumbLabel1 | サムネ上部ラベル1。短い分類タグ（例: 悲報、速報、衝撃） | 〜6字 | ✅ |
+| thumbLabel2 | サムネ上部ラベル2。別角度のタグ（例: 海外の反応）。なければ null | 〜8字 | あれば |
 | ytTitle | YouTube動画タイトル。検索に強く、クリックしたくなるもの | 〜60字 | ✅ |
 | ytDescription | YouTube概要欄。動画内容の要約+ハッシュタグ | 100〜200字 | ✅ |
 | ytTags | YouTube検索タグ配列。5〜10件 | — | ✅ |
@@ -494,32 +495,30 @@ ${warehouseBlock}
 - **insight** → 論点を4つ以上テキストボックスで表示。overviewData.catchphrases に4件以上
 - **picture** → 画像中心。overviewData は {}
 
-**補足スライド型（supplement1Type / supplement2Type）:**
-各補足スロットで独立して選ぶ。ルール順に判定し、最初に該当した型を使う:
+**supplement1Type の決定（以下のフローチャートを上から順に判定。最初に当てはまった型を使う）:**
 
-1. **matchcard**（試合結果・試合ネタ）→ スコアが記事にあれば必ずこれ。Data に homeTeam/awayTeam/homeScore/awayScore
-2. **stats**（選手の活躍にフォーカス）→ 数値が話題の中心。Data.dataSlots は label/value を4〜8件
-3. **comparison**（属性が同じ2者の比較）→ 同ポジション選手同士、監督同士など。leftName/rightName + dataSlots
-4. **timeline**（過去シーズンの推移等）→ 複数時点の数値。series(name, points[{x,y}])
-5. **history**（過去の対戦結果・事件の時系列）→ events: [{date, title, detail}] を3〜6件
-6. **insight**（論点まとめ）→ 論点を4つ以上出せる場合。Data.catchphrases は4〜6件
-7. **picture**（その他）→ 画像中心。Data は {}
+Q1. 記事にスコア（○-○）があるか？
+  → YES → **matchcard**（必須。試合ネタでは他の型より常に優先）
+Q2. 特定の選手のゴール数・アシスト・レーティング等の数値が話題の中心か？
+  → YES → **stats**
+Q3. 2者（選手vs選手、チームvsチーム）の比較が感情軸の核か？
+  → YES → **comparison**
+Q4. 時系列（過去の対戦歴・事件の年表）が感情を深めるか？
+  → YES → **history**
+Q5. 上記すべてNO
+  → **insight**（論点4つ以上でまとめる）
 
-⚠️ 判定ミス例: 試合結果なのに insight → NG。選手の活躍なのに picture → NG
+**supplement2Type の決定:**
+- supplement1Type と同じ型は選ばない
+- 上のQ1〜Q5を supplement1 で使わなかった素材に対して再度判定
+- 素材が足りなければ null（無理に埋めない）
 
-**supplement1Data / supplement2Data の例:**
-\`\`\`json
-"supplement1Type": "matchcard",
-"supplement1Data": { "homeTeam": "Japan", "awayTeam": "Netherlands", "homeScore": 2, "awayScore": 1 }
-\`\`\`
-\`\`\`json
-"supplement1Type": "stats",
-"supplement1Data": { "dataSlots": [{"label":"ゴール数","value":"15"},{"label":"アシスト","value":"8"}] }
-\`\`\`
-\`\`\`json
-"supplement2Type": "history",
-"supplement2Data": { "events": [{"date":"2024-03","title":"PSG戦","detail":"2-1で勝利"},{"date":"2024-06","title":"ドイツ戦","detail":"1-1"}] }
-\`\`\`
+**各型の Data スキーマ:**
+- matchcard: { "homeTeam": "Japan", "awayTeam": "Netherlands", "homeScore": 2, "awayScore": 2 }
+- stats: { "dataSlots": [{"label":"ゴール数","value":"15"}, {"label":"アシスト","value":"8"}] } ← 4〜8件
+- comparison: { "leftName": "選手A", "rightName": "選手B", "dataSlots": [{"label":"得点","left":"12","right":"8"}] }
+- history: { "events": [{"date":"2024-03","title":"PSG戦","detail":"2-1で勝利"}] } ← 3〜6件
+- insight: { "catchphrases": ["論点1","論点2","論点3","論点4"] } ← 4〜6件
 
 **assetLabels（画像・データ取得用ラベル）:**
 - この案件に関連するキーパーソン・チームを最大8件提案する
@@ -576,9 +575,10 @@ ${hasRealComments
     {"name": "Liverpool", "type": "team", "league": "Premier League"},
     {"name": "Japan", "type": "nationalTeam"}
   ],
-  "thumbLine1": "遠藤航が決断",
-  "thumbLine2": "代表引退の真相",
-  "thumbComment": "マジかよ...\n泣けるわ",
+  "thumbLine1": "{red:遠藤航}が決断",
+  "thumbLine2": "代表{blue:引退}の真相",
+  "thumbLabel1": "速報",
+  "thumbLabel2": "海外の反応",
   "ytTitle": "【速報】遠藤航、W杯直前に代表引退を発表…その決断の裏側とは",
   "ytDescription": "遠藤航がW杯直前に日本代表からの引退を発表。キャプテンとしてチームを牽引してきた男の決断に、ファンからは感謝と惜しむ声が殺到。\\n\\n#遠藤航 #日本代表 #W杯 #サッカー",
   "ytTags": ["遠藤航", "日本代表", "W杯", "代表引退", "サッカー", "ワールドカップ", "リバプール"],
@@ -688,9 +688,10 @@ ${hasRealComments
     commentAngle1: clean(parsed.commentAngle1, 30) || 'ネットの反応',
     commentAngle2: clean(parsed.commentAngle2, 30) || 'さらに反応',
     assetLabels,
-    thumbLine1:    clean(parsed.thumbLine1, 24)    || '',
-    thumbLine2:    clean(parsed.thumbLine2, 24),
-    thumbComment:  clean(parsed.thumbComment, 40)  || '',
+    thumbLine1:    clean(parsed.thumbLine1, 30)    || '',
+    thumbLine2:    clean(parsed.thumbLine2, 30),
+    thumbLabel1:   clean(parsed.thumbLabel1, 12)   || '',
+    thumbLabel2:   clean(parsed.thumbLabel2, 12),
     ytTitle:       clean(parsed.ytTitle, 80)        || '',
     ytDescription: clean(parsed.ytDescription, 300) || '',
     ytTags:        Array.isArray(parsed.ytTags) ? parsed.ytTags.map(t => String(t||'').trim()).filter(Boolean).slice(0, 10) : [],
@@ -759,7 +760,8 @@ async function buildNetaBook(topicData, { force = false } = {}) {
     commentAngle2:    neta.commentAngle2,
     thumbLine1:       neta.thumbLine1,
     thumbLine2:       neta.thumbLine2,
-    thumbComment:     neta.thumbComment,
+    thumbLabel1:      neta.thumbLabel1,
+    thumbLabel2:      neta.thumbLabel2,
     ytTitle:          neta.ytTitle,
     ytDescription:    neta.ytDescription,
     ytTags:           neta.ytTags,

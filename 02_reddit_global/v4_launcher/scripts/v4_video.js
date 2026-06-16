@@ -445,10 +445,34 @@ async function generateV4Video(book, providedModules = null) {
     ? fs.readdirSync(videoDir).filter(f => f.startsWith(shortId) && f.endsWith('.mp4'))
     : [];
 
+  // サムネ自動生成
+  let thumbPath = null;
+  try {
+    const { generateV4Thumb } = require('./v4_thumb_gen');
+    const thumbOut = path.join(videoDir, shortId + '_thumb.png');
+    const thumbImage = book.thumbnail?.url || (Array.isArray(book.slideImages) && book.slideImages[0]?.url) || '';
+    await generateV4Thumb({
+      bgImage:     thumbImage,
+      line1:       book.thumbLine1 || book.title || '',
+      line2:       book.thumbLine2 || '',
+      label1:      book.thumbLabel1 || '',
+      label2:      book.thumbLabel2 || '',
+      accentColor: '#FFD700',
+      bgBrightness: 0.85,
+      titleSize:   92,
+      outputPath:  thumbOut,
+    });
+    thumbPath = thumbOut;
+    console.log('[v4_video] サムネ生成:', thumbOut);
+  } catch (e) {
+    console.warn('[v4_video] サムネ生成スキップ:', e.message);
+  }
+
   const result = {
     postId,
     jobId,
     videoPath: videos.length ? path.join(videoDir, videos[0]) : null,
+    thumbPath,
     modules: modules.length,
     book,
   };
