@@ -331,7 +331,7 @@ function inferEntityType(book) {
 function _labelsFromAssetLabels(assetLabels) {
   const labels = [];
   const seen = new Set();
-  for (const al of assetLabels) {
+  for (const al of assetLabels.slice(0, 3)) {
     const name = String(al.name || '').trim();
     const t = String(al.type || 'player').trim();
     if (!name || seen.has(name.toLowerCase())) continue;
@@ -758,7 +758,7 @@ async function fetchBookAssets(book) {
   const topicKeyword = String(book?.mainEntity || book?.topic || '').slice(0, 30);
 
   // assetLabels があれば、各ラベルの team/name から公式X画像を広範囲取得
-  const assetLabels = Array.isArray(book?.assetLabels) ? book.assetLabels : [];
+  const assetLabels = Array.isArray(book?.assetLabels) ? book.assetLabels.slice(0, 3) : [];
   const xHandleTargets = new Set();
   for (const al of assetLabels) {
     const name = String(al.name || '').trim();
