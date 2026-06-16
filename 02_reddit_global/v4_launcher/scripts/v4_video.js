@@ -320,7 +320,7 @@ function buildModules(book) {
   const commentsPerSlide = Math.ceil(allComments.length / Math.max(contentSlides.length, 1));
   contentSlides.forEach((slide, i) => {
     const start = i * commentsPerSlide;
-    const chunk = allComments.slice(start, start + commentsPerSlide).slice(0, 4);
+    const chunk = allComments.slice(start, start + commentsPerSlide).slice(0, 8);
     if (chunk.length) {
       slide.overlayComments = chunk.map((text, ci) => ({
         text: _compactText(text, 36),

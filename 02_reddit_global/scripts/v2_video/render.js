@@ -325,15 +325,21 @@ function _injectCommentOverlay(html, mod) {
   const STAGGER = 2.0;
   const transitionDelay = chunkStarts[transitionChunkIdx] ?? (LEAD + (narrText ? 6 : 0));
 
-  const COLORS = ['#FFE066', '#66D9EF', '#A6E22E', '#FD971F', '#F92672', '#AE81FF', '#E6DB74'];
+  // リアクションスライドと同じパステルカラー
+  const CMT_BG = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
 
   const commentDivs = comments.map((c, i) => {
     const chunkIdx = commentChunkStart + i;
     const delay = chunkStarts[chunkIdx] ?? (transitionDelay + STAGGER * (i + 1));
-    const color = COLORS[i % COLORS.length];
-    const yPos = 30 + (i % 4) * 15;
-    const xShift = (i % 2 === 0) ? '5%' : '15%';
-    return `<div class="oc-comment" style="animation-delay:${delay.toFixed(2)}s;top:${yPos}%;left:${xShift};border-left:4px solid ${color}">${_escHtml(String(c.text || ''))}</div>`;
+    const bgC = CMT_BG[i % CMT_BG.length];
+    const side = i % 2 === 0 ? 'flex-start' : 'flex-end';
+    const text = String(c.text || '');
+    const trim = text.length > 100 ? text.slice(0, 98) + '…' : text;
+    return `<div class="oc-slot" style="align-self:${side};animation-delay:${delay.toFixed(2)}s;">
+  <div class="oc-card" style="background:${bgC};">
+    <div class="oc-text">${_escHtml(trim).replace(/\n/g, '<br>')}</div>
+  </div>
+</div>`;
   }).join('\n');
 
   const overlayHTML = `
@@ -353,24 +359,36 @@ function _injectCommentOverlay(html, mod) {
   opacity:0;animation:oc-fade-in 0.4s ease forwards;
   animation-delay:${transitionDelay.toFixed(2)}s;
 }
-.oc-comment {
+.oc-area {
   position:absolute;
-  max-width:70%;padding:10px 18px;
-  background:rgba(20,20,30,0.85);color:#fff;
-  font:600 22px 'Noto Sans JP',sans-serif;line-height:1.5;
-  border-radius:6px;
-  opacity:0;animation:oc-slide-in 0.4s ease forwards;
+  top:120px; bottom:130px; left:60px; right:60px;
+  display:flex; flex-direction:column;
+  justify-content:flex-start; gap:20px;
+  z-index:5;
+}
+.oc-slot {
+  opacity:0; width:fit-content; max-width:90%;
+  animation:oc-slide-in 0.45s ease-out forwards;
+}
+.oc-card {
+  border:3px solid #000; border-radius:8px;
+  padding:10px 18px;
+  box-shadow:4px 4px 0 rgba(0,0,0,0.4);
+}
+.oc-text {
+  color:#111; font:700 42px 'Noto Sans JP',sans-serif;
+  line-height:1.4; overflow-wrap:break-word;
 }
 @keyframes oc-fade-in { to { opacity:1 } }
 @keyframes oc-slide-in {
-  from { opacity:0;transform:translateY(12px) }
+  from { opacity:0;transform:translateY(-30px) }
   to   { opacity:1;transform:translateY(0) }
 }
 </style>
 <div class="comment-overlay">
   <div class="oc-dimmer"></div>
   <div class="oc-transition">${_escHtml(transition)}</div>
-  ${commentDivs}
+  <div class="oc-area">${commentDivs}</div>
 </div>`;
 
   // </body> の直前に注入
@@ -1293,12 +1311,9 @@ async function main() {
 
   const ZINGA_PATH = path.join(BGM_DIR, 'zinga.mp3');
   const REST_CANDIDATES = [
-    'eve of battle.mp3',
-    'strategy meeting.mp3',
-    'Walking in downtown.mp3',
-    'dribbler.mp3',
-    'tikitaka.mp3',
-    'No. 6.mp3',
+    'dusk_horizon.mp3',
+    'dandelion.mp3',
+    'downtown_walk.mp3',
   ]
     .map(f => path.join(BGM_DIR, f))
     .filter(p => fs.existsSync(p));
@@ -1324,8 +1339,8 @@ async function main() {
     const restSecStr   = (totalMs / 1000 - switchSec).toFixed(3);
     console.log(`🎵 BGM 2セクション: zinga (0〜${switchSecStr}s, op+toc) → ${path.basename(restPath)} (〜${totalSec}s)`);
     const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${ZINGA_PATH}" -stream_loop -1 -i "${restPath}" ` +
-                `-filter_complex "[1:a]atrim=0:${switchSecStr},asetpts=PTS-STARTPTS,volume=0.18[bgm_a];` +
-                `[2:a]atrim=0:${restSecStr},asetpts=PTS-STARTPTS,volume=0.18[bgm_b];` +
+                `-filter_complex "[1:a]atrim=0:${switchSecStr},asetpts=PTS-STARTPTS,volume=0.12[bgm_a];` +
+                `[2:a]atrim=0:${restSecStr},asetpts=PTS-STARTPTS,volume=0.12[bgm_b];` +
                 `[bgm_a][bgm_b]concat=n=2:v=0:a=1[bgm];` +
                 `[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
                 `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
@@ -1336,7 +1351,7 @@ async function main() {
     if (bgmPath) {
       console.log(`🎵 BGM 単一: ${path.basename(bgmPath)} (op/toc 検出失敗 or 候補不足)`);
       const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${bgmPath}" ` +
-                  `-filter_complex "[1:a]volume=0.18,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
+                  `-filter_complex "[1:a]volume=0.12,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
                   `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
       execSync(cmd, { stdio: 'pipe' });
     } else {
