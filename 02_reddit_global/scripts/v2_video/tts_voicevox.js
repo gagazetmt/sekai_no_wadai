@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { applyJpDict } = require('./jp_dict');
+const { callAI } = require('../ai_client');
 
 const API_BASE = process.env.VOICEVOX_URL || 'http://127.0.0.1:50021';
 const DEFAULT_VOICE = String(process.env.VOICEVOX_MAIN_SPEAKER || '13');
@@ -68,6 +69,39 @@ function sanitize(text) {
     .trim();
 }
 
+const NARRATION_CLEAN_PROMPT = `あなたはVOICEVOX音声合成の前処理専門です。
+入力テキストを、VOICEVOXが自然に読み上げられる形に変換してください。
+
+ルール:
+- 中黒（・）を除去して固有名詞を一語にする（例: レアル・マドリー→レアルマドリー、リオネル・メッシ→リオネルメッシ）
+- 外国人名のスペースを除去（例: ルカ モドリッチ→ルカモドリッチ）
+- "" "" 「」 『』 （） などの括弧・引用符を除去（中の内容はそのまま残す）
+- …（三点リーダ）、——（ダッシュ）、※ 等の装飾記号を除去または自然な日本語に変換
+- 数字+英字の略語はカタカナに（例: 3G→スリージー は不要、そのまま）
+- 句読点（、。）と感嘆符（！？）はそのまま残す（VOICEVOXのブレイク制御に必要）
+- 意味・内容・語順は一切変えない
+- 出力はクリーンテキストのみ。説明や注釈は絶対に付けない`;
+
+async function deepseekNarrationClean(text) {
+  if (!text || text.length < 5) return text;
+  try {
+    const result = await callAI({
+      forceProvider: 'deepseek',
+      model: 'deepseek-chat',
+      max_tokens: 500,
+      label: 'voicevox-narration-clean',
+      messages: [{ role: 'user', content: text }],
+      system: NARRATION_CLEAN_PROMPT,
+    });
+    const cleaned = (result || '').trim();
+    if (cleaned.length < 3) return text;
+    return cleaned;
+  } catch (e) {
+    console.warn(`⚠️ DeepSeek narration clean 失敗、元テキスト使用: ${e.message}`);
+    return text;
+  }
+}
+
 function convertWavToMp3(wavPath, outputPath) {
   return new Promise((resolve, reject) => {
     const proc = spawn(FFMPEG, [
@@ -84,7 +118,8 @@ function convertWavToMp3(wavPath, outputPath) {
 }
 
 async function generateVoiceVoxTTS(opts = {}) {
-  const text = sanitize(opts.text);
+  const sanitized = sanitize(opts.text);
+  const text = await deepseekNarrationClean(sanitized);
   const outputPath = opts.outputPath;
   const speaker = Number(opts.voiceId ?? DEFAULT_VOICE);
   if (!text) throw new Error('text is required');
@@ -96,7 +131,7 @@ async function generateVoiceVoxTTS(opts = {}) {
   );
   if (!queryRes.ok) throw new Error(`VOICEVOX audio_query: ${queryRes.status}`);
   const query = await queryRes.json();
-  query.speedScale = Math.max(0.5, Math.min(2.0, Number(opts.speed) || 1.12));
+  query.speedScale = Math.max(0.5, Math.min(2.0, Number(opts.speed) || 1.22));
   query.intonationScale = 1.2;
   query.volumeScale = 1.05;
 
