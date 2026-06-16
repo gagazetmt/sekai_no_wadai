@@ -216,7 +216,7 @@ async function _fromReddit(sourceUrl, topic = '') {
       const apiUrl = sourceUrl.replace(/\/$/, '') + '.json?limit=50&sort=top';
       const res = await fetch(apiUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
         },
         signal: AbortSignal.timeout(12000),
@@ -238,7 +238,10 @@ async function _fromReddit(sourceUrl, topic = '') {
     const enTopic = topic.replace(/[ぁ-ん]|[ァ-ヶ]|[一-龥]/g, '').trim() || topic;
     const searchUrl = `https://www.reddit.com/r/soccer/search.json?q=${encodeURIComponent(enTopic)}&sort=new&restrict_sr=1&limit=5&t=week`;
     const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
+      },
       signal: AbortSignal.timeout(12000),
     });
     if (!res.ok) return [];
@@ -250,7 +253,10 @@ async function _fromReddit(sourceUrl, topic = '') {
       if (!permalink) continue;
       try {
         const threadRes = await fetch(`https://www.reddit.com${permalink}.json?limit=30&sort=top`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; V4Neta/1.0)' },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
+          },
           signal: AbortSignal.timeout(10000),
         });
         if (!threadRes.ok) continue;
