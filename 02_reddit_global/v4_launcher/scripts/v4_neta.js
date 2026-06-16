@@ -208,8 +208,60 @@ function _isLikelyXReaction(value) {
   return !newsSummary.test(text) || reactionSignal.test(text);
 }
 
+// ── 記事から英語検索クエリを抽出 ─────────────────────────────
+function _extractEnQuery(topic, articles) {
+  const blob = articles
+    .map(a => `${a.title || ''} ${(a.fullText || a.snippet || '').slice(0, 500)}`)
+    .join('\n');
+  if (!blob.trim()) return topic.replace(/[ぁ-んァ-ヶ一-龥々]/g, '').trim() || topic;
+
+  const noise = new Set([
+    'The', 'This', 'That', 'With', 'From', 'About', 'After', 'Before',
+    'Under', 'Over', 'Into', 'During', 'According', 'However', 'While',
+    'When', 'Where', 'Which', 'What', 'Their', 'There', 'They', 'Have',
+    'Has', 'Had', 'Will', 'Would', 'Could', 'Should', 'Been', 'Being',
+    'Also', 'Just', 'More', 'Most', 'Some', 'Other', 'New', 'First',
+    'Last', 'But', 'Not', 'And', 'For', 'Are', 'Was', 'Were', 'His',
+    'Her', 'Its', 'Our', 'Can', 'May', 'All', 'Get', 'Got', 'Read',
+    'Click', 'Here', 'Getty', 'Images', 'Photo', 'Video', 'Source',
+    'Report', 'Reports', 'Says', 'Said', 'Per', 'Via', 'Now', 'Set',
+    'One', 'Two', 'Three', 'Four', 'Five', 'Man', 'Top', 'Cup',
+  ]);
+  const freq = {};
+
+  // Multi-word proper nouns: "Kylian Mbappe", "Real Madrid"
+  const multiWord = blob.match(
+    /[A-Z][a-zà-öø-ÿ]{2,}(?:\s+(?:de|van|von|di|el|al|da|dos|del)\s+|\s+)[A-Z][a-zà-öø-ÿ]{2,}(?:\s+[A-Z][a-zà-öø-ÿ]{2,})*/g
+  ) || [];
+  for (const phrase of multiWord) {
+    const words = phrase.split(/\s+/);
+    if (words.every(w => noise.has(w))) continue;
+    const key = phrase.toLowerCase();
+    if (!freq[key]) freq[key] = { text: phrase, score: 0 };
+    freq[key].score += 3;
+  }
+
+  // Single capitalized words (repeated = likely a name)
+  const singles = blob.match(/\b[A-Z][a-zà-öø-ÿ]{2,}\b/g) || [];
+  for (const word of singles) {
+    if (noise.has(word)) continue;
+    const key = word.toLowerCase();
+    if (!freq[key]) freq[key] = { text: word, score: 0 };
+    freq[key].score += 1;
+  }
+
+  const topTerms = Object.values(freq)
+    .filter(e => e.score >= 2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(e => e.text);
+
+  if (topTerms.length > 0) return topTerms.join(' ');
+  return topic.replace(/[ぁ-んァ-ヶ一-龥々]/g, '').trim() || topic;
+}
+
 // ── Reddit スレッドの生コメント ──────────────────────────────
-async function _fromReddit(sourceUrl, topic = '') {
+async function _fromReddit(sourceUrl, topic = '', enQuery = '') {
   // ① ソースURLがredditならそのスレッドから取得
   if (sourceUrl && sourceUrl.includes('reddit.com')) {
     try {
@@ -232,11 +284,12 @@ async function _fromReddit(sourceUrl, topic = '') {
       }
     } catch (e) { console.warn('[comments] Reddit direct 失敗:', e.message); }
   }
-  // ② topicベースでr/soccerを検索してコメント取得
-  if (!topic) return [];
+  // ② 記事から抽出した英語クエリ or topicベースでr/soccerを検索
+  if (!topic && !enQuery) return [];
   try {
-    const enTopic = topic.replace(/[ぁ-ん]|[ァ-ヶ]|[一-龥]/g, '').trim() || topic;
-    const searchUrl = `https://www.reddit.com/r/soccer/search.json?q=${encodeURIComponent(enTopic)}&sort=new&restrict_sr=1&limit=5&t=week`;
+    const searchTerm = enQuery || topic.replace(/[ぁ-ん]|[ァ-ヶ]|[一-龥]/g, '').trim() || topic;
+    console.log(`[comments] Reddit検索: "${searchTerm}"`);
+    const searchUrl = `https://www.reddit.com/r/soccer/search.json?q=${encodeURIComponent(searchTerm)}&sort=new&restrict_sr=1&limit=5&t=week`;
     const res = await fetch(searchUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -356,7 +409,7 @@ async function _fromX(sourceUrl, topic = '') {
 }
 
 // ── コメント倉庫を構築・保存 ─────────────────────────────────
-async function _buildCommentWarehouse(topic, sourceUrl) {
+async function _buildCommentWarehouse(topic, sourceUrl, articles = []) {
   const key      = _topicKey(topic);
   const savePath = path.join(COMMENTS_DIR, `_comments_${key}.json`);
 
@@ -372,9 +425,13 @@ async function _buildCommentWarehouse(topic, sourceUrl) {
     } catch (_) {}
   }
 
-  // 3ソース並列取得（topicベース検索フォールバック付き）
+  // 記事から英語検索クエリを抽出（Redditの検索精度向上）
+  const enQuery = articles.length > 0 ? _extractEnQuery(topic, articles) : '';
+  if (enQuery) console.log(`[comments] 記事から抽出した英語クエリ: "${enQuery}"`);
+
+  // 3ソース並列取得
   const [reddit, yahoo, x] = await Promise.all([
-    _fromReddit(sourceUrl, topic),
+    _fromReddit(sourceUrl, topic, enQuery),
     _fromYahoo(topic),
     _fromX(sourceUrl, topic),
   ]);
@@ -736,11 +793,9 @@ async function buildNetaBook(topicData, { force = false } = {}) {
 
   console.log('[v4_neta] 開始:', topic);
 
-  // ニュース検索 + コメント倉庫構築 を並列
-  const [articles, warehouse] = await Promise.all([
-    _fetchLatestNews(topic, url),
-    _buildCommentWarehouse(topic, url),
-  ]);
+  // ① 記事取得 → ② 記事の文脈を使ってコメント検索（順次実行）
+  const articles = await _fetchLatestNews(topic, url);
+  const warehouse = await _buildCommentWarehouse(topic, url, articles);
   const trustedCount = articles.filter(a => a.isTrusted).length;
   console.log(`[v4_neta] ニュース: ${articles.length}件（信頼${trustedCount}件） / コメント倉庫: ${warehouse.total}件`);
 
