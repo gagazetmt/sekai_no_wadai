@@ -87,14 +87,17 @@ async function processInParallel(items, limit, worker, onError) {
 //   opening は無音時 5秒（タイトル冒頭のテンポ重視）、それ以外は 8秒
 function slideDurationMs(mod) {
   const a = Array.isArray(mod.audio) ? mod.audio : [];
+  // endingPause: ending スライドの遷移後に追加する無音秒数（一言落ち演出用）
+  const pauseMs = mod?.endingPause ? Math.round(mod.endingPause * 1000) : 0;
   if (a.length) {
     const sumSec = a.reduce((s, c) => s + (c.durationSec || 0), 0);
     if (sumSec > 0) {
-      const ms = Math.round(sumSec * 1000) + LEAD_PAD_MS + TAIL_PAD_MS;
+      const ms = Math.round(sumSec * 1000) + LEAD_PAD_MS + TAIL_PAD_MS + pauseMs;
       return Math.min(ms, MAX_SLIDE_MS);
     }
   }
-  return mod?.type === 'opening' ? 5000 : DEFAULT_SLIDE_MS;
+  const base = mod?.type === 'opening' ? 5000 : DEFAULT_SLIDE_MS;
+  return base + pauseMs;
 }
 
 const BASE_DIR     = path.join(__dirname, '..', '..');
@@ -134,15 +137,16 @@ function audioDirFor(postId) {
 
 // reaction 系判定（v4_reaction も V2 reaction と同じ TTS/voice 処理を通す）
 function _isReactionType(t) { return t === 'reaction' || t === 'v4_reaction'; }
+function _hasOverlayComments(mod) { return Array.isArray(mod?.overlayComments) && mod.overlayComments.length > 0; }
 
 // 1スライド分の TTS 生成タスク (chunk配列) を作る。実生成は呼び出し側で並列化
 function buildSlideTtsTasks(mod, idx, postId) {
   if (Array.isArray(mod.audio) && mod.audio.length) return []; // 既に生成済
   const narr = String(mod.narration || '').trim();
-  // narration 空でも opening (title 読み上げ) / reaction (comments) / toc (items) は対象
+  // narration 空でも opening (title 読み上げ) / reaction (comments) / toc (items) / overlayComments は対象
   const titleAvailable = mod.type === 'opening' && String(mod.title || '').trim();
   const tocItemsAvailable = mod.type === 'toc' && Array.isArray(mod.tocItems) && mod.tocItems.length;
-  if (!narr && !_isReactionType(mod.type) && !titleAvailable && !tocItemsAvailable) return [];
+  if (!narr && !_isReactionType(mod.type) && !_hasOverlayComments(mod) && !titleAvailable && !tocItemsAvailable) return [];
   const chunks = tts.buildChunksForModule(mod);
   if (!chunks.length) return [];
 
@@ -165,26 +169,46 @@ function buildSlideTtsTasks(mod, idx, postId) {
   const provider = ttsCfg.provider || tts.DEFAULT_PROVIDER;
   const defaults = tts.getDefaults(provider);
 
-  // 🆕 reaction の comment chunk (c >= 1) はランダム voice（複数キャラ感）
+  // reaction / overlayComments の comment chunk はランダム voice（複数キャラ感）
   //   modules.json の m.reactionVoices に保存して再生成しても同じ voice を維持
-  //   chunk[0] (前置きナレ) はメイン voice、chunk[1+] (各コメント) がランダム
+  //   overlayComments: chunk構成 = [narration..., transition, comment1, comment2, ...]
+  //   reaction:        chunk構成 = [narration, comment1, comment2, ...]
   let reactionVoices = null;
   let reactionStyleInstructions = null;
-  if (_isReactionType(mod.type) && provider === 'gemini') {
-    const commentChunkCount = Math.max(0, chunks.length - 1);
-    if (Array.isArray(mod.reactionVoices) && mod.reactionVoices.length >= commentChunkCount) {
+  const hasOverlay = _hasOverlayComments(mod);
+  // overlayComments: narration chunks + 1 (transition) がコメント開始位置
+  // reaction: narration があれば 1、なければ 0
+  const narrChunkCount = hasOverlay
+    ? (narr ? 1 : 0) + 1  // narration + transition
+    : (_isReactionType(mod.type) && narr ? 1 : 0);
+  const reactionCommentStart = narrChunkCount;
+  if ((_isReactionType(mod.type) || hasOverlay) && (provider === 'gemini' || provider === 'voicevox')) {
+    const commentChunkCount = Math.max(0, chunks.length - reactionCommentStart);
+    const savedVoicesValid = Array.isArray(mod.reactionVoices) &&
+      mod.reactionVoices.length >= commentChunkCount &&
+      (provider !== 'voicevox' || mod.reactionVoices.every(value => /^\d+$/.test(String(value))));
+    if (savedVoicesValid) {
       reactionVoices = mod.reactionVoices.slice(0, commentChunkCount);
     } else {
-      const ttsGemini = require('./tts_gemini');
       reactionVoices = [];
-      for (let i = 0; i < commentChunkCount; i++) {
-        reactionVoices.push(ttsGemini.pickReactionVoice());
+      if (provider === 'voicevox') {
+        const ttsVoiceVox = require('./tts_voicevox');
+        for (let i = 0; i < commentChunkCount; i++) {
+          reactionVoices.push(ttsVoiceVox.pickCommentVoice());
+        }
+      } else {
+        const ttsGemini = require('./tts_gemini');
+        for (let i = 0; i < commentChunkCount; i++) {
+          reactionVoices.push(ttsGemini.pickReactionVoice());
+        }
       }
       mod.reactionVoices = reactionVoices;  // modules.json に保存される
     }
     // reaction comment 用 style: 感情控えめ + テンポやや早め (引用文読み)
-    const ttsGemini = require('./tts_gemini');
-    reactionStyleInstructions = ttsGemini.getReactionStyleInstructions();
+    if (provider === 'gemini') {
+      const ttsGemini = require('./tts_gemini');
+      reactionStyleInstructions = ttsGemini.getReactionStyleInstructions();
+    }
   }
 
   return chunks.map((text, c) => {
@@ -193,8 +217,8 @@ function buildSlideTtsTasks(mod, idx, postId) {
     let voiceId = ttsCfg.voiceId || defaults.voice;
     let styleInstructions = ttsCfg.styleInstructions || undefined;
     // reaction の comment chunk (c >= 1) は事前抽選 voice + 専用 style
-    if (reactionVoices && c >= 1) {
-      voiceId = reactionVoices[c - 1] || voiceId;
+    if (reactionVoices && c >= reactionCommentStart) {
+      voiceId = reactionVoices[c - reactionCommentStart] || voiceId;
       styleInstructions = reactionStyleInstructions;
     }
     return {
@@ -253,27 +277,111 @@ function buildSlideHTML(mod) {
   const m = mapImagesToModule(mod);
   const opVar = (m.variant && OP_BUILDERS[m.variant]) ? m.variant : 'v1';
   const edVar = (m.variant && ED_BUILDERS[m.variant]) ? m.variant : 'v1';
+  let html;
   switch (m.type) {
-    case 'opening':     return OP_BUILDERS[opVar](m);
-    case 'ending':      return ED_BUILDERS[edVar](m);
-    case 'toc':         return buildTocHTML(m);
-    case 'insight':     return buildInsightHTML(m);
-    case 'history':     return buildHistoryHTML(m);
-    case 'matchcard':   return buildMatchcardHTML(m);
-    case 'stats':       return buildStatsHTML(m);
-    // profile は stats と同じテンプレ（左=人物・チーム画像 / 右=データカード grid）
-    //   旧 buildProfileHTML（試合プレビュー型）は実装が matchcard と重複しており未使用
-    case 'profile':     return buildStatsHTML(m);
-    case 'comparison':  return buildComparisonHTML(m);
-    case 'reaction':    return buildReactionHTML(m);
-    case 'ranking':     return buildRankingHTML(m);
-    case 'timeline':    return buildTimelineHTML(m);
-    case 'picture':      return buildPictureHTML(m);
-    case 'v4_picture':  return buildV4PictureHTML(m);
-    case 'v4_reaction': return buildV4ReactionHTML(m);
-    case 'v4_opening':  return buildV4OpeningHTML(m);
-    default:            return buildUniversalHTML(m);
+    case 'opening':     html = OP_BUILDERS[opVar](m); break;
+    case 'ending':      html = ED_BUILDERS[edVar](m); break;
+    case 'toc':         html = buildTocHTML(m); break;
+    case 'insight':     html = buildInsightHTML(m); break;
+    case 'history':     html = buildHistoryHTML(m); break;
+    case 'matchcard':   html = buildMatchcardHTML(m); break;
+    case 'stats':       html = buildStatsHTML(m); break;
+    case 'profile':     html = buildStatsHTML(m); break;
+    case 'comparison':  html = buildComparisonHTML(m); break;
+    case 'reaction':    html = buildReactionHTML(m); break;
+    case 'ranking':     html = buildRankingHTML(m); break;
+    case 'timeline':    html = buildTimelineHTML(m); break;
+    case 'picture':     html = buildPictureHTML(m); break;
+    case 'v4_picture':  html = buildV4PictureHTML(m); break;
+    case 'v4_reaction': html = buildV4ReactionHTML(m); break;
+    case 'v4_opening':  html = buildV4OpeningHTML(m); break;
+    default:            html = buildUniversalHTML(m); break;
   }
+  // overlayComments が付いている場合、コメントオーバーレイを注入
+  if (_hasOverlayComments(m)) {
+    html = _injectCommentOverlay(html, m);
+  }
+  return html;
+}
+
+// コンテンツスライド HTML にコメントオーバーレイを注入
+function _injectCommentOverlay(html, mod) {
+  const comments = mod.overlayComments || [];
+  const transition = String(mod.commentTransition || 'これに対する反応がこちらです。').trim();
+  const audio = Array.isArray(mod.audio) ? mod.audio : [];
+
+  // コメントチャンクの開始位置: narration chunks + transition (1)
+  const narrText = String(mod.narration || '').trim();
+  const narrChunkCount = narrText ? 1 : 0;
+  const transitionChunkIdx = narrChunkCount;
+  const commentChunkStart = narrChunkCount + 1;
+
+  // audio からタイミング計算（LEAD_PAD_SEC は各テンプレ共通で 0.6s 前後）
+  const LEAD = parseFloat(process.env.LEAD_PAD_SEC || '0.6');
+  const chunkStarts = audio.map((_, i) =>
+    LEAD + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
+
+  // フォールバック: audio が無い場合は固定間隔
+  const STAGGER = 2.0;
+  const transitionDelay = chunkStarts[transitionChunkIdx] ?? (LEAD + (narrText ? 6 : 0));
+
+  const COLORS = ['#FFE066', '#66D9EF', '#A6E22E', '#FD971F', '#F92672', '#AE81FF', '#E6DB74'];
+
+  const commentDivs = comments.map((c, i) => {
+    const chunkIdx = commentChunkStart + i;
+    const delay = chunkStarts[chunkIdx] ?? (transitionDelay + STAGGER * (i + 1));
+    const color = COLORS[i % COLORS.length];
+    const yPos = 30 + (i % 4) * 15;
+    const xShift = (i % 2 === 0) ? '5%' : '15%';
+    return `<div class="oc-comment" style="animation-delay:${delay.toFixed(2)}s;top:${yPos}%;left:${xShift};border-left:4px solid ${color}">${_escHtml(String(c.text || ''))}</div>`;
+  }).join('\n');
+
+  const overlayHTML = `
+<style>
+.comment-overlay {
+  position:fixed;inset:0;z-index:9000;pointer-events:none;
+}
+.oc-dimmer {
+  position:absolute;inset:0;background:rgba(0,0,0,0.55);
+  opacity:0;animation:oc-fade-in 0.5s ease forwards;
+  animation-delay:${(transitionDelay - 0.3).toFixed(2)}s;
+}
+.oc-transition {
+  position:absolute;top:12%;left:50%;transform:translateX(-50%);
+  font:bold 28px 'Noto Sans JP','Barlow Condensed',sans-serif;color:#fff;
+  text-shadow:0 2px 8px rgba(0,0,0,0.7);letter-spacing:2px;
+  opacity:0;animation:oc-fade-in 0.4s ease forwards;
+  animation-delay:${transitionDelay.toFixed(2)}s;
+}
+.oc-comment {
+  position:absolute;
+  max-width:70%;padding:10px 18px;
+  background:rgba(20,20,30,0.85);color:#fff;
+  font:600 22px 'Noto Sans JP',sans-serif;line-height:1.5;
+  border-radius:6px;
+  opacity:0;animation:oc-slide-in 0.4s ease forwards;
+}
+@keyframes oc-fade-in { to { opacity:1 } }
+@keyframes oc-slide-in {
+  from { opacity:0;transform:translateY(12px) }
+  to   { opacity:1;transform:translateY(0) }
+}
+</style>
+<div class="comment-overlay">
+  <div class="oc-dimmer"></div>
+  <div class="oc-transition">${_escHtml(transition)}</div>
+  ${commentDivs}
+</div>`;
+
+  // </body> の直前に注入
+  if (html.includes('</body>')) {
+    return html.replace('</body>', overlayHTML + '\n</body>');
+  }
+  return html + overlayHTML;
+}
+
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // 1スライドを Puppeteer + ffmpeg で MP4 化

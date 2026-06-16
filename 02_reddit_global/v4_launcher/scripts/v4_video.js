@@ -261,13 +261,13 @@ function buildModules(book) {
        : book.structurePattern === 'rapid' ? 'comment_heavy'
        : 'info_heavy');
 
-  let c1 = _comments(book.comments1);
-  let c2 = _comments(book.comments2);
-  if (!c2.length && c1.length >= 5) {
-    const half = Math.ceil(c1.length / 2);
-    c2 = c1.slice(half);
-    c1 = c1.slice(0, half);
-  }
+  // ── コメント収集・分配 ──
+  const allComments = [..._comments(book.comments1), ..._comments(book.comments2)];
+  const commentAngles = [
+    _cleanText(book.commentAngle1, 'これに対する反応がこちらです。'),
+    _cleanText(book.commentAngle2, 'さらにこんな声も。'),
+    'こんな意見も届いています。',
+  ];
 
   const opening = {
     type: 'opening',
@@ -278,25 +278,8 @@ function buildModules(book) {
     narration:   threadTitle,
   };
 
-  // 概要スライド: overviewType に応じて型を決定
-  const ovType = book.overviewType === 'insight' ? 'insight' : 'picture';
-  const overview = {
-    type: ovType,
-    title: '何が起きた？',
-    images: overviewPick?.path ? [overviewPick.path] : images,
-    bgImage:     overviewPick?.path || imagePath || null,
-    imageAdjust: overviewPick?.adj,
-    narration:   _compactText(book.overview, 190),
-  };
-  if (ovType === 'insight') {
-    const ovData = book.overviewData || {};
-    const phrases = Array.isArray(ovData.catchphrases)
-      ? ovData.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
-      : [];
-    overview.catchphrases = phrases.length >= 2 ? phrases.slice(0, 6) : [_compactText(book.overview, 42)];
-  }
-
-  // 補足1・補足2: 新フィールドがあれば個別ビルド、なければ旧互換
+  // ── 概要スライド ──
+  // supplement1 があればそれが概要を兼ねる。なければ insight/picture。
   let supp1 = null;
   let supp2 = null;
   if (book.supplement1Type || book.supplement2Type) {
@@ -308,15 +291,44 @@ function buildModules(book) {
   if (supp1 && suppPick?.adj) supp1.imageAdjust = suppPick.adj;
   if (supp2 && suppPick?.adj) supp2.imageAdjust = suppPick.adj;
 
-  const reaction1 = _buildReaction(_cleanText(book.commentAngle1, 'ネットの反応'), c1);
-  const reaction2 = _buildReaction(_cleanText(book.commentAngle2, 'さらに反応'), c2);
-  // 反応スライド: スタジアム/群衆/祝福系 画像を優先
-  const rxImg = slideImgs.find(i => ['stadium','celebration','team_group'].includes(i.contentType))
-             || slideImgs[3] || thumb;
-  const rxPath = rxImg ? String(rxImg.url || '').replace(/^\//, '') : imagePath;
-  const rxAdj  = _imageAdjust(rxImg);
-  if (reaction1) { reaction1.bgImage = rxPath; if (rxAdj) reaction1.imageAdjust = rxAdj; }
-  if (reaction2) { reaction2.bgImage = rxPath; if (rxAdj) reaction2.imageAdjust = rxAdj; }
+  let content1;
+  if (supp1) {
+    supp1.narration = _compactText(book.overview, 190) || supp1.narration;
+    content1 = supp1;
+  } else {
+    const ovType = book.overviewType === 'insight' ? 'insight' : 'picture';
+    content1 = {
+      type: ovType,
+      title: '何が起きた？',
+      images: overviewPick?.path ? [overviewPick.path] : images,
+      bgImage:     overviewPick?.path || imagePath || null,
+      imageAdjust: overviewPick?.adj,
+      narration:   _compactText(book.overview, 190),
+    };
+    if (ovType === 'insight') {
+      const ovData = book.overviewData || {};
+      const phrases = Array.isArray(ovData.catchphrases)
+        ? ovData.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
+        : [];
+      content1.catchphrases = phrases.length >= 2 ? phrases.slice(0, 6) : [_compactText(book.overview, 42)];
+    }
+  }
+
+  // ── コメント分配 ──
+  // content slides の数に応じてコメントを均等分配
+  const contentSlides = [content1, supp2].filter(Boolean);
+  const commentsPerSlide = Math.ceil(allComments.length / Math.max(contentSlides.length, 1));
+  contentSlides.forEach((slide, i) => {
+    const start = i * commentsPerSlide;
+    const chunk = allComments.slice(start, start + commentsPerSlide).slice(0, 4);
+    if (chunk.length) {
+      slide.overlayComments = chunk.map((text, ci) => ({
+        text: _compactText(text, 36),
+        score: 100 - ci * 10,
+      }));
+      slide.commentTransition = commentAngles[i] || commentAngles[0];
+    }
+  });
 
   const ending = {
     type:          'ending',
@@ -327,26 +339,15 @@ function buildModules(book) {
     endingCta:     { text: '　' },
     nextTopic:     _cleanText(book.endingPunch, ''),
     commentPrompt: 'あなたの予想をコメントで！',
+    endingPause:   4,
   };
 
-  // レイアウトに応じてスライド順序を決定
-  let middle;
-  if (layout === 'comment_heavy') {
-    // ②コメント重点型: 概要 → 補足1 → コメ1 → 補足2 → コメ2
-    middle = [overview, supp1, reaction1, supp2, reaction2];
-  } else {
-    // ①情報重点型: 概要 → 補足1 → 補足2 → コメ1 → コメ2
-    middle = [overview, supp1, supp2, reaction1, reaction2];
-  }
-  const modules = [opening, ...middle.filter(Boolean), ending];
+  // ── 固定構成: op → content1(+comments) → [content2(+comments)] → ed ──
+  const modules = [opening, ...contentSlides, ending];
 
-  // 4枚を下回らないよう安全弁
-  if (modules.length < 4) {
-    const fallbackSupplement = _buildSupplement(book, imagePath);
-    if (fallbackSupplement) modules.splice(2, 0, fallbackSupplement);
-  }
-  if (modules.length < 4) {
-    modules.splice(2, 0, {
+  // 3枚を下回らないよう安全弁（opening + content1 + ending = 最低3枚）
+  if (modules.length < 3) {
+    modules.splice(1, 0, {
       type: 'insight',
       title: '今回の要点',
       narration: _compactText(book.overview, 120),
@@ -355,7 +356,7 @@ function buildModules(book) {
     });
   }
 
-  console.log(`[v4_video] layout=${layout} / ${modules.length}枚 / ${modules.map(m => m.type).join(' → ')}`);
+  console.log(`[v4_video] ${modules.length}枚 / ${modules.map(m => m.type).join(' → ')} / comments: ${allComments.length}件分配`);
   return modules;
 }
 

@@ -673,11 +673,17 @@ async function fetchBookAssets(book) {
             tournament: matchResult.tournament,
             venue:      matchResult.venue,
             scoreline:  matchResult.scoreline,
+            homeScore:  matchResult.homeScore,
+            awayScore:  matchResult.awayScore,
             goals:      matchResult.goals,
             cards:      matchResult.cards,
+            subs:       matchResult.subs || [],
             stats:      matchResult.stats,
             topPlayers: matchResult.topPlayers,
             formations: matchResult.formations,
+            lineup:     matchResult.lineup || { home: [], away: [] },
+            homeLogo:   matchResult.homeLogo || null,
+            awayLogo:   matchResult.awayLogo || null,
             h2hSummary: matchResult.h2hSummary,
           };
           const logoSource = matchResult._source === 'fotmob' ? 'fotmob-logo' : 'sofascore-logo';
@@ -710,6 +716,32 @@ async function fetchBookAssets(book) {
           // 後方互換: supplementData にも同期
           if (matchcardSfx && targetData !== 'supplementData') {
             book.supplementData = { ...sd };
+          }
+          // supplement2 が stats の場合、試合パフォーマンスデータで上書き
+          if (book.supplement2Type === 'stats' && matchResult.topPlayers?.length) {
+            const keyPlayer = book.keyPlayer || matchResult.topPlayers[0]?.name;
+            const playerLineup = [...(matchResult.lineup?.home || []), ...(matchResult.lineup?.away || [])];
+            const kp = playerLineup.find(p => p.name === keyPlayer);
+            const kpGoals = (matchResult.goals || []).filter(g => g.player === keyPlayer);
+            const slots = [];
+            if (kp?.rating)  slots.push({ label: '試合評価', value: String(kp.rating) });
+            if (kpGoals.length) slots.push({ label: 'ゴール', value: kpGoals.map(g => g.timeStr).join(', ') });
+            if (kp?.pos)     slots.push({ label: 'ポジション', value: kp.pos });
+            // チーム全体のスタッツも追加
+            const statMap = matchResult.stats || {};
+            if (statMap['Ball possession']) slots.push({ label: 'ポゼッション', value: `${statMap['Ball possession'].home} - ${statMap['Ball possession'].away}` });
+            if (statMap['Total shots'])     slots.push({ label: 'シュート', value: `${statMap['Total shots'].home} - ${statMap['Total shots'].away}` });
+            if (statMap['Shots on target']) slots.push({ label: '枠内シュート', value: `${statMap['Shots on target'].home} - ${statMap['Shots on target'].away}` });
+            // トップ選手一覧
+            for (const tp of matchResult.topPlayers.slice(0, 3)) {
+              slots.push({ label: tp.name, value: `評価 ${tp.rating}` });
+            }
+            book.supplement2Data = {
+              entity: keyPlayer || book.supplement2Data?.entity,
+              dataSlots: slots.slice(0, 8),
+            };
+            book.supplement2Title = book.supplement2Title || `${keyPlayer} 試合パフォーマンス`;
+            console.log(`[v4/assets] supplement2 stats → 試合パフォーマンスに上書き (${slots.length}項目)`);
           }
           console.log(`[v4/assets] Match OK: ${matchResult.scoreline} → ${targetData}`);
         } else {

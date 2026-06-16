@@ -572,17 +572,23 @@ function buildChunksForModule(mod) {
     return narr ? [narr] : [];
   }
 
+  // overlayComments 付きモジュール: narration → transition → comments のチャンク構成
+  // コンテンツスライド上にコメントをオーバーレイ表示する新構成
+  if (Array.isArray(mod.overlayComments) && mod.overlayComments.length) {
+    const narrChunks = narr ? [narr] : [];
+    const transition = String(mod.commentTransition || 'これに対する反応がこちらです。').trim();
+    const commentChunks = mod.overlayComments
+      .map(c => String(c?.text || '').trim())
+      .filter(Boolean)
+      .slice(0, 7);
+    return [...narrChunks, transition, ...commentChunks];
+  }
+
   // 🆕 1 slide 1 chunk モード（2026-05-14）
-  //   env: TTS_ONE_CHUNK_PER_SLIDE=1
-  //   narration 全文を 1 chunk として返す → Gemini TTS が一気通貫で生成 → 声色完全統一
-  //   ただし catchphrase / 字幕の同期は Gemini ASR で取得した word timestamps に依存（render.js 側で取得）
-  //   reaction はコメント別音声化が必要なので除外
   if (process.env.TTS_ONE_CHUNK_PER_SLIDE === '1' && mod.type !== 'reaction' && mod.type !== 'v4_reaction') {
     return narr ? [narr] : [];
   }
 
-  // 通常タイプ (insight / reaction / comparison / stats / history): 文末分割
-  //   chunk 数 = catchphrase 出現タイミングのアンカーになるため削減不可
   let baseChunks = splitIntoChunks(narr);
 
   if (mod.type === 'reaction' || mod.type === 'v4_reaction') {
