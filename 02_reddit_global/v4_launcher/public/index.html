@@ -120,9 +120,8 @@ main { padding: 14px; max-width: 860px; margin: 0 auto; }
 .src-chip .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .src-chip[data-src="all"].active  { background: var(--yellow); }
 .src-chip[data-src="X"].active    { background: var(--cx); }
-.src-chip[data-src="Yahoo"].active { background: var(--cy); }
-.src-chip[data-src="Reddit"].active { background: var(--cr); }
-.src-chip[data-src="5ch"].active { background: var(--c5); }
+.src-chip[data-src="X/JP"].active { background: var(--cx); }
+.src-chip[data-src="X/EN"].active { background: var(--cx); }
 .src-count {
   background: rgba(255,255,255,.12); border-radius: 10px;
   padding: 0 5px; font-size: 10px; font-weight: 900;
@@ -783,24 +782,14 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
     <div class="scan-title">📡 スキャン中...</div>
     <div class="scan-sources">
       <div class="scan-row">
-        <span class="scan-label" style="color:var(--cx)">X</span>
+        <span class="scan-label" style="color:var(--cx)">X/JP</span>
         <div class="scan-bar"><div class="scan-fill x" id="fillX"></div></div>
         <span class="scan-status" id="statX">待機</span>
       </div>
       <div class="scan-row">
-        <span class="scan-label" style="color:var(--cy)">Yahoo</span>
-        <div class="scan-bar"><div class="scan-fill yahoo" id="fillY"></div></div>
-        <span class="scan-status" id="statY">待機</span>
-      </div>
-      <div class="scan-row">
-        <span class="scan-label" style="color:var(--cr)">Reddit</span>
-        <div class="scan-bar"><div class="scan-fill reddit" id="fillR"></div></div>
-        <span class="scan-status" id="statR">待機</span>
-      </div>
-      <div class="scan-row">
-        <span class="scan-label" style="color:var(--c5)">5ch</span>
-        <div class="scan-bar"><div class="scan-fill" id="fill5" style="background:var(--c5)"></div></div>
-        <span class="scan-status" id="stat5">待機</span>
+        <span class="scan-label" style="color:var(--cx)">X/EN</span>
+        <div class="scan-bar"><div class="scan-fill x" id="fillXen"></div></div>
+        <span class="scan-status" id="statXen">待機</span>
       </div>
     </div>
   </div>
@@ -811,21 +800,13 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       <span class="dot" style="background:var(--yellow)"></span>
       全件 <span class="src-count" id="cntAll">0</span>
     </div>
-    <div class="src-chip" data-src="X" onclick="filterSrc('X')">
+    <div class="src-chip" data-src="X/JP" onclick="filterSrc('X/JP')">
       <span class="dot" style="background:var(--cx)"></span>
-      X <span class="src-count" id="cntX">0</span>
+      X/JP <span class="src-count" id="cntXjp">0</span>
     </div>
-    <div class="src-chip" data-src="Yahoo" onclick="filterSrc('Yahoo')">
-      <span class="dot" style="background:var(--cy)"></span>
-      Yahoo <span class="src-count" id="cntY">0</span>
-    </div>
-    <div class="src-chip" data-src="Reddit" onclick="filterSrc('Reddit')">
-      <span class="dot" style="background:var(--cr)"></span>
-      Reddit <span class="src-count" id="cntR">0</span>
-    </div>
-    <div class="src-chip" data-src="5ch" onclick="filterSrc('5ch')">
-      <span class="dot" style="background:var(--c5)"></span>
-      5ch <span class="src-count" id="cnt5">0</span>
+    <div class="src-chip" data-src="X/EN" onclick="filterSrc('X/EN')">
+      <span class="dot" style="background:var(--cx)"></span>
+      X/EN <span class="src-count" id="cntXen">0</span>
     </div>
   </div>
 
@@ -1525,46 +1506,32 @@ function startScanAnim() {
   document.getElementById('srcFilters').style.display = 'none';
   document.getElementById('liveDot').classList.add('on');
 
-  // 順番にバーを伸ばす演出
   setTimeout(() => {
     document.getElementById('fillX').style.width = '70%';
     document.getElementById('statX').textContent = '取得中';
   }, 300);
   setTimeout(() => {
-    document.getElementById('fillY').style.width = '60%';
-    document.getElementById('statY').textContent = '取得中';
+    document.getElementById('fillXen').style.width = '60%';
+    document.getElementById('statXen').textContent = '取得中';
   }, 700);
-  setTimeout(() => {
-    document.getElementById('fillR').style.width = '80%';
-    document.getElementById('statR').textContent = '取得中';
-  }, 1100);
-  setTimeout(() => {
-    document.getElementById('fill5').style.width = '75%';
-    document.getElementById('stat5').textContent = '取得中';
-  }, 1400);
 }
 function stopScanAnim(counts) {
   document.getElementById('liveDot').classList.remove('on');
   document.getElementById('scanAnim').classList.remove('on');
   if (counts) {
     document.getElementById('fillX').style.width = '100%';
-    document.getElementById('fillY').style.width = '100%';
-    document.getElementById('fillR').style.width = '100%';
-    document.getElementById('fill5').style.width = '100%';
-    document.getElementById('statX').textContent = counts.x + '件';
-    document.getElementById('statY').textContent = counts.y + '件';
-    document.getElementById('statR').textContent = counts.r + '件';
-    document.getElementById('stat5').textContent = counts.fivech + '件';
+    document.getElementById('fillXen').style.width = '100%';
+    document.getElementById('statX').textContent = (counts.xjp || 0) + '件';
+    document.getElementById('statXen').textContent = (counts.xen || 0) + '件';
   }
-  // バーをリセット（少し遅延）
   setTimeout(() => {
-    ['fillX','fillY','fillR','fill5'].forEach(id => document.getElementById(id).style.transition = 'none');
+    ['fillX','fillXen'].forEach(id => document.getElementById(id).style.transition = 'none');
     setTimeout(() => {
-      ['fillX','fillY','fillR','fill5'].forEach(id => {
+      ['fillX','fillXen'].forEach(id => {
         document.getElementById(id).style.width = '0%';
         document.getElementById(id).style.transition = 'width 1.5s ease';
       });
-      ['statX','statY','statR','stat5'].forEach(id => document.getElementById(id).textContent = '待機');
+      ['statX','statXen'].forEach(id => document.getElementById(id).textContent = '待機');
     }, 50);
   }, 2000);
 }
@@ -1619,20 +1586,16 @@ function renderTopics(topics) {
   S.activeFilter = 'all';
 
   // カウント集計
-  const counts = { all: topics.length, X: 0, Yahoo: 0, Reddit: 0, '5ch': 0 };
+  const counts = { all: topics.length, 'X/JP': 0, 'X/EN': 0 };
   topics.forEach(t => {
     const src = String(t.source || '');
-    if (src.startsWith('X'))      counts.X++;
-    else if (src.startsWith('Y')) counts.Yahoo++;
-    else if (src.startsWith('R')) counts.Reddit++;
-    else if (src.startsWith('5ch')) counts['5ch']++;
+    if (src === 'X/JP')      counts['X/JP']++;
+    else if (src === 'X/EN') counts['X/EN']++;
   });
 
   document.getElementById('cntAll').textContent   = counts.all;
-  document.getElementById('cntX').textContent     = counts.X;
-  document.getElementById('cntY').textContent     = counts.Yahoo;
-  document.getElementById('cntR').textContent     = counts.Reddit;
-  document.getElementById('cnt5').textContent     = counts['5ch'];
+  document.getElementById('cntXjp').textContent   = counts['X/JP'];
+  document.getElementById('cntXen').textContent    = counts['X/EN'];
   document.getElementById('topicCount').textContent = topics.length + '件';
   document.getElementById('srcFilters').style.display = 'flex';
 
@@ -1650,7 +1613,7 @@ function filterSrc(src) {
 
   const filtered = src === 'all'
     ? S.topics
-    : S.topics.filter(t => String(t.source || '').startsWith(src[0]));
+    : S.topics.filter(t => String(t.source || '') === src);
   renderGrid(filtered);
 }
 
@@ -1663,12 +1626,7 @@ function renderGrid(topics) {
 
   // このソースに対応するcssクラス
   function srcClass(src) {
-    const s = String(src || '');
-    if (s.startsWith('X'))      return 'X';
-    if (s.startsWith('Y'))      return 'Yahoo';
-    if (s.startsWith('R'))      return 'Reddit';
-    if (s.startsWith('5ch'))    return '5ch';
-    return '';
+    return 'X';
   }
 
   function timeStr(date) {

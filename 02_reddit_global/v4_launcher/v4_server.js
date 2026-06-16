@@ -90,7 +90,6 @@ app.post('/api/scout', (req, res) => {
   setImmediate(async () => {
     try {
       const topics = await runScout({
-        perSource: 5,
         onProgress: (p) => updateJob(jobId, { status: 'running', stage: p.stage, message: p.message }),
       });
       updateJob(jobId, { status: 'done', topics });
@@ -436,8 +435,8 @@ app.post('/api/fullauto', (req, res) => {
       let t = topic ? { topic, hook: hook || '', url: url || '' } : null;
 
       if (!t) {
-        updateJob(jobId, { status: 'running', stage: 'scout', message: 'X / Yahoo / Reddit / 5ch をスカウト中...' });
-        const topics = await runScout({ perSource: 5 });
+        updateJob(jobId, { status: 'running', stage: 'scout', message: 'X/JP + X/EN をスカウト中...' });
+        const topics = await runScout();
         if (!topics?.length) throw new Error('スカウト結果が0件でした');
         t = topics[0];  // 最高スコア案件を自動採用
         updateJob(jobId, { status: 'running', stage: 'scout', message: `案件決定: ${t.topic}`, topic: t.topic });
