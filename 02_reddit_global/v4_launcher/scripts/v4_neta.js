@@ -612,8 +612,17 @@ ${hasRealComments
   try {
     parsed = JSON.parse(jsonText);
   } catch (e) {
-    // JSON が壊れていたら最小構造でフォールバック
-    throw new Error('ネタブックJSON parse失敗: ' + e.message);
+    // DeepSeekが値のクォートを落とすケースを修復して再試行
+    try {
+      let s = jsonText.replace(/```[\s\S]*?```/g, '');
+      s = s.replace(/,\s*([}\]])/g, '$1');
+      s = s.replace(/"(\w+)"\s*:\s*([^\x00-\x7F][^\n,}\]]*)/g,
+        (m, key, val) => `"${key}": ${JSON.stringify(val.trim())}`);
+      parsed = JSON.parse(s);
+      console.log('[v4_neta] JSON修復成功（クォート補完）');
+    } catch (_) {
+      throw new Error('ネタブックJSON parse失敗: ' + e.message);
+    }
   }
 
   if (parsed.tone_check === 'ng') {
