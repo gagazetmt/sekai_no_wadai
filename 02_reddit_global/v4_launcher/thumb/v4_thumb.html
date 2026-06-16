@@ -26,22 +26,32 @@
     filter: brightness(var(--bg-brightness, 0.88));
   }
 
-  /* ── サブラベル（テキストボックスの少し上） ── */
-  .sub-labels {
+  /* ── ボトムラッパー（テキストボックス+サブラベルをまとめて配置） ── */
+  .bottom-wrap {
     position: absolute;
-    bottom: calc(35% + 16px);
+    bottom: 10px;
     left: 10px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    z-index: 5;
+  }
+
+  /* ── サブラベル（メインボックスに20%被る） ── */
+  .sub-labels {
     display: flex;
     gap: 10px;
-    z-index: 10;
+    margin-bottom: -20px;
+    z-index: 15;
+    position: relative;
   }
 
   .sub-label {
     background: #FFF8E1;
-    font-size: 34px;
+    font-size: 40px;
     font-weight: 900;
-    padding: 5px 18px;
-    border: 4px solid #111;
+    padding: 4px 20px;
+    border: 5px solid #111;
     border-radius: 4px;
     line-height: 1.2;
     white-space: nowrap;
@@ -51,21 +61,16 @@
   .sub-label .sl-text { color: #cc0000; }
   .sub-label.hidden { display: none; }
 
-  /* ── メインテキストボックス（下35%） ── */
+  /* ── メインテキストボックス（幅は中身に合わせて縮む） ── */
   .title-box {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    right: 10px;
-    height: calc(35% - 10px);
     background: var(--accent-color, #FFD700);
     border: 4px solid #2a1a00;
     border-radius: 6px;
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
     justify-content: center;
     padding: 2px 18px;
-    z-index: 5;
+    max-width: 1260px;
   }
 
   .title-line {
@@ -73,7 +78,7 @@
     font-size: var(--title-size, 92px);
     font-weight: 900;
     color: #111;
-    line-height: 0.92;
+    line-height: 0.95;
     letter-spacing: -3px;
     white-space: nowrap;
   }
@@ -81,25 +86,24 @@
   .title-line .red { color: #cc0000; }
   .title-line .blue { color: #0044cc; }
   .title-line .white { color: #ffffff; text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; }
-
-  /* コメントなしモード */
-  .sub-label.hidden { display: none; }
 </style>
 </head>
 <body>
   <!-- 背景写真 -->
   <div class="photo-area"></div>
 
-  <!-- サブラベル（最大2個） -->
-  <div class="sub-labels">
-    <div class="sub-label {{LABEL1_HIDDEN}}"><span class="sl-text">{{LABEL1}}</span></div>
-    <div class="sub-label {{LABEL2_HIDDEN}}"><span class="sl-text">{{LABEL2}}</span></div>
-  </div>
-
-  <!-- メインテキストボックス -->
-  <div class="title-box">
-    <span class="title-line">{{LINE1}}</span>
-    <span class="title-line">{{LINE2}}</span>
+  <!-- ボトムラッパー -->
+  <div class="bottom-wrap">
+    <!-- サブラベル（最大2個、メインボックスに被る） -->
+    <div class="sub-labels">
+      <div class="sub-label {{LABEL1_HIDDEN}}"><span class="sl-text">{{LABEL1}}</span></div>
+      <div class="sub-label {{LABEL2_HIDDEN}}"><span class="sl-text">{{LABEL2}}</span></div>
+    </div>
+    <!-- メインテキストボックス -->
+    <div class="title-box">
+      <span class="title-line">{{LINE1}}</span>
+      <span class="title-line">{{LINE2}}</span>
+    </div>
   </div>
 </body>
 </html>
