@@ -187,13 +187,15 @@ async function _pickTopics(items, maxTopics = 40) {
 
   const examples = [
     '【悲報】エンバペ君、ファンダイクに勝負を挑んだ結果wwwww',
-    '【朗報】辛口でおなじみキャラガーさん、三笘の天才ゴールを大絶賛',
-    '【速報】ユルゲン・クロップ、レアルマドリード監督の交渉合意と現地報道',
-    '日本代表のPKが下手な理由がこちらです',
-    '【完全覚醒】遠藤航、31歳にしてとんでもない境地に辿り着くwwwwww',
+    '【朗報】辛口キャラガーさん、三笘の天才ゴールを大絶賛してしまう',
+    '【速報】クロップさん、レアル監督就任で交渉合意と現地報道',
+    '日本代表のPKが下手な理由がこちらですwww',
+    '【完全覚醒】遠藤航、31歳にしてとんでもない境地に辿り着く',
+    'レヴァンドフスキさん（36）、まだ衰える気配がない模様',
+    '【悲報】マンUさん、また逆転負けを喫してしまう…',
   ].join('\n');
 
-  const prompt = `あなたは2chサッカー動画チャンネルのプロデューサーです。
+  const prompt = `あなたは2ch/5chサッカー板の住人であり、サッカー動画チャンネルのプロデューサーです。
 以下は今日のXで話題になっているサッカーニュース一覧です。
 
 **選定基準（優先順）**
@@ -203,8 +205,15 @@ async function _pickTopics(items, maxTopics = 40) {
 4. ネタ化・笑い・驚きになる要素があるか → 重要
 5. 似たようなニュースが被ってないか → 被りは1件だけにする
 
-**良いフック文の例（この雰囲気で作る）:**
+**5chスレタイの例（このノリ・テンションで topic を作る）:**
 ${examples}
+
+**スレタイのルール:**
+- 【悲報】【朗報】【速報】【悲報】【完全覚醒】等のタグを適宜つける
+- 「○○さん、△△してしまうwww」「○○した結果wwwww」「○○な模様」「○○がこちら」等の5ch定番構文を使う
+- 選手・チームを「さん」「君」「ニキ」等で親しみを込めて呼ぶのもOK
+- 長すぎない（40字以内）。パッと見てネタが分かること
+- 選手やクラブへのリスペクトは忘れない。愛あるイジりはOKだが誹謗中傷はNG
 
 【ニュース一覧（${items.length}件）】
 ${block}
@@ -213,14 +222,13 @@ ${block}
 同じ出来事を扱うニュースはソースが違っても1件だけにしてください。
 
 それぞれ:
-- topic: 20字以内の一言要約
-- hook: 2ch風フック文（30字以内）※良い例の雰囲気を参考に
+- topic: 5chスレタイ風の案件名（40字以内）※上記の例を参考に
 - score: 0〜100
 - source: [ソース]タグそのまま
 - originalIndex: 上記番号（1始まり）
 
 JSONのみ:
-{"topics":[{"topic":"...","hook":"...","score":88,"source":"X/JP","originalIndex":3}]}`;
+{"topics":[{"topic":"【悲報】エンバペ君、ファンダイクに勝負を挑んだ結果wwwww","score":88,"source":"X/JP","originalIndex":3}]}`;
 
   try {
     const raw = await callAI({
@@ -238,8 +246,8 @@ JSONのみ:
       .map(t => {
         const orig = items[(t.originalIndex || 1) - 1] || {};
         return {
-          topic:  String(t.topic || '').slice(0, 30),
-          hook:   String(t.hook  || '').slice(0, 60),
+          topic:  String(t.topic || '').slice(0, 50),
+          hook:   String(t.topic || '').slice(0, 50),
           score:  Math.max(0, Math.min(100, Number(t.score) || 50)),
           source: String(orig.source || t.source || ''),
           title:  orig.title || '',
@@ -251,7 +259,7 @@ JSONのみ:
   } catch (e) {
     console.warn('[scout] 選定失敗:', e.message);
     return items.slice(0, maxTopics).map(it => ({
-      topic: it.title.slice(0, 30), hook: '', score: 50,
+      topic: it.title.slice(0, 50), hook: it.title.slice(0, 50), score: 50,
       source: it.source, title: it.title, url: it.url, date: it.date,
     }));
   }

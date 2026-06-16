@@ -1653,7 +1653,6 @@ function renderGrid(topics) {
         <span class="tc-score">${t.score || 0}pt</span>
       </div>
       <div class="tc-topic">${esc(t.topic)}</div>
-      ${t.hook ? `<div class="tc-hook">${esc(t.hook)}</div>` : ''}
       <div style="display:flex;align-items:center;margin-top:8px;gap:8px;">
         ${t.date ? `<div class="tc-time" style="margin-top:0;">${timeStr(t.date)}</div>` : ''}
         <button class="btn btn-yellow" style="margin-left:auto;padding:6px 12px;font-size:11px;"
@@ -1675,7 +1674,7 @@ async function selectTopic(idx) {
   // バナー
   document.getElementById('selBanner').classList.add('on');
   document.getElementById('selTopic').textContent = t.topic;
-  document.getElementById('selHook').textContent  = t.hook || '';
+  document.getElementById('selHook').textContent  = '';
 
   // Step2 解放 & 遷移
   document.getElementById('tab2').disabled = false;
