@@ -1,21 +1,14 @@
 // v4_launcher/scripts/v4_scout.js
-// V4ニューススカウト（4部門: X / Yahoo / Reddit / 5ch）
-//   X       : advanced_search × 2 + Japan trends
-//   Yahoo   : Brave Search site:news.yahoo.co.jp
-//   Reddit  : r/soccer + r/JapanSoccer top posts
-//
-//   → 全件 DeepSeek に渡して上位 7 件選定 + フック生成
+// V4ニューススカウト（X/JP + X/EN のみ）
+//   → 全件 DeepSeek に渡して総合上位40件選定 + フック生成
 //   → 48h 重複排除 (used_topics.json)
 'use strict';
 
 const path  = require('path');
 const fs    = require('fs');
-const https = require('https');
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), quiet: true });
 
-const { fetchSerper } = require('../../scripts/modules/fetchers/brave_search_module');
-const { fetch5chTitles } = require('../../scripts/modules/fetchers/5ch_fetcher');
-const { callAI }      = require('../../scripts/ai_client');
+const { callAI } = require('../../scripts/ai_client');
 
 const DATA_DIR   = path.join(__dirname, '..', 'data');
 const SCOUT_FILE = path.join(DATA_DIR, 'scout_results.json');
@@ -23,17 +16,14 @@ const USED_FILE  = path.join(DATA_DIR, 'used_topics.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const X_API_KEY = process.env.TWITTER_API_IO_KEY;
-const REDDIT_COOKIE = process.env.REDDIT_SESSION_COOKIE || '';
 
 const FRESHNESS_HOURS = 12;
 
 function _isWithinHours(dateStr, hours) {
   if (!dateStr) return true;
   const s = String(dateStr).trim();
-  // ISO 日付
   const d = new Date(s);
   if (!isNaN(d.getTime())) return (Date.now() - d.getTime()) < hours * 3600 * 1000;
-  // Brave age 文字列 ("3 hours ago", "1 day ago", "2 days ago" 等)
   const m = s.match(/(\d+)\s*(minute|hour|day|week|month|year)/i);
   if (m) {
     const n = Number(m[1]);
@@ -41,19 +31,11 @@ function _isWithinHours(dateStr, hours) {
     const ms = { minute: 60e3, hour: 3600e3, day: 86400e3, week: 604800e3, month: 2592e6, year: 31536e6 };
     return n * (ms[unit] || 86400e3) < hours * 3600e3;
   }
-  // 日本語 ("3時間前", "1日前")
-  const mj = s.match(/(\d+)\s*(分|時間|日|週間|ヶ月|か月|年)/);
-  if (mj) {
-    const n = Number(mj[1]);
-    const unit = mj[2];
-    const ms = { '分': 60e3, '時間': 3600e3, '日': 86400e3, '週間': 604800e3, 'ヶ月': 2592e6, 'か月': 2592e6, '年': 31536e6 };
-    return n * (ms[unit] || 86400e3) < hours * 3600e3;
-  }
   return true;
 }
 
 // ─────────────────────────────────────────────────────────────
-// ① X (twitterAPI.io)
+// X (twitterAPI.io) — JP + EN
 // ─────────────────────────────────────────────────────────────
 async function _fetchX() {
   if (!X_API_KEY) return [];
@@ -79,117 +61,11 @@ async function _fetchX() {
     } catch (e) { console.warn(`[scout] X ${label} 失敗:`, e.message); }
   }
 
-  // Japan Trends
-  try {
-    const res = await fetch('https://api.twitterapi.io/twitter/trends?' + new URLSearchParams({ woeid: '23424856' }), {
-      headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(8000),
-    });
-    const data = await res.json();
-    const trends = data?.trends || [];
-    const soccerTrends = trends.filter(t => {
-      const n = (t.trend?.name || '').toLowerCase();
-      return /サッカー|football|soccer|代表|w杯|worldcup|jfa|移籍|cl |pl |premier|champions/i.test(n);
-    });
-    for (const t of soccerTrends.slice(0, 5)) {
-      items.push({ title: t.trend.name, source: 'X/Trend', url: '', date: null });
-    }
-  } catch (e) { console.warn('[scout] X Trends 失敗:', e.message); }
-
   return items;
 }
 
 // ─────────────────────────────────────────────────────────────
-// ② Yahoo Japan（Brave Search 経由）
-// ─────────────────────────────────────────────────────────────
-async function _fetchYahoo() {
-  try {
-    const res = await fetchSerper('site:news.yahoo.co.jp サッカー 最新', '', 'ja', null, { num: 20 });
-    if (!res?.ok) {
-      console.warn('[scout] Yahoo 失敗:', res?.error || 'unknown');
-      return [];
-    }
-    return (res?.organic || []).map(r => ({
-      title:  (r.title || '').trim(),
-      source: 'Yahoo',
-      url:    r.link || '',
-      date:   r.date || null,
-    })).filter(it => it.title.length > 10);
-  } catch (e) {
-    console.warn('[scout] Yahoo 失敗:', e.message);
-    return [];
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// ③ Reddit（JSON API）
-// ─────────────────────────────────────────────────────────────
-async function _fetchReddit() {
-  const subreddits = ['soccer', 'JapanSoccer'];
-  const sorts = ['top', 'hot', 'rising', 'new'];
-  const items = [];
-
-  for (const sub of subreddits) {
-    for (const sort of sorts) {
-      try {
-        const suffix = sort === 'top' ? 'top.json?t=day&limit=50' : `${sort}.json?limit=50`;
-        const res = await fetch(`https://www.reddit.com/r/${sub}/${suffix}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; V4Scout/1.0)',
-            ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}),
-          },
-          signal: AbortSignal.timeout(12000),
-        });
-        const data = await res.json();
-        const posts = data?.data?.children || [];
-        for (const p of posts) {
-          const d = p.data || {};
-          if (d.stickied || d.is_video || Number(d.score || 0) < 5) continue;
-          items.push({
-            title:  String(d.title || '').trim(),
-            source: `Reddit/r/${sub}`,
-            url:    `https://reddit.com${d.permalink || ''}`,
-            date:   d.created_utc ? new Date(d.created_utc * 1000).toISOString() : null,
-            score:  d.score || 0,
-          });
-        }
-      } catch (e) { console.warn(`[scout] Reddit r/${sub}/${sort} 失敗:`, e.message); }
-    }
-  }
-
-  return _dedup(items);
-}
-
-async function _fetch5ch() {
-  try {
-    const candidates = await fetch5chTitles();
-    return candidates.map(item => {
-      const title = String(item.titleJa || item.title || '')
-        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-        .replace(/&amp;/g, '&')
-        .trim();
-      const newsBonus = /移籍|退団|加入|獲得|負傷|離脱|引退|解任|就任|優勝|敗退|勝利|敗戦|ゴール|得点|W杯|ワールドカップ|CL|記録|発表|報道|決定|終了|炎上|契約|代表|監督|FIFA|プレミア/i.test(title)
-        ? 500
-        : 0;
-      return {
-        title,
-        source: '5ch',
-        url: item.url || '',
-        date: item.created_utc ? new Date(item.created_utc * 1000).toISOString() : null,
-        score: Number(item.score || 0) + newsBonus,
-      };
-    }).filter(item => {
-      if (item.title.length <= 8) return false;
-      if (/スレ|応援|議論|雑談|ワッチョイ|女子|なでしこ|ファン|総合|無能|死ね|ゴミ|クソ/i.test(item.title)) return false;
-      return true;
-    }).sort((a, b) => (b.score || 0) - (a.score || 0));
-  } catch (e) {
-    console.warn('[scout] 5ch 失敗:', e.message);
-    return [];
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// 重複排除（URL・正規化タイトル・文字bigram類似）
+// 重複排除
 // ─────────────────────────────────────────────────────────────
 function _normalizeTitle(value) {
   return String(value || '')
@@ -219,7 +95,6 @@ const EVENT_GROUPS = [
   ['勝利', '快勝', '白星'],
   ['契約', '更新', '延長'],
   ['ランキング', 'ランク', '順位'],
-  ['無料視聴', '無料', '視聴', '中継', '配信'],
 ];
 
 function _entityTokens(value) {
@@ -284,15 +159,6 @@ function _dedup(items, existing = []) {
   });
 }
 
-function _sourceGroup(source) {
-  const value = String(source || '');
-  if (value.startsWith('X')) return 'X';
-  if (value.startsWith('Yahoo')) return 'Yahoo';
-  if (value.startsWith('Reddit')) return 'Reddit';
-  if (value.startsWith('5ch')) return '5ch';
-  return '';
-}
-
 // ─────────────────────────────────────────────────────────────
 // 48h 使用済みURL管理
 // ─────────────────────────────────────────────────────────────
@@ -307,14 +173,14 @@ function _loadUsed() {
 function _saveUsed(used, newTopics) {
   const now = new Date().toISOString();
   const added = newTopics.map(t => ({ url: t.url, title: t.title, addedAt: now }));
-  const next = [...used, ...added].slice(-200);  // 最大200件保持
+  const next = [...used, ...added].slice(-200);
   fs.writeFileSync(USED_FILE, JSON.stringify(next, null, 2));
 }
 
 // ─────────────────────────────────────────────────────────────
-// DeepSeek: 全件見せて上位選定 + フック生成
+// DeepSeek: 全件見せて総合上位40件選定
 // ─────────────────────────────────────────────────────────────
-async function _pickTopics(items, perSource = 5) {
+async function _pickTopics(items, maxTopics = 40) {
   const block = items.map((it, i) =>
     `${i+1}. [${it.source}] ${it.title}`
   ).join('\n');
@@ -328,14 +194,14 @@ async function _pickTopics(items, perSource = 5) {
   ].join('\n');
 
   const prompt = `あなたは2chサッカー動画チャンネルのプロデューサーです。
-以下は今日のX・Yahoo・Reddit・5chで話題になっているサッカーニュース一覧です。
+以下は今日のXで話題になっているサッカーニュース一覧です。
 
-**選定基準**
-1. 日本代表・日本人選手（三笘/久保/南野/遠藤/冨安/上田/堂安/鎌田/中村敬斗 等）→ 最優先（+20点ボーナス）
-2. W杯・CL・PLの話題 → 高優先
-3. 有名選手の移籍・スキャンダル・記録 → 高優先
+**選定基準（優先順）**
+1. W杯・CL・PL・リーガなど主要大会の試合結果・トピック → 最優先
+2. 有名選手の移籍・スキャンダル・記録・名場面 → 高優先
+3. 日本代表・日本人選手（三笘/久保/南野/遠藤/冨安/上田/堂安/鎌田/中村敬斗 等）→ 高優先
 4. ネタ化・笑い・驚きになる要素があるか → 重要
-5. 似たようなニュースが被ってないか → 避ける
+5. 似たようなニュースが被ってないか → 被りは1件だけにする
 
 **良いフック文の例（この雰囲気で作る）:**
 ${examples}
@@ -343,9 +209,8 @@ ${examples}
 【ニュース一覧（${items.length}件）】
 ${block}
 
-X・Yahoo・Reddit・5chから、それぞれ最大${perSource}件ずつ選んでください。
+総合スコア順に上位${maxTopics}件を選んでください。
 同じ出来事を扱うニュースはソースが違っても1件だけにしてください。
-全体順位ではなく、各ソースの枠を必ず守ってください。
 
 それぞれ:
 - topic: 20字以内の一言要約
@@ -360,7 +225,7 @@ JSONのみ:
   try {
     const raw = await callAI({
       forceProvider: 'deepseek', model: 'deepseek-chat',
-      max_tokens: 3000,
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     });
     const m = raw && raw.match(/\{[\s\S]*\}/);
@@ -369,6 +234,7 @@ JSONのみ:
     if (!Array.isArray(parsed.topics)) return [];
     return parsed.topics
       .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, maxTopics)
       .map(t => {
         const orig = items[(t.originalIndex || 1) - 1] || {};
         return {
@@ -384,7 +250,7 @@ JSONのみ:
       .filter(topic => topic.topic && topic.title);
   } catch (e) {
     console.warn('[scout] 選定失敗:', e.message);
-    return items.map(it => ({
+    return items.slice(0, maxTopics).map(it => ({
       topic: it.title.slice(0, 30), hook: '', score: 50,
       source: it.source, title: it.title, url: it.url, date: it.date,
     }));
@@ -395,89 +261,44 @@ JSONのみ:
 // メイン
 // ─────────────────────────────────────────────────────────────
 async function runScout(opts = {}) {
-  const perSource = opts.perSource || 5;
+  const maxTopics = opts.maxTopics || 40;
   const onProgress = opts.onProgress || (() => {});
   console.log('[v4_scout] 開始:', new Date().toLocaleString('ja-JP'));
 
-  onProgress({ stage: 'fetch', message: '4部門を並列取得中...' });
+  onProgress({ stage: 'fetch', message: 'X/JP + X/EN を取得中...' });
 
-  // 4部門並列取得
-  const [xItems, yahooItems, redditItems, fivechItems] = await Promise.all([
-    _fetchX(), _fetchYahoo(), _fetchReddit(), _fetch5ch(),
-  ]);
+  const xItems = await _fetchX();
+  console.log(`[v4_scout] 取得: X=${xItems.length}`);
+  onProgress({ stage: 'filter', message: `${xItems.length}件取得 → フィルタ・重複排除中...` });
 
-  const total = xItems.length + yahooItems.length + redditItems.length + fivechItems.length;
-  console.log(
-    `[v4_scout] 取得: X=${xItems.length} Yahoo=${yahooItems.length} Reddit=${redditItems.length} 5ch=${fivechItems.length}`,
-  );
-  onProgress({ stage: 'filter', message: `${total}件取得 → フィルタ・重複排除中...` });
+  // 12時間以内フィルタ
+  const fresh = xItems.filter(it => _isWithinHours(it.date, FRESHNESS_HOURS));
+  console.log(`[v4_scout] 12h フィルタ: ${fresh.length}件`);
 
-  // 12時間以内フィルタ（速報特化）
-  const filterFresh = items => items.filter(it => _isWithinHours(it.date, FRESHNESS_HOURS));
-  const freshX       = filterFresh(xItems);
-  const freshYahoo   = filterFresh(yahooItems);
-  const freshReddit  = filterFresh(redditItems);
-  const fresh5ch     = filterFresh(fivechItems);
-  console.log(
-    `[v4_scout] 12h フィルタ: X=${freshX.length} Yahoo=${freshYahoo.length} Reddit=${freshReddit.length} 5ch=${fresh5ch.length}`,
-  );
-
-  // ソース内重複を先に落とし、各ソースの候補数を均等に保つ
-  const sourcePools = {
-    X: _dedup(freshX),
-    Yahoo: _dedup(freshYahoo),
-    Reddit: _dedup(freshReddit),
-    '5ch': _dedup(fresh5ch),
-  };
-  const all = Object.values(sourcePools).flat();
+  // 重複排除
+  const deduped = _dedup(fresh);
 
   // 48h 使用済みURL除外
   const used = _loadUsed();
   const usedUrls = new Set(used.map(u => u.url).filter(Boolean));
   const usedTitles = used.map(u => u.title).filter(Boolean);
-  const fresh = all.filter(it => {
+  const novel = deduped.filter(it => {
     if (it.url && usedUrls.has(it.url)) return false;
     if (usedTitles.some(title => _similarTitle(title, _itemText(it)))) return false;
     return true;
   });
 
-  console.log(`[v4_scout] 重複排除: ${all.length}件 → 新規${fresh.length}件`);
-  onProgress({ stage: 'ai', message: `新規${fresh.length}件 → AI選定中...` });
+  console.log(`[v4_scout] 重複排除: ${deduped.length}件 → 新規${novel.length}件`);
+  onProgress({ stage: 'ai', message: `新規${novel.length}件 → AI選定中...` });
 
-  // 各ソース最大15件をAIへ渡し、各5件を選定
-  const balancedInput = ['X', 'Yahoo', 'Reddit', '5ch']
-    .flatMap(group => fresh.filter(item => _sourceGroup(item.source) === group).slice(0, 15));
-  const picked = await _pickTopics(balancedInput, perSource);
-
-  // AI出力をソース別に固定し、足りない枠は元候補から補完
-  const topics = [];
-  for (const group of ['X', 'Yahoo', 'Reddit', '5ch']) {
-    const selected = _dedup(
-      picked.filter(item => _sourceGroup(item.source) === group),
-      topics,
-    ).slice(0, perSource);
-    const pool = fresh.filter(item => _sourceGroup(item.source) === group);
-    const fillers = _dedup(pool, [...topics, ...selected])
-      .slice(0, Math.max(0, perSource - selected.length))
-      .map(item => ({
-        topic: item.title.slice(0, 30),
-        hook: item.title.slice(0, 60),
-        score: Math.max(50, Math.min(100, Number(item.score) || 70)),
-        source: item.source,
-        title: item.title,
-        url: item.url,
-        date: item.date,
-      }));
-    topics.push(...selected, ...fillers);
-  }
-  topics.sort((a, b) => (b.score || 0) - (a.score || 0));
+  const topics = await _pickTopics(novel, maxTopics);
   console.log(`[v4_scout] 選定: ${topics.length}件`);
 
   // 結果保存
   const result = { scoutedAt: new Date().toISOString(), topicCount: topics.length, topics };
   fs.writeFileSync(SCOUT_FILE, JSON.stringify(result, null, 2));
 
-  // 使用済みに追加（今回選ばれた7件）
+  // 使用済みに追加
   _saveUsed(used, topics);
 
   return topics;
