@@ -249,7 +249,9 @@ function buildModules(book) {
   const imagePath    = thumbPick?.path || preset[0] || null;
   const imageAdj     = thumbPick?.adj  || undefined;
   const overviewPick = _pick(1) || (preset[1] ? { path: preset[1], adj: undefined } : thumbPick);
-  const suppPick     = _pick(2) || (preset[2] ? { path: preset[2], adj: undefined } : overviewPick);
+  const supp1Pick    = _pick(2) || (preset[2] ? { path: preset[2], adj: undefined } : overviewPick);
+  const supp2Pick    = _pick(3) || (preset[3] ? { path: preset[3], adj: undefined } : supp1Pick);
+  const suppPick     = supp1Pick;
   const images = imagePath ? [imagePath] : [];
   const threadTitle = book.title || book.hook || book.topic;
 
@@ -278,45 +280,41 @@ function buildModules(book) {
     narration:   threadTitle,
   };
 
-  // ── 概要スライド ──
-  // supplement1 があればそれが概要を兼ねる。なければ insight/picture。
+  // ── 概要スライド（独立） ──
+  const ovType = book.overviewType === 'insight' ? 'insight' : 'picture';
+  const overviewSlide = {
+    type: ovType,
+    title: '何が起きた？',
+    images: overviewPick?.path ? [overviewPick.path] : images,
+    bgImage:     overviewPick?.path || imagePath || null,
+    imageAdjust: overviewPick?.adj,
+    narration:   _compactText(book.overview, 190),
+  };
+  if (ovType === 'insight') {
+    const ovData = book.overviewData || {};
+    const phrases = Array.isArray(ovData.catchphrases)
+      ? ovData.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
+      : [];
+    overviewSlide.catchphrases = phrases.length >= 2 ? phrases.slice(0, 6) : [_compactText(book.overview, 42)];
+  }
+
+  // ── 補足スライド（それぞれ独立） ──
   let supp1 = null;
   let supp2 = null;
   if (book.supplement1Type || book.supplement2Type) {
-    supp1 = _buildSupplementSlide(book, 1, suppPick?.path || null);
-    supp2 = _buildSupplementSlide(book, 2, suppPick?.path || null);
+    supp1 = _buildSupplementSlide(book, 1, supp1Pick?.path || null);
+    supp2 = _buildSupplementSlide(book, 2, supp2Pick?.path || null);
   } else {
-    supp1 = _buildSupplement(book, suppPick?.path || null);
+    supp1 = _buildSupplement(book, supp1Pick?.path || null);
   }
-  if (supp1 && suppPick?.adj) supp1.imageAdjust = suppPick.adj;
-  if (supp2 && suppPick?.adj) supp2.imageAdjust = suppPick.adj;
+  if (supp1 && supp1Pick?.adj) supp1.imageAdjust = supp1Pick.adj;
+  if (supp2 && supp2Pick?.adj) supp2.imageAdjust = supp2Pick.adj;
 
-  let content1;
-  if (supp1) {
-    supp1.narration = _compactText(book.overview, 190) || supp1.narration;
-    content1 = supp1;
-  } else {
-    const ovType = book.overviewType === 'insight' ? 'insight' : 'picture';
-    content1 = {
-      type: ovType,
-      title: '何が起きた？',
-      images: overviewPick?.path ? [overviewPick.path] : images,
-      bgImage:     overviewPick?.path || imagePath || null,
-      imageAdjust: overviewPick?.adj,
-      narration:   _compactText(book.overview, 190),
-    };
-    if (ovType === 'insight') {
-      const ovData = book.overviewData || {};
-      const phrases = Array.isArray(ovData.catchphrases)
-        ? ovData.catchphrases.map(x => _cleanText(typeof x === 'string' ? x : x?.text)).filter(Boolean)
-        : [];
-      content1.catchphrases = phrases.length >= 2 ? phrases.slice(0, 6) : [_compactText(book.overview, 42)];
-    }
-  }
+  // 補足2: ナレーションが短すぎる場合は省略
+  if (supp2 && (supp2.narration || '').length < 30) supp2 = null;
 
   // ── コメント分配 ──
-  // content slides の数に応じてコメントを均等分配
-  const contentSlides = [content1, supp2].filter(Boolean);
+  const contentSlides = [overviewSlide, supp1, supp2].filter(Boolean);
   const commentsPerSlide = Math.ceil(allComments.length / Math.max(contentSlides.length, 1));
   contentSlides.forEach((slide, i) => {
     const start = i * commentsPerSlide;
