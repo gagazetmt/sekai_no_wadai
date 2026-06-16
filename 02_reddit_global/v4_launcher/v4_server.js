@@ -185,12 +185,24 @@ app.post('/api/confirm/rebuild', async (req, res) => {
   if (!module || !instruction) return res.status(400).json({ ok: false, error: 'module + instruction required' });
   try {
     const { callAI } = require('../scripts/ai_client');
+    // 試合データ（matchcard用）を収集
+    const matchData = book?.supplement1Data?.matchData || book?.supplement2Data?.matchData || book?.supplementData?.matchData || null;
+    const matchSummary = matchData ? [
+      matchData.tournament ? `大会: ${matchData.tournament}` : '',
+      matchData.scoreline ? `スコア: ${matchData.scoreline}` : '',
+      matchData.goals?.length ? `ゴール: ${matchData.goals.map(g => `${g.player} ${g.minute}'${g.ownGoal ? ' (OG)' : ''}`).join(', ')}` : '',
+      matchData.cards?.length ? `カード: ${matchData.cards.map(c => `${c.player} ${c.minute}' ${c.type}`).join(', ')}` : '',
+      matchData.stats ? `スタッツ: ${Object.entries(matchData.stats).map(([k,v]) => `${k}: ${v.home}-${v.away}`).join(', ')}` : '',
+      matchData.topPlayers?.length ? `MVP: ${matchData.topPlayers.map(p => `${p.name}(${p.rating})`).join(', ')}` : '',
+    ].filter(Boolean).join('\n') : '';
+
     const context = [
       book?.topic   ? `案件: ${book.topic}` : '',
       book?.overview ? `概要: ${book.overview}` : '',
       book?.supplement1 ? `補足1: ${book.supplement1}` : '',
       book?.supplement2 ? `補足2: ${book.supplement2}` : '',
       (book?.fetchedData || []).length ? `取得データ: ${book.fetchedData.map(r => `${r.label}: ${r.value}`).join(' / ')}` : '',
+      matchSummary ? `【試合データ】\n${matchSummary}` : '',
     ].filter(Boolean).join('\n');
 
     const prompt = `あなたはサッカー動画のスライド構成担当です。
@@ -217,13 +229,20 @@ ${instruction}
   "narration": "ナレーション（150字以内。動画で読み上げる文章）",
   "catchphrases": ["キャッチフレーズ1", "..."],
   "dataSlots": [{"label":"項目名","value":"値"}],
-  "commentTransition": "コメント導入文"
+  "commentTransition": "コメント導入文",
+  "homeTeam": "ホームチーム名（matchcard型の場合）",
+  "awayTeam": "アウェイチーム名（matchcard型の場合）",
+  "homeScore": 0,
+  "awayScore": 0,
+  "matchData": { "goals": [...], "cards": [...], "stats": {...} }
 }
+※matchcard型の場合は試合データから正確なスコア・ゴール・カード情報を含めてください。
+matchcard型以外ならmatchData/homeTeam/awayTeamは不要です。
 
 JSONのみ:`;
 
     const raw = await callAI({
-      forceProvider: 'deepseek', model: 'deepseek-chat', max_tokens: 1500,
+      forceProvider: 'deepseek', model: 'deepseek-chat', max_tokens: 2500,
       label: 'confirm-rebuild',
       messages: [{ role: 'user', content: prompt }],
     });
@@ -234,6 +253,15 @@ JSONのみ:`;
     if (merged.images === undefined) merged.images = module.images || [];
     if (merged.bgImage === undefined) merged.bgImage = module.bgImage || null;
     if (merged.overlayComments === undefined) merged.overlayComments = module.overlayComments;
+    // matchcard型: AI応答にmatchDataがなければbookの実データで補完
+    if (merged.type === 'matchcard' && !merged.matchData && matchData) {
+      merged.matchData = matchData;
+      merged.homeTeam  = merged.homeTeam || matchData.scoreline?.split(/\s*\d/)?.[0]?.trim() || book?.supplement1Data?.homeTeam || book?.supplement2Data?.homeTeam;
+      merged.awayTeam  = merged.awayTeam || book?.supplement1Data?.awayTeam || book?.supplement2Data?.awayTeam;
+      merged.homeScore = merged.homeScore ?? matchData.homeScore;
+      merged.awayScore = merged.awayScore ?? matchData.awayScore;
+      merged.matchDate = merged.matchDate || book?.supplement1Data?.matchDate || book?.supplement2Data?.matchDate;
+    }
     res.json({ ok: true, module: merged });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
