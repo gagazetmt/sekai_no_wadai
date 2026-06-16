@@ -253,14 +253,43 @@ JSONのみ:`;
     if (merged.images === undefined) merged.images = module.images || [];
     if (merged.bgImage === undefined) merged.bgImage = module.bgImage || null;
     if (merged.overlayComments === undefined) merged.overlayComments = module.overlayComments;
-    // matchcard型: AI応答にmatchDataがなければbookの実データで補完
-    if (merged.type === 'matchcard' && !merged.matchData && matchData) {
-      merged.matchData = matchData;
-      merged.homeTeam  = merged.homeTeam || matchData.scoreline?.split(/\s*\d/)?.[0]?.trim() || book?.supplement1Data?.homeTeam || book?.supplement2Data?.homeTeam;
-      merged.awayTeam  = merged.awayTeam || book?.supplement1Data?.awayTeam || book?.supplement2Data?.awayTeam;
-      merged.homeScore = merged.homeScore ?? matchData.homeScore;
-      merged.awayScore = merged.awayScore ?? matchData.awayScore;
-      merged.matchDate = merged.matchDate || book?.supplement1Data?.matchDate || book?.supplement2Data?.matchDate;
+    // matchcard型: 試合データを補完
+    if (merged.type === 'matchcard' && !merged.matchData) {
+      if (matchData) {
+        // bookに既存の試合データがあれば流用
+        merged.matchData = matchData;
+        merged.homeTeam  = merged.homeTeam || book?.supplement1Data?.homeTeam || book?.supplement2Data?.homeTeam;
+        merged.awayTeam  = merged.awayTeam || book?.supplement1Data?.awayTeam || book?.supplement2Data?.awayTeam;
+        merged.homeScore = merged.homeScore ?? matchData.homeScore;
+        merged.awayScore = merged.awayScore ?? matchData.awayScore;
+        merged.matchDate = merged.matchDate || book?.supplement1Data?.matchDate || book?.supplement2Data?.matchDate;
+      } else {
+        // bookに試合データがない → チーム名を推定してライブ取得
+        const home = merged.homeTeam || (book?.assetLabels || []).filter(l => l.type === 'team' || l.type === 'nationalTeam').map(l => l.name)[0];
+        const away = merged.awayTeam || (book?.assetLabels || []).filter(l => l.type === 'team' || l.type === 'nationalTeam').map(l => l.name)[1];
+        if (home && away) {
+          console.log(`[rebuild] matchcard用に試合データ取得: ${home} vs ${away}`);
+          const { fetchSofaScoreMatch } = require('../scripts/modules/fetchers/sofascore_match');
+          const { fetchFotMobMatch }    = require('../scripts/modules/fetchers/fotmob_match');
+          let mr = await fetchSofaScoreMatch(home, away);
+          if (!mr?.ok) mr = await fetchFotMobMatch(home, away);
+          if (mr?.ok) {
+            merged.homeTeam  = mr.homeTeam;
+            merged.awayTeam  = mr.awayTeam;
+            merged.homeScore = mr.homeScore;
+            merged.awayScore = mr.awayScore;
+            merged.matchDate = mr.matchDate;
+            merged.matchData = {
+              tournament: mr.tournament, venue: mr.venue, scoreline: mr.scoreline,
+              homeScore: mr.homeScore, awayScore: mr.awayScore,
+              goals: mr.goals, cards: mr.cards, subs: mr.subs || [],
+              stats: mr.stats, topPlayers: mr.topPlayers,
+              formations: mr.formations, lineup: mr.lineup || { home: [], away: [] },
+              homeLogo: mr.homeLogo || null, awayLogo: mr.awayLogo || null,
+            };
+          }
+        }
+      }
     }
     res.json({ ok: true, module: merged });
   } catch (e) {
