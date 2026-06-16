@@ -1014,6 +1014,13 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       <!-- データバインド（型によって動的表示） -->
       <div id="confirmDataBind" style="display:none;"></div>
 
+      <!-- overlayComments（全スライド共通） -->
+      <div id="confirmOverlayWrap" style="display:none;">
+        <label class="confirm-label">💬 オーバーレイコメント</label>
+        <div id="confirmOverlayBoxes"></div>
+        <button class="db-add-btn" onclick="addOverlayComment()">＋ コメント追加</button>
+      </div>
+
       <!-- リアクション：個別コメントボックス -->
       <div id="confirmReactionWrap" style="display:none;">
         <label class="confirm-label">コメント</label>
@@ -2013,6 +2020,11 @@ function renderConfirmEditor() {
   document.getElementById('confirmTitleLabel').textContent = isEnding ? '締めコメント（オチ）' : 'タイトル';
   document.getElementById('confirmNarrationLabel').textContent = isEnding ? 'ナレーション（読み上げ）' : 'ナレーション';
 
+  // overlayComments（opening/ending以外で表示）
+  const hasOverlay = !['opening', 'ending'].includes(module.type);
+  document.getElementById('confirmOverlayWrap').style.display = hasOverlay ? 'block' : 'none';
+  if (hasOverlay) renderOverlayComments(module);
+
   // リアクション：個別コメントボックス
   if (isReaction) renderReactionBoxes(module);
 
@@ -2507,6 +2519,49 @@ function removeDataSlot(i) {
   else if (t === 'ranking') module.items?.splice(i, 1);
   else if (t === 'insight') module.catchphrases?.splice(i, 1);
   renderDataBind(module);
+}
+
+// ─── overlayComments 表示・編集 ─────────────────────────────────
+function renderOverlayComments(module) {
+  const wrap = document.getElementById('confirmOverlayBoxes');
+  if (!wrap) return;
+  const comments = Array.isArray(module.overlayComments) ? module.overlayComments : [];
+  if (!comments.length) {
+    wrap.innerHTML = '<div style="padding:6px;font-size:11px;color:var(--muted)">コメントなし</div>';
+    return;
+  }
+  wrap.innerHTML = comments.map((c, i) => {
+    const text = typeof c === 'string' ? c : (c?.text || '');
+    return '<div class="rx-box" data-idx="' + i + '">' +
+      '<div class="rx-box-head">' +
+        '<span class="rx-box-num">' + (i+1) + '</span>' +
+        '<button class="cw-btn del" onclick="removeOverlayComment(' + i + ')">−</button>' +
+      '</div>' +
+      '<textarea class="rx-textarea" rows="2" oninput="updateOverlayText(' + i + ',this.value)">' + escTA(text) + '</textarea>' +
+    '</div>';
+  }).join('');
+}
+
+function updateOverlayText(i, text) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module?.overlayComments?.[i]) return;
+  if (typeof module.overlayComments[i] === 'string') module.overlayComments[i] = text;
+  else module.overlayComments[i].text = text;
+}
+
+function removeOverlayComment(i) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module?.overlayComments) return;
+  module.overlayComments.splice(i, 1);
+  renderOverlayComments(module);
+}
+
+function addOverlayComment() {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  if (!Array.isArray(module.overlayComments)) module.overlayComments = [];
+  module.overlayComments.push({ text: '', score: 50 });
+  renderOverlayComments(module);
 }
 
 // ─── リアクション個別コメントボックス ──────────────────────────
