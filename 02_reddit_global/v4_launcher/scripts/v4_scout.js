@@ -302,8 +302,12 @@ async function runScout(opts = {}) {
   const topics = await _pickTopics(novel, maxTopics);
   console.log(`[v4_scout] 選定: ${topics.length}件`);
 
-  // 結果保存
-  const result = { scoutedAt: new Date().toISOString(), topicCount: topics.length, topics };
+  // 結果保存（全候補も含める）
+  const selectedUrls = new Set(topics.map(t => t.url).filter(Boolean));
+  const rejected = novel
+    .filter(it => !selectedUrls.has(it.url))
+    .map(it => ({ title: it.title, source: it.source, url: it.url, date: it.date }));
+  const result = { scoutedAt: new Date().toISOString(), topicCount: topics.length, topics, rejected };
   fs.writeFileSync(SCOUT_FILE, JSON.stringify(result, null, 2));
 
   // 使用済みに追加
