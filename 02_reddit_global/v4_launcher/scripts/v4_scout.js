@@ -46,17 +46,30 @@ async function _fetchX() {
     { q: 'World Cup OR football OR soccer -is:retweet lang:en', label: 'X/EN' },
   ];
 
+  const TARGET_PER_QUERY = 100;
+  const MAX_PAGES = 5;
+
   for (const { q, label } of queries) {
     try {
-      const res = await fetch('https://api.twitterapi.io/twitter/tweet/advanced_search?' + new URLSearchParams({
-        query: q, queryType: 'Top',
-      }), { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) });
-      const data = await res.json();
-      const tweets = data?.data?.tweets || data?.tweets || [];
-      for (const t of tweets.slice(0, 50)) {
-        const text = String(t.text || '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, ' ').trim();
-        if (text.length < 20) continue;
-        items.push({ title: text.slice(0, 120), source: label, url: `https://x.com/i/web/status/${t.id || ''}`, date: t.created_at || null });
+      let cursor = null;
+      let collected = 0;
+      for (let page = 0; page < MAX_PAGES && collected < TARGET_PER_QUERY; page++) {
+        const params = { query: q, queryType: 'Top' };
+        if (cursor) params.cursor = cursor;
+        const res = await fetch('https://api.twitterapi.io/twitter/tweet/advanced_search?' + new URLSearchParams(params),
+          { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) });
+        const data = await res.json();
+        const tweets = data?.data?.tweets || data?.tweets || [];
+        if (!tweets.length) break;
+        for (const t of tweets) {
+          if (collected >= TARGET_PER_QUERY) break;
+          const text = String(t.text || '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, ' ').trim();
+          if (text.length < 20) continue;
+          items.push({ title: text.slice(0, 120), source: label, url: `https://x.com/i/web/status/${t.id || ''}`, date: t.created_at || null });
+          collected++;
+        }
+        cursor = data?.next_cursor || data?.data?.next_cursor || null;
+        if (!cursor) break;
       }
     } catch (e) { console.warn(`[scout] X ${label} 失敗:`, e.message); }
   }
