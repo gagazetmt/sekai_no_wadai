@@ -1532,6 +1532,7 @@ function goStep(n) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page' + n)?.classList.add('active');
   document.querySelector(`.nav-tab[data-step="${n}"]`)?.classList.add('active');
+  if (n === 3 && S.confirmModules.length) renderConfirmEditor();
 }
 
 // ═════════════════════════════════ STEP 1: スカウト
@@ -1730,6 +1731,13 @@ async function selectTopic(idx) {
       document.getElementById('btnNeta').style.display = 'none';
       document.getElementById('btnRegenNeta').style.display = 'inline-flex';
       loadCommentWarehouse(t.topic);
+      // 保存済みconfirmModulesがあればStep3タブを有効化
+      if (Array.isArray(r.book._confirmModules) && r.book._confirmModules.length) {
+        S.confirmModules = r.book._confirmModules;
+        S.confirmActive = 0;
+        document.getElementById('tab3').disabled = false;
+        document.getElementById('tab3').classList.add('done');
+      }
     } else {
       document.getElementById('btnNeta').style.display = 'inline-flex';
     }
@@ -1913,6 +1921,8 @@ async function goToConfirm() {
     document.getElementById('tab4').disabled = true;
     goStep(3);
     renderConfirmEditor();
+    // 自動保存（バックグラウンド）
+    api('/api/confirm/save', { book: S.netaBook, modules: S.confirmModules }).catch(() => {});
   } catch (e) {
     sb('netaStatus', 'error', e.message);
   }
