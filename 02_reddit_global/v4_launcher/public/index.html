@@ -25,6 +25,7 @@
   --cy:      #ff6b00;   /* Yahoo orange */
   --cr:      #ff4500;   /* Reddit */
   --c5:      #b58cff;   /* 5ch */
+  --accent:  #00e5a0;   /* teal accent */
   --radius:  10px;
   --rad-sm:  6px;
 }
@@ -200,6 +201,47 @@ main { padding: 14px; max-width: 860px; margin: 0 auto; }
   line-height: 1.5;
 }
 .tc-time { font-size: 10px; color: var(--muted2); margin-top: 7px; }
+
+/* ══════════════════════════════════ HISTORY ARCHIVE */
+#historySection { margin-top: 18px; }
+#historyToggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer;
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px; font-weight: 700; color: var(--muted);
+  transition: .15s;
+}
+#historyToggle:hover { border-color: var(--border2); color: var(--text); }
+#historyToggle .h-arrow { transition: transform .2s; }
+#historyToggle.open .h-arrow { transform: rotate(90deg); }
+#historyBody { display: none; margin-top: 8px; }
+#historyBody.open { display: block; }
+.hist-day {
+  margin-bottom: 12px;
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.hist-day-head {
+  padding: 8px 14px; font-size: 12px; font-weight: 700;
+  color: var(--muted); background: var(--s2);
+  display: flex; align-items: center; gap: 8px;
+}
+.hist-day-head .h-count {
+  background: rgba(255,255,255,.08); border-radius: 10px;
+  padding: 1px 7px; font-size: 10px;
+}
+.hist-item {
+  padding: 6px 14px; font-size: 13px; line-height: 1.5;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.hist-item:first-child { border-top: none; }
+.hist-score {
+  font-size: 11px; font-weight: 900; color: var(--yellow);
+  min-width: 32px; text-align: right; flex-shrink: 0;
+}
+.hist-topic { flex: 1; }
 
 /* ══════════════════════════════════ SCAN ANIMATION */
 #scanAnim {
@@ -866,6 +908,16 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
       <div class="e-icon">📡</div>
       <p>「今すぐスカウト」で<br>最新ネタを収集します</p>
     </div>
+  </div>
+
+  <!-- 過去案件アーカイブ -->
+  <div id="historySection">
+    <div id="historyToggle" onclick="toggleHistory()">
+      <span class="h-arrow">▶</span>
+      📂 過去案件（7日間）
+      <span id="historyMeta" style="margin-left:auto;font-size:11px;color:var(--muted2);"></span>
+    </div>
+    <div id="historyBody"></div>
   </div>
 </div>
 
@@ -1771,6 +1823,57 @@ async function selectTopic(idx) {
     }
   } catch (_) {
     document.getElementById('btnNeta').style.display = 'inline-flex';
+  }
+}
+
+// ─── 過去案件アーカイブ ───────────────────────────────────────
+async function toggleHistory() {
+  const tog = document.getElementById('historyToggle');
+  const body = document.getElementById('historyBody');
+  const isOpen = tog.classList.toggle('open');
+  if (isOpen) {
+    body.classList.add('open');
+    await loadHistory();
+  } else {
+    body.classList.remove('open');
+  }
+}
+
+async function loadHistory() {
+  const body = document.getElementById('historyBody');
+  const meta = document.getElementById('historyMeta');
+  try {
+    const history = await api('/api/scout/history');
+    if (!history.length) {
+      body.innerHTML = '<div class="empty" style="padding:24px;"><p>まだ過去案件がありません</p></div>';
+      meta.textContent = '';
+      return;
+    }
+    const byDay = {};
+    let total = 0;
+    history.slice().reverse().forEach(entry => {
+      const d = new Date(entry.scoutedAt);
+      const key = d.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' });
+      if (!byDay[key]) byDay[key] = [];
+      (entry.topics || []).forEach(t => {
+        byDay[key].push(t);
+        total++;
+      });
+    });
+    meta.textContent = total + '件';
+    body.innerHTML = Object.entries(byDay).map(([day, topics]) => `
+      <div class="hist-day">
+        <div class="hist-day-head">${day}<span class="h-count">${topics.length}件</span></div>
+        ${topics.map(t => `
+          <div class="hist-item">
+            <span class="hist-score">${t.score || 0}pt</span>
+            <span class="hist-topic">${esc(t.topic)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  } catch (_) {
+    body.innerHTML = '<div class="empty" style="padding:24px;"><p>履歴の読み込みに失敗しました</p></div>';
   }
 }
 

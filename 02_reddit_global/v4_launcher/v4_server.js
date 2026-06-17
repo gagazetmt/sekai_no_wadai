@@ -14,7 +14,7 @@ const fs      = require('fs');
 const { createJob, readJob, updateJob } = require('../routes/_job_helper');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
-const { runScout, SCOUT_FILE }                       = require('./scripts/v4_scout');
+const { runScout, SCOUT_FILE, HISTORY_FILE }          = require('./scripts/v4_scout');
 const { buildNetaBook, getCachedBook, getWarehousePath } = require('./scripts/v4_neta');
 const { buildModules, generateV4Video }              = require('./scripts/v4_video');
 const { fetchBookAssets, fetchSingleLabel }           = require('./scripts/v4_assets');
@@ -111,6 +111,13 @@ app.get('/api/scout/latest', (req, res) => {
     if (!fs.existsSync(SCOUT_FILE)) return res.json({ topics: [], scoutedAt: null });
     res.json(JSON.parse(fs.readFileSync(SCOUT_FILE, 'utf8')));
   } catch (_) { res.json({ topics: [], scoutedAt: null }); }
+});
+
+app.get('/api/scout/history', (req, res) => {
+  try {
+    if (!fs.existsSync(HISTORY_FILE)) return res.json([]);
+    res.json(JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')));
+  } catch (_) { res.json([]); }
 });
 
 // ── ② コメント倉庫取得 ───────────────────────────────────────

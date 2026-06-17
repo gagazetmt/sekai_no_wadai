@@ -12,8 +12,9 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env'), quiet
 const { callAI } = require('../../scripts/ai_client');
 
 const DATA_DIR   = path.join(__dirname, '..', 'data');
-const SCOUT_FILE = path.join(DATA_DIR, 'scout_results.json');
-const USED_FILE  = path.join(DATA_DIR, 'used_topics.json');
+const SCOUT_FILE   = path.join(DATA_DIR, 'scout_results.json');
+const HISTORY_FILE = path.join(DATA_DIR, 'scout_history.json');
+const USED_FILE    = path.join(DATA_DIR, 'used_topics.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const FRESHNESS_HOURS = 48;
@@ -355,10 +356,31 @@ async function runScout(opts = {}) {
   // 使用済みに追加
   _saveUsed(used, topics);
 
+  // 過去案件格納庫に追記（7日分保持）
+  _appendHistory(topics);
+
   return topics;
 }
 
-module.exports = { runScout, SCOUT_FILE, dedupItems: _dedup, similarTitle: _similarTitle };
+function _appendHistory(topics) {
+  try {
+    const history = fs.existsSync(HISTORY_FILE)
+      ? JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'))
+      : [];
+    const entry = {
+      scoutedAt: new Date().toISOString(),
+      topics: topics.map(t => ({ topic: t.topic, score: t.score, source: t.source, url: t.url })),
+    };
+    history.push(entry);
+    const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+    const trimmed = history.filter(h => new Date(h.scoutedAt).getTime() > cutoff);
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(trimmed, null, 2));
+  } catch (e) {
+    console.warn('[scout] 履歴保存失敗:', e.message);
+  }
+}
+
+module.exports = { runScout, SCOUT_FILE, HISTORY_FILE, dedupItems: _dedup, similarTitle: _similarTitle };
 
 if (require.main === module) {
   runScout().then(t => {
