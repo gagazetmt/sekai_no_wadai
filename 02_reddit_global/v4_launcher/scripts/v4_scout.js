@@ -1,6 +1,7 @@
 // v4_launcher/scripts/v4_scout.js
-// V4ニューススカウト（X/JP + X/EN のみ）
-//   → 全件 DeepSeek に渡して総合上位40件選定 + フック生成
+// V4ニューススカウト（YouTube RSS ベース）
+//   → サッカー速報系チャンネルのRSSから最新動画タイトルを収集
+//   → 重複排除・被りスコアリング → DeepSeek で案件名生成
 //   → 48h 重複排除 (used_topics.json)
 'use strict';
 
@@ -15,65 +16,73 @@ const SCOUT_FILE = path.join(DATA_DIR, 'scout_results.json');
 const USED_FILE  = path.join(DATA_DIR, 'used_topics.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const X_API_KEY = process.env.TWITTER_API_IO_KEY;
+const FRESHNESS_HOURS = 48;
 
-const FRESHNESS_HOURS = 12;
+const YT_CHANNELS = [
+  { id: 'UCMu08XN0y5PDstIZuIvGI4Q', name: 'uwasathefootball2' },
+  { id: 'UChh0v1SKmhWT46AvTCtDhOA', name: 'soccer-labo' },
+  { id: 'UCQ2yepON1XgzXdU622bdJag', name: 'soccerhannousyu' },
+  { id: 'UCiqOY9-kU6ZdkqgTeEvQk9w', name: 'soccer_chiebukuro' },
+];
 
-function _isWithinHours(dateStr, hours) {
-  if (!dateStr) return true;
-  const s = String(dateStr).trim();
-  const d = new Date(s);
-  if (!isNaN(d.getTime())) return (Date.now() - d.getTime()) < hours * 3600 * 1000;
-  const m = s.match(/(\d+)\s*(minute|hour|day|week|month|year)/i);
-  if (m) {
-    const n = Number(m[1]);
-    const unit = m[2].toLowerCase();
-    const ms = { minute: 60e3, hour: 3600e3, day: 86400e3, week: 604800e3, month: 2592e6, year: 31536e6 };
-    return n * (ms[unit] || 86400e3) < hours * 3600e3;
-  }
-  return true;
+// ─────────────────────────────────────────────────────────────
+// YouTube RSS 取得
+// ─────────────────────────────────────────────────────────────
+function _parseXmlTag(xml, tag) {
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`);
+  const m = xml.match(re);
+  return m ? m[1].trim() : '';
 }
 
-// ─────────────────────────────────────────────────────────────
-// X (twitterAPI.io) — JP + EN
-// ─────────────────────────────────────────────────────────────
-async function _fetchX() {
-  if (!X_API_KEY) return [];
-  const items = [];
-
-  const queries = [
-    { q: 'サッカー OR 日本代表 OR W杯 -is:retweet lang:ja', label: 'X/JP' },
-    { q: 'World Cup OR football OR soccer -is:retweet lang:en', label: 'X/EN' },
-  ];
-
-  const TARGET_PER_QUERY = 100;
-  const MAX_PAGES = 5;
-
-  for (const { q, label } of queries) {
-    try {
-      let cursor = null;
-      let collected = 0;
-      for (let page = 0; page < MAX_PAGES && collected < TARGET_PER_QUERY; page++) {
-        const params = { query: q, queryType: 'Top' };
-        if (cursor) params.cursor = cursor;
-        const res = await fetch('https://api.twitterapi.io/twitter/tweet/advanced_search?' + new URLSearchParams(params),
-          { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) });
-        const data = await res.json();
-        const tweets = data?.data?.tweets || data?.tweets || [];
-        if (!tweets.length) break;
-        for (const t of tweets) {
-          if (collected >= TARGET_PER_QUERY) break;
-          const text = String(t.text || '').replace(/https?:\/\/\S+/g, '').replace(/\n+/g, ' ').trim();
-          if (text.length < 20) continue;
-          items.push({ title: text.slice(0, 120), source: label, url: `https://x.com/i/web/status/${t.id || ''}`, date: t.created_at || null });
-          collected++;
-        }
-        cursor = data?.next_cursor || data?.data?.next_cursor || null;
-        if (!cursor) break;
-      }
-    } catch (e) { console.warn(`[scout] X ${label} 失敗:`, e.message); }
+function _parseEntries(xml) {
+  const entries = [];
+  const parts = xml.split('<entry>').slice(1);
+  for (const part of parts) {
+    const block = part.split('</entry>')[0] || '';
+    const title = _parseXmlTag(block, 'title');
+    const published = _parseXmlTag(block, 'published');
+    const videoId = _parseXmlTag(block, 'yt:videoId');
+    const descBlock = block.match(/<media:description>([\s\S]*?)<\/media:description>/);
+    const description = descBlock ? descBlock[1].trim() : '';
+    if (title && videoId) {
+      entries.push({ title, published, videoId, description });
+    }
   }
+  return entries;
+}
 
+async function _fetchYouTubeRSS() {
+  const items = [];
+  const cutoff = Date.now() - FRESHNESS_HOURS * 3600 * 1000;
+
+  const fetches = YT_CHANNELS.map(async (ch) => {
+    try {
+      const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const xml = await res.text();
+      const entries = _parseEntries(xml);
+      const channelItems = [];
+      for (const e of entries) {
+        const pubDate = new Date(e.published);
+        if (!isNaN(pubDate.getTime()) && pubDate.getTime() < cutoff) continue;
+        const hashtags = (e.description.match(/#[^\s#]+/g) || []).slice(0, 20).join(' ');
+        channelItems.push({
+          title: e.title,
+          source: `YT/${ch.name}`,
+          url: `https://www.youtube.com/watch?v=${e.videoId}`,
+          date: e.published,
+          hashtags,
+        });
+      }
+      return channelItems;
+    } catch (e) {
+      console.warn(`[scout] YT/${ch.name} RSS失敗:`, e.message);
+      return [];
+    }
+  });
+
+  const results = await Promise.all(fetches);
+  for (const channelItems of results) items.push(...channelItems);
   return items;
 }
 
@@ -173,6 +182,23 @@ function _dedup(items, existing = []) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// 被りスコアリング: 複数チャンネルが扱ってるネタほど高スコア
+// ─────────────────────────────────────────────────────────────
+function _scoreByOverlap(items) {
+  for (let i = 0; i < items.length; i++) {
+    const sources = new Set([items[i].source]);
+    for (let j = 0; j < items.length; j++) {
+      if (i === j) continue;
+      if (_similarTitle(items[i].title, items[j].title)) {
+        sources.add(items[j].source);
+      }
+    }
+    items[i].overlap = sources.size;
+  }
+  return items;
+}
+
+// ─────────────────────────────────────────────────────────────
 // 48h 使用済みURL管理
 // ─────────────────────────────────────────────────────────────
 function _loadUsed() {
@@ -191,11 +217,11 @@ function _saveUsed(used, newTopics) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// DeepSeek: 全件見せて総合上位40件選定
+// DeepSeek: YouTube動画タイトルから案件名を生成
 // ─────────────────────────────────────────────────────────────
-async function _pickTopics(items, maxTopics = 40) {
+async function _pickTopics(items, maxTopics = 30) {
   const block = items.map((it, i) =>
-    `${i+1}. [${it.source}] ${it.title}`
+    `${i+1}. [被り${it.overlap}ch] ${it.title}${it.hashtags ? ' / tags: ' + it.hashtags : ''}`
   ).join('\n');
 
   const examples = [
@@ -209,39 +235,40 @@ async function _pickTopics(items, maxTopics = 40) {
   ].join('\n');
 
   const prompt = `あなたは2ch/5chサッカー板の住人であり、サッカー動画チャンネルのプロデューサーです。
-以下は今日のXで話題になっているサッカーニュース一覧です。
+以下はサッカー速報系YouTubeチャンネルの最新動画タイトル一覧です。
+「被りNch」は同じネタを扱ったチャンネル数（多い＝注目度が高い）。
 
 **選定基準（優先順）**
-1. W杯・CL・PL・リーガなど主要大会の試合結果・トピック → 最優先
-2. 有名選手の移籍・スキャンダル・記録・名場面 → 高優先
-3. 日本代表・日本人選手（三笘/久保/南野/遠藤/冨安/上田/堂安/鎌田/中村敬斗 等）→ 高優先
-4. ネタ化・笑い・驚きになる要素があるか → 重要
-5. 似たようなニュースが被ってないか → 被りは1件だけにする
+1. 被りが多いネタ（複数chが扱っている）→ 最優先
+2. W杯・CL・PL・リーガなど主要大会の試合結果・トピック → 高優先
+3. 有名選手の移籍・スキャンダル・記録・名場面 → 高優先
+4. 日本代表・日本人選手 → 高優先
+5. ネタ化・笑い・驚きになる要素があるか → 重要
+6. 同じ出来事を扱う動画は1件にまとめる
 
 **5chスレタイの例（このノリ・テンションで topic を作る）:**
 ${examples}
 
 **スレタイのルール:**
-- 【悲報】【朗報】【速報】【悲報】【完全覚醒】等のタグを適宜つける
+- 【悲報】【朗報】【速報】【完全覚醒】等のタグを適宜つける
 - 「○○さん、△△してしまうwww」「○○した結果wwwww」「○○な模様」「○○がこちら」等の5ch定番構文を使う
 - 選手・チームを「さん」「君」「ニキ」等で親しみを込めて呼ぶのもOK
 - 長すぎない（40字以内）。パッと見てネタが分かること
 - 選手やクラブへのリスペクトは忘れない。愛あるイジりはOKだが誹謗中傷はNG
 
-【ニュース一覧（${items.length}件）】
+【動画タイトル一覧（${items.length}件）】
 ${block}
 
-総合スコア順に上位${maxTopics}件を選んでください。
-同じ出来事を扱うニュースはソースが違っても1件だけにしてください。
+上位${maxTopics}件を選んでください。
+同じ出来事を扱う動画は1件にまとめてください。
 
 それぞれ:
 - topic: 5chスレタイ風の案件名（40字以内）※上記の例を参考に
-- score: 0〜100
-- source: [ソース]タグそのまま
-- originalIndex: 上記番号（1始まり）
+- score: 0〜100（被りchが多いほど高スコアにする）
+- originalIndex: 上記番号（1始まり）。まとめた場合は代表の1件
 
 JSONのみ:
-{"topics":[{"topic":"【悲報】エンバペ君、ファンダイクに勝負を挑んだ結果wwwww","score":88,"source":"X/JP","originalIndex":3}]}`;
+{"topics":[{"topic":"【悲報】エンバペ君、ファンダイクに勝負を挑んだ結果wwwww","score":88,"originalIndex":3}]}`;
 
   try {
     const raw = await callAI({
@@ -262,7 +289,7 @@ JSONのみ:
           topic:  String(t.topic || '').slice(0, 50),
           hook:   String(t.topic || '').slice(0, 50),
           score:  Math.max(0, Math.min(100, Number(t.score) || 50)),
-          source: String(orig.source || t.source || ''),
+          source: String(orig.source || ''),
           title:  orig.title || '',
           url:    orig.url   || '',
           date:   orig.date  || null,
@@ -282,22 +309,21 @@ JSONのみ:
 // メイン
 // ─────────────────────────────────────────────────────────────
 async function runScout(opts = {}) {
-  const maxTopics = opts.maxTopics || 40;
+  const maxTopics = opts.maxTopics || 30;
   const onProgress = opts.onProgress || (() => {});
   console.log('[v4_scout] 開始:', new Date().toLocaleString('ja-JP'));
 
-  onProgress({ stage: 'fetch', message: 'X/JP + X/EN を取得中...' });
+  onProgress({ stage: 'fetch', message: 'YouTube RSS を取得中...' });
 
-  const xItems = await _fetchX();
-  console.log(`[v4_scout] 取得: X=${xItems.length}`);
-  onProgress({ stage: 'filter', message: `${xItems.length}件取得 → フィルタ・重複排除中...` });
+  const ytItems = await _fetchYouTubeRSS();
+  console.log(`[v4_scout] 取得: YT=${ytItems.length}件 (${YT_CHANNELS.length}ch)`);
+  onProgress({ stage: 'filter', message: `${ytItems.length}件取得 → 重複排除・スコアリング中...` });
 
-  // 12時間以内フィルタ
-  const fresh = xItems.filter(it => _isWithinHours(it.date, FRESHNESS_HOURS));
-  console.log(`[v4_scout] 12h フィルタ: ${fresh.length}件`);
+  // 被りスコアリング（dedup前に実施）
+  _scoreByOverlap(ytItems);
 
   // 重複排除
-  const deduped = _dedup(fresh);
+  const deduped = _dedup(ytItems);
 
   // 48h 使用済みURL除外
   const used = _loadUsed();
