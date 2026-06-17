@@ -1034,11 +1034,13 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <label class="confirm-label">コメント</label>
         <div id="confirmReactionBoxes"></div>
         <button class="db-add-btn" onclick="addRxComment()">＋ コメント追加</button>
-        <details class="rx-warehouse-details" id="rxWarehouseDetails">
-          <summary class="rx-warehouse-summary">📦 コメント格納庫 <span id="rxWarehouseCount">0</span></summary>
-          <div class="rx-warehouse-list" id="rxWarehouseList"></div>
-        </details>
       </div>
+
+      <!-- コメント格納庫（全スライド共通） -->
+      <details class="rx-warehouse-details" id="rxWarehouseDetails">
+        <summary class="rx-warehouse-summary">📦 コメント格納庫 <span id="rxWarehouseCount">0</span></summary>
+        <div class="rx-warehouse-list" id="rxWarehouseList"></div>
+      </details>
 
       <!-- エンディング用フィールド -->
       <div id="confirmEndingWrap" style="display:none;">
@@ -2017,6 +2019,7 @@ function renderConfirmEditor() {
 
   // リアクション：個別コメントボックス
   if (isReaction) renderReactionBoxes(module);
+  renderRxWarehouse();
 
   // エンディング：次回予告・コメント誘導
   if (isEnding) {
@@ -2636,9 +2639,16 @@ function addFromWarehouse(poolIdx) {
   if (!module) return;
   const pool = S.poolComments || [];
   if (!pool[poolIdx]) return;
-  if (!Array.isArray(module.comments)) module.comments = [];
-  module.comments.push({ text: pool[poolIdx].text, score: 50 });
-  renderReactionBoxes(module);
+  const text = pool[poolIdx].text;
+  if (module.type === 'reaction') {
+    if (!Array.isArray(module.comments)) module.comments = [];
+    module.comments.push({ text, score: 50 });
+    renderReactionBoxes(module);
+  } else {
+    if (!Array.isArray(module.overlayComments)) module.overlayComments = [];
+    module.overlayComments.push({ text, score: 50 });
+    renderOverlayComments(module);
+  }
 }
 
 function toggleRxSwap(i) {
