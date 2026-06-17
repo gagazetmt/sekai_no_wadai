@@ -501,7 +501,23 @@ const RINEKA_SYSTEM = `あなたはリネカ。サッカー専門のクリエイ
    - ただし、愛あるネタ弄りはOK（例: トーレス師匠の宇宙開発、バルサの守備崩壊芸など、ファン間で定番化しているもの）
    - 判断基準: 「その選手/クラブのファンが見て不快にならないか」。際どい場合はリスペクト側に倒す`;
 
-async function _generateNetaBook(topic, hook, articles, warehouse) {
+function _refVideoBlock(refVideos) {
+  if (!refVideos || !refVideos.length) return '';
+  const lines = refVideos.map(r => {
+    const parts = [`タイトル: ${r.title}`];
+    if (r.hashtags) parts.push(`タグ: ${r.hashtags}`);
+    parts.push(`ch: ${r.source}`);
+    return '- ' + parts.join(' / ');
+  }).join('\n');
+  return `
+**YouTubeメタデータの参考資料（同じネタを扱う他チャンネルの動画）:**
+以下は同じトピックを扱っているサッカー速報系YouTubeチャンネルの動画タイトルとハッシュタグです。
+これらを **教科書として参考に** してください。タイトルやタグの傾向・キーワード選定・構文を学び、独自のメタデータを作ること。**丸パクリは禁止**。
+${lines}
+`;
+}
+
+async function _generateNetaBook(topic, hook, articles, warehouse, refVideos = []) {
   const articleBlock = articles.map((a, i) => {
     const trustTag = a.isTrusted ? '★信頼メディア' : '';
     return `【ニュース${i+1}】[${a.host}] ${trustTag} ${a.title}\n${a.fullText}`;
@@ -574,6 +590,7 @@ ${warehouseBlock}
 | ytTitle | YouTube動画タイトル。検索に強く、クリックしたくなるもの | 〜60字 | ✅ |
 | ytDescription | YouTube概要欄。動画内容の要約+ハッシュタグ | 100〜200字 | ✅ |
 | ytTags | YouTube検索タグ配列。5〜10件 | — | ✅ |
+${_refVideoBlock(refVideos)}
 | tone_check | "ok" / "ng" | — | ✅ |
 
 **レイアウト型（layoutType）:**
@@ -826,7 +843,8 @@ async function buildNetaBook(topicData, { force = false } = {}) {
   console.log(`[v4_neta] ニュース: ${articles.length}件（信頼${trustedCount}件） / コメント倉庫: ${warehouse.total}件`);
 
   // AI ネタブック生成（1 API call）
-  const neta = await _generateNetaBook(topic, hook, articles, warehouse);
+  const refVideos = topicData.refVideos || [];
+  const neta = await _generateNetaBook(topic, hook, articles, warehouse, refVideos);
   console.log(`[v4_neta] 生成完了 s1:${!!neta.supplement1} s2:${!!neta.supplement2} c1:${!!neta.comments1} c2:${!!neta.comments2}`);
 
   const book = {

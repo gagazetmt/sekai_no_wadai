@@ -23,6 +23,7 @@ const YT_CHANNELS = [
   { id: 'UChh0v1SKmhWT46AvTCtDhOA', name: 'soccer-labo' },
   { id: 'UCQ2yepON1XgzXdU622bdJag', name: 'soccerhannousyu' },
   { id: 'UCiqOY9-kU6ZdkqgTeEvQk9w', name: 'soccer_chiebukuro' },
+  { id: 'UCUbpukVQZHXV_3Uh1O7JACQ', name: 'sokuhosoccer', trusted: true },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -186,14 +187,15 @@ function _dedup(items, existing = []) {
 // ─────────────────────────────────────────────────────────────
 function _scoreByOverlap(items) {
   for (let i = 0; i < items.length; i++) {
-    const sources = new Set([items[i].source]);
+    const refs = [{ title: items[i].title, hashtags: items[i].hashtags || '', source: items[i].source }];
     for (let j = 0; j < items.length; j++) {
       if (i === j) continue;
       if (_similarTitle(items[i].title, items[j].title)) {
-        sources.add(items[j].source);
+        refs.push({ title: items[j].title, hashtags: items[j].hashtags || '', source: items[j].source });
       }
     }
-    items[i].overlap = sources.size;
+    items[i].overlap = new Set(refs.map(r => r.source)).size;
+    items[i].refVideos = refs;
   }
   return items;
 }
@@ -293,6 +295,7 @@ JSONのみ:
           title:  orig.title || '',
           url:    orig.url   || '',
           date:   orig.date  || null,
+          refVideos: orig.refVideos || [],
         };
       })
       .filter(topic => topic.topic && topic.title);
