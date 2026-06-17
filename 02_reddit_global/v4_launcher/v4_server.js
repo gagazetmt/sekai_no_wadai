@@ -296,6 +296,33 @@ JSONのみ:`;
   }
 });
 
+app.post('/api/confirm/save', (req, res) => {
+  const { book, modules } = req.body || {};
+  if (!book?.topic) return res.status(400).json({ ok: false, error: 'book.topic required' });
+  try {
+    const NETA_DIR = path.join(__dirname, 'data', 'neta_books');
+    const INDEX_FILE = path.join(NETA_DIR, '_index.json');
+    const topicKey = String(book.topic || '').toLowerCase()
+      .replace(/[\s　。、！？!?.,:;]+/g, '').slice(0, 50);
+    let idx = {};
+    try { idx = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf8')); } catch (_) {}
+    const existing = idx[topicKey];
+    const fname = existing || `neta_${book.topic.replace(/[^\w぀-ゟ゠-ヿ一-鿿]+/g, '_').slice(0, 40)}_${Date.now()}.json`;
+    const fullPath = path.join(NETA_DIR, fname);
+    const saved = existing && fs.existsSync(fullPath)
+      ? { ...JSON.parse(fs.readFileSync(fullPath, 'utf8')), ...book }
+      : book;
+    if (Array.isArray(modules)) saved._confirmModules = modules;
+    saved.savedAt = new Date().toISOString();
+    fs.writeFileSync(fullPath, JSON.stringify(saved, null, 2));
+    idx[topicKey] = fname;
+    fs.writeFileSync(INDEX_FILE, JSON.stringify(idx, null, 2));
+    res.json({ ok: true, file: fname });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/confirm/preview', (req, res) => {
   const { module } = req.body || {};
   if (!module) return res.status(400).send('<!doctype html><body>module required</body>');

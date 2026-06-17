@@ -339,14 +339,12 @@ function _labelsFromAssetLabels(assetLabels) {
 
     if (t === 'player') {
       labels.push(
-        { source: 'sofascore',     entity: name, type: 'player', team: al.team || null },
         { source: 'fotmob',        entity: name, type: 'player', team: al.team || null },
         { source: 'transfermarkt', entity: name, type: 'player', team: al.team || null },
         { source: 'wikipedia',     entity: name, type: 'player', team: al.team || null },
       );
     } else if (t === 'manager') {
       labels.push(
-        { source: 'sofascore', entity: name, type: 'manager', team: al.team || null },
         { source: 'fotmob',    entity: name, type: 'manager', team: al.team || null },
         { source: 'wikipedia', entity: name, type: 'manager', team: al.team || null },
       );
@@ -381,7 +379,6 @@ function normalizeLabels(book) {
     { source: 'transfermarkt', entity: keyPlayer, type: 'player' },
   ] : [];
   const keyManagerLabel  = keyManager   ? [
-    { source: 'sofascore', entity: keyManager, type: 'manager' },
     { source: 'fotmob',    entity: keyManager, type: 'manager' },
   ] : [];
   const otherPlayerLabels = otherPlayers.map(p => ({ source: 'fotmob', entity: p, type: 'player' }));
@@ -403,8 +400,8 @@ function normalizeLabels(book) {
     : [];
   if (subs.length) {
     const subType = inferEntityType({ mainEntity: subs[0] });
-    const mainSource = type === 'player' ? 'sofascore' : 'wikipedia';
-    const subSource  = subType === 'player' ? 'sofascore' : 'wikipedia';
+    const mainSource = type === 'player' ? 'fotmob' : 'wikipedia';
+    const subSource  = subType === 'player' ? 'fotmob' : 'wikipedia';
     return [
       { source: mainSource, entity, type },
       { source: subSource,  entity: subs[0], type: subType },
@@ -416,7 +413,6 @@ function normalizeLabels(book) {
 
   if (type === 'player') {
     return [
-      { source: 'sofascore',     entity, type },
       { source: 'fotmob',        entity, type },
       { source: 'transfermarkt', entity, type },
       { source: 'wikipedia',     entity, type },
@@ -654,10 +650,10 @@ async function fetchBookAssets(book) {
     if (rawHome && rawAway) {
       try {
         console.log(`[v4/assets] Match data: ${rawHome} vs ${rawAway}`);
-        let matchResult = await fetchSofaScoreMatch(rawHome, rawAway);
+        let matchResult = await fetchFotMobMatch(rawHome, rawAway);
         if (!matchResult?.ok) {
-          console.log(`[v4/assets] SofaScore失敗 → FotMob fallback`);
-          matchResult = await fetchFotMobMatch(rawHome, rawAway);
+          console.log(`[v4/assets] FotMob失敗 → SofaScore fallback`);
+          matchResult = await fetchSofaScoreMatch(rawHome, rawAway);
         }
         if (matchResult?.ok) {
           // 新フィールド（supplement1Data / supplement2Data）と旧フィールド（supplementData）両方に書き込む

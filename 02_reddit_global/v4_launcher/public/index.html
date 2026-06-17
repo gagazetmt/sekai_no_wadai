@@ -365,7 +365,7 @@ textarea.neta-edit:focus { outline: none; border-color: var(--yellow); }
 /* ══ Step3 画像ギャラリー ══════════════════════════════════════ */
 .confirm-gallery {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-  gap: 8px; max-height: 340px; overflow-y: auto;
+  gap: 8px; max-height: 600px; overflow-y: auto;
   margin-top: 6px;
 }
 .confirm-gallery .gallery-item { aspect-ratio: 4/3; }
@@ -710,6 +710,33 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 }
 .rx-swap-item:hover { background: var(--s2); }
 .rx-swap-item:last-child { border-bottom: none; }
+.rx-warehouse-details { margin-top: 10px; }
+.rx-warehouse-summary {
+  cursor: pointer; font-size: 12px; font-weight: 700; color: var(--muted);
+  padding: 6px 0; user-select: none;
+}
+.rx-warehouse-summary span {
+  font-size: 10px; background: var(--s3); padding: 1px 7px;
+  border-radius: 10px; margin-left: 4px;
+}
+.rx-warehouse-list {
+  max-height: 280px; overflow-y: auto; margin-top: 6px;
+  border: 1px solid var(--border); border-radius: var(--rad-sm);
+  background: var(--s1);
+}
+.rx-wh-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px; font-size: 12px; color: #ccc;
+  border-bottom: 1px solid var(--border); line-height: 1.5;
+}
+.rx-wh-item:last-child { border-bottom: none; }
+.rx-wh-item .rx-wh-add {
+  flex-shrink: 0; background: none; border: 1px solid var(--border2);
+  color: var(--yellow); font-size: 13px; font-weight: 900;
+  width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.rx-wh-item .rx-wh-add:hover { background: var(--s2); }
 
 /* ══ エンディング編集 ════════════════════════════════════════ */
 .ending-hint {
@@ -1007,6 +1034,10 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
         <label class="confirm-label">コメント</label>
         <div id="confirmReactionBoxes"></div>
         <button class="db-add-btn" onclick="addRxComment()">＋ コメント追加</button>
+        <details class="rx-warehouse-details" id="rxWarehouseDetails">
+          <summary class="rx-warehouse-summary">📦 コメント格納庫 <span id="rxWarehouseCount">0</span></summary>
+          <div class="rx-warehouse-list" id="rxWarehouseList"></div>
+        </details>
       </div>
 
       <!-- エンディング用フィールド -->
@@ -1056,6 +1087,7 @@ video { width: 100%; border-radius: var(--radius); background: #000; }
 
   <div class="confirm-actions mt14" style="justify-content:center;gap:10px;">
     <button class="btn btn-yellow" style="padding:14px 28px;" onclick="startConfirmedVideo()">▶ この構成で動画生成</button>
+    <button class="btn btn-ghost" onclick="saveConfirmState()" id="btnSaveConfirm">💾 保管保存</button>
     <button class="btn btn-ghost" onclick="goStep(2)">ネタブックへ戻る</button>
   </div>
 </div>
@@ -1837,6 +1869,7 @@ const CONFIRM_TYPES = [
   'timeline', 'ranking', 'matchcard', 'reaction', 'ending',
 ];
 let _confirmPreviewUrl = null;
+let _previewDebounce = null;
 
 function syncNetaBookEdits() {
   if (!S.netaBook) return;
@@ -2077,7 +2110,11 @@ function moveConfirmSlide(direction) {
   renderConfirmEditor();
 }
 
-async function reloadConfirmPreview() {
+function reloadConfirmPreview() {
+  clearTimeout(_previewDebounce);
+  _previewDebounce = setTimeout(_doReloadPreview, 300);
+}
+async function _doReloadPreview() {
   updateConfirmModule(false);
   const module = S.confirmModules[S.confirmActive];
   const frame = document.getElementById('confirmPreviewFrame');
@@ -2535,12 +2572,13 @@ function renderReactionBoxes(module) {
         '<button class="cw-btn up" onclick="moveRxComment(' + i + ',-1)"' + (i===0?' disabled':'') + '>↑</button>' +
         '<button class="cw-btn dn" onclick="moveRxComment(' + i + ',1)"' + (i===comments.length-1?' disabled':'') + '>↓</button>' +
         '<button class="cw-btn del" onclick="removeRxComment(' + i + ')">−</button>' +
-        '<button class="btn btn-ghost" style="margin-left:auto;padding:3px 8px;font-size:10px;" onclick="toggleRxSwap(' + i + ')">🔄 倉庫</button>' +
+        '<button class="btn btn-ghost" style="margin-left:auto;padding:3px 8px;font-size:10px;" onclick="toggleRxSwap(' + i + ')">🔄 入替</button>' +
       '</div>' +
       '<textarea class="rx-textarea" rows="2" oninput="updateRxText(' + i + ',this.value)">' + escTA(text) + '</textarea>' +
       '<div class="rx-swap-list" id="rxSwap' + i + '" style="display:none;"></div>' +
     '</div>';
   }).join('');
+  renderRxWarehouse();
 }
 
 function updateRxText(i, text) {
@@ -2574,6 +2612,35 @@ function addRxComment() {
   renderReactionBoxes(module);
 }
 
+function renderRxWarehouse() {
+  const list = document.getElementById('rxWarehouseList');
+  const countEl = document.getElementById('rxWarehouseCount');
+  if (!list) return;
+  const pool = S.poolComments || [];
+  if (countEl) countEl.textContent = pool.length;
+  if (!pool.length) {
+    list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--muted)">倉庫にコメントがありません</div>';
+    return;
+  }
+  list.innerHTML = pool.map((c, i) =>
+    '<div class="rx-wh-item">' +
+      '<span class="cw-src ' + srcClass(c.source) + '">' + srcLabel(c.source) + '</span>' +
+      '<span style="flex:1">' + esc(c.text) + '</span>' +
+      '<button class="rx-wh-add" onclick="addFromWarehouse(' + i + ')" title="コメントに追加">＋</button>' +
+    '</div>'
+  ).join('');
+}
+
+function addFromWarehouse(poolIdx) {
+  const module = S.confirmModules[S.confirmActive];
+  if (!module) return;
+  const pool = S.poolComments || [];
+  if (!pool[poolIdx]) return;
+  if (!Array.isArray(module.comments)) module.comments = [];
+  module.comments.push({ text: pool[poolIdx].text, score: 50 });
+  renderReactionBoxes(module);
+}
+
 function toggleRxSwap(i) {
   const el = document.getElementById('rxSwap' + i);
   if (!el) return;
@@ -2604,6 +2671,21 @@ function swapRxComment(commentIdx, poolIdx) {
   const el = document.getElementById('rxSwap' + commentIdx);
   if (el) el.style.display = 'none';
   renderReactionBoxes(module);
+}
+
+async function saveConfirmState() {
+  updateConfirmModule(false);
+  const btn = document.getElementById('btnSaveConfirm');
+  btn.disabled = true; btn.textContent = '💾 保存中...';
+  try {
+    const result = await api('/api/confirm/save', { book: S.netaBook, modules: S.confirmModules });
+    if (!result.ok) throw new Error(result.error || '保存失敗');
+    btn.textContent = '✅ 保存完了';
+    setTimeout(() => { btn.textContent = '💾 保管保存'; btn.disabled = false; }, 2000);
+  } catch (e) {
+    alert('保存失敗: ' + e.message);
+    btn.textContent = '💾 保管保存'; btn.disabled = false;
+  }
 }
 
 // ─── スライド追加・削除 ────────────────────────────────────────

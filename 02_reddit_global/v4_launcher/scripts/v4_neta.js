@@ -128,16 +128,18 @@ async function _fetchLatestNews(topic, existingUrl = '') {
   // 信頼メディア優先 → Yahoo News 優先 → その他
   candidates.sort((a, b) => b.trustScore - a.trustScore || (b.isTrusted ? 1 : 0) - (a.isTrusted ? 1 : 0));
 
-  // 上位 8 件から本文取得を試みる（目標 5 件）
+  // 上位 8 件から本文を並列取得（目標 5 件）
+  const top8 = candidates.slice(0, 8);
+  const fetched = await Promise.all(
+    top8.map(c => fetchArticleContent(c.url).catch(() => null))
+  );
   const articles = [];
-  for (const c of candidates.slice(0, 8)) {
-    try {
-      const res = await fetchArticleContent(c.url);
-      if (res?.ok && res.content) {
-        articles.push({ ...c, fullText: res.content.slice(0, ARTICLE_CHARS) });
-        if (articles.length >= 5) break;
-      }
-    } catch (_) {}
+  for (let i = 0; i < top8.length; i++) {
+    const res = fetched[i];
+    if (res?.ok && res.content) {
+      articles.push({ ...top8[i], fullText: res.content.slice(0, ARTICLE_CHARS) });
+      if (articles.length >= 5) break;
+    }
   }
   // 本文取得できなかった分はスニペットで補完
   for (const c of candidates) {
@@ -145,7 +147,10 @@ async function _fetchLatestNews(topic, existingUrl = '') {
     if (!articles.find(a => a.url === c.url))
       articles.push({ ...c, fullText: c.snippet });
   }
-  return articles.slice(0, 5);
+  const result = articles.slice(0, 5);
+  // 英語検索結果のスニペットを _enSnippets に保持（enQuery 抽出のフォールバック用）
+  result._enSnippets = (enRes.organic || []).map(r => `${r.title || ''} ${r.snippet || ''}`);
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -209,54 +214,68 @@ function _isLikelyXReaction(value) {
 }
 
 // ── 記事から英語検索クエリを抽出 ─────────────────────────────
-function _extractEnQuery(topic, articles) {
-  const blob = articles
-    .map(a => `${a.title || ''} ${(a.fullText || a.snippet || '').slice(0, 500)}`)
-    .join('\n');
-  if (!blob.trim()) return topic.replace(/[ぁ-んァ-ヶ一-龥々]/g, '').trim() || topic;
+const _EN_NOISE = new Set([
+  'The', 'This', 'That', 'With', 'From', 'About', 'After', 'Before',
+  'Under', 'Over', 'Into', 'During', 'According', 'However', 'While',
+  'When', 'Where', 'Which', 'What', 'Their', 'There', 'They', 'Have',
+  'Has', 'Had', 'Will', 'Would', 'Could', 'Should', 'Been', 'Being',
+  'Also', 'Just', 'More', 'Most', 'Some', 'Other', 'New', 'First',
+  'Last', 'But', 'Not', 'And', 'For', 'Are', 'Was', 'Were', 'His',
+  'Her', 'Its', 'Our', 'Can', 'May', 'All', 'Get', 'Got', 'Read',
+  'Click', 'Here', 'Getty', 'Images', 'Photo', 'Video', 'Source',
+  'Report', 'Reports', 'Says', 'Said', 'Per', 'Via', 'Now', 'Set',
+  'One', 'Two', 'Three', 'Four', 'Five', 'Man', 'Top', 'Cup',
+  'World', 'Hat', 'Trick', 'Goal', 'Goals', 'Match', 'Game',
+  'Score', 'News', 'Latest', 'Breaking', 'Update', 'Live',
+]);
 
-  const noise = new Set([
-    'The', 'This', 'That', 'With', 'From', 'About', 'After', 'Before',
-    'Under', 'Over', 'Into', 'During', 'According', 'However', 'While',
-    'When', 'Where', 'Which', 'What', 'Their', 'There', 'They', 'Have',
-    'Has', 'Had', 'Will', 'Would', 'Could', 'Should', 'Been', 'Being',
-    'Also', 'Just', 'More', 'Most', 'Some', 'Other', 'New', 'First',
-    'Last', 'But', 'Not', 'And', 'For', 'Are', 'Was', 'Were', 'His',
-    'Her', 'Its', 'Our', 'Can', 'May', 'All', 'Get', 'Got', 'Read',
-    'Click', 'Here', 'Getty', 'Images', 'Photo', 'Video', 'Source',
-    'Report', 'Reports', 'Says', 'Said', 'Per', 'Via', 'Now', 'Set',
-    'One', 'Two', 'Three', 'Four', 'Five', 'Man', 'Top', 'Cup',
-  ]);
+function _extractNamesFromBlob(blob) {
   const freq = {};
-
-  // Multi-word proper nouns: "Kylian Mbappe", "Real Madrid"
   const multiWord = blob.match(
     /[A-Z][a-zà-öø-ÿ]{2,}(?:\s+(?:de|van|von|di|el|al|da|dos|del)\s+|\s+)[A-Z][a-zà-öø-ÿ]{2,}(?:\s+[A-Z][a-zà-öø-ÿ]{2,})*/g
   ) || [];
   for (const phrase of multiWord) {
     const words = phrase.split(/\s+/);
-    if (words.every(w => noise.has(w))) continue;
+    if (words.every(w => _EN_NOISE.has(w))) continue;
     const key = phrase.toLowerCase();
     if (!freq[key]) freq[key] = { text: phrase, score: 0 };
     freq[key].score += 3;
   }
-
-  // Single capitalized words (repeated = likely a name)
   const singles = blob.match(/\b[A-Z][a-zà-öø-ÿ]{2,}\b/g) || [];
   for (const word of singles) {
-    if (noise.has(word)) continue;
+    if (_EN_NOISE.has(word)) continue;
     const key = word.toLowerCase();
     if (!freq[key]) freq[key] = { text: word, score: 0 };
     freq[key].score += 1;
   }
-
-  const topTerms = Object.values(freq)
+  return Object.values(freq)
     .filter(e => e.score >= 2)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
     .map(e => e.text);
+}
 
-  if (topTerms.length > 0) return topTerms.join(' ');
+function _extractEnQuery(topic, articles) {
+  // ① 記事本文から抽出を試みる
+  const blob = articles
+    .map(a => `${a.title || ''} ${(a.fullText || a.snippet || '').slice(0, 500)}`)
+    .join('\n');
+  if (blob.trim()) {
+    const terms = _extractNamesFromBlob(blob);
+    if (terms.length > 0) return terms.join(' ');
+  }
+
+  // ② 記事本文に英語名が無い場合、英語検索結果のスニペットから抽出
+  const enSnippets = articles._enSnippets || [];
+  if (enSnippets.length) {
+    const enBlob = enSnippets.join('\n');
+    const terms = _extractNamesFromBlob(enBlob);
+    if (terms.length > 0) {
+      console.log(`[comments] 英語スニペットから抽出: "${terms.join(' ')}"`);
+      return terms.join(' ');
+    }
+  }
+
   return topic.replace(/[ぁ-んァ-ヶ一-龥々]/g, '').trim() || topic;
 }
 
@@ -300,10 +319,9 @@ async function _fromReddit(sourceUrl, topic = '', enQuery = '') {
     if (!res.ok) return [];
     const data = await res.json();
     const posts = data?.data?.children || [];
-    const allComments = [];
-    for (const post of posts.slice(0, 3)) {
-      const permalink = post.data?.permalink;
-      if (!permalink) continue;
+    const permalinks = posts.slice(0, 3)
+      .map(p => p.data?.permalink).filter(Boolean);
+    const threadResults = await Promise.all(permalinks.map(async (permalink) => {
       try {
         const threadRes = await fetch(`https://www.reddit.com${permalink}.json?limit=30&sort=top`, {
           headers: {
@@ -312,16 +330,15 @@ async function _fromReddit(sourceUrl, topic = '', enQuery = '') {
           },
           signal: AbortSignal.timeout(10000),
         });
-        if (!threadRes.ok) continue;
+        if (!threadRes.ok) return [];
         const threadData = await threadRes.json();
-        const comments = (threadData?.[1]?.data?.children || [])
+        return (threadData?.[1]?.data?.children || [])
           .filter(c => c.kind === 't1' && c.data?.body && c.data.body !== '[deleted]')
           .map(c => String(c.data.body).replace(/\n+/g, ' ').trim())
           .filter(t => t.length >= 15 && t.length <= 280);
-        allComments.push(...comments);
-      } catch (_) {}
-    }
-    return _uniqueComments(allComments, 25);
+      } catch (_) { return []; }
+    }));
+    return _uniqueComments(threadResults.flat(), 25);
   } catch (e) {
     console.warn('[comments] Reddit search 失敗:', e.message);
     return [];
@@ -340,15 +357,14 @@ async function _fromYahoo(topic) {
         .filter(url => /^https?:\/\/news\.yahoo\.co\.jp\//i.test(String(url || '')))
     )].slice(0, 4);
 
+    const results = await Promise.all(
+      urls.map(url => fetchArticleContent(url).catch(() => null))
+    );
     const comments = [];
-    for (const url of urls) {
-      try {
-        const article = await fetchArticleContent(url);
-        if (Array.isArray(article?.comments)) {
-          comments.push(...article.comments.filter(_isLikelyYahooComment));
-        }
-        if (comments.length >= 20) break;
-      } catch (_) {}
+    for (const article of results) {
+      if (Array.isArray(article?.comments)) {
+        comments.push(...article.comments.filter(_isLikelyYahooComment));
+      }
     }
     return _uniqueComments(comments, 15);
   } catch (e) {
@@ -409,7 +425,9 @@ async function _fromX(sourceUrl, topic = '') {
 }
 
 // ── コメント倉庫を構築・保存 ─────────────────────────────────
-async function _buildCommentWarehouse(topic, sourceUrl, articles = []) {
+// articlesPromise: Promise<articles[]> を受け取り、Yahoo/X は即座に並列開始、
+// Reddit だけ記事の enQuery を待ってから検索する
+async function _buildCommentWarehouse(topic, sourceUrl, articlesPromise = null) {
   const key      = _topicKey(topic);
   const savePath = path.join(COMMENTS_DIR, `_comments_${key}.json`);
 
@@ -425,13 +443,17 @@ async function _buildCommentWarehouse(topic, sourceUrl, articles = []) {
     } catch (_) {}
   }
 
-  // 記事から英語検索クエリを抽出（Redditの検索精度向上）
-  const enQuery = articles.length > 0 ? _extractEnQuery(topic, articles) : '';
-  if (enQuery) console.log(`[comments] 記事から抽出した英語クエリ: "${enQuery}"`);
+  // Yahoo/X は topic だけで動くので即座に開始
+  // Reddit は記事から抽出した enQuery で精度を上げるため、articlesPromise を待つ
+  const redditPromise = (async () => {
+    const articles = articlesPromise ? await articlesPromise : [];
+    const enQuery = articles.length > 0 ? _extractEnQuery(topic, articles) : '';
+    if (enQuery) console.log(`[comments] 記事から抽出した英語クエリ: "${enQuery}"`);
+    return _fromReddit(sourceUrl, topic, enQuery);
+  })();
 
-  // 3ソース並列取得
   const [reddit, yahoo, x] = await Promise.all([
-    _fromReddit(sourceUrl, topic, enQuery),
+    redditPromise,
     _fromYahoo(topic),
     _fromX(sourceUrl, topic),
   ]);
@@ -793,9 +815,13 @@ async function buildNetaBook(topicData, { force = false } = {}) {
 
   console.log('[v4_neta] 開始:', topic);
 
-  // ① 記事取得 → ② 記事の文脈を使ってコメント検索（順次実行）
-  const articles = await _fetchLatestNews(topic, url);
-  const warehouse = await _buildCommentWarehouse(topic, url, articles);
+  // 記事取得とコメント倉庫を並列開始
+  // Yahoo/X は topic だけで即座に走り、Reddit だけ記事の enQuery を待つ
+  const articlesPromise = _fetchLatestNews(topic, url);
+  const [articles, warehouse] = await Promise.all([
+    articlesPromise,
+    _buildCommentWarehouse(topic, url, articlesPromise),
+  ]);
   const trustedCount = articles.filter(a => a.isTrusted).length;
   console.log(`[v4_neta] ニュース: ${articles.length}件（信頼${trustedCount}件） / コメント倉庫: ${warehouse.total}件`);
 
