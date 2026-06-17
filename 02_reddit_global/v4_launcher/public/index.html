@@ -2083,7 +2083,6 @@ function pickConfirmImage(url) {
   }
   updateConfirmModule(false);
   renderConfirmGallery();
-  reloadConfirmPreview();
 }
 
 function onAdjChange() {
@@ -2100,7 +2099,6 @@ function onAdjChange() {
   const module = S.confirmModules[S.confirmActive];
   if (module) {
     module.imageAdjust = (ox === 0 && oy === 0 && zoom === 1.0) ? undefined : { offsetX: ox, offsetY: oy, zoom };
-    reloadConfirmPreview();
   }
 }
 
@@ -2834,7 +2832,7 @@ function onConfirmTypeChange() {
   const module = S.confirmModules[S.confirmActive];
   if (!module) return;
   const newType = document.getElementById('confirmType').value;
-  if (newType === module.type) { updateConfirmModule(); return; }
+  if (newType === module.type) { updateConfirmModule(false); return; }
   readDataBind(module);
   module.type = newType;
   if ((newType === 'stats' || newType === 'profile') && !Array.isArray(module.dataSlots)) module.dataSlots = [];
@@ -2852,7 +2850,6 @@ function onConfirmTypeChange() {
   document.getElementById('confirmTitleLabel').textContent = newType === 'ending' ? '締めコメント（オチ）' : 'タイトル';
   document.getElementById('confirmNarrationLabel').textContent = newType === 'ending' ? 'ナレーション（読み上げ）' : 'ナレーション';
   renderConfirmTabs();
-  reloadConfirmPreview();
 }
 
 // ═════════════════════════════════ STEP 4: サムネ + メタデータ
