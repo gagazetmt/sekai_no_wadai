@@ -47,7 +47,9 @@ const { buildV4ReactionHTML } = require('../../v4_launcher/slides/v4_reaction');
 const { buildV4OpeningHTML }  = require('../../v4_launcher/slides/v4_opening');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
-const W = 1920, H = 1080, FPS = 30;
+const W   = parseInt(process.env.RENDER_W   || '1920', 10);
+const H   = parseInt(process.env.RENDER_H   || '1080', 10);
+const FPS = parseInt(process.env.RENDER_FPS || '30',   10);
 const DEFAULT_SLIDE_MS = 8000;   // 音声無しスライドのフォールバック
 // 音声前後の無音インターバル（_common.js と共有・全スライド共通）
 const LEAD_PAD_MS = Math.round(LEAD_PAD_SEC * 1000);
@@ -402,42 +404,125 @@ function _escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// 1スライドを Puppeteer + ffmpeg で MP4 化
+// 1スライドを Puppeteer + ffmpeg で MP4 化（segmented hybrid 対応）
+// アニメーション終了後の静止区間は PNG 1枚を ffmpeg loop で尺伸ばしし、
+// Puppeteer キャプチャ回数を削減する
 async function renderSlide(page, html, durationMs, outPath) {
   const totalFrames = Math.round(durationMs / 1000 * FPS);
 
   await page.setContent(html, { waitUntil: 'load', timeout: 60000 });
 
-  const ff = spawn(FFMPEG, [
-    '-y',
-    '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p',
-    '-r', String(FPS), '-vf', `scale=${W}:${H}`,
-    outPath,
-  ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-  const done = new Promise((resolve, reject) => {
-    ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
-    ff.stderr.on('data', () => {}); // drain
+  // アニメーション最大終了時刻を検出（hybrid 判定用）
+  const maxAnimEndMs = await page.evaluate(() => {
+    const anims = document.getAnimations();
+    if (!anims.length) return 0;
+    let maxEnd = 0;
+    for (const a of anims) {
+      try {
+        const ct = a.effect?.getComputedTiming?.();
+        if (!ct) continue;
+        const end = (ct.delay || 0) + (ct.activeDuration || 0);
+        if (isFinite(end) && end > maxEnd) maxEnd = end;
+      } catch (_) {}
+    }
+    return maxEnd;
   });
 
-  // 各フレームでアニメ時刻を固定してキャプチャ（全アニメが同期する）
-  for (let f = 0; f < totalFrames; f++) {
-    const tMs = Math.round(f * 1000 / FPS);
-    await page.evaluate(tMs => new Promise(resolve => {
-      document.getAnimations().forEach(a => {
-        a.pause();
-        try { a.currentTime = tMs; } catch (_) {}
-      });
-      requestAnimationFrame(resolve);
-    }), tMs);
-    const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
-    const ok = ff.stdin.write(buf);
-    if (!ok) await new Promise(r => ff.stdin.once('drain', r));
-  }
+  const animEndFrame = Math.ceil(maxAnimEndMs / 1000 * FPS) + FPS; // +1秒マージン
+  const MIN_STATIC_FRAMES = FPS * 2; // 2秒以上の静止区間がないと hybrid しない
+  const useHybrid = animEndFrame > 0 && animEndFrame < totalFrames
+    && (totalFrames - animEndFrame) >= MIN_STATIC_FRAMES;
 
-  ff.stdin.end();
-  await done;
+  if (useHybrid) {
+    const captureFrames = Math.min(animEndFrame, totalFrames);
+    const animPath      = outPath.replace(/\.mp4$/, '_anim.mp4');
+    const stillPng      = outPath.replace(/\.mp4$/, '_still.png');
+    const stillMp4      = outPath.replace(/\.mp4$/, '_still.mp4');
+    const concatTxt     = outPath.replace(/\.mp4$/, '_cat.txt');
+
+    console.log(`    ⚡ hybrid: ${captureFrames}/${totalFrames}f 録画 + ${totalFrames - captureFrames}f 静止画`);
+
+    // ── 動く区間を Puppeteer 録画 ──
+    let lastBuf;
+    const ff = spawn(FFMPEG, [
+      '-y',
+      '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-r', String(FPS), '-vf', `scale=${W}:${H}`,
+      animPath,
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const doneAnim = new Promise((resolve, reject) => {
+      ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg anim exit ' + code)));
+      ff.stderr.on('data', () => {});
+    });
+
+    for (let f = 0; f < captureFrames; f++) {
+      const tMs = Math.round(f * 1000 / FPS);
+      await page.evaluate(tMs => new Promise(resolve => {
+        document.getAnimations().forEach(a => {
+          a.pause();
+          try { a.currentTime = tMs; } catch (_) {}
+        });
+        requestAnimationFrame(resolve);
+      }), tMs);
+      lastBuf = await page.screenshot({ type: 'jpeg', quality: 82 });
+      const ok = ff.stdin.write(lastBuf);
+      if (!ok) await new Promise(r => ff.stdin.once('drain', r));
+    }
+    ff.stdin.end();
+    await doneAnim;
+
+    // ── 最終フレームを PNG で保存 → ffmpeg loop で静止区間 mp4 ──
+    const lastPng = await page.screenshot({ type: 'png' });
+    fs.writeFileSync(stillPng, lastPng);
+    const stillDurSec = ((totalFrames - captureFrames) / FPS).toFixed(3);
+    await _runFfmpeg([
+      '-y', '-loop', '1', '-i', stillPng,
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-t', stillDurSec, '-r', String(FPS), '-vf', `scale=${W}:${H}`,
+      stillMp4,
+    ]);
+
+    // ── concat demuxer で結合 ──
+    fs.writeFileSync(concatTxt, `file '${animPath.replace(/\\/g, '/')}'\nfile '${stillMp4.replace(/\\/g, '/')}'\n`);
+    await _runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatTxt, '-c', 'copy', outPath]);
+
+    // cleanup
+    for (const f of [animPath, stillPng, stillMp4, concatTxt]) {
+      try { fs.unlinkSync(f); } catch (_) {}
+    }
+  } else {
+    // ── フル Puppeteer 録画（従来方式）──
+    const ff = spawn(FFMPEG, [
+      '-y',
+      '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-r', String(FPS), '-vf', `scale=${W}:${H}`,
+      outPath,
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+    const done = new Promise((resolve, reject) => {
+      ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
+      ff.stderr.on('data', () => {});
+    });
+
+    for (let f = 0; f < totalFrames; f++) {
+      const tMs = Math.round(f * 1000 / FPS);
+      await page.evaluate(tMs => new Promise(resolve => {
+        document.getAnimations().forEach(a => {
+          a.pause();
+          try { a.currentTime = tMs; } catch (_) {}
+        });
+        requestAnimationFrame(resolve);
+      }), tMs);
+      const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
+      const ok = ff.stdin.write(buf);
+      if (!ok) await new Promise(r => ff.stdin.once('drain', r));
+    }
+
+    ff.stdin.end();
+    await done;
+  }
 }
 
 // ffmpeg を非同期で実行（execSync ではなく spawn 利用、並列ワーカーがブロックされない）

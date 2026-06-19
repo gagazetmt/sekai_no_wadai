@@ -366,6 +366,9 @@ function _runRender(postId, jobId, { customTts = false } = {}) {
       TTS_PROVIDER: 'voicevox',
       AUDIO_MODE: 'legacy',
       TTS_COMBINED_MODE: '0',
+      RENDER_W:   process.env.RENDER_W   || '1280',
+      RENDER_H:   process.env.RENDER_H   || '720',
+      RENDER_FPS: process.env.RENDER_FPS || '20',
     };
     const proc = spawn('node', [RENDER_JS, postId, jobId], {
       cwd: BASE_DIR,
