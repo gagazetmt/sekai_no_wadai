@@ -285,7 +285,7 @@ async function renderSlide(page, html, durationMs, outPath, cdp) {
   await page.setContent(scaledHtml, { waitUntil: 'load', timeout: 60000 });
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 
-  // アニメーション最大終了時刻を検出
+  // アニメーション最大終了時刻を検出（infinite は除外）
   const maxAnimEndMs = await page.evaluate(() => {
     const anims = document.getAnimations();
     if (!anims.length) return 0;
@@ -293,6 +293,7 @@ async function renderSlide(page, html, durationMs, outPath, cdp) {
     for (const a of anims) {
       const t = a.effect?.getComputedTiming?.();
       if (!t) continue;
+      if (!isFinite(t.activeDuration)) continue;
       const end = (t.delay || 0) + (t.activeDuration || 0);
       if (end > maxEnd) maxEnd = end;
     }
