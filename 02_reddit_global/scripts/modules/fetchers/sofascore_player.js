@@ -235,7 +235,7 @@ async function fetchSofaScorePlayer(playerNameEn) {
     ]);
 
     // ② 詳細情報（市場価値・契約）
-    let playerDetail = pdRaw?.__err ? {} : (pdRaw.player || {});
+    const playerDetail = pdRaw?.__err ? {} : (pdRaw.player || {});
     const marketValue = playerDetail.proposedMarketValue || null;
     const contractUntil = playerDetail.contractUntilTimestamp
       ? new Date(playerDetail.contractUntilTimestamp * 1000).toISOString().slice(0, 7)
@@ -424,7 +424,7 @@ async function fetchSofaScorePlayer(playerNameEn) {
       name:          player.name,
       position,
       team:          player.team?.name || playerDetail.team?.name,
-      nationality:   player.country?.name || playerDetail.country?.name,
+      nationality:   player.country?.name,
       dateOfBirth:   playerDetail.dateOfBirth,
       age:           playerDetail.dateOfBirthTimestamp
         ? Math.floor((Date.now() - playerDetail.dateOfBirthTimestamp * 1000) / (365.25 * 24 * 3600 * 1000))

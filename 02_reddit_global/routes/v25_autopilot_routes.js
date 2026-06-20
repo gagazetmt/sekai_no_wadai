@@ -11,7 +11,6 @@ const { createJob, readJob, updateJob } = require('./_job_helper');
 const { _runSuggestLabels, _runFetchAll, _runRefineLabelsFromArticles } = require('./step2_routes');
 const { _runProposeModules, _runScenarioJob } = require('./step3_routes');
 const { _runGenerateViewpoints } = require('./viewpoint_routes');
-const { matchPlayers, matchClubs, matchManagers } = require('../scripts/modules/stock_match');
 const { generateAIPlan } = require('../v3_launcher/v3_planner');
 const { fetchAndAssignSlideImages } = require('../v3_launcher/v3_image_fetcher');
 const { getBindingMeta, buildDataSlotsFromMeta, resolveCustomSlotKeys } = require('../scripts/v2_story/binding_meta');
@@ -476,36 +475,6 @@ router.post('/v25/save-modules', express.json(), (req, res) => {
 
 // mode 別カード選定：企画ピース → modules 配列に変換
 // Sonnet が hookScore を付けてるので hookScore 降順で重要度が決まる
-// ストック画像を modules.json に自動セット
-// bgImage未設定のスライドのみ対象。entity名 → stock_match → 最高スコア画像
-function _autoAssignStockImages(postId, si) {
-  const mFile = modulesPath(postId);
-  const data = safeJson(mFile, null);
-  if (!data?.modules?.length) return 0;
-  let assigned = 0;
-  const modules = data.modules.map(mod => {
-    if (mod.bgImage) return mod;
-    const hit = String(mod.mainKey || '').match(/^entity:(.+)$/);
-    if (!hit) return mod;
-    const entityName = hit[1].trim();
-    if (!entityName) return mod;
-    const entityItem = (si?.boxes?.entity?.items || []).find(it => it.label === entityName);
-    const role = entityItem?.role || 'player';
-    let imgs = [];
-    if      (role === 'player')  imgs = matchPlayers (entityName, { limit: 1 });
-    else if (role === 'manager') imgs = matchManagers(entityName, { limit: 1 });
-    else if (role === 'team')    imgs = matchClubs   (entityName, { limit: 1, kinds: ['logo'] });
-    if (imgs.length && imgs[0].url) {
-      assigned++;
-      return { ...mod, bgImage: imgs[0].url };
-    }
-    return mod;
-  });
-  data.modules = modules;
-  try { fs.writeFileSync(mFile, JSON.stringify(data, null, 2)); } catch (_) {}
-  return assigned;
-}
-
 function _vpBuildPlanFromCards(cards, mode) {
   const opening  = cards.find(c => c.slideType === 'opening');
   const ending   = cards.find(c => c.slideType === 'ending');
@@ -580,46 +549,17 @@ router.post('/v25/autopilot/vp-start', express.json(), (req, res) => {
       si.storyFacts = Array.isArray(refineResult.storyFacts) ? refineResult.storyFacts : [];
       fs.writeFileSync(siFile, JSON.stringify(si, null, 2));
 
-      // ② fetch-all + deep-research を並列実行（どちらもI/O重いので並列が効果的）
-      updateJob(jobId, { status:'running', step:'fetch-deep',
-        message:'データ取得 + ディープリサーチ（並列）...' });
-      const { runDeepResearch, buildAnalyzeBook } = require('../scripts/modules/article_researcher');
-      const drSearches = [...(suggested.searches || [])].filter(Boolean);
-      const [, drResult] = await Promise.all([
-        _runFetchAll({ postId, items: labels }),
-        runDeepResearch(drSearches, si, {
-          postTitle: post.titleJa || post.title,
-          onProgress: () => {},
-        }).catch(e => { console.warn('[vp-start] deep-research失敗(続行):', e.message); return null; }),
-      ]);
+      // ② データ取得（SofaScore / TM / Wikipedia / FotMob）
+      updateJob(jobId, { status:'running', step:'fetch-all',
+        message:'データ取得中（' + labels.length + '件）...' });
+      await _runFetchAll({ postId, items: labels });
 
-      // fetch-all完了後のsiDataにdeep-research結果を追記して保存
-      const fetchedSi = safeJson(siFile, si);
-      if (drResult) {
-        fetchedSi.deepResearch = drResult;
-        fs.writeFileSync(siFile, JSON.stringify(fetchedSi, null, 2));
-        console.log('[vp-start] deepResearch: articles=' + drResult.articleCount
-          + ' unavailable=' + drResult.constraintList.unavailable.length
-          + ' entities=' + drResult.suggestedEntities.length);
-      }
-
-      // ③ アナライズブック生成（記事 + entityデータ両方揃ったここで統合）
-      updateJob(jobId, { status:'running', step:'analyze-book', message:'アナライズブック生成中...' });
-      const latestSiForBook = safeJson(siFile, fetchedSi);
-      const drExtractions = drResult?.extractions || [];
-      const analyzeBook = await buildAnalyzeBook(drExtractions, latestSiForBook, post.titleJa || post.title)
-        .catch(e => { console.warn('[vp-start] analyzeBook失敗(続行):', e.message); return null; });
-      if (analyzeBook) {
-        latestSiForBook.analyzeBook = analyzeBook;
-        fs.writeFileSync(siFile, JSON.stringify(latestSiForBook, null, 2));
-        console.log('[vp-start] analyzeBook生成: topics=' + analyzeBook.topics.length);
-      }
-
-      // ④ 企画ピース生成（Sonnet固定 / analyzeBook + deepResearch制約リストを自動適用）
+      // ③ 企画ピース生成（Sonnet 固定）
       updateJob(jobId, { status:'running', step:'viewpoints', message:'企画ピース生成中（Sonnet）...' });
       const { cards, briefing } = await _runGenerateViewpoints(postId);
 
       if (mode === 'semi') {
+        // 企画ビルダーへ誘導（カードはクライアントが表示）
         updateJob(jobId, { status:'done', step:'done', navigateTo:'25',
           cards, briefing, message:'完了 → 企画ビルダーで確認してください' });
         return;
@@ -635,14 +575,8 @@ router.post('/v25/autopilot/vp-start', express.json(), (req, res) => {
       await _runScenarioJob(scJobId, postId, modules, post,
         { sprint:'deepseek', seedPlan: briefing });
 
-      // ⑤ ストック画像自動セット
-      const latestSi = safeJson(siFile, fetchedSi);
-      const imgAssigned = _autoAssignStockImages(postId, latestSi);
-      console.log('[vp-start] 画像自動セット: ' + imgAssigned + '枚');
-
       updateJob(jobId, { status:'done', step:'done', navigateTo:'4',
-        moduleCount: modules.length, imgAssigned,
-        message:'完了（画像' + imgAssigned + '枚自動セット）→ Step4で確認してください' });
+        moduleCount: modules.length, message:'完了 → Step4で脚本を確認してください' });
 
     } catch (e) {
       console.error('[autopilot/vp]', e.message);

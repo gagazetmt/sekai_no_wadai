@@ -2285,29 +2285,6 @@ function getUI() {
         + '</div>';
     }
 
-    // ── toc: チャプター一覧編集 ──
-    if (m.type === 'toc') {
-      const TOC_MAX = 5;
-      const tocArr = Array.isArray(m.tocItems) ? m.tocItems : [];
-      const _addTocBtn = tocArr.length < TOC_MAX
-        ? '<button class="s4-toc-add" onclick="s4AddTocItem()" style="background:#1a3a1a;color:#6bff8b;border:1px solid #2a5a2a;border-radius:4px;cursor:pointer;font-size:12px;padding:5px 12px;margin-top:6px;">＋ 追加 (' + tocArr.length + '/' + TOC_MAX + ')</button>'
-        : '<div style="font-size:10px;color:#666;margin-top:6px;">上限 (' + TOC_MAX + '/' + TOC_MAX + ')</div>';
-      const _totalToc = tocArr.length;
-      extraHtml += '<div style="font-size:11px;color:var(--c);font-weight:bold;margin:14px 0 6px;">📋 チャプター一覧</div>'
-        + tocArr.map(function(it, idx) {
-            const txt = (typeof it === 'string') ? it : (it?.text || '');
-            const upDis = idx === 0 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
-            const dnDis = idx === _totalToc - 1 ? ' disabled style="opacity:0.3;cursor:not-allowed;' : ' style="cursor:pointer;';
-            return '<div style="display:grid;grid-template-columns:20px 1fr 24px 24px 28px;gap:4px;margin-bottom:4px;align-items:center;">'
-              + '<span style="font-size:11px;color:#f59e0b;text-align:center;font-weight:bold;">' + (idx + 1) + '</span>'
-              + '<input class="inp s4-toc-item" data-idx="' + idx + '" value="' + _esc(txt) + '" oninput="s4OnInput()" placeholder="チャプタータイトル（8〜18文字）" style="font-size:12px;padding:4px 8px;">'
-              + '<button class="s4-toc-up" data-idx="' + idx + '" title="上へ"' + upDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;">↑</button>'
-              + '<button class="s4-toc-down" data-idx="' + idx + '" title="下へ"' + dnDis + 'background:#1a2a3a;color:#7dc8ff;border:1px solid #2a4a6a;border-radius:3px;font-size:11px;padding:0 4px;line-height:24px;height:24px;">↓</button>'
-              + '<button class="s4-toc-del" data-idx="' + idx + '" title="削除" style="background:#3a1a1a;color:#ff6b6b;border:1px solid #5a2a2a;border-radius:3px;cursor:pointer;font-size:13px;padding:0 6px;line-height:24px;height:24px;">×</button>'
-              + '</div>';
-          }).join('') + _addTocBtn;
-    }
-
     // ── 🆕 ranking 編集: items 配列 (rank / name / value / subtext) ──
     if (m.type === 'ranking') {
       const RANK_MAX = 5;
@@ -2670,18 +2647,6 @@ function getUI() {
     _bindSwap('.s4-phrase-down', () => m.catchphrases, +1);
     _bindSwap('.s4-cmt-up',   () => m.comments, -1);
     _bindSwap('.s4-cmt-down', () => m.comments, +1);
-    _bindSwap('.s4-toc-up',   () => m.tocItems, -1);
-    _bindSwap('.s4-toc-down', () => m.tocItems, +1);
-    el.querySelectorAll('.s4-toc-del').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        _collectInputs();
-        const idx = parseInt(btn.getAttribute('data-idx'), 10);
-        if (Array.isArray(m.tocItems) && idx >= 0 && idx < m.tocItems.length) {
-          m.tocItems.splice(idx, 1);
-          _renderEditor(); _saveAndReload();
-        }
-      });
-    });
 
     /* 🆕 ranking items ハンドラ */
     _bindSwap('.s4-rank-up',   () => m.items, -1);
@@ -3253,14 +3218,6 @@ function getUI() {
       const ps = document.querySelectorAll('.s4-phrase');
       m.catchphrases = Array.from(ps).map(el => el.value);
     }
-    if (m.type === 'toc') {
-      const tocInputs = document.querySelectorAll('.s4-toc-item');
-      if (tocInputs.length) {
-        m.tocItems = Array.from(tocInputs).map(function(el) {
-          return { text: el.value, chunkText: el.value };
-        });
-      }
-    }
     if (Array.isArray(m.comments)) {
       const ts = document.querySelectorAll('.s4-cmt-text');
       const ss = document.querySelectorAll('.s4-cmt-score');
@@ -3758,17 +3715,6 @@ function getUI() {
     m.catchphrases.push(usesObj ? { text: '', chunkText: '' } : '');
     _renderEditor();
     _saveAndReload();
-  };
-
-  window.s4AddTocItem = function() {
-    _collectInputs();
-    const i = window.APP.s4.activeTab;
-    const m = window.APP.s4.modules[i];
-    if (!m || m.type !== 'toc') return;
-    if (!Array.isArray(m.tocItems)) m.tocItems = [];
-    if (m.tocItems.length >= 5) return;
-    m.tocItems.push({ text: '', chunkText: '' });
-    _renderEditor(); _saveAndReload();
   };
 
   /* ── ナレーション再生成（ジョブ化・タブ閉じても継続）── */

@@ -14,27 +14,22 @@
 
 const _gemini  = require('./tts_gemini');
 const _minimax = require('./tts_minimax');
-const _voicevox = require('./tts_voicevox');
 
 const DEFAULT_PROVIDER = (process.env.TTS_PROVIDER || 'gemini').toLowerCase();
 
 const PRESET_PROVIDERS = [
-  { id: 'voicevox', label: 'VOICEVOX（青山龍星＋コメント男4:女1）' },
   { id: 'gemini',  label: 'Gemini 3.1 Flash TTS (採用・若手熱血リポーター)' },
   { id: 'minimax', label: 'MiniMax speech-2.8-hd (保険・ベテラン店主)' },
 ];
 
 function _normalize(provider) {
   const p = String(provider || DEFAULT_PROVIDER).toLowerCase();
-  if (p === 'voicevox') return 'voicevox';
   if (p === 'minimax') return 'minimax';
   return 'gemini';
 }
 
 function getEngine(provider) {
-  const p = _normalize(provider);
-  if (p === 'voicevox') return _voicevox;
-  return p === 'minimax' ? _minimax : _gemini;
+  return _normalize(provider) === 'minimax' ? _minimax : _gemini;
 }
 
 /**
@@ -53,14 +48,6 @@ function getEngine(provider) {
  */
 async function generate(opts = {}) {
   const provider = _normalize(opts.provider);
-  if (provider === 'voicevox') {
-    return _voicevox.generateVoiceVoxTTS({
-      text: opts.text,
-      outputPath: opts.outputPath,
-      voiceId: opts.voiceId,
-      speed: opts.speed,
-    });
-  }
   if (provider === 'minimax') {
     return _minimax.generateMiniMaxTTS({
       text: opts.text,
@@ -98,9 +85,7 @@ function getDefaults(provider) {
     presetVoices: eng.PRESET_VOICES || [],
     presetModels: eng.PRESET_MODELS || [],
   };
-  if (p === 'voicevox') {
-    base.supports = { emotion: false, speed: true, vol: false, pitch: false, styleInstructions: false };
-  } else if (p === 'minimax') {
+  if (p === 'minimax') {
     base.emotions = ['(なし)', ...(_minimax.ALLOWED_EMOTIONS || [])];
     base.supports = { emotion: true, speed: true, vol: true, pitch: true, styleInstructions: false };
   } else {

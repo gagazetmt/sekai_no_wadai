@@ -155,43 +155,6 @@ async function fetchBoard(board) {
   return results;
 }
 
-// スカウト用: subject.txt のみ取得（dat不要、sleepなし）
-async function fetchBoardTitles(board) {
-  try {
-    const subj = await get(board.url + 'subject.txt');
-    return parseSubject(subj, board.filter).slice(0, MAX_THREADS).map(t => ({
-      threadId: t.threadId,
-      boardId:  board.id,
-      boardName: board.name,
-      title:    t.title,
-      count:    t.count,
-      url:      board.url + 'read.cgi/' + t.threadId,
-    }));
-  } catch (e) {
-    console.warn(`[5ch] board取得失敗 (${board.name}): ${e.message}`);
-    return [];
-  }
-}
-
-async function fetch5chTitles() {
-  console.log('📡 5ch タイトル取得...');
-  const all = [];
-  for (const board of BOARDS) {
-    console.log(`  板: ${board.name}`);
-    all.push(...await fetchBoardTitles(board));
-  }
-  console.log(`✅ 5ch: ${all.length}件取得`);
-  return all.map(t => ({
-    id: `5ch_${t.boardId}_${t.threadId}`,
-    source: '5ch',
-    title: t.title,
-    titleJa: t.title,
-    url: t.url,
-    score: t.count,
-    created_utc: Math.floor(Date.now() / 1000),
-  }));
-}
-
 // candidates_YYYY-MM-DD.json 形式に変換
 function toCandidate(thread, iso) {
   const id = `5ch_${thread.boardId}_${thread.threadId}`;
@@ -227,4 +190,4 @@ async function fetch5chCandidates(iso) {
   return candidates;
 }
 
-module.exports = { fetch5chCandidates, fetch5chTitles };
+module.exports = { fetch5chCandidates };

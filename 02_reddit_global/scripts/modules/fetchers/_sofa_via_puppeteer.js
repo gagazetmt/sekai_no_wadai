@@ -66,18 +66,11 @@ async function init() {
         });
       }
     }
-    // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（sofascore.com / api.sofascore.com は通す）
-    await attachBlocker(_page, { allowHosts: ['sofascore.com', 'api.sofascore.com'] });
+    // 帯域節約: 画像/フォント/CSS + 広告/トラッカー遮断（api.sofascore.com は通す）
+    await attachBlocker(_page, { allowHosts: ['api.sofascore.com'] });
     await _page.setUserAgent(UA);
     await _page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
-    // 2026-06-14: Webshare IP が SofaScore バックエンドで繰り返しブロックされるようになったため
-    // www.sofascore.com 訪問を復活（CF clearance cookie を取得してから API を叩く）
-    // ※ 2026-05-12 に「不要」として削除したが、バックエンド IP ブロックが強化されたため再導入
-    try {
-      await _page.goto('https://www.sofascore.com/', {
-        waitUntil: 'domcontentloaded', timeout: 20000,
-      });
-    } catch (_) { /* タイムアウトでも cookie 取得できていれば続行 */ }
+    // www.sofascore.com 訪問は不要（上記コメント参照）。即 API 叩ける状態にする
     // プロセス終了時に自動 close
     process.once('exit',   () => { try { _browser?.close(); } catch (_) {} });
     process.once('SIGINT', () => { try { _browser?.close(); } catch (_) {} process.exit(); });
@@ -160,68 +153,4 @@ async function apiGetImage(urlPath) {
   });
 }
 
-// ── 選手ページ（www.sofascore.com）から __NEXT_DATA__ を取得 ─────
-//   api.sofascore.com が 403 の場合のフォールバック
-//   www.sofascore.com/player/{slug}/{id} → SSR 埋め込みの選手情報
-async function fetchPlayerPage(playerId, playerName) {
-  await init();
-  const slug = String(playerName || 'player')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return _serialize(async () => {
-    const url = `https://www.sofascore.com/player/${slug}/${playerId}`;
-    const res = await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    if (!res || res.status() !== 200) return null;
-    const text = await _page.evaluate(() =>
-      document.getElementById('__NEXT_DATA__')?.textContent || ''
-    );
-    if (!text) return null;
-    try { return JSON.parse(text)?.props?.pageProps || null; }
-    catch (_) { return null; }
-  });
-}
-
-// ── チームページ（www.sofascore.com）から __NEXT_DATA__ を取得 ──
-async function fetchTeamPage(teamId, teamName) {
-  await init();
-  const slug = String(teamName || 'team')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return _serialize(async () => {
-    const url = `https://www.sofascore.com/team/football/${slug}/${teamId}`;
-    const res = await _page.goto(url, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    if (!res || res.status() !== 200) return null;
-    const text = await _page.evaluate(() =>
-      document.getElementById('__NEXT_DATA__')?.textContent || ''
-    );
-    if (!text) return null;
-    try { return JSON.parse(text)?.props?.pageProps || null; }
-    catch (_) { return null; }
-  });
-}
-
-// ── 試合ページ（www.sofascore.com）から __NEXT_DATA__ を取得 ─────
-//   api.sofascore.com が 403 の場合のフォールバック
-//   www.sofascore.com/football/match/{slug}/{id} → SSR 埋め込みの試合情報
-async function fetchMatchPage(matchUrl) {
-  await init();
-  return _serialize(async () => {
-    const res = await _page.goto(matchUrl, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
-    if (!res || res.status() !== 200) {
-      console.log(`[SofaScore Match SSR] page status: ${res?.status() || 'null'}`);
-      return null;
-    }
-    const text = await _page.evaluate(() =>
-      document.getElementById('__NEXT_DATA__')?.textContent || ''
-    );
-    if (!text) return null;
-    try { return JSON.parse(text)?.props?.pageProps || null; }
-    catch (_) { return null; }
-  });
-}
-
-module.exports = { init, close, apiGet, apiGetImage, fetchPlayerPage, fetchTeamPage, fetchMatchPage };
+module.exports = { init, close, apiGet, apiGetImage };

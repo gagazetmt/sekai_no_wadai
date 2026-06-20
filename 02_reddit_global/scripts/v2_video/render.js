@@ -41,15 +41,9 @@ const { buildRankingHTML }    = require('./slides/ranking');
 const { buildTimelineHTML }   = require('./slides/timeline');
 const { buildPictureHTML }    = require('./slides/picture');
 const { mapImagesToModule, LEAD_PAD_SEC, TAIL_PAD_SEC }   = require('./slides/_common');
-// V4スライド（フォント大化版）
-const { buildV4PictureHTML }  = require('../../v4_launcher/slides/v4_picture');
-const { buildV4ReactionHTML } = require('../../v4_launcher/slides/v4_reaction');
-const { buildV4OpeningHTML }  = require('../../v4_launcher/slides/v4_opening');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
-const W   = parseInt(process.env.RENDER_W   || '1920', 10);
-const H   = parseInt(process.env.RENDER_H   || '1080', 10);
-const FPS = parseInt(process.env.RENDER_FPS || '30',   10);
+const W = 1920, H = 1080, FPS = 30;
 const DEFAULT_SLIDE_MS = 8000;   // 音声無しスライドのフォールバック
 // 音声前後の無音インターバル（_common.js と共有・全スライド共通）
 const LEAD_PAD_MS = Math.round(LEAD_PAD_SEC * 1000);
@@ -89,17 +83,14 @@ async function processInParallel(items, limit, worker, onError) {
 //   opening は無音時 5秒（タイトル冒頭のテンポ重視）、それ以外は 8秒
 function slideDurationMs(mod) {
   const a = Array.isArray(mod.audio) ? mod.audio : [];
-  // endingPause: ending スライドの遷移後に追加する無音秒数（一言落ち演出用）
-  const pauseMs = mod?.endingPause ? Math.round(mod.endingPause * 1000) : 0;
   if (a.length) {
     const sumSec = a.reduce((s, c) => s + (c.durationSec || 0), 0);
     if (sumSec > 0) {
-      const ms = Math.round(sumSec * 1000) + LEAD_PAD_MS + TAIL_PAD_MS + pauseMs;
+      const ms = Math.round(sumSec * 1000) + LEAD_PAD_MS + TAIL_PAD_MS;
       return Math.min(ms, MAX_SLIDE_MS);
     }
   }
-  const base = mod?.type === 'opening' ? 5000 : DEFAULT_SLIDE_MS;
-  return base + pauseMs;
+  return mod?.type === 'opening' ? 5000 : DEFAULT_SLIDE_MS;
 }
 
 const BASE_DIR     = path.join(__dirname, '..', '..');
@@ -137,18 +128,14 @@ function audioDirFor(postId) {
   return dir;
 }
 
-// reaction 系判定（v4_reaction も V2 reaction と同じ TTS/voice 処理を通す）
-function _isReactionType(t) { return t === 'reaction' || t === 'v4_reaction'; }
-function _hasOverlayComments(mod) { return Array.isArray(mod?.overlayComments) && mod.overlayComments.length > 0; }
-
 // 1スライド分の TTS 生成タスク (chunk配列) を作る。実生成は呼び出し側で並列化
 function buildSlideTtsTasks(mod, idx, postId) {
   if (Array.isArray(mod.audio) && mod.audio.length) return []; // 既に生成済
   const narr = String(mod.narration || '').trim();
-  // narration 空でも opening (title 読み上げ) / reaction (comments) / toc (items) / overlayComments は対象
+  // narration 空でも opening (title 読み上げ) / reaction (comments) / toc (items) は対象
   const titleAvailable = mod.type === 'opening' && String(mod.title || '').trim();
   const tocItemsAvailable = mod.type === 'toc' && Array.isArray(mod.tocItems) && mod.tocItems.length;
-  if (!narr && !_isReactionType(mod.type) && !_hasOverlayComments(mod) && !titleAvailable && !tocItemsAvailable) return [];
+  if (!narr && mod.type !== 'reaction' && !titleAvailable && !tocItemsAvailable) return [];
   const chunks = tts.buildChunksForModule(mod);
   if (!chunks.length) return [];
 
@@ -163,7 +150,7 @@ function buildSlideTtsTasks(mod, idx, postId) {
   // ttsCfg は読み取り専用扱いで、reaction の場合 speed を +10% override（コメント読み上げ高速化）
   //   2026-05-08: 相棒指示で reaction 全体に適用（前置きナレも含む）
   const ttsCfg = { ...(mod.tts || {}) };
-  if (_isReactionType(mod.type) && ttsCfg.speed == null) {
+  if (mod.type === 'reaction' && ttsCfg.speed == null) {
     // 通常 default 1.03 → reaction では 1.13 で 10% 早め
     ttsCfg.speed = 1.13;
   }
@@ -171,46 +158,26 @@ function buildSlideTtsTasks(mod, idx, postId) {
   const provider = ttsCfg.provider || tts.DEFAULT_PROVIDER;
   const defaults = tts.getDefaults(provider);
 
-  // reaction / overlayComments の comment chunk はランダム voice（複数キャラ感）
+  // 🆕 reaction の comment chunk (c >= 1) はランダム voice（複数キャラ感）
   //   modules.json の m.reactionVoices に保存して再生成しても同じ voice を維持
-  //   overlayComments: chunk構成 = [narration..., transition, comment1, comment2, ...]
-  //   reaction:        chunk構成 = [narration, comment1, comment2, ...]
+  //   chunk[0] (前置きナレ) はメイン voice、chunk[1+] (各コメント) がランダム
   let reactionVoices = null;
   let reactionStyleInstructions = null;
-  const hasOverlay = _hasOverlayComments(mod);
-  // overlayComments: narration chunks + 1 (transition) がコメント開始位置
-  // reaction: narration があれば 1、なければ 0
-  const narrChunkCount = hasOverlay
-    ? (narr ? 1 : 0) + 1  // narration + transition
-    : (_isReactionType(mod.type) && narr ? 1 : 0);
-  const reactionCommentStart = narrChunkCount;
-  if ((_isReactionType(mod.type) || hasOverlay) && (provider === 'gemini' || provider === 'voicevox')) {
-    const commentChunkCount = Math.max(0, chunks.length - reactionCommentStart);
-    const savedVoicesValid = Array.isArray(mod.reactionVoices) &&
-      mod.reactionVoices.length >= commentChunkCount &&
-      (provider !== 'voicevox' || mod.reactionVoices.every(value => /^\d+$/.test(String(value))));
-    if (savedVoicesValid) {
+  if (mod.type === 'reaction' && provider === 'gemini') {
+    const commentChunkCount = Math.max(0, chunks.length - 1);
+    if (Array.isArray(mod.reactionVoices) && mod.reactionVoices.length >= commentChunkCount) {
       reactionVoices = mod.reactionVoices.slice(0, commentChunkCount);
     } else {
+      const ttsGemini = require('./tts_gemini');
       reactionVoices = [];
-      if (provider === 'voicevox') {
-        const ttsVoiceVox = require('./tts_voicevox');
-        for (let i = 0; i < commentChunkCount; i++) {
-          reactionVoices.push(ttsVoiceVox.pickCommentVoice());
-        }
-      } else {
-        const ttsGemini = require('./tts_gemini');
-        for (let i = 0; i < commentChunkCount; i++) {
-          reactionVoices.push(ttsGemini.pickReactionVoice());
-        }
+      for (let i = 0; i < commentChunkCount; i++) {
+        reactionVoices.push(ttsGemini.pickReactionVoice());
       }
       mod.reactionVoices = reactionVoices;  // modules.json に保存される
     }
     // reaction comment 用 style: 感情控えめ + テンポやや早め (引用文読み)
-    if (provider === 'gemini') {
-      const ttsGemini = require('./tts_gemini');
-      reactionStyleInstructions = ttsGemini.getReactionStyleInstructions();
-    }
+    const ttsGemini = require('./tts_gemini');
+    reactionStyleInstructions = ttsGemini.getReactionStyleInstructions();
   }
 
   return chunks.map((text, c) => {
@@ -219,8 +186,8 @@ function buildSlideTtsTasks(mod, idx, postId) {
     let voiceId = ttsCfg.voiceId || defaults.voice;
     let styleInstructions = ttsCfg.styleInstructions || undefined;
     // reaction の comment chunk (c >= 1) は事前抽選 voice + 専用 style
-    if (reactionVoices && c >= reactionCommentStart) {
-      voiceId = reactionVoices[c - reactionCommentStart] || voiceId;
+    if (reactionVoices && c >= 1) {
+      voiceId = reactionVoices[c - 1] || voiceId;
       styleInstructions = reactionStyleInstructions;
     }
     return {
@@ -279,265 +246,46 @@ function buildSlideHTML(mod) {
   const m = mapImagesToModule(mod);
   const opVar = (m.variant && OP_BUILDERS[m.variant]) ? m.variant : 'v1';
   const edVar = (m.variant && ED_BUILDERS[m.variant]) ? m.variant : 'v1';
-  let html;
   switch (m.type) {
-    case 'opening':     html = OP_BUILDERS[opVar](m); break;
-    case 'ending':      html = ED_BUILDERS[edVar](m); break;
-    case 'toc':         html = buildTocHTML(m); break;
-    case 'insight':     html = buildInsightHTML(m); break;
-    case 'history':     html = buildHistoryHTML(m); break;
-    case 'matchcard':   html = buildMatchcardHTML(m); break;
-    case 'stats':       html = buildStatsHTML(m); break;
-    case 'profile':     html = buildStatsHTML(m); break;
-    case 'comparison':  html = buildComparisonHTML(m); break;
-    case 'reaction':    html = buildReactionHTML(m); break;
-    case 'ranking':     html = buildRankingHTML(m); break;
-    case 'timeline':    html = buildTimelineHTML(m); break;
-    case 'picture':     html = buildPictureHTML(m); break;
-    case 'v4_picture':  html = buildV4PictureHTML(m); break;
-    case 'v4_reaction': html = buildV4ReactionHTML(m); break;
-    case 'v4_opening':  html = buildV4OpeningHTML(m); break;
-    default:            html = buildUniversalHTML(m); break;
+    case 'opening':     return OP_BUILDERS[opVar](m);
+    case 'ending':      return ED_BUILDERS[edVar](m);
+    case 'toc':         return buildTocHTML(m);
+    case 'insight':     return buildInsightHTML(m);
+    case 'history':     return buildHistoryHTML(m);
+    case 'matchcard':   return buildMatchcardHTML(m);
+    case 'stats':       return buildStatsHTML(m);
+    // profile は stats と同じテンプレ（左=人物・チーム画像 / 右=データカード grid）
+    //   旧 buildProfileHTML（試合プレビュー型）は実装が matchcard と重複しており未使用
+    case 'profile':     return buildStatsHTML(m);
+    case 'comparison':  return buildComparisonHTML(m);
+    case 'reaction':    return buildReactionHTML(m);
+    case 'ranking':     return buildRankingHTML(m);
+    case 'timeline':    return buildTimelineHTML(m);
+    case 'picture':     return buildPictureHTML(m);
+    default:            return buildUniversalHTML(m);
   }
-  // overlayComments が付いている場合、コメントオーバーレイを注入
-  if (_hasOverlayComments(m)) {
-    html = _injectCommentOverlay(html, m);
-  }
-  return html;
-}
-
-// コンテンツスライド HTML にコメントオーバーレイを注入
-function _injectCommentOverlay(html, mod) {
-  const comments = mod.overlayComments || [];
-  const transition = String(mod.commentTransition || 'これに対する反応がこちらです。').trim();
-  const audio = Array.isArray(mod.audio) ? mod.audio : [];
-
-  // コメントチャンクの開始位置: narration chunks + transition (1)
-  const narrText = String(mod.narration || '').trim();
-  const narrChunkCount = narrText ? 1 : 0;
-  const transitionChunkIdx = narrChunkCount;
-  const commentChunkStart = narrChunkCount + 1;
-
-  // audio からタイミング計算（LEAD_PAD_SEC は各テンプレ共通で 0.6s 前後）
-  const LEAD = parseFloat(process.env.LEAD_PAD_SEC || '0.6');
-  const chunkStarts = audio.map((_, i) =>
-    LEAD + audio.slice(0, i).reduce((s, c) => s + (c.durationSec || 0), 0));
-
-  // フォールバック: audio が無い場合は固定間隔
-  const STAGGER = 2.0;
-  const transitionDelay = chunkStarts[transitionChunkIdx] ?? (LEAD + (narrText ? 6 : 0));
-
-  // リアクションスライドと同じパステルカラー
-  const CMT_BG = ['#FFF9C4', '#C8EEFF', '#D4F5D4', '#EDD5FF', '#FFE8CC', '#FFD5EA'];
-
-  const commentDivs = comments.map((c, i) => {
-    const chunkIdx = commentChunkStart + i;
-    const delay = chunkStarts[chunkIdx] ?? (transitionDelay + STAGGER * (i + 1));
-    const bgC = CMT_BG[i % CMT_BG.length];
-    const side = i % 2 === 0 ? 'flex-start' : 'flex-end';
-    const text = String(c.text || '');
-    const trim = text.length > 100 ? text.slice(0, 98) + '…' : text;
-    return `<div class="oc-slot" style="align-self:${side};animation-delay:${delay.toFixed(2)}s;">
-  <div class="oc-card" style="background:${bgC};">
-    <div class="oc-text">${_escHtml(trim).replace(/\n/g, '<br>')}</div>
-  </div>
-</div>`;
-  }).join('\n');
-
-  const overlayHTML = `
-<style>
-.comment-overlay {
-  position:fixed;inset:0;z-index:9000;pointer-events:none;
-}
-.oc-dimmer {
-  position:absolute;inset:0;background:rgba(0,0,0,0.55);
-  opacity:0;animation:oc-fade-in 0.5s ease forwards;
-  animation-delay:${(transitionDelay - 0.3).toFixed(2)}s;
-}
-.oc-transition {
-  position:absolute;top:12%;left:50%;transform:translateX(-50%);
-  font:bold 28px 'Noto Sans JP','Barlow Condensed',sans-serif;color:#fff;
-  text-shadow:0 2px 8px rgba(0,0,0,0.7);letter-spacing:2px;
-  opacity:0;animation:oc-fade-in 0.4s ease forwards;
-  animation-delay:${transitionDelay.toFixed(2)}s;
-}
-.oc-area {
-  position:absolute;
-  top:120px; bottom:130px; left:60px; right:60px;
-  display:flex; flex-direction:column;
-  justify-content:flex-start; gap:20px;
-  z-index:5;
-}
-.oc-slot {
-  opacity:0; width:fit-content; max-width:90%;
-  animation:oc-slide-in 0.45s ease-out forwards;
-}
-.oc-card {
-  border:3px solid #000; border-radius:8px;
-  padding:10px 18px;
-  box-shadow:4px 4px 0 rgba(0,0,0,0.4);
-}
-.oc-text {
-  color:#111; font:700 42px 'Noto Sans JP',sans-serif;
-  line-height:1.4; overflow-wrap:break-word;
-}
-@keyframes oc-fade-in { to { opacity:1 } }
-@keyframes oc-slide-in {
-  from { opacity:0;transform:translateY(-30px) }
-  to   { opacity:1;transform:translateY(0) }
-}
-</style>
-<div class="comment-overlay">
-  <div class="oc-dimmer"></div>
-  <div class="oc-transition">${_escHtml(transition)}</div>
-  <div class="oc-area">${commentDivs}</div>
-</div>`;
-
-  // </body> の直前に注入
-  if (html.includes('</body>')) {
-    return html.replace('</body>', overlayHTML + '\n</body>');
-  }
-  return html + overlayHTML;
-}
-
-function _escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // 1スライドを Puppeteer + ffmpeg で MP4 化
-//
-// 3段階の最適化:
-//   A. Ken Burns スライド → Puppeteer 1枚撮影 + ffmpeg zoom（フレームループ不要）
-//   B. 静止区間ありスライド → hybrid（入り口だけ録画 + PNG 尺伸ばし）
-//   C. 全尺アニメスライド → 従来のフル Puppeteer 録画
 async function renderSlide(page, html, durationMs, outPath) {
   const totalFrames = Math.round(durationMs / 1000 * FPS);
-  const durSec = (durationMs / 1000).toFixed(3);
 
-  // Ken Burns を HTML レベルで検出・除去（Animations API より確実）
-  const hasKenBurns = /animation:\s*(?:kbZoom|kenBurns)\s/.test(html);
-  const renderHtml = hasKenBurns
-    ? html.replace(/animation:\s*(?:kbZoom|kenBurns)\s+[\d.]+s[^;]*;/g, '')
-    : html;
+  await page.setContent(html, { waitUntil: 'load', timeout: 60000 });
 
-  await page.setContent(renderHtml, { waitUntil: 'load', timeout: 60000 });
-
-  // ── A. Ken Burns スライド: 1枚PNG → ffmpeg zoom（最速）──
-  if (hasKenBurns) {
-    const stillPng = outPath.replace(/\.mp4$/, '_kb.png');
-
-    // 入り口アニメを最終状態まで飛ばして1枚撮影
-    await page.evaluate(() => {
-      document.getAnimations().forEach(a => {
-        try { a.finish(); } catch (_) { a.cancel(); }
-      });
-    });
-    await page.evaluate(() => new Promise(r => requestAnimationFrame(r)));
-    const png = await page.screenshot({ type: 'png' });
-    fs.writeFileSync(stillPng, png);
-
-    console.log(`    🚀 KB 1枚撮影→ffmpeg zoom: ${durSec}s`);
-    await _runFfmpeg([
-      '-y', '-loop', '1', '-i', stillPng,
-      '-vf', `crop=trunc(in_w/(1.0+0.08*t/${durSec})/2)*2:trunc(in_h/(1.0+0.08*t/${durSec})/2)*2,scale=${W}:${H}`,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-t', durSec, '-r', String(FPS),
-      outPath,
-    ]);
-    try { fs.unlinkSync(stillPng); } catch (_) {}
-    return;
-  }
-
-  // Ken Burns なし → アニメーション長を検出して hybrid 判定
-  const maxAnimEndMs = await page.evaluate(() => {
-    const anims = document.getAnimations();
-    if (!anims.length) return 0;
-    let maxEnd = 0;
-    for (const a of anims) {
-      try {
-        const ct = a.effect?.getComputedTiming?.();
-        if (!ct) continue;
-        const end = (ct.delay || 0) + (ct.activeDuration || 0);
-        if (isFinite(end) && end > maxEnd) maxEnd = end;
-      } catch (_) {}
-    }
-    return maxEnd;
-  });
-
-  const animEndFrame = Math.ceil(maxAnimEndMs / 1000 * FPS) + FPS;
-  const MIN_STATIC_FRAMES = FPS * 2;
-  const useHybrid = animEndFrame > 0 && animEndFrame < totalFrames
-    && (totalFrames - animEndFrame) >= MIN_STATIC_FRAMES;
-
-  // ── B. hybrid: 入り口アニメだけ録画 + 静止画で尺伸ばし ──
-  if (useHybrid) {
-    const captureFrames = Math.min(animEndFrame, totalFrames);
-    const animPath  = outPath.replace(/\.mp4$/, '_anim.mp4');
-    const stillPng  = outPath.replace(/\.mp4$/, '_still.png');
-    const stillMp4  = outPath.replace(/\.mp4$/, '_still.mp4');
-    const concatTxt = outPath.replace(/\.mp4$/, '_cat.txt');
-
-    console.log(`    ⚡ hybrid: ${captureFrames}/${totalFrames}f 録画 + ${totalFrames - captureFrames}f 静止画`);
-
-    const ff = spawn(FFMPEG, [
-      '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-r', String(FPS), '-vf', `scale=${W}:${H}`,
-      animPath,
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
-    const doneAnim = new Promise((resolve, reject) => {
-      ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg anim exit ' + code)));
-      ff.stderr.on('data', () => {});
-    });
-
-    for (let f = 0; f < captureFrames; f++) {
-      const tMs = Math.round(f * 1000 / FPS);
-      await page.evaluate(tMs => new Promise(resolve => {
-        document.getAnimations().forEach(a => {
-          a.pause();
-          try { a.currentTime = tMs; } catch (_) {}
-        });
-        requestAnimationFrame(resolve);
-      }), tMs);
-      const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
-      const ok = ff.stdin.write(buf);
-      if (!ok) await new Promise(r => ff.stdin.once('drain', r));
-    }
-    ff.stdin.end();
-    await doneAnim;
-
-    const lastPng = await page.screenshot({ type: 'png' });
-    fs.writeFileSync(stillPng, lastPng);
-    const stillDurSec = ((totalFrames - captureFrames) / FPS).toFixed(3);
-    await _runFfmpeg([
-      '-y', '-loop', '1', '-i', stillPng,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-t', stillDurSec, '-r', String(FPS), '-vf', `scale=${W}:${H}`,
-      stillMp4,
-    ]);
-
-    fs.writeFileSync(concatTxt, `file '${animPath.replace(/\\/g, '/')}'\nfile '${stillMp4.replace(/\\/g, '/')}'\n`);
-    await _runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatTxt, '-c', 'copy', outPath]);
-
-    for (const f of [animPath, stillPng, stillMp4, concatTxt]) {
-      try { fs.unlinkSync(f); } catch (_) {}
-    }
-    return;
-  }
-
-  // ── C. フル Puppeteer 録画（従来方式）──
   const ff = spawn(FFMPEG, [
-    '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-y',
+    '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p',
     '-r', String(FPS), '-vf', `scale=${W}:${H}`,
     outPath,
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
   const done = new Promise((resolve, reject) => {
     ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
-    ff.stderr.on('data', () => {});
+    ff.stderr.on('data', () => {}); // drain
   });
 
+  // 各フレームでアニメ時刻を固定してキャプチャ（全アニメが同期する）
   for (let f = 0; f < totalFrames; f++) {
     const tMs = Math.round(f * 1000 / FPS);
     await page.evaluate(tMs => new Promise(resolve => {
@@ -638,8 +386,7 @@ async function main() {
     console.error('modules not found:', mp);
     process.exit(1);
   }
-  const modulePayload = JSON.parse(fs.readFileSync(mp, 'utf8'));
-  const { modules = [] } = modulePayload;
+  const { modules = [] } = JSON.parse(fs.readFileSync(mp, 'utf8'));
   if (!modules.length) {
     updateJob(jobId, { status: 'error', error: 'modules empty' });
     process.exit(1);
@@ -649,13 +396,7 @@ async function main() {
   //   opening 直後（無ければ先頭）に toc を 1枚挿入。
   //   tocItems は opening/toc/ending を除く全スライドの title から自動抽出。
   //   章2件未満ならスキップ。既に toc を含む案件はそのまま尊重。
-  //   v4_* スライド構成（2chまとめ型ショート動画）は固定5枚構成のため TOC なし。
-  const _isV4Modules =
-    modulePayload.source === 'v4' ||
-    modulePayload.disableToc === true ||
-    String(postId || '').startsWith('v4_') ||
-    modules.some(m => m && /^v4_/.test(String(m.type || '')));
-  if (!_isV4Modules && !modules.some(m => m && m.type === 'toc')) {
+  if (!modules.some(m => m && m.type === 'toc')) {
     const chapters = modules
       .filter(m => m && !['opening', 'toc', 'ending'].includes(m.type))
       .map(m => String(m.title || '').trim())
@@ -772,10 +513,10 @@ async function main() {
       // reaction: legacy では除外（chunk 毎ランダム voice 維持のため個別 TTS）
       //   INTEGRATED モード時は narration + comments[] を 1 chunk 統合してナレーター voice で combined に含める
       //   (ランダム voice 演出は犠牲、 INTEGRATED の simplicity 優先。将来 amix で復活予定)
-      if (_isReactionType(m.type) && !INTEGRATED_AUDIO_MODE) return;
+      if (m.type === 'reaction' && !INTEGRATED_AUDIO_MODE) return;
       if (Array.isArray(m.audio) && m.audio.length) return;
       let narr;
-      if (_isReactionType(m.type)) {
+      if (m.type === 'reaction') {
         const comments = (Array.isArray(m.comments) ? m.comments : [])
           .map(c => String(c?.text || '').trim()).filter(Boolean).slice(0, 7);
         narr = [String(m.narration || '').trim(), ...comments].filter(Boolean).join('。 ');
@@ -1045,7 +786,7 @@ async function main() {
         console.log(`  ⏭️ m${mi} (${m.type}) skip (NORMALIZE_SKIP_TYPES)`);
         continue;
       }
-      const isReaction = _isReactionType(m.type);
+      const isReaction = m.type === 'reaction';
       for (let i = 0; i < m.audio.length; i++) {
         const audio = m.audio[i];
         if (!audio.file) continue;
@@ -1427,9 +1168,12 @@ async function main() {
 
   const ZINGA_PATH = path.join(BGM_DIR, 'zinga.mp3');
   const REST_CANDIDATES = [
-    'dusk_horizon.mp3',
-    'dandelion.mp3',
-    'downtown_walk.mp3',
+    'eve of battle.mp3',
+    'strategy meeting.mp3',
+    'Walking in downtown.mp3',
+    'dribbler.mp3',
+    'tikitaka.mp3',
+    'No. 6.mp3',
   ]
     .map(f => path.join(BGM_DIR, f))
     .filter(p => fs.existsSync(p));
@@ -1455,8 +1199,8 @@ async function main() {
     const restSecStr   = (totalMs / 1000 - switchSec).toFixed(3);
     console.log(`🎵 BGM 2セクション: zinga (0〜${switchSecStr}s, op+toc) → ${path.basename(restPath)} (〜${totalSec}s)`);
     const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${ZINGA_PATH}" -stream_loop -1 -i "${restPath}" ` +
-                `-filter_complex "[1:a]atrim=0:${switchSecStr},asetpts=PTS-STARTPTS,volume=0.12[bgm_a];` +
-                `[2:a]atrim=0:${restSecStr},asetpts=PTS-STARTPTS,volume=0.12[bgm_b];` +
+                `-filter_complex "[1:a]atrim=0:${switchSecStr},asetpts=PTS-STARTPTS,volume=0.18[bgm_a];` +
+                `[2:a]atrim=0:${restSecStr},asetpts=PTS-STARTPTS,volume=0.18[bgm_b];` +
                 `[bgm_a][bgm_b]concat=n=2:v=0:a=1[bgm];` +
                 `[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
                 `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
@@ -1467,7 +1211,7 @@ async function main() {
     if (bgmPath) {
       console.log(`🎵 BGM 単一: ${path.basename(bgmPath)} (op/toc 検出失敗 or 候補不足)`);
       const cmd = `"${FFMPEG}" -y -i "${concatMp4}" -stream_loop -1 -i "${bgmPath}" ` +
-                  `-filter_complex "[1:a]volume=0.12,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
+                  `-filter_complex "[1:a]volume=0.18,atrim=0:${totalSec}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0[a]" ` +
                   `-map 0:v -map "[a]" -c:v copy -c:a aac -b:a 192k -shortest "${outVideo}"`;
       execSync(cmd, { stdio: 'pipe' });
     } else {
