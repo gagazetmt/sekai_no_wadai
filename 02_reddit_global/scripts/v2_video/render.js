@@ -534,16 +534,14 @@ async function renderSlide(page, html, durationMs, outPath) {
     await done;
   }
 
-  // ── Ken Burns を ffmpeg scale+crop で後付け（1.0→1.08 zoom, center crop）──
+  // ── Ken Burns を ffmpeg crop→scale で後付け（1.0→1.08 zoom）──
+  // crop で徐々に小さく切り出し → scale で元サイズに拡大 = zoom in 効果
   if (hasKenBurns) {
     const durSec = (durationMs / 1000).toFixed(3);
     console.log(`    🎥 KB→ffmpeg: ${durSec}s zoom`);
     await _runFfmpeg([
       '-y', '-i', rawPath,
-      '-vf', [
-        `scale='trunc(${W}*(1.0+0.08*t/${durSec})/2)*2':'trunc(${H}*(1.0+0.08*t/${durSec})/2)*2'`,
-        `crop=${W}:${H}`,
-      ].join(','),
+      '-vf', `crop='trunc(in_w/(1.0+0.08*t/${durSec})/2)*2':'trunc(in_h/(1.0+0.08*t/${durSec})/2)*2',scale=${W}:${H}`,
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-r', String(FPS),
       outPath,
