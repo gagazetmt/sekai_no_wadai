@@ -43,7 +43,9 @@ const { buildPictureHTML }    = require('./slides/picture');
 const { mapImagesToModule, LEAD_PAD_SEC, TAIL_PAD_SEC }   = require('./slides/_common');
 
 const FFMPEG = process.platform === 'win32' ? 'C:\\ffmpeg\\bin\\ffmpeg.exe' : 'ffmpeg';
-const W = 1920, H = 1080, FPS = 30;
+const DESIGN_W = 1920, DESIGN_H = 1080;
+const W = 1280, H = 720, FPS = 24;
+const CSS_SCALE = W / DESIGN_W; // 0.6667
 const DEFAULT_SLIDE_MS = 8000;   // 音声無しスライドのフォールバック
 // 音声前後の無音インターバル（_common.js と共有・全スライド共通）
 const LEAD_PAD_MS = Math.round(LEAD_PAD_SEC * 1000);
@@ -266,36 +268,121 @@ function buildSlideHTML(mod) {
   }
 }
 
-// 1スライドを Puppeteer + ffmpeg で MP4 化
-async function renderSlide(page, html, durationMs, outPath) {
+// HTMLを720pビューポートに収まるようCSS transformで縮小
+function wrapScaled(html) {
+  return html.replace(
+    /<body([^>]*)>/,
+    `<body$1><div style="transform:scale(${CSS_SCALE});transform-origin:top left;width:${DESIGN_W}px;height:${DESIGN_H}px;">`
+  ).replace('</body>', '</div></body>');
+}
+
+// CDP captureScreenshot でフレームをキャプチャしffmpegにpipe
+// hybrid: 入り口アニメだけ録画、残りは静止画ループ
+async function renderSlide(page, html, durationMs, outPath, cdp) {
   const totalFrames = Math.round(durationMs / 1000 * FPS);
+  const scaledHtml = wrapScaled(html);
 
-  await page.setContent(html, { waitUntil: 'load', timeout: 60000 });
+  await page.setContent(scaledHtml, { waitUntil: 'load', timeout: 60000 });
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 
+  // アニメーション最大終了時刻を検出
+  const maxAnimEndMs = await page.evaluate(() => {
+    const anims = document.getAnimations();
+    if (!anims.length) return 0;
+    let maxEnd = 0;
+    for (const a of anims) {
+      const t = a.effect?.getComputedTiming?.();
+      if (!t) continue;
+      const end = (t.delay || 0) + (t.activeDuration || 0);
+      if (end > maxEnd) maxEnd = end;
+    }
+    return maxEnd;
+  });
+
+  const animEndFrame = Math.ceil(maxAnimEndMs / 1000 * FPS) + FPS;
+  const MIN_STATIC_FRAMES = FPS * 2;
+  const useHybrid = animEndFrame > 0 && animEndFrame < totalFrames
+    && (totalFrames - animEndFrame) >= MIN_STATIC_FRAMES;
+
+  if (useHybrid) {
+    const captureFrames = Math.min(animEndFrame, totalFrames);
+    const animPath  = outPath.replace(/\.mp4$/, '_anim.mp4');
+    const stillPng  = outPath.replace(/\.mp4$/, '_still.png');
+    const stillMp4  = outPath.replace(/\.mp4$/, '_still.mp4');
+    const concatTxt = outPath.replace(/\.mp4$/, '_cat.txt');
+
+    console.log(`    ⚡ hybrid: ${captureFrames}/${totalFrames}f 録画 + ${totalFrames - captureFrames}f 静止画`);
+
+    const ff = spawn(FFMPEG, [
+      '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-r', String(FPS),
+      animPath,
+    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const ffDone = new Promise((resolve, reject) => {
+      ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
+      ff.stderr.on('data', () => {});
+    });
+
+    for (let f = 0; f < captureFrames; f++) {
+      const tMs = Math.round(f * 1000 / FPS);
+      await page.evaluate(tMs => {
+        document.getAnimations().forEach(a => {
+          a.pause();
+          try { a.currentTime = tMs; } catch (_) {}
+        });
+      }, tMs);
+      const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 82 });
+      const buf = Buffer.from(data, 'base64');
+      const ok = ff.stdin.write(buf);
+      if (!ok) await new Promise(r => ff.stdin.once('drain', r));
+    }
+    ff.stdin.end();
+    await ffDone;
+
+    // 最終フレームをPNGで保存 → 静止画ループ
+    const { data: pngData } = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    fs.writeFileSync(stillPng, Buffer.from(pngData, 'base64'));
+    const staticDurSec = ((totalFrames - captureFrames) / FPS).toFixed(3);
+    await _runFfmpeg([
+      '-y', '-loop', '1', '-i', stillPng,
+      '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-t', staticDurSec, '-r', String(FPS),
+      stillMp4,
+    ]);
+
+    fs.writeFileSync(concatTxt, `file '${animPath.replace(/\\/g, '/')}'\nfile '${stillMp4.replace(/\\/g, '/')}'\n`);
+    await _runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatTxt, '-c', 'copy', outPath]);
+
+    for (const f of [animPath, stillPng, stillMp4, concatTxt]) {
+      try { fs.unlinkSync(f); } catch (_) {}
+    }
+    return;
+  }
+
+  // フル録画（全尺アニメーションのスライド）
   const ff = spawn(FFMPEG, [
-    '-y',
-    '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-pix_fmt', 'yuv420p',
-    '-r', String(FPS), '-vf', `scale=${W}:${H}`,
+    '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-r', String(FPS),
     outPath,
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
 
   const done = new Promise((resolve, reject) => {
     ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
-    ff.stderr.on('data', () => {}); // drain
+    ff.stderr.on('data', () => {});
   });
 
-  // 各フレームでアニメ時刻を固定してキャプチャ（全アニメが同期する）
   for (let f = 0; f < totalFrames; f++) {
     const tMs = Math.round(f * 1000 / FPS);
-    await page.evaluate(tMs => new Promise(resolve => {
+    await page.evaluate(tMs => {
       document.getAnimations().forEach(a => {
         a.pause();
         try { a.currentTime = tMs; } catch (_) {}
       });
-      requestAnimationFrame(resolve);
-    }), tMs);
-    const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
+    }, tMs);
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 82 });
+    const buf = Buffer.from(data, 'base64');
     const ok = ff.stdin.write(buf);
     if (!ok) await new Promise(r => ff.stdin.once('drain', r));
   }
@@ -983,15 +1070,17 @@ async function main() {
       protocolTimeout: 240_000,
       args: [
         '--no-sandbox', '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',  // /dev/shm 不足対策（VPS Docker 想定）
+        '--disable-dev-shm-usage',
         `--window-size=${W},${H}`,
       ],
     });
     const page = await browser.newPage();
     await page.setViewport({ width: W, height: H });
-    return { browser, page };
+    const cdp = await page.createCDPSession();
+    return { browser, page, cdp };
   }));
   const pages = workerCtxs.map(c => c.page);
+  const cdps = workerCtxs.map(c => c.cdp);
 
   // 各スライドの video-only / audio-only を別々に保持（xfade/acrossfade で繋ぐため）
   //   2026-05-07: 0.6s → 1.5s に拡張。TOC→本編遷移が急すぎる相棒指摘を受けて。
@@ -1015,6 +1104,7 @@ async function main() {
       async ({ i, m: mod }, _idxInList, workerIdx) => {
         const t0 = Date.now();
         const page = pages[workerIdx];
+        const cdp = cdps[workerIdx];
         const html = buildSlideHTML(mod);
         // INTEGRATED_AUDIO_MODE では各 slide の長さは startAbsSec / endAbsSec で固定
         //   combined.mp3 と動画長を完全一致させ、xfade 0 で単純連結 → mux で音声乗せ
@@ -1029,7 +1119,7 @@ async function main() {
         const audioOnly = path.join(workDir, `slide_${String(i).padStart(2, '0')}_a.m4a`);
         const audioCount = Array.isArray(mod.audio) ? mod.audio.length : 0;
         console.log(`[w${workerIdx}/${i+1}] ${mod.type} "${(mod.title||'').slice(0,28)}" / ${(durMs/1000).toFixed(1)}s / chunks=${audioCount} → レンダ開始`);
-        await renderSlide(page, html, durMs, videoOnly);
+        await renderSlide(page, html, durMs, videoOnly, cdp);
         if (!INTEGRATED_AUDIO_MODE) {
           await buildSlideAudio(mod, durMs, audioOnly);
           slideAudios[i] = audioOnly;
@@ -1052,7 +1142,7 @@ async function main() {
     }
   } finally {
     // 全 worker browser を閉じる
-    await Promise.all(workerCtxs.map(c => c.browser.close().catch(() => {})));
+    await Promise.all(workerCtxs.map(c => c.cdp.detach().catch(() => {}).then(() => c.browser.close().catch(() => {}))));
   }
 
   // concat + xfade（クロスフェード）で繋ぐ
