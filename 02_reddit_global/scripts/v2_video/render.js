@@ -541,7 +541,7 @@ async function renderSlide(page, html, durationMs, outPath) {
     console.log(`    🎥 KB→ffmpeg: ${durSec}s zoom`);
     await _runFfmpeg([
       '-y', '-i', rawPath,
-      '-vf', `crop='trunc(in_w/(1.0+0.08*t/${durSec})/2)*2':'trunc(in_h/(1.0+0.08*t/${durSec})/2)*2',scale=${W}:${H}`,
+      '-vf', `crop=trunc(in_w/(1.0+0.08*t/${durSec})/2)*2:trunc(in_h/(1.0+0.08*t/${durSec})/2)*2,scale=${W}:${H}`,
       '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
       '-r', String(FPS),
       outPath,
