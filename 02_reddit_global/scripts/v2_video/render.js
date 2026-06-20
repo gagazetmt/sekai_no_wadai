@@ -1224,7 +1224,7 @@ async function main() {
       const inputs = compactVideos.map(p => `-i "${p}"`).join(' ');
       const filter = compactVideos.map((_, i) => `[${i}:v]`).join('') + `concat=n=${N}:v=1:a=0[vout]`;
       const cmd = `"${FFMPEG}" -y ${inputs} -filter_complex "${filter}" -map "[vout]" ` +
-                  `-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -maxrate 12M -bufsize 24M -r ${FPS} ` +
+                  `-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -maxrate 12M -bufsize 24M -r ${OUT_FPS} ` +
                   `-movflags +faststart "${videoOnly}"`;
       execSync(cmd, { stdio: 'pipe' });
     }
@@ -1276,7 +1276,7 @@ async function main() {
 
     const cmd = `"${FFMPEG}" -y ${inputs} -filter_complex_script "${filterScript}" ` +
                 `-map "[vout]" -map "[aout]" ` +
-                `-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -maxrate 12M -bufsize 24M -r ${FPS} ` +
+                `-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -maxrate 12M -bufsize 24M -r ${OUT_FPS} ` +
                 `-c:a aac -b:a 128k -movflags +faststart "${concatMp4}"`;
     execSync(cmd, { stdio: 'pipe' });
   }
