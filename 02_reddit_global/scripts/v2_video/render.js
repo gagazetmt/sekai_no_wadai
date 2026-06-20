@@ -404,30 +404,51 @@ function _escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// 1スライドを Puppeteer + ffmpeg で MP4 化（segmented hybrid + Ken Burns ffmpeg化）
+// 1スライドを Puppeteer + ffmpeg で MP4 化
 //
-// 最適化戦略:
-//   1. Ken Burns (kbZoom / kenBurns) を CSS から除去し、ffmpeg scale+crop で後付け
-//      → Puppeteer キャプチャを入り口アニメの数十フレームに激減
-//   2. 入り口アニメ終了後の静止区間は PNG 1枚 → ffmpeg loop で尺伸ばし
+// 3段階の最適化:
+//   A. Ken Burns スライド → Puppeteer 1枚撮影 + ffmpeg zoom（フレームループ不要）
+//   B. 静止区間ありスライド → hybrid（入り口だけ録画 + PNG 尺伸ばし）
+//   C. 全尺アニメスライド → 従来のフル Puppeteer 録画
 async function renderSlide(page, html, durationMs, outPath) {
   const totalFrames = Math.round(durationMs / 1000 * FPS);
+  const durSec = (durationMs / 1000).toFixed(3);
 
-  await page.setContent(html, { waitUntil: 'load', timeout: 60000 });
+  // Ken Burns を HTML レベルで検出・除去（Animations API より確実）
+  const hasKenBurns = /animation:\s*(?:kbZoom|kenBurns)\s/.test(html);
+  const renderHtml = hasKenBurns
+    ? html.replace(/animation:\s*(?:kbZoom|kenBurns)\s+[\d.]+s[^;]*;/g, '')
+    : html;
 
-  // ── Ken Burns 検出 & CSS から除去（ffmpeg で後付けするため）──
-  const hasKenBurns = await page.evaluate(() => {
-    let found = false;
-    for (const a of document.getAnimations()) {
-      if (a.animationName === 'kbZoom' || a.animationName === 'kenBurns') {
-        a.cancel();
-        found = true;
-      }
-    }
-    return found;
-  });
+  await page.setContent(renderHtml, { waitUntil: 'load', timeout: 60000 });
 
-  // アニメーション最大終了時刻を検出（Ken Burns 除去済みなので入り口アニメだけが残る）
+  // ── A. Ken Burns スライド: 1枚PNG → ffmpeg zoom（最速）──
+  if (hasKenBurns) {
+    const stillPng = outPath.replace(/\.mp4$/, '_kb.png');
+
+    // 入り口アニメを最終状態まで飛ばして1枚撮影
+    await page.evaluate(() => {
+      document.getAnimations().forEach(a => {
+        try { a.finish(); } catch (_) { a.cancel(); }
+      });
+    });
+    await page.evaluate(() => new Promise(r => requestAnimationFrame(r)));
+    const png = await page.screenshot({ type: 'png' });
+    fs.writeFileSync(stillPng, png);
+
+    console.log(`    🚀 KB 1枚撮影→ffmpeg zoom: ${durSec}s`);
+    await _runFfmpeg([
+      '-y', '-loop', '1', '-i', stillPng,
+      '-vf', `crop=trunc(in_w/(1.0+0.08*t/${durSec})/2)*2:trunc(in_h/(1.0+0.08*t/${durSec})/2)*2,scale=${W}:${H}`,
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+      '-t', durSec, '-r', String(FPS),
+      outPath,
+    ]);
+    try { fs.unlinkSync(stillPng); } catch (_) {}
+    return;
+  }
+
+  // Ken Burns なし → アニメーション長を検出して hybrid 判定
   const maxAnimEndMs = await page.evaluate(() => {
     const anims = document.getAnimations();
     if (!anims.length) return 0;
@@ -443,22 +464,20 @@ async function renderSlide(page, html, durationMs, outPath) {
     return maxEnd;
   });
 
-  const animEndFrame = Math.ceil(maxAnimEndMs / 1000 * FPS) + FPS; // +1秒マージン
+  const animEndFrame = Math.ceil(maxAnimEndMs / 1000 * FPS) + FPS;
   const MIN_STATIC_FRAMES = FPS * 2;
   const useHybrid = animEndFrame > 0 && animEndFrame < totalFrames
     && (totalFrames - animEndFrame) >= MIN_STATIC_FRAMES;
 
-  // ── Puppeteer キャプチャ（hybrid or フル）──
-  const rawPath = hasKenBurns ? outPath.replace(/\.mp4$/, '_raw.mp4') : outPath;
-
+  // ── B. hybrid: 入り口アニメだけ録画 + 静止画で尺伸ばし ──
   if (useHybrid) {
     const captureFrames = Math.min(animEndFrame, totalFrames);
-    const animPath  = rawPath.replace(/\.mp4$/, '_anim.mp4');
-    const stillPng  = rawPath.replace(/\.mp4$/, '_still.png');
-    const stillMp4  = rawPath.replace(/\.mp4$/, '_still.mp4');
-    const concatTxt = rawPath.replace(/\.mp4$/, '_cat.txt');
+    const animPath  = outPath.replace(/\.mp4$/, '_anim.mp4');
+    const stillPng  = outPath.replace(/\.mp4$/, '_still.png');
+    const stillMp4  = outPath.replace(/\.mp4$/, '_still.mp4');
+    const concatTxt = outPath.replace(/\.mp4$/, '_cat.txt');
 
-    console.log(`    ⚡ hybrid: ${captureFrames}/${totalFrames}f 録画 + ${totalFrames - captureFrames}f 静止画${hasKenBurns ? ' + KB→ffmpeg' : ''}`);
+    console.log(`    ⚡ hybrid: ${captureFrames}/${totalFrames}f 録画 + ${totalFrames - captureFrames}f 静止画`);
 
     const ff = spawn(FFMPEG, [
       '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
@@ -498,56 +517,43 @@ async function renderSlide(page, html, durationMs, outPath) {
     ]);
 
     fs.writeFileSync(concatTxt, `file '${animPath.replace(/\\/g, '/')}'\nfile '${stillMp4.replace(/\\/g, '/')}'\n`);
-    await _runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatTxt, '-c', 'copy', rawPath]);
+    await _runFfmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatTxt, '-c', 'copy', outPath]);
 
     for (const f of [animPath, stillPng, stillMp4, concatTxt]) {
       try { fs.unlinkSync(f); } catch (_) {}
     }
-  } else {
-    const ff = spawn(FFMPEG, [
-      '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-r', String(FPS), '-vf', `scale=${W}:${H}`,
-      rawPath,
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
-
-    const done = new Promise((resolve, reject) => {
-      ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
-      ff.stderr.on('data', () => {});
-    });
-
-    for (let f = 0; f < totalFrames; f++) {
-      const tMs = Math.round(f * 1000 / FPS);
-      await page.evaluate(tMs => new Promise(resolve => {
-        document.getAnimations().forEach(a => {
-          a.pause();
-          try { a.currentTime = tMs; } catch (_) {}
-        });
-        requestAnimationFrame(resolve);
-      }), tMs);
-      const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
-      const ok = ff.stdin.write(buf);
-      if (!ok) await new Promise(r => ff.stdin.once('drain', r));
-    }
-
-    ff.stdin.end();
-    await done;
+    return;
   }
 
-  // ── Ken Burns を ffmpeg crop→scale で後付け（1.0→1.08 zoom）──
-  // crop で徐々に小さく切り出し → scale で元サイズに拡大 = zoom in 効果
-  if (hasKenBurns) {
-    const durSec = (durationMs / 1000).toFixed(3);
-    console.log(`    🎥 KB→ffmpeg: ${durSec}s zoom`);
-    await _runFfmpeg([
-      '-y', '-i', rawPath,
-      '-vf', `crop=trunc(in_w/(1.0+0.08*t/${durSec})/2)*2:trunc(in_h/(1.0+0.08*t/${durSec})/2)*2,scale=${W}:${H}`,
-      '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
-      '-r', String(FPS),
-      outPath,
-    ]);
-    try { fs.unlinkSync(rawPath); } catch (_) {}
+  // ── C. フル Puppeteer 録画（従来方式）──
+  const ff = spawn(FFMPEG, [
+    '-y', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-r', String(FPS), '-i', 'pipe:0',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p',
+    '-r', String(FPS), '-vf', `scale=${W}:${H}`,
+    outPath,
+  ], { stdio: ['pipe', 'pipe', 'pipe'] });
+
+  const done = new Promise((resolve, reject) => {
+    ff.on('close', code => code === 0 ? resolve() : reject(new Error('ffmpeg exit ' + code)));
+    ff.stderr.on('data', () => {});
+  });
+
+  for (let f = 0; f < totalFrames; f++) {
+    const tMs = Math.round(f * 1000 / FPS);
+    await page.evaluate(tMs => new Promise(resolve => {
+      document.getAnimations().forEach(a => {
+        a.pause();
+        try { a.currentTime = tMs; } catch (_) {}
+      });
+      requestAnimationFrame(resolve);
+    }), tMs);
+    const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
+    const ok = ff.stdin.write(buf);
+    if (!ok) await new Promise(r => ff.stdin.once('drain', r));
   }
+
+  ff.stdin.end();
+  await done;
 }
 
 // ffmpeg を非同期で実行（execSync ではなく spawn 利用、並列ワーカーがブロックされない）
