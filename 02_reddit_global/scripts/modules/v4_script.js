@@ -182,13 +182,25 @@ type 別:
 
   console.log(`[v4_script] 脚本生成開始: ${book.topic} (ピース${midCards.length}枚→4-6セグメント)`);
 
-  const raw = await callAI({
-    forceProvider: 'anthropic',
-    model: 'claude-sonnet-4-6',
-    max_tokens: 16000,
-    label: 'v4-script',
-    messages: [{ role: 'user', content: prompt }],
-  });
+  let raw;
+  try {
+    raw = await callAI({
+      forceProvider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      max_tokens: 16000,
+      label: 'v4-script',
+      messages: [{ role: 'user', content: prompt }],
+    });
+  } catch (e) {
+    console.warn(`[v4_script] Anthropic失敗 (${e.message?.slice(0, 80)}) → DeepSeekフォールバック`);
+    raw = await callAI({
+      forceProvider: 'deepseek',
+      model: 'deepseek-chat',
+      max_tokens: 16000,
+      label: 'v4-script-fallback',
+      messages: [{ role: 'user', content: prompt }],
+    });
+  }
 
   let parsed = null;
   try {
