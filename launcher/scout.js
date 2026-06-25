@@ -6,6 +6,26 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
+// ── Brave Search（research.js / comments.js から利用） ──
+
+async function braveSearch(query, count = 5) {
+  const key = process.env.BRAVE_API_KEY;
+  if (!key) return [];
+
+  const params = new URLSearchParams({
+    q: query, count: String(count), freshness: 'pd', text_decorations: 'false',
+  });
+  const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip', 'X-Subscription-Token': key },
+  });
+  if (!res.ok) throw new Error(`Brave Search ${res.status}`);
+  const data = await res.json();
+
+  return (data.web?.results || []).map(r => ({
+    title: r.title, snippet: r.description, url: r.url, source: 'brave', age: r.age || null,
+  }));
+}
+
 // ── DeepSeek AI 呼び出し ─────────────────────────────
 
 async function callDeepSeek(systemPrompt, userPrompt) {
@@ -188,4 +208,4 @@ async function scoutWithAI() {
   return topics;
 }
 
-module.exports = { scoutWithAI, fetchYahooRaw, fetchRedditRaw };
+module.exports = { scoutWithAI, fetchYahooRaw, fetchRedditRaw, braveSearch, callDeepSeek };

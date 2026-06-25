@@ -79,6 +79,7 @@ async function phaseResearch(topic, options = {}) {
     homeTeam: options.homeTeam || null,
     awayTeam: options.awayTeam || null,
     playerName: options.playerName || null,
+    searchQuery: options.searchQuery || null,
   });
   const summary = {
     articles: facts.articles?.length || 0,

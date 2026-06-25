@@ -1,13 +1,6 @@
 // launcher/dashboard.js
 // ステップバイステップ操作型ダッシュボード
 // node dashboard.js → http://localhost:3456
-//
-// Flow (ユーザー操作型):
-//   1. Client sends {action:'scout'}        → Server returns topics list
-//   2. Client sends {action:'research', topicIndex}  → Server returns facts
-//   3. Client sends {action:'plan'}         → Server returns viewpoints
-//   4. Client sends {action:'render', viewpointIndex, edits?} → Server runs render
-//   5. (future) meta
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const http = require('http');
@@ -20,9 +13,23 @@ const {
   phaseScout, phaseResearch, phasePlan, phaseRender, phaseMeta,
 } = require('./pipeline');
 const { listPatterns } = require('./slide_patterns');
-const { scoutWithAI } = require('./scout');
+const { scoutWithAI, callDeepSeek } = require('./scout');
 
 const PORT = 3456;
+const SAVED_FILE = path.join(__dirname, 'output', 'saved_topics.json');
+
+// ── 保存済みトピック永続化 ──────────────────────────────
+
+function loadSaved() {
+  try { return JSON.parse(fs.readFileSync(SAVED_FILE, 'utf8')); }
+  catch (_) { return []; }
+}
+
+function saveToDisk(topics) {
+  const dir = path.dirname(SAVED_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(SAVED_FILE, JSON.stringify(topics, null, 2));
+}
 
 // ── HTTP サーバー ────────────────────────────────────
 
@@ -62,14 +69,19 @@ function broadcast(data) {
 let session = {
   phase: 'idle',
   topics: null,
-  selectedTopic: null,
+  savedTopics: loadSaved(),
+  activeTopic: null,
   facts: null,
   viewpoints: null,
   renderResult: null,
 };
 
 function resetSession() {
-  session = { phase: 'idle', topics: null, selectedTopic: null, facts: null, viewpoints: null, renderResult: null };
+  session = {
+    phase: 'idle', topics: null,
+    savedTopics: session.savedTopics,
+    activeTopic: null, facts: null, viewpoints: null, renderResult: null,
+  };
 }
 
 // ── console インターセプト ────────────────────────────
@@ -118,22 +130,58 @@ async function runScout() {
 
 // ── Step 2: Research ─────────────────────────────────
 
-async function runResearch(topicIndex) {
-  if (!session.topics || !session.topics[topicIndex]) return;
-  const topic = session.topics[topicIndex];
-  session.selectedTopic = topic.title || topic.text;
+async function analyzeTopic(topicTitle) {
+  try {
+    const result = await callDeepSeek(
+      `サッカーのニューストピックから、関連するチーム名と選手名を英語で抽出してください。
+選手名はフルネーム（例: Lionel Messi, Takefusa Kubo）で返してください。
+該当しない場合はnullを返してください。
+JSON形式: {"homeTeam": "Japan" or null, "awayTeam": "Sweden" or null, "playerName": "Lionel Messi" or null, "searchQuery": "英語での検索クエリ（トピック全体を反映）"}`,
+      topicTitle
+    );
+    console.log(`  [analyze] teams: ${result.homeTeam || '—'} vs ${result.awayTeam || '—'}, player: ${result.playerName || '—'}`);
+    return result;
+  } catch (err) {
+    console.warn(`  [analyze] failed: ${err.message}`);
+    return {};
+  }
+}
+
+async function runResearch(topicTitle) {
+  session.activeTopic = topicTitle;
+  session.facts = null;
   session.phase = 'researching';
   interceptConsole();
-  broadcast({ type: 'phase', phase: 'researching', topic: session.selectedTopic });
+  broadcast({ type: 'phase', phase: 'researching', topic: topicTitle });
 
   try {
-    const { facts, summary } = await phaseResearch(session.selectedTopic);
+    const analysis = await analyzeTopic(topicTitle);
+    const { facts, summary } = await phaseResearch(topicTitle, {
+      homeTeam: analysis.homeTeam || null,
+      awayTeam: analysis.awayTeam || null,
+      playerName: analysis.playerName || null,
+      searchQuery: analysis.searchQuery || null,
+    });
     session.facts = facts;
     session.phase = 'facts_ready';
-    broadcast({ type: 'facts_ready', summary, topic: session.selectedTopic });
+
+    const factsForClient = {
+      topic: facts.topic,
+      articles: (facts.articles || []).map(a => ({ title: a.title, url: a.url, textLen: (a.text || '').length })),
+      matchData: facts.matchData ? { ok: true, scoreline: facts.matchData.scoreline } : null,
+      playerData: facts.playerData ? { ok: true, name: facts.playerData.name, team: facts.playerData.team } : null,
+      comments: {
+        reddit: (facts.comments?.reddit || []).length,
+        yahoo: (facts.comments?.yahoo || []).length,
+        x: (facts.comments?.x || []).length,
+        total: (facts.comments?.all || []).length,
+        samples: (facts.comments?.all || []).slice(0, 5).map(c => typeof c === 'string' ? c : c.text),
+      },
+    };
+    broadcast({ type: 'facts_ready', summary, facts: factsForClient, topic: topicTitle });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
-    session.phase = 'topics_ready';
+    session.phase = 'idle';
   } finally {
     restoreConsole();
   }
@@ -175,7 +223,7 @@ async function runRender(viewpointIndex, edits) {
       if (edits.suggestedPattern) vp.suggestedPattern = edits.suggestedPattern;
     }
 
-    const videoTopic = vp.title || session.selectedTopic;
+    const videoTopic = vp.title || session.activeTopic;
     const patternKey = vp.suggestedPattern || 'match_result';
 
     const emitter = new EventEmitter();
@@ -183,18 +231,11 @@ async function runRender(viewpointIndex, edits) {
 
     const result = await phaseRender(videoTopic, patternKey, session.facts, emitter);
     session.renderResult = result;
-
     const meta = await phaseMeta(result);
 
     session.phase = 'done';
     const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
-    broadcast({
-      type: 'done',
-      topic: videoTopic,
-      patternKey,
-      totalDuration: result.totalDuration,
-      videoUrl,
-    });
+    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
     session.phase = 'plan_ready';
@@ -210,7 +251,8 @@ wss.on('connection', (ws) => {
     type: 'hello',
     phase: session.phase,
     topics: session.topics,
-    selectedTopic: session.selectedTopic,
+    savedTopics: session.savedTopics,
+    activeTopic: session.activeTopic,
     viewpoints: session.phase === 'plan_ready' ? session.viewpoints : null,
     patterns: session.phase === 'plan_ready' ? listPatterns() : null,
     steps: STEPS,
@@ -226,31 +268,45 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', detail: '処理中です' }));
         return;
       }
-      resetSession();
+      session.topics = null;
+      session.phase = 'idle';
       runScout();
     }
 
-    if (msg.action === 'research') {
-      if (session.phase !== 'topics_ready') {
-        ws.send(JSON.stringify({ type: 'error', detail: 'まずscoutを実行してください' }));
-        return;
+    if (msg.action === 'save_topics') {
+      const indices = msg.indices || [];
+      if (!session.topics) return;
+      const newTopics = indices
+        .map(i => session.topics[i])
+        .filter(Boolean)
+        .filter(t => !session.savedTopics.some(s => s.title === t.title));
+      session.savedTopics.push(...newTopics);
+      saveToDisk(session.savedTopics);
+      broadcast({ type: 'saved_topics', savedTopics: session.savedTopics });
+    }
+
+    if (msg.action === 'remove_saved') {
+      const idx = msg.index;
+      if (idx >= 0 && idx < session.savedTopics.length) {
+        session.savedTopics.splice(idx, 1);
+        saveToDisk(session.savedTopics);
+        broadcast({ type: 'saved_topics', savedTopics: session.savedTopics });
       }
-      runResearch(msg.topicIndex);
+    }
+
+    if (msg.action === 'activate') {
+      const topic = session.savedTopics[msg.index];
+      if (!topic) return;
+      runResearch(topic.title);
     }
 
     if (msg.action === 'plan') {
-      if (session.phase !== 'facts_ready') {
-        ws.send(JSON.stringify({ type: 'error', detail: 'まずresearchを実行してください' }));
-        return;
-      }
+      if (session.phase !== 'facts_ready') return;
       runPlan();
     }
 
     if (msg.action === 'render') {
-      if (session.phase !== 'plan_ready') {
-        ws.send(JSON.stringify({ type: 'error', detail: '企画ピース未確定' }));
-        return;
-      }
+      if (session.phase !== 'plan_ready') return;
       runRender(msg.viewpointIndex, msg.edits);
     }
 

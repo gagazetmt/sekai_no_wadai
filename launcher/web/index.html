@@ -14,7 +14,6 @@
 }
 body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-/* ── Header ── */
 .header {
   background: linear-gradient(135deg,#1e293b,#0f172a);
   border-bottom: 1px solid var(--border);
@@ -45,10 +44,7 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 .panel { display: none; }
 .panel.visible { display: block; }
 
-/* ── Step 1: Scout ── */
-.scout-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.scout-header h2 { font-size: 16px; font-weight: 700; flex: 1; }
-
+/* ── Buttons ── */
 .btn {
   background: var(--accent); color: #fff; border: none; border-radius: 8px;
   padding: 10px 24px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -58,33 +54,57 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 .btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
 .btn-green { background: var(--green); }
 .btn-orange { background: var(--orange); }
+.btn-red { background: var(--red); }
 .btn-sm { padding: 6px 14px; font-size: 12px; }
 .btn-outline {
   background: transparent; border: 1px solid var(--border); color: var(--muted);
 }
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
 
-.topic-list { display: flex; flex-direction: column; gap: 6px; }
+/* ── Section headers ── */
+.section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.section-header h2 { font-size: 16px; font-weight: 700; flex: 1; }
 
+/* ── Saved topics ── */
+.saved-section { margin-bottom: 24px; }
+.saved-list { display: flex; flex-direction: column; gap: 4px; }
+.saved-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+}
+.saved-card .saved-title { flex: 1; font-size: 13px; font-weight: 500; }
+.saved-badge {
+  padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+}
+.saved-badge.yahoo { background: rgba(239,68,68,.15); color: var(--red); }
+.saved-badge.reddit { background: rgba(249,115,22,.15); color: var(--orange); }
+.saved-card .saved-actions { display: flex; gap: 4px; }
+
+/* ── Topic cards (scout results) ── */
+.topic-list { display: flex; flex-direction: column; gap: 6px; }
 .topic-card {
   background: var(--card); border: 2px solid var(--border); border-radius: 10px;
   padding: 12px 16px; cursor: pointer; transition: all .2s;
   display: flex; align-items: flex-start; gap: 12px;
 }
 .topic-card:hover { border-color: var(--accent); background: var(--card2); }
-.topic-card.selected { border-color: var(--amber); box-shadow: 0 0 20px rgba(245,158,11,.12); }
+.topic-card.checked { border-color: var(--amber); box-shadow: 0 0 20px rgba(245,158,11,.12); }
 
-.topic-num {
-  width: 28px; height: 28px; border-radius: 50%; background: var(--border);
+.topic-check {
+  width: 22px; height: 22px; border-radius: 4px; border: 2px solid var(--border);
   display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; color: var(--muted); flex-shrink: 0; margin-top: 2px;
+  flex-shrink: 0; margin-top: 2px; transition: all .2s;
 }
-.topic-card.selected .topic-num { background: var(--amber); color: #000; }
+.topic-card.checked .topic-check {
+  background: var(--amber); border-color: var(--amber);
+}
+.topic-card.checked .topic-check::after {
+  content: '✓'; color: #000; font-size: 14px; font-weight: 800;
+}
 
 .topic-body { flex: 1; min-width: 0; }
 .topic-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
-.topic-snippet { font-size: 12px; color: var(--muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.topic-meta { display: flex; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--muted); }
+.topic-meta { display: flex; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--muted); }
 .topic-badge {
   padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
 }
@@ -92,8 +112,9 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 .topic-badge.reddit { background: rgba(249,115,22,.15); color: var(--orange); }
 
 .scout-footer {
-  margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;
+  margin-top: 16px; display: flex; justify-content: space-between; align-items: center;
 }
+.scout-footer .checked-count { font-size: 12px; color: var(--muted); }
 
 /* ── Loading ── */
 .loading { text-align: center; padding: 48px 0; }
@@ -105,7 +126,7 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 .loading p { font-size: 13px; color: var(--muted); }
 
 /* ── Empty ── */
-.empty-state { text-align: center; padding: 64px 16px; }
+.empty-state { text-align: center; padding: 48px 16px; }
 .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
 .empty-state p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
@@ -126,7 +147,47 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 .log-line.warn { color: var(--yellow); }
 .log-line.error { color: var(--red); }
 
-/* ── Placeholder panels ── */
+/* ── Step 2: Research ── */
+.research-summary {
+  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.summary-chip {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 120px;
+}
+.summary-chip .chip-num { font-size: 22px; font-weight: 800; color: var(--accent); }
+.summary-chip .chip-label { font-size: 11px; color: var(--muted); }
+
+.research-block { margin-bottom: 16px; }
+.block-title {
+  font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+
+.article-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 6px;
+}
+.article-card .art-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.article-card .art-meta { font-size: 11px; color: var(--muted); }
+.article-card a { color: var(--accent); text-decoration: none; }
+.article-card a:hover { text-decoration: underline; }
+
+.comment-sources { display: flex; gap: 6px; margin-bottom: 8px; }
+.comment-src {
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  background: var(--card); border: 1px solid var(--border);
+}
+
+.comment-sample {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 4px; font-size: 12px; line-height: 1.5; color: var(--text);
+}
+
+.research-footer {
+  margin-top: 20px; display: flex; justify-content: space-between;
+}
+
 .placeholder { text-align: center; padding: 48px; color: var(--muted); font-size: 14px; }
 </style>
 </head>
@@ -138,7 +199,6 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 </div>
 
 <div class="main">
-  <!-- Step nav -->
   <div class="step-nav">
     <div class="step-tab active" id="tab-1"><span class="num">1</span>案件取得</div>
     <div class="step-tab" id="tab-2"><span class="num">2</span>情報収集</div>
@@ -147,52 +207,89 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
     <div class="step-tab" id="tab-5"><span class="num">5</span>サムネ+メタ</div>
   </div>
 
-  <!-- Step 1: Scout -->
+  <!-- ══ Step 1: Scout ══ -->
   <div class="panel visible" id="panel-1">
+
+    <!-- 保存済み案件 -->
+    <div class="saved-section" id="savedSection" style="display:none">
+      <div class="section-header">
+        <h2>保存済み案件</h2>
+        <span id="savedCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div class="saved-list" id="savedList"></div>
+    </div>
+
+    <!-- スカウト -->
     <div id="scoutEmpty" class="empty-state">
       <div class="icon">🔍</div>
       <h3>サッカーの旬な話題を集める</h3>
-      <p>Brave Search + X から最新トピックを取得します</p>
+      <p>Yahoo News + Reddit r/soccer → DeepSeek選定</p>
       <button class="btn" id="scoutBtn" onclick="doScout()">案件取得</button>
     </div>
+
     <div id="scoutLoading" class="loading" style="display:none">
       <div class="spinner-lg"></div>
-      <p>トピックを収集中...</p>
+      <p>Yahoo + Reddit をスキャン → DeepSeek選定中...</p>
     </div>
+
     <div id="scoutResults" style="display:none">
-      <div class="scout-header">
-        <h2>トピック一覧</h2>
+      <div class="section-header">
+        <h2>スカウト結果</h2>
         <span id="topicCount" style="font-size:12px;color:var(--muted)"></span>
         <button class="btn btn-sm btn-outline" onclick="doScout()">再取得</button>
       </div>
       <div class="topic-list" id="topicList"></div>
       <div class="scout-footer">
-        <button class="btn btn-green" id="nextBtn" disabled onclick="doSelectTopic()">この案件で情報収集へ →</button>
+        <span class="checked-count" id="checkedCount">0件選択中</span>
+        <button class="btn btn-green" id="saveBtn" disabled onclick="doSave()">選択した案件を保存</button>
       </div>
     </div>
   </div>
 
-  <!-- Step 2: Research -->
+  <!-- ══ Step 2: Research ══ -->
   <div class="panel" id="panel-2">
-    <div class="placeholder">Step 2: 情報収集（実装予定）</div>
-  </div>
+    <div id="researchLoading" class="loading" style="display:none">
+      <div class="spinner-lg"></div>
+      <p id="researchLoadingText">情報収集中...</p>
+    </div>
 
-  <!-- Step 3: Plan -->
-  <div class="panel" id="panel-3">
-    <div class="placeholder">Step 3: 企画ピース（実装予定）</div>
-  </div>
+    <div id="researchResults" style="display:none">
+      <div class="section-header">
+        <h2 id="researchTopic"></h2>
+      </div>
 
-  <!-- Step 4: Render -->
-  <div class="panel" id="panel-4">
-    <div class="placeholder">Step 4: レンダリング（実装予定）</div>
-  </div>
+      <!-- 収集サマリー -->
+      <div class="research-summary" id="researchSummary"></div>
 
-  <!-- Step 5: Meta -->
-  <div class="panel" id="panel-5">
-    <div class="placeholder">Step 5: サムネ+メタ（実装予定）</div>
-  </div>
+      <!-- 記事一覧 -->
+      <div class="research-block" id="articlesBlock" style="display:none">
+        <h3 class="block-title">記事</h3>
+        <div id="articlesList"></div>
+      </div>
 
-  <!-- Log -->
+      <!-- コメント -->
+      <div class="research-block" id="commentsBlock" style="display:none">
+        <h3 class="block-title">コメント</h3>
+        <div class="comment-sources" id="commentSources"></div>
+        <div id="commentSamples"></div>
+      </div>
+
+      <!-- 試合/選手データ -->
+      <div class="research-block" id="dataBlock" style="display:none">
+        <h3 class="block-title">データ</h3>
+        <div id="dataContent"></div>
+      </div>
+
+      <div class="research-footer">
+        <button class="btn btn-outline" onclick="backToStep1()">← 案件一覧に戻る</button>
+        <button class="btn btn-green" id="toPlanBtn" onclick="doPlan()">企画ピース生成へ →</button>
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-3"><div class="placeholder">Step 3: 企画ピース（実装予定）</div></div>
+  <div class="panel" id="panel-4"><div class="placeholder">Step 4: レンダリング（実装予定）</div></div>
+  <div class="panel" id="panel-5"><div class="placeholder">Step 5: サムネ+メタ（実装予定）</div></div>
+
   <div class="log-section">
     <div class="log-header" onclick="toggleLog()"><span>ログ</span><span id="logToggle">▼</span></div>
     <div class="log-body" id="logBody"></div>
@@ -202,7 +299,8 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
 <script>
 let ws;
 let topics = [];
-let selectedIndex = -1;
+let checkedSet = new Set();
+let savedTopics = [];
 let logCollapsed = false;
 
 function connect() {
@@ -212,43 +310,45 @@ function connect() {
 }
 
 function send(obj) {
-  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
 
 function handleMessage(msg) {
   switch (msg.type) {
     case 'hello':
-      if (msg.topics) {
-        renderTopics(msg.topics);
-      }
+      if (msg.savedTopics) renderSaved(msg.savedTopics);
+      if (msg.topics) renderTopics(msg.topics);
       break;
-
     case 'phase':
-      if (msg.phase === 'scouting') {
-        showScoutLoading(true);
-        setActive(true);
-      }
+      if (msg.phase === 'scouting') { showScoutLoading(true); setActive(true); }
       if (msg.phase === 'researching') {
-        setActive(true);
+        setActive(true); setTab(2);
+        document.getElementById('researchLoading').style.display = '';
+        document.getElementById('researchResults').style.display = 'none';
+        document.getElementById('researchLoadingText').textContent = '「' + (msg.topic || '') + '」の情報を収集中...';
       }
+      if (msg.phase === 'planning') { setActive(true); }
       break;
-
     case 'topics_ready':
       renderTopics(msg.topics);
       showScoutLoading(false);
       setActive(false);
       break;
-
+    case 'saved_topics':
+      renderSaved(msg.savedTopics);
+      break;
+    case 'facts_ready':
+      renderResearch(msg);
+      setActive(false);
+      break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
       showScoutLoading(false);
       setActive(false);
       break;
-
     case 'reset':
       resetUI();
       break;
-
     case 'log':
       appendLog(msg.text, msg.level);
       break;
@@ -259,6 +359,7 @@ function handleMessage(msg) {
 
 function doScout() {
   document.getElementById('scoutBtn').disabled = true;
+  checkedSet.clear();
   showScoutLoading(true);
   setActive(true);
   send({ action: 'scout' });
@@ -272,58 +373,166 @@ function showScoutLoading(on) {
 
 function renderTopics(list) {
   topics = list;
-  selectedIndex = -1;
-  const container = document.getElementById('topicList');
-  document.getElementById('topicCount').textContent = `${list.length}件`;
+  checkedSet.clear();
+  document.getElementById('topicCount').textContent = list.length + '件';
   document.getElementById('scoutEmpty').style.display = 'none';
   document.getElementById('scoutLoading').style.display = 'none';
   document.getElementById('scoutResults').style.display = '';
   document.getElementById('scoutBtn').disabled = false;
-  document.getElementById('nextBtn').disabled = true;
+  updateCheckedCount();
 
-  container.innerHTML = list.map((t, i) => {
-    const title = esc(t.title || t.text || '');
-    const snippet = esc(t.snippet || '');
-    const source = t.source || 'yahoo';
-    const badgeClass = source === 'reddit' ? 'reddit' : 'yahoo';
-    const badgeLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
-    const meta = [];
+  var container = document.getElementById('topicList');
+  container.innerHTML = list.map(function(t, i) {
+    var title = esc(t.title || '');
+    var source = t.source || 'yahoo';
+    var badgeClass = source === 'reddit' ? 'reddit' : 'yahoo';
+    var badgeLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
+    var meta = [];
     if (t.reason) meta.push(t.reason);
     if (t.score) meta.push('↑' + t.score);
 
-    return `<div class="topic-card" id="tc-${i}" onclick="selectTopic(${i})">
-      <div class="topic-num">${i + 1}</div>
-      <div class="topic-body">
-        <div class="topic-title">${title}</div>
-        ${snippet ? `<div class="topic-snippet">${snippet}</div>` : ''}
-        <div class="topic-meta">
-          <span class="topic-badge ${badgeClass}">${badgeLabel}</span>
-          ${meta.map(m => `<span>${m}</span>`).join('')}
-        </div>
-      </div>
-    </div>`;
+    return '<div class="topic-card" id="tc-' + i + '" onclick="toggleCheck(' + i + ')">' +
+      '<div class="topic-check"></div>' +
+      '<div class="topic-body">' +
+        '<div class="topic-title">' + title + '</div>' +
+        '<div class="topic-meta">' +
+          '<span class="topic-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
+          meta.map(function(m) { return '<span>' + esc(m) + '</span>'; }).join('') +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
-function selectTopic(idx) {
-  document.querySelectorAll('.topic-card').forEach((c, i) => c.classList.toggle('selected', i === idx));
-  selectedIndex = idx;
-  document.getElementById('nextBtn').disabled = false;
+function toggleCheck(idx) {
+  if (checkedSet.has(idx)) checkedSet.delete(idx);
+  else checkedSet.add(idx);
+  var card = document.getElementById('tc-' + idx);
+  if (card) card.classList.toggle('checked', checkedSet.has(idx));
+  updateCheckedCount();
 }
 
-function doSelectTopic() {
-  if (selectedIndex < 0) return;
-  setTab(2);
-  send({ action: 'research', topicIndex: selectedIndex });
+function updateCheckedCount() {
+  var n = checkedSet.size;
+  document.getElementById('checkedCount').textContent = n + '件選択中';
+  document.getElementById('saveBtn').disabled = n === 0;
+}
+
+function doSave() {
+  var indices = Array.from(checkedSet).sort(function(a, b) { return a - b; });
+  send({ action: 'save_topics', indices: indices });
+  checkedSet.clear();
+  document.querySelectorAll('.topic-card.checked').forEach(function(c) { c.classList.remove('checked'); });
+  updateCheckedCount();
+}
+
+// ── Saved topics ──
+
+function renderSaved(list) {
+  savedTopics = list;
+  var section = document.getElementById('savedSection');
+  if (!list.length) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  document.getElementById('savedCount').textContent = list.length + '件';
+
+  var container = document.getElementById('savedList');
+  container.innerHTML = list.map(function(t, i) {
+    var source = t.source || 'yahoo';
+    var badgeClass = source === 'reddit' ? 'reddit' : 'yahoo';
+    var badgeLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
+    return '<div class="saved-card">' +
+      '<span class="saved-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
+      '<div class="saved-title">' + esc(t.title) + '</div>' +
+      '<div class="saved-actions">' +
+        '<button class="btn btn-sm btn-green" onclick="doActivate(' + i + ')">情報収集へ</button>' +
+        '<button class="btn btn-sm btn-outline" onclick="doRemoveSaved(' + i + ')">✕</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function doActivate(idx) {
+  send({ action: 'activate', index: idx });
+}
+
+function doRemoveSaved(idx) {
+  send({ action: 'remove_saved', index: idx });
+}
+
+// ── Step 2: Research ──
+
+function renderResearch(msg) {
+  document.getElementById('researchLoading').style.display = 'none';
+  document.getElementById('researchResults').style.display = '';
+  document.getElementById('researchTopic').textContent = msg.topic || '';
+
+  var s = msg.summary || {};
+  var f = msg.facts || {};
+
+  // サマリーチップ
+  document.getElementById('researchSummary').innerHTML =
+    '<div class="summary-chip"><div class="chip-num">' + (s.articles || 0) + '</div><div class="chip-label">記事</div></div>' +
+    '<div class="summary-chip"><div class="chip-num">' + (s.comments || 0) + '</div><div class="chip-label">コメント</div></div>' +
+    '<div class="summary-chip"><div class="chip-num">' + (s.hasMatchData ? '✓' : '—') + '</div><div class="chip-label">試合データ</div></div>' +
+    '<div class="summary-chip"><div class="chip-num">' + (s.hasPlayerData ? '✓' : '—') + '</div><div class="chip-label">選手データ</div></div>';
+
+  // 記事
+  var articles = f.articles || [];
+  var ab = document.getElementById('articlesBlock');
+  if (articles.length) {
+    ab.style.display = '';
+    document.getElementById('articlesList').innerHTML = articles.map(function(a) {
+      return '<div class="article-card">' +
+        '<div class="art-title">' + esc(a.title || '(タイトルなし)') + '</div>' +
+        '<div class="art-meta"><a href="' + esc(a.url || '') + '" target="_blank">' + esc((a.url || '').slice(0, 60)) + '</a> — ' + (a.textLen || 0) + '文字</div>' +
+      '</div>';
+    }).join('');
+  } else { ab.style.display = 'none'; }
+
+  // コメント
+  var c = f.comments || {};
+  var cb = document.getElementById('commentsBlock');
+  if (c.total > 0) {
+    cb.style.display = '';
+    document.getElementById('commentSources').innerHTML =
+      '<span class="comment-src">Reddit ' + (c.reddit || 0) + '</span>' +
+      '<span class="comment-src">Yahoo ' + (c.yahoo || 0) + '</span>' +
+      '<span class="comment-src">X ' + (c.x || 0) + '</span>';
+    document.getElementById('commentSamples').innerHTML = (c.samples || []).map(function(t) {
+      return '<div class="comment-sample">' + esc(t) + '</div>';
+    }).join('');
+  } else { cb.style.display = 'none'; }
+
+  // 試合/選手データ
+  var db = document.getElementById('dataBlock');
+  var parts = [];
+  if (f.matchData && f.matchData.ok) parts.push('試合: ' + (f.matchData.scoreline || ''));
+  if (f.playerData && f.playerData.ok) parts.push('選手: ' + (f.playerData.name || '') + ' (' + (f.playerData.team || '') + ')');
+  if (parts.length) {
+    db.style.display = '';
+    document.getElementById('dataContent').innerHTML = parts.map(function(p) {
+      return '<div class="article-card"><div class="art-title">' + esc(p) + '</div></div>';
+    }).join('');
+  } else { db.style.display = 'none'; }
+}
+
+function backToStep1() {
+  setTab(1);
+}
+
+function doPlan() {
+  send({ action: 'plan' });
+  setActive(true);
+  setTab(3);
 }
 
 // ── Tab nav ──
 
 function setTab(num) {
-  for (let i = 1; i <= 5; i++) {
-    document.getElementById(`panel-${i}`).classList.toggle('visible', i === num);
-    const tab = document.getElementById(`tab-${i}`);
-    tab.classList.remove('active');
+  for (var i = 1; i <= 5; i++) {
+    document.getElementById('panel-' + i).classList.toggle('visible', i === num);
+    var tab = document.getElementById('tab-' + i);
+    tab.classList.remove('active', 'done');
     if (i < num) tab.classList.add('done');
     if (i === num) tab.classList.add('active');
   }
@@ -337,7 +546,7 @@ function setActive(on) {
 
 function resetUI() {
   topics = [];
-  selectedIndex = -1;
+  checkedSet.clear();
   setTab(1);
   document.getElementById('scoutEmpty').style.display = '';
   document.getElementById('scoutLoading').style.display = 'none';
@@ -348,8 +557,8 @@ function resetUI() {
 }
 
 function appendLog(text, level) {
-  const body = document.getElementById('logBody');
-  const line = document.createElement('div');
+  var body = document.getElementById('logBody');
+  var line = document.createElement('div');
   line.className = 'log-line' + (level === 'warn' ? ' warn' : level === 'error' ? ' error' : '');
   line.textContent = text;
   body.appendChild(line);
@@ -363,7 +572,7 @@ function toggleLog() {
 }
 
 function esc(s) {
-  const d = document.createElement('div');
+  var d = document.createElement('div');
   d.textContent = s || '';
   return d.innerHTML;
 }
