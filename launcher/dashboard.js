@@ -14,11 +14,13 @@ const {
 } = require('./pipeline');
 const { listPatterns } = require('./slide_patterns');
 const { scoutWithAI, callDeepSeek } = require('./scout');
+const { generateMods } = require('./script_gen');
 
 const PORT = 3456;
 const SAVED_FILE = path.join(__dirname, 'output', 'saved_topics.json');
+const TOPIC_DATA_FILE = path.join(__dirname, 'output', 'topic_data.json');
 
-// ── 保存済みトピック永続化 ──────────────────────────────
+// ── 永続化 ──────────────────────────────────────────────
 
 function loadSaved() {
   try { return JSON.parse(fs.readFileSync(SAVED_FILE, 'utf8')); }
@@ -31,6 +33,27 @@ function saveToDisk(topics) {
   fs.writeFileSync(SAVED_FILE, JSON.stringify(topics, null, 2));
 }
 
+function loadTopicData() {
+  try { return JSON.parse(fs.readFileSync(TOPIC_DATA_FILE, 'utf8')); }
+  catch (_) { return {}; }
+}
+
+function saveTopicData() {
+  const dir = path.dirname(TOPIC_DATA_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const slim = {};
+  for (const [k, v] of Object.entries(session.topicData)) {
+    slim[k] = {
+      summary: v.summary,
+      factsForClient: v.factsForClient,
+      viewpoints: v.viewpoints || null,
+      mods: v.mods || null,
+      renderResult: v.renderResult || null,
+    };
+  }
+  fs.writeFileSync(TOPIC_DATA_FILE, JSON.stringify(slim, null, 2));
+}
+
 // ── HTTP サーバー ────────────────────────────────────
 
 const server = http.createServer((req, res) => {
@@ -38,6 +61,14 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(fs.readFileSync(path.join(__dirname, 'web', 'index.html')));
     return;
+  }
+  if (req.url === '/mia.jpg') {
+    const imgPath = path.join(__dirname, 'web', 'mia.jpg');
+    if (fs.existsSync(imgPath)) {
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'max-age=86400' });
+      fs.createReadStream(imgPath).pipe(res);
+      return;
+    }
   }
   if (req.url.startsWith('/output/')) {
     const filePath = path.join(__dirname, req.url);
@@ -70,6 +101,8 @@ let session = {
   phase: 'idle',
   topics: null,
   savedTopics: loadSaved(),
+  topicData: loadTopicData(),
+  factsCache: {},
   activeTopic: null,
   facts: null,
   viewpoints: null,
@@ -80,6 +113,8 @@ function resetSession() {
   session = {
     phase: 'idle', topics: null,
     savedTopics: session.savedTopics,
+    topicData: session.topicData,
+    factsCache: session.factsCache,
     activeTopic: null, facts: null, viewpoints: null, renderResult: null,
   };
 }
@@ -147,6 +182,26 @@ JSON形式: {"homeTeam": "Japan" or null, "awayTeam": "Sweden" or null, "playerN
   }
 }
 
+async function translateComments(samples) {
+  if (!samples.length) return [];
+  const numbered = samples.map((c, i) => `${i}. ${c}`).join('\n');
+  try {
+    const result = await callDeepSeek(
+      `以下のサッカー関連コメントを処理してください:
+- 英語コメント → 面白く自然な日本語に意訳（ネットの口語調OK、元のニュアンスは保つ）
+- 日本語で120文字以上のコメント → 要点を80文字以内に短縮
+- 短い日本語コメント → そのまま
+元の件数と同じ数だけ、同じ順序で返してください。
+JSON: {"comments": ["コメント1", "コメント2", ...]}`,
+      numbered
+    );
+    return result.comments || samples;
+  } catch (err) {
+    console.warn(`  [translate] failed: ${err.message}`);
+    return samples;
+  }
+}
+
 async function runResearch(topicTitle) {
   session.activeTopic = topicTitle;
   session.facts = null;
@@ -163,7 +218,17 @@ async function runResearch(topicTitle) {
       searchQuery: analysis.searchQuery || null,
     });
     session.facts = facts;
-    session.phase = 'facts_ready';
+    session.factsCache[topicTitle] = facts;
+
+    const rawSamples = [];
+    for (const src of ['reddit', 'yahoo', 'x']) {
+      (facts.comments?.[src] || []).slice(0, 5).forEach(c => {
+        rawSamples.push(typeof c === 'string' ? c : c.text);
+      });
+    }
+
+    console.log(`  [translate] ${rawSamples.length}件のコメントを処理中...`);
+    const processed = await translateComments(rawSamples);
 
     const factsForClient = {
       topic: facts.topic,
@@ -175,10 +240,16 @@ async function runResearch(topicTitle) {
         yahoo: (facts.comments?.yahoo || []).length,
         x: (facts.comments?.x || []).length,
         total: (facts.comments?.all || []).length,
-        samples: (facts.comments?.all || []).slice(0, 5).map(c => typeof c === 'string' ? c : c.text),
+        samples: processed,
       },
     };
+
+    session.topicData[topicTitle] = { summary, factsForClient };
+    saveTopicData();
+
+    session.phase = 'facts_ready';
     broadcast({ type: 'facts_ready', summary, facts: factsForClient, topic: topicTitle });
+    broadcast({ type: 'saved_topics', savedTopics: session.savedTopics, researchedTopics: Object.keys(session.topicData) });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
     session.phase = 'idle';
@@ -199,6 +270,12 @@ async function runPlan() {
     const viewpoints = await phasePlan(session.facts);
     session.viewpoints = viewpoints;
     session.phase = 'plan_ready';
+
+    if (session.activeTopic && session.topicData[session.activeTopic]) {
+      session.topicData[session.activeTopic].viewpoints = viewpoints;
+      saveTopicData();
+    }
+
     broadcast({ type: 'plan_ready', viewpoints, patterns: listPatterns() });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
@@ -210,32 +287,41 @@ async function runPlan() {
 
 // ── Step 4: Render ───────────────────────────────────
 
-async function runRender(viewpointIndex, edits) {
-  if (session.phase !== 'plan_ready') return;
+async function runRender(viewpointIndex, edits, prebuiltMods = null) {
+  if (!session.viewpoints) return;
   session.phase = 'rendering';
   interceptConsole();
-  broadcast({ type: 'phase', phase: 'rendering' });
+
+  const vp = { ...session.viewpoints[viewpointIndex || 0] };
+  if (edits) {
+    if (edits.title) vp.title = edits.title;
+    if (edits.suggestedPattern) vp.suggestedPattern = edits.suggestedPattern;
+  }
+  const videoTopic = vp.title || session.activeTopic;
+  const patternKey = vp.suggestedPattern || 'match_result';
+
+  broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic, patternKey });
 
   try {
-    const vp = { ...session.viewpoints[viewpointIndex || 0] };
-    if (edits) {
-      if (edits.title) vp.title = edits.title;
-      if (edits.suggestedPattern) vp.suggestedPattern = edits.suggestedPattern;
-    }
-
-    const videoTopic = vp.title || session.activeTopic;
-    const patternKey = vp.suggestedPattern || 'match_result';
+    if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
 
     const emitter = new EventEmitter();
     emitter.on('pipeline', (evt) => broadcast(evt));
 
-    const result = await phaseRender(videoTopic, patternKey, session.facts, emitter);
+    const result = await phaseRender(videoTopic, patternKey, session.facts, emitter, prebuiltMods);
     session.renderResult = result;
-    const meta = await phaseMeta(result);
+    await phaseMeta(result);
 
     session.phase = 'done';
     const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
-    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl });
+
+    if (session.activeTopic && session.topicData[session.activeTopic]) {
+      session.topicData[session.activeTopic].renderResult = { videoUrl, totalDuration: result.totalDuration, patternKey, topic: videoTopic };
+      session.topicData[session.activeTopic].mods = result.mods;
+      saveTopicData();
+    }
+
+    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, mods: result.mods });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
     session.phase = 'plan_ready';
@@ -247,14 +333,20 @@ async function runRender(viewpointIndex, edits) {
 // ── WebSocket 接続 ───────────────────────────────────
 
 wss.on('connection', (ws) => {
+  const activeData = session.activeTopic ? session.topicData[session.activeTopic] : null;
   ws.send(JSON.stringify({
     type: 'hello',
     phase: session.phase,
     topics: session.topics,
     savedTopics: session.savedTopics,
+    researchedTopics: Object.keys(session.topicData),
     activeTopic: session.activeTopic,
-    viewpoints: session.phase === 'plan_ready' ? session.viewpoints : null,
-    patterns: session.phase === 'plan_ready' ? listPatterns() : null,
+    activeFacts: activeData ? activeData.factsForClient : null,
+    activeSummary: activeData ? activeData.summary : null,
+    activeViewpoints: activeData && activeData.viewpoints ? activeData.viewpoints : null,
+    activeRenderResult: activeData && activeData.renderResult ? activeData.renderResult : null,
+    activeMods: activeData && activeData.mods ? activeData.mods : null,
+    patterns: listPatterns(),
     steps: STEPS,
     renderSubSteps: RENDER_SUB_STEPS,
   }));
@@ -282,7 +374,7 @@ wss.on('connection', (ws) => {
         .filter(t => !session.savedTopics.some(s => s.title === t.title));
       session.savedTopics.push(...newTopics);
       saveToDisk(session.savedTopics);
-      broadcast({ type: 'saved_topics', savedTopics: session.savedTopics });
+      broadcast({ type: 'saved_topics', savedTopics: session.savedTopics, researchedTopics: Object.keys(session.topicData) });
     }
 
     if (msg.action === 'remove_saved') {
@@ -290,24 +382,109 @@ wss.on('connection', (ws) => {
       if (idx >= 0 && idx < session.savedTopics.length) {
         session.savedTopics.splice(idx, 1);
         saveToDisk(session.savedTopics);
-        broadcast({ type: 'saved_topics', savedTopics: session.savedTopics });
+        broadcast({ type: 'saved_topics', savedTopics: session.savedTopics, researchedTopics: Object.keys(session.topicData) });
       }
     }
 
     if (msg.action === 'activate') {
       const topic = session.savedTopics[msg.index];
       if (!topic) return;
-      runResearch(topic.title);
+      const cached = session.topicData[topic.title];
+      if (cached) {
+        session.activeTopic = topic.title;
+        session.facts = session.factsCache[topic.title] || null;
+        session.viewpoints = cached.viewpoints || null;
+        session.phase = cached.viewpoints ? 'plan_ready' : 'facts_ready';
+        broadcast({ type: 'facts_ready', summary: cached.summary, facts: cached.factsForClient, topic: topic.title });
+        if (cached.viewpoints) broadcast({ type: 'plan_ready', viewpoints: cached.viewpoints, patterns: listPatterns() });
+        if (cached.renderResult) broadcast({ type: 'done', ...cached.renderResult, mods: cached.mods || null });
+        else if (cached.mods) broadcast({ type: 'script_ready', mods: cached.mods, topic: topic.title });
+      } else {
+        runResearch(topic.title);
+      }
     }
 
     if (msg.action === 'plan') {
-      if (session.phase !== 'facts_ready') return;
+      if (!session.activeTopic) return;
+      if (!msg.force) {
+        const cached = session.topicData[session.activeTopic];
+        if (cached && cached.viewpoints) {
+          session.viewpoints = cached.viewpoints;
+          session.phase = 'plan_ready';
+          broadcast({ type: 'plan_ready', viewpoints: cached.viewpoints, patterns: listPatterns() });
+          return;
+        }
+      }
+      if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
+      if (!session.facts) {
+        broadcast({ type: 'error', detail: '情報収集データがありません。先に情報収集を実行してください。' });
+        return;
+      }
       runPlan();
     }
 
     if (msg.action === 'render') {
-      if (session.phase !== 'plan_ready') return;
+      if (!session.viewpoints || !session.viewpoints.length) {
+        broadcast({ type: 'error', detail: '企画ピースがありません。先にStep 3を実行してください。' });
+        return;
+      }
       runRender(msg.viewpointIndex, msg.edits);
+    }
+
+    if (msg.action === 'generate_script') {
+      if (!session.activeTopic) return;
+      if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
+      // サーバー再起動後 factsCache は空なので topicData から facts を再構築
+      if (!session.facts) {
+        ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
+        return;
+      }
+      // viewpoints も topicData から復元
+      if (!session.viewpoints && session.activeTopic && session.topicData[session.activeTopic]) {
+        session.viewpoints = session.topicData[session.activeTopic].viewpoints || null;
+      }
+      if (!session.viewpoints || !session.viewpoints.length) {
+        ws.send(JSON.stringify({ type: 'error', detail: '企画ピースがありません。先に Step 3 を実行してください。' }));
+        return;
+      }
+      const vp = session.viewpoints[msg.viewpointIndex != null ? msg.viewpointIndex : 0];
+      if (!vp) return;
+      const videoTopic = (msg.edits && msg.edits.title) || vp.title || session.activeTopic;
+      const patternKey = (msg.edits && msg.edits.suggestedPattern) || vp.suggestedPattern || 'match_result';
+      interceptConsole();
+      broadcast({ type: 'phase', phase: 'generating_script' });
+      try {
+        const mods = await generateMods(patternKey, videoTopic, session.facts);
+        if (session.topicData[session.activeTopic]) {
+          session.topicData[session.activeTopic].mods = mods;
+          saveTopicData();
+        }
+        broadcast({ type: 'script_ready', mods, topic: videoTopic, patternKey });
+      } catch (err) {
+        broadcast({ type: 'error', detail: err.message });
+      } finally {
+        restoreConsole();
+      }
+    }
+
+    if (msg.action === 'update_mods') {
+      if (!session.activeTopic) return;
+      if (!session.topicData[session.activeTopic]) session.topicData[session.activeTopic] = {};
+      session.topicData[session.activeTopic].mods = msg.mods;
+      saveTopicData();
+      ws.send(JSON.stringify({ type: 'mods_saved' }));
+    }
+
+    if (msg.action === 're_render') {
+      if (!session.viewpoints || !session.viewpoints.length) {
+        broadcast({ type: 'error', detail: '企画データがありません。Step 3 を先に実行してください。' });
+        return;
+      }
+      if (session.activeTopic && session.topicData[session.activeTopic]) {
+        session.topicData[session.activeTopic].mods = msg.mods;
+        saveTopicData();
+      }
+      runRender(msg.viewpointIndex || 0, msg.edits, msg.mods);
     }
 
     if (msg.action === 'reset') {

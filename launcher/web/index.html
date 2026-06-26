@@ -3,240 +3,571 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>V5 Launcher</title>
+<title>V5 Launcher — ミア工房</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --bg: #0f1117; --card: #1a1d27; --card2: #22252f;
-  --border: #2a2d3a; --text: #e4e4e7; --muted: #71717a;
-  --accent: #3b82f6; --green: #22c55e; --yellow: #eab308;
-  --red: #ef4444; --orange: #f97316; --amber: #f59e0b;
+  --bg: #0a0c12;
+  --bg2: #0e1119;
+  --card: rgba(28, 32, 44, 0.7);
+  --card-solid: #1a1e2a;
+  --card2: #232838;
+  --border: rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.14);
+  --text: #eef0f5;
+  --muted: #8b90a3;
+  --faint: #5a5f72;
+  --accent: #6366f1;
+  --accent2: #38bdf8;
+  --accent-grad: linear-gradient(135deg, #6366f1 0%, #38bdf8 100%);
+  --green: #2dd4a7;
+  --yellow: #fbbf24;
+  --red: #f87171;
+  --orange: #fb923c;
+  --amber: #f59e0b;
+  --pink: #f472b6;
+  --shadow: 0 8px 30px rgba(0,0,0,0.4);
+  --shadow-glow: 0 0 0 1px rgba(99,102,241,.3), 0 8px 40px rgba(99,102,241,.18);
 }
-body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Segoe UI','Noto Sans JP',system-ui,sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, rgba(99,102,241,0.16), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(56,189,248,0.10), transparent 55%);
+  background-attachment: fixed;
+}
+::selection { background: rgba(99,102,241,.35); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a2f40; border-radius: 8px; border: 2px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: #353b50; }
 
+/* ════ Header ════ */
 .header {
-  background: linear-gradient(135deg,#1e293b,#0f172a);
+  position: sticky; top: 0; z-index: 50;
+  backdrop-filter: blur(14px);
+  background: rgba(10,12,18,0.72);
   border-bottom: 1px solid var(--border);
-  padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+  padding: 12px 22px; display: flex; align-items: center; gap: 14px;
 }
-.header h1 { font-size: 18px; font-weight: 700; }
-.header h1 span { color: var(--accent); }
-.status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-.status-dot.active { background: var(--green); animation: pulse 1.5s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-
-.main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-
-/* ── Step nav ── */
-.step-nav { display: flex; gap: 2px; margin-bottom: 24px; }
-.step-tab {
-  flex: 1; padding: 10px 8px; text-align: center; font-size: 12px; font-weight: 600;
-  background: var(--card); border: 1px solid var(--border); color: var(--muted);
-  cursor: default; transition: all .2s;
+.mia-avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  background-image: url('/mia.jpg');
+  background-size: 260%;
+  background-position: 74% 16%;
+  border: 2px solid rgba(99,102,241,.5);
+  box-shadow: 0 0 18px rgba(99,102,241,.35);
+  flex-shrink: 0;
 }
-.step-tab:first-child { border-radius: 8px 0 0 8px; }
-.step-tab:last-child { border-radius: 0 8px 8px 0; }
-.step-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-.step-tab.done { background: rgba(34,197,94,.15); border-color: var(--green); color: var(--green); }
-.step-tab .num { display: block; font-size: 16px; font-weight: 800; margin-bottom: 2px; }
-
-/* ── Panels ── */
-.panel { display: none; }
-.panel.visible { display: block; }
-
-/* ── Buttons ── */
-.btn {
-  background: var(--accent); color: #fff; border: none; border-radius: 8px;
-  padding: 10px 24px; font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: opacity .2s; white-space: nowrap;
+.header-titles { display: flex; flex-direction: column; gap: 1px; }
+.header h1 { font-size: 16px; font-weight: 800; letter-spacing: .2px; display: flex; align-items: center; gap: 7px; }
+.header h1 .grad {
+  background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.btn:hover { opacity: .85; }
-.btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
-.btn-green { background: var(--green); }
-.btn-orange { background: var(--orange); }
-.btn-red { background: var(--red); }
-.btn-sm { padding: 6px 14px; font-size: 12px; }
-.btn-outline {
-  background: transparent; border: 1px solid var(--border); color: var(--muted);
+.header .subtitle { font-size: 11px; color: var(--muted); font-weight: 500; }
+.header-spacer { flex: 1; }
+.status-pill {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  padding: 6px 12px; border-radius: 999px; font-size: 11.5px; color: var(--muted); font-weight: 600;
 }
-.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
-
-/* ── Section headers ── */
-.section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.section-header h2 { font-size: 16px; font-weight: 700; flex: 1; }
-
-/* ── Saved topics ── */
-.saved-section { margin-bottom: 24px; }
-.saved-list { display: flex; flex-direction: column; gap: 4px; }
-.saved-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); transition: all .3s; }
+.status-dot.active { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 1.4s infinite; }
+@keyframes pulse { 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:.5; transform:scale(.82)} }
+.icon-btn {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--muted);
+  width: 34px; height: 34px; border-radius: 9px; cursor: pointer; font-size: 15px;
+  display: flex; align-items: center; justify-content: center; transition: all .2s;
 }
-.saved-card .saved-title { flex: 1; font-size: 13px; font-weight: 500; }
-.saved-badge {
-  padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
-}
-.saved-badge.yahoo { background: rgba(239,68,68,.15); color: var(--red); }
-.saved-badge.reddit { background: rgba(249,115,22,.15); color: var(--orange); }
-.saved-card .saved-actions { display: flex; gap: 4px; }
+.icon-btn:hover { color: var(--text); border-color: var(--border-strong); background: rgba(255,255,255,0.07); }
 
-/* ── Topic cards (scout results) ── */
-.topic-list { display: flex; flex-direction: column; gap: 6px; }
-.topic-card {
-  background: var(--card); border: 2px solid var(--border); border-radius: 10px;
-  padding: 12px 16px; cursor: pointer; transition: all .2s;
-  display: flex; align-items: flex-start; gap: 12px;
-}
-.topic-card:hover { border-color: var(--accent); background: var(--card2); }
-.topic-card.checked { border-color: var(--amber); box-shadow: 0 0 20px rgba(245,158,11,.12); }
+.main { max-width: 1000px; margin: 0 auto; padding: 26px 18px 80px; }
 
-.topic-check {
-  width: 22px; height: 22px; border-radius: 4px; border: 2px solid var(--border);
+/* ════ Stepper ════ */
+.stepper { position: relative; display: flex; justify-content: space-between; margin: 4px 0 30px; }
+.stepper::before {
+  content: ''; position: absolute; top: 21px; left: 7%; right: 7%; height: 2px;
+  background: var(--border); border-radius: 2px;
+}
+.stepper::after {
+  content: ''; position: absolute; top: 21px; left: 7%; height: 2px; border-radius: 2px;
+  width: var(--rail, 0%); max-width: 86%;
+  background: var(--accent-grad);
+  transition: width .5s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 0 12px rgba(99,102,241,.5);
+}
+.step {
+  position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 7px;
+  cursor: pointer; flex: 1; transition: transform .2s;
+}
+.step:hover { transform: translateY(-2px); }
+.step-node {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--card-solid); border: 2px solid var(--border-strong);
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; margin-top: 2px; transition: all .2s;
+  font-size: 16px; font-weight: 800; color: var(--muted);
+  transition: all .3s; position: relative;
 }
-.topic-card.checked .topic-check {
-  background: var(--amber); border-color: var(--amber);
+.step.active .step-node {
+  background: var(--accent-grad); border-color: transparent; color: #fff;
+  box-shadow: 0 0 0 5px rgba(99,102,241,.16), 0 6px 20px rgba(99,102,241,.4);
+  transform: scale(1.06);
 }
-.topic-card.checked .topic-check::after {
-  content: '✓'; color: #000; font-size: 14px; font-weight: 800;
+.step.done .step-node {
+  background: rgba(45,212,167,.14); border-color: var(--green); color: var(--green);
+}
+.step.done .step-node::after { content: '✓'; font-size: 18px; }
+.step.done .step-node .step-num { display: none; }
+.step-label { font-size: 11.5px; font-weight: 600; color: var(--muted); transition: color .2s; text-align: center; }
+.step.active .step-label { color: var(--text); }
+.step.done .step-label { color: var(--green); }
+
+/* ════ Panels ════ */
+.panel { display: none; animation: fadeUp .4s cubic-bezier(.2,.7,.2,1); }
+.panel.visible { display: block; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* ════ Buttons ════ */
+.btn {
+  background: var(--accent-grad); color: #fff; border: none; border-radius: 10px;
+  padding: 11px 22px; font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all .2s; white-space: nowrap; letter-spacing: .2px;
+  box-shadow: 0 4px 14px rgba(99,102,241,.3);
+}
+.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99,102,241,.42); filter: brightness(1.06); }
+.btn:active { transform: translateY(0); }
+.btn:disabled { background: var(--card2); color: var(--faint); cursor: not-allowed; box-shadow: none; transform: none; filter: none; }
+.btn-green { background: linear-gradient(135deg,#2dd4a7,#10b981); box-shadow: 0 4px 14px rgba(45,212,167,.3); }
+.btn-green:hover { box-shadow: 0 6px 20px rgba(45,212,167,.42); }
+.btn-sm { padding: 7px 15px; font-size: 12px; border-radius: 8px; }
+.btn-ghost {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border); color: var(--muted);
+  box-shadow: none;
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--text); background: rgba(99,102,241,.08); box-shadow: none; filter: none; }
+a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+
+/* ════ Section headers ════ */
+.section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.section-header h2 { font-size: 18px; font-weight: 800; flex: 1; min-width: 200px; letter-spacing: .2px; }
+.pill-count {
+  font-size: 11px; color: var(--muted); background: rgba(255,255,255,0.05);
+  padding: 3px 10px; border-radius: 999px; font-weight: 600; border: 1px solid var(--border);
 }
 
-.topic-body { flex: 1; min-width: 0; }
-.topic-title { font-size: 14px; font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
-.topic-meta { display: flex; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--muted); }
-.topic-badge {
-  padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+/* ════ Mia note ════ */
+.mia-note {
+  display: flex; align-items: flex-start; gap: 11px; margin-bottom: 18px;
+  background: linear-gradient(135deg, rgba(99,102,241,.08), rgba(56,189,248,.05));
+  border: 1px solid rgba(99,102,241,.2); border-radius: 14px; padding: 12px 15px;
 }
-.topic-badge.yahoo { background: rgba(239,68,68,.15); color: var(--red); }
-.topic-badge.reddit { background: rgba(249,115,22,.15); color: var(--orange); }
+.mia-note .mn-face {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background-image: url('/mia.jpg'); background-size: 260%; background-position: 74% 16%;
+  border: 1.5px solid rgba(99,102,241,.5);
+}
+.mia-note .mn-text { font-size: 12.5px; line-height: 1.6; color: #c4c8d6; }
+.mia-note .mn-text b { color: var(--accent2); font-weight: 700; }
+
+/* ════ Cards / grids ════ */
+.card {
+  background: var(--card); backdrop-filter: blur(6px);
+  border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+}
+
+/* ════ Saved topics ════ */
+.saved-section { margin-bottom: 26px; }
+.saved-list { display: flex; flex-direction: column; gap: 7px; }
+.saved-card {
+  background: var(--card); backdrop-filter: blur(6px);
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 15px; display: flex; align-items: center; gap: 11px; transition: all .2s;
+  cursor: pointer;
+}
+.saved-card:hover { border-color: var(--border-strong); transform: translateX(2px); }
+.saved-card.active { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.saved-card .saved-title { flex: 1; font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.saved-card .saved-actions { display: flex; gap: 6px; }
+.badge {
+  padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+  flex-shrink: 0;
+}
+.badge.yahoo { background: rgba(248,113,113,.16); color: var(--red); }
+.badge.reddit { background: rgba(251,146,60,.16); color: var(--orange); }
+.chk-done {
+  display: inline-flex; align-items: center; gap: 3px; color: var(--green);
+  font-size: 10.5px; font-weight: 800; background: rgba(45,212,167,.12);
+  padding: 2px 8px; border-radius: 6px; flex-shrink: 0;
+}
+
+/* ════ Scout topic cards ════ */
+.topic-list { display: flex; flex-direction: column; gap: 8px; }
+.topic-card {
+  background: var(--card); backdrop-filter: blur(6px);
+  border: 1.5px solid var(--border); border-radius: 13px;
+  padding: 14px 16px; cursor: pointer; transition: all .18s;
+  display: flex; align-items: flex-start; gap: 13px;
+}
+.topic-card:hover { border-color: var(--border-strong); background: rgba(35,40,56,.6); transform: translateY(-1px); }
+.topic-card.checked { border-color: var(--amber); background: rgba(245,158,11,.06); box-shadow: 0 0 0 1px rgba(245,158,11,.25), 0 6px 22px rgba(245,158,11,.12); }
+.topic-check {
+  width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px; transition: all .2s;
+}
+.topic-card.checked .topic-check { background: var(--amber); border-color: var(--amber); transform: scale(1.05); }
+.topic-card.checked .topic-check::after { content: '✓'; color: #1a1205; font-size: 15px; font-weight: 900; }
+.topic-body { flex: 1; min-width: 0; }
+.topic-title { font-size: 14px; font-weight: 700; line-height: 1.45; margin-bottom: 6px; }
+.topic-meta { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+.topic-reason { color: var(--faint); }
+.topic-score { color: var(--orange); font-weight: 600; }
 
 .scout-footer {
-  margin-top: 16px; display: flex; justify-content: space-between; align-items: center;
+  margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  position: sticky; bottom: 14px;
+  background: rgba(10,12,18,0.8); backdrop-filter: blur(10px);
+  border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px;
 }
-.scout-footer .checked-count { font-size: 12px; color: var(--muted); }
+.scout-footer .checked-count { font-size: 12.5px; color: var(--muted); font-weight: 600; }
 
-/* ── Loading ── */
-.loading { text-align: center; padding: 48px 0; }
-.loading .spinner-lg {
-  width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent);
-  border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 12px;
+/* ════ Loading ════ */
+.loading { text-align: center; padding: 60px 0; }
+.dual-spinner { width: 46px; height: 46px; margin: 0 auto 18px; position: relative; }
+.dual-spinner::before, .dual-spinner::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; border: 3px solid transparent;
 }
+.dual-spinner::before { border-top-color: var(--accent); animation: spin .9s linear infinite; }
+.dual-spinner::after { border-bottom-color: var(--accent2); animation: spin 1.4s linear infinite reverse; inset: 6px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading p { font-size: 13px; color: var(--muted); }
+.loading p { font-size: 13.5px; color: var(--muted); font-weight: 500; }
+.loading .load-sub { font-size: 12px; color: var(--faint); margin-top: 6px; }
 
-/* ── Empty ── */
-.empty-state { text-align: center; padding: 48px 16px; }
-.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
-.empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
-.empty-state p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+/* ════ Empty state ════ */
+.empty-state { text-align: center; padding: 56px 20px; }
+.empty-state .icon {
+  width: 84px; height: 84px; margin: 0 auto 18px; border-radius: 24px;
+  display: flex; align-items: center; justify-content: center; font-size: 40px;
+  background: linear-gradient(135deg, rgba(99,102,241,.14), rgba(56,189,248,.08));
+  border: 1px solid rgba(99,102,241,.2);
+}
+.empty-state h3 { font-size: 18px; margin-bottom: 8px; font-weight: 800; }
+.empty-state p { font-size: 13px; color: var(--muted); margin-bottom: 22px; line-height: 1.6; }
 
-/* ── Log ── */
-.log-section { margin-top: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.log-header {
-  padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--muted);
-  border-bottom: 1px solid var(--border); display: flex; justify-content: space-between;
-  cursor: pointer; user-select: none;
-}
-.log-body {
-  max-height: 200px; overflow-y: auto; padding: 10px 14px;
-  font-family: Consolas,Menlo,monospace; font-size: 11px; line-height: 1.6; color: var(--muted);
-}
-.log-body.collapsed { display: none; }
-.log-line { white-space: pre-wrap; word-break: break-all; }
-.log-line.warn { color: var(--yellow); }
-.log-line.error { color: var(--red); }
-
-/* ── Step 2: Research ── */
-.research-summary {
-  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
-}
+/* ════ Step 2: Research ════ */
+.research-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
 .summary-chip {
-  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 16px; display: flex; align-items: center; gap: 8px; flex: 1; min-width: 120px;
+  background: var(--card); backdrop-filter: blur(6px); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px 14px; text-align: center; transition: all .2s;
 }
-.summary-chip .chip-num { font-size: 22px; font-weight: 800; color: var(--accent); }
-.summary-chip .chip-label { font-size: 11px; color: var(--muted); }
+.summary-chip:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+.summary-chip .chip-icon { font-size: 18px; margin-bottom: 6px; }
+.summary-chip .chip-num {
+  font-size: 26px; font-weight: 900;
+  background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.summary-chip .chip-num.ok { background: linear-gradient(135deg,#2dd4a7,#10b981); -webkit-background-clip: text; background-clip: text; }
+.summary-chip .chip-num.none { background: none; color: var(--faint); -webkit-text-fill-color: var(--faint); }
+.summary-chip .chip-label { font-size: 11px; color: var(--muted); margin-top: 3px; font-weight: 600; }
 
-.research-block { margin-bottom: 16px; }
+.research-block { margin-bottom: 24px; }
 .block-title {
-  font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase;
-  letter-spacing: .5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .8px; margin-bottom: 11px; display: flex; align-items: center; gap: 8px;
 }
+.block-title::before { content: ''; width: 3px; height: 14px; background: var(--accent-grad); border-radius: 2px; }
 
 .article-card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 6px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 11px;
+  padding: 12px 15px; margin-bottom: 7px; transition: all .2s;
 }
-.article-card .art-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.article-card:hover { border-color: var(--border-strong); }
+.article-card .art-title { font-size: 13.5px; font-weight: 700; margin-bottom: 4px; line-height: 1.4; }
 .article-card .art-meta { font-size: 11px; color: var(--muted); }
-.article-card a { color: var(--accent); text-decoration: none; }
+.article-card a { color: var(--accent2); text-decoration: none; }
 .article-card a:hover { text-decoration: underline; }
 
-.comment-sources { display: flex; gap: 6px; margin-bottom: 8px; }
+.comment-sources { display: flex; gap: 7px; margin-bottom: 12px; flex-wrap: wrap; }
 .comment-src {
-  padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
-  background: var(--card); border: 1px solid var(--border);
+  padding: 5px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--muted);
 }
-
+.comment-src b { color: var(--text); }
 .comment-sample {
-  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 4px; font-size: 12px; line-height: 1.5; color: var(--text);
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  border-top-left-radius: 4px;
+  padding: 11px 15px; margin-bottom: 7px; font-size: 12.5px; line-height: 1.6; color: #d2d6e2;
+  position: relative;
 }
 
-.research-footer {
-  margin-top: 20px; display: flex; justify-content: space-between;
+/* ════ Step 3: Viewpoints ════ */
+.viewpoint-card {
+  background: var(--card); backdrop-filter: blur(6px); border: 1px solid var(--border);
+  border-radius: 16px; padding: 18px; margin-bottom: 12px; transition: all .2s;
+  position: relative; overflow: hidden;
+}
+.viewpoint-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--vp-color, var(--muted));
+}
+.viewpoint-card { cursor: pointer; }
+.viewpoint-card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
+.viewpoint-card.selected { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.vp-header { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.vp-priority {
+  font-size: 11px; font-weight: 900; color: #fff; padding: 2px 9px; border-radius: 999px;
+  background: var(--vp-color, var(--muted));
+}
+.vp-angle { font-size: 11.5px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+.vp-title { font-size: 16px; font-weight: 800; margin-bottom: 11px; line-height: 1.45; }
+.vp-points { margin: 0 0 14px 2px; font-size: 12.5px; color: var(--muted); line-height: 1.5; list-style: none; }
+.vp-points li { padding: 3px 0 3px 18px; position: relative; }
+.vp-points li::before { content: '▹'; position: absolute; left: 0; color: var(--accent2); }
+.vp-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.vp-pattern { font-size: 11.5px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.vp-pattern .vp-pat-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); }
+
+/* ════ Step 4: Render ════ */
+.render-info { margin-bottom: 20px; }
+.render-info h3 { font-size: 16px; font-weight: 800; margin-bottom: 5px; }
+.render-info .render-meta { font-size: 12.5px; color: var(--muted); }
+.sub-steps { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+.sub-step {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 13px 16px; display: flex; align-items: center; gap: 13px; transition: all .3s; opacity: .55;
+}
+.sub-step.running { border-color: var(--accent); background: rgba(99,102,241,.07); opacity: 1; box-shadow: 0 0 0 1px rgba(99,102,241,.2); }
+.sub-step.done { border-color: rgba(45,212,167,.3); opacity: 1; }
+.sub-step-icon {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--border-strong); color: var(--faint); font-weight: 800;
+}
+.sub-step.running .sub-step-icon {
+  border-color: var(--accent); color: var(--accent);
+  animation: spin 1s linear infinite; border-right-color: transparent;
+}
+.sub-step.done .sub-step-icon { border-color: var(--green); background: rgba(45,212,167,.15); color: var(--green); animation: none; }
+.sub-step-label { flex: 1; font-size: 13.5px; font-weight: 700; }
+.sub-step-detail { font-size: 11.5px; color: var(--muted); }
+
+.render-done { text-align: center; padding: 16px 0 8px; }
+.render-done .done-icon { font-size: 56px; margin-bottom: 10px; animation: pop .5s cubic-bezier(.2,1.3,.4,1); }
+@keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+.render-done h3 { font-size: 22px; margin-bottom: 5px; font-weight: 900; }
+.render-done .done-meta { font-size: 13px; color: var(--muted); }
+.video-player { margin: 20px auto; border-radius: 16px; overflow: hidden; background: #000; box-shadow: var(--shadow); max-width: 420px; }
+.video-player video { width: 100%; display: block; }
+
+/* ════ Footer nav ════ */
+.flow-footer { margin-top: 24px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* ════ Log drawer ════ */
+.log-section {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+  background: rgba(10,12,18,0.92); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border);
+}
+.log-inner { max-width: 1000px; margin: 0 auto; }
+.log-header {
+  padding: 10px 18px; font-size: 11.5px; font-weight: 700; color: var(--muted);
+  display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;
+}
+.log-header .log-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 7px; display: inline-block; }
+.log-body {
+  max-height: 190px; overflow-y: auto; padding: 4px 18px 14px;
+  font-family: 'Cascadia Code',Consolas,Menlo,monospace; font-size: 11px; line-height: 1.65; color: var(--muted);
+}
+.log-body.collapsed { display: none; }
+.log-line { white-space: pre-wrap; word-break: break-word; padding: 1px 0; }
+.log-line.warn { color: var(--yellow); }
+.log-line.error { color: var(--red); }
+.log-empty { color: var(--faint); font-style: italic; }
+
+.placeholder { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+
+/* ════ Image controls (zoom / XY) ════ */
+.img-controls { margin-top: 8px; padding: 10px 12px; background: rgba(255,255,255,.025); border-radius: 9px; border: 1px solid var(--border); }
+.img-preview-pane { width: 100%; aspect-ratio: 16/9; border-radius: 7px; overflow: hidden; background: var(--card2); margin-bottom: 10px; display: none; position: relative; }
+.img-preview-pane.has-img { display: block; }
+.img-preview-inner { width: 100%; height: 100%; background-size: 100%; background-position: 50% 50%; background-repeat: no-repeat; transition: background-size .12s, background-position .12s; }
+.ic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.ic-row:last-child { margin-bottom: 0; }
+.ic-label { font-size: 10.5px; font-weight: 700; color: var(--muted); width: 38px; flex-shrink: 0; }
+.ic-slider { flex: 1; accent-color: var(--accent); cursor: pointer; }
+.ic-val { font-size: 11px; color: var(--faint); width: 38px; text-align: right; font-family: 'Cascadia Code',Consolas,monospace; flex-shrink: 0; }
+
+/* ════ Step 4 editor toolbar ════ */
+.re-vp-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px 18px; margin-bottom: 16px;
+}
+.re-vp-card .vp-angle { margin-bottom: 4px; }
+.re-vp-card .vp-title { font-size: 15px; font-weight: 800; line-height: 1.4; margin-bottom: 10px; }
+.re-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+.re-toolbar .sf { flex: 1; min-width: 160px; }
+.re-gen-loading { display: flex; align-items: center; gap: 12px; padding: 18px; color: var(--muted); font-size: 13.5px; }
+.re-bottom-bar {
+  position: sticky; bottom: 54px; z-index: 30;
+  background: rgba(10,12,18,0.88); backdrop-filter: blur(12px);
+  border: 1px solid var(--border); border-radius: 14px;
+  padding: 12px 16px; margin-top: 20px;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
 }
 
-.placeholder { text-align: center; padding: 48px; color: var(--muted); font-size: 14px; }
+/* ════ Step 4 / Step 5: Script Editor ════ */
+.slide-card {
+  background: var(--card); backdrop-filter: blur(6px);
+  border: 1px solid var(--border); border-radius: 16px;
+  margin-bottom: 16px; overflow: hidden; transition: border-color .2s;
+}
+.slide-card:focus-within { border-color: var(--border-strong); }
+.slide-card-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.slide-num { font-size: 11px; font-weight: 800; color: var(--faint); min-width: 48px; }
+.slide-type-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 6px;
+  background: rgba(99,102,241,.15); color: var(--accent); border: 1px solid rgba(99,102,241,.25);
+}
+.slide-type-sel {
+  font-size: 12px; padding: 4px 8px; border-radius: 8px;
+  background: var(--card2); border: 1px solid var(--border); color: var(--text);
+  cursor: pointer; flex: 1; max-width: 260px;
+}
+.preview-toggle {
+  margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--muted);
+  background: none; border: 1px solid var(--border); border-radius: 7px;
+  padding: 4px 10px; cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.preview-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+.slide-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.sf { display: flex; flex-direction: column; gap: 5px; }
+.sf label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.sf textarea, .sf input[type=text], .sf input[type=url] {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 9px;
+  color: var(--text); font-size: 13px; padding: 9px 12px; resize: vertical;
+  transition: border-color .15s; font-family: inherit;
+}
+.sf textarea:focus, .sf input[type=text]:focus, .sf input[type=url]:focus {
+  outline: none; border-color: var(--accent);
+}
+.sf textarea { min-height: 72px; line-height: 1.6; }
+.img-row { display: flex; align-items: center; gap: 8px; }
+.img-row input { flex: 1; }
+.img-thumb { width: 48px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0; background: var(--card2); }
+.img-upload-btn { font-size: 11px; padding: 5px 10px; border-radius: 7px; background: var(--card2); border: 1px solid var(--border); color: var(--muted); cursor: pointer; white-space: nowrap; transition: all .15s; }
+.img-upload-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.img-file-input { display: none; }
+.cp-list { display: flex; flex-direction: column; gap: 6px; }
+.cp-item { display: flex; gap: 6px; align-items: flex-start; }
+.cp-item textarea { flex: 1; min-height: 42px; }
+.cp-del { padding: 6px 9px; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2); border-radius: 7px; color: var(--red); cursor: pointer; font-size: 13px; flex-shrink: 0; transition: all .15s; }
+.cp-del:hover { background: rgba(248,113,113,.2); }
+.cp-add { font-size: 12px; padding: 6px 14px; border-radius: 8px; background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.2); color: var(--accent); cursor: pointer; transition: all .15s; align-self: flex-start; }
+.cp-add:hover { background: rgba(99,102,241,.2); }
+.score-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.score-row input { width: 56px; text-align: center; }
+.score-sep { font-size: 18px; font-weight: 800; color: var(--muted); }
+.team-input { flex: 1; min-width: 100px; }
+
+/* preview box */
+.slide-preview-box { display: none; border-top: 1px solid var(--border); background: var(--bg); }
+.slide-preview-box.open { display: block; }
+.spv {
+  aspect-ratio: 16/9; max-width: 480px; margin: 16px auto;
+  border-radius: 12px; overflow: hidden; position: relative;
+  background: linear-gradient(135deg, #12152a 0%, #0a0c18 100%);
+  border: 1px solid var(--border);
+}
+.spv-bg { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: .35; }
+.spv-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.7) 0%, transparent 50%); }
+.spv-badge { position: absolute; top: 10px; left: 10px; font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 5px; background: var(--accent); color: #fff; }
+.spv-title { position: absolute; bottom: 28px; left: 12px; right: 12px; font-size: 14px; font-weight: 800; line-height: 1.35; }
+.spv-narration { position: absolute; bottom: 8px; left: 12px; right: 12px; font-size: 9px; color: rgba(255,255,255,.55); line-height: 1.4; overflow: hidden; max-height: 28px; }
+.spv-score { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+.spv-score .teams { font-size: 11px; color: rgba(255,255,255,.7); margin-bottom: 4px; display: flex; justify-content: space-between; gap: 20px; }
+.spv-score .sc { font-size: 32px; font-weight: 900; background: var(--accent-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.spv-kps { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; }
+.spv-kp { font-size: 9.5px; color: rgba(255,255,255,.75); padding-left: 10px; position: relative; line-height: 1.3; }
+.spv-kp::before { content: '▹'; position: absolute; left: 0; color: var(--accent2); }
+
+.step5-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.step5-toolbar h2 { flex: 1; font-size: 14px; line-height: 1.4; }
+
+.mods-saved-toast {
+  position: fixed; top: 70px; right: 20px; z-index: 200;
+  background: var(--green); color: #0a2a1e; font-size: 12.5px; font-weight: 800;
+  padding: 8px 16px; border-radius: 10px; opacity: 0; transition: opacity .3s;
+  pointer-events: none;
+}
+.mods-saved-toast.show { opacity: 1; }
+
+@media (max-width: 640px) {
+  .research-summary { grid-template-columns: repeat(2, 1fr); }
+  .step-label { font-size: 10px; }
+  .step-node { width: 38px; height: 38px; font-size: 14px; }
+  .header .subtitle { display: none; }
+}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="status-dot" id="statusDot"></div>
-  <h1><span>⚽</span> V5 Launcher</h1>
+  <div class="mia-avatar"></div>
+  <div class="header-titles">
+    <h1><span class="grad">V5 Launcher</span> <span style="font-weight:600;color:var(--faint)">⚽ サッカー動画工房</span></h1>
+    <div class="subtitle">話題を拾って、論点を立てて、動画にする</div>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="status-pill"><span class="status-dot" id="statusDot"></span><span id="statusText">待機中</span></div>
+  <button class="icon-btn" title="リセット" onclick="doReset()">↺</button>
 </div>
 
 <div class="main">
-  <div class="step-nav">
-    <div class="step-tab active" id="tab-1"><span class="num">1</span>案件取得</div>
-    <div class="step-tab" id="tab-2"><span class="num">2</span>情報収集</div>
-    <div class="step-tab" id="tab-3"><span class="num">3</span>企画ピース</div>
-    <div class="step-tab" id="tab-4"><span class="num">4</span>レンダリング</div>
-    <div class="step-tab" id="tab-5"><span class="num">5</span>サムネ+メタ</div>
+
+  <!-- ════ Stepper ════ -->
+  <div class="stepper" id="stepper">
+    <div class="step active" id="step-1" onclick="switchTab(1)"><div class="step-node"><span class="step-num">1</span></div><div class="step-label">案件取得</div></div>
+    <div class="step" id="step-2" onclick="switchTab(2)"><div class="step-node"><span class="step-num">2</span></div><div class="step-label">情報収集</div></div>
+    <div class="step" id="step-3" onclick="switchTab(3)"><div class="step-node"><span class="step-num">3</span></div><div class="step-label">企画ピース</div></div>
+    <div class="step" id="step-4" onclick="switchTab(4)"><div class="step-node"><span class="step-num">4</span></div><div class="step-label">レンダリング</div></div>
+    <div class="step" id="step-5" onclick="switchTab(5)"><div class="step-node"><span class="step-num">5</span></div><div class="step-label">サムネ+メタ</div></div>
   </div>
 
-  <!-- ══ Step 1: Scout ══ -->
+  <!-- ════ Step 1: Scout ════ -->
   <div class="panel visible" id="panel-1">
-
-    <!-- 保存済み案件 -->
     <div class="saved-section" id="savedSection" style="display:none">
       <div class="section-header">
         <h2>保存済み案件</h2>
-        <span id="savedCount" style="font-size:12px;color:var(--muted)"></span>
+        <span class="pill-count" id="savedCount"></span>
       </div>
       <div class="saved-list" id="savedList"></div>
     </div>
 
-    <!-- スカウト -->
     <div id="scoutEmpty" class="empty-state">
       <div class="icon">🔍</div>
       <h3>サッカーの旬な話題を集める</h3>
-      <p>Yahoo News + Reddit r/soccer → DeepSeek選定</p>
-      <button class="btn" id="scoutBtn" onclick="doScout()">案件取得</button>
+      <p>Yahoo News と Reddit r/soccer をスキャンして、<br>DeepSeek が動画ネタになりそうな話題を選定するよ</p>
+      <button class="btn" id="scoutBtn" onclick="doScout()">案件を取得する</button>
     </div>
 
     <div id="scoutLoading" class="loading" style="display:none">
-      <div class="spinner-lg"></div>
-      <p>Yahoo + Reddit をスキャン → DeepSeek選定中...</p>
+      <div class="dual-spinner"></div>
+      <p id="scoutLoadingText">Yahoo + Reddit をスキャン中...</p>
+      <p class="load-sub">DeepSeek が話題を吟味してるよ、ちょっと待ってね相棒</p>
     </div>
 
     <div id="scoutResults" style="display:none">
       <div class="section-header">
         <h2>スカウト結果</h2>
-        <span id="topicCount" style="font-size:12px;color:var(--muted)"></span>
-        <button class="btn btn-sm btn-outline" onclick="doScout()">再取得</button>
+        <span class="pill-count" id="topicCount"></span>
+        <button class="btn btn-sm btn-ghost" onclick="doScout()">↻ 再取得</button>
       </div>
       <div class="topic-list" id="topicList"></div>
       <div class="scout-footer">
@@ -246,53 +577,171 @@ body { font-family: 'Segoe UI','Noto Sans JP',sans-serif; background: var(--bg);
     </div>
   </div>
 
-  <!-- ══ Step 2: Research ══ -->
+  <!-- ════ Step 2: Research ════ -->
   <div class="panel" id="panel-2">
+    <div id="researchEmpty" class="empty-state">
+      <div class="icon">📋</div>
+      <h3>まだ案件が選ばれてないよ</h3>
+      <p>Step 1 の保存済み案件をタップして選んでね</p>
+      <button class="btn btn-ghost" onclick="switchTab(1)">← 案件一覧へ</button>
+    </div>
+
+    <div id="researchReady" style="display:none" class="empty-state">
+      <div class="icon">📡</div>
+      <h3 id="researchReadyTopic" style="font-size:15px; line-height:1.5; max-width:480px; margin:0 auto 12px"></h3>
+      <p>記事・コメント・選手データをかき集めるよ</p>
+      <button class="btn btn-green" style="margin-bottom:10px" onclick="doResearch()">情報収集スタート</button>
+      <br>
+      <button class="btn btn-ghost" onclick="switchTab(1)">← 案件一覧に戻る</button>
+    </div>
+
     <div id="researchLoading" class="loading" style="display:none">
-      <div class="spinner-lg"></div>
+      <div class="dual-spinner"></div>
       <p id="researchLoadingText">情報収集中...</p>
+      <p class="load-sub">記事・コメント・選手データをかき集めてるよ</p>
     </div>
 
     <div id="researchResults" style="display:none">
-      <div class="section-header">
-        <h2 id="researchTopic"></h2>
-      </div>
-
-      <!-- 収集サマリー -->
+      <div class="section-header"><h2 id="researchTopic"></h2></div>
       <div class="research-summary" id="researchSummary"></div>
 
-      <!-- 記事一覧 -->
       <div class="research-block" id="articlesBlock" style="display:none">
         <h3 class="block-title">記事</h3>
         <div id="articlesList"></div>
       </div>
 
-      <!-- コメント -->
       <div class="research-block" id="commentsBlock" style="display:none">
-        <h3 class="block-title">コメント</h3>
+        <h3 class="block-title">コメント（意訳・要約済み）</h3>
         <div class="comment-sources" id="commentSources"></div>
         <div id="commentSamples"></div>
       </div>
 
-      <!-- 試合/選手データ -->
       <div class="research-block" id="dataBlock" style="display:none">
         <h3 class="block-title">データ</h3>
         <div id="dataContent"></div>
       </div>
 
-      <div class="research-footer">
-        <button class="btn btn-outline" onclick="backToStep1()">← 案件一覧に戻る</button>
-        <button class="btn btn-green" id="toPlanBtn" onclick="doPlan()">企画ピース生成へ →</button>
+      <div class="flow-footer">
+        <button class="btn btn-ghost" onclick="switchTab(1)">← 案件一覧に戻る</button>
+        <button class="btn btn-green" id="toPlanBtn" onclick="goToPlan()">企画ピース生成へ →</button>
       </div>
     </div>
   </div>
-  <div class="panel" id="panel-3"><div class="placeholder">Step 3: 企画ピース（実装予定）</div></div>
-  <div class="panel" id="panel-4"><div class="placeholder">Step 4: レンダリング（実装予定）</div></div>
-  <div class="panel" id="panel-5"><div class="placeholder">Step 5: サムネ+メタ（実装予定）</div></div>
 
-  <div class="log-section">
-    <div class="log-header" onclick="toggleLog()"><span>ログ</span><span id="logToggle">▼</span></div>
-    <div class="log-body" id="logBody"></div>
+  <!-- ════ Step 3: Plan ════ -->
+  <div class="panel" id="panel-3">
+    <div id="planEmpty" class="empty-state">
+      <div class="icon">💡</div>
+      <h3>企画ピース</h3>
+      <p>集めた情報から、動画になりそうな切り口を 4〜6個 立てるよ</p>
+      <button class="btn" id="planBtn" onclick="doPlan()">企画ピースを生成</button>
+    </div>
+    <div id="planLoading" class="loading" style="display:none">
+      <div class="dual-spinner"></div>
+      <p>企画ピースを生成中...</p>
+      <p class="load-sub">リネカと一緒に切り口を練ってるよ</p>
+    </div>
+    <div id="planResults" style="display:none">
+      <div class="section-header">
+        <h2 id="planTopic"></h2>
+        <button class="btn btn-sm btn-ghost" onclick="doPlan(true)">↻ 再生成</button>
+      </div>
+      <div id="viewpointList"></div>
+      <div class="flow-footer">
+        <button class="btn btn-ghost" onclick="switchTab(2)">← 情報収集に戻る</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ Step 4: Render ════ -->
+  <div class="panel" id="panel-4">
+    <div id="renderEmpty" class="empty-state">
+      <div class="icon">🎬</div>
+      <h3>レンダリング</h3>
+      <p>Step 3 で企画ピースをタップして選んでね</p>
+      <button class="btn btn-ghost" onclick="switchTab(3)">← 企画ピースへ</button>
+    </div>
+
+    <div id="renderEditor" style="display:none">
+      <!-- 選択中の企画ピース情報 -->
+      <div class="re-vp-card">
+        <div class="vp-header">
+          <span class="vp-priority" id="rePriority"></span>
+          <span class="vp-angle" id="reAngle"></span>
+        </div>
+        <div class="vp-title" id="reVpTitle"></div>
+        <div class="re-toolbar">
+          <div class="sf">
+            <label>動画タイトル</label>
+            <input type="text" id="reTitleInput" placeholder="タイトルを入力...">
+          </div>
+          <div class="sf">
+            <label>スライドパターン</label>
+            <select id="rePatternSel" class="slide-type-sel"></select>
+          </div>
+          <button class="btn btn-sm btn-ghost" id="reGenBtn" onclick="generateScript()">脚本を生成</button>
+        </div>
+      </div>
+
+      <!-- 脚本生成中 -->
+      <div id="reGenLoading" style="display:none" class="re-gen-loading">
+        <div class="dual-spinner" style="width:32px;height:32px;flex-shrink:0"></div>
+        <span>脚本を生成中...</span>
+      </div>
+
+      <!-- スライドエディタ -->
+      <div id="slideEditor"></div>
+
+      <!-- 下部バー -->
+      <div class="re-bottom-bar" id="reBottomBar" style="display:none">
+        <button class="btn btn-ghost" onclick="switchTab(3)">← 企画に戻る</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost" onclick="saveMods()">💾 保存</button>
+          <button class="btn btn-green" style="font-size:14px;padding:11px 24px" onclick="startRender()">🎬 レンダリング開始</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="renderProgress" style="display:none">
+      <div class="render-info">
+        <h3 id="renderTitle"></h3>
+        <div class="render-meta" id="renderMeta"></div>
+      </div>
+      <div class="sub-steps" id="subStepsList"></div>
+    </div>
+    <div id="renderDone" style="display:none">
+      <div class="render-done">
+        <div class="done-icon">🎉</div>
+        <h3>動画完成！</h3>
+        <div class="done-meta" id="doneMeta"></div>
+      </div>
+      <div class="video-player" id="videoPlayer"></div>
+      <div class="flow-footer">
+        <button class="btn btn-ghost" onclick="switchTab(3)">← 企画に戻る</button>
+        <button class="btn btn-ghost" onclick="switchTab(5)">✏️ 脚本を編集</button>
+        <a class="btn btn-green" id="downloadLink" download>⬇ ダウンロード</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ Step 5: サムネ + メタ ════ -->
+  <div class="panel" id="panel-5">
+    <div class="empty-state">
+      <div class="icon">🖼️</div>
+      <h3>サムネ + 投稿メタ</h3>
+      <p>サムネイル生成・タイトル・概要欄・タグの自動生成（実装予定）</p>
+      <button class="btn btn-ghost" onclick="switchTab(4)">← Step 4へ</button>
+    </div>
+  </div>
+  <div class="mods-saved-toast" id="modsSavedToast">💾 保存しました</div>
+
+</div>
+
+<!-- ════ Log drawer ════ -->
+<div class="log-section">
+  <div class="log-inner">
+    <div class="log-header" onclick="toggleLog()"><span><span class="log-dot"></span>ログ</span><span id="logToggle">▼</span></div>
+    <div class="log-body" id="logBody"><div class="log-empty">ログはまだないよ</div></div>
   </div>
 </div>
 
@@ -301,50 +750,106 @@ let ws;
 let topics = [];
 let checkedSet = new Set();
 let savedTopics = [];
+let researchedSet = new Set();
+let currentActiveTopic = null;
+let selectedTopicIndex = null;
+let allPatterns = [];
 let logCollapsed = false;
+let logHasContent = false;
+let currentStep = 1;
+
+const SCOUT_MSGS = [
+  'Yahoo + Reddit をスキャン中...',
+  'DeepSeek が話題を吟味してるよ...',
+  '盛り上がりそうなネタを厳選中...',
+];
+let scoutMsgTimer = null;
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}`);
   ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
-  ws.onclose = () => setTimeout(connect, 2000);
+  ws.onopen = () => setStatus('待機中', false);
+  ws.onclose = () => { setStatus('再接続中...', false); setTimeout(connect, 2000); };
 }
-
-function send(obj) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-}
+function send(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
 
 function handleMessage(msg) {
   switch (msg.type) {
     case 'hello':
+      if (msg.researchedTopics) researchedSet = new Set(msg.researchedTopics);
+      if (msg.patterns) allPatterns = msg.patterns;
       if (msg.savedTopics) renderSaved(msg.savedTopics);
       if (msg.topics) renderTopics(msg.topics);
+      if (msg.activeTopic && msg.activeFacts) {
+        currentActiveTopic = msg.activeTopic;
+        renderResearch({ topic: msg.activeTopic, summary: msg.activeSummary, facts: msg.activeFacts });
+      }
+      if (msg.activeViewpoints) renderViewpoints({ viewpoints: msg.activeViewpoints, patterns: allPatterns });
+      if (msg.activeRenderResult) showRenderDone(msg.activeRenderResult);
+      if (msg.activeMods) loadScriptEditor(msg.activeMods, msg.activeTopic);
       break;
     case 'phase':
-      if (msg.phase === 'scouting') { showScoutLoading(true); setActive(true); }
+      if (msg.phase === 'scouting') { showScoutLoading(true); setStatus('案件取得中', true); }
       if (msg.phase === 'researching') {
-        setActive(true); setTab(2);
+        setStatus('情報収集中', true); setTab(2);
+        document.getElementById('researchEmpty').style.display = 'none';
+        document.getElementById('researchReady').style.display = 'none';
         document.getElementById('researchLoading').style.display = '';
         document.getElementById('researchResults').style.display = 'none';
-        document.getElementById('researchLoadingText').textContent = '「' + (msg.topic || '') + '」の情報を収集中...';
+        document.getElementById('researchLoadingText').textContent = '「' + (msg.topic || '') + '」を調べてるよ';
       }
-      if (msg.phase === 'planning') { setActive(true); }
+      if (msg.phase === 'planning') {
+        setStatus('企画生成中', true); setTab(3);
+        document.getElementById('planEmpty').style.display = 'none';
+        document.getElementById('planLoading').style.display = '';
+        document.getElementById('planResults').style.display = 'none';
+      }
+      if (msg.phase === 'generating_script') {
+        setStatus('脚本生成中', true);
+        document.getElementById('reGenLoading').style.display = '';
+        document.getElementById('reGenBtn').disabled = true;
+      }
+      if (msg.phase === 'rendering') {
+        setStatus('レンダリング中', true); setTab(4);
+        document.getElementById('renderEditor').style.display = 'none';
+        document.getElementById('renderProgress').style.display = '';
+        initRenderProgress(msg.topic, msg.patternKey);
+      }
       break;
     case 'topics_ready':
-      renderTopics(msg.topics);
-      showScoutLoading(false);
-      setActive(false);
+      renderTopics(msg.topics); showScoutLoading(false); setStatus('待機中', false);
       break;
     case 'saved_topics':
+      if (msg.researchedTopics) researchedSet = new Set(msg.researchedTopics);
       renderSaved(msg.savedTopics);
       break;
     case 'facts_ready':
-      renderResearch(msg);
-      setActive(false);
+      currentActiveTopic = msg.topic; researchedSet.add(msg.topic);
+      renderResearch(msg); renderSaved(savedTopics);
+      setStatus('待機中', false); setTab(2);
+      break;
+    case 'plan_ready':
+      allPatterns = msg.patterns || allPatterns;
+      renderViewpoints(msg); setStatus('待機中', false); setTab(3);
+      break;
+    case 'sub_step':
+      updateSubStep(msg);
+      break;
+    case 'done':
+      showRenderDone(msg); setStatus('完成！', false); setTab(4);
+      if (msg.mods) currentMods = JSON.parse(JSON.stringify(msg.mods));
+      break;
+    case 'script_ready':
+      loadScriptEditor(msg.mods, msg.topic);
+      setStatus('脚本生成完了', false);
+      break;
+    case 'mods_saved':
+      showSavedToast();
       break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
-      showScoutLoading(false);
-      setActive(false);
+      showScoutLoading(false); setStatus('エラー', false);
+      hideAllLoaders();
       break;
     case 'reset':
       resetUI();
@@ -355,228 +860,612 @@ function handleMessage(msg) {
   }
 }
 
-// ── Scout ──
-
+// ════ Scout ════
 function doScout() {
   document.getElementById('scoutBtn').disabled = true;
   checkedSet.clear();
   showScoutLoading(true);
-  setActive(true);
+  setStatus('案件取得中', true);
+  cycleScoutMsg();
   send({ action: 'scout' });
 }
-
+function cycleScoutMsg() {
+  let i = 0;
+  clearInterval(scoutMsgTimer);
+  scoutMsgTimer = setInterval(() => {
+    i = (i + 1) % SCOUT_MSGS.length;
+    var el = document.getElementById('scoutLoadingText');
+    if (el) el.textContent = SCOUT_MSGS[i];
+  }, 2500);
+}
 function showScoutLoading(on) {
+  if (!on) clearInterval(scoutMsgTimer);
   document.getElementById('scoutEmpty').style.display = on ? 'none' : (topics.length ? 'none' : '');
   document.getElementById('scoutLoading').style.display = on ? '' : 'none';
   document.getElementById('scoutResults').style.display = on ? 'none' : (topics.length ? '' : 'none');
 }
-
 function renderTopics(list) {
-  topics = list;
+  topics = list || [];
   checkedSet.clear();
-  document.getElementById('topicCount').textContent = list.length + '件';
+  document.getElementById('topicCount').textContent = topics.length + '件';
   document.getElementById('scoutEmpty').style.display = 'none';
   document.getElementById('scoutLoading').style.display = 'none';
-  document.getElementById('scoutResults').style.display = '';
+  document.getElementById('scoutResults').style.display = topics.length ? '' : 'none';
+  if (!topics.length) document.getElementById('scoutEmpty').style.display = '';
   document.getElementById('scoutBtn').disabled = false;
   updateCheckedCount();
-
-  var container = document.getElementById('topicList');
-  container.innerHTML = list.map(function(t, i) {
-    var title = esc(t.title || '');
+  document.getElementById('topicList').innerHTML = topics.map(function(t, i) {
     var source = t.source || 'yahoo';
-    var badgeClass = source === 'reddit' ? 'reddit' : 'yahoo';
-    var badgeLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
-    var meta = [];
-    if (t.reason) meta.push(t.reason);
-    if (t.score) meta.push('↑' + t.score);
-
+    var bClass = source === 'reddit' ? 'reddit' : 'yahoo';
+    var bLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
+    var meta = '<span class="badge ' + bClass + '">' + bLabel + '</span>';
+    if (t.reason) meta += '<span class="topic-reason">' + esc(t.reason) + '</span>';
+    if (t.score) meta += '<span class="topic-score">↑' + t.score + '</span>';
     return '<div class="topic-card" id="tc-' + i + '" onclick="toggleCheck(' + i + ')">' +
       '<div class="topic-check"></div>' +
-      '<div class="topic-body">' +
-        '<div class="topic-title">' + title + '</div>' +
-        '<div class="topic-meta">' +
-          '<span class="topic-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
-          meta.map(function(m) { return '<span>' + esc(m) + '</span>'; }).join('') +
-        '</div>' +
-      '</div>' +
-    '</div>';
+      '<div class="topic-body"><div class="topic-title">' + esc(t.title || '') + '</div>' +
+      '<div class="topic-meta">' + meta + '</div></div></div>';
   }).join('');
 }
-
 function toggleCheck(idx) {
-  if (checkedSet.has(idx)) checkedSet.delete(idx);
-  else checkedSet.add(idx);
+  if (checkedSet.has(idx)) checkedSet.delete(idx); else checkedSet.add(idx);
   var card = document.getElementById('tc-' + idx);
   if (card) card.classList.toggle('checked', checkedSet.has(idx));
   updateCheckedCount();
 }
-
 function updateCheckedCount() {
   var n = checkedSet.size;
   document.getElementById('checkedCount').textContent = n + '件選択中';
   document.getElementById('saveBtn').disabled = n === 0;
 }
-
 function doSave() {
-  var indices = Array.from(checkedSet).sort(function(a, b) { return a - b; });
+  var indices = Array.from(checkedSet).sort(function(a,b){return a-b;});
   send({ action: 'save_topics', indices: indices });
   checkedSet.clear();
-  document.querySelectorAll('.topic-card.checked').forEach(function(c) { c.classList.remove('checked'); });
+  document.querySelectorAll('.topic-card.checked').forEach(function(c){ c.classList.remove('checked'); });
   updateCheckedCount();
 }
 
-// ── Saved topics ──
-
+// ════ Saved ════
 function renderSaved(list) {
-  savedTopics = list;
+  savedTopics = list || [];
   var section = document.getElementById('savedSection');
-  if (!list.length) { section.style.display = 'none'; return; }
+  if (!savedTopics.length) { section.style.display = 'none'; return; }
   section.style.display = '';
-  document.getElementById('savedCount').textContent = list.length + '件';
-
-  var container = document.getElementById('savedList');
-  container.innerHTML = list.map(function(t, i) {
+  document.getElementById('savedCount').textContent = savedTopics.length + '件';
+  document.getElementById('savedList').innerHTML = savedTopics.map(function(t, i) {
     var source = t.source || 'yahoo';
-    var badgeClass = source === 'reddit' ? 'reddit' : 'yahoo';
-    var badgeLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
-    return '<div class="saved-card">' +
-      '<span class="saved-badge ' + badgeClass + '">' + badgeLabel + '</span>' +
+    var bClass = source === 'reddit' ? 'reddit' : 'yahoo';
+    var bLabel = source === 'reddit' ? 'Reddit' : 'Yahoo';
+    var done = researchedSet.has(t.title);
+    var active = currentActiveTopic === t.title;
+    var btn = done ? '詳細を見る' : '情報収集へ';
+    var doneBadge = done ? '<span class="chk-done">✓ 済</span>' : '';
+    return '<div class="saved-card' + (active ? ' active' : '') + '" onclick="doSelectTopic(' + i + ')">' +
+      '<span class="badge ' + bClass + '">' + bLabel + '</span>' + doneBadge +
       '<div class="saved-title">' + esc(t.title) + '</div>' +
       '<div class="saved-actions">' +
-        '<button class="btn btn-sm btn-green" onclick="doActivate(' + i + ')">情報収集へ</button>' +
-        '<button class="btn btn-sm btn-outline" onclick="doRemoveSaved(' + i + ')">✕</button>' +
-      '</div>' +
-    '</div>';
+        '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); doRemoveSaved(' + i + ')">✕</button>' +
+      '</div></div>';
   }).join('');
 }
-
-function doActivate(idx) {
-  send({ action: 'activate', index: idx });
+function doSelectTopic(idx) {
+  selectedTopicIndex = idx;
+  var t = savedTopics[idx];
+  if (!t) return;
+  // キャッシュ済みならそのまま activate して結果表示
+  if (researchedSet.has(t.title)) {
+    send({ action: 'activate', index: idx });
+    setStatus('データ読み込み中', true);
+    switchTab(2);
+    return;
+  }
+  // 未収集なら Step2 に遷移して収集ボタンを表示
+  document.getElementById('researchEmpty').style.display = 'none';
+  document.getElementById('researchReady').style.display = '';
+  document.getElementById('researchLoading').style.display = 'none';
+  document.getElementById('researchResults').style.display = 'none';
+  document.getElementById('researchReadyTopic').textContent = t.title;
+  switchTab(2);
 }
-
-function doRemoveSaved(idx) {
-  send({ action: 'remove_saved', index: idx });
+function doResearch() {
+  if (selectedTopicIndex === null) return;
+  send({ action: 'activate', index: selectedTopicIndex });
+  setStatus('情報収集中', true);
+  document.getElementById('researchReady').style.display = 'none';
+  document.getElementById('researchLoading').style.display = '';
 }
+function doRemoveSaved(idx) { send({ action: 'remove_saved', index: idx }); }
 
-// ── Step 2: Research ──
-
+// ════ Step 2: Research ════
 function renderResearch(msg) {
+  document.getElementById('researchEmpty').style.display = 'none';
   document.getElementById('researchLoading').style.display = 'none';
   document.getElementById('researchResults').style.display = '';
   document.getElementById('researchTopic').textContent = msg.topic || '';
-
-  var s = msg.summary || {};
-  var f = msg.facts || {};
-
-  // サマリーチップ
+  var s = msg.summary || {}, f = msg.facts || {};
   document.getElementById('researchSummary').innerHTML =
-    '<div class="summary-chip"><div class="chip-num">' + (s.articles || 0) + '</div><div class="chip-label">記事</div></div>' +
-    '<div class="summary-chip"><div class="chip-num">' + (s.comments || 0) + '</div><div class="chip-label">コメント</div></div>' +
-    '<div class="summary-chip"><div class="chip-num">' + (s.hasMatchData ? '✓' : '—') + '</div><div class="chip-label">試合データ</div></div>' +
-    '<div class="summary-chip"><div class="chip-num">' + (s.hasPlayerData ? '✓' : '—') + '</div><div class="chip-label">選手データ</div></div>';
+    chip('📰', s.articles || 0, '記事') +
+    chip('💬', s.comments || 0, 'コメント') +
+    chip('⚽', s.hasMatchData ? '✓' : '—', '試合データ', s.hasMatchData ? 'ok' : 'none') +
+    chip('👤', s.hasPlayerData ? '✓' : '—', '選手データ', s.hasPlayerData ? 'ok' : 'none');
 
-  // 記事
   var articles = f.articles || [];
   var ab = document.getElementById('articlesBlock');
   if (articles.length) {
     ab.style.display = '';
     document.getElementById('articlesList').innerHTML = articles.map(function(a) {
-      return '<div class="article-card">' +
-        '<div class="art-title">' + esc(a.title || '(タイトルなし)') + '</div>' +
-        '<div class="art-meta"><a href="' + esc(a.url || '') + '" target="_blank">' + esc((a.url || '').slice(0, 60)) + '</a> — ' + (a.textLen || 0) + '文字</div>' +
-      '</div>';
+      return '<div class="article-card"><div class="art-title">' + esc(a.title || '(タイトルなし)') + '</div>' +
+        '<div class="art-meta"><a href="' + esc(a.url || '') + '" target="_blank">' + esc((a.url || '').slice(0,55)) + '</a> · ' + (a.textLen || 0) + '文字</div></div>';
     }).join('');
-  } else { ab.style.display = 'none'; }
+  } else ab.style.display = 'none';
 
-  // コメント
   var c = f.comments || {};
   var cb = document.getElementById('commentsBlock');
   if (c.total > 0) {
     cb.style.display = '';
     document.getElementById('commentSources').innerHTML =
-      '<span class="comment-src">Reddit ' + (c.reddit || 0) + '</span>' +
-      '<span class="comment-src">Yahoo ' + (c.yahoo || 0) + '</span>' +
-      '<span class="comment-src">X ' + (c.x || 0) + '</span>';
-    document.getElementById('commentSamples').innerHTML = (c.samples || []).map(function(t) {
+      '<span class="comment-src">Reddit <b>' + (c.reddit||0) + '</b></span>' +
+      '<span class="comment-src">Yahoo <b>' + (c.yahoo||0) + '</b></span>' +
+      '<span class="comment-src">X <b>' + (c.x||0) + '</b></span>';
+    document.getElementById('commentSamples').innerHTML = (c.samples||[]).map(function(t){
       return '<div class="comment-sample">' + esc(t) + '</div>';
     }).join('');
-  } else { cb.style.display = 'none'; }
+  } else cb.style.display = 'none';
 
-  // 試合/選手データ
   var db = document.getElementById('dataBlock');
   var parts = [];
-  if (f.matchData && f.matchData.ok) parts.push('試合: ' + (f.matchData.scoreline || ''));
-  if (f.playerData && f.playerData.ok) parts.push('選手: ' + (f.playerData.name || '') + ' (' + (f.playerData.team || '') + ')');
+  if (f.matchData && f.matchData.ok) parts.push('🏟️ 試合: ' + (f.matchData.scoreline || ''));
+  if (f.playerData && f.playerData.ok) parts.push('⭐ 選手: ' + (f.playerData.name || '') + ' (' + (f.playerData.team || '') + ')');
   if (parts.length) {
     db.style.display = '';
-    document.getElementById('dataContent').innerHTML = parts.map(function(p) {
+    document.getElementById('dataContent').innerHTML = parts.map(function(p){
       return '<div class="article-card"><div class="art-title">' + esc(p) + '</div></div>';
     }).join('');
-  } else { db.style.display = 'none'; }
+  } else db.style.display = 'none';
 }
-
-function backToStep1() {
-  setTab(1);
+function chip(icon, num, label, cls) {
+  return '<div class="summary-chip"><div class="chip-icon">' + icon + '</div>' +
+    '<div class="chip-num ' + (cls||'') + '">' + num + '</div><div class="chip-label">' + label + '</div></div>';
 }
-
-function doPlan() {
-  send({ action: 'plan' });
-  setActive(true);
+function goToPlan() {
   setTab(3);
+  var hasVp = document.getElementById('planResults').style.display !== 'none';
+  if (!hasVp) doPlan();
 }
 
-// ── Tab nav ──
+// ════ Step 3: Plan ════
+function doPlan(force) {
+  if (!currentActiveTopic) return;
+  document.getElementById('planEmpty').style.display = 'none';
+  document.getElementById('planLoading').style.display = '';
+  document.getElementById('planResults').style.display = 'none';
+  setStatus('企画生成中', true);
+  setTab(3);
+  send({ action: 'plan', force: !!force });
+}
+function renderViewpoints(msg) {
+  document.getElementById('planEmpty').style.display = 'none';
+  document.getElementById('planLoading').style.display = 'none';
+  document.getElementById('planResults').style.display = '';
+  document.getElementById('planTopic').textContent = currentActiveTopic || '';
+  var vps = msg.viewpoints || [];
+  var patterns = msg.patterns || allPatterns;
+  var pmap = {}; patterns.forEach(function(p){ pmap[p.key] = p; });
+  var colors = {5:'#f87171',4:'#fb923c',3:'#fbbf24',2:'#6366f1',1:'#8b90a3'};
+  currentViewpoints = vps;
+  document.getElementById('viewpointList').innerHTML = vps.map(function(v, i) {
+    var pat = pmap[v.suggestedPattern] || {};
+    var color = colors[v.priority] || '#8b90a3';
+    var pts = (v.keyPoints || []).map(function(kp){ return '<li>' + esc(kp) + '</li>'; }).join('');
+    return '<div class="viewpoint-card" style="--vp-color:' + color + '" onclick="selectViewpoint(' + i + ')">' +
+      '<div class="vp-header"><span class="vp-priority">P' + (v.priority||0) + '</span><span class="vp-angle">' + esc(v.angle||'') + '</span></div>' +
+      '<div class="vp-title">' + esc(v.title||'') + '</div>' +
+      '<ul class="vp-points">' + pts + '</ul>' +
+      '<div class="vp-footer"><span class="vp-pattern"><span class="vp-pat-dot"></span>' + esc(pat.label || v.suggestedPattern || '') + ' · ' + (pat.slideCount || '?') + 'スライド</span>' +
+      '<span style="font-size:12px;color:var(--accent);font-weight:700">タップで選択 →</span></div></div>';
+  }).join('');
+}
 
-function setTab(num) {
-  for (var i = 1; i <= 5; i++) {
-    document.getElementById('panel-' + i).classList.toggle('visible', i === num);
-    var tab = document.getElementById('tab-' + i);
-    tab.classList.remove('active', 'done');
-    if (i < num) tab.classList.add('done');
-    if (i === num) tab.classList.add('active');
+// ════ Step 4: Render + Editor ════
+var selectedVpIndex = null;
+var currentViewpoints = [];
+var currentMods = null;
+var SLIDE_TYPES = ['opening','ending','matchcard','insight','stats','history','comparison'];
+var SLIDE_TYPE_LABELS = {
+  opening:'オープニング', ending:'エンディング', matchcard:'試合カード',
+  insight:'インサイト', stats:'スタッツ', history:'ヒストリー', comparison:'比較'
+};
+
+function selectViewpoint(i) {
+  selectedVpIndex = i;
+  var vp = currentViewpoints[i];
+  if (!vp) return;
+  var colors = {5:'#f87171',4:'#fb923c',3:'#fbbf24',2:'#6366f1',1:'#8b90a3'};
+
+  document.querySelectorAll('.viewpoint-card').forEach(function(el, j) {
+    el.classList.toggle('selected', j === i);
+  });
+
+  document.getElementById('rePriority').textContent = 'P' + (vp.priority || '');
+  document.getElementById('rePriority').style.background = colors[vp.priority] || '#8b90a3';
+  document.getElementById('reAngle').textContent = vp.angle || '';
+  document.getElementById('reVpTitle').textContent = vp.title || '';
+  document.getElementById('reTitleInput').value = vp.title || '';
+
+  var sel = document.getElementById('rePatternSel');
+  sel.innerHTML = allPatterns.map(function(p) {
+    return '<option value="' + p.key + '"' + (p.key === vp.suggestedPattern ? ' selected' : '') + '>' +
+      p.label + '（' + p.slideCount + 'スライド）</option>';
+  }).join('');
+
+  // キャッシュ済みmodsがあればエディタを即表示
+  var cached = currentMods;
+  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('renderEditor').style.display = '';
+  document.getElementById('renderProgress').style.display = 'none';
+  document.getElementById('renderDone').style.display = 'none';
+  document.getElementById('reGenBtn').disabled = false;
+  document.getElementById('reGenLoading').style.display = 'none';
+
+  if (cached && cached.length) {
+    renderSlideEditor();
+    document.getElementById('reGenBtn').textContent = '↻ 再生成';
+    document.getElementById('reBottomBar').style.display = '';
+  } else {
+    document.getElementById('slideEditor').innerHTML = '';
+    document.getElementById('reGenBtn').textContent = '脚本を生成';
+    document.getElementById('reBottomBar').style.display = 'none';
+  }
+  switchTab(4);
+}
+
+function generateScript() {
+  if (selectedVpIndex === null) return;
+  var title = document.getElementById('reTitleInput').value.trim();
+  var pattern = document.getElementById('rePatternSel').value;
+  document.getElementById('reGenLoading').style.display = '';
+  document.getElementById('reGenBtn').disabled = true;
+  document.getElementById('slideEditor').innerHTML = '';
+  document.getElementById('reBottomBar').style.display = 'none';
+  send({
+    action: 'generate_script',
+    viewpointIndex: selectedVpIndex,
+    edits: { title: title || undefined, suggestedPattern: pattern || undefined },
+  });
+  setStatus('脚本生成中', true);
+}
+
+function loadScriptEditor(mods, topic) {
+  currentMods = JSON.parse(JSON.stringify(mods));
+  document.getElementById('reGenLoading').style.display = 'none';
+  document.getElementById('reGenBtn').disabled = false;
+  document.getElementById('reGenBtn').textContent = '↻ 再生成';
+  if (topic) document.getElementById('reTitleInput').value = topic;
+  renderSlideEditor();
+  document.getElementById('reBottomBar').style.display = '';
+}
+
+function renderSlideEditor() {
+  document.getElementById('slideEditor').innerHTML =
+    (currentMods || []).map(function(mod, i) { return buildSlideCard(mod, i); }).join('');
+}
+
+function buildSlideCard(mod, i) {
+  var typeOpts = SLIDE_TYPES.map(function(t) {
+    return '<option value="' + t + '"' + (mod.type === t ? ' selected' : '') + '>' + (SLIDE_TYPE_LABELS[t] || t) + '</option>';
+  }).join('');
+
+  function imgBlock(key, label) {
+    var url = mod[key] || '';
+    var zoom = mod[key + 'Zoom'] != null ? mod[key + 'Zoom'] : 100;
+    var ix   = mod[key + 'X']    != null ? mod[key + 'X']    : 50;
+    var iy   = mod[key + 'Y']    != null ? mod[key + 'Y']    : 50;
+    var pvStyle = url ? 'background-image:url("' + esc(url) + '");background-size:' + zoom + '%;background-position:' + ix + '% ' + iy + '%' : '';
+    return '<div class="sf"><label>' + label + '</label>' +
+      '<div class="img-row">' +
+        '<input type="url" value="' + esc(url) + '" placeholder="https://..." oninput="updateModImg(' + i + ',\'' + key + '\',this)">' +
+        '<label class="img-upload-btn">📁<input class="img-file-input" type="file" accept="image/*" onchange="uploadModImg(' + i + ',\'' + key + '\',this)"></label>' +
+      '</div>' +
+      '<div class="img-controls">' +
+        '<div class="img-preview-pane' + (url ? ' has-img' : '') + '" id="imgpv-' + i + '-' + key + '">' +
+          '<div class="img-preview-inner" style="' + pvStyle + '"></div>' +
+        '</div>' +
+        '<div class="ic-row"><span class="ic-label">ズーム</span>' +
+          '<input type="range" min="50" max="400" value="' + zoom + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'Zoom\',this.value)">' +
+          '<span class="ic-val" id="icv-' + i + '-' + key + '-Zoom">' + zoom + '%</span></div>' +
+        '<div class="ic-row"><span class="ic-label">X 位置</span>' +
+          '<input type="range" min="0" max="100" value="' + ix + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'X\',this.value)">' +
+          '<span class="ic-val" id="icv-' + i + '-' + key + '-X">' + ix + '%</span></div>' +
+        '<div class="ic-row"><span class="ic-label">Y 位置</span>' +
+          '<input type="range" min="0" max="100" value="' + iy + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'Y\',this.value)">' +
+          '<span class="ic-val" id="icv-' + i + '-' + key + '-Y">' + iy + '%</span></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var cpSection = '';
+  if (mod.type === 'insight') {
+    var cps = mod.catchphrases || [];
+    cpSection = '<div class="sf"><label>キャッチコピー</label><div class="cp-list" id="cplist-' + i + '">' +
+      cps.map(function(cp, j) {
+        return '<div class="cp-item"><textarea oninput="updateCp(' + i + ',' + j + ',this.value)">' + esc(cp) + '</textarea>' +
+          '<button class="cp-del" onclick="removeCp(' + i + ',' + j + ')">✕</button></div>';
+      }).join('') +
+      '</div><button class="cp-add" onclick="addCp(' + i + ')">＋ 追加</button></div>';
+  }
+
+  var scoreSection = '';
+  if (mod.type === 'matchcard') {
+    scoreSection = '<div class="sf"><label>スコア</label><div class="score-row">' +
+      '<input type="text" class="team-input" value="' + esc(mod.homeTeam || '') + '" placeholder="ホーム" oninput="updateModField(' + i + ',\'homeTeam\',this.value)">' +
+      '<input type="text" value="' + esc(mod.homeScore != null ? mod.homeScore : '') + '" oninput="updateModField(' + i + ',\'homeScore\',this.value)" style="width:50px;text-align:center">' +
+      '<span class="score-sep">–</span>' +
+      '<input type="text" value="' + esc(mod.awayScore != null ? mod.awayScore : '') + '" oninput="updateModField(' + i + ',\'awayScore\',this.value)" style="width:50px;text-align:center">' +
+      '<input type="text" class="team-input" value="' + esc(mod.awayTeam || '') + '" placeholder="アウェイ" oninput="updateModField(' + i + ',\'awayTeam\',this.value)">' +
+      '</div></div>';
+  }
+
+  var hasImg2 = mod.type === 'comparison' || mod.type === 'stats';
+
+  return '<div class="slide-card">' +
+    '<div class="slide-card-header">' +
+      '<span class="slide-num">Slide ' + (i + 1) + '</span>' +
+      '<select class="slide-type-sel" onchange="updateModField(' + i + ',\'type\',this.value);renderSlideEditor()">' + typeOpts + '</select>' +
+      '<button class="preview-toggle" onclick="togglePreview(' + i + ')">▶ プレビュー</button>' +
+    '</div>' +
+    '<div class="slide-body">' +
+      '<div class="sf"><label>タイトル</label><input type="text" value="' + esc(mod.title || '') + '" oninput="updateModField(' + i + ',\'title\',this.value)"></div>' +
+      (mod.badge !== undefined ? '<div class="sf"><label>バッジ</label><input type="text" value="' + esc(mod.badge || '') + '" oninput="updateModField(' + i + ',\'badge\',this.value)"></div>' : '') +
+      '<div class="sf"><label>ナレーション</label><textarea oninput="updateModField(' + i + ',\'narration\',this.value)">' + esc(mod.narration || '') + '</textarea></div>' +
+      imgBlock('bgImage', '背景画像') +
+      (hasImg2 ? imgBlock('leftImage', '左画像') + imgBlock('rightImage', '右画像') : '') +
+      scoreSection + cpSection +
+    '</div>' +
+    '<div class="slide-preview-box" id="pvbox-' + i + '"></div>' +
+  '</div>';
+}
+
+function updateImgProp(i, key, prop, val) {
+  if (!currentMods || !currentMods[i]) return;
+  currentMods[i][key + prop] = Number(val);
+  var valEl = document.getElementById('icv-' + i + '-' + key + '-' + prop);
+  if (valEl) valEl.textContent = val + '%';
+  var pane = document.getElementById('imgpv-' + i + '-' + key);
+  if (!pane) return;
+  var inner = pane.querySelector('.img-preview-inner');
+  if (!inner) return;
+  var m = currentMods[i];
+  var zoom = m[key + 'Zoom'] != null ? m[key + 'Zoom'] : 100;
+  var ix   = m[key + 'X']    != null ? m[key + 'X']    : 50;
+  var iy   = m[key + 'Y']    != null ? m[key + 'Y']    : 50;
+  inner.style.backgroundSize     = zoom + '%';
+  inner.style.backgroundPosition = ix + '% ' + iy + '%';
+}
+
+function updateModField(i, key, value) {
+  if (!currentMods || !currentMods[i]) return;
+  currentMods[i][key] = value;
+}
+
+function updateModImg(i, key, input) {
+  updateModField(i, key, input.value);
+  var pane = document.getElementById('imgpv-' + i + '-' + key);
+  if (pane) {
+    var inner = pane.querySelector('.img-preview-inner');
+    if (inner) inner.style.backgroundImage = 'url("' + input.value + '")';
+    pane.classList.toggle('has-img', !!input.value);
   }
 }
 
-// ── Utils ──
-
-function setActive(on) {
-  document.getElementById('statusDot').classList.toggle('active', on);
+function uploadModImg(i, key, input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var url = e.target.result;
+    updateModField(i, key, url);
+    var row = input.closest('.img-row');
+    var urlInput = row.querySelector('input[type=url]');
+    if (urlInput) urlInput.value = '(ローカルファイル)';
+    var pane = document.getElementById('imgpv-' + i + '-' + key);
+    if (pane) {
+      var inner = pane.querySelector('.img-preview-inner');
+      if (inner) inner.style.backgroundImage = 'url("' + url + '")';
+      pane.classList.add('has-img');
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
+function updateCp(i, j, value) {
+  if (currentMods && currentMods[i] && currentMods[i].catchphrases) currentMods[i].catchphrases[j] = value;
+}
+function addCp(i) {
+  if (!currentMods[i].catchphrases) currentMods[i].catchphrases = [];
+  currentMods[i].catchphrases.push('');
+  var list = document.getElementById('cplist-' + i);
+  var j = currentMods[i].catchphrases.length - 1;
+  var item = document.createElement('div'); item.className = 'cp-item';
+  item.innerHTML = '<textarea oninput="updateCp(' + i + ',' + j + ',this.value)"></textarea><button class="cp-del" onclick="removeCp(' + i + ',' + j + ')">✕</button>';
+  list.appendChild(item);
+}
+function removeCp(i, j) {
+  if (currentMods && currentMods[i] && currentMods[i].catchphrases) currentMods[i].catchphrases.splice(j, 1);
+  renderSlideEditor();
+}
+
+function togglePreview(i) {
+  var box = document.getElementById('pvbox-' + i);
+  if (!box) return;
+  var open = box.classList.toggle('open');
+  if (open) box.innerHTML = buildPreviewHtml(currentMods[i]);
+}
+
+function buildPreviewHtml(mod) {
+  var key = 'bgImage';
+  var url  = mod[key] || mod.leftImage || '';
+  var zoom = mod[key + 'Zoom'] != null ? mod[key + 'Zoom'] : 100;
+  var ix   = mod[key + 'X']    != null ? mod[key + 'X']    : 50;
+  var iy   = mod[key + 'Y']    != null ? mod[key + 'Y']    : 50;
+  var bgInner = url
+    ? 'background-image:url("' + esc(url) + '");background-size:' + zoom + '%;background-position:' + ix + '% ' + iy + '%'
+    : '';
+  var badge = mod.badge || '';
+  var title = mod.title || '';
+  var narration = (mod.narration || '').slice(0, 80);
+  var inner = '';
+  if (mod.type === 'matchcard') {
+    inner = '<div class="spv-score"><div class="teams"><span>' + esc(mod.homeTeam || '?') + '</span><span>' + esc(mod.awayTeam || '?') + '</span></div>' +
+      '<div class="sc">' + (mod.homeScore != null ? mod.homeScore : '-') + ' – ' + (mod.awayScore != null ? mod.awayScore : '-') + '</div></div>';
+  } else if (mod.type === 'insight') {
+    inner = '<div class="spv-kps">' + (mod.catchphrases || []).slice(0, 3).map(function(c) {
+      return '<div class="spv-kp">' + esc(c) + '</div>';
+    }).join('') + '</div>';
+  }
+  return '<div class="spv">' +
+    (url ? '<div class="spv-bg"><div class="img-preview-inner" style="' + bgInner + ';width:100%;height:100%;position:absolute;inset:0"></div></div>' : '') +
+    '<div class="spv-overlay"></div>' +
+    (badge ? '<div class="spv-badge">' + esc(badge) + '</div>' : '') +
+    '<div class="spv-title">' + esc(title) + '</div>' +
+    '<div class="spv-narration">' + esc(narration) + '</div>' + inner + '</div>';
+}
+
+function saveMods() {
+  if (!currentMods) return;
+  send({ action: 'update_mods', mods: currentMods });
+}
+
+function startRender() {
+  if (!currentMods || !currentMods.length) return;
+  send({ action: 're_render', mods: currentMods });
+  setStatus('レンダリング中', true);
+  document.getElementById('renderEditor').style.display = 'none';
+  document.getElementById('renderProgress').style.display = '';
+}
+function initRenderProgress(topic, patternKey) {
+  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('renderProgress').style.display = '';
+  document.getElementById('renderDone').style.display = 'none';
+  document.getElementById('renderTitle').textContent = topic || currentActiveTopic || '';
+  var patLabel = '';
+  allPatterns.forEach(function(p){ if (p.key === patternKey) patLabel = p.label + ' · ' + p.slideCount + 'スライド'; });
+  document.getElementById('renderMeta').textContent = patLabel || patternKey || '';
+  var steps = [
+    {id:'script',label:'脚本生成'},{id:'images',label:'画像取得'},{id:'narration',label:'ナレーション'},
+    {id:'whisper',label:'字幕生成'},{id:'render',label:'レンダリング'},{id:'concat',label:'動画結合'}
+  ];
+  document.getElementById('subStepsList').innerHTML = steps.map(function(s){
+    return '<div class="sub-step" id="ss-' + s.id + '"><div class="sub-step-icon">' + '</div>' +
+      '<div class="sub-step-label">' + s.label + '</div><div class="sub-step-detail" id="ssd-' + s.id + '"></div></div>';
+  }).join('');
+}
+function updateSubStep(msg) {
+  var el = document.getElementById('ss-' + msg.step);
+  if (!el) return;
+  el.className = 'sub-step ' + (msg.status || '');
+  var icon = el.querySelector('.sub-step-icon');
+  if (msg.status === 'done') icon.textContent = '✓';
+  else if (msg.status === 'running') icon.textContent = '';
+  var d = document.getElementById('ssd-' + msg.step);
+  if (d && msg.detail) d.textContent = msg.detail;
+}
+function showRenderDone(msg) {
+  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('renderProgress').style.display = 'none';
+  document.getElementById('renderDone').style.display = '';
+  document.getElementById('doneMeta').textContent = '尺 ' + (msg.totalDuration || 0) + '秒 · ' + (msg.patternKey || '');
+  var player = document.getElementById('videoPlayer');
+  if (msg.videoUrl) {
+    player.innerHTML = '<video controls src="' + esc(msg.videoUrl) + '"></video>';
+    document.getElementById('downloadLink').href = msg.videoUrl;
+  }
+}
+
+// ════ Tabs / stepper ════
+function switchTab(num) {
+  setTab(num);
+  if (num === 2) refreshEmptyState('research', ['researchResults','researchLoading','researchReady'], 'researchEmpty');
+  if (num === 3) {
+    var shown = refreshEmptyState('plan', ['planResults','planLoading'], 'planEmpty');
+    if (shown) document.getElementById('planBtn').disabled = !(currentActiveTopic && researchedSet.has(currentActiveTopic));
+  }
+  if (num === 4) refreshEmptyState('render', ['renderEditor','renderProgress','renderDone'], 'renderEmpty');
+}
+function refreshEmptyState(_n, liveIds, emptyId) {
+  var anyLive = liveIds.some(function(id){ return document.getElementById(id).style.display !== 'none'; });
+  document.getElementById(emptyId).style.display = anyLive ? 'none' : '';
+  return !anyLive;
+}
+function setTab(num) {
+  currentStep = num;
+  for (var i = 1; i <= 5; i++) {
+    document.getElementById('panel-' + i).classList.toggle('visible', i === num);
+    var step = document.getElementById('step-' + i);
+    step.classList.remove('active', 'done');
+    if (i < num) step.classList.add('done');
+    if (i === num) step.classList.add('active');
+  }
+  var pct = ((num - 1) / 4) * 100;
+  document.getElementById('stepper').style.setProperty('--rail', pct + '%');
+}
+
+// ════ Utils ════
+function setStatus(text, active) {
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('statusDot').classList.toggle('active', active);
+}
+function hideAllLoaders() {
+  ['researchLoading','planLoading'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+}
+function doReset() {
+  if (!confirm('現在のセッションをリセットする？（保存済み案件と収集データは残るよ）')) return;
+  send({ action: 'reset' });
+}
 function resetUI() {
-  topics = [];
-  checkedSet.clear();
+  topics = []; checkedSet.clear();
   setTab(1);
-  document.getElementById('scoutEmpty').style.display = '';
+  document.getElementById('scoutEmpty').style.display = savedTopics.length || true ? '' : '';
   document.getElementById('scoutLoading').style.display = 'none';
   document.getElementById('scoutResults').style.display = 'none';
   document.getElementById('scoutBtn').disabled = false;
-  document.getElementById('logBody').innerHTML = '';
-  setActive(false);
+  ['researchResults','planResults','renderProgress','renderDone'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+  setStatus('待機中', false);
 }
-
 function appendLog(text, level) {
   var body = document.getElementById('logBody');
+  if (!logHasContent) { body.innerHTML = ''; logHasContent = true; }
   var line = document.createElement('div');
   line.className = 'log-line' + (level === 'warn' ? ' warn' : level === 'error' ? ' error' : '');
   line.textContent = text;
   body.appendChild(line);
   body.scrollTop = body.scrollHeight;
 }
-
 function toggleLog() {
   logCollapsed = !logCollapsed;
   document.getElementById('logBody').classList.toggle('collapsed', logCollapsed);
-  document.getElementById('logToggle').textContent = logCollapsed ? '▶' : '▼';
+  document.getElementById('logToggle').textContent = logCollapsed ? '▲' : '▼';
+}
+function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+
+// ════ Step 5: Script Editor ════
+var currentMods = null;
+var SLIDE_TYPES = [
+  'opening','ending','matchcard','insight','stats','history','comparison'
+];
+var SLIDE_TYPE_LABELS = {
+  opening:'オープニング', ending:'エンディング', matchcard:'試合カード',
+  insight:'インサイト', stats:'スタッツ', history:'ヒストリー', comparison:'比較'
+};
+
+
+function showSavedToast() {
+  var el = document.getElementById('modsSavedToast');
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 2000);
 }
 
-function esc(s) {
-  var d = document.createElement('div');
-  d.textContent = s || '';
-  return d.innerHTML;
-}
-
+setTab(1);
 connect();
 </script>
 </body>
