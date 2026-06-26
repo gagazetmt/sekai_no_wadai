@@ -219,27 +219,7 @@ async function research(topic, options = {}) {
     }
   }
 
-  // Step3: 試合データ（options優先 → 抽出値フォールバック）
-  const homeTeam = options.homeTeam || facts.extracted?.homeTeam || null;
-  const awayTeam = options.awayTeam || facts.extracted?.awayTeam || null;
-  if (homeTeam && awayTeam) {
-    const matchResult = await fetchMatch(homeTeam, awayTeam);
-    if (matchResult.ok) {
-      facts.matchData = matchResult;
-    }
-  }
-
-  // Step4: 選手データ（options優先 → match系でなければ抽出値）
-  const playerName = options.playerName ||
-    (facts.extracted?.topicType === 'player' ? facts.extracted?.playerName : null) || null;
-  if (playerName) {
-    const playerResult = await fetchPlayer(playerName);
-    if (playerResult.ok) {
-      facts.playerData = playerResult;
-    }
-  }
-
-  // Step5: コメント収集
+  // Step3: コメント収集
   try {
     const commentResult = await collectComments(topic, { enQuery: options.searchQuery || '' });
     facts.comments = commentResult;
