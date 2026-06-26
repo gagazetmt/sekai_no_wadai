@@ -13,7 +13,7 @@ async function braveSearch(query, count = 5) {
   if (!key) return [];
 
   const params = new URLSearchParams({
-    q: query, count: String(count), freshness: 'pd', text_decorations: 'false',
+    q: query, count: String(count), freshness: 'pw', text_decorations: 'false',
   });
   const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
     headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip', 'X-Subscription-Token': key },

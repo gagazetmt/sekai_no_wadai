@@ -199,8 +199,20 @@ async function research(topic, options = {}) {
   const facts = { topic, articles: [], matchData: null, playerData: null, comments: null, extracted: null, xImages: [] };
 
   // Step1: 記事収集
+  // トピック名からノイズ除去してBrave検索クエリを構築
+  const cleanedTopic = topic
+    .replace(/（[^）]*）/g, '')        // 括弧内（メディア名など）を除去
+    .replace(/\s*[-－]\s*Yahoo.*$/i, '') // "- Yahoo!ニュース" などを除去
+    .replace(/[！!。、【】「」『』★☆♪]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+  const searchQuery = options.searchQuery
+    ? `${cleanedTopic} ${options.searchQuery}`.trim()
+    : cleanedTopic;
+  console.log(`  [articles] query: "${searchQuery}"`);
   try {
-    const articles = await braveDeepSearch(topic, 3);
+    const articles = await braveDeepSearch(searchQuery, 5);
     facts.articles = articles;
     console.log(`  [articles] ${articles.length} articles scraped`);
   } catch (err) {
