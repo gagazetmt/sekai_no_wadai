@@ -239,22 +239,7 @@ async function research(topic, options = {}) {
     }
   }
 
-  // Step5: X公式画像取得（ラベルベース）
-  const labels = facts.extracted?.labels || [];
-  if (labels.length > 0) {
-    console.log(`  [x_images] Fetching from ${labels.length} labels...`);
-    try {
-      const { fetchImagesForLabels } = require('./fetchers/x_images');
-      const xImages = await fetchImagesForLabels(labels);
-      facts.xImages = xImages;
-    } catch (err) {
-      console.warn(`  [x_images] failed: ${err.message}`);
-    }
-  } else {
-    console.log('  [x_images] no labels, skipping');
-  }
-
-  // Step6: コメント収集
+  // Step5: コメント収集
   try {
     const commentResult = await collectComments(topic, { enQuery: options.searchQuery || '' });
     facts.comments = commentResult;
