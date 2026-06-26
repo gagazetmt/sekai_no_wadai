@@ -514,6 +514,48 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
   .step-node { width: 38px; height: 38px; font-size: 14px; }
   .header .subtitle { display: none; }
 }
+
+/* ════ VP Bottom Bar (Step3) ════ */
+.vp-bottom-bar {
+  position: sticky; bottom: 0;
+  background: linear-gradient(to top, var(--bg) 82%, transparent);
+  padding: 24px 0 8px; margin-top: 4px;
+}
+.vp-bb-info { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.vp-bb-title-sm { font-size: 13px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-bb-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.vp-bb-controls input[type=text] { flex: 1; min-width: 140px; }
+.vp-bb-controls select { min-width: 150px; }
+.btn-accent { background: var(--accent-grad); color: #fff; font-weight: 700; border: none; }
+.btn-accent:hover { opacity: .88; }
+
+/* ════ Step4 Tab Editor ════ */
+.s4-topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0 14px; border-bottom: 1px solid var(--border); margin-bottom: 12px;
+}
+.s4-topic { font-size: 14px; font-weight: 700; color: var(--text); flex: 1; margin-right: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s4-tabs-row {
+  display: flex; overflow-x: auto; gap: 0;
+  border-bottom: 2px solid var(--border); margin-bottom: 16px; scrollbar-width: thin;
+}
+.s4-tab {
+  flex-shrink: 0; padding: 9px 10px 9px 12px; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 5px;
+  white-space: nowrap; transition: color .12s; user-select: none;
+}
+.s4-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(99,102,241,.04); }
+.s4-tab:hover:not(.active) { color: var(--text); }
+.s4-tab-label { max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.s4-tab-type { font-size: 10px; color: var(--faint); }
+.s4-tab-btns { display: flex; align-items: center; gap: 1px; }
+.s4-tab-btn { background: none; border: none; padding: 2px 5px; color: var(--faint); cursor: pointer; font-size: 11px; border-radius: 4px; }
+.s4-tab-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.s4-tab-btn.del:hover { color: var(--red); }
+.s4-add-tab { flex-shrink: 0; padding: 9px 14px; color: var(--accent); cursor: pointer; font-size: 13px; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.s4-add-tab:hover { background: rgba(99,102,241,.07); }
 </style>
 </head>
 <body>
@@ -647,8 +689,19 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         <button class="btn btn-sm btn-ghost" onclick="doPlan(true)">↻ 再生成</button>
       </div>
       <div id="viewpointList"></div>
-      <div class="flow-footer">
-        <button class="btn btn-ghost" onclick="switchTab(2)">← 情報収集に戻る</button>
+      <!-- 企画選択後に表示されるボトムバー -->
+      <div class="vp-bottom-bar" id="vpBottomBar" style="display:none">
+        <div class="vp-bb-info">
+          <span class="vp-priority" id="bbPriority"></span>
+          <span class="vp-angle" id="bbAngle"></span>
+          <span class="vp-bb-title-sm" id="bbTitle"></span>
+        </div>
+        <div class="vp-bb-controls">
+          <input type="text" id="bbTitleInput" placeholder="動画タイトル...">
+          <select id="bbPatternSel" class="slide-type-sel"></select>
+          <button class="btn btn-sm btn-ghost" id="bbRegenBtn" onclick="doGenerateScript()" style="display:none">↻ 再生成</button>
+          <button class="btn btn-accent" id="bbGenBtn" onclick="doOpenEditor()">脚本を生成 →</button>
+        </div>
       </div>
     </div>
   </div>
@@ -663,43 +716,23 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
     </div>
 
     <div id="renderEditor" style="display:none">
-      <!-- 選択中の企画ピース情報 -->
-      <div class="re-vp-card">
-        <div class="vp-header">
-          <span class="vp-priority" id="rePriority"></span>
-          <span class="vp-angle" id="reAngle"></span>
-        </div>
-        <div class="vp-title" id="reVpTitle"></div>
-        <div class="re-toolbar">
-          <div class="sf">
-            <label>動画タイトル</label>
-            <input type="text" id="reTitleInput" placeholder="タイトルを入力...">
-          </div>
-          <div class="sf">
-            <label>スライドパターン</label>
-            <select id="rePatternSel" class="slide-type-sel"></select>
-          </div>
-          <button class="btn btn-sm btn-ghost" id="reGenBtn" onclick="generateScript()">脚本を生成</button>
+      <!-- 上部バー：トピック + 保存/レンダリングボタン -->
+      <div class="s4-topbar">
+        <span class="s4-topic" id="s4TopicLabel"></span>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-sm btn-ghost" onclick="saveMods()">💾 保存</button>
+          <button class="btn btn-sm btn-green" onclick="startRender()">🎬 レンダリング開始</button>
         </div>
       </div>
-
-      <!-- 脚本生成中 -->
+      <!-- 脚本生成中スピナー -->
       <div id="reGenLoading" style="display:none" class="re-gen-loading">
         <div class="dual-spinner" style="width:32px;height:32px;flex-shrink:0"></div>
         <span>脚本を生成中...</span>
       </div>
-
-      <!-- スライドエディタ -->
-      <div id="slideEditor"></div>
-
-      <!-- 下部バー -->
-      <div class="re-bottom-bar" id="reBottomBar" style="display:none">
-        <button class="btn btn-ghost" onclick="switchTab(3)">← 企画に戻る</button>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-ghost" onclick="saveMods()">💾 保存</button>
-          <button class="btn btn-green" style="font-size:14px;padding:11px 24px" onclick="startRender()">🎬 レンダリング開始</button>
-        </div>
-      </div>
+      <!-- スライドタブ行 -->
+      <div class="s4-tabs-row" id="s4TabsRow" style="display:none"></div>
+      <!-- 1スライド分エディタ -->
+      <div id="s4EditorPanel"></div>
     </div>
 
     <div id="renderProgress" style="display:none">
@@ -806,8 +839,9 @@ function handleMessage(msg) {
       }
       if (msg.phase === 'generating_script') {
         setStatus('脚本生成中', true);
+        document.getElementById('renderEmpty').style.display = 'none';
+        document.getElementById('renderEditor').style.display = '';
         document.getElementById('reGenLoading').style.display = '';
-        document.getElementById('reGenBtn').disabled = true;
       }
       if (msg.phase === 'rendering') {
         setStatus('レンダリング中', true); setTab(4);
@@ -1069,6 +1103,7 @@ function renderViewpoints(msg) {
 
 // ════ Step 4: Render + Editor ════
 var selectedVpIndex = null;
+var s4ActiveIdx = 0;
 var currentViewpoints = [];
 var currentMods = null;
 var SLIDE_TYPES = ['opening','ending','matchcard','insight','stats','history','comparison'];
@@ -1087,69 +1122,146 @@ function selectViewpoint(i) {
     el.classList.toggle('selected', j === i);
   });
 
-  document.getElementById('rePriority').textContent = 'P' + (vp.priority || '');
-  document.getElementById('rePriority').style.background = colors[vp.priority] || '#8b90a3';
-  document.getElementById('reAngle').textContent = vp.angle || '';
-  document.getElementById('reVpTitle').textContent = vp.title || '';
-  document.getElementById('reTitleInput').value = vp.title || '';
+  var color = colors[vp.priority] || '#8b90a3';
+  document.getElementById('bbPriority').textContent = 'P' + (vp.priority || '');
+  document.getElementById('bbPriority').style.background = color;
+  document.getElementById('bbAngle').textContent = vp.angle || '';
+  document.getElementById('bbTitle').textContent = vp.title || '';
+  document.getElementById('bbTitleInput').value = vp.title || '';
 
-  var sel = document.getElementById('rePatternSel');
+  var sel = document.getElementById('bbPatternSel');
   sel.innerHTML = allPatterns.map(function(p) {
     return '<option value="' + p.key + '"' + (p.key === vp.suggestedPattern ? ' selected' : '') + '>' +
       p.label + '（' + p.slideCount + 'スライド）</option>';
   }).join('');
 
-  // キャッシュ済みmodsがあればエディタを即表示
-  var cached = currentMods;
+  var hasMods = !!(currentMods && currentMods.length);
+  document.getElementById('bbGenBtn').textContent = hasMods ? '脚本を編集 →' : '脚本を生成 →';
+  document.getElementById('bbRegenBtn').style.display = hasMods ? '' : 'none';
+  document.getElementById('vpBottomBar').style.display = '';
+}
+
+function doOpenEditor() {
+  if (currentMods && currentMods.length > 0) {
+    var topic = document.getElementById('bbTitleInput').value.trim() || currentActiveTopic || '';
+    document.getElementById('s4TopicLabel').textContent = topic;
+    document.getElementById('renderEmpty').style.display = 'none';
+    document.getElementById('renderEditor').style.display = '';
+    document.getElementById('renderProgress').style.display = 'none';
+    document.getElementById('renderDone').style.display = 'none';
+    document.getElementById('reGenLoading').style.display = 'none';
+    s4RenderTabs();
+    s4RenderEditor();
+    switchTab(4);
+  } else {
+    doGenerateScript();
+  }
+}
+
+function doGenerateScript() {
+  if (selectedVpIndex === null) return;
+  var title = document.getElementById('bbTitleInput').value.trim();
+  var pattern = document.getElementById('bbPatternSel').value;
+  currentMods = null; s4ActiveIdx = 0;
   document.getElementById('renderEmpty').style.display = 'none';
   document.getElementById('renderEditor').style.display = '';
   document.getElementById('renderProgress').style.display = 'none';
   document.getElementById('renderDone').style.display = 'none';
-  document.getElementById('reGenBtn').disabled = false;
-  document.getElementById('reGenLoading').style.display = 'none';
-
-  if (cached && cached.length) {
-    renderSlideEditor();
-    document.getElementById('reGenBtn').textContent = '↻ 再生成';
-    document.getElementById('reBottomBar').style.display = '';
-  } else {
-    document.getElementById('slideEditor').innerHTML = '';
-    document.getElementById('reGenBtn').textContent = '脚本を生成';
-    document.getElementById('reBottomBar').style.display = 'none';
-  }
-  switchTab(4);
-}
-
-function generateScript() {
-  if (selectedVpIndex === null) return;
-  var title = document.getElementById('reTitleInput').value.trim();
-  var pattern = document.getElementById('rePatternSel').value;
   document.getElementById('reGenLoading').style.display = '';
-  document.getElementById('reGenBtn').disabled = true;
-  document.getElementById('slideEditor').innerHTML = '';
-  document.getElementById('reBottomBar').style.display = 'none';
+  document.getElementById('s4TabsRow').style.display = 'none';
+  document.getElementById('s4EditorPanel').innerHTML = '';
   send({
     action: 'generate_script',
     viewpointIndex: selectedVpIndex,
     edits: { title: title || undefined, suggestedPattern: pattern || undefined },
   });
   setStatus('脚本生成中', true);
+  switchTab(4);
 }
 
 function loadScriptEditor(mods, topic) {
   currentMods = JSON.parse(JSON.stringify(mods));
+  s4ActiveIdx = 0;
   document.getElementById('reGenLoading').style.display = 'none';
-  document.getElementById('reGenBtn').disabled = false;
-  document.getElementById('reGenBtn').textContent = '↻ 再生成';
-  if (topic) document.getElementById('reTitleInput').value = topic;
-  renderSlideEditor();
-  document.getElementById('reBottomBar').style.display = '';
+  if (topic) document.getElementById('s4TopicLabel').textContent = topic;
+  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('renderEditor').style.display = '';
+  document.getElementById('renderProgress').style.display = 'none';
+  document.getElementById('renderDone').style.display = 'none';
+  s4RenderTabs();
+  s4RenderEditor();
+  switchTab(4);
 }
 
-function renderSlideEditor() {
-  document.getElementById('slideEditor').innerHTML =
-    (currentMods || []).map(function(mod, i) { return buildSlideCard(mod, i); }).join('');
+function s4RenderTabs() {
+  var total = (currentMods || []).length;
+  var row = document.getElementById('s4TabsRow');
+  row.style.display = total ? '' : 'none';
+  row.innerHTML = (currentMods || []).map(function(mod, i) {
+    var isBookend = mod.type === 'opening' || mod.type === 'ending';
+    var active = i === s4ActiveIdx;
+    var typeLabel = SLIDE_TYPE_LABELS[mod.type] || mod.type || '';
+    var title = (mod.title || typeLabel).slice(0, 10);
+    var moveBtns = isBookend ? '' : (
+      '<div class="s4-tab-btns">' +
+      (i > 1 ? '<button class="s4-tab-btn" onclick="event.stopPropagation();s4MoveSlide(' + i + ',-1)">◀</button>' : '') +
+      (i < total - 2 ? '<button class="s4-tab-btn" onclick="event.stopPropagation();s4MoveSlide(' + i + ',1)">▶</button>' : '') +
+      '<button class="s4-tab-btn del" onclick="event.stopPropagation();s4DeleteSlide(' + i + ')">✕</button>' +
+      '</div>'
+    );
+    return '<div class="s4-tab' + (active ? ' active' : '') + '" onclick="s4Switch(' + i + ')">' +
+      '<span class="s4-tab-label">' + esc(title) + '</span>' +
+      '<span class="s4-tab-type">' + esc(typeLabel) + '</span>' +
+      moveBtns +
+    '</div>';
+  }).join('') + '<button class="s4-add-tab" onclick="s4AddSlide()">＋ 追加</button>';
 }
+
+function s4Switch(i) {
+  s4ActiveIdx = i;
+  s4RenderTabs();
+  s4RenderEditor();
+}
+
+function s4RenderEditor() {
+  var panel = document.getElementById('s4EditorPanel');
+  if (!currentMods || !currentMods.length) { panel.innerHTML = ''; return; }
+  var idx = Math.max(0, Math.min(s4ActiveIdx, currentMods.length - 1));
+  s4ActiveIdx = idx;
+  panel.innerHTML = buildSlideCard(currentMods[idx], idx);
+}
+
+function s4AddSlide() {
+  if (!currentMods) return;
+  var newMod = { type: 'insight', title: '新スライド', narration: '', catchphrases: [], bgImage: null };
+  var insertAt = currentMods.length;
+  if (insertAt > 0 && currentMods[insertAt - 1].type === 'ending') insertAt--;
+  currentMods.splice(insertAt, 0, newMod);
+  s4ActiveIdx = insertAt;
+  s4RenderTabs();
+  s4RenderEditor();
+}
+
+function s4DeleteSlide(i) {
+  if (!currentMods || currentMods.length <= 2) return;
+  currentMods.splice(i, 1);
+  s4ActiveIdx = Math.min(s4ActiveIdx, currentMods.length - 1);
+  if (s4ActiveIdx >= i && s4ActiveIdx > 0) s4ActiveIdx = i - 1;
+  s4RenderTabs();
+  s4RenderEditor();
+}
+
+function s4MoveSlide(i, dir) {
+  if (!currentMods) return;
+  var j = i + dir;
+  if (j < 1 || j > currentMods.length - 2) return;
+  var tmp = currentMods[i]; currentMods[i] = currentMods[j]; currentMods[j] = tmp;
+  s4ActiveIdx = j;
+  s4RenderTabs();
+  s4RenderEditor();
+}
+
+function renderSlideEditor() { s4RenderEditor(); }
 
 function buildSlideCard(mod, i) {
   var typeOpts = SLIDE_TYPES.map(function(t) {
@@ -1211,7 +1323,7 @@ function buildSlideCard(mod, i) {
   return '<div class="slide-card">' +
     '<div class="slide-card-header">' +
       '<span class="slide-num">Slide ' + (i + 1) + '</span>' +
-      '<select class="slide-type-sel" onchange="updateModField(' + i + ',\'type\',this.value);renderSlideEditor()">' + typeOpts + '</select>' +
+      '<select class="slide-type-sel" onchange="updateModField(' + i + ',\'type\',this.value);s4RenderEditor()">' + typeOpts + '</select>' +
       '<button class="preview-toggle" onclick="togglePreview(' + i + ')">▶ プレビュー</button>' +
     '</div>' +
     '<div class="slide-body">' +
@@ -1292,7 +1404,7 @@ function addCp(i) {
 }
 function removeCp(i, j) {
   if (currentMods && currentMods[i] && currentMods[i].catchphrases) currentMods[i].catchphrases.splice(j, 1);
-  renderSlideEditor();
+  s4RenderEditor();
 }
 
 function togglePreview(i) {
@@ -1424,12 +1536,14 @@ function doReset() {
 }
 function resetUI() {
   topics = []; checkedSet.clear();
+  currentMods = null; s4ActiveIdx = 0; selectedVpIndex = null;
   setTab(1);
-  document.getElementById('scoutEmpty').style.display = savedTopics.length || true ? '' : '';
+  document.getElementById('scoutEmpty').style.display = '';
   document.getElementById('scoutLoading').style.display = 'none';
   document.getElementById('scoutResults').style.display = 'none';
   document.getElementById('scoutBtn').disabled = false;
-  ['researchResults','planResults','renderProgress','renderDone'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+  document.getElementById('vpBottomBar').style.display = 'none';
+  ['researchResults','planResults','renderEditor','renderProgress','renderDone'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
   setStatus('待機中', false);
 }
 function appendLog(text, level) {
@@ -1447,17 +1561,6 @@ function toggleLog() {
   document.getElementById('logToggle').textContent = logCollapsed ? '▲' : '▼';
 }
 function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
-
-// ════ Step 5: Script Editor ════
-var currentMods = null;
-var SLIDE_TYPES = [
-  'opening','ending','matchcard','insight','stats','history','comparison'
-];
-var SLIDE_TYPE_LABELS = {
-  opening:'オープニング', ending:'エンディング', matchcard:'試合カード',
-  insight:'インサイト', stats:'スタッツ', history:'ヒストリー', comparison:'比較'
-};
-
 
 function showSavedToast() {
   var el = document.getElementById('modsSavedToast');
