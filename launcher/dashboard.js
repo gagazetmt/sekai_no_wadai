@@ -493,20 +493,26 @@ wss.on('connection', (ws) => {
       const images = [];
       const facts = session.facts;
       if (facts) {
-        // 記事サムネイル
+        // X公式画像（ラベルベース・最優先で先頭に）
+        (facts.xImages || []).forEach(xi => {
+          if (xi.url && xi.url.startsWith('http')) {
+            images.push({ url: xi.url, label: xi.source || 'X公式' });
+          }
+        });
+        // 選手画像（FotMob）
+        if (facts.playerData?.imageUrl) {
+          images.push({ url: facts.playerData.imageUrl, label: facts.playerData.name || '選手' });
+        }
+        // チームロゴ（FotMob）
+        if (facts.matchData?.homeLogo) images.push({ url: facts.matchData.homeLogo, label: facts.matchData.homeTeam || 'Home' });
+        if (facts.matchData?.awayLogo) images.push({ url: facts.matchData.awayLogo, label: facts.matchData.awayTeam || 'Away' });
+        // 記事サムネイル（最後・補完用）
         (facts.articles || []).forEach(a => {
           const url = a.imageUrl || a.image || a.thumbnail || null;
           if (url && url.startsWith('http')) {
             images.push({ url, label: (a.title || '').slice(0, 40) });
           }
         });
-        // 選手画像
-        if (facts.playerData?.imageUrl) {
-          images.push({ url: facts.playerData.imageUrl, label: facts.playerData.name || '選手' });
-        }
-        // チームロゴ
-        if (facts.matchData?.homeLogo) images.push({ url: facts.matchData.homeLogo, label: facts.matchData.homeTeam || 'Home' });
-        if (facts.matchData?.awayLogo) images.push({ url: facts.matchData.awayLogo, label: facts.matchData.awayTeam || 'Away' });
       }
       // 重複除去
       const seen = new Set();
