@@ -1300,17 +1300,33 @@ function renderResearch(msg) {
 }
 
 // ── ラベル操作 ──────────────────────────────────────────
+var LABEL_META = {
+  match:  { color: '#f59e0b', bg: 'rgba(245,158,11,0.18)',  border: 'rgba(245,158,11,0.6)',  icon: '⚽', label: 'マッチ' },
+  team:   { color: '#93c5fd', bg: 'rgba(147,197,253,0.18)', border: 'rgba(147,197,253,0.6)', icon: '🏳️', label: 'チーム' },
+  player: { color: '#10b981', bg: 'rgba(16,185,129,0.18)',  border: 'rgba(16,185,129,0.6)',  icon: '👤', label: '選手'   },
+};
 function renderLabelChips() {
-  var LABEL_COLORS = { match: '#f59e0b', team: '#93c5fd', player: '#10b981' };
-  document.getElementById('labelChips').innerHTML = currentLabels.map(function(lb, i) {
-    var col = LABEL_COLORS[lb.type] || '#94a3b8';
+  var el = document.getElementById('labelChips');
+  if (!el) return;
+  if (!currentLabels.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--faint)">ラベルなし（AI解析失敗 or まだ収集前）</span>';
+    return;
+  }
+  el.innerHTML = currentLabels.map(function(lb, i) {
+    var m = LABEL_META[lb.type] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.18)', border: 'rgba(148,163,184,0.6)', icon: '🏷️', label: lb.type };
     var display = lb.type === 'match'
       ? (lb.homeTeam || '?') + ' vs ' + (lb.awayTeam || '?')
-      : lb.name || '';
-    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;border:1px solid ' + col + ';font-size:12px;color:' + col + ';background:' + col + '18">' +
-      '<span style="font-size:10px;opacity:0.7">' + esc(lb.type) + '</span> ' + esc(display) +
-      '<button onclick="removeLabel(' + i + ')" style="border:none;background:none;color:' + col + ';cursor:pointer;padding:0;margin-left:2px;font-size:13px;line-height:1">✕</button>' +
-      '</span>';
+      : (lb.name || '');
+    var sub = lb.type === 'match' && lb.competition ? lb.competition : (lb.type === 'player' && lb.team ? lb.team : '');
+    return '<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px 5px 8px;border-radius:8px;border:1px solid ' + m.border + ';background:' + m.bg + ';cursor:default">' +
+      '<span style="font-size:14px">' + m.icon + '</span>' +
+      '<div style="display:flex;flex-direction:column;line-height:1.2">' +
+        '<span style="font-size:13px;font-weight:700;color:' + m.color + '">' + esc(display) + '</span>' +
+        (sub ? '<span style="font-size:10px;color:' + m.color + ';opacity:0.7">' + esc(sub) + '</span>' : '') +
+      '</div>' +
+      '<span style="font-size:10px;color:' + m.color + ';opacity:0.55;padding:1px 4px;border:1px solid ' + m.border + ';border-radius:4px;margin-left:2px">' + m.label + '</span>' +
+      '<button onclick="removeLabel(' + i + ')" style="border:none;background:none;color:' + m.color + ';cursor:pointer;padding:0 0 0 4px;font-size:14px;line-height:1;opacity:0.7" title="削除">✕</button>' +
+    '</div>';
   }).join('');
 }
 function addLabelManual() {

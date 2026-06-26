@@ -202,6 +202,33 @@ JSON: {"comments": ["コメント1", "コメント2", ...]}`,
   }
 }
 
+// DeepSeek が返した labels を使いつつ、空なら extracted 情報からフォールバック生成
+function buildLabels(facts) {
+  const ex = facts.extracted || null;
+  let labels = (ex?.labels && Array.isArray(ex.labels) && ex.labels.length > 0)
+    ? ex.labels
+    : [];
+
+  if (!labels.length && ex) {
+    // フォールバック: homeTeam/awayTeam/playerName から最低限のラベルを作る
+    if (ex.homeTeam && ex.awayTeam) {
+      labels.push({ type: 'match', homeTeam: ex.homeTeam, awayTeam: ex.awayTeam, matchDate: ex.matchDate || null, competition: ex.competition || null });
+      labels.push({ type: 'team', name: ex.homeTeam });
+      labels.push({ type: 'team', name: ex.awayTeam });
+    }
+    if (ex.playerName) {
+      labels.push({ type: 'player', name: ex.playerName, team: ex.homeTeam || null, nationalTeam: null });
+    }
+  }
+
+  // FotMob取得済みデータからも補完（matchData / playerData）
+  if (facts.matchData?.ok && !labels.some(l => l.type === 'match')) {
+    labels.unshift({ type: 'match', homeTeam: facts.matchData.homeTeam, awayTeam: facts.matchData.awayTeam, matchDate: facts.matchData.matchDate || null, competition: facts.matchData.tournament || null });
+  }
+
+  return labels;
+}
+
 async function runResearch(topicTitle) {
   session.activeTopic = topicTitle;
   session.facts = null;
@@ -244,7 +271,7 @@ async function runResearch(topicTitle) {
       matchData: facts.matchData ? { ok: true, scoreline: facts.matchData.scoreline } : null,
       playerData: facts.playerData ? { ok: true, name: facts.playerData.name, team: facts.playerData.team } : null,
       extracted: facts.extracted || null,
-      labels: facts.extracted?.labels || [],
+      labels: buildLabels(facts),
       xImagesCount: (facts.xImages || []).length,
       comments: {
         reddit: (facts.comments?.reddit || []).length,
