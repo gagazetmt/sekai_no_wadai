@@ -205,6 +205,7 @@ JSON: {"comments": ["コメント1", "コメント2", ...]}`,
 async function runResearch(topicTitle) {
   session.activeTopic = topicTitle;
   session.facts = null;
+  session.viewpoints = null;
   session.phase = 'researching';
   interceptConsole();
   broadcast({ type: 'phase', phase: 'researching', topic: topicTitle });

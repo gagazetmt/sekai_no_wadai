@@ -1017,6 +1017,7 @@ function handleMessage(msg) {
       break;
     case 'facts_ready':
       currentActiveTopic = msg.topic; researchedSet.add(msg.topic);
+      clearDerivedData();
       renderResearch(msg); renderSaved(savedTopics);
       setStatus('待機中', false); setTab(2);
       break;
@@ -2214,6 +2215,20 @@ function setStatus(text, active) {
 }
 function hideAllLoaders() {
   ['researchLoading','planLoading'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+}
+// トピック切替時: Step3/4 の表示を初期化（Step1/2 は触らない）
+function clearDerivedData() {
+  currentMods = null; s4ActiveIdx = 0; selectedVpIndex = null;
+  // Step3 (企画ピース) → 空状態へ
+  document.getElementById('planEmpty').style.display = '';
+  document.getElementById('planLoading').style.display = 'none';
+  document.getElementById('planResults').style.display = 'none';
+  document.getElementById('vpBottomBar').style.display = 'none';
+  // Step4 (脚本編集) → 空状態へ
+  document.getElementById('renderEmpty').style.display = '';
+  document.getElementById('renderEditor').style.display = 'none';
+  document.getElementById('renderProgress').style.display = 'none';
+  document.getElementById('renderDone').style.display = 'none';
 }
 function doReset() {
   if (!confirm('現在のセッションをリセットする？（保存済み案件と収集データは残るよ）')) return;
