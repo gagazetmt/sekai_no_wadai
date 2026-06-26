@@ -560,6 +560,65 @@ wss.on('connection', (ws) => {
       }
     }
 
+    // ラベルに基づいて試合/選手データを取得（Step2 データ取得ボタンから呼ばれる）
+    if (msg.action === 'fetch_data') {
+      const labels = msg.labels || [];
+      const matchLabel  = labels.find(l => l.type === 'match');
+      const playerLabel = labels.find(l => l.type === 'player');
+      const homeTeam  = matchLabel?.homeTeam || null;
+      const awayTeam  = matchLabel?.awayTeam || null;
+      const playerName = playerLabel?.name || null;
+
+      if (!homeTeam && !awayTeam && !playerName) {
+        ws.send(JSON.stringify({ type: 'data_ready', matchData: null, playerData: null, error: 'ラベルにチーム名・選手名がありません' }));
+        return;
+      }
+
+      broadcast({ type: 'phase', phase: 'fetching_data' });
+      const { fetchMatch, fetchPlayer } = require('./research');
+      const result = { matchData: null, playerData: null };
+
+      if (homeTeam && awayTeam) {
+        try {
+          const md = await fetchMatch(homeTeam, awayTeam);
+          if (md.ok) {
+            if (!session.facts) session.facts = {};
+            session.facts.matchData = md;
+            result.matchData = { ok: true, scoreline: md.scoreline, homeTeam: md.homeTeam, awayTeam: md.awayTeam, tournament: md.tournament };
+          } else {
+            result.matchData = { ok: false, error: md.error };
+          }
+        } catch (err) {
+          result.matchData = { ok: false, error: err.message };
+        }
+      }
+
+      if (playerName) {
+        try {
+          const pd = await fetchPlayer(playerName);
+          if (pd.ok) {
+            if (!session.facts) session.facts = {};
+            session.facts.playerData = pd;
+            result.playerData = { ok: true, name: pd.name, team: pd.team };
+          } else {
+            result.playerData = { ok: false, error: pd.error };
+          }
+        } catch (err) {
+          result.playerData = { ok: false, error: err.message };
+        }
+      }
+
+      // factsForClient を更新して topicData に保存
+      if (session.activeTopic && session.topicData[session.activeTopic]) {
+        const fc = session.topicData[session.activeTopic].factsForClient;
+        if (result.matchData)  fc.matchData  = result.matchData;
+        if (result.playerData) fc.playerData = result.playerData;
+        saveTopicData();
+      }
+
+      broadcast({ type: 'data_ready', ...result });
+    }
+
     if (msg.action === 'get_gallery_images') {
       const images = [];
       const facts = session.facts;
