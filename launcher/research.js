@@ -126,15 +126,64 @@ async function fetchPlayer(playerName) {
   return { ok: false, error: `Player "${playerName}" not found` };
 }
 
+// ── DeepSeek: 記事から構造情報を抽出 ────────────────────
+
+async function deepseekExtractInfo(topic, articles) {
+  const key = process.env.DEEPSEEK_API_KEY;
+  if (!key) return null;
+
+  const snippets = articles.map((a, i) =>
+    `[${i + 1}] ${a.title}\n${(a.text || a.snippet || '').slice(0, 600)}`
+  ).join('\n\n');
+
+  const sys = `あなたはサッカーニュース分析AIです。
+記事を読んで、動画制作に必要な情報をJSONで抽出してください。
+
+【抽出フィールド】
+- topicType: "match"（試合結果・経過）/ "player"（選手個人）/ "transfer"（移籍）/ "controversy"（議論・論争）/ "other"
+- homeTeam: FotMob検索用の英語チーム名（例: "Japan", "Sweden", "Manchester City"）。不明なら null
+- awayTeam: 同上。不明なら null
+- matchDate: 試合日 YYYY-MM-DD 形式。不明なら null
+- playerName: 選手中心なら英語フルネーム（例: "Kaoru Mitoma"）。試合系なら null
+- competition: 大会名（例: "FIFA World Cup 2026", "Premier League"）。不明なら null
+
+【重要】
+- チーム名は必ず英語に変換（「日本」→"Japan"、「スウェーデン」→"Sweden"）
+- 日付は記事中に書かれている日付を使う。推測しない
+- JSON のみ返す。説明文不要`;
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat', temperature: 0.1, max_tokens: 300,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: `トピック: ${topic}\n\n記事:\n${snippets}` },
+        ],
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) { console.warn(`  [extract] DeepSeek ${res.status}`); return null; }
+    const d = await res.json();
+    return JSON.parse(d.choices[0].message.content);
+  } catch (e) {
+    console.warn(`  [extract] failed: ${e.message}`);
+    return null;
+  }
+}
+
 // ── メインAPI ─────────────────────────────────────────
 
 async function research(topic, options = {}) {
   console.log('\n=== Research: Gathering facts ===\n');
   console.log(`  Topic: ${topic}\n`);
 
-  const facts = { topic, articles: [], matchData: null, playerData: null, comments: null };
+  const facts = { topic, articles: [], matchData: null, playerData: null, comments: null, extracted: null };
 
-  // Brave Searchで関連記事を収集
+  // Step1: 記事収集
   try {
     const articles = await braveDeepSearch(topic, 3);
     facts.articles = articles;
@@ -143,23 +192,39 @@ async function research(topic, options = {}) {
     console.warn(`  [articles] failed: ${err.message}`);
   }
 
-  // 試合データ（チーム名が指定された場合）
-  if (options.homeTeam && options.awayTeam) {
-    const matchResult = await fetchMatch(options.homeTeam, options.awayTeam);
+  // Step2: DeepSeek で記事を解析 → チーム名/日付/選手名を抽出
+  if (facts.articles.length > 0) {
+    console.log('  [extract] Analyzing articles with DeepSeek...');
+    const extracted = await deepseekExtractInfo(topic, facts.articles);
+    if (extracted) {
+      facts.extracted = extracted;
+      console.log(`  [extract] type:${extracted.topicType} home:${extracted.homeTeam} away:${extracted.awayTeam} date:${extracted.matchDate} player:${extracted.playerName}`);
+    } else {
+      console.warn('  [extract] DeepSeek skipped or failed');
+    }
+  }
+
+  // Step3: 試合データ（options優先 → 抽出値フォールバック）
+  const homeTeam = options.homeTeam || facts.extracted?.homeTeam || null;
+  const awayTeam = options.awayTeam || facts.extracted?.awayTeam || null;
+  if (homeTeam && awayTeam) {
+    const matchResult = await fetchMatch(homeTeam, awayTeam);
     if (matchResult.ok) {
       facts.matchData = matchResult;
     }
   }
 
-  // 選手データ（選手名が指定された場合）
-  if (options.playerName) {
-    const playerResult = await fetchPlayer(options.playerName);
+  // Step4: 選手データ（options優先 → match系でなければ抽出値）
+  const playerName = options.playerName ||
+    (facts.extracted?.topicType === 'player' ? facts.extracted?.playerName : null) || null;
+  if (playerName) {
+    const playerResult = await fetchPlayer(playerName);
     if (playerResult.ok) {
       facts.playerData = playerResult;
     }
   }
 
-  // コメント収集（3ソース並列）
+  // Step5: コメント収集
   try {
     const commentResult = await collectComments(topic, { enQuery: options.searchQuery || '' });
     facts.comments = commentResult;

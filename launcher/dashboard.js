@@ -235,6 +235,7 @@ async function runResearch(topicTitle) {
       articles: (facts.articles || []).map(a => ({ title: a.title, url: a.url, textLen: (a.text || '').length })),
       matchData: facts.matchData ? { ok: true, scoreline: facts.matchData.scoreline } : null,
       playerData: facts.playerData ? { ok: true, name: facts.playerData.name, team: facts.playerData.team } : null,
+      extracted: facts.extracted || null,
       comments: {
         reddit: (facts.comments?.reddit || []).length,
         yahoo: (facts.comments?.yahoo || []).length,

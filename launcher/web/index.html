@@ -508,11 +508,58 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 }
 .mods-saved-toast.show { opacity: 1; }
 
+/* ════ Responsive ════ */
 @media (max-width: 640px) {
-  .research-summary { grid-template-columns: repeat(2, 1fr); }
-  .step-label { font-size: 10px; }
-  .step-node { width: 38px; height: 38px; font-size: 14px; }
+  .main { padding: 18px 12px 72px; }
+  .header { padding: 14px 12px; margin-bottom: 18px; }
+  .header .title { font-size: 16px; }
   .header .subtitle { display: none; }
+
+  /* ステッパー */
+  .stepper { margin-bottom: 20px; }
+  .step-node { width: 36px; height: 36px; font-size: 13px; }
+  .step-label { font-size: 9px; margin-top: 4px; }
+  .step-num { font-size: 13px; }
+
+  /* カード */
+  .card { padding: 12px; }
+  .section-header h2 { font-size: 15px; min-width: 0; }
+  .section-header { flex-wrap: wrap; gap: 6px; }
+
+  /* Step 1 */
+  .topic-card { flex-direction: row; gap: 10px; }
+  .topic-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .scout-footer { flex-direction: column; align-items: stretch; gap: 8px; }
+  .scout-footer .btn { text-align: center; }
+
+  /* Step 2 */
+  .research-summary { grid-template-columns: repeat(2, 1fr); }
+  .flow-footer { flex-direction: column; gap: 8px; }
+  .flow-footer .btn { text-align: center; width: 100%; box-sizing: border-box; }
+
+  /* Step 3 VP BottomBar */
+  .vp-bottom-bar { padding: 16px 0 6px; }
+  .vp-bb-controls { flex-direction: column; align-items: stretch; }
+  .vp-bb-controls input[type=text],
+  .vp-bb-controls select { width: 100%; box-sizing: border-box; }
+  .vp-bb-controls .btn { text-align: center; }
+
+  /* Step 4 */
+  .s4-topbar { flex-wrap: wrap; gap: 8px; }
+  .s4-topbar > div { flex-wrap: wrap; gap: 6px; }
+  .s4-tab-label { max-width: 60px; }
+  .re-toolbar { flex-wrap: wrap; }
+  .re-toolbar .sf { min-width: 0; width: 100%; }
+
+  /* DS/コメント行 */
+  .ds-item, .cmt-item { flex-wrap: wrap; }
+  .ds-comp-row { flex-direction: column; gap: 4px; }
+}
+
+@media (max-width: 420px) {
+  .step-label { display: none; }
+  .stepper { margin-bottom: 16px; }
+  .main { padding: 14px 10px 64px; }
 }
 
 /* ════ VP Bottom Bar (Step3) ════ */
@@ -1136,12 +1183,33 @@ function renderResearch(msg) {
 
   var db = document.getElementById('dataBlock');
   var parts = [];
-  if (f.matchData && f.matchData.ok) parts.push('🏟️ 試合: ' + (f.matchData.scoreline || ''));
-  if (f.playerData && f.playerData.ok) parts.push('⭐ 選手: ' + (f.playerData.name || '') + ' (' + (f.playerData.team || '') + ')');
+
+  // DeepSeek抽出情報
+  var ex = f.extracted;
+  if (ex) {
+    var exLabel = '🤖 AI解析: ' + (ex.topicType || '?');
+    if (ex.homeTeam && ex.awayTeam) exLabel += ' ／ ' + ex.homeTeam + ' vs ' + ex.awayTeam;
+    if (ex.matchDate) exLabel += ' (' + ex.matchDate + ')';
+    if (ex.playerName) exLabel += ' ／ 選手: ' + ex.playerName;
+    if (ex.competition) exLabel += ' ／ ' + ex.competition;
+    parts.push({ icon: '🤖', text: exLabel, ok: true });
+  }
+
+  if (f.matchData && f.matchData.ok) {
+    parts.push({ icon: '🏟️', text: '試合データ: ' + (f.matchData.scoreline || ''), ok: true });
+  } else if (ex && ex.homeTeam && ex.awayTeam) {
+    parts.push({ icon: '🏟️', text: '試合データ: 取得失敗（' + ex.homeTeam + ' vs ' + ex.awayTeam + '）', ok: false });
+  }
+
+  if (f.playerData && f.playerData.ok) {
+    parts.push({ icon: '👤', text: '選手データ: ' + (f.playerData.name || '') + ' (' + (f.playerData.team || '') + ')', ok: true });
+  }
+
   if (parts.length) {
     db.style.display = '';
-    document.getElementById('dataContent').innerHTML = parts.map(function(p){
-      return '<div class="article-card"><div class="art-title">' + esc(p) + '</div></div>';
+    document.getElementById('dataContent').innerHTML = parts.map(function(p) {
+      return '<div class="article-card" style="border-left:3px solid ' + (p.ok ? 'var(--green)' : 'var(--red)') + '">' +
+        '<div class="art-title">' + esc(p.text) + '</div></div>';
     }).join('');
   } else db.style.display = 'none';
 }
