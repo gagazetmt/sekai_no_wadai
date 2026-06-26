@@ -776,31 +776,23 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       <div class="section-header"><h2 id="researchTopic"></h2></div>
       <div class="research-summary" id="researchSummary"></div>
 
+      <!-- 1. 記事 -->
       <div class="research-block" id="articlesBlock" style="display:none">
         <h3 class="block-title">記事</h3>
         <div id="articlesList"></div>
       </div>
 
+      <!-- 2. コメント（件数とソースのみ） -->
       <div class="research-block" id="commentsBlock" style="display:none">
-        <h3 class="block-title">コメント（意訳・要約済み）</h3>
+        <h3 class="block-title">コメント</h3>
         <div class="comment-sources" id="commentSources"></div>
-        <div id="commentSamples"></div>
       </div>
 
-      <div class="research-block" id="dataBlock" style="display:none">
-        <h3 class="block-title">データ</h3>
-        <div id="dataContent"></div>
-      </div>
-
-      <!-- ラベルブロック -->
+      <!-- 3. ラベル（AI提案＋手動追加） -->
       <div class="research-block" id="labelsBlock" style="display:none">
-        <h3 class="block-title" style="display:flex;align-items:center;gap:8px">
-          ラベル
-          <span id="xImagesChip" style="font-size:11px;color:var(--green);font-weight:600;display:none"></span>
-        </h3>
+        <h3 class="block-title">ラベル</h3>
         <div id="labelChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
-        <!-- 手動追加フォーム -->
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <select id="labelTypeAdd" style="font-size:12px;padding:4px 6px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text)">
             <option value="team">team</option>
             <option value="player">player</option>
@@ -809,8 +801,26 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
           <input id="labelNameAdd" type="text" placeholder="チーム名 / 選手名（英語）" style="font-size:12px;padding:4px 8px;flex:1;min-width:140px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text)">
           <button class="btn btn-sm btn-ghost" onclick="addLabelManual()" style="white-space:nowrap">＋ 追加</button>
         </div>
-        <button class="btn btn-sm btn-accent" id="fetchXImagesBtn" onclick="doFetchXImages()" style="font-size:12px">🐦 X画像を取得</button>
-        <span id="xFetchStatus" style="font-size:12px;color:var(--muted);margin-left:8px;display:none">取得中...</span>
+      </div>
+
+      <!-- 4. データ（手動取得） -->
+      <div class="research-block" id="dataBlock">
+        <h3 class="block-title">データ</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <button class="btn btn-sm btn-accent" id="fetchDataBtn" onclick="doFetchData()" style="font-size:12px">📊 データ取得</button>
+          <span id="dataFetchStatus" style="font-size:12px;color:var(--muted);display:none">取得中...</span>
+        </div>
+        <div id="dataContent"></div>
+      </div>
+
+      <!-- 5. 画像（手動取得） -->
+      <div class="research-block" id="imagesBlock">
+        <h3 class="block-title">画像</h3>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-sm btn-accent" id="fetchXImagesBtn" onclick="doFetchXImages()" style="font-size:12px">🖼 画像取得</button>
+          <span id="xFetchStatus" style="font-size:12px;color:var(--muted);display:none">取得中...</span>
+          <span id="xImagesChip" style="font-size:12px;color:var(--green);font-weight:600;display:none"></span>
+        </div>
       </div>
 
       <div class="flow-footer">
@@ -1082,14 +1092,21 @@ function handleMessage(msg) {
     case 'mods_saved':
       showSavedToast();
       break;
+    case 'data_ready':
+      document.getElementById('fetchDataBtn').disabled = false;
+      document.getElementById('dataFetchStatus').style.display = 'none';
+      renderDataContent(msg.matchData, msg.playerData);
+      break;
     case 'gallery_images':
       s4RenderGallery(msg.images);
       document.getElementById('xFetchStatus').style.display = 'none';
+      document.getElementById('fetchXImagesBtn').disabled = false;
       break;
     case 'x_images_ready':
       var chip = document.getElementById('xImagesChip');
-      if (chip) { chip.textContent = '🐦 ' + msg.count + '枚取得済み'; chip.style.display = ''; }
+      if (chip) { chip.textContent = msg.count + '枚取得済み'; chip.style.display = ''; }
       document.getElementById('xFetchStatus').style.display = 'none';
+      document.getElementById('fetchXImagesBtn').disabled = false;
       break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
@@ -1231,10 +1248,9 @@ function renderResearch(msg) {
   var s = msg.summary || {}, f = msg.facts || {};
   document.getElementById('researchSummary').innerHTML =
     chip('📰', s.articles || 0, '記事') +
-    chip('💬', s.comments || 0, 'コメント') +
-    chip('⚽', s.hasMatchData ? '✓' : '—', '試合データ', s.hasMatchData ? 'ok' : 'none') +
-    chip('👤', s.hasPlayerData ? '✓' : '—', '選手データ', s.hasPlayerData ? 'ok' : 'none');
+    chip('💬', s.comments || 0, 'コメント');
 
+  // 1. 記事
   var articles = f.articles || [];
   var ab = document.getElementById('articlesBlock');
   if (articles.length) {
@@ -1245,58 +1261,62 @@ function renderResearch(msg) {
     }).join('');
   } else ab.style.display = 'none';
 
+  // 2. コメント（件数のみ）
   var c = f.comments || {};
   var cb = document.getElementById('commentsBlock');
-  if (c.total > 0) {
-    cb.style.display = '';
-    document.getElementById('commentSources').innerHTML =
-      '<span class="comment-src">Reddit <b>' + (c.reddit||0) + '</b></span>' +
-      '<span class="comment-src">Yahoo <b>' + (c.yahoo||0) + '</b></span>' +
-      '<span class="comment-src">X <b>' + (c.x||0) + '</b></span>';
-    document.getElementById('commentSamples').innerHTML = (c.samples||[]).map(function(t){
-      return '<div class="comment-sample">' + esc(t) + '</div>';
-    }).join('');
-  } else cb.style.display = 'none';
+  cb.style.display = '';
+  document.getElementById('commentSources').innerHTML =
+    '<span class="comment-src">Reddit <b>' + (c.reddit||0) + '</b></span>' +
+    '<span class="comment-src">Yahoo <b>' + (c.yahoo||0) + '</b></span>' +
+    '<span class="comment-src">X <b>' + (c.x||0) + '</b></span>';
 
-  var db = document.getElementById('dataBlock');
-  var parts = [];
-
-  // DeepSeek抽出情報
-  var ex = f.extracted;
-  if (ex) {
-    var exLabel = '🤖 AI解析: ' + (ex.topicType || '?');
-    if (ex.homeTeam && ex.awayTeam) exLabel += ' ／ ' + ex.homeTeam + ' vs ' + ex.awayTeam;
-    if (ex.matchDate) exLabel += ' (' + ex.matchDate + ')';
-    if (ex.playerName) exLabel += ' ／ 選手: ' + ex.playerName;
-    if (ex.competition) exLabel += ' ／ ' + ex.competition;
-    parts.push({ icon: '🤖', text: exLabel, ok: true });
-  }
-
-  if (f.matchData && f.matchData.ok) {
-    parts.push({ icon: '🏟️', text: '試合データ: ' + (f.matchData.scoreline || ''), ok: true });
-  } else if (ex && ex.homeTeam && ex.awayTeam) {
-    parts.push({ icon: '🏟️', text: '試合データ: 取得失敗（' + ex.homeTeam + ' vs ' + ex.awayTeam + '）', ok: false });
-  }
-
-  if (f.playerData && f.playerData.ok) {
-    parts.push({ icon: '👤', text: '選手データ: ' + (f.playerData.name || '') + ' (' + (f.playerData.team || '') + ')', ok: true });
-  }
-
-  if (parts.length) {
-    db.style.display = '';
-    document.getElementById('dataContent').innerHTML = parts.map(function(p) {
-      return '<div class="article-card" style="border-left:3px solid ' + (p.ok ? 'var(--green)' : 'var(--red)') + '">' +
-        '<div class="art-title">' + esc(p.text) + '</div></div>';
-    }).join('');
-  } else db.style.display = 'none';
-
-  // ラベルブロック
-  var lb = document.getElementById('labelsBlock');
-  lb.style.display = '';
-  var xChip = document.getElementById('xImagesChip');
-  if (f.xImagesCount > 0) { xChip.textContent = '🐦 ' + f.xImagesCount + '枚取得済み'; xChip.style.display = ''; }
-  else xChip.style.display = 'none';
+  // 3. ラベル（AI提案）
+  document.getElementById('labelsBlock').style.display = '';
   renderLabelChips();
+
+  // 4. データ（ボタンのみ初期表示）
+  document.getElementById('dataContent').innerHTML = '';
+  document.getElementById('fetchDataBtn').disabled = false;
+  document.getElementById('dataFetchStatus').style.display = 'none';
+
+  // 5. 画像
+  var xChip = document.getElementById('xImagesChip');
+  if (f.xImagesCount > 0) { xChip.textContent = f.xImagesCount + '枚取得済み'; xChip.style.display = ''; }
+  else xChip.style.display = 'none';
+  document.getElementById('fetchXImagesBtn').disabled = false;
+  document.getElementById('xFetchStatus').style.display = 'none';
+}
+
+function renderDataContent(matchData, playerData) {
+  var parts = [];
+  if (matchData) {
+    if (matchData.ok) {
+      parts.push({ text: '🏟️ ' + (matchData.scoreline || matchData.homeTeam + ' vs ' + matchData.awayTeam), ok: true });
+      if (matchData.tournament) parts.push({ text: '🏆 ' + matchData.tournament, ok: true });
+    } else {
+      parts.push({ text: '🏟️ 試合データ取得失敗: ' + (matchData.error || ''), ok: false });
+    }
+  }
+  if (playerData) {
+    if (playerData.ok) {
+      parts.push({ text: '👤 ' + (playerData.name || '') + (playerData.team ? ' (' + playerData.team + ')' : ''), ok: true });
+    } else {
+      parts.push({ text: '👤 選手データ取得失敗: ' + (playerData.error || ''), ok: false });
+    }
+  }
+  if (!parts.length) parts.push({ text: 'データなし（ラベルにチーム/選手を追加してください）', ok: false });
+  document.getElementById('dataContent').innerHTML = parts.map(function(p) {
+    return '<div class="article-card" style="border-left:3px solid ' + (p.ok ? 'var(--green)' : 'var(--red)') + '">' +
+      '<div class="art-title">' + esc(p.text) + '</div></div>';
+  }).join('');
+}
+
+function doFetchData() {
+  if (!currentLabels.length) { alert('ラベルがありません'); return; }
+  document.getElementById('fetchDataBtn').disabled = true;
+  document.getElementById('dataFetchStatus').style.display = '';
+  document.getElementById('dataContent').innerHTML = '';
+  send({ action: 'fetch_data', labels: currentLabels });
 }
 
 // ── ラベル操作 ──────────────────────────────────────────
