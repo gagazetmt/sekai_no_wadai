@@ -171,7 +171,7 @@ async function analyzeTopic(topicTitle) {
       `サッカーのニューストピックから、関連するチーム名と選手名を英語で抽出してください。
 選手名はフルネーム（例: Lionel Messi, Takefusa Kubo）で返してください。
 該当しない場合はnullを返してください。
-JSON形式: {"homeTeam": "Japan" or null, "awayTeam": "Sweden" or null, "playerName": "Lionel Messi" or null, "searchQuery": "英語での検索クエリ（トピック全体を反映）"}`,
+JSON形式: {"homeTeam": "Japan" or null, "awayTeam": "Sweden" or null, "playerName": "Lionel Messi" or null, "searchQuery": "3〜4語の検索キーワード（英語。最重要ワードのみ。例: Vinicius VAR Brazil protest）"}`,
       topicTitle
     );
     console.log(`  [analyze] teams: ${result.homeTeam || '—'} vs ${result.awayTeam || '—'}, player: ${result.playerName || '—'}`);
