@@ -132,9 +132,9 @@ async function deepseekExtractInfo(topic, articles) {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) return null;
 
-  const snippets = articles.map((a, i) =>
-    `[${i + 1}] ${a.title}\n${(a.text || a.snippet || '').slice(0, 600)}`
-  ).join('\n\n');
+  const snippets = articles.length > 0
+    ? articles.map((a, i) => `[${i + 1}] ${a.title}\n${(a.text || a.snippet || '').slice(0, 600)}`).join('\n\n')
+    : '（記事なし）';
 
   const sys = `あなたはサッカーニュース分析AIです。
 記事を読んで、動画制作に必要な情報をJSONで返してください。
@@ -207,16 +207,14 @@ async function research(topic, options = {}) {
     console.warn(`  [articles] failed: ${err.message}`);
   }
 
-  // Step2: DeepSeek で記事を解析 → チーム名/日付/選手名を抽出
-  if (facts.articles.length > 0) {
-    console.log('  [extract] Analyzing articles with DeepSeek...');
-    const extracted = await deepseekExtractInfo(topic, facts.articles);
-    if (extracted) {
-      facts.extracted = extracted;
-      console.log(`  [extract] type:${extracted.topicType} home:${extracted.homeTeam} away:${extracted.awayTeam} date:${extracted.matchDate} player:${extracted.playerName}`);
-    } else {
-      console.warn('  [extract] DeepSeek skipped or failed');
-    }
+  // Step2: DeepSeek でラベル抽出（記事ゼロでもトピック名だけで実行）
+  console.log('  [extract] Analyzing with DeepSeek...');
+  const extracted = await deepseekExtractInfo(topic, facts.articles);
+  if (extracted) {
+    facts.extracted = extracted;
+    console.log(`  [extract] type:${extracted.topicType} home:${extracted.homeTeam} away:${extracted.awayTeam} date:${extracted.matchDate} player:${extracted.playerName}`);
+  } else {
+    console.warn('  [extract] DeepSeek failed');
   }
 
   // Step3: コメント収集

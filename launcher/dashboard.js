@@ -226,6 +226,18 @@ function buildLabels(facts) {
     labels.unshift({ type: 'match', homeTeam: facts.matchData.homeTeam, awayTeam: facts.matchData.awayTeam, matchDate: facts.matchData.matchDate || null, competition: facts.matchData.tournament || null });
   }
 
+  // 最終フォールバック: ex も matchData も取れなかった場合、トピック名から推定
+  if (!labels.length && facts.topic) {
+    const t = facts.topic;
+    const vsM = t.match(/(.+?)\s+(?:vs?\.?|対|×)\s+(.+)/i);
+    if (vsM) {
+      labels.push({ type: 'match', homeTeam: vsM[1].trim(), awayTeam: vsM[2].trim(), matchDate: null, competition: null });
+    } else {
+      // 選手/チームとして登録（ユーザーが後で編集できる）
+      labels.push({ type: 'player', name: t.replace(/【.*?】/g, '').trim().slice(0, 60), team: null, nationalTeam: null });
+    }
+  }
+
   return labels;
 }
 
