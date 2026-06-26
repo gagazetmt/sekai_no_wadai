@@ -168,13 +168,26 @@ async function runScout() {
 async function analyzeTopic(topicTitle) {
   try {
     const result = await callDeepSeek(
-      `サッカーのニューストピックから、関連するチーム名と選手名を英語で抽出してください。
-選手名はフルネーム（例: Lionel Messi, Takefusa Kubo）で返してください。
-該当しない場合はnullを返してください。
-JSON形式: {"homeTeam": "Japan" or null, "awayTeam": "Sweden" or null, "playerName": "Lionel Messi" or null, "searchQuery": "3〜4語の検索キーワード（英語。最重要ワードのみ。例: Vinicius VAR Brazil protest）"}`,
+      `サッカーのニューストピックから必要な情報を英語で抽出してください。
+選手名はフルネーム（例: Lionel Messi, Takefusa Kubo）、チーム名は英語で。
+JSON形式:
+{
+  "homeTeam": "Japan" or null,
+  "awayTeam": "Sweden" or null,
+  "playerName": "Lionel Messi" or null,
+  "searchQuery": "3〜4語の検索キーワード（英語。例: Vinicius VAR Brazil protest）",
+  "labels": [
+    {"type": "player", "name": "Vinícius Júnior", "team": "Real Madrid", "nationalTeam": "Brazil"},
+    {"type": "team", "name": "Brazil"},
+    {"type": "team", "name": "Colombia"}
+  ]
+}
+labelsルール: 3〜5個。記事がなくてもトピック名から推測して生成する。
+topicTypeが試合なら type:"match" を含める（homeTeam/awayTeam必須）。
+type:"team" のname は英語チーム名。type:"player" は英語名・所属(team)・代表(nationalTeam or null)。`,
       topicTitle
     );
-    console.log(`  [analyze] teams: ${result.homeTeam || '—'} vs ${result.awayTeam || '—'}, player: ${result.playerName || '—'}`);
+    console.log(`  [analyze] teams: ${result.homeTeam || '—'} vs ${result.awayTeam || '—'}, player: ${result.playerName || '—'}, labels: ${(result.labels || []).length}件`);
     return result;
   } catch (err) {
     console.warn(`  [analyze] failed: ${err.message}`);
@@ -203,11 +216,11 @@ JSON: {"comments": ["コメント1", "コメント2", ...]}`,
 }
 
 // DeepSeek が返した labels を使いつつ、空なら extracted 情報からフォールバック生成
-function buildLabels(facts) {
+function buildLabels(facts, fallbackLabels = []) {
   const ex = facts.extracted || null;
   let labels = (ex?.labels && Array.isArray(ex.labels) && ex.labels.length > 0)
     ? ex.labels
-    : [];
+    : (fallbackLabels.length > 0 ? fallbackLabels : []);
 
   if (!labels.length && ex) {
     // フォールバック: homeTeam/awayTeam/playerName から最低限のラベルを作る
@@ -224,6 +237,9 @@ function buildLabels(facts) {
   // FotMob取得済みデータからも補完（matchData / playerData）
   if (facts.matchData?.ok && !labels.some(l => l.type === 'match')) {
     labels.unshift({ type: 'match', homeTeam: facts.matchData.homeTeam, awayTeam: facts.matchData.awayTeam, matchDate: facts.matchData.matchDate || null, competition: facts.matchData.tournament || null });
+  }
+  if (facts.playerData?.ok && !labels.some(l => l.type === 'player')) {
+    labels.push({ type: 'player', name: facts.playerData.name, team: facts.playerData.team || null, nationalTeam: null });
   }
 
   // 最終フォールバック: ex も matchData も取れなかった場合、トピック名から推定
@@ -283,7 +299,7 @@ async function runResearch(topicTitle) {
       matchData: facts.matchData ? { ok: true, scoreline: facts.matchData.scoreline } : null,
       playerData: facts.playerData ? { ok: true, name: facts.playerData.name, team: facts.playerData.team } : null,
       extracted: facts.extracted || null,
-      labels: buildLabels(facts),
+      labels: buildLabels(facts, analysis.labels || []),
       xImagesCount: (facts.xImages || []).length,
       comments: {
         reddit: (facts.comments?.reddit || []).length,
@@ -447,6 +463,11 @@ wss.on('connection', (ws) => {
         session.facts = session.factsCache[topic.title] || null;
         session.viewpoints = cached.viewpoints || null;
         session.phase = cached.viewpoints ? 'plan_ready' : 'facts_ready';
+        // 旧キャッシュに labels がない場合は再構築して保存
+        if (!cached.factsForClient.labels) {
+          cached.factsForClient.labels = buildLabels(cached.factsForClient);
+          saveTopicData();
+        }
         broadcast({ type: 'facts_ready', summary: cached.summary, facts: cached.factsForClient, topic: topic.title });
         if (cached.viewpoints) broadcast({ type: 'plan_ready', viewpoints: cached.viewpoints, patterns: listPatterns() });
         if (cached.renderResult) broadcast({ type: 'done', ...cached.renderResult, mods: cached.mods || null });
