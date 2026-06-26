@@ -59,9 +59,9 @@ async function braveDeepSearch(query, count = 5) {
 
     try {
       const text = await scrapeUrl(r.url);
-      texts.push({ url: r.url, title: r.title, text });
+      texts.push({ url: r.url, title: r.title, text, thumbnail: r.thumbnail || null });
     } catch (err) {
-      texts.push({ url: r.url, title: r.title, text: r.snippet || '' });
+      texts.push({ url: r.url, title: r.title, text: r.snippet || '', thumbnail: r.thumbnail || null });
     }
   }
 

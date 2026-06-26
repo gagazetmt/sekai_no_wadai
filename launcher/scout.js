@@ -23,6 +23,7 @@ async function braveSearch(query, count = 5) {
 
   return (data.web?.results || []).map(r => ({
     title: r.title, snippet: r.description, url: r.url, source: 'brave', age: r.age || null,
+    thumbnail: r.thumbnail?.src || r.meta_url?.favicon || null,
   }));
 }
 
