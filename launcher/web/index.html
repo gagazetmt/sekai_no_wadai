@@ -642,7 +642,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .s4-preview-wrap { background: var(--card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
 .s4-preview-box { width: 100%; overflow: hidden; background: #000; position: relative; border-radius: 0 0 8px 8px; }
 .spv-inner {
-  position: relative; width: 1920px; height: 1080px;
+  position: absolute; top: 0; left: 0; width: 1920px; height: 1080px;
   transform-origin: top left; overflow: hidden;
   background: #0a0c18; color: #fff;
   font-family: 'Segoe UI','Noto Sans JP',system-ui,sans-serif;
@@ -1429,13 +1429,9 @@ function s4RefreshPreview() {
   if (!mod) return;
   var w = box.offsetWidth;
   if (w < 10) { setTimeout(s4RefreshPreview, 100); return; }
-  box.innerHTML = '<div class="spv-inner" id="spvInner">' + s4BuildSlideContent(mod) + '</div>';
-  var inner = document.getElementById('spvInner');
-  if (inner) {
-    var scale = w / 1920;
-    inner.style.transform = 'scale(' + scale + ')';
-    box.style.height = Math.round(1080 * scale) + 'px';
-  }
+  var scale = w / 1920;
+  box.style.height = Math.round(1080 * scale) + 'px';
+  box.innerHTML = '<div class="spv-inner" style="transform:scale(' + scale + ')">' + s4BuildSlideContent(mod) + '</div>';
 }
 
 function s4BuildSlideContent(mod) {
