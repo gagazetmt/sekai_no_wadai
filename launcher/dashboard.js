@@ -537,7 +537,11 @@ wss.on('connection', (ws) => {
       try {
         broadcast({ type: 'phase', phase: 'fetching_x_images' });
         const { fetchImagesForLabels } = require('./fetchers/x_images');
-        const xImages = await fetchImagesForLabels(labels);
+        const TIMEOUT_MS = 25000;
+        const xImages = await Promise.race([
+          fetchImagesForLabels(labels),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)),
+        ]);
         // factsCache / topicData を更新
         if (session.facts) session.facts.xImages = xImages;
         if (session.activeTopic && session.topicData[session.activeTopic]) {
@@ -549,7 +553,10 @@ wss.on('connection', (ws) => {
         broadcast({ type: 'gallery_images', images });
         broadcast({ type: 'x_images_ready', count: xImages.length });
       } catch (err) {
-        ws.send(JSON.stringify({ type: 'error', detail: 'X画像取得失敗: ' + err.message }));
+        // タイムアウト or エラーでも gallery_images を返してブロック解除
+        broadcast({ type: 'gallery_images', images: [] });
+        broadcast({ type: 'x_images_ready', count: 0 });
+        console.warn(`  [fetch_x_images] ${err.message}`);
       }
     }
 
