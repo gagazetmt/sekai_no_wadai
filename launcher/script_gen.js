@@ -133,15 +133,15 @@ function compressFacts(facts) {
     };
   }
 
-  // コメント: 各ソース上位5件だけ
+  // コメント: 各ソース上位を多めに渡す（6-9個×複数スライド分の素材確保）
   if (facts.comments) {
     const pick = (arr, n) => (arr || []).slice(0, n).map(c =>
       `[${c.source || '?'}] ${typeof c === 'string' ? c : c.text || ''}`
     );
     out._comments = [
-      ...pick(facts.comments.reddit, 5),
-      ...pick(facts.comments.yahoo,  3),
-      ...pick(facts.comments.x,      3),
+      ...pick(facts.comments.reddit, 10),
+      ...pick(facts.comments.yahoo,  8),
+      ...pick(facts.comments.x,      7),
     ].filter(Boolean);
   }
 
@@ -211,10 +211,11 @@ async function generateMods(patternKey, topic, facts) {
   - stats: {"Ball possession": {home:55, away:45}, ...}
   - lineup: {home:[{name,pos},...], away:[{name,pos},...]}
   - formations: {home:"4-3-3", away:"4-2-3-1"}
-- comments: opening/ending以外のスライドに必須。ファン反応配列（4〜6個）
+- comments: opening/ending以外のスライドに必須。ファン反応配列（6〜9個）
   - 形式: [{text:"日本語（15文字以内厳守）", source:"x"|"reddit"|"yahoo"}, ...]
   - 素材の_commentsから関連するものを使う。面白い日本語に意訳
   - 不足時は視聴者が書きそうな反応を生成（source:"x"）
+  - 必ず6個以上生成すること
 - bgImage: null（後工程で設定）
 - leftImage / rightImage: null（comparison用、後工程）
 
