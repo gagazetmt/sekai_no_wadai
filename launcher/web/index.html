@@ -674,6 +674,17 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .cmt-item { display: flex; gap: 6px; align-items: center; }
 .cmt-text { flex: 1; min-width: 0; }
 .cmt-src { width: 80px; flex-shrink: 0; font-size: 12px; }
+
+/* ════ Comment Warehouse ════ */
+.wh-details { margin-top: 10px; }
+.wh-details summary { font-size: 12px; color: var(--muted); cursor: pointer; padding: 4px 0; user-select: none; }
+.wh-details summary:hover { color: var(--text); }
+.wh-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; max-height: 200px; overflow-y: auto; }
+.wh-item { display: flex; align-items: center; gap: 6px; padding: 4px 6px; background: var(--card2); border-radius: 6px; border: 1px solid var(--border); }
+.wh-src { font-size: 10px; color: var(--muted); width: 40px; flex-shrink: 0; }
+.wh-text { flex: 1; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wh-add { border: none; background: var(--green); color: #000; font-size: 14px; font-weight: 700; border-radius: 5px; width: 24px; height: 24px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.wh-add:hover { background: #34d399; }
 </style>
 </head>
 <body>
@@ -781,6 +792,27 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         <div id="dataContent"></div>
       </div>
 
+      <!-- ラベルブロック -->
+      <div class="research-block" id="labelsBlock" style="display:none">
+        <h3 class="block-title" style="display:flex;align-items:center;gap:8px">
+          ラベル
+          <span id="xImagesChip" style="font-size:11px;color:var(--green);font-weight:600;display:none"></span>
+        </h3>
+        <div id="labelChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+        <!-- 手動追加フォーム -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <select id="labelTypeAdd" style="font-size:12px;padding:4px 6px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text)">
+            <option value="team">team</option>
+            <option value="player">player</option>
+            <option value="match">match</option>
+          </select>
+          <input id="labelNameAdd" type="text" placeholder="チーム名 / 選手名（英語）" style="font-size:12px;padding:4px 8px;flex:1;min-width:140px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text)">
+          <button class="btn btn-sm btn-ghost" onclick="addLabelManual()" style="white-space:nowrap">＋ 追加</button>
+        </div>
+        <button class="btn btn-sm btn-accent" id="fetchXImagesBtn" onclick="doFetchXImages()" style="font-size:12px">🐦 X画像を取得</button>
+        <span id="xFetchStatus" style="font-size:12px;color:var(--muted);margin-left:8px;display:none">取得中...</span>
+      </div>
+
       <div class="flow-footer">
         <button class="btn btn-ghost" onclick="switchTab(1)">← 案件一覧に戻る</button>
         <button class="btn btn-green" id="toPlanBtn" onclick="goToPlan()">企画ピース生成へ →</button>
@@ -865,7 +897,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
           <!-- 画像ギャラリー -->
           <div class="s4-gallery-wrap">
             <div class="s4-panel-hdr">
-              <span>📁 画像ギャラリー</span>
+              <span>📁 画像ギャラリー <span id="galleryTargetHdr" style="font-size:11px;color:var(--accent);margin-left:4px"></span></span>
               <button class="btn btn-sm btn-ghost" onclick="s4LoadGallery()" style="padding:3px 8px">取得</button>
             </div>
             <div class="s4-gallery-body">
@@ -949,6 +981,13 @@ let logCollapsed = false;
 let logHasContent = false;
 let currentStep = 1;
 
+// ラベル管理（Step2）
+var currentLabels = [];  // [{type, name, ...}]
+// コメント倉庫
+var commentWarehouse = [];  // [{text, source}]
+// ギャラリーターゲット（どのスライドのどのフィールドに適用するか）
+var galleryTarget = { idx: null, key: 'bgImage' };
+
 const SCOUT_MSGS = [
   'Yahoo + Reddit をスキャン中...',
   'DeepSeek が話題を吟味してるよ...',
@@ -1018,6 +1057,10 @@ function handleMessage(msg) {
     case 'facts_ready':
       currentActiveTopic = msg.topic; researchedSet.add(msg.topic);
       clearDerivedData();
+      // コメント倉庫を初期化
+      commentWarehouse = (msg.facts && msg.facts.comments && msg.facts.comments.all) || [];
+      // ラベルを初期化
+      currentLabels = (msg.facts && msg.facts.labels) || [];
       renderResearch(msg); renderSaved(savedTopics);
       setStatus('待機中', false); setTab(2);
       break;
@@ -1041,6 +1084,12 @@ function handleMessage(msg) {
       break;
     case 'gallery_images':
       s4RenderGallery(msg.images);
+      document.getElementById('xFetchStatus').style.display = 'none';
+      break;
+    case 'x_images_ready':
+      var chip = document.getElementById('xImagesChip');
+      if (chip) { chip.textContent = '🐦 ' + msg.count + '枚取得済み'; chip.style.display = ''; }
+      document.getElementById('xFetchStatus').style.display = 'none';
       break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
@@ -1240,7 +1289,58 @@ function renderResearch(msg) {
         '<div class="art-title">' + esc(p.text) + '</div></div>';
     }).join('');
   } else db.style.display = 'none';
+
+  // ラベルブロック
+  var lb = document.getElementById('labelsBlock');
+  lb.style.display = '';
+  var xChip = document.getElementById('xImagesChip');
+  if (f.xImagesCount > 0) { xChip.textContent = '🐦 ' + f.xImagesCount + '枚取得済み'; xChip.style.display = ''; }
+  else xChip.style.display = 'none';
+  renderLabelChips();
 }
+
+// ── ラベル操作 ──────────────────────────────────────────
+function renderLabelChips() {
+  var LABEL_COLORS = { match: '#f59e0b', team: '#93c5fd', player: '#10b981' };
+  document.getElementById('labelChips').innerHTML = currentLabels.map(function(lb, i) {
+    var col = LABEL_COLORS[lb.type] || '#94a3b8';
+    var display = lb.type === 'match'
+      ? (lb.homeTeam || '?') + ' vs ' + (lb.awayTeam || '?')
+      : lb.name || '';
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;border:1px solid ' + col + ';font-size:12px;color:' + col + ';background:' + col + '18">' +
+      '<span style="font-size:10px;opacity:0.7">' + esc(lb.type) + '</span> ' + esc(display) +
+      '<button onclick="removeLabel(' + i + ')" style="border:none;background:none;color:' + col + ';cursor:pointer;padding:0;margin-left:2px;font-size:13px;line-height:1">✕</button>' +
+      '</span>';
+  }).join('');
+}
+function addLabelManual() {
+  var type = document.getElementById('labelTypeAdd').value;
+  var name = document.getElementById('labelNameAdd').value.trim();
+  if (!name) return;
+  if (type === 'match') {
+    var parts = name.split(/\s+vs\s+/i);
+    currentLabels.push({ type: 'match', homeTeam: parts[0] || name, awayTeam: parts[1] || '', matchDate: null, competition: null });
+  } else if (type === 'player') {
+    currentLabels.push({ type: 'player', name: name, team: null, nationalTeam: null });
+  } else {
+    currentLabels.push({ type: 'team', name: name });
+  }
+  document.getElementById('labelNameAdd').value = '';
+  renderLabelChips();
+}
+function removeLabel(i) {
+  currentLabels.splice(i, 1);
+  renderLabelChips();
+}
+function doFetchXImages() {
+  if (!currentLabels.length) { alert('ラベルがありません'); return; }
+  document.getElementById('xFetchStatus').style.display = '';
+  document.getElementById('fetchXImagesBtn').disabled = true;
+  send({ action: 'fetch_x_images', labels: currentLabels });
+  // ギャラリー受信後に再有効化
+  setTimeout(function() { document.getElementById('fetchXImagesBtn').disabled = false; }, 30000);
+}
+
 function chip(icon, num, label, cls) {
   return '<div class="summary-chip"><div class="chip-icon">' + icon + '</div>' +
     '<div class="chip-num ' + (cls||'') + '">' + num + '</div><div class="chip-label">' + label + '</div></div>';
@@ -1402,6 +1502,9 @@ function s4RenderTabs() {
 
 function s4Switch(i) {
   s4ActiveIdx = i;
+  galleryTarget = { idx: i, key: 'bgImage' };
+  var hdr = document.getElementById('galleryTargetHdr');
+  if (hdr) hdr.textContent = '';
   s4RenderTabs();
   s4RenderEditor();
 }
@@ -1784,30 +1887,43 @@ function s4RenderGallery(images) {
     grid.innerHTML = '<p class="s4-gallery-empty">画像が見つかりませんでした</p>';
     return;
   }
-  var mod = currentMods && currentMods[s4ActiveIdx];
-  var currentBg = mod ? (mod.bgImage || '') : '';
+  var mod = currentMods && currentMods[galleryTarget.idx != null ? galleryTarget.idx : s4ActiveIdx];
+  var currentVal = mod ? (mod[galleryTarget.key] || '') : '';
   grid.innerHTML = s4GalleryImages.map(function(img, gi) {
-    var active = img.url === currentBg ? ' active' : '';
+    var active = img.url === currentVal ? ' active' : '';
     return '<div class="s4-gallery-thumb' + active + '" style="background-image:url(\'' + esc(img.url) + '\')" ' +
       'onclick="s4ApplyGalleryImage(' + gi + ')" title="' + esc(img.label||'') + '"></div>';
   }).join('');
 }
 
-function s4ApplyGalleryImage(gi) {
-  if (!currentMods || !currentMods[s4ActiveIdx]) return;
-  var img = s4GalleryImages[gi];
-  if (!img) return;
-  currentMods[s4ActiveIdx].bgImage = img.url;
-  // URLフィールドも同期
-  var inp = document.getElementById('bgImageUrl_' + s4ActiveIdx);
-  if (inp) inp.value = img.url;
-  // アクティブ強調
-  var thumbs = document.querySelectorAll('.s4-gallery-thumb');
-  thumbs.forEach(function(t, ti) { t.classList.toggle('active', ti === gi); });
-  s4RefreshPreview();
+// imgBlock内の「ギャラリーから選ぶ」ボタン用: ターゲットをセットしてギャラリーへスクロール
+function s4FocusGallery(idx, key) {
+  galleryTarget = { idx: idx, key: key };
+  var hdr = document.getElementById('galleryTargetHdr');
+  var KEY_LABELS = { bgImage: '背景画像', leftImage: '左画像', rightImage: '右画像' };
+  if (hdr) hdr.textContent = '→ ' + (KEY_LABELS[key] || key) + ' に適用';
+  var wrap = document.querySelector('.s4-gallery-wrap');
+  if (wrap) wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // 現在の画像をハイライト更新
+  s4RenderGallery(s4GalleryImages);
 }
 
-// ギャラリーWS受信は下のmsg handlerに追加
+function s4ApplyGalleryImage(gi) {
+  var tIdx = galleryTarget.idx != null ? galleryTarget.idx : s4ActiveIdx;
+  var tKey = galleryTarget.key || 'bgImage';
+  if (!currentMods || !currentMods[tIdx]) return;
+  var img = s4GalleryImages[gi];
+  if (!img) return;
+  currentMods[tIdx][tKey] = img.url;
+  // URLフィールドも同期
+  var inp = document.getElementById('imgurl-' + tIdx + '-' + tKey);
+  if (inp) inp.value = img.url;
+  // アクティブ強調
+  document.querySelectorAll('.s4-gallery-thumb').forEach(function(t, ti) {
+    t.classList.toggle('active', ti === gi);
+  });
+  s4RefreshPreview();
+}
 
 function s4AddSlide() {
   if (!currentMods) return;
@@ -1854,7 +1970,8 @@ function buildSlideCard(mod, i) {
     var pvStyle = url ? 'background-image:url("' + esc(url) + '");background-size:' + zoom + '%;background-position:' + ix + '% ' + iy + '%' : '';
     return '<div class="sf"><label>' + label + '</label>' +
       '<div class="img-row">' +
-        '<input type="url" value="' + esc(url) + '" placeholder="https://..." oninput="updateModImg(' + i + ',\'' + key + '\',this)">' +
+        '<input type="url" id="imgurl-' + i + '-' + key + '" value="' + esc(url) + '" placeholder="https://..." oninput="updateModImg(' + i + ',\'' + key + '\',this)">' +
+        '<button class="img-upload-btn" onclick="s4FocusGallery(' + i + ',\'' + key + '\')" title="ギャラリーから選ぶ">🖼</button>' +
         '<label class="img-upload-btn">📁<input class="img-file-input" type="file" accept="image/*" onchange="uploadModImg(' + i + ',\'' + key + '\',this)"></label>' +
       '</div>' +
       '<div class="img-controls">' +
@@ -1928,10 +2045,11 @@ function buildSlideCard(mod, i) {
       '<button class="cp-add" onclick="addDataSlot(' + i + ')">＋ スロット追加</button></div>';
   }
 
-  // ── コメント（ファン反応） ──
+  // ── コメント（ファン反応） + 倉庫 ──
   var cmtSection = '';
   if (mod.type !== 'opening' && mod.type !== 'ending') {
     var cmts = mod.comments || [];
+    var usedTexts = new Set(cmts.map(function(c){ return c.text; }));
     var cmtRows = cmts.map(function(c, j) {
       var srcOpts = ['x','reddit','yahoo'].map(function(s) {
         return '<option value="' + s + '"' + (c.source === s ? ' selected' : '') + '>' + s + '</option>';
@@ -1942,9 +2060,24 @@ function buildSlideCard(mod, i) {
         '<button class="ds-del" onclick="removeComment(' + i + ',' + j + ')">✕</button>' +
       '</div>';
     }).join('');
+    // コメント倉庫
+    var warehouseItems = commentWarehouse.filter(function(w){ return !usedTexts.has(w.text); });
+    var warehouseRows = warehouseItems.length
+      ? warehouseItems.map(function(w, wi) {
+          return '<div class="wh-item">' +
+            '<span class="wh-src">' + esc(w.source||'x') + '</span>' +
+            '<span class="wh-text">' + esc(w.text||'') + '</span>' +
+            '<button class="wh-add" onclick="warehouseToSlide(' + i + ',' + wi + ')">＋</button>' +
+          '</div>';
+        }).join('')
+      : '<div style="font-size:11px;color:var(--faint);padding:4px 0">倉庫は空（記事を収集するとコメントが溜まるよ）</div>';
+
     cmtSection = '<div class="sf"><label>コメント（ファン反応）</label>' +
       '<div class="cmt-list">' + cmtRows + '</div>' +
-      '<button class="cp-add" onclick="addComment(' + i + ')">＋ コメント追加</button></div>';
+      '<button class="cp-add" onclick="addComment(' + i + ')">＋ 空欄追加</button>' +
+      '<details class="wh-details"><summary>コメント倉庫 (' + warehouseItems.length + '件)</summary>' +
+      '<div class="wh-list">' + warehouseRows + '</div>' +
+      '</details></div>';
   }
 
   return '<div class="slide-card">' +
@@ -2068,6 +2201,19 @@ function buildPreviewHtml(mod) {
     (badge ? '<div class="spv-badge">' + esc(badge) + '</div>' : '') +
     '<div class="spv-title">' + esc(title) + '</div>' +
     '<div class="spv-narration">' + esc(narration) + '</div>' + inner + '</div>';
+}
+
+// コメント倉庫 → スライドへ移動
+function warehouseToSlide(slideIdx, warehouseIdx) {
+  if (!currentMods || !currentMods[slideIdx]) return;
+  // 倉庫の表示順は usedTexts フィルタ後なので全体から再計算
+  var usedTexts = new Set((currentMods[slideIdx].comments || []).map(function(c){ return c.text; }));
+  var available = commentWarehouse.filter(function(w){ return !usedTexts.has(w.text); });
+  var item = available[warehouseIdx];
+  if (!item) return;
+  if (!currentMods[slideIdx].comments) currentMods[slideIdx].comments = [];
+  currentMods[slideIdx].comments.push({ text: item.text.slice(0, 15), source: item.source || 'x' });
+  s4RenderEditor();
 }
 
 function saveMods() {
