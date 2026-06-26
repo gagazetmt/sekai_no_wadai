@@ -556,6 +556,21 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .s4-tab-btn.del:hover { color: var(--red); }
 .s4-add-tab { flex-shrink: 0; padding: 9px 14px; color: var(--accent); cursor: pointer; font-size: 13px; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .s4-add-tab:hover { background: rgba(99,102,241,.07); }
+
+/* ════ Data Slots Editor ════ */
+.ds-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.ds-item { display: flex; gap: 6px; align-items: center; }
+.ds-item input { flex: 1; min-width: 0; }
+.ds-item input.ds-label { flex: 1.2; }
+.ds-item input.ds-val { flex: 0.8; }
+.ds-del { padding: 6px 9px; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2); border-radius: 7px; color: var(--red); cursor: pointer; font-size: 13px; flex-shrink: 0; transition: all .15s; }
+.ds-del:hover { background: rgba(248,113,113,.2); }
+
+/* ════ Comments Editor ════ */
+.cmt-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.cmt-item { display: flex; gap: 6px; align-items: center; }
+.cmt-text { flex: 1; min-width: 0; }
+.cmt-src { width: 80px; flex-shrink: 0; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -578,8 +593,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
     <div class="step active" id="step-1" onclick="switchTab(1)"><div class="step-node"><span class="step-num">1</span></div><div class="step-label">案件取得</div></div>
     <div class="step" id="step-2" onclick="switchTab(2)"><div class="step-node"><span class="step-num">2</span></div><div class="step-label">情報収集</div></div>
     <div class="step" id="step-3" onclick="switchTab(3)"><div class="step-node"><span class="step-num">3</span></div><div class="step-label">企画ピース</div></div>
-    <div class="step" id="step-4" onclick="switchTab(4)"><div class="step-node"><span class="step-num">4</span></div><div class="step-label">レンダリング</div></div>
-    <div class="step" id="step-5" onclick="switchTab(5)"><div class="step-node"><span class="step-num">5</span></div><div class="step-label">サムネ+メタ</div></div>
+    <div class="step" id="step-4" onclick="switchTab(4)"><div class="step-node"><span class="step-num">4</span></div><div class="step-label">編集</div></div>
+    <div class="step" id="step-5" onclick="switchTab(5)"><div class="step-node"><span class="step-num">5</span></div><div class="step-label">レンダリング</div></div>
   </div>
 
   <!-- ════ Step 1: Scout ════ -->
@@ -716,12 +731,12 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
     </div>
 
     <div id="renderEditor" style="display:none">
-      <!-- 上部バー：トピック + 保存/レンダリングボタン -->
+      <!-- 上部バー：トピック + 保存 + Step5へ -->
       <div class="s4-topbar">
         <span class="s4-topic" id="s4TopicLabel"></span>
         <div style="display:flex;gap:8px;flex-shrink:0">
           <button class="btn btn-sm btn-ghost" onclick="saveMods()">💾 保存</button>
-          <button class="btn btn-sm btn-green" onclick="startRender()">🎬 レンダリング開始</button>
+          <button class="btn btn-sm btn-accent" onclick="goToRender()">レンダリングへ →</button>
         </div>
       </div>
       <!-- 脚本生成中スピナー -->
@@ -734,7 +749,32 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       <!-- 1スライド分エディタ -->
       <div id="s4EditorPanel"></div>
     </div>
+  </div>
 
+  <!-- ════ Step 5: Rendering ════ -->
+  <div class="panel" id="panel-5">
+    <!-- 未生成：mods なし -->
+    <div id="render5Empty" class="empty-state">
+      <div class="icon">🎬</div>
+      <h3>レンダリング</h3>
+      <p>Step 4 で脚本を編集してから、ここでレンダリングを開始してね</p>
+      <button class="btn btn-ghost" onclick="switchTab(4)">← 編集へ</button>
+    </div>
+    <!-- 開始待ち：mods 準備済み -->
+    <div id="render5Ready" style="display:none">
+      <div class="s4-topbar">
+        <span class="s4-topic" id="render5TopicLabel"></span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-ghost" onclick="switchTab(4)">← 編集に戻る</button>
+          <button class="btn btn-green" style="font-size:14px;padding:11px 24px" onclick="startRender()">🎬 レンダリング開始</button>
+        </div>
+      </div>
+      <div class="empty-state" style="padding-top:20px">
+        <div class="icon" style="font-size:40px">🚀</div>
+        <p style="margin-bottom:0">脚本の準備ができたよ！<br>上のボタンでレンダリングを開始してね</p>
+      </div>
+    </div>
+    <!-- レンダリング進捗 -->
     <div id="renderProgress" style="display:none">
       <div class="render-info">
         <h3 id="renderTitle"></h3>
@@ -742,6 +782,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       </div>
       <div class="sub-steps" id="subStepsList"></div>
     </div>
+    <!-- 完成 -->
     <div id="renderDone" style="display:none">
       <div class="render-done">
         <div class="done-icon">🎉</div>
@@ -750,20 +791,9 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       </div>
       <div class="video-player" id="videoPlayer"></div>
       <div class="flow-footer">
-        <button class="btn btn-ghost" onclick="switchTab(3)">← 企画に戻る</button>
-        <button class="btn btn-ghost" onclick="switchTab(5)">✏️ 脚本を編集</button>
+        <button class="btn btn-ghost" onclick="switchTab(4)">← 編集に戻る</button>
         <a class="btn btn-green" id="downloadLink" download>⬇ ダウンロード</a>
       </div>
-    </div>
-  </div>
-
-  <!-- ════ Step 5: サムネ + メタ ════ -->
-  <div class="panel" id="panel-5">
-    <div class="empty-state">
-      <div class="icon">🖼️</div>
-      <h3>サムネ + 投稿メタ</h3>
-      <p>サムネイル生成・タイトル・概要欄・タグの自動生成（実装予定）</p>
-      <button class="btn btn-ghost" onclick="switchTab(4)">← Step 4へ</button>
     </div>
   </div>
   <div class="mods-saved-toast" id="modsSavedToast">💾 保存しました</div>
@@ -844,8 +874,8 @@ function handleMessage(msg) {
         document.getElementById('reGenLoading').style.display = '';
       }
       if (msg.phase === 'rendering') {
-        setStatus('レンダリング中', true); setTab(4);
-        document.getElementById('renderEditor').style.display = 'none';
+        setStatus('レンダリング中', true); setTab(5);
+        document.getElementById('render5Ready').style.display = 'none';
         document.getElementById('renderProgress').style.display = '';
         initRenderProgress(msg.topic, msg.patternKey);
       }
@@ -870,7 +900,7 @@ function handleMessage(msg) {
       updateSubStep(msg);
       break;
     case 'done':
-      showRenderDone(msg); setStatus('完成！', false); setTab(4);
+      showRenderDone(msg); setStatus('完成！', false); setTab(5);
       if (msg.mods) currentMods = JSON.parse(JSON.stringify(msg.mods));
       break;
     case 'script_ready':
@@ -1320,6 +1350,53 @@ function buildSlideCard(mod, i) {
 
   var hasImg2 = mod.type === 'comparison' || mod.type === 'stats';
 
+  // ── データスロット ──
+  var dataSection = '';
+  if (mod.type === 'stats' || mod.type === 'history' || mod.type === 'comparison') {
+    var slots = mod.dataSlots || [];
+    var isComp = mod.type === 'comparison';
+    var slotRows = slots.map(function(slot, j) {
+      if (isComp) {
+        return '<div class="ds-item">' +
+          '<input type="text" class="ds-label" placeholder="項目" value="' + esc(slot.label||'') + '" oninput="updateDataSlot(' + i + ',' + j + ',\'label\',this.value)">' +
+          '<input type="text" class="ds-val" placeholder="左" value="' + esc(slot.leftValue||'') + '" oninput="updateDataSlot(' + i + ',' + j + ',\'leftValue\',this.value)">' +
+          '<input type="text" class="ds-val" placeholder="右" value="' + esc(slot.rightValue||'') + '" oninput="updateDataSlot(' + i + ',' + j + ',\'rightValue\',this.value)">' +
+          '<button class="ds-del" onclick="removeDataSlot(' + i + ',' + j + ')">✕</button>' +
+        '</div>';
+      }
+      return '<div class="ds-item">' +
+        '<input type="text" class="ds-label" placeholder="ラベル" value="' + esc(slot.label||'') + '" oninput="updateDataSlot(' + i + ',' + j + ',\'label\',this.value)">' +
+        '<input type="text" class="ds-val" placeholder="値" value="' + esc(slot.value||'') + '" oninput="updateDataSlot(' + i + ',' + j + ',\'value\',this.value)">' +
+        '<button class="ds-del" onclick="removeDataSlot(' + i + ',' + j + ')">✕</button>' +
+      '</div>';
+    }).join('');
+    var dsHeader = isComp
+      ? '<div style="display:flex;gap:6px;font-size:11px;color:var(--faint);padding:0 0 4px 0"><span style="flex:1.2">項目</span><span style="flex:0.8">左</span><span style="flex:0.8">右</span><span style="width:34px"></span></div>'
+      : '<div style="display:flex;gap:6px;font-size:11px;color:var(--faint);padding:0 0 4px 0"><span style="flex:1.2">ラベル</span><span style="flex:0.8">値</span><span style="width:34px"></span></div>';
+    dataSection = '<div class="sf"><label>データスロット</label>' + dsHeader +
+      '<div class="ds-list">' + slotRows + '</div>' +
+      '<button class="cp-add" onclick="addDataSlot(' + i + ')">＋ スロット追加</button></div>';
+  }
+
+  // ── コメント（ファン反応） ──
+  var cmtSection = '';
+  if (mod.type !== 'opening' && mod.type !== 'ending') {
+    var cmts = mod.comments || [];
+    var cmtRows = cmts.map(function(c, j) {
+      var srcOpts = ['x','reddit','yahoo'].map(function(s) {
+        return '<option value="' + s + '"' + (c.source === s ? ' selected' : '') + '>' + s + '</option>';
+      }).join('');
+      return '<div class="cmt-item">' +
+        '<input type="text" class="cmt-text" placeholder="コメント（15文字以内）" value="' + esc(c.text||'') + '" oninput="updateComment(' + i + ',' + j + ',\'text\',this.value)">' +
+        '<select class="cmt-src" onchange="updateComment(' + i + ',' + j + ',\'source\',this.value)">' + srcOpts + '</select>' +
+        '<button class="ds-del" onclick="removeComment(' + i + ',' + j + ')">✕</button>' +
+      '</div>';
+    }).join('');
+    cmtSection = '<div class="sf"><label>コメント（ファン反応）</label>' +
+      '<div class="cmt-list">' + cmtRows + '</div>' +
+      '<button class="cp-add" onclick="addComment(' + i + ')">＋ コメント追加</button></div>';
+  }
+
   return '<div class="slide-card">' +
     '<div class="slide-card-header">' +
       '<span class="slide-num">Slide ' + (i + 1) + '</span>' +
@@ -1332,7 +1409,7 @@ function buildSlideCard(mod, i) {
       '<div class="sf"><label>ナレーション</label><textarea oninput="updateModField(' + i + ',\'narration\',this.value)">' + esc(mod.narration || '') + '</textarea></div>' +
       imgBlock('bgImage', '背景画像') +
       (hasImg2 ? imgBlock('leftImage', '左画像') + imgBlock('rightImage', '右画像') : '') +
-      scoreSection + cpSection +
+      scoreSection + cpSection + dataSection + cmtSection +
     '</div>' +
     '<div class="slide-preview-box" id="pvbox-' + i + '"></div>' +
   '</div>';
@@ -1448,15 +1525,62 @@ function saveMods() {
   send({ action: 'update_mods', mods: currentMods });
 }
 
+function goToRender() {
+  if (!currentMods || !currentMods.length) return;
+  document.getElementById('render5TopicLabel').textContent = document.getElementById('s4TopicLabel').textContent || currentActiveTopic || '';
+  document.getElementById('render5Empty').style.display = 'none';
+  document.getElementById('render5Ready').style.display = '';
+  document.getElementById('renderProgress').style.display = 'none';
+  document.getElementById('renderDone').style.display = 'none';
+  switchTab(5);
+}
+
 function startRender() {
   if (!currentMods || !currentMods.length) return;
   send({ action: 're_render', mods: currentMods });
   setStatus('レンダリング中', true);
-  document.getElementById('renderEditor').style.display = 'none';
+  document.getElementById('render5Ready').style.display = 'none';
   document.getElementById('renderProgress').style.display = '';
+  switchTab(5);
+}
+
+// ── データスロット操作 ──
+function addDataSlot(i) {
+  if (!currentMods || !currentMods[i]) return;
+  if (!currentMods[i].dataSlots) currentMods[i].dataSlots = [];
+  var isComp = currentMods[i].type === 'comparison';
+  currentMods[i].dataSlots.push(isComp ? {label:'',leftValue:'',rightValue:''} : {label:'',value:''});
+  s4RenderEditor();
+}
+function removeDataSlot(i, j) {
+  if (!currentMods || !currentMods[i] || !currentMods[i].dataSlots) return;
+  currentMods[i].dataSlots.splice(j, 1);
+  s4RenderEditor();
+}
+function updateDataSlot(i, j, field, value) {
+  if (!currentMods || !currentMods[i] || !currentMods[i].dataSlots) return;
+  currentMods[i].dataSlots[j][field] = value;
+}
+
+// ── コメント操作 ──
+function addComment(i) {
+  if (!currentMods || !currentMods[i]) return;
+  if (!currentMods[i].comments) currentMods[i].comments = [];
+  currentMods[i].comments.push({text:'',source:'x'});
+  s4RenderEditor();
+}
+function removeComment(i, j) {
+  if (!currentMods || !currentMods[i] || !currentMods[i].comments) return;
+  currentMods[i].comments.splice(j, 1);
+  s4RenderEditor();
+}
+function updateComment(i, j, field, value) {
+  if (!currentMods || !currentMods[i] || !currentMods[i].comments) return;
+  currentMods[i].comments[j][field] = value;
 }
 function initRenderProgress(topic, patternKey) {
-  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('render5Empty').style.display = 'none';
+  document.getElementById('render5Ready').style.display = 'none';
   document.getElementById('renderProgress').style.display = '';
   document.getElementById('renderDone').style.display = 'none';
   document.getElementById('renderTitle').textContent = topic || currentActiveTopic || '';
@@ -1483,7 +1607,8 @@ function updateSubStep(msg) {
   if (d && msg.detail) d.textContent = msg.detail;
 }
 function showRenderDone(msg) {
-  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('render5Empty').style.display = 'none';
+  document.getElementById('render5Ready').style.display = 'none';
   document.getElementById('renderProgress').style.display = 'none';
   document.getElementById('renderDone').style.display = '';
   document.getElementById('doneMeta').textContent = '尺 ' + (msg.totalDuration || 0) + '秒 · ' + (msg.patternKey || '');
@@ -1502,7 +1627,18 @@ function switchTab(num) {
     var shown = refreshEmptyState('plan', ['planResults','planLoading'], 'planEmpty');
     if (shown) document.getElementById('planBtn').disabled = !(currentActiveTopic && researchedSet.has(currentActiveTopic));
   }
-  if (num === 4) refreshEmptyState('render', ['renderEditor','renderProgress','renderDone'], 'renderEmpty');
+  if (num === 4) refreshEmptyState('render', ['renderEditor'], 'renderEmpty');
+  if (num === 5) {
+    var anyRender = ['renderProgress','renderDone'].some(function(id) {
+      return document.getElementById(id).style.display !== 'none';
+    });
+    if (!anyRender) {
+      var hasMods = !!(currentMods && currentMods.length);
+      document.getElementById('render5Empty').style.display = hasMods ? 'none' : '';
+      document.getElementById('render5Ready').style.display = hasMods ? '' : 'none';
+      if (hasMods) document.getElementById('render5TopicLabel').textContent = currentActiveTopic || '';
+    }
+  }
 }
 function refreshEmptyState(_n, liveIds, emptyId) {
   var anyLive = liveIds.some(function(id){ return document.getElementById(id).style.display !== 'none'; });
@@ -1543,7 +1679,7 @@ function resetUI() {
   document.getElementById('scoutResults').style.display = 'none';
   document.getElementById('scoutBtn').disabled = false;
   document.getElementById('vpBottomBar').style.display = 'none';
-  ['researchResults','planResults','renderEditor','renderProgress','renderDone'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+  ['researchResults','planResults','renderEditor','render5Ready','renderProgress','renderDone'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
   setStatus('待機中', false);
 }
 function appendLog(text, level) {
