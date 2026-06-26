@@ -221,15 +221,22 @@ async function runResearch(topicTitle) {
     session.facts = facts;
     session.factsCache[topicTitle] = facts;
 
-    const rawSamples = [];
+    // ソース情報を保持しながらサンプル収集（最大10件×3ソース=30件）
+    const rawWithSrc = [];
     for (const src of ['reddit', 'yahoo', 'x']) {
-      (facts.comments?.[src] || []).slice(0, 5).forEach(c => {
-        rawSamples.push(typeof c === 'string' ? c : c.text);
+      (facts.comments?.[src] || []).slice(0, 10).forEach(c => {
+        rawWithSrc.push({ text: typeof c === 'string' ? c : c.text, source: src });
       });
     }
 
-    console.log(`  [translate] ${rawSamples.length}件のコメントを処理中...`);
-    const processed = await translateComments(rawSamples);
+    console.log(`  [translate] ${rawWithSrc.length}件のコメントを処理中...`);
+    const translatedTexts = await translateComments(rawWithSrc.map(c => c.text));
+    // 翻訳テキストと元のソースを再合成
+    const allComments = rawWithSrc.map((c, i) => ({
+      text: (translatedTexts[i] || c.text).slice(0, 50),
+      source: c.source,
+    }));
+    const processed = allComments.map(c => c.text);  // 後方互換
 
     const factsForClient = {
       topic: facts.topic,
@@ -237,12 +244,15 @@ async function runResearch(topicTitle) {
       matchData: facts.matchData ? { ok: true, scoreline: facts.matchData.scoreline } : null,
       playerData: facts.playerData ? { ok: true, name: facts.playerData.name, team: facts.playerData.team } : null,
       extracted: facts.extracted || null,
+      labels: facts.extracted?.labels || [],
+      xImagesCount: (facts.xImages || []).length,
       comments: {
         reddit: (facts.comments?.reddit || []).length,
         yahoo: (facts.comments?.yahoo || []).length,
         x: (facts.comments?.x || []).length,
         total: (facts.comments?.all || []).length,
         samples: processed,
+        all: allComments,  // {text, source} 配列 → コメント倉庫で使用
       },
     };
 
@@ -488,6 +498,32 @@ wss.on('connection', (ws) => {
         saveTopicData();
       }
       runRender(msg.viewpointIndex || 0, msg.edits, msg.mods);
+    }
+
+    // ラベルを使ってX公式画像を再取得（Step2から呼ばれる）
+    if (msg.action === 'fetch_x_images') {
+      const labels = msg.labels || [];
+      if (!labels.length) {
+        ws.send(JSON.stringify({ type: 'gallery_images', images: [] }));
+        return;
+      }
+      try {
+        broadcast({ type: 'phase', phase: 'fetching_x_images' });
+        const { fetchImagesForLabels } = require('./fetchers/x_images');
+        const xImages = await fetchImagesForLabels(labels);
+        // factsCache / topicData を更新
+        if (session.facts) session.facts.xImages = xImages;
+        if (session.activeTopic && session.topicData[session.activeTopic]) {
+          session.topicData[session.activeTopic].factsForClient.xImagesCount = xImages.length;
+          session.topicData[session.activeTopic].factsForClient.labels = labels;
+        }
+        // ギャラリーに直接送る
+        const images = xImages.map(xi => ({ url: xi.url, label: xi.source || 'X公式' }));
+        broadcast({ type: 'gallery_images', images });
+        broadcast({ type: 'x_images_ready', count: xImages.length });
+      } catch (err) {
+        ws.send(JSON.stringify({ type: 'error', detail: 'X画像取得失敗: ' + err.message }));
+      }
     }
 
     if (msg.action === 'get_gallery_images') {
