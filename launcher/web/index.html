@@ -1436,111 +1436,332 @@ function s4RefreshPreview() {
 
 function s4BuildSlideContent(mod) {
   if (!mod) return '';
-  var bgUrl = mod.bgImage || '';
-  var zoom = mod.bgImageZoom != null ? mod.bgImageZoom : 100;
-  var bx   = mod.bgImageX   != null ? mod.bgImageX   : 50;
-  var by   = mod.bgImageY   != null ? mod.bgImageY   : 50;
-  var bgCSS = bgUrl
-    ? 'background-image:url("' + esc(bgUrl) + '");background-size:' + zoom + '%;background-position:' + bx + '% ' + by + '%;background-repeat:no-repeat;background-color:#0a0c18'
-    : 'background-color:#0a0c18';
+  var type = mod.type || 'opening';
 
-  var html = '';
-  // 背景レイヤー
-  html += '<div style="position:absolute;inset:0;' + bgCSS + '"></div>';
-  // グラデーションオーバーレイ
-  html += '<div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.35) 50%,rgba(0,0,0,.08) 100%)"></div>';
+  // PALETTE (slides/insight.js に合わせる)
+  var BG      = '#060e1c';
+  var SURFACE = '#0d1830';
+  var ACCENT  = '#f59e0b';
+  var TEXT    = '#ffffff';
+  var MUTED   = '#94a3b8';
+  var BLUE    = '#93c5fd';
+  var RED     = '#fca5a5';
+  var GREEN   = '#10b981';
 
-  // バッジ
-  if (mod.badge) {
-    html += '<div style="position:absolute;top:80px;left:96px;background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-size:28px;font-weight:900;padding:10px 28px;border-radius:8px;letter-spacing:2px;text-transform:uppercase">' + esc(mod.badge) + '</div>';
+  // 共有 keyframes（<style> タグで注入、ブラウザが CSS アニメーションとして実行）
+  var sharedStyle = '<style>' +
+    '@keyframes bgZoom{from{transform:scale(1)}to{transform:scale(1.1)}}' +
+    '@keyframes bgZoomSlow{from{transform:scale(1)}to{transform:scale(1.05)}}' +
+    '@keyframes kenBurns{from{transform:scale(1) translate(0,0)}to{transform:scale(1.08) translate(-2%,1%)}}' +
+    '@keyframes fadeIn{from{opacity:0}to{opacity:1}}' +
+    '@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}' +
+    '@keyframes slideInLeft{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:translateX(0)}}' +
+    '@keyframes slideInRight{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}' +
+    '@keyframes sweepMove{0%{left:-4px;opacity:0.8}80%{opacity:0.6}100%{left:100%;opacity:0}}' +
+    '@keyframes bannerDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}' +
+    '@keyframes vsAppear{from{transform:translateX(-50%) scale(0.6);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}' +
+    '@keyframes vsPulse{0%,100%{transform:translateX(-50%) scale(1);box-shadow:0 0 0 6px rgba(245,158,11,0.25),0 0 0 12px rgba(245,158,11,0.1)}50%{transform:translateX(-50%) scale(1.06);box-shadow:0 0 0 9px rgba(245,158,11,0.4),0 0 0 18px rgba(245,158,11,0.18)}}' +
+    '@keyframes ctaPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 8px rgba(245,158,11,0.2),0 8px 40px rgba(245,158,11,0.5)}50%{transform:scale(1.05);box-shadow:0 0 0 14px rgba(245,158,11,0.25),0 12px 60px rgba(245,158,11,0.7)}}' +
+    '@keyframes arrowBounce{0%,100%{opacity:0.85;transform:translateX(-50%) translateY(0)}50%{opacity:1;transform:translateX(-50%) translateY(14px)}}' +
+    '@keyframes cmtSlide{from{opacity:0;transform:translateY(-18px)}to{opacity:1;transform:translateY(0)}}' +
+    '@keyframes dotPulse{0%,100%{box-shadow:0 0 0 3px #10b981,0 0 0 0px rgba(16,185,129,0)}50%{box-shadow:0 0 0 3px #10b981,0 0 0 8px rgba(16,185,129,0.3)}}' +
+    '@keyframes timelineGrow{from{transform:scaleY(0);transform-origin:top}to{transform:scaleY(1);transform-origin:top}}' +
+    '</style>';
+
+  // comments.js パステルカードオーバーレイ
+  function buildCmtOverlay(cmts) {
+    if (!cmts || !cmts.length) return '';
+    var CMT_BG = ['#FFF9C4','#C8EEFF','#D4F5D4','#EDD5FF','#FFE8CC','#FFD5EA'];
+    var cards = cmts.slice(0, 5).map(function(c, i) {
+      var bg       = CMT_BG[i % CMT_BG.length];
+      var srcBg    = c.source === 'reddit' ? '#ff4500' : c.source === 'yahoo' ? '#fff' : '#000';
+      var srcColor = c.source === 'yahoo' ? '#e60023' : '#fff';
+      var srcLtr   = c.source === 'reddit' ? 'R' : c.source === 'yahoo' ? 'Y' : 'X';
+      var align    = (i % 2 === 0) ? 'flex-start' : 'flex-end';
+      var rot      = (i % 2 === 0 ? 1 : -1) * (i * 1.7);
+      var delay    = (0.2 + i * 0.18).toFixed(2);
+      return '<div style="display:flex;justify-content:' + align + ';animation:cmtSlide 0.45s ease-out ' + delay + 's backwards">' +
+        '<div style="background:' + bg + ';border:3px solid #000;border-radius:14px;box-shadow:4px 4px 0 rgba(0,0,0,0.2);padding:16px 22px;display:flex;align-items:center;gap:16px;transform:rotate(' + rot + 'deg);max-width:700px">' +
+          '<div style="width:56px;height:56px;border-radius:50%;background:' + srcBg + ';border:2px solid #000;display:flex;align-items:center;justify-content:center;color:' + srcColor + ';font-size:26px;font-weight:900;flex-shrink:0">' + srcLtr + '</div>' +
+          '<span style="font-size:42px;font-weight:700;color:#222">' + esc(c.text||'') + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    return '<div style="position:absolute;bottom:50px;left:60px;right:60px;display:flex;flex-direction:column;gap:18px;z-index:50">' + cards + '</div>';
   }
 
-  // タイプ別コンテンツ
-  if (mod.type === 'matchcard') {
-    var hs = mod.homeScore != null ? mod.homeScore : '-';
-    var as = mod.awayScore != null ? mod.awayScore : '-';
-    html += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);text-align:center;width:1600px;margin-left:-800px">' +
-      '<div style="display:flex;justify-content:space-around;font-size:44px;color:rgba(255,255,255,.65);margin-bottom:24px;font-weight:600">' +
-        '<span>' + esc(mod.homeTeam || '?') + '</span>' +
-        '<span style="color:rgba(255,255,255,.2)">vs</span>' +
-        '<span>' + esc(mod.awayTeam || '?') + '</span>' +
-      '</div>' +
-      '<div style="font-size:220px;font-weight:900;background:linear-gradient(135deg,#6366f1,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1;letter-spacing:16px">' +
-        esc(hs) + ' – ' + esc(as) +
-      '</div>' +
-      (mod.tournament ? '<div style="font-size:36px;color:rgba(255,255,255,.45);margin-top:24px;letter-spacing:2px">' + esc(mod.tournament) + '</div>' : '') +
-    '</div>';
+  var html = sharedStyle;
+  var cmts = mod.comments || [];
 
-    // ゴール一覧（下部）
-    var goals = (mod.goals || []).slice(0, 6);
-    if (goals.length) {
-      html += '<div style="position:absolute;bottom:160px;left:0;right:0;display:flex;justify-content:space-between;padding:0 120px">';
-      var homeGoals = goals.filter(function(g) { return g.isHome; });
-      var awayGoals = goals.filter(function(g) { return !g.isHome; });
-      html += '<div style="font-size:28px;color:rgba(255,255,255,.6)">' + homeGoals.map(function(g) { return esc(g.player) + ' ' + esc(g.timeStr||''); }).join('<br>') + '</div>';
-      html += '<div style="font-size:28px;color:rgba(255,255,255,.6);text-align:right">' + awayGoals.map(function(g) { return esc(g.player) + ' ' + esc(g.timeStr||''); }).join('<br>') + '</div>';
+  // ──── opening ────
+  if (type === 'opening') {
+    var ttl = mod.title || '';
+    var badgeText  = mod.badge || '';
+    var badgeColor = ACCENT;
+    if (!badgeText) {
+      if (/衝撃|炎上|疑惑|批判|問題/.test(ttl))         { badgeText = '衝撃'; badgeColor = '#ef4444'; }
+      else if (/朗報|決定|確定|歓喜|合意|内定/.test(ttl)) { badgeText = '朗報'; badgeColor = GREEN; }
+      else if (/速報/.test(ttl))                          { badgeText = '速報'; badgeColor = ACCENT; }
+      else                                                 { badgeText = 'OPENING'; }
+    }
+    var tLen  = ttl.length;
+    var tSize = tLen <= 6 ? 110 : tLen <= 10 ? 96 : tLen <= 14 ? 80 : 64;
+
+    html += '<div style="position:absolute;inset:0;background:' + BG + ';animation:bgZoom 8s ease-out forwards"></div>';
+    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 50%,rgba(245,158,11,0.12) 0%,transparent 70%),linear-gradient(135deg,rgba(6,14,28,0.35) 0%,rgba(6,14,28,0.52) 100%)"></div>';
+    // sweep-line: 横スキャン
+    html += '<div style="position:absolute;top:0;bottom:0;width:4px;background:linear-gradient(to bottom,transparent,rgba(245,158,11,0.85),transparent);animation:sweepMove 5s ease-in-out 0.3s forwards"></div>';
+    html += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:48px;padding:80px">';
+    html += '<div style="background:' + badgeColor + ';color:#000;font-size:34px;font-weight:900;padding:12px 40px;border-radius:8px;letter-spacing:4px;animation:fadeInUp 0.5s ease-out 0.4s backwards">' + esc(badgeText) + '</div>';
+    html += '<div style="font-size:' + tSize + 'px;font-weight:900;color:' + TEXT + ';text-align:center;line-height:1.2;-webkit-text-stroke:2px rgba(255,255,255,0.18);text-shadow:0 0 8px rgba(255,255,255,0.45),0 0 24px rgba(245,158,11,0.35),0 6px 32px rgba(0,0,0,0.95);max-width:1600px;animation:fadeInUp 0.8s ease-out 0.7s backwards">' + esc(ttl) + '</div>';
+    html += '</div>';
+
+  // ──── insight ────
+  } else if (type === 'insight') {
+    var cps = (mod.catchphrases || []).slice(0, 5);
+    html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
+    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 20% 50%,rgba(245,158,11,0.08) 0%,transparent 70%)"></div>';
+    html += '<div style="position:absolute;top:70px;left:80px;font-size:52px;font-weight:900;color:' + ACCENT + ';letter-spacing:1px;animation:fadeIn 0.5s ease-out 0.2s backwards">' + esc(mod.title||'') + '</div>';
+    html += '<div style="position:absolute;top:190px;left:80px;right:80px;bottom:180px;display:flex;flex-direction:column;justify-content:space-evenly">';
+    cps.forEach(function(cp, i) {
+      var delay = (0.35 + i * 0.22).toFixed(2);
+      html += '<div style="font-size:52px;font-weight:700;color:' + TEXT + ';padding:24px 36px;border-left:12px solid ' + ACCENT + ';background:rgba(255,255,255,0.04);border-radius:0 12px 12px 0;line-height:1.35;animation:slideInLeft 0.5s ease-out ' + delay + 's backwards">' + esc(cp) + '</div>';
+    });
+    html += '</div>';
+    html += buildCmtOverlay(cmts);
+
+  // ──── matchcard ────
+  } else if (type === 'matchcard') {
+    var mc = mod;
+    var hs = mc.homeScore != null ? mc.homeScore : '-';
+    var as_s = mc.awayScore != null ? mc.awayScore : '-';
+    var goals = (mc.goals || []).slice(0, 8);
+    var hGoals = goals.filter(function(g){ return g.isHome; });
+    var aGoals = goals.filter(function(g){ return !g.isHome; });
+    var mcStats = mc.stats || {};
+    var statEntries = Object.entries(mcStats).slice(0, 5);
+    var lineup = mc.lineup || {};
+    var homePlayers = lineup.home || [];
+    var awayPlayers = lineup.away || [];
+
+    html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
+    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 70% at 50% 50%,rgba(13,24,48,0.6) 0%,transparent 70%)"></div>';
+    // 1280x720 scaled 1.5x centered
+    html += '<div style="position:absolute;top:50%;left:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(1.5);transform-origin:center center;background:#081220;border-radius:12px;overflow:hidden;box-shadow:0 0 80px rgba(0,0,0,0.8);animation:fadeIn 0.5s ease-out 0.1s backwards">';
+    // left column (60%)
+    html += '<div style="position:absolute;top:0;left:0;width:60%;height:100%;padding:28px 24px;display:flex;flex-direction:column;gap:12px;overflow:hidden">';
+    html += '<div style="font-size:18px;font-weight:700;color:' + ACCENT + ';letter-spacing:2px;text-transform:uppercase;animation:fadeIn 0.4s ease-out 0.3s backwards">' + esc(mc.tournament||'MATCH') + '</div>';
+    // score
+    html += '<div style="display:flex;align-items:center;gap:16px;animation:fadeInUp 0.6s ease-out 0.45s backwards">';
+    html += '<div style="flex:1;text-align:right"><div style="font-size:30px;font-weight:700;color:' + TEXT + '">' + esc(mc.homeTeam||'HOME') + '</div></div>';
+    html += '<div style="font-size:72px;font-weight:900;color:' + TEXT + ';letter-spacing:4px;min-width:130px;text-align:center;font-family:\'Barlow Condensed\',sans-serif">' + esc(hs) + '<span style="opacity:0.35;margin:0 4px">:</span>' + esc(as_s) + '</div>';
+    html += '<div style="flex:1"><div style="font-size:30px;font-weight:700;color:' + TEXT + '">' + esc(mc.awayTeam||'AWAY') + '</div></div>';
+    html += '</div>';
+    // goals
+    if (hGoals.length || aGoals.length) {
+      html += '<div style="display:flex;gap:12px;font-size:16px;color:' + MUTED + ';animation:fadeIn 0.5s ease-out 0.8s backwards">';
+      html += '<div style="flex:1;text-align:right">' + hGoals.map(function(g){ return esc(g.player)+' '+esc(g.timeStr||''); }).join('<br>') + '</div>';
+      html += '<div style="width:1px;background:rgba(255,255,255,0.1)"></div>';
+      html += '<div style="flex:1">' + aGoals.map(function(g){ return esc(g.player)+' '+esc(g.timeStr||''); }).join('<br>') + '</div>';
       html += '</div>';
     }
+    // stats bars
+    statEntries.forEach(function(entry, si) {
+      var k = entry[0]; var v = entry[1];
+      var hv = v.home != null ? v.home : 50;
+      var av = v.away != null ? v.away : 50;
+      var d = (0.9 + si * 0.1).toFixed(2);
+      html += '<div style="animation:fadeIn 0.4s ease-out ' + d + 's backwards"><div style="font-size:14px;color:' + MUTED + ';margin-bottom:3px">' + esc(k) + '</div>';
+      html += '<div style="display:flex;align-items:center;gap:6px;font-size:16px;font-weight:700">';
+      html += '<span style="color:' + BLUE + ';min-width:30px;text-align:right">' + hv + '</span>';
+      html += '<div style="flex:1;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + hv + '%;background:' + BLUE + ';border-radius:3px"></div></div>';
+      html += '<div style="flex:1;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;direction:rtl"><div style="height:100%;width:' + av + '%;background:' + RED + ';border-radius:3px"></div></div>';
+      html += '<span style="color:' + RED + ';min-width:30px">' + av + '</span>';
+      html += '</div></div>';
+    });
+    html += '</div>'; // left col
 
-  } else if (mod.type === 'insight') {
-    var cps = (mod.catchphrases || []).slice(0, 4);
-    html += '<div style="position:absolute;top:180px;left:100px;right:100px">' +
-      cps.map(function(cp) {
-        return '<div style="font-size:52px;font-weight:700;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:24px;line-height:1.3">' +
-          '<span style="color:#38bdf8;font-size:36px;flex-shrink:0">▹</span><span>' + esc(cp) + '</span></div>';
-      }).join('') +
-    '</div>';
-
-  } else if (mod.type === 'stats' || mod.type === 'history') {
-    var slots = (mod.dataSlots || []).slice(0, 6);
-    html += '<div style="position:absolute;top:180px;left:100px;right:100px">' +
-      slots.map(function(s) {
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;margin-bottom:14px;background:rgba(255,255,255,.06);border-radius:10px;font-size:38px">' +
-          '<span style="color:rgba(255,255,255,.7)">' + esc(s.label||'') + '</span>' +
-          '<span style="font-weight:800;background:linear-gradient(135deg,#6366f1,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">' + esc(s.value||'') + '</span>' +
-        '</div>';
-      }).join('') +
-    '</div>';
-
-  } else if (mod.type === 'comparison') {
-    // 左右画像
-    if (mod.leftImage) {
-      html += '<div style="position:absolute;inset:0;left:0;width:50%;background-image:url(\'' + esc(mod.leftImage) + '\');background-size:cover;background-position:center;opacity:.35"></div>';
+    // right col: pitch (40%)
+    html += '<div style="position:absolute;top:0;right:0;width:40%;height:100%;background:#1a4023;overflow:hidden">';
+    html += '<svg width="100%" height="100%" viewBox="0 0 512 720" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;opacity:0.45">';
+    html += '<rect x="40" y="20" width="432" height="680" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2"/>';
+    html += '<line x1="40" y1="360" x2="472" y2="360" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>';
+    html += '<circle cx="256" cy="360" r="60" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>';
+    html += '<rect x="140" y="20" width="232" height="100" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>';
+    html += '<rect x="140" y="600" width="232" height="100" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>';
+    html += '<circle cx="256" cy="80" r="5" fill="rgba(255,255,255,0.5)"/>';
+    html += '<circle cx="256" cy="640" r="5" fill="rgba(255,255,255,0.5)"/>';
+    html += '</svg>';
+    if (homePlayers.length || awayPlayers.length) {
+      var hRows = [[256,65],[130,165],[200,150],[310,150],[382,165],[90,275],[185,265],[256,260],[325,265],[420,275],[256,355]];
+      var aRows = [[256,655],[130,555],[200,570],[310,570],[382,555],[90,445],[185,455],[256,460],[325,455],[420,445],[256,365]];
+      html += '<svg width="100%" height="100%" viewBox="0 0 512 720" xmlns="http://www.w3.org/2000/svg" style="position:absolute;inset:0;animation:fadeIn 0.6s ease-out 0.5s backwards">';
+      homePlayers.slice(0,11).forEach(function(p, i) {
+        var pos = hRows[i] || [256, 300];
+        var isGK = (p.pos && p.pos.toUpperCase()==='GK') || i===0;
+        html += '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="16" fill="' + (isGK ? '#fcd34d' : BLUE) + '" stroke="white" stroke-width="2.5"/>';
+      });
+      awayPlayers.slice(0,11).forEach(function(p, i) {
+        var pos = aRows[i] || [256, 400];
+        var isGK = (p.pos && p.pos.toUpperCase()==='GK') || i===0;
+        html += '<circle cx="' + pos[0] + '" cy="' + pos[1] + '" r="16" fill="' + (isGK ? '#fcd34d' : RED) + '" stroke="white" stroke-width="2.5"/>';
+      });
+      html += '</svg>';
+    } else if (mc.formations) {
+      html += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;animation:fadeIn 0.6s ease-out 0.5s backwards">';
+      html += '<div style="font-size:52px;font-weight:900;color:' + BLUE + '">' + esc(mc.formations.home||'') + '</div>';
+      html += '<div style="font-size:28px;color:' + MUTED + '">vs</div>';
+      html += '<div style="font-size:52px;font-weight:900;color:' + RED + '">' + esc(mc.formations.away||'') + '</div>';
+      html += '</div>';
     }
-    if (mod.rightImage) {
-      html += '<div style="position:absolute;inset:0;left:50%;width:50%;background-image:url(\'' + esc(mod.rightImage) + '\');background-size:cover;background-position:center;opacity:.35"></div>';
-    }
-    // 中央仕切り
-    html += '<div style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.15)"></div>';
-    var cslots = (mod.dataSlots || []).slice(0, 6);
-    html += '<div style="position:absolute;top:180px;left:60px;right:60px">' +
-      cslots.map(function(s) {
-        return '<div style="display:flex;align-items:center;padding:16px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:38px;gap:16px">' +
-          '<span style="flex:1;text-align:right;color:#38bdf8;font-weight:700">' + esc(s.leftValue||'-') + '</span>' +
-          '<span style="flex:1;text-align:center;color:rgba(255,255,255,.45);font-size:28px">' + esc(s.label||'') + '</span>' +
-          '<span style="flex:1;text-align:left;color:#f472b6;font-weight:700">' + esc(s.rightValue||'-') + '</span>' +
-        '</div>';
-      }).join('') +
-    '</div>';
-  }
+    html += '</div>'; // right col pitch
+    html += '</div>'; // mc-scale
 
-  // タイトル（matchcard以外）
-  if (mod.type !== 'matchcard') {
-    html += '<div style="position:absolute;bottom:220px;left:96px;right:96px;font-size:72px;font-weight:900;line-height:1.3;text-shadow:0 2px 16px rgba(0,0,0,.6)">' + esc(mod.title||'') + '</div>';
-  }
-  // ナレーション（先頭80字）
-  if (mod.narration) {
-    html += '<div style="position:absolute;bottom:80px;left:96px;right:96px;font-size:30px;color:rgba(255,255,255,.5);line-height:1.6">' + esc((mod.narration||'').slice(0,80)) + '</div>';
-  }
-  // コメントバブル（右下、最大3個）
-  var cmts = (mod.comments || []).slice(0, 3);
-  if (cmts.length) {
-    html += '<div style="position:absolute;right:96px;bottom:' + (mod.narration ? 160 : 80) + 'px;display:flex;flex-direction:column;align-items:flex-end;gap:12px">' +
-      cmts.map(function(c, ci) {
-        var srcColor = c.source === 'reddit' ? '#ff6314' : c.source === 'yahoo' ? '#6b09f5' : '#1da1f2';
-        return '<div style="background:rgba(0,0,0,.65);border-left:3px solid ' + srcColor + ';padding:10px 18px;border-radius:6px;font-size:24px;max-width:480px;opacity:' + (1 - ci * 0.15) + '">' + esc(c.text||'') + '</div>';
-      }).join('') +
-    '</div>';
+  // ──── stats ────
+  } else if (type === 'stats') {
+    html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
+    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 0% 50%,rgba(13,24,48,0.9) 0%,transparent 60%)"></div>';
+    // left 40%: Ken Burns + name
+    html += '<div style="position:absolute;top:0;left:0;width:40%;height:100%;overflow:hidden">';
+    if (mod.bgImage) {
+      html += '<div style="position:absolute;inset:0;background-image:url(\'' + esc(mod.bgImage) + '\');background-size:cover;background-position:center top;animation:kenBurns 8s ease-out forwards"></div>';
+    } else {
+      html += '<div style="position:absolute;inset:0;background:linear-gradient(160deg,' + SURFACE + ' 0%,' + BG + ' 100%);animation:kenBurns 8s ease-out forwards"></div>';
+    }
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 0%,' + BG + ' 92%)"></div>';
+    html += '<div style="position:absolute;bottom:160px;left:0;right:0;text-align:center;animation:fadeInUp 0.6s ease-out 0.5s backwards">';
+    html += '<div style="font-size:40px;font-weight:900;color:' + TEXT + ';text-shadow:0 2px 12px rgba(0,0,0,0.9)">' + esc(mod.siBinding||'') + '</div>';
+    html += '</div>';
+    html += '</div>'; // left panel
+    // right 60%: badge + title + card grid
+    html += '<div style="position:absolute;top:0;right:0;width:60%;height:100%;padding:80px 60px 200px 40px">';
+    html += '<div style="display:inline-block;background:' + SURFACE + ';border:2px solid ' + ACCENT + ';color:' + ACCENT + ';font-size:24px;font-weight:700;padding:8px 24px;border-radius:6px;letter-spacing:3px;margin-bottom:32px;animation:fadeIn 0.4s ease-out 0.3s backwards">' + esc(mod.badge||'STATS') + '</div>';
+    html += '<div style="font-size:52px;font-weight:900;color:' + TEXT + ';margin-bottom:36px;line-height:1.2;animation:fadeInUp 0.5s ease-out 0.5s backwards">' + esc(mod.title||'') + '</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+    (mod.dataSlots||[]).slice(0,6).forEach(function(s, i) {
+      var d = (0.65 + i * 0.12).toFixed(2);
+      html += '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px 24px;animation:fadeInUp 0.4s ease-out ' + d + 's backwards">';
+      html += '<div style="font-size:22px;color:' + MUTED + ';margin-bottom:8px">' + esc(s.label||'') + '</div>';
+      html += '<div style="font-size:52px;font-weight:900;color:#FFD700;line-height:1.1">' + esc(s.value||'-') + '</div>';
+      html += '</div>';
+    });
+    html += '</div></div>'; // grid + right panel
+    html += buildCmtOverlay(cmts);
+
+  // ──── history ────
+  } else if (type === 'history') {
+    html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
+    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 50% 80% at 0% 50%,rgba(13,24,48,0.95) 0%,transparent 55%)"></div>';
+    // left 35%: Ken Burns hero
+    html += '<div style="position:absolute;top:0;left:0;width:35%;height:100%;overflow:hidden">';
+    if (mod.bgImage) {
+      html += '<div style="position:absolute;inset:0;background-image:url(\'' + esc(mod.bgImage) + '\');background-size:cover;background-position:center top;animation:kenBurns 8s ease-out forwards"></div>';
+    } else {
+      html += '<div style="position:absolute;inset:0;background:linear-gradient(160deg,' + SURFACE + ' 0%,' + BG + ' 100%);animation:kenBurns 8s ease-out forwards"></div>';
+    }
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 0%,' + BG + ' 90%)"></div>';
+    if (mod.historyHero) {
+      html += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:160px;font-weight:900;color:rgba(245,158,11,0.15);line-height:1;text-align:center;white-space:nowrap;animation:fadeIn 1s ease-out 0.3s backwards">' + esc(mod.historyHero) + '</div>';
+    }
+    html += '<div style="position:absolute;bottom:120px;left:20px;right:20px;text-align:center;animation:fadeInUp 0.5s ease-out 0.5s backwards">';
+    html += '<div style="font-size:38px;font-weight:900;color:' + TEXT + '">' + esc(mod.siBinding||'') + '</div>';
+    html += '<div style="font-size:24px;color:' + ACCENT + ';margin-top:8px">' + esc(mod.title||'') + '</div>';
+    html += '</div>';
+    html += '</div>'; // left panel
+    // right 63%: timeline
+    var evts = (mod.dataSlots||[]).slice(0,6);
+    html += '<div style="position:absolute;top:0;right:0;width:63%;height:100%;padding:80px 60px 180px 80px;overflow:hidden">';
+    html += '<div style="position:absolute;left:80px;top:80px;bottom:80px;width:3px;background:linear-gradient(to bottom,' + ACCENT + ',rgba(245,158,11,0.2));animation:timelineGrow 0.8s ease-out 0.3s backwards"></div>';
+    html += '<div style="display:flex;flex-direction:column;height:100%;justify-content:space-evenly;padding-left:32px">';
+    evts.forEach(function(ev, i) {
+      var isLast = (i === evts.length - 1);
+      var dotCol = isLast ? GREEN : ACCENT;
+      var d = (0.4 + i * 0.18).toFixed(2);
+      var dotAnim = isLast
+        ? 'animation:slideInRight 0.4s ease-out ' + d + 's backwards,dotPulse 1.5s ease-in-out ' + (parseFloat(d)+0.5).toFixed(2) + 's infinite backwards'
+        : 'animation:slideInRight 0.4s ease-out ' + d + 's backwards';
+      html += '<div style="display:flex;align-items:flex-start;position:relative;' + dotAnim + '">';
+      html += '<div style="position:absolute;left:-48px;top:6px;width:22px;height:22px;border-radius:50%;background:' + dotCol + ';border:3px solid ' + BG + ';box-shadow:0 0 0 3px ' + dotCol + '"></div>';
+      html += '<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 20px;flex:1">';
+      html += '<div style="font-size:24px;font-weight:700;color:' + ACCENT + ';margin-bottom:4px">' + esc(ev.label||'') + '</div>';
+      html += '<div style="font-size:28px;font-weight:600;color:' + TEXT + ';line-height:1.3">' + esc(ev.value||'') + '</div>';
+      html += '</div></div>';
+    });
+    html += '</div></div>'; // flex + right panel
+    html += buildCmtOverlay(cmts);
+
+  // ──── comparison ────
+  } else if (type === 'comparison') {
+    // outer flex container
+    html += '<div style="position:absolute;inset:0;display:flex">';
+    // left panel 30%
+    html += '<div style="width:30%;height:100%;position:relative;overflow:hidden;flex-shrink:0">';
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(160deg,#1e3a8a 0%,' + BG + ' 100%);animation:fadeIn 0.6s ease-out 0.15s backwards"></div>';
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(to right,transparent 0%,rgba(8,18,32,1.0) 100%)"></div>';
+    html += '<div style="position:absolute;bottom:145px;left:0;right:0;text-align:center;animation:fadeInUp 0.5s ease-out 0.6s backwards">';
+    html += '<div style="font-size:38px;font-weight:900;color:' + TEXT + ';padding:0 12px">' + esc(mod.siBindingLeft||'PLAYER A') + '</div>';
+    html += '</div>';
+    html += '</div>'; // left panel
+    // center panel
+    html += '<div style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:center;padding:110px 0 130px;position:relative;z-index:10">';
+    var cslots2 = (mod.dataSlots||[]).slice(0,7);
+    cslots2.forEach(function(s, i) {
+      var d = (0.5 + i * 0.09).toFixed(2);
+      html += '<div style="display:flex;align-items:center;height:90px;border-bottom:1px solid rgba(255,255,255,0.07);animation:fadeInUp 0.3s ease-out ' + d + 's backwards">';
+      html += '<div style="width:35%;text-align:right;padding-right:40px;font-size:50px;font-weight:900;color:#fff;text-shadow:0 0 12px rgba(255,255,255,0.55),0 0 28px rgba(252,211,77,0.45)">' + esc(s.leftValue||'-') + '</div>';
+      html += '<div style="width:30%;display:flex;align-items:center;justify-content:center">';
+      html += '<div style="color:' + ACCENT + ';font-size:27px;font-weight:900;letter-spacing:1px;text-align:center">' + esc(s.label||'') + '</div>';
+      html += '</div>';
+      html += '<div style="width:35%;padding-left:40px;font-size:50px;font-weight:900;color:#fff;text-shadow:0 0 12px rgba(255,255,255,0.55),0 0 28px rgba(252,211,77,0.45)">' + esc(s.rightValue||'-') + '</div>';
+      html += '</div>';
+    });
+    // VS badge
+    html += '<div style="position:absolute;bottom:130px;left:50%;transform:translateX(-50%);width:88px;height:88px;background:' + ACCENT + ';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:900;color:#000;animation:vsAppear 0.5s ease-out 0.7s backwards,vsPulse 2.5s ease-in-out 1.4s infinite">VS</div>';
+    html += '</div>'; // center
+    // right panel 30%
+    html += '<div style="width:30%;height:100%;position:relative;overflow:hidden;flex-shrink:0">';
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(160deg,#7f1d1d 0%,' + BG + ' 100%);animation:fadeIn 0.6s ease-out 0.25s backwards"></div>';
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(to left,transparent 0%,rgba(8,18,32,1.0) 100%)"></div>';
+    html += '<div style="position:absolute;bottom:145px;left:0;right:0;text-align:center;animation:fadeInUp 0.5s ease-out 0.6s backwards">';
+    html += '<div style="font-size:38px;font-weight:900;color:' + TEXT + ';padding:0 12px">' + esc(mod.siBindingRight||'PLAYER B') + '</div>';
+    html += '</div>';
+    html += '</div>'; // right panel
+    html += '</div>'; // outer flex
+    // top banner
+    html += '<div style="position:absolute;top:0;left:0;right:0;height:90px;background:rgba(0,0,0,0.82);border-bottom:4px solid ' + ACCENT + ';display:flex;align-items:center;justify-content:center;z-index:20;animation:bannerDown 0.4s ease-out backwards">';
+    html += '<div style="color:' + ACCENT + ';font-size:32px;font-weight:700;letter-spacing:4px">' + esc(mod.title||'COMPARISON') + '</div>';
+    html += '</div>';
+    html += buildCmtOverlay(cmts);
+
+  // ──── ending ────
+  } else if (type === 'ending') {
+    var endTtl = mod.title || '次回もお楽しみに！';
+    var etLen = endTtl.length;
+    var etSize = 120;
+    if (etLen > 14) etSize = 100;
+    if (etLen > 18) etSize = 84;
+    if (etLen > 22) etSize = 70;
+    if (etLen > 28) etSize = 60;
+    var ctaTxt = (mod.endingCta && mod.endingCta.text) || 'チャンネル登録 & いいね';
+
+    html += '<div style="position:absolute;inset:0;background:linear-gradient(160deg,' + SURFACE + ' 0%,' + BG + ' 100%);animation:bgZoomSlow 12s ease-out forwards"></div>';
+    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 60%,rgba(245,158,11,0.10) 0%,transparent 70%),linear-gradient(135deg,rgba(6,14,28,0.30) 0%,rgba(6,14,28,0.55) 100%)"></div>';
+    html += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px;text-align:center;z-index:5">';
+    html += '<div style="font-size:' + etSize + 'px;font-weight:900;color:' + TEXT + ';line-height:1.18;-webkit-text-stroke:2px rgba(255,255,255,0.18);text-shadow:0 0 8px rgba(255,255,255,0.45),0 0 24px rgba(245,158,11,0.35),0 6px 32px rgba(0,0,0,0.95);max-width:1620px;margin-bottom:56px;animation:fadeInUp 0.8s ease-out 0.3s backwards">' + esc(endTtl) + '</div>';
+    html += '<div style="background:' + ACCENT + ';color:#000;padding:24px 56px;border-radius:16px;font-size:46px;font-weight:900;letter-spacing:2px;box-shadow:0 0 0 8px rgba(245,158,11,0.2),0 8px 40px rgba(245,158,11,0.5);display:inline-flex;align-items:center;gap:22px;animation:fadeIn 0.8s ease-out 0.9s backwards,ctaPulse 2.5s ease-in-out 1.6s infinite backwards">';
+    html += '<svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22a2.2 2.2 0 0 0 2.2-2.2H9.8A2.2 2.2 0 0 0 12 22zm6.6-6.6V10A6.6 6.6 0 0 0 13 3.5V2.6a1 1 0 1 0-2 0v.9A6.6 6.6 0 0 0 5.4 10v5.4L4 17v.8h16V17l-1.4-1.6z"/></svg>';
+    html += '<span>' + esc(ctaTxt) + '</span>';
+    html += '<svg width="44" height="44" viewBox="0 0 24 24" fill="currentColor"><path d="M2 10h4.5v11H2zm6.5 11V10l5.5-9c.9 0 1.7.7 1.7 1.7v6.6h6.7c1 0 1.7.7 1.7 1.7l-1.7 8.4c-.2.9-.9 1.6-1.8 1.6H8.5z"/></svg>';
+    html += '</div></div>';
+    // bounce arrow
+    html += '<div style="position:absolute;bottom:88px;left:50%;color:' + ACCENT + ';filter:drop-shadow(0 0 12px rgba(245,158,11,0.7));animation:fadeIn 0.6s ease-out 1.4s backwards,arrowBounce 1.5s ease-in-out 2s infinite backwards;z-index:6">';
+    html += '<svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor" style="transform:translateX(-50%)"><path d="M12 16.5l-7-7h14z"/></svg>';
+    html += '</div>';
+
+  // ──── fallback ────
+  } else {
+    html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
+    html += '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><div style="font-size:48px;color:' + MUTED + '">' + esc(type) + '</div></div>';
   }
 
   return html;
