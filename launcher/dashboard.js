@@ -564,8 +564,9 @@ wss.on('connection', (ws) => {
           }
         });
         // 選手画像（FotMob）
-        if (facts.playerData?.imageUrl) {
-          images.push({ url: facts.playerData.imageUrl, label: facts.playerData.name || '選手' });
+        const playerImg = facts.playerData?.photo || facts.playerData?.imageUrl || null;
+        if (playerImg) {
+          images.push({ url: playerImg, label: facts.playerData.name || '選手' });
         }
         // チームロゴ（FotMob）
         if (facts.matchData?.homeLogo) images.push({ url: facts.matchData.homeLogo, label: facts.matchData.homeTeam || 'Home' });
