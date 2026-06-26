@@ -31,6 +31,16 @@ const TEAM_NAME_MAP = {
   'iran': 'IR Iran',
   'cape verde': 'Cabo Verde',
   'trinidad': 'Trinidad and Tobago',
+  'bosnia': 'Bosnia and Herzegovina',
+  'bosnia herzegovina': 'Bosnia and Herzegovina',
+  'bosnia & herzegovina': 'Bosnia and Herzegovina',
+  'bih': 'Bosnia and Herzegovina',
+  'north macedonia': 'North Macedonia',
+  'fyr macedonia': 'North Macedonia',
+  'scotland': 'Scotland',
+  'wales': 'Wales',
+  'republic of ireland': 'Republic of Ireland',
+  'northern ireland': 'Northern Ireland',
 };
 
 function normalizeTeamName(name) {
