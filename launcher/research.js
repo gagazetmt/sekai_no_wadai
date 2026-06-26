@@ -126,7 +126,7 @@ async function fetchPlayer(playerName) {
   return { ok: false, error: `Player "${playerName}" not found` };
 }
 
-// ── DeepSeek: 記事から構造情報を抽出 ────────────────────
+// ── DeepSeek: 記事からラベル抽出（ラベル方式） ──────────
 
 async function deepseekExtractInfo(topic, articles) {
   const key = process.env.DEEPSEEK_API_KEY;
@@ -137,27 +137,42 @@ async function deepseekExtractInfo(topic, articles) {
   ).join('\n\n');
 
   const sys = `あなたはサッカーニュース分析AIです。
-記事を読んで、動画制作に必要な情報をJSONで抽出してください。
+記事を読んで、動画制作に必要な情報をJSONで返してください。
 
-【抽出フィールド】
-- topicType: "match"（試合結果・経過）/ "player"（選手個人）/ "transfer"（移籍）/ "controversy"（議論・論争）/ "other"
-- homeTeam: FotMob検索用の英語チーム名（例: "Japan", "Sweden", "Manchester City"）。不明なら null
-- awayTeam: 同上。不明なら null
-- matchDate: 試合日 YYYY-MM-DD 形式。不明なら null
-- playerName: 選手中心なら英語フルネーム（例: "Kaoru Mitoma"）。試合系なら null
-- competition: 大会名（例: "FIFA World Cup 2026", "Premier League"）。不明なら null
+【出力フォーマット】
+{
+  "topicType": "match" | "player" | "transfer" | "controversy" | "other",
+  "homeTeam": "英語チーム名 or null",
+  "awayTeam": "英語チーム名 or null",
+  "matchDate": "YYYY-MM-DD or null",
+  "playerName": "英語フルネーム or null",
+  "competition": "大会名 or null",
+  "labels": [
+    { "type": "match", "homeTeam": "Japan", "awayTeam": "Sweden", "matchDate": "2026-06-XX", "competition": "FIFA World Cup 2026" },
+    { "type": "team",   "name": "Japan" },
+    { "type": "team",   "name": "Sweden" },
+    { "type": "player", "name": "Kaoru Mitoma", "team": "Brighton", "nationalTeam": "Japan" }
+  ]
+}
+
+【labelsルール】
+- 3〜5個。記事の核心にある「チーム」「選手」「試合」を抽出する
+- topicTypeが"match"なら必ず type:"match" のラベルを含める
+- type:"team" のname は英語チーム名（FotMob/X検索に使う）
+- type:"player" は選手名(英語)・所属クラブ(team,英語)・代表チーム(nationalTeam,英語 or null)
+- type:"match" は homeTeam/awayTeam 両方必須（片方不明でも null で含める）
 
 【重要】
-- チーム名は必ず英語に変換（「日本」→"Japan"、「スウェーデン」→"Sweden"）
-- 日付は記事中に書かれている日付を使う。推測しない
-- JSON のみ返す。説明文不要`;
+- チーム名は必ず英語変換（「日本」→"Japan"、「スウェーデン」→"Sweden"）
+- matchDate は記事に明記された日付のみ。推測しない
+- JSONのみ返す。説明文不要`;
 
   try {
     const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
-        model: 'deepseek-chat', temperature: 0.1, max_tokens: 300,
+        model: 'deepseek-chat', temperature: 0.1, max_tokens: 600,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: sys },
@@ -181,7 +196,7 @@ async function research(topic, options = {}) {
   console.log('\n=== Research: Gathering facts ===\n');
   console.log(`  Topic: ${topic}\n`);
 
-  const facts = { topic, articles: [], matchData: null, playerData: null, comments: null, extracted: null };
+  const facts = { topic, articles: [], matchData: null, playerData: null, comments: null, extracted: null, xImages: [] };
 
   // Step1: 記事収集
   try {
@@ -224,7 +239,22 @@ async function research(topic, options = {}) {
     }
   }
 
-  // Step5: コメント収集
+  // Step5: X公式画像取得（ラベルベース）
+  const labels = facts.extracted?.labels || [];
+  if (labels.length > 0) {
+    console.log(`  [x_images] Fetching from ${labels.length} labels...`);
+    try {
+      const { fetchImagesForLabels } = require('./fetchers/x_images');
+      const xImages = await fetchImagesForLabels(labels);
+      facts.xImages = xImages;
+    } catch (err) {
+      console.warn(`  [x_images] failed: ${err.message}`);
+    }
+  } else {
+    console.log('  [x_images] no labels, skipping');
+  }
+
+  // Step6: コメント収集
   try {
     const commentResult = await collectComments(topic, { enQuery: options.searchQuery || '' });
     facts.comments = commentResult;
