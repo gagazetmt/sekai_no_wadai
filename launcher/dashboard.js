@@ -488,6 +488,31 @@ wss.on('connection', (ws) => {
       runRender(msg.viewpointIndex || 0, msg.edits, msg.mods);
     }
 
+    if (msg.action === 'get_gallery_images') {
+      const images = [];
+      const facts = session.facts;
+      if (facts) {
+        // 記事サムネイル
+        (facts.articles || []).forEach(a => {
+          const url = a.imageUrl || a.image || a.thumbnail || null;
+          if (url && url.startsWith('http')) {
+            images.push({ url, label: (a.title || '').slice(0, 40) });
+          }
+        });
+        // 選手画像
+        if (facts.playerData?.imageUrl) {
+          images.push({ url: facts.playerData.imageUrl, label: facts.playerData.name || '選手' });
+        }
+        // チームロゴ
+        if (facts.matchData?.homeLogo) images.push({ url: facts.matchData.homeLogo, label: facts.matchData.homeTeam || 'Home' });
+        if (facts.matchData?.awayLogo) images.push({ url: facts.matchData.awayLogo, label: facts.matchData.awayTeam || 'Away' });
+      }
+      // 重複除去
+      const seen = new Set();
+      const unique = images.filter(img => { if (seen.has(img.url)) return false; seen.add(img.url); return true; });
+      ws.send(JSON.stringify({ type: 'gallery_images', images: unique }));
+    }
+
     if (msg.action === 'reset') {
       resetSession();
       broadcast({ type: 'reset' });

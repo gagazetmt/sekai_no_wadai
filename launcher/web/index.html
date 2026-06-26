@@ -557,6 +557,35 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .s4-add-tab { flex-shrink: 0; padding: 9px 14px; color: var(--accent); cursor: pointer; font-size: 13px; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -2px; }
 .s4-add-tab:hover { background: rgba(99,102,241,.07); }
 
+/* ════ Step4 2カラムグリッド ════ */
+.s4-main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: flex-start; }
+@media (max-width: 900px) { .s4-main-grid { grid-template-columns: 1fr; } }
+.s4-right-col { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 72px; }
+.s4-panel-hdr { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--muted); }
+.s4-panel-hdr span { flex: 1; }
+
+/* ════ Slide Preview ════ */
+.s4-preview-wrap { background: var(--card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.s4-preview-box { width: 100%; overflow: hidden; background: #000; position: relative; border-radius: 0 0 8px 8px; }
+.spv-inner {
+  position: relative; width: 1920px; height: 1080px;
+  transform-origin: top left; overflow: hidden;
+  background: #0a0c18; color: #fff;
+  font-family: 'Segoe UI','Noto Sans JP',system-ui,sans-serif;
+}
+
+/* ════ Image Gallery ════ */
+.s4-gallery-wrap { background: var(--card); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.s4-gallery-body { padding: 10px; max-height: 280px; overflow-y: auto; }
+.s4-gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.s4-gallery-thumb {
+  aspect-ratio: 16/9; background-size: cover; background-position: center; background-color: var(--card2);
+  border-radius: 4px; cursor: pointer; border: 2px solid transparent; transition: border-color .15s;
+}
+.s4-gallery-thumb:hover { border-color: var(--accent); }
+.s4-gallery-thumb.active { border-color: var(--green); }
+.s4-gallery-empty { font-size: 12px; color: var(--faint); padding: 12px; }
+
 /* ════ Data Slots Editor ════ */
 .ds-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .ds-item { display: flex; gap: 6px; align-items: center; }
@@ -746,8 +775,33 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       </div>
       <!-- スライドタブ行 -->
       <div class="s4-tabs-row" id="s4TabsRow" style="display:none"></div>
-      <!-- 1スライド分エディタ -->
-      <div id="s4EditorPanel"></div>
+      <!-- 2カラム: エディタ + プレビュー/ギャラリー -->
+      <div class="s4-main-grid">
+        <div id="s4EditorPanel"></div>
+        <!-- 右カラム: プレビュー + ギャラリー -->
+        <div class="s4-right-col">
+          <!-- プレビュー -->
+          <div class="s4-preview-wrap">
+            <div class="s4-panel-hdr">
+              <span>🖼️ プレビュー</span>
+              <button class="btn btn-sm btn-ghost" onclick="s4RefreshPreview()" style="padding:3px 8px">↻</button>
+            </div>
+            <div class="s4-preview-box" id="s4PreviewBox"></div>
+          </div>
+          <!-- 画像ギャラリー -->
+          <div class="s4-gallery-wrap">
+            <div class="s4-panel-hdr">
+              <span>📁 画像ギャラリー</span>
+              <button class="btn btn-sm btn-ghost" onclick="s4LoadGallery()" style="padding:3px 8px">取得</button>
+            </div>
+            <div class="s4-gallery-body">
+              <div id="s4GalleryGrid" class="s4-gallery-grid">
+                <p class="s4-gallery-empty">「取得」で画像を読み込む</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -909,6 +963,9 @@ function handleMessage(msg) {
       break;
     case 'mods_saved':
       showSavedToast();
+      break;
+    case 'gallery_images':
+      s4RenderGallery(msg.images);
       break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
@@ -1259,7 +1316,185 @@ function s4RenderEditor() {
   var idx = Math.max(0, Math.min(s4ActiveIdx, currentMods.length - 1));
   s4ActiveIdx = idx;
   panel.innerHTML = buildSlideCard(currentMods[idx], idx);
+  s4RefreshPreview();
 }
+
+// ════ スライドプレビュー ════
+var s4PreviewTimer = null;
+function s4SchedulePreview() {
+  clearTimeout(s4PreviewTimer);
+  s4PreviewTimer = setTimeout(s4RefreshPreview, 420);
+}
+
+function s4RefreshPreview() {
+  var box = document.getElementById('s4PreviewBox');
+  if (!box) return;
+  if (!currentMods || !currentMods.length) { box.innerHTML = ''; box.style.height = ''; return; }
+  var mod = currentMods[Math.max(0, Math.min(s4ActiveIdx, currentMods.length - 1))];
+  if (!mod) return;
+  var w = box.offsetWidth;
+  if (w < 10) { setTimeout(s4RefreshPreview, 100); return; }
+  box.innerHTML = '<div class="spv-inner" id="spvInner">' + s4BuildSlideContent(mod) + '</div>';
+  var inner = document.getElementById('spvInner');
+  if (inner) {
+    var scale = w / 1920;
+    inner.style.transform = 'scale(' + scale + ')';
+    box.style.height = Math.round(1080 * scale) + 'px';
+  }
+}
+
+function s4BuildSlideContent(mod) {
+  if (!mod) return '';
+  var bgUrl = mod.bgImage || '';
+  var zoom = mod.bgImageZoom != null ? mod.bgImageZoom : 100;
+  var bx   = mod.bgImageX   != null ? mod.bgImageX   : 50;
+  var by   = mod.bgImageY   != null ? mod.bgImageY   : 50;
+  var bgCSS = bgUrl
+    ? 'background-image:url("' + esc(bgUrl) + '");background-size:' + zoom + '%;background-position:' + bx + '% ' + by + '%;background-repeat:no-repeat;background-color:#0a0c18'
+    : 'background-color:#0a0c18';
+
+  var html = '';
+  // 背景レイヤー
+  html += '<div style="position:absolute;inset:0;' + bgCSS + '"></div>';
+  // グラデーションオーバーレイ
+  html += '<div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.35) 50%,rgba(0,0,0,.08) 100%)"></div>';
+
+  // バッジ
+  if (mod.badge) {
+    html += '<div style="position:absolute;top:80px;left:96px;background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-size:28px;font-weight:900;padding:10px 28px;border-radius:8px;letter-spacing:2px;text-transform:uppercase">' + esc(mod.badge) + '</div>';
+  }
+
+  // タイプ別コンテンツ
+  if (mod.type === 'matchcard') {
+    var hs = mod.homeScore != null ? mod.homeScore : '-';
+    var as = mod.awayScore != null ? mod.awayScore : '-';
+    html += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);text-align:center;width:1600px;margin-left:-800px">' +
+      '<div style="display:flex;justify-content:space-around;font-size:44px;color:rgba(255,255,255,.65);margin-bottom:24px;font-weight:600">' +
+        '<span>' + esc(mod.homeTeam || '?') + '</span>' +
+        '<span style="color:rgba(255,255,255,.2)">vs</span>' +
+        '<span>' + esc(mod.awayTeam || '?') + '</span>' +
+      '</div>' +
+      '<div style="font-size:220px;font-weight:900;background:linear-gradient(135deg,#6366f1,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1;letter-spacing:16px">' +
+        esc(hs) + ' – ' + esc(as) +
+      '</div>' +
+      (mod.tournament ? '<div style="font-size:36px;color:rgba(255,255,255,.45);margin-top:24px;letter-spacing:2px">' + esc(mod.tournament) + '</div>' : '') +
+    '</div>';
+
+    // ゴール一覧（下部）
+    var goals = (mod.goals || []).slice(0, 6);
+    if (goals.length) {
+      html += '<div style="position:absolute;bottom:160px;left:0;right:0;display:flex;justify-content:space-between;padding:0 120px">';
+      var homeGoals = goals.filter(function(g) { return g.isHome; });
+      var awayGoals = goals.filter(function(g) { return !g.isHome; });
+      html += '<div style="font-size:28px;color:rgba(255,255,255,.6)">' + homeGoals.map(function(g) { return esc(g.player) + ' ' + esc(g.timeStr||''); }).join('<br>') + '</div>';
+      html += '<div style="font-size:28px;color:rgba(255,255,255,.6);text-align:right">' + awayGoals.map(function(g) { return esc(g.player) + ' ' + esc(g.timeStr||''); }).join('<br>') + '</div>';
+      html += '</div>';
+    }
+
+  } else if (mod.type === 'insight') {
+    var cps = (mod.catchphrases || []).slice(0, 4);
+    html += '<div style="position:absolute;top:180px;left:100px;right:100px">' +
+      cps.map(function(cp) {
+        return '<div style="font-size:52px;font-weight:700;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:24px;line-height:1.3">' +
+          '<span style="color:#38bdf8;font-size:36px;flex-shrink:0">▹</span><span>' + esc(cp) + '</span></div>';
+      }).join('') +
+    '</div>';
+
+  } else if (mod.type === 'stats' || mod.type === 'history') {
+    var slots = (mod.dataSlots || []).slice(0, 6);
+    html += '<div style="position:absolute;top:180px;left:100px;right:100px">' +
+      slots.map(function(s) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:20px 28px;margin-bottom:14px;background:rgba(255,255,255,.06);border-radius:10px;font-size:38px">' +
+          '<span style="color:rgba(255,255,255,.7)">' + esc(s.label||'') + '</span>' +
+          '<span style="font-weight:800;background:linear-gradient(135deg,#6366f1,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent">' + esc(s.value||'') + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+
+  } else if (mod.type === 'comparison') {
+    // 左右画像
+    if (mod.leftImage) {
+      html += '<div style="position:absolute;inset:0;left:0;width:50%;background-image:url(\'' + esc(mod.leftImage) + '\');background-size:cover;background-position:center;opacity:.35"></div>';
+    }
+    if (mod.rightImage) {
+      html += '<div style="position:absolute;inset:0;left:50%;width:50%;background-image:url(\'' + esc(mod.rightImage) + '\');background-size:cover;background-position:center;opacity:.35"></div>';
+    }
+    // 中央仕切り
+    html += '<div style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:rgba(255,255,255,.15)"></div>';
+    var cslots = (mod.dataSlots || []).slice(0, 6);
+    html += '<div style="position:absolute;top:180px;left:60px;right:60px">' +
+      cslots.map(function(s) {
+        return '<div style="display:flex;align-items:center;padding:16px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:38px;gap:16px">' +
+          '<span style="flex:1;text-align:right;color:#38bdf8;font-weight:700">' + esc(s.leftValue||'-') + '</span>' +
+          '<span style="flex:1;text-align:center;color:rgba(255,255,255,.45);font-size:28px">' + esc(s.label||'') + '</span>' +
+          '<span style="flex:1;text-align:left;color:#f472b6;font-weight:700">' + esc(s.rightValue||'-') + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  // タイトル（matchcard以外）
+  if (mod.type !== 'matchcard') {
+    html += '<div style="position:absolute;bottom:220px;left:96px;right:96px;font-size:72px;font-weight:900;line-height:1.3;text-shadow:0 2px 16px rgba(0,0,0,.6)">' + esc(mod.title||'') + '</div>';
+  }
+  // ナレーション（先頭80字）
+  if (mod.narration) {
+    html += '<div style="position:absolute;bottom:80px;left:96px;right:96px;font-size:30px;color:rgba(255,255,255,.5);line-height:1.6">' + esc((mod.narration||'').slice(0,80)) + '</div>';
+  }
+  // コメントバブル（右下、最大3個）
+  var cmts = (mod.comments || []).slice(0, 3);
+  if (cmts.length) {
+    html += '<div style="position:absolute;right:96px;bottom:' + (mod.narration ? 160 : 80) + 'px;display:flex;flex-direction:column;align-items:flex-end;gap:12px">' +
+      cmts.map(function(c, ci) {
+        var srcColor = c.source === 'reddit' ? '#ff6314' : c.source === 'yahoo' ? '#6b09f5' : '#1da1f2';
+        return '<div style="background:rgba(0,0,0,.65);border-left:3px solid ' + srcColor + ';padding:10px 18px;border-radius:6px;font-size:24px;max-width:480px;opacity:' + (1 - ci * 0.15) + '">' + esc(c.text||'') + '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  return html;
+}
+
+// ════ 画像ギャラリー ════
+var s4GalleryImages = [];
+
+function s4LoadGallery() {
+  document.getElementById('s4GalleryGrid').innerHTML = '<p class="s4-gallery-empty">読み込み中...</p>';
+  send({ action: 'get_gallery_images' });
+}
+
+function s4RenderGallery(images) {
+  s4GalleryImages = images || [];
+  var grid = document.getElementById('s4GalleryGrid');
+  if (!grid) return;
+  if (!s4GalleryImages.length) {
+    grid.innerHTML = '<p class="s4-gallery-empty">画像が見つかりませんでした</p>';
+    return;
+  }
+  var mod = currentMods && currentMods[s4ActiveIdx];
+  var currentBg = mod ? (mod.bgImage || '') : '';
+  grid.innerHTML = s4GalleryImages.map(function(img, gi) {
+    var active = img.url === currentBg ? ' active' : '';
+    return '<div class="s4-gallery-thumb' + active + '" style="background-image:url(\'' + esc(img.url) + '\')" ' +
+      'onclick="s4ApplyGalleryImage(' + gi + ')" title="' + esc(img.label||'') + '"></div>';
+  }).join('');
+}
+
+function s4ApplyGalleryImage(gi) {
+  if (!currentMods || !currentMods[s4ActiveIdx]) return;
+  var img = s4GalleryImages[gi];
+  if (!img) return;
+  currentMods[s4ActiveIdx].bgImage = img.url;
+  // URLフィールドも同期
+  var inp = document.getElementById('bgImageUrl_' + s4ActiveIdx);
+  if (inp) inp.value = img.url;
+  // アクティブ強調
+  var thumbs = document.querySelectorAll('.s4-gallery-thumb');
+  thumbs.forEach(function(t, ti) { t.classList.toggle('active', ti === gi); });
+  s4RefreshPreview();
+}
+
+// ギャラリーWS受信は下のmsg handlerに追加
 
 function s4AddSlide() {
   if (!currentMods) return;
@@ -1706,6 +1941,20 @@ function showSavedToast() {
 
 setTab(1);
 connect();
+
+// ════ 編集→プレビュー自動更新 ════
+document.addEventListener('input', function(e) {
+  if (e.target.closest('#s4EditorPanel')) s4SchedulePreview();
+});
+document.addEventListener('change', function(e) {
+  if (e.target.closest('#s4EditorPanel')) s4SchedulePreview();
+});
+
+// ウィンドウリサイズ時にプレビュースケール再計算
+window.addEventListener('resize', function() {
+  clearTimeout(s4PreviewTimer);
+  s4PreviewTimer = setTimeout(s4RefreshPreview, 200);
+});
 </script>
 </body>
 </html>
