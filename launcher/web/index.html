@@ -544,16 +544,43 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
   .vp-bb-controls select { width: 100%; box-sizing: border-box; }
   .vp-bb-controls .btn { text-align: center; }
 
-  /* Step 4 */
+  /* ── Step 4 全般 ── */
   .s4-topbar { flex-wrap: wrap; gap: 8px; }
   .s4-topbar > div { flex-wrap: wrap; gap: 6px; }
   .s4-tab-label { max-width: 60px; }
   .re-toolbar { flex-wrap: wrap; }
   .re-toolbar .sf { min-width: 0; width: 100%; }
 
+  /* 右カラムを1カラム時はstickyを解除 */
+  .s4-right-col { position: static; }
+
+  /* スライドカードヘッダー折り返し */
+  .slide-card-header { flex-wrap: wrap; gap: 6px; }
+  .slide-type-sel { max-width: none; flex: 1; min-width: 140px; }
+  .preview-toggle { margin-left: 0; }
+
+  /* スコア行: チーム名を上段・スコアを下段に分離 */
+  .score-row { flex-direction: column; align-items: stretch; gap: 6px; }
+  .score-row .team-input { width: 100%; }
+  .score-row-nums { display: flex; align-items: center; gap: 8px; justify-content: center; }
+
   /* DS/コメント行 */
-  .ds-item, .cmt-item { flex-wrap: wrap; }
-  .ds-comp-row { flex-direction: column; gap: 4px; }
+  .ds-item { flex-wrap: wrap; gap: 5px; }
+  .ds-item input.ds-label { flex: 1 1 120px; min-width: 0; }
+  .ds-item input.ds-val   { flex: 1 1 70px;  min-width: 0; }
+  .cmt-item { flex-wrap: wrap; gap: 5px; }
+  .cmt-text { min-width: 0; flex: 1 1 140px; }
+  .cmt-src  { flex: 0 0 80px; }
+}
+
+@media (max-width: 420px) {
+  .step-label { display: none; }
+  .stepper { margin-bottom: 16px; }
+  .main { padding: 14px 10px 64px; }
+  /* Step4: タブをよりコンパクトに */
+  .s4-tab { padding: 7px 8px; }
+  .s4-tab-btns { display: none; }  /* 移動・削除ボタン隠す（タップ誤爆防止） */
+  .s4-add-tab { padding: 7px 10px; }
 }
 
 @media (max-width: 420px) {
@@ -1644,9 +1671,11 @@ function buildSlideCard(mod, i) {
   if (mod.type === 'matchcard') {
     scoreSection = '<div class="sf"><label>スコア</label><div class="score-row">' +
       '<input type="text" class="team-input" value="' + esc(mod.homeTeam || '') + '" placeholder="ホーム" oninput="updateModField(' + i + ',\'homeTeam\',this.value)">' +
-      '<input type="text" value="' + esc(mod.homeScore != null ? mod.homeScore : '') + '" oninput="updateModField(' + i + ',\'homeScore\',this.value)" style="width:50px;text-align:center">' +
-      '<span class="score-sep">–</span>' +
-      '<input type="text" value="' + esc(mod.awayScore != null ? mod.awayScore : '') + '" oninput="updateModField(' + i + ',\'awayScore\',this.value)" style="width:50px;text-align:center">' +
+      '<div class="score-row-nums">' +
+        '<input type="text" value="' + esc(mod.homeScore != null ? mod.homeScore : '') + '" oninput="updateModField(' + i + ',\'homeScore\',this.value)" style="width:50px;text-align:center">' +
+        '<span class="score-sep">–</span>' +
+        '<input type="text" value="' + esc(mod.awayScore != null ? mod.awayScore : '') + '" oninput="updateModField(' + i + ',\'awayScore\',this.value)" style="width:50px;text-align:center">' +
+      '</div>' +
       '<input type="text" class="team-input" value="' + esc(mod.awayTeam || '') + '" placeholder="アウェイ" oninput="updateModField(' + i + ',\'awayTeam\',this.value)">' +
       '</div></div>';
   }
