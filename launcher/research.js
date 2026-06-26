@@ -199,17 +199,14 @@ async function research(topic, options = {}) {
   const facts = { topic, articles: [], matchData: null, playerData: null, comments: null, extracted: null, xImages: [] };
 
   // Step1: 記事収集
-  // トピック名からノイズ除去してBrave検索クエリを構築
-  const cleanedTopic = topic
-    .replace(/（[^）]*）/g, '')        // 括弧内（メディア名など）を除去
-    .replace(/\s*[-－]\s*Yahoo.*$/i, '') // "- Yahoo!ニュース" などを除去
+  // analyzeTopic が生成した英語クエリを優先。なければトピック名を短く切る
+  const searchQuery = options.searchQuery || topic
+    .replace(/（[^）]*）/g, '')
+    .replace(/\s*[-－]\s*Yahoo.*$/i, '')
     .replace(/[！!。、【】「」『』★☆♪]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 120);
-  const searchQuery = options.searchQuery
-    ? `${cleanedTopic} ${options.searchQuery}`.trim()
-    : cleanedTopic;
+    .slice(0, 60);
   console.log(`  [articles] query: "${searchQuery}"`);
   try {
     const articles = await braveDeepSearch(searchQuery, 5);
