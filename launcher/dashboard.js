@@ -356,7 +356,8 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw); } catch (_) { return; }
 
     if (msg.action === 'scout') {
-      if (session.phase !== 'idle' && session.phase !== 'done' && session.phase !== 'topics_ready') {
+      const scoutOk = ['idle','done','topics_ready','facts_ready','plan_ready','script_ready'];
+      if (!scoutOk.includes(session.phase)) {
         ws.send(JSON.stringify({ type: 'error', detail: '処理中です' }));
         return;
       }
