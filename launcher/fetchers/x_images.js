@@ -184,6 +184,23 @@ async function fetchImagesForLabels(labels, opts = {}) {
           addImages(ntTop, `@${ntHandle} (player=${label.name}/nt)`);
         }
       }
+      // クラブが不明 or 取得0件の場合: 選手名で直接検索 → 最新15件
+      if (label.name) {
+        const beforeCount = results.length;
+        const direct = await searchTweets(`"${label.name}" filter:images -filter:retweets`, 'Latest');
+        direct.sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
+        const directUrls = [];
+        const directSeen = new Set();
+        for (const tw of direct) {
+          if (directUrls.length >= 15) break;
+          for (const url of extractMediaUrls(tw)) {
+            if (directUrls.length >= 15) break;
+            if (!directSeen.has(url)) { directSeen.add(url); directUrls.push(url); }
+          }
+        }
+        addImages(directUrls, `X検索:${label.name}`);
+        console.log(`  [x_images] player direct search "${label.name}": ${results.length - beforeCount}件追加`);
+      }
     }
   }
 

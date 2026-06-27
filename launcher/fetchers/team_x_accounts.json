@@ -175,6 +175,8 @@
     "Hungary":           { "league": "National Team",       "handle": "MLSZhivatalos",    "handleJP": null },
     "Romania":           { "league": "National Team",       "handle": "FRFromania",       "handleJP": null },
     "Sweden":            { "league": "National Team",       "handle": "svenskfotboll",    "handleJP": null },
+    "Bosnia and Herzegovina": { "league": "National Team",  "handle": "NFSBiH",           "handleJP": null },
+    "Bosnia":            { "league": "National Team",       "handle": "NFSBiH",           "handleJP": null },
     "Ukraine":           { "league": "National Team",       "handle": "uaborig",          "handleJP": null },
     "Norway":            { "league": "National Team",       "handle": "naborig_fotball",  "handleJP": null },
     "Ireland":           { "league": "National Team",       "handle": "FAIreland",        "handleJP": null },
