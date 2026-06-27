@@ -56,7 +56,7 @@ async function renderSlide(browser, name, html, durationSec, outputPath) {
     '-y',
     '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(FPS),
     '-i', 'pipe:0',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'ultrafast',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-preset', 'ultrafast',
     '-crf', '23',
     outputPath,
   ], { stdio: ['pipe', 'pipe', 'pipe'] });

@@ -8,10 +8,11 @@ const path = require('path');
 // ── スライド動画に音声をミックス ──────────────────────
 
 function muxAudio(videoPath, audioPath, outputPath) {
-  // 映像の長さに合わせる（音声が短い場合は残りを無音で埋める）
+  // apad: 音声が映像より短い場合に無音パディング。-shortest: 映像長に合わせて切る
   execSync(`ffmpeg -y -i "${videoPath}" -i "${audioPath}" \
     -c:v copy -c:a aac -b:a 128k \
     -map 0:v:0 -map 1:a:0 \
+    -af apad -shortest \
     "${outputPath}"`, { stdio: 'pipe' });
   return outputPath;
 }
@@ -28,7 +29,8 @@ function concatVideos(videoPaths, outputPath) {
   fs.writeFileSync(listPath, listContent);
 
   execSync(`ffmpeg -y -f concat -safe 0 -i "${listPath}" \
-    -c:v copy -c:a aac -b:a 128k \
+    -c:v copy -c:a copy \
+    -avoid_negative_ts make_zero \
     "${outputPath}"`, { stdio: 'pipe' });
 
   // cleanup
