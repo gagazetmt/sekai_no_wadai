@@ -17,6 +17,34 @@ const { scoutWithAI, callDeepSeek } = require('./scout');
 const { generateMods, generateModsForPieces } = require('./script_gen');
 const { generateThumbnail } = require('./thumbnail');
 
+// プレビュー用: 実レンダリングと同じスライドビルダー
+const { buildInsightHTML }    = require('./slides/insight');
+const { buildOpeningHTML }    = require('./slides/opening');
+const { buildHistoryHTML }    = require('./slides/history');
+const { buildStatsHTML }      = require('./slides/stats');
+const { buildMatchcardHTML }  = require('./slides/matchcard');
+const { buildComparisonHTML } = require('./slides/comparison');
+const { buildEndingHTML }     = require('./slides/ending');
+const { injectCommentOverlay } = require('./slides/comments');
+
+const PREVIEW_BUILDERS = {
+  opening: buildOpeningHTML, insight: buildInsightHTML, history: buildHistoryHTML,
+  stats: buildStatsHTML, matchcard: buildMatchcardHTML, comparison: buildComparisonHTML, ending: buildEndingHTML,
+};
+
+// 実ビルダーでスライドHTMLを生成（プレビュー = 本番と同一見た目）
+function buildPreviewHTML(mod) {
+  const type = mod.type || 'insight';
+  const builder = PREVIEW_BUILDERS[type] || buildInsightHTML;
+  const m = Object.assign({}, mod, { durationSec: mod.durationSec || 8 });
+  let html = builder(m);
+  // コメントオーバーレイ（プレビューは簡易タイミングで早めに表示）
+  if (type !== 'opening' && type !== 'ending' && Array.isArray(m.comments) && m.comments.length) {
+    html = injectCommentOverlay(html, m.comments, 1.0, null, m.durationSec);
+  }
+  return html;
+}
+
 const PORT = 3456;
 const SAVED_FILE = path.join(__dirname, 'output', 'saved_topics.json');
 const TOPIC_DATA_FILE = path.join(__dirname, 'output', 'topic_data.json');
@@ -66,12 +94,61 @@ function loadTopicDataWithMeta() {
   } catch (_) { return { topicData: {}, activeTopic: null, phase: 'idle' }; }
 }
 
+// ── ギャラリー画像集約（取得元ラベル付き）─────────────
+// X公式（ラベルごと）/ 選手 / ロゴ / 記事 を {url, label, group} で返す。
+// Step2 のラベル別一覧と Step4 ギャラリーの両方で使う。
+function collectGalleryImages(facts) {
+  const images = [];
+  if (!facts) return images;
+  // X公式画像（source = "@ハンドル (team/top)" 等の取得元ラベル）
+  (facts.xImages || []).forEach(xi => {
+    if (!xi.url || !xi.url.startsWith('http')) return;
+    const group = (xi.source || 'X公式').replace(/\s*\(.*\)\s*$/, '');  // top/latest をまとめる
+    images.push({ url: xi.url, label: xi.source || 'X公式', group });
+  });
+  // 選手画像（FotMob/SofaScore — data URI のことあり）
+  const playerImg = facts.playerData?.photo || facts.playerData?.imageUrl || null;
+  if (playerImg) images.push({ url: playerImg, label: facts.playerData.name || '選手', group: '選手' });
+  // チームロゴ
+  if (facts.matchData?.homeLogo) images.push({ url: facts.matchData.homeLogo, label: facts.matchData.homeTeam || 'Home', group: 'ロゴ' });
+  if (facts.matchData?.awayLogo) images.push({ url: facts.matchData.awayLogo, label: facts.matchData.awayTeam || 'Away', group: 'ロゴ' });
+  // 記事サムネイル
+  (facts.articles || []).forEach(a => {
+    const url = a.imageUrl || a.image || a.thumbnail || null;
+    if (url && url.startsWith('http')) images.push({ url, label: (a.title || '').slice(0, 40), group: '記事' });
+  });
+  // 重複除去
+  const seen = new Set();
+  return images.filter(img => { if (seen.has(img.url)) return false; seen.add(img.url); return true; });
+}
+
 // ── HTTP サーバー ────────────────────────────────────
+
+// プレビュー用: 最後にリクエストされた mod をここに保持
+let lastPreviewMod = null;
 
 const server = http.createServer((req, res) => {
   if (req.url === '/' || req.url === '/index.html') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    // no-cache: スマホSafari等が古いHTMLを掴み続けるのを防ぐ
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     res.end(fs.readFileSync(path.join(__dirname, 'web', 'index.html')));
+    return;
+  }
+  // /preview — iframe が直接 GET して HTML を受け取る（srcdoc を使わない）
+  if (req.url.startsWith('/preview')) {
+    try {
+      const html = lastPreviewMod ? buildPreviewHTML(lastPreviewMod) : '<body style="background:#060e1c;color:#fff;padding:40px;font-size:32px">プレビューなし</body>';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(html);
+    } catch (e) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<body style="background:#1a0000;color:#f88;padding:40px;font-size:28px">エラー: ${e.message}</body>`);
+    }
     return;
   }
   if (req.url === '/mia.jpg') {
@@ -693,20 +770,112 @@ wss.on('connection', (ws) => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)),
         ]);
         // factsCache / topicData を更新
-        if (session.facts) session.facts.xImages = xImages;
+        if (!session.facts) session.facts = {};
+        session.facts.xImages = xImages;
         if (session.activeTopic && session.topicData[session.activeTopic]) {
           session.topicData[session.activeTopic].factsForClient.xImagesCount = xImages.length;
           session.topicData[session.activeTopic].factsForClient.labels = labels;
         }
-        // ギャラリーに直接送る
-        const images = xImages.map(xi => ({ url: xi.url, label: xi.source || 'X公式' }));
-        broadcast({ type: 'gallery_images', images });
+        // 取得元ラベル付きで全画像（X + 選手 + ロゴ + 記事）を送る
+        broadcast({ type: 'gallery_images', images: collectGalleryImages(session.facts) });
         broadcast({ type: 'x_images_ready', count: xImages.length });
       } catch (err) {
         // タイムアウト or エラーでも gallery_images を返してブロック解除
         broadcast({ type: 'gallery_images', images: [] });
         broadcast({ type: 'x_images_ready', count: 0 });
         console.warn(`  [fetch_x_images] ${err.message}`);
+      }
+    }
+
+    // ── V3式: 単一ラベルのデータ取得（ラベルカードの「データ取得」ボタン）──
+    if (msg.action === 'fetch_label_data') {
+      const label = msg.label;
+      const labelKey = msg.labelKey;
+      if (!label) { ws.send(JSON.stringify({ type: 'label_data_ready', labelKey, error: 'no label' })); return; }
+      broadcast({ type: 'phase', phase: 'fetching_data' });
+      const { fetchMatch, fetchPlayer, fetchTeam } = require('./research');
+      const out = { type: 'label_data_ready', labelKey, matchData: null, playerData: null, teamData: null, images: [] };
+      try {
+        if (!session.facts) session.facts = {};
+        if (label.type === 'match' && label.homeTeam && label.awayTeam) {
+          const md = await fetchMatch(label.homeTeam, label.awayTeam);
+          if (md.ok) {
+            session.facts.matchData = md;
+            out.matchData = { ok: true, scoreline: md.scoreline, homeTeam: md.homeTeam, awayTeam: md.awayTeam, tournament: md.tournament };
+            if (md.homeLogo) out.images.push({ url: md.homeLogo, label: md.homeTeam || 'Home', group: 'ロゴ' });
+            if (md.awayLogo) out.images.push({ url: md.awayLogo, label: md.awayTeam || 'Away', group: 'ロゴ' });
+          } else out.matchData = { ok: false, error: md.error };
+        } else if (label.type === 'player' && label.name) {
+          const pd = await fetchPlayer(label.name);
+          if (pd.ok) {
+            session.facts.playerData = pd;
+            let matchStats = null;
+            const mdFull = session.facts.matchData;
+            if (mdFull?.playerStats && pd.playerId) { const ps = mdFull.playerStats[String(pd.playerId)]; if (ps) matchStats = ps.stats; }
+            out.playerData = {
+              ok: true, playerId: pd.playerId, name: pd.name, position: pd.position, age: pd.age,
+              nationality: pd.nationality, team: pd.team, leagueName: pd.leagueName, marketValue: pd.marketValue,
+              marketValueHistory: pd.marketValueHistory || [], seasonStats: pd.seasonStats, nationalTeam: pd.nationalTeam,
+              recentAvgRating: pd.recentAvgRating, matchStats,
+            };
+            if (pd.photo) out.images.push({ url: pd.photo, label: pd.name || '選手', group: '選手' });
+          } else out.playerData = { ok: false, error: pd.error };
+        } else if (label.type === 'team' && label.name) {
+          const td = await fetchTeam(label.name);
+          out.teamData = td;
+          if (td && td.ok) {
+            session.facts.teamData = session.facts.teamData || [];
+            const idx = session.facts.teamData.findIndex(t => t.name === td.name);
+            if (idx >= 0) session.facts.teamData[idx] = td; else session.facts.teamData.push(td);
+            const logo = td.logo || td.teamLogo || td.crest || null;
+            if (logo) out.images.push({ url: logo, label: td.name || 'Team', group: 'ロゴ' });
+          }
+        } else {
+          out.error = 'このラベルはデータ取得に対応していません';
+        }
+        // factsForClient へ反映
+        if (session.activeTopic && session.topicData[session.activeTopic]) {
+          const fc = session.topicData[session.activeTopic].factsForClient;
+          if (out.matchData)  fc.matchData  = out.matchData;
+          if (out.playerData) fc.playerData = out.playerData;
+          saveTopicData();
+        }
+      } catch (err) {
+        out.error = err.message;
+      }
+      ws.send(JSON.stringify(out));
+    }
+
+    // ── V3式: 単一ラベルの画像取得（ラベルカードの「画像取得」ボタン）──
+    if (msg.action === 'fetch_label_images') {
+      const label = msg.label;
+      const labelKey = msg.labelKey;
+      if (!label) { ws.send(JSON.stringify({ type: 'label_images_ready', labelKey, images: [] })); return; }
+      broadcast({ type: 'phase', phase: 'fetching_x_images' });
+      try {
+        const { fetchImagesForLabels } = require('./fetchers/x_images');
+        const TIMEOUT_MS = 25000;
+        const xImages = await Promise.race([
+          fetchImagesForLabels([label]),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS)),
+        ]);
+        if (!session.facts) session.facts = {};
+        // facts.xImages へマージ（重複除去）
+        const existing = session.facts.xImages || [];
+        const seen = new Set(existing.map(x => x.url));
+        xImages.forEach(xi => { if (!seen.has(xi.url)) { existing.push(xi); seen.add(xi.url); } });
+        session.facts.xImages = existing;
+        if (session.activeTopic && session.topicData[session.activeTopic]) {
+          session.topicData[session.activeTopic].factsForClient.xImagesCount = existing.length;
+          saveTopicData();
+        }
+        const images = xImages
+          .filter(xi => xi.url && xi.url.startsWith('http'))
+          .map(xi => ({ url: xi.url, label: xi.source || 'X公式', group: (xi.source || 'X公式').replace(/\s*\(.*\)\s*$/, '') }));
+        ws.send(JSON.stringify({ type: 'label_images_ready', labelKey, images }));
+      } catch (err) {
+        ws.send(JSON.stringify({ type: 'label_images_ready', labelKey, images: [], error: err.message }));
+        console.warn(`  [fetch_label_images] ${err.message}`);
       }
     }
 
@@ -814,35 +983,13 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.action === 'get_gallery_images') {
-      const images = [];
-      const facts = session.facts;
-      if (facts) {
-        // X公式画像（ラベルベース・最優先で先頭に）
-        (facts.xImages || []).forEach(xi => {
-          if (xi.url && xi.url.startsWith('http')) {
-            images.push({ url: xi.url, label: xi.source || 'X公式' });
-          }
-        });
-        // 選手画像（FotMob）
-        const playerImg = facts.playerData?.photo || facts.playerData?.imageUrl || null;
-        if (playerImg) {
-          images.push({ url: playerImg, label: facts.playerData.name || '選手' });
-        }
-        // チームロゴ（FotMob）
-        if (facts.matchData?.homeLogo) images.push({ url: facts.matchData.homeLogo, label: facts.matchData.homeTeam || 'Home' });
-        if (facts.matchData?.awayLogo) images.push({ url: facts.matchData.awayLogo, label: facts.matchData.awayTeam || 'Away' });
-        // 記事サムネイル（最後・補完用）
-        (facts.articles || []).forEach(a => {
-          const url = a.imageUrl || a.image || a.thumbnail || null;
-          if (url && url.startsWith('http')) {
-            images.push({ url, label: (a.title || '').slice(0, 40) });
-          }
-        });
-      }
-      // 重複除去
-      const seen = new Set();
-      const unique = images.filter(img => { if (seen.has(img.url)) return false; seen.add(img.url); return true; });
-      ws.send(JSON.stringify({ type: 'gallery_images', images: unique }));
+      ws.send(JSON.stringify({ type: 'gallery_images', images: collectGalleryImages(session.facts) }));
+    }
+
+    // スライドプレビュー: mod を保存して ready を返す（HTML は /preview エンドポイントで返す）
+    if (msg.action === 'preview_slide') {
+      lastPreviewMod = msg.mod || {};
+      ws.send(JSON.stringify({ type: 'preview_ready', reqId: msg.reqId || null }));
     }
 
     if (msg.action === 'reset') {

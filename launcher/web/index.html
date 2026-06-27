@@ -1326,8 +1326,8 @@ function handleMessage(msg) {
     case 'gallery_images':
       onGalleryImages(msg.images);
       break;
-    case 'slide_preview':
-      s4ShowPreview(msg.html, msg.reqId);
+    case 'preview_ready':
+      s4ShowPreview(msg.reqId);
       break;
     case 'label_data_ready':
       onLabelDataReady(msg);
@@ -2139,18 +2139,17 @@ function s4RefreshPreview() {
   send({ action: 'preview_slide', mod: mod, reqId: s4PreviewReqId });
 }
 
-function s4ShowPreview(html, reqId) {
+function s4ShowPreview(reqId) {
   // 古いリクエストの応答は捨てる
   if (reqId != null && reqId !== s4PreviewReqId) return;
   var box = document.getElementById('s4PreviewBox');
   if (!box) return;
   var w = box.offsetWidth;
-  if (w < 10) { setTimeout(function(){ s4ShowPreview(html, reqId); }, 100); return; }
+  if (w < 10) { setTimeout(function(){ s4ShowPreview(reqId); }, 100); return; }
   var scale = w / 1920;
   box.style.height = Math.round(1080 * scale) + 'px';
-  box.innerHTML = '<iframe class="spv-frame" sandbox="allow-scripts allow-same-origin" style="width:1920px;height:1080px;border:0;transform:scale(' + scale + ');transform-origin:top left"></iframe>';
-  var f = box.querySelector('iframe');
-  if (f) f.srcdoc = html;
+  // srcdoc ではなく src= で読み込む（モバイルでの大量HTML srcdoc クラッシュ回避）
+  box.innerHTML = '<iframe style="width:1920px;height:1080px;border:0;transform:scale(' + scale + ');transform-origin:top left" src="/preview?t=' + Date.now() + '"></iframe>';
 }
 
 function s4BuildSlideContent(mod) {
