@@ -964,6 +964,13 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         <div class="done-meta" id="doneMeta"></div>
       </div>
       <div class="video-player" id="videoPlayer"></div>
+      <div id="thumbnailBlock" style="display:none;margin-top:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">サムネイル</div>
+        <img id="thumbnailImg" style="width:100%;border-radius:8px;border:1px solid var(--border)" />
+        <div style="margin-top:8px">
+          <a class="btn btn-ghost" id="thumbnailLink" download="thumbnail.jpg" style="font-size:13px">⬇ サムネDL</a>
+        </div>
+      </div>
       <div class="flow-footer">
         <button class="btn btn-ghost" onclick="switchTab(4)">← 編集に戻る</button>
         <a class="btn btn-green" id="downloadLink" download>⬇ ダウンロード</a>
@@ -2488,6 +2495,14 @@ function showRenderDone(msg) {
   if (msg.videoUrl) {
     player.innerHTML = '<video controls src="' + esc(msg.videoUrl) + '"></video>';
     document.getElementById('downloadLink').href = msg.videoUrl;
+  }
+  var thumbBlock = document.getElementById('thumbnailBlock');
+  if (msg.thumbnailUrl) {
+    document.getElementById('thumbnailImg').src = msg.thumbnailUrl;
+    document.getElementById('thumbnailLink').href = msg.thumbnailUrl;
+    thumbBlock.style.display = '';
+  } else {
+    thumbBlock.style.display = 'none';
   }
 }
 

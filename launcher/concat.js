@@ -5,6 +5,8 @@ const { execSync } = require('child_process');
 const fs   = require('fs');
 const path = require('path');
 
+const BGM_PATH = path.join(__dirname, 'assets', 'bgm.mp3');
+
 // ── スライド動画に音声をミックス ──────────────────────
 
 function muxAudio(videoPath, audioPath, outputPath) {
@@ -91,14 +93,35 @@ function buildFinalVideo(videoFiles, audioFiles, outputDir, finalName = 'final.m
     throw new Error('No valid video files to concat');
   }
 
-  const finalPath = path.join(outputDir, finalName);
-  concatVideos(muxedFiles, finalPath);
+  const rawPath = path.join(outputDir, '_raw_' + finalName);
+  concatVideos(muxedFiles, rawPath);
 
   // muxed/silent 中間ファイルを削除
   for (const f of muxedFiles) {
     if (f.includes('muxed_') || f.includes('silent_')) {
       try { fs.unlinkSync(f); } catch {}
     }
+  }
+
+  // BGM ミックス
+  const finalPath = path.join(outputDir, finalName);
+  if (fs.existsSync(BGM_PATH)) {
+    try {
+      execSync(`ffmpeg -y -i "${rawPath}" -stream_loop -1 -i "${BGM_PATH}" \
+        -filter_complex "[1:a]volume=0.18[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[a]" \
+        -map 0:v -map "[a]" \
+        -c:v copy -c:a aac -b:a 128k \
+        -movflags +faststart \
+        "${finalPath}"`, { stdio: 'pipe' });
+      fs.unlinkSync(rawPath);
+      const size = (fs.statSync(finalPath).size / (1024 * 1024)).toFixed(1);
+      console.log(`  BGM mixed: ${finalPath} (${size}MB)`);
+    } catch (err) {
+      console.warn(`  BGM mix failed: ${err.message} — using raw`);
+      fs.renameSync(rawPath, finalPath);
+    }
+  } else {
+    fs.renameSync(rawPath, finalPath);
   }
 
   return finalPath;

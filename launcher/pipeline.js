@@ -22,6 +22,7 @@ const { buildFinalVideo }    = require('./concat');
 const { getPattern, listPatterns, buildPiecesPattern } = require('./slide_patterns');
 const { resolveAllImages }   = require('./fetchers/images');
 const { whisperAll }         = require('./whisper');
+const { generateThumbnail }  = require('./thumbnail');
 
 const STEPS = [
   { id: 'scout',    label: '案件取得',              num: 1 },
@@ -188,10 +189,28 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
   const totalDuration = renderDurations.reduce((s, d) => s + d, 0).toFixed(1);
   _emit(emitter, 'sub_step', { step: 'concat', status: 'done', detail: `${totalDuration}s` });
 
+  // Sub 7: Thumbnail
+  let thumbnailPath = null;
+  try {
+    const openingMod = mods[0] || {};
+    const contentMod = mods[1] || {};
+    const badge = openingMod.badge || '速報';
+    const bgImageUrl = contentMod.bgImage || openingMod.bgImage || null;
+    thumbnailPath = await generateThumbnail({
+      title: topic,
+      badge,
+      bgImageUrl,
+      outputPath: path.join(outputDir, 'thumbnail.jpg'),
+    });
+    _emit(emitter, 'sub_step', { step: 'thumbnail', status: 'done', detail: 'thumbnail.jpg' });
+  } catch (err) {
+    console.warn(`  Thumbnail failed: ${err.message}`);
+  }
+
   return {
     topic, patternKey, mods, outputDir, finalVideo,
     totalDuration: parseFloat(totalDuration),
-    videoFiles, audioFiles,
+    videoFiles, audioFiles, thumbnailPath,
   };
 }
 
