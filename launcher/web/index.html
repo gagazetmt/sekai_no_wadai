@@ -1224,6 +1224,7 @@ function handleMessage(msg) {
       document.getElementById('fetchXImagesBtn').disabled = false;
       break;
     case 'thumbnail_ready':
+      clearTimeout(_thumbTimer);
       currentThumbnailUrl = msg.thumbnailUrl;
       s5UpdateThumb(msg.thumbnailUrl);
       document.getElementById('thumbRegenStatus').style.display = 'none';
@@ -1231,18 +1232,23 @@ function handleMessage(msg) {
       document.getElementById('thumbGenBtn').textContent = '↻ 再生成';
       break;
     case 'thumbnail_error':
+      clearTimeout(_thumbTimer);
       document.getElementById('thumbRegenStatus').textContent = 'エラー: ' + msg.detail;
       document.getElementById('thumbRegenStatus').style.color = 'var(--red, #ef4444)';
+      document.getElementById('thumbRegenStatus').style.display = '';
       document.getElementById('thumbGenBtn').disabled = false;
       document.getElementById('thumbGenBtn').textContent = '🖼️ 生成';
       break;
     case 'meta_ready':
+      clearTimeout(_metaTimer);
       s5FillMeta(msg.meta);
       document.getElementById('metaGenStatus').style.display = 'none';
       document.getElementById('metaGenBtn').disabled = false;
       break;
     case 'meta_error':
+      clearTimeout(_metaTimer);
       document.getElementById('metaGenStatus').textContent = 'エラー: ' + msg.detail;
+      document.getElementById('metaGenStatus').style.color = 'var(--red, #ef4444)';
       document.getElementById('metaGenBtn').disabled = false;
       break;
     case 'error':
@@ -2652,23 +2658,42 @@ function selectBadge(btn) {
   btn.classList.add('active');
 }
 
+var _thumbTimer = null;
 function regenThumbnail() {
   var badge = (document.querySelector('.badge-btn.active') || {}).dataset?.badge || '速報';
   var titleEl = document.getElementById('thumbTitle');
   var title = titleEl.value.trim() || titleEl.placeholder || '';
   var genBtn = document.getElementById('thumbGenBtn');
+  var statusEl = document.getElementById('thumbRegenStatus');
   genBtn.disabled = true;
   genBtn.textContent = '生成中...';
-  document.getElementById('thumbRegenStatus').style.display = 'none';
+  statusEl.textContent = '生成中...';
+  statusEl.style.color = 'var(--muted)';
+  statusEl.style.display = '';
+  clearTimeout(_thumbTimer);
+  _thumbTimer = setTimeout(function() {
+    genBtn.disabled = false;
+    genBtn.textContent = '🖼️ 生成';
+    statusEl.textContent = 'タイムアウト — サーバーを再起動して試してね';
+    statusEl.style.color = 'var(--red, #ef4444)';
+  }, 30000);
   send({ action: 'regen_thumbnail', badge: badge, title: title, bgImageUrl: null });
 }
 
+var _metaTimer = null;
 function generateMeta() {
   var btn = document.getElementById('metaGenBtn');
+  var statusEl = document.getElementById('metaGenStatus');
   btn.disabled = true;
-  document.getElementById('metaGenStatus').textContent = '生成中...';
-  document.getElementById('metaGenStatus').style.color = 'var(--muted)';
-  document.getElementById('metaGenStatus').style.display = '';
+  statusEl.textContent = '生成中... (〜15秒)';
+  statusEl.style.color = 'var(--muted)';
+  statusEl.style.display = '';
+  clearTimeout(_metaTimer);
+  _metaTimer = setTimeout(function() {
+    btn.disabled = false;
+    statusEl.textContent = 'タイムアウト — サーバーを再起動して試してね';
+    statusEl.style.color = 'var(--red, #ef4444)';
+  }, 30000);
   send({ action: 'generate_meta' });
 }
 
