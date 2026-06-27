@@ -1299,7 +1299,56 @@ function renderDataContent(matchData, playerData, teamData) {
   }
   if (playerData) {
     if (playerData.ok) {
-      parts.push({ text: '👤 ' + (playerData.name || '') + (playerData.team ? ' (' + playerData.team + ')' : ''), ok: true });
+      // ⑤ 基本情報
+      var pLine = '👤 ' + (playerData.name || '');
+      if (playerData.position) pLine += ' ／ ' + playerData.position;
+      if (playerData.age) pLine += ' ／ ' + playerData.age + '歳';
+      if (playerData.nationality) pLine += ' ／ ' + playerData.nationality;
+      if (playerData.team) pLine += ' ／ ' + playerData.team;
+      if (playerData.marketValue) pLine += ' ／ 評価額: ' + playerData.marketValue;
+      parts.push({ text: pLine, ok: true });
+      // ① 今季スタッツ
+      var ss = playerData.seasonStats;
+      if (ss) {
+        var ssLine = '📊 今季';
+        if (playerData.leagueName) ssLine += '(' + playerData.leagueName + ')';
+        ssLine += ': ';
+        var ssItems = [];
+        if (ss.goals != null)       ssItems.push('G ' + ss.goals);
+        if (ss.assists != null)     ssItems.push('A ' + ss.assists);
+        if (ss.appearances != null) ssItems.push(ss.appearances + '試合');
+        if (ss.rating != null)      ssItems.push('評価 ' + ss.rating);
+        if (ss.expectedGoals != null) ssItems.push('xG ' + ss.expectedGoals);
+        parts.push({ text: ssLine + (ssItems.join(' ／ ') || 'データなし'), ok: true });
+      }
+      // ③ 代表スタッツ
+      var nt = playerData.nationalTeam;
+      if (nt) {
+        var ntLine = '🌍 ' + (nt.teamName || '代表') + ': ';
+        var ntItems = [];
+        if (nt.total.appearances) ntItems.push(nt.total.appearances + 'caps');
+        if (nt.total.goals)       ntItems.push('G ' + nt.total.goals);
+        if (nt.total.assists)     ntItems.push('A ' + nt.total.assists);
+        parts.push({ text: ntLine + (ntItems.join(' ／ ') || 'データなし'), ok: true });
+      }
+      // ④ 今試合スタッツ
+      var ms = playerData.matchStats;
+      if (ms) {
+        var msItems = [];
+        var msKeys = ['FotMob rating','Goals','Assists','Minutes played','Expected goals (xG)','Shots on target','Key passes','Successful dribbles'];
+        msKeys.forEach(function(k) { if (ms[k] != null) msItems.push(k.replace('FotMob rating','評価').replace('Minutes played','出場分') + ': ' + ms[k]); });
+        if (msItems.length) parts.push({ text: '⚽ 今試合: ' + msItems.join(' ／ '), ok: true });
+      }
+      // ⑥ 市場価格推移（最新3点）
+      var mvh = playerData.marketValueHistory;
+      if (mvh && mvh.length) {
+        var recent = mvh.slice(-3);
+        var mvLine = '💰 市場価格推移: ' + recent.map(function(v) {
+          var val = v.value >= 1000000 ? '€' + (v.value / 1000000).toFixed(0) + 'M' : '€' + (v.value / 1000).toFixed(0) + 'K';
+          return (v.date ? v.date.slice(0,7) : '?') + ' ' + val;
+        }).join(' → ');
+        parts.push({ text: mvLine, ok: true });
+      }
     } else {
       parts.push({ text: '👤 選手データ取得失敗: ' + (playerData.error || ''), ok: false });
     }

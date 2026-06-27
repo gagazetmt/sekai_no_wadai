@@ -634,7 +634,35 @@ wss.on('connection', (ws) => {
           if (pd.ok) {
             if (!session.facts) session.facts = {};
             session.facts.playerData = pd;
-            result.playerData = { ok: true, name: pd.name, team: pd.team };
+            // 今試合スタッツを matchData.playerStats から紐付け
+            let matchStats = null;
+            const mdFull = session.facts.matchData;
+            if (mdFull?.playerStats && pd.playerId) {
+              const key = String(pd.playerId);
+              const ps = mdFull.playerStats[key];
+              if (ps) matchStats = ps.stats;
+            }
+            result.playerData = {
+              ok: true,
+              playerId: pd.playerId,
+              name: pd.name,
+              position: pd.position,
+              age: pd.age,
+              nationality: pd.nationality,
+              team: pd.team,
+              leagueName: pd.leagueName,
+              seasonYear: pd.seasonYear,
+              marketValue: pd.marketValue,
+              marketValueHistory: pd.marketValueHistory || [],
+              seasonStats: pd.seasonStats,
+              nationalTeam: pd.nationalTeam,
+              recentAvgRating: pd.recentAvgRating,
+              last5Matches: pd.last5Matches,
+              currentClub: pd.currentClub,
+              playerCareer: pd.playerCareer,
+              photo: pd.photo,
+              matchStats,
+            };
           } else {
             result.playerData = { ok: false, error: pd.error };
           }
