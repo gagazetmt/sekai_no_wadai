@@ -1028,14 +1028,16 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         </div>
         <div class="flow-footer">
           <button class="btn btn-ghost" onclick="copyMeta()">📋 全コピー</button>
+          <button class="btn btn-accent" id="metaGenBtn" onclick="generateMeta()">✨ AI生成</button>
         </div>
+        <div id="metaGenStatus" style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px;display:none">生成中...</div>
       </div>
 
       <!-- タブ3: サムネイル編集 -->
       <div class="s5-panel" id="s5-thumb" style="display:none">
         <div class="thumb-preview-wrap">
-          <img id="thumbnailImg" class="thumb-preview-img" />
-          <div id="thumbEmpty" class="thumb-empty" style="display:none">サムネなし</div>
+          <img id="thumbnailImg" class="thumb-preview-img" style="display:none" />
+          <div id="thumbEmpty" class="thumb-empty">まだサムネイルがありません。下の「生成」ボタンを押してね</div>
         </div>
         <div class="meta-field" style="margin-top:12px">
           <label class="meta-label">バッジ</label>
@@ -1048,14 +1050,14 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
           </div>
         </div>
         <div class="meta-field">
-          <label class="meta-label">サムネタイトル</label>
+          <label class="meta-label">サムネタイトル <span style="font-size:11px;color:var(--muted)">（20文字目安）</span></label>
           <input id="thumbTitle" class="meta-input" type="text" maxlength="40" placeholder="空欄で動画タイトルを使用" />
         </div>
         <div class="flow-footer">
-          <a class="btn btn-ghost" id="thumbnailLink" download="thumbnail.jpg">⬇ サムネDL</a>
-          <button class="btn btn-accent" onclick="regenThumbnail()">↻ 再生成</button>
+          <a class="btn btn-ghost" id="thumbnailLink" download="thumbnail.jpg" style="display:none">⬇ サムネDL</a>
+          <button class="btn btn-accent" onclick="regenThumbnail()" id="thumbGenBtn">🖼️ 生成</button>
         </div>
-        <div id="thumbRegenStatus" style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px;display:none">再生成中...</div>
+        <div id="thumbRegenStatus" style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px;display:none">生成中...</div>
       </div>
     </div>
   </div>
@@ -1225,9 +1227,23 @@ function handleMessage(msg) {
       currentThumbnailUrl = msg.thumbnailUrl;
       s5UpdateThumb(msg.thumbnailUrl);
       document.getElementById('thumbRegenStatus').style.display = 'none';
+      document.getElementById('thumbGenBtn').disabled = false;
+      document.getElementById('thumbGenBtn').textContent = '↻ 再生成';
       break;
     case 'thumbnail_error':
       document.getElementById('thumbRegenStatus').textContent = 'エラー: ' + msg.detail;
+      document.getElementById('thumbRegenStatus').style.color = 'var(--red, #ef4444)';
+      document.getElementById('thumbGenBtn').disabled = false;
+      document.getElementById('thumbGenBtn').textContent = '🖼️ 生成';
+      break;
+    case 'meta_ready':
+      s5FillMeta(msg.meta);
+      document.getElementById('metaGenStatus').style.display = 'none';
+      document.getElementById('metaGenBtn').disabled = false;
+      break;
+    case 'meta_error':
+      document.getElementById('metaGenStatus').textContent = 'エラー: ' + msg.detail;
+      document.getElementById('metaGenBtn').disabled = false;
       break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
@@ -2593,13 +2609,7 @@ function showRenderDone(msg) {
 
   // タブ2: メタデータ
   currentMeta = msg.meta || null;
-  if (currentMeta) {
-    var titleEl = document.getElementById('metaTitle');
-    titleEl.value = currentMeta.title || msg.topic || '';
-    titleEl.dispatchEvent(new Event('input'));
-    document.getElementById('metaDescription').value = currentMeta.description || '';
-    document.getElementById('metaTags').value = Array.isArray(currentMeta.tags) ? currentMeta.tags.join(', ') : '';
-  }
+  s5FillMeta(currentMeta || { title: msg.topic || '' });
 
   // タブ3: サムネイル
   currentThumbnailUrl = msg.thumbnailUrl || null;
@@ -2644,10 +2654,31 @@ function selectBadge(btn) {
 
 function regenThumbnail() {
   var badge = (document.querySelector('.badge-btn.active') || {}).dataset?.badge || '速報';
-  var title = document.getElementById('thumbTitle').value.trim()
-             || document.getElementById('thumbTitle').placeholder;
-  document.getElementById('thumbRegenStatus').style.display = '';
+  var titleEl = document.getElementById('thumbTitle');
+  var title = titleEl.value.trim() || titleEl.placeholder || '';
+  var genBtn = document.getElementById('thumbGenBtn');
+  genBtn.disabled = true;
+  genBtn.textContent = '生成中...';
+  document.getElementById('thumbRegenStatus').style.display = 'none';
   send({ action: 'regen_thumbnail', badge: badge, title: title, bgImageUrl: null });
+}
+
+function generateMeta() {
+  var btn = document.getElementById('metaGenBtn');
+  btn.disabled = true;
+  document.getElementById('metaGenStatus').textContent = '生成中...';
+  document.getElementById('metaGenStatus').style.color = 'var(--muted)';
+  document.getElementById('metaGenStatus').style.display = '';
+  send({ action: 'generate_meta' });
+}
+
+function s5FillMeta(meta) {
+  if (!meta) return;
+  var titleEl = document.getElementById('metaTitle');
+  titleEl.value = meta.title || '';
+  titleEl.dispatchEvent(new Event('input'));
+  document.getElementById('metaDescription').value = meta.description || '';
+  document.getElementById('metaTags').value = Array.isArray(meta.tags) ? meta.tags.join(', ') : (meta.tags || '');
 }
 
 function copyMeta() {
