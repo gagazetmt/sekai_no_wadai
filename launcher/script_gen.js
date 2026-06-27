@@ -199,9 +199,21 @@ async function generateMods(patternKey, topic, facts) {
   const systemPrompt = `あなたはサッカーYouTube動画のデータ構成AIです。
 与えられたトピック・素材・スライド仕様に基づいて、各スライドのmodデータをJSON形式で生成してください。
 
-【フィールド仕様】
+【ナレーション仕様】
+- opening narration: タイトルコールのみ。「〇〇が〇〇した件について見ていきましょう」程度の短い導入（30文字以内）
+- コンテンツスライド narration: 話題の概要を口語体で200文字程度にまとめる。事実ベースで視聴者が「へぇ」となる内容
+- ending narration: オチの一言のみ。「やっぱ〇〇はすごいな」「これはエモい」程度の締め（30文字以内）
+
+【コメント仕様（opening/ending以外の全スライドに必須）】
+- 7〜9個
+- 形式: [{text:"日本語", source:"x"|"reddit"|"yahoo"}, ...]
+- 1コメント40〜120文字を優先（短すぎず、読んで面白いもの）
+- 素材の_commentsから使う。英文コメントは内容を踏まえた面白い日本語意訳（直訳NG）
+- 不足時は視聴者が書きそうなリアルな反応を生成（source:"x"）
+- 必ず7個以上生成すること
+
+【その他フィールド仕様】
 - title: スライド見出し（日本語・短く印象的に）
-- narration: ナレーション台本（日本語・口語体・100〜200文字。openingは30〜60文字、endingは「チャンネル登録よろしくお願いします」系の30〜60文字）
 - badge: バッジテキスト（opening/endingのみ。例: 速報、注目、朗報、衝撃）
 - catchphrases: insight用。論点の箇条書き配列（3〜5個、各20文字以内）
 - siBinding: stats/history用。英語名（選手名 or チーム名）。画像検索キー
@@ -219,11 +231,6 @@ async function generateMods(patternKey, topic, facts) {
   - stats: {"Ball possession": {home:55, away:45}, ...}
   - lineup: {home:[{name,pos},...], away:[{name,pos},...]}
   - formations: {home:"4-3-3", away:"4-2-3-1"}
-- comments: opening/ending以外のスライドに必須。ファン反応配列（6〜9個）
-  - 形式: [{text:"日本語（15文字以内厳守）", source:"x"|"reddit"|"yahoo"}, ...]
-  - 素材の_commentsから関連するものを使う。面白い日本語に意訳
-  - 不足時は視聴者が書きそうな反応を生成（source:"x"）
-  - 必ず6個以上生成すること
 - bgImage: null（後工程で設定）
 - leftImage / rightImage: null（comparison用、後工程）
 
@@ -296,11 +303,11 @@ async function generateModsForPieces(selectedViewpoints, facts) {
   const compressed = compressFacts(facts);
 
   const SLIDE_TYPE_SPEC = {
-    insight:    '- title, narration（100-200文字）, catchphrases（3-5個・各20文字以内）, comments（6-9個）',
-    matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（100-200文字）',
-    stats:      '- title, narration（100-200文字）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
-    comparison: '- title, narration（100-200文字）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（6-9個）',
-    history:    '- title, narration（100-200文字）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
+    insight:    '- title, narration（200文字程度の概要）, catchphrases（3-5個・各20文字以内）, comments（7-9個・各40-120文字）',
+    matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（200文字程度の概要）',
+    stats:      '- title, narration（200文字程度の概要）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（7-9個・各40-120文字）',
+    comparison: '- title, narration（200文字程度の概要）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（7-9個・各40-120文字）',
+    history:    '- title, narration（200文字程度の概要）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）, comments（7-9個・各40-120文字）',
   };
 
   const piecesText = selectedViewpoints.map((vp, i) => {
@@ -311,17 +318,29 @@ async function generateModsForPieces(selectedViewpoints, facts) {
   const systemPrompt = `あなたはサッカーYouTube動画のデータ構成AIです。
 選ばれた企画ピース（${count}個）をもとに、${pattern.slides.length}枚のスライドデータをJSON形式で生成してください。
 
+【ナレーション仕様】
+- opening narration: タイトルコールのみ。「〇〇について見ていきましょう」程度の短い導入（30文字以内）
+- コンテンツスライド narration: 話題の概要を口語体で200文字程度にまとめる。事実ベースで視聴者が「へぇ」となる内容
+- ending narration: オチの一言のみ。「やっぱ〇〇はすごいな」「これはエモい」程度の締め（30文字以内）
+
+【コメント仕様（opening/ending以外のスライドに必須）】
+- 7〜9個
+- 形式: [{text:"日本語", source:"x"|"reddit"|"yahoo"}, ...]
+- 1コメント40〜120文字を優先（短すぎず、読んで面白いもの）
+- 素材の_commentsから使う。英文コメントは内容を踏まえた面白い日本語意訳（直訳NG）
+- 不足時は視聴者が書きそうなリアルな反応を生成（source:"x"）
+- 必ず7個以上生成すること
+
 【スライド構成】
-- slides[0]: opening — 動画の掴み。title（10文字以内・インパクト重視）+ badge="速報"固定 + narration 30-60文字
+- slides[0]: opening — title（10文字以内・インパクト重視）+ badge="速報"固定 + narration（上記仕様）
 ${selectedViewpoints.map((vp, i) => {
   const t = contentTypes[i];
   return `- slides[${i + 1}]: ${t} — 企画ピース${i + 1}「${vp.angle}」\n  必須フィールド: ${SLIDE_TYPE_SPEC[t] || SLIDE_TYPE_SPEC.insight}`;
 }).join('\n')}
-- slides[${count + 1}]: ending — チャンネル登録訴求。title（「チャンネル登録」等）+ narration 30-60文字
+- slides[${count + 1}]: ending — title（「チャンネル登録」等）+ narration（上記仕様）
 
 【共通注意】
 - 素材の実データを優先。事実の捏造禁止
-- comments は素材の_commentsから関連するものを15文字以内の日本語に意訳。不足時は視聴者反応を生成（source:"x"）
 - 全${pattern.slides.length}枚分を必ず生成`;
 
   const userPrompt = `選択された企画ピース:\n${piecesText}\n\n素材:\n${compressed}\n\nJSON形式で返してください:\n{"mods": [slide0, ${selectedViewpoints.map((_, i) => `slide${i + 1}`).join(', ')}, slide${count + 1}]}`;
