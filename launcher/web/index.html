@@ -369,6 +369,38 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .video-player { margin: 20px auto; border-radius: 16px; overflow: hidden; background: #000; box-shadow: var(--shadow); max-width: 420px; }
 .video-player video { width: 100%; display: block; }
 
+/* ════ Step5 副タブ ════ */
+.s5-tabs { display: flex; gap: 4px; margin: 16px 0 0; border-bottom: 1px solid var(--border); }
+.s5-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted);
+  font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; margin-bottom: -1px;
+  transition: color .15s, border-color .15s; }
+.s5-tab:hover { color: var(--text); }
+.s5-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.s5-panel { padding-top: 16px; }
+
+/* ════ メタデータ ════ */
+.meta-field { margin-bottom: 14px; }
+.meta-label { display: block; font-size: 11.5px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.meta-input { width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+.meta-textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 10px 12px; font-size: 13px;
+  resize: vertical; line-height: 1.6; }
+.meta-input:focus, .meta-textarea:focus { outline: none; border-color: var(--accent); }
+.meta-count { font-size: 11px; color: var(--muted); text-align: right; margin-top: 3px; }
+
+/* ════ サムネイル編集 ════ */
+.thumb-preview-wrap { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: #000; }
+.thumb-preview-img { width: 100%; display: block; }
+.thumb-empty { padding: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+.badge-selector { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge-btn { background: var(--surface2); border: 1.5px solid var(--border); color: var(--muted);
+  border-radius: 20px; padding: 5px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all .15s; }
+.badge-btn:hover { border-color: var(--accent); color: var(--text); }
+.badge-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
 /* ════ Footer nav ════ */
 .flow-footer { margin-top: 24px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
@@ -963,17 +995,67 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         <h3>動画完成！</h3>
         <div class="done-meta" id="doneMeta"></div>
       </div>
-      <div class="video-player" id="videoPlayer"></div>
-      <div id="thumbnailBlock" style="display:none;margin-top:16px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">サムネイル</div>
-        <img id="thumbnailImg" style="width:100%;border-radius:8px;border:1px solid var(--border)" />
-        <div style="margin-top:8px">
-          <a class="btn btn-ghost" id="thumbnailLink" download="thumbnail.jpg" style="font-size:13px">⬇ サムネDL</a>
+      <!-- 副タブ -->
+      <div class="s5-tabs">
+        <button class="s5-tab active" onclick="s5SwitchTab('video',this)">▶ 動画</button>
+        <button class="s5-tab" onclick="s5SwitchTab('meta',this)">📝 投稿メタ</button>
+        <button class="s5-tab" onclick="s5SwitchTab('thumb',this)">🖼️ サムネ編集</button>
+      </div>
+
+      <!-- タブ1: 動画 -->
+      <div class="s5-panel" id="s5-video">
+        <div class="video-player" id="videoPlayer"></div>
+        <div class="flow-footer">
+          <button class="btn btn-ghost" onclick="switchTab(4)">← 編集に戻る</button>
+          <a class="btn btn-green" id="downloadLink" download>⬇ 動画DL</a>
         </div>
       </div>
-      <div class="flow-footer">
-        <button class="btn btn-ghost" onclick="switchTab(4)">← 編集に戻る</button>
-        <a class="btn btn-green" id="downloadLink" download>⬇ ダウンロード</a>
+
+      <!-- タブ2: 投稿メタデータ -->
+      <div class="s5-panel" id="s5-meta" style="display:none">
+        <div class="meta-field">
+          <label class="meta-label">タイトル</label>
+          <input id="metaTitle" class="meta-input" type="text" maxlength="100" />
+          <div id="metaTitleCount" class="meta-count">0 / 100</div>
+        </div>
+        <div class="meta-field">
+          <label class="meta-label">概要欄</label>
+          <textarea id="metaDescription" class="meta-textarea" rows="7"></textarea>
+        </div>
+        <div class="meta-field">
+          <label class="meta-label">タグ <span style="font-size:11px;color:var(--muted)">（カンマ区切り）</span></label>
+          <input id="metaTags" class="meta-input" type="text" />
+        </div>
+        <div class="flow-footer">
+          <button class="btn btn-ghost" onclick="copyMeta()">📋 全コピー</button>
+        </div>
+      </div>
+
+      <!-- タブ3: サムネイル編集 -->
+      <div class="s5-panel" id="s5-thumb" style="display:none">
+        <div class="thumb-preview-wrap">
+          <img id="thumbnailImg" class="thumb-preview-img" />
+          <div id="thumbEmpty" class="thumb-empty" style="display:none">サムネなし</div>
+        </div>
+        <div class="meta-field" style="margin-top:12px">
+          <label class="meta-label">バッジ</label>
+          <div class="badge-selector" id="badgeSelector">
+            <button class="badge-btn active" data-badge="速報" onclick="selectBadge(this)">速報</button>
+            <button class="badge-btn" data-badge="注目" onclick="selectBadge(this)">注目</button>
+            <button class="badge-btn" data-badge="解説" onclick="selectBadge(this)">解説</button>
+            <button class="badge-btn" data-badge="分析" onclick="selectBadge(this)">分析</button>
+            <button class="badge-btn" data-badge="特集" onclick="selectBadge(this)">特集</button>
+          </div>
+        </div>
+        <div class="meta-field">
+          <label class="meta-label">サムネタイトル</label>
+          <input id="thumbTitle" class="meta-input" type="text" maxlength="40" placeholder="空欄で動画タイトルを使用" />
+        </div>
+        <div class="flow-footer">
+          <a class="btn btn-ghost" id="thumbnailLink" download="thumbnail.jpg">⬇ サムネDL</a>
+          <button class="btn btn-accent" onclick="regenThumbnail()">↻ 再生成</button>
+        </div>
+        <div id="thumbRegenStatus" style="text-align:center;font-size:12px;color:var(--muted);margin-top:8px;display:none">再生成中...</div>
       </div>
     </div>
   </div>
@@ -996,6 +1078,9 @@ let checkedSet = new Set();
 let savedTopics = [];
 let researchedSet = new Set();
 let currentActiveTopic = null;
+let currentMeta = null;
+let currentThumbnailUrl = null;
+let currentVideoOutputDir = null;
 let selectedTopicIndex = null;
 let allPatterns = [];
 let logCollapsed = false;
@@ -1135,6 +1220,14 @@ function handleMessage(msg) {
       if (chip) { chip.textContent = msg.count + '枚取得済み'; chip.style.display = ''; }
       document.getElementById('xFetchStatus').style.display = 'none';
       document.getElementById('fetchXImagesBtn').disabled = false;
+      break;
+    case 'thumbnail_ready':
+      currentThumbnailUrl = msg.thumbnailUrl;
+      s5UpdateThumb(msg.thumbnailUrl);
+      document.getElementById('thumbRegenStatus').style.display = 'none';
+      break;
+    case 'thumbnail_error':
+      document.getElementById('thumbRegenStatus').textContent = 'エラー: ' + msg.detail;
       break;
     case 'error':
       appendLog('ERROR: ' + msg.detail, 'error');
@@ -2491,19 +2584,81 @@ function showRenderDone(msg) {
   document.getElementById('renderProgress').style.display = 'none';
   document.getElementById('renderDone').style.display = '';
   document.getElementById('doneMeta').textContent = '尺 ' + (msg.totalDuration || 0) + '秒 · ' + (msg.patternKey || '');
-  var player = document.getElementById('videoPlayer');
+
+  // タブ1: 動画
   if (msg.videoUrl) {
-    player.innerHTML = '<video controls src="' + esc(msg.videoUrl) + '"></video>';
+    document.getElementById('videoPlayer').innerHTML = '<video controls src="' + esc(msg.videoUrl) + '"></video>';
     document.getElementById('downloadLink').href = msg.videoUrl;
   }
-  var thumbBlock = document.getElementById('thumbnailBlock');
-  if (msg.thumbnailUrl) {
-    document.getElementById('thumbnailImg').src = msg.thumbnailUrl;
-    document.getElementById('thumbnailLink').href = msg.thumbnailUrl;
-    thumbBlock.style.display = '';
-  } else {
-    thumbBlock.style.display = 'none';
+
+  // タブ2: メタデータ
+  currentMeta = msg.meta || null;
+  if (currentMeta) {
+    var titleEl = document.getElementById('metaTitle');
+    titleEl.value = currentMeta.title || msg.topic || '';
+    titleEl.dispatchEvent(new Event('input'));
+    document.getElementById('metaDescription').value = currentMeta.description || '';
+    document.getElementById('metaTags').value = Array.isArray(currentMeta.tags) ? currentMeta.tags.join(', ') : '';
   }
+
+  // タブ3: サムネイル
+  currentThumbnailUrl = msg.thumbnailUrl || null;
+  s5UpdateThumb(currentThumbnailUrl);
+  // サムネタイトルのデフォルトをトピックに
+  document.getElementById('thumbTitle').value = '';
+  document.getElementById('thumbTitle').placeholder = msg.topic || '';
+
+  // 最初は動画タブ
+  s5SwitchTab('video', document.querySelector('.s5-tab'));
+}
+
+function s5SwitchTab(name, btn) {
+  ['video','meta','thumb'].forEach(function(n) {
+    document.getElementById('s5-' + n).style.display = n === name ? '' : 'none';
+  });
+  document.querySelectorAll('.s5-tab').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+}
+
+function s5UpdateThumb(url) {
+  var img = document.getElementById('thumbnailImg');
+  var empty = document.getElementById('thumbEmpty');
+  var link = document.getElementById('thumbnailLink');
+  if (url) {
+    img.src = url;
+    img.style.display = '';
+    empty.style.display = 'none';
+    link.href = url;
+    link.style.display = '';
+  } else {
+    img.style.display = 'none';
+    empty.style.display = '';
+    link.style.display = 'none';
+  }
+}
+
+function selectBadge(btn) {
+  document.querySelectorAll('.badge-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+
+function regenThumbnail() {
+  var badge = (document.querySelector('.badge-btn.active') || {}).dataset?.badge || '速報';
+  var title = document.getElementById('thumbTitle').value.trim()
+             || document.getElementById('thumbTitle').placeholder;
+  document.getElementById('thumbRegenStatus').style.display = '';
+  send({ action: 'regen_thumbnail', badge: badge, title: title, bgImageUrl: null });
+}
+
+function copyMeta() {
+  var title = document.getElementById('metaTitle').value;
+  var desc  = document.getElementById('metaDescription').value;
+  var tags  = document.getElementById('metaTags').value;
+  var text  = '【タイトル】\n' + title + '\n\n【概要欄】\n' + desc + '\n\n【タグ】\n' + tags;
+  navigator.clipboard.writeText(text).then(function() {
+    var btn = document.querySelector('[onclick="copyMeta()"]');
+    if (btn) { var orig = btn.textContent; btn.textContent = '✓ コピー済み'; setTimeout(function(){ btn.textContent = orig; }, 1500); }
+  });
 }
 
 // ════ Tabs / stepper ════
@@ -2607,6 +2762,11 @@ function showSavedToast() {
 
 setTab(1);
 connect();
+
+// ════ メタタイトル文字数カウント ════
+document.getElementById('metaTitle').addEventListener('input', function() {
+  document.getElementById('metaTitleCount').textContent = this.value.length + ' / 100';
+});
 
 // ════ 編集→プレビュー自動更新 ════
 document.addEventListener('input', function(e) {

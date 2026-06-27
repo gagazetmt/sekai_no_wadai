@@ -15,6 +15,7 @@ const {
 const { listPatterns } = require('./slide_patterns');
 const { scoutWithAI, callDeepSeek } = require('./scout');
 const { generateMods, generateModsForPieces } = require('./script_gen');
+const { generateThumbnail } = require('./thumbnail');
 
 const PORT = 3456;
 const SAVED_FILE = path.join(__dirname, 'output', 'saved_topics.json');
@@ -415,18 +416,19 @@ async function runRender(viewpointIndex, edits, prebuiltMods = null) {
 
     const result = await phaseRender(videoTopic, patternKey, session.facts, emitter, prebuiltMods);
     session.renderResult = result;
-    await phaseMeta(result);
+    const meta = await phaseMeta(result);
 
     session.phase = 'done';
     const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
+    const thumbnailUrl = result.thumbnailPath ? `/output/${path.basename(result.outputDir)}/thumbnail.jpg` : null;
 
     if (session.activeTopic && session.topicData[session.activeTopic]) {
-      session.topicData[session.activeTopic].renderResult = { videoUrl, totalDuration: result.totalDuration, patternKey, topic: videoTopic };
+      session.topicData[session.activeTopic].renderResult = { videoUrl, thumbnailUrl, totalDuration: result.totalDuration, patternKey, topic: videoTopic, meta };
       session.topicData[session.activeTopic].mods = result.mods;
       saveTopicData();
     }
 
-    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, mods: result.mods });
+    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, thumbnailUrl, meta, mods: result.mods });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
     session.phase = 'plan_ready';
@@ -455,15 +457,16 @@ async function runRenderWithMods(patternKey, videoTopic, prebuiltMods) {
     emitter.on('pipeline', (evt) => broadcast(evt));
     const result = await phaseRender(videoTopic, patternKey, session.facts, emitter, prebuiltMods);
     session.renderResult = result;
-    await phaseMeta(result);
+    const meta = await phaseMeta(result);
     session.phase = 'done';
     const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
+    const thumbnailUrl = result.thumbnailPath ? `/output/${path.basename(result.outputDir)}/thumbnail.jpg` : null;
     if (session.activeTopic && session.topicData[session.activeTopic]) {
-      session.topicData[session.activeTopic].renderResult = { videoUrl, totalDuration: result.totalDuration, patternKey, topic: videoTopic };
+      session.topicData[session.activeTopic].renderResult = { videoUrl, thumbnailUrl, totalDuration: result.totalDuration, patternKey, topic: videoTopic, meta };
       session.topicData[session.activeTopic].mods = result.mods;
       saveTopicData();
     }
-    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, mods: result.mods });
+    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, thumbnailUrl, meta, mods: result.mods });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
     session.phase = 'plan_ready';
@@ -845,6 +848,34 @@ wss.on('connection', (ws) => {
     if (msg.action === 'reset') {
       resetSession();
       broadcast({ type: 'reset' });
+    }
+
+    // サムネイル再生成
+    if (msg.action === 'regen_thumbnail') {
+      const rr = session.renderResult;
+      if (!rr || !rr.outputDir) {
+        ws.send(JSON.stringify({ type: 'thumbnail_error', detail: '動画がまだ生成されていません' }));
+        return;
+      }
+      try {
+        const thumbPath = path.join(rr.outputDir, 'thumbnail.jpg');
+        await generateThumbnail({
+          title: msg.title || rr.topic,
+          badge: msg.badge || '速報',
+          bgImageUrl: msg.bgImageUrl || null,
+          outputPath: thumbPath,
+        });
+        const thumbnailUrl = `/output/${path.basename(rr.outputDir)}/thumbnail.jpg`;
+        // キャッシュ回避用クエリパラメータ
+        const thumbnailUrlBusted = thumbnailUrl + '?t=' + Date.now();
+        if (session.activeTopic && session.topicData[session.activeTopic]?.renderResult) {
+          session.topicData[session.activeTopic].renderResult.thumbnailUrl = thumbnailUrl;
+          saveTopicData();
+        }
+        ws.send(JSON.stringify({ type: 'thumbnail_ready', thumbnailUrl: thumbnailUrlBusted }));
+      } catch (e) {
+        ws.send(JSON.stringify({ type: 'thumbnail_error', detail: e.message }));
+      }
     }
   });
 });

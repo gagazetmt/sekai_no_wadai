@@ -216,14 +216,63 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
 
 async function phaseMeta(renderResult) {
   console.log('── Phase 5: Meta ──');
-  // TODO: サムネイル生成 + タイトル/概要欄/タグ生成
-  console.log('  (未実装 — placeholder)');
-  return {
-    thumbnail: null,
-    title: renderResult.topic,
-    description: '',
-    tags: [],
+  const key = process.env.DEEPSEEK_API_KEY;
+  const { topic, mods } = renderResult;
+
+  // narration テキストを集めてコンテキスト生成
+  const narrationTexts = (mods || [])
+    .filter(m => m.narration && m.type !== 'opening' && m.type !== 'ending')
+    .map(m => m.narration)
+    .join('\n');
+
+  const defaultMeta = {
+    title: topic,
+    description: `${topic}\n\n#サッカー #速報 #W杯2026`,
+    tags: ['サッカー', 'W杯2026', '速報', 'FIFA', topic.slice(0, 20)],
   };
+
+  if (!key) {
+    console.log('  [meta] DeepSeek key なし → デフォルトメタ');
+    return defaultMeta;
+  }
+
+  try {
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat', temperature: 0.5, max_tokens: 600,
+        response_format: { type: 'json_object' },
+        messages: [{
+          role: 'system',
+          content: `あなたはYouTubeのSEO専門家です。サッカー動画の投稿メタデータをJSONで返してください。
+【出力フォーマット】
+{
+  "title": "YouTube動画タイトル（50文字前後・数字や「！」を使って目を引く）",
+  "description": "概要欄テキスト（200〜400文字。1行目はタイトルの補足、改行後に内容箇条書き、最後にハッシュタグ5個）",
+  "tags": ["タグ1","タグ2",...] （15個以内）
+}
+JSONのみ返す。`
+        }, {
+          role: 'user',
+          content: `トピック: ${topic}\n\n内容:\n${narrationTexts.slice(0, 600)}`,
+        }],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) throw new Error(`DeepSeek ${res.status}`);
+    const d = await res.json();
+    const meta = JSON.parse(d.choices[0].message.content);
+    console.log(`  [meta] title: ${meta.title}`);
+    return {
+      title: meta.title || defaultMeta.title,
+      description: meta.description || defaultMeta.description,
+      tags: Array.isArray(meta.tags) ? meta.tags : defaultMeta.tags,
+    };
+  } catch (e) {
+    console.warn(`  [meta] failed: ${e.message}`);
+    return defaultMeta;
+  }
 }
 
 // ══════════════════════════════════════════════════════
