@@ -265,7 +265,8 @@ ${modSpec}
         }
       }
     }
-    // bgImage / leftImage / rightImage は必ず null（後工程）
+    // スライドタイプ・後工程画像フィールドを注入
+    mods[i].type       = slot.type;
     mods[i].bgImage    = null;
     mods[i].leftImage  = null;
     mods[i].rightImage = null;
@@ -331,8 +332,9 @@ ${selectedViewpoints.map((vp, i) => {
 
   const mods = result.mods.slice(0, pattern.slides.length);
 
-  // matchcard の matchData フラット化
+  // スライドタイプ注入 + matchcard フラット化 + 後工程フィールド初期化
   pattern.slides.forEach((slot, i) => {
+    mods[i].type = slot.type;
     if (slot.type === 'matchcard' && mods[i]?.matchData) {
       const md = mods[i].matchData;
       for (const field of slot.required) {

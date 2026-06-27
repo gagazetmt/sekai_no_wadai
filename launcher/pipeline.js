@@ -19,7 +19,7 @@ const { generateScript, generateMods } = require('./script_gen');
 const { generateNarration }  = require('./narration');
 const { renderAll }          = require('./render');
 const { buildFinalVideo }    = require('./concat');
-const { getPattern, listPatterns } = require('./slide_patterns');
+const { getPattern, listPatterns, buildPiecesPattern } = require('./slide_patterns');
 const { resolveAllImages }   = require('./fetchers/images');
 const { whisperAll }         = require('./whisper');
 
@@ -97,20 +97,27 @@ async function phasePlan(facts) {
   return viewpoints;
 }
 
-async function phaseRender(topic, patternKey, facts, emitter) {
+async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = null) {
   console.log('── Phase 4: Render ──');
   const outputDir = makeOutputDir(topic);
 
   // Sub 1: Script (mods)
-  _emit(emitter, 'sub_step', { step: 'script', status: 'running' });
-  console.log('  [4-1] Script generation...');
-  const mods = await generateMods(patternKey, topic, facts);
-  console.log(`  [4-1] → ${mods.length} mods (${patternKey})`);
+  let mods;
+  if (prebuiltMods) {
+    mods = prebuiltMods;
+    console.log(`  [4-1] Using prebuilt mods (${mods.length} slides)`);
+    _emit(emitter, 'sub_step', { step: 'script', status: 'done', detail: `${mods.length}スライド（編集済み）` });
+  } else {
+    _emit(emitter, 'sub_step', { step: 'script', status: 'running' });
+    console.log('  [4-1] Script generation...');
+    mods = await generateMods(patternKey, topic, facts);
+    console.log(`  [4-1] → ${mods.length} mods (${patternKey})`);
+    _emit(emitter, 'sub_step', { step: 'script', status: 'done', detail: `${mods.length}スライド` });
+  }
   fs.writeFileSync(
     path.join(outputDir, 'script.json'),
     JSON.stringify({ topic, patternKey, mods }, null, 2)
   );
-  _emit(emitter, 'sub_step', { step: 'script', status: 'done', detail: `${mods.length}スライド` });
 
   // Sub 2: Images
   _emit(emitter, 'sub_step', { step: 'images', status: 'running' });
@@ -162,9 +169,13 @@ async function phaseRender(topic, patternKey, facts, emitter) {
   // Sub 5: Render
   _emit(emitter, 'sub_step', { step: 'render', status: 'running' });
   console.log('  [4-5] Render...');
-  const pattern = getPattern(patternKey);
+  // pieces_N は動的パターン: mod.type から再構築
+  const pattern = patternKey.startsWith('pieces_')
+    ? buildPiecesPattern(mods.slice(1, -1).map(m => m.type || 'insight'))
+    : getPattern(patternKey);
   const renderDurations = durations.map((d, i) => {
-    const isBookend = pattern.slides[i].type === 'opening' || pattern.slides[i].type === 'ending';
+    const slotType = (pattern.slides[i] || {}).type || mods[i].type || 'insight';
+    const isBookend = slotType === 'opening' || slotType === 'ending';
     return d + leadPad + tailPad + (isBookend ? 0 : commentPad);
   });
   const videoFiles = await renderAll(patternKey, mods, renderDurations, outputDir);

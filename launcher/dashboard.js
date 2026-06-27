@@ -397,6 +397,41 @@ async function runRender(viewpointIndex, edits, prebuiltMods = null) {
   }
 }
 
+// pieces_N 用レンダー（prebuiltMods 必須）
+async function runRenderWithMods(patternKey, videoTopic, prebuiltMods) {
+  if (!prebuiltMods || !prebuiltMods.length) {
+    broadcast({ type: 'error', detail: 'mods がありません。先に脚本を生成してください。' });
+    return;
+  }
+  session.phase = 'rendering';
+  interceptConsole();
+  broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic, patternKey });
+  try {
+    if (!session.facts) {
+      const td = session.topicData[session.activeTopic];
+      session.facts = session.factsCache[session.activeTopic] || td?.factsForClient || null;
+    }
+    const emitter = new EventEmitter();
+    emitter.on('pipeline', (evt) => broadcast(evt));
+    const result = await phaseRender(videoTopic, patternKey, session.facts, emitter, prebuiltMods);
+    session.renderResult = result;
+    await phaseMeta(result);
+    session.phase = 'done';
+    const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
+    if (session.activeTopic && session.topicData[session.activeTopic]) {
+      session.topicData[session.activeTopic].renderResult = { videoUrl, totalDuration: result.totalDuration, patternKey, topic: videoTopic };
+      session.topicData[session.activeTopic].mods = result.mods;
+      saveTopicData();
+    }
+    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, mods: result.mods });
+  } catch (err) {
+    broadcast({ type: 'error', detail: err.message });
+    session.phase = 'plan_ready';
+  } finally {
+    restoreConsole();
+  }
+}
+
 // ── WebSocket 接続 ───────────────────────────────────
 
 wss.on('connection', (ws) => {
@@ -502,11 +537,20 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.action === 'render') {
-      if (!session.viewpoints || !session.viewpoints.length) {
-        broadcast({ type: 'error', detail: '企画ピースがありません。先にStep 3を実行してください。' });
-        return;
+      const cachedMods = session.topicData[session.activeTopic]?.mods;
+      const isPieces = msg.patternKey?.startsWith('pieces_') || cachedMods?.some(m => m.type);
+      if (isPieces) {
+        const prebuiltMods = msg.mods || cachedMods;
+        const patternKey   = msg.patternKey || `pieces_${(prebuiltMods?.length || 3) - 2}`;
+        const videoTopic   = msg.topic || session.activeTopic;
+        runRenderWithMods(patternKey, videoTopic, prebuiltMods);
+      } else {
+        if (!session.viewpoints || !session.viewpoints.length) {
+          broadcast({ type: 'error', detail: '企画ピースがありません。先にStep 3を実行してください。' });
+          return;
+        }
+        runRender(msg.viewpointIndex, msg.edits);
       }
-      runRender(msg.viewpointIndex, msg.edits);
     }
 
     if (msg.action === 'generate_script') {
@@ -569,15 +613,23 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.action === 're_render') {
-      if (!session.viewpoints || !session.viewpoints.length) {
-        broadcast({ type: 'error', detail: '企画データがありません。Step 3 を先に実行してください。' });
-        return;
-      }
-      if (session.activeTopic && session.topicData[session.activeTopic]) {
-        session.topicData[session.activeTopic].mods = msg.mods;
+      const mods = msg.mods;
+      if (session.activeTopic && session.topicData[session.activeTopic] && mods) {
+        session.topicData[session.activeTopic].mods = mods;
         saveTopicData();
       }
-      runRender(msg.viewpointIndex || 0, msg.edits, msg.mods);
+      // mods に type が入っていれば pieces フロー
+      if (mods && mods.some(m => m.type)) {
+        const patternKey = `pieces_${(mods.length || 3) - 2}`;
+        const videoTopic = msg.topic || session.activeTopic;
+        runRenderWithMods(patternKey, videoTopic, mods);
+      } else {
+        if (!session.viewpoints || !session.viewpoints.length) {
+          broadcast({ type: 'error', detail: '企画データがありません。Step 3 を先に実行してください。' });
+          return;
+        }
+        runRender(msg.viewpointIndex || 0, msg.edits, mods);
+      }
     }
 
     // ラベルを使ってX公式画像を再取得（Step2から呼ばれる）
