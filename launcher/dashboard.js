@@ -489,6 +489,11 @@ wss.on('connection', (ws) => {
         }
       }
       if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
+      // サーバー再起動後は factsCache が空 → topicData の factsForClient で代替
+      if (!session.facts) {
+        const td = session.topicData[session.activeTopic];
+        if (td?.factsForClient) session.facts = td.factsForClient;
+      }
       if (!session.facts) {
         broadcast({ type: 'error', detail: '情報収集データがありません。先に情報収集を実行してください。' });
         return;
