@@ -880,9 +880,9 @@ wss.on('connection', (ws) => {
           session.topicData[session.activeTopic].renderResult.thumbnailUrl = thumbnailUrl;
           saveTopicData();
         }
-        ws.send(JSON.stringify({ type: 'thumbnail_ready', thumbnailUrl: thumbnailUrlBusted }));
+        broadcast({ type: 'thumbnail_ready', thumbnailUrl: thumbnailUrlBusted });
       } catch (e) {
-        ws.send(JSON.stringify({ type: 'thumbnail_error', detail: e.message }));
+        broadcast({ type: 'thumbnail_error', detail: e.message });
       }
     }
 
@@ -899,9 +899,9 @@ wss.on('connection', (ws) => {
           session.topicData[session.activeTopic].renderResult.meta = meta;
           saveTopicData();
         }
-        ws.send(JSON.stringify({ type: 'meta_ready', meta }));
+        broadcast({ type: 'meta_ready', meta });
       } catch (e) {
-        ws.send(JSON.stringify({ type: 'meta_error', detail: e.message }));
+        broadcast({ type: 'meta_error', detail: e.message });
       }
     }
   });
