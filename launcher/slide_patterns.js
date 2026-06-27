@@ -420,4 +420,35 @@ function validateMods(patternName, mods) {
   return { valid: errors.length === 0, errors };
 }
 
-module.exports = { PATTERNS, getPattern, listPatterns, validateMods };
+// スライドタイプごとの required フィールド定義
+const CONTENT_SLIDE_REQUIRED = {
+  insight:    ['title', 'narration', 'catchphrases', 'comments'],
+  matchcard:  ['homeTeam', 'awayTeam', 'homeScore', 'awayScore', 'goals', 'stats', 'lineup', 'formations', 'tournament', 'matchDate', 'venue'],
+  stats:      ['title', 'narration', 'siBinding', 'dataSlots', 'comments'],
+  comparison: ['title', 'narration', 'siBindingLeft', 'siBindingRight', 'dataSlots', 'comments'],
+  history:    ['title', 'narration', 'historyHero', 'dataSlots', 'comments'],
+};
+
+// 企画ピース用の動的パターン生成
+// contentTypes: スライドタイプ文字列の配列（1〜2個）
+function buildPiecesPattern(contentTypes) {
+  if (!contentTypes || !contentTypes.length || contentTypes.length > 2) {
+    throw new Error('contentTypes は1〜2個の配列');
+  }
+  const slides = [
+    { type: 'opening', badge: '速報', required: ['title', 'narration'] },
+    ...contentTypes.map(t => ({
+      type: t,
+      required: CONTENT_SLIDE_REQUIRED[t] || CONTENT_SLIDE_REQUIRED.insight,
+    })),
+    { type: 'ending', required: ['title', 'narration'] },
+  ];
+  return {
+    label: `企画ピース×${contentTypes.length}（${slides.length}枚）`,
+    when:  `op + ${contentTypes.join(' + ')} + ed`,
+    slides,
+    _dynamic: true,
+  };
+}
+
+module.exports = { PATTERNS, getPattern, listPatterns, validateMods, buildPiecesPattern, CONTENT_SLIDE_REQUIRED };

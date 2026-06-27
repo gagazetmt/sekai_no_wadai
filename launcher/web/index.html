@@ -860,8 +860,9 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       <div class="vp-bottom-bar" id="vpBottomBar" style="display:none">
         <div class="vp-bb-info">
           <span id="bbCount" style="font-weight:700;color:var(--accent);font-size:13px;flex-shrink:0"></span>
-          <span id="bbSelectedLabels" style="font-size:12px;color:var(--text-sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0"></span>
+          <span style="font-size:12px;color:var(--text-sub)">枚構成</span>
         </div>
+        <div id="bbPieceSelectors" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
         <div class="vp-bb-controls">
           <button class="btn btn-accent" id="bbGenBtn" onclick="doGeneratePieces()">この構成で脚本生成 →</button>
         </div>
@@ -1529,16 +1530,46 @@ function selectViewpoint(i) {
     document.getElementById('vpBottomBar').style.display = 'none';
     return;
   }
-  var labels = selectedVpIndices.map(function(k) { return currentViewpoints[k] ? currentViewpoints[k].angle : ''; }).join(' ＋ ');
   var slideCount = count + 2; // op + pieces + ed
-  document.getElementById('bbCount').textContent = count + '個選択 · ' + slideCount + '枚構成';
-  document.getElementById('bbSelectedLabels').textContent = labels;
+  document.getElementById('bbCount').textContent = count + '個選択 · ' + slideCount;
+
+  // 各ピースのスライドタイプ選択セレクターを描画
+  var SLIDE_TYPE_OPTIONS = [
+    { value: 'insight',    label: 'インサイト（解説）' },
+    { value: 'matchcard',  label: '試合カード（スコア）' },
+    { value: 'stats',      label: 'スタッツ（数値）' },
+    { value: 'comparison', label: '比較（左右対比）' },
+    { value: 'history',    label: 'ヒストリー（年表）' },
+  ];
+  var selectorsHtml = selectedVpIndices.map(function(k, order) {
+    var vp = currentViewpoints[k];
+    if (!vp) return '';
+    // suggestedPattern からデフォルトタイプを推定
+    var defaultType = 'insight';
+    if (vp.suggestedPattern === 'match_result' || vp.suggestedPattern === 'match_turning_point') defaultType = 'matchcard';
+    else if (vp.suggestedPattern === 'player_performance' || vp.suggestedPattern === 'player_season') defaultType = 'stats';
+    var opts = SLIDE_TYPE_OPTIONS.map(function(o) {
+      return '<option value="' + o.value + '"' + (o.value === defaultType ? ' selected' : '') + '>' + o.label + '</option>';
+    }).join('');
+    return '<div style="display:flex;align-items:center;gap:8px">' +
+      '<span style="font-size:12px;color:var(--text-sub);flex-shrink:0;min-width:60px">ピース' + (order + 1) + '：' + esc(vp.angle) + '</span>' +
+      '<select class="slide-type-sel piece-type-sel" data-piece-idx="' + order + '" style="flex:1">' + opts + '</select>' +
+      '</div>';
+  }).join('');
+  document.getElementById('bbPieceSelectors').innerHTML = selectorsHtml;
   document.getElementById('vpBottomBar').style.display = '';
 }
 
 function doGeneratePieces() {
   if (!selectedVpIndices.length) return;
-  var selectedViewpoints = selectedVpIndices.map(function(i) { return currentViewpoints[i]; }).filter(Boolean);
+  // 各ピースのスライドタイプをセレクトから読む
+  var typeSelectors = document.querySelectorAll('.piece-type-sel');
+  var selectedViewpoints = selectedVpIndices.map(function(vpIdx, order) {
+    var vp = Object.assign({}, currentViewpoints[vpIdx]);
+    var sel = typeSelectors[order];
+    vp.slideType = sel ? sel.value : 'insight';
+    return vp;
+  }).filter(Boolean);
   currentMods = null; s4ActiveIdx = 0;
   document.getElementById('renderEmpty').style.display = 'none';
   document.getElementById('renderEditor').style.display = '';

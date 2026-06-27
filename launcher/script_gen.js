@@ -6,7 +6,7 @@
 // facts圧縮: 必要フィールドのみ送信
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
-const { PATTERNS, getPattern, validateMods } = require('./slide_patterns');
+const { PATTERNS, getPattern, validateMods, buildPiecesPattern } = require('./slide_patterns');
 
 const TIMEOUT_MS = 55000;
 
@@ -274,40 +274,45 @@ ${modSpec}
 // ── 企画ピース用 mod 生成 ────────────────────────────
 // selectedViewpoints: [{angle, title, keyPoints, suggestedPattern, priority}, ...]
 
+// selectedViewpoints: [{angle, title, keyPoints, slideType?, ...}, ...]
+// slideType は 'insight'|'matchcard'|'stats'|'comparison'|'history'
 async function generateModsForPieces(selectedViewpoints, facts) {
   const count = selectedViewpoints.length;
   if (count < 1 || count > 2) throw new Error('selectedViewpoints は1〜2個');
+
+  const contentTypes = selectedViewpoints.map(vp => vp.slideType || 'insight');
+  const pattern = buildPiecesPattern(contentTypes);
   const patternKey = `pieces_${count}`;
-  const pattern = getPattern(patternKey);
 
   const compressed = compressFacts(facts);
 
-  // 企画ピース情報を文字列化
-  const piecesText = selectedViewpoints.map((vp, i) =>
-    `企画ピース${i + 1}:\n  切り口: ${vp.angle}\n  タイトル案: ${vp.title}\n  ポイント:\n${vp.keyPoints.map(p => `    - ${p}`).join('\n')}`
-  ).join('\n\n');
+  const SLIDE_TYPE_SPEC = {
+    insight:    '- title, narration（60-120文字）, catchphrases（3-5個・各20文字以内）, comments（6-9個）',
+    matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（60-120文字）',
+    stats:      '- title, narration（60-120文字）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
+    comparison: '- title, narration（60-120文字）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（6-9個）',
+    history:    '- title, narration（60-120文字）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
+  };
+
+  const piecesText = selectedViewpoints.map((vp, i) => {
+    const t = contentTypes[i];
+    return `企画ピース${i + 1}（スライドタイプ: ${t}）:\n  切り口: ${vp.angle}\n  タイトル案: ${vp.title}\n  ポイント:\n${(vp.keyPoints || []).map(p => `    - ${p}`).join('\n')}`;
+  }).join('\n\n');
 
   const systemPrompt = `あなたはサッカーYouTube動画のデータ構成AIです。
 選ばれた企画ピース（${count}個）をもとに、${pattern.slides.length}枚のスライドデータをJSON形式で生成してください。
 
 【スライド構成】
-- slides[0]: opening（動画の掴み。badge="速報"固定）
-${selectedViewpoints.map((vp, i) =>
-  `- slides[${i + 1}]: insight（企画ピース${i + 1}「${vp.angle}」の中身）`
-).join('\n')}
-- slides[${count + 1}]: ending（チャンネル登録訴求）
+- slides[0]: opening — 動画の掴み。badge="速報"。narration 20-40文字
+${selectedViewpoints.map((vp, i) => {
+  const t = contentTypes[i];
+  return `- slides[${i + 1}]: ${t} — 企画ピース${i + 1}「${vp.angle}」\n  必須フィールド: ${SLIDE_TYPE_SPEC[t] || SLIDE_TYPE_SPEC.insight}`;
+}).join('\n')}
+- slides[${count + 1}]: ending — チャンネル登録訴求。narration 20-40文字
 
-【フィールド仕様】
-- title: スライド見出し（日本語・短く印象的）
-- narration: ナレーション台本（口語体。opening/ending は20〜40文字、insight は60〜120文字）
-- badge: opening/ending のみ（"速報" 固定 / ending は "登録" 等）
-- catchphrases: insight のみ。企画ポイントの箇条書き（3〜5個、各20文字以内）
-- comments: insight のみ。ファン反応（6〜9個）
-  形式: [{text:"15文字以内", source:"x"|"reddit"|"yahoo"}]
-  素材の_commentsを使い、不足時は視聴者反応を生成
-
-【注意】
+【共通注意】
 - 素材の実データを優先。事実の捏造禁止
+- comments は素材の_commentsから関連するものを15文字以内の日本語に意訳。不足時は視聴者反応を生成（source:"x"）
 - 全${pattern.slides.length}枚分を必ず生成`;
 
   const userPrompt = `選択された企画ピース:\n${piecesText}\n\n素材:\n${compressed}\n\nJSON形式で返してください:\n{"mods": [slide0, ${selectedViewpoints.map((_, i) => `slide${i + 1}`).join(', ')}, slide${count + 1}]}`;
@@ -317,12 +322,31 @@ ${selectedViewpoints.map((vp, i) =>
   if (result.mods.length < pattern.slides.length) throw new Error(`Expected ${pattern.slides.length} mods, got ${result.mods.length}`);
 
   const mods = result.mods.slice(0, pattern.slides.length);
-  mods.forEach(m => { m.bgImage = null; m.leftImage = null; m.rightImage = null; });
 
-  const validation = validateMods(patternKey, mods);
+  // matchcard の matchData フラット化
+  pattern.slides.forEach((slot, i) => {
+    if (slot.type === 'matchcard' && mods[i]?.matchData) {
+      const md = mods[i].matchData;
+      for (const field of slot.required) {
+        if (mods[i][field] === undefined && md[field] !== undefined) mods[i][field] = md[field];
+      }
+    }
+    mods[i].bgImage = null; mods[i].leftImage = null; mods[i].rightImage = null;
+  });
+
+  // 動的パターンは validateMods がキー検索するので直接検証
+  const errors = [];
+  pattern.slides.forEach((slot, i) => {
+    const mod = mods[i];
+    if (!mod) { errors.push(`slides[${i}]: mod なし`); return; }
+    for (const field of slot.required) {
+      if (mod[field] === undefined || mod[field] === null) errors.push(`slides[${i}] (${slot.type}): "${field}" 未設定`);
+    }
+  });
+  const validation = { valid: errors.length === 0, errors };
   if (!validation.valid) console.warn('  [script_gen] Validation warnings:', validation.errors);
 
-  return { patternKey, mods, validation };
+  return { patternKey, pattern, mods, validation };
 }
 
 // ── メインAPI ─────────────────────────────────────────
