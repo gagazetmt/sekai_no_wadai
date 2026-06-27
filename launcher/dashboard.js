@@ -71,7 +71,8 @@ const server = http.createServer((req, res) => {
     }
   }
   if (req.url.startsWith('/output/')) {
-    const filePath = path.join(__dirname, decodeURIComponent(req.url));
+    let decodedUrl; try { decodedUrl = decodeURIComponent(req.url); } catch (_) { decodedUrl = req.url; }
+    const filePath = path.join(__dirname, decodedUrl);
     if (fs.existsSync(filePath)) {
       const ext = path.extname(filePath);
       const types = { '.mp4': 'video/mp4', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png' };
