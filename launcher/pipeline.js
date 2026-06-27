@@ -142,15 +142,14 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
       durations: mods.map(() => 10),
     };
   }
-  const { audioFiles, durations } = narrationResult;
+  const { audioFiles, durations, commentDurations } = narrationResult;
   _emit(emitter, 'sub_step', { step: 'narration', status: 'done', detail: `${durations.length}本` });
 
   // Sub 4: Whisper
   _emit(emitter, 'sub_step', { step: 'whisper', status: 'running' });
   console.log('  [4-4] Whisper...');
-  const leadPad    = parseFloat(process.env.LEAD_PAD_SEC)    || 0.5;
-  const tailPad    = parseFloat(process.env.TAIL_PAD_SEC)    || 0.3;
-  const commentPad = parseFloat(process.env.COMMENT_PAD_SEC) || 3.0;
+  const leadPad = parseFloat(process.env.LEAD_PAD_SEC) || 0.5;
+  const tailPad = parseFloat(process.env.TAIL_PAD_SEC) || 0.3;
 
   let whisperResults;
   try {
@@ -161,8 +160,11 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
   }
   mods.forEach((mod, i) => {
     const wr = whisperResults[i] || {};
-    mod.subtitleChunks = wr.chunks || [];
-    mod.narrationEndSec = wr.narrationEndSec || (leadPad + durations[i]);
+    mod.subtitleChunks    = wr.chunks || [];
+    mod.subtitleWords     = wr.words || [];
+    mod.subtitleSegments  = wr.segments || [];     // segment タイムスタンプ（より正確な字幕同期用）
+    mod.narrationDurOnly  = durations[i];          // ナレーションのみの長さ（コメント字幕除外用）
+    mod.narrationEndSec   = wr.narrationEndSec || (leadPad + durations[i]);
   });
   const totalChunks = whisperResults.reduce((a, r) => a + (r.chunks?.length || 0), 0);
   _emit(emitter, 'sub_step', { step: 'whisper', status: 'done', detail: `${totalChunks}チャンク` });
@@ -177,7 +179,8 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
   const renderDurations = durations.map((d, i) => {
     const slotType = (pattern.slides[i] || {}).type || mods[i].type || 'insight';
     const isBookend = slotType === 'opening' || slotType === 'ending';
-    return d + leadPad + tailPad + (isBookend ? 0 : commentPad);
+    const cmtPad = commentDurations?.[i] || 0;
+    return d + leadPad + tailPad + (isBookend ? 0 : cmtPad);
   });
   const videoFiles = await renderAll(patternKey, mods, renderDurations, outputDir);
   _emit(emitter, 'sub_step', { step: 'render', status: 'done', detail: `${videoFiles.length}スライド` });
