@@ -14,7 +14,7 @@ const {
 } = require('./pipeline');
 const { listPatterns } = require('./slide_patterns');
 const { scoutWithAI, callDeepSeek } = require('./scout');
-const { generateMods } = require('./script_gen');
+const { generateMods, generateModsForPieces } = require('./script_gen');
 
 const PORT = 3456;
 const SAVED_FILE = path.join(__dirname, 'output', 'saved_topics.json');
@@ -525,14 +525,26 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', detail: '企画ピースがありません。先に Step 3 を実行してください。' }));
         return;
       }
-      const vp = session.viewpoints[msg.viewpointIndex != null ? msg.viewpointIndex : 0];
-      if (!vp) return;
-      const videoTopic = (msg.edits && msg.edits.title) || vp.title || session.activeTopic;
-      const patternKey = (msg.edits && msg.edits.suggestedPattern) || vp.suggestedPattern || 'match_result';
       interceptConsole();
       broadcast({ type: 'phase', phase: 'generating_script' });
       try {
-        const mods = await generateMods(patternKey, videoTopic, session.facts);
+        let patternKey, mods, videoTopic;
+
+        if (msg.selectedViewpoints && msg.selectedViewpoints.length) {
+          // 企画ピース選択モード（pieces_1 or pieces_2）
+          const result = await generateModsForPieces(msg.selectedViewpoints, session.facts);
+          patternKey = result.patternKey;
+          mods       = result.mods;
+          videoTopic = msg.selectedViewpoints[0].title || session.activeTopic;
+        } else {
+          // 従来モード（viewpointIndex 指定）
+          const vp = session.viewpoints[msg.viewpointIndex != null ? msg.viewpointIndex : 0];
+          if (!vp) return;
+          videoTopic = (msg.edits && msg.edits.title) || vp.title || session.activeTopic;
+          patternKey = (msg.edits && msg.edits.suggestedPattern) || vp.suggestedPattern || 'match_result';
+          mods = await generateMods(patternKey, videoTopic, session.facts);
+        }
+
         if (session.topicData[session.activeTopic]) {
           session.topicData[session.activeTopic].mods = mods;
           saveTopicData();

@@ -315,6 +315,13 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .viewpoint-card { cursor: pointer; }
 .viewpoint-card:hover { border-color: var(--border-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
 .viewpoint-card.selected { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.vp-sel-badge {
+  position: absolute; top: 12px; right: 12px;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-size: 13px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+}
 .vp-header { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .vp-priority {
   font-size: 11px; font-weight: 900; color: #fff; padding: 2px 9px; border-radius: 999px;
@@ -852,15 +859,11 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       <!-- 企画選択後に表示されるボトムバー -->
       <div class="vp-bottom-bar" id="vpBottomBar" style="display:none">
         <div class="vp-bb-info">
-          <span class="vp-priority" id="bbPriority"></span>
-          <span class="vp-angle" id="bbAngle"></span>
-          <span class="vp-bb-title-sm" id="bbTitle"></span>
+          <span id="bbCount" style="font-weight:700;color:var(--accent);font-size:13px;flex-shrink:0"></span>
+          <span id="bbSelectedLabels" style="font-size:12px;color:var(--text-sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0"></span>
         </div>
         <div class="vp-bb-controls">
-          <input type="text" id="bbTitleInput" placeholder="動画タイトル...">
-          <select id="bbPatternSel" class="slide-type-sel"></select>
-          <button class="btn btn-sm btn-ghost" id="bbRegenBtn" onclick="doGenerateScript()" style="display:none">↻ 再生成</button>
-          <button class="btn btn-accent" id="bbGenBtn" onclick="doOpenEditor()">脚本を生成 →</button>
+          <button class="btn btn-accent" id="bbGenBtn" onclick="doGeneratePieces()">この構成で脚本生成 →</button>
         </div>
       </div>
     </div>
@@ -1468,21 +1471,25 @@ function renderViewpoints(msg) {
   var pmap = {}; patterns.forEach(function(p){ pmap[p.key] = p; });
   var colors = {5:'#f87171',4:'#fb923c',3:'#fbbf24',2:'#6366f1',1:'#8b90a3'};
   currentViewpoints = vps;
+  selectedVpIndices = [];
+  document.getElementById('vpBottomBar').style.display = 'none';
   document.getElementById('viewpointList').innerHTML = vps.map(function(v, i) {
     var pat = pmap[v.suggestedPattern] || {};
     var color = colors[v.priority] || '#8b90a3';
     var pts = (v.keyPoints || []).map(function(kp){ return '<li>' + esc(kp) + '</li>'; }).join('');
     return '<div class="viewpoint-card" style="--vp-color:' + color + '" onclick="selectViewpoint(' + i + ')">' +
+      '<span class="vp-sel-badge" style="display:none"></span>' +
       '<div class="vp-header"><span class="vp-priority">P' + (v.priority||0) + '</span><span class="vp-angle">' + esc(v.angle||'') + '</span></div>' +
       '<div class="vp-title">' + esc(v.title||'') + '</div>' +
       '<ul class="vp-points">' + pts + '</ul>' +
-      '<div class="vp-footer"><span class="vp-pattern"><span class="vp-pat-dot"></span>' + esc(pat.label || v.suggestedPattern || '') + ' · ' + (pat.slideCount || '?') + 'スライド</span>' +
-      '<span style="font-size:12px;color:var(--accent);font-weight:700">タップで選択 →</span></div></div>';
+      '<div class="vp-footer"><span class="vp-pattern"><span class="vp-pat-dot"></span>' + esc(pat.label || v.suggestedPattern || '') + '</span>' +
+      '<span style="font-size:12px;color:var(--text-sub)">タップで選択</span></div></div>';
   }).join('');
 }
 
 // ════ Step 4: Render + Editor ════
 var selectedVpIndex = null;
+var selectedVpIndices = [];   // 企画ピース選択（最大2個）
 var s4ActiveIdx = 0;
 var currentViewpoints = [];
 var currentMods = null;
@@ -1493,32 +1500,56 @@ var SLIDE_TYPE_LABELS = {
 };
 
 function selectViewpoint(i) {
-  selectedVpIndex = i;
-  var vp = currentViewpoints[i];
-  if (!vp) return;
-  var colors = {5:'#f87171',4:'#fb923c',3:'#fbbf24',2:'#6366f1',1:'#8b90a3'};
+  var idx = selectedVpIndices.indexOf(i);
+  if (idx >= 0) {
+    // 選択解除
+    selectedVpIndices.splice(idx, 1);
+  } else {
+    if (selectedVpIndices.length >= 2) return; // 最大2個
+    selectedVpIndices.push(i);
+  }
+  selectedVpIndex = selectedVpIndices[0] !== undefined ? selectedVpIndices[0] : null;
 
+  // カード選択状態を更新
   document.querySelectorAll('.viewpoint-card').forEach(function(el, j) {
-    el.classList.toggle('selected', j === i);
+    var isSelected = selectedVpIndices.indexOf(j) >= 0;
+    el.classList.toggle('selected', isSelected);
+    // 選択番号バッジを更新
+    var badge = el.querySelector('.vp-sel-badge');
+    if (badge) {
+      var order = selectedVpIndices.indexOf(j) + 1;
+      badge.textContent = isSelected ? order : '';
+      badge.style.display = isSelected ? '' : 'none';
+    }
   });
 
-  var color = colors[vp.priority] || '#8b90a3';
-  document.getElementById('bbPriority').textContent = 'P' + (vp.priority || '');
-  document.getElementById('bbPriority').style.background = color;
-  document.getElementById('bbAngle').textContent = vp.angle || '';
-  document.getElementById('bbTitle').textContent = vp.title || '';
-  document.getElementById('bbTitleInput').value = vp.title || '';
-
-  var sel = document.getElementById('bbPatternSel');
-  sel.innerHTML = allPatterns.map(function(p) {
-    return '<option value="' + p.key + '"' + (p.key === vp.suggestedPattern ? ' selected' : '') + '>' +
-      p.label + '（' + p.slideCount + 'スライド）</option>';
-  }).join('');
-
-  var hasMods = !!(currentMods && currentMods.length);
-  document.getElementById('bbGenBtn').textContent = hasMods ? '脚本を編集 →' : '脚本を生成 →';
-  document.getElementById('bbRegenBtn').style.display = hasMods ? '' : 'none';
+  // ボトムバー更新
+  var count = selectedVpIndices.length;
+  if (count === 0) {
+    document.getElementById('vpBottomBar').style.display = 'none';
+    return;
+  }
+  var labels = selectedVpIndices.map(function(k) { return currentViewpoints[k] ? currentViewpoints[k].angle : ''; }).join(' ＋ ');
+  var slideCount = count + 2; // op + pieces + ed
+  document.getElementById('bbCount').textContent = count + '個選択 · ' + slideCount + '枚構成';
+  document.getElementById('bbSelectedLabels').textContent = labels;
   document.getElementById('vpBottomBar').style.display = '';
+}
+
+function doGeneratePieces() {
+  if (!selectedVpIndices.length) return;
+  var selectedViewpoints = selectedVpIndices.map(function(i) { return currentViewpoints[i]; }).filter(Boolean);
+  currentMods = null; s4ActiveIdx = 0;
+  document.getElementById('renderEmpty').style.display = 'none';
+  document.getElementById('renderEditor').style.display = '';
+  document.getElementById('renderProgress').style.display = 'none';
+  document.getElementById('renderDone').style.display = 'none';
+  document.getElementById('reGenLoading').style.display = '';
+  document.getElementById('s4TabsRow').style.display = 'none';
+  document.getElementById('s4EditorPanel').innerHTML = '';
+  send({ action: 'generate_script', selectedViewpoints: selectedViewpoints });
+  setStatus('脚本生成中', true);
+  switchTab(4);
 }
 
 function doOpenEditor() {
