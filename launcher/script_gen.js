@@ -201,7 +201,7 @@ async function generateMods(patternKey, topic, facts) {
 
 【フィールド仕様】
 - title: スライド見出し（日本語・短く印象的に）
-- narration: ナレーション台本（日本語・口語体・50〜120文字。openingは20〜40文字、endingは「チャンネル登録よろしくお願いします」系の20〜40文字）
+- narration: ナレーション台本（日本語・口語体・100〜200文字。openingは30〜60文字、endingは「チャンネル登録よろしくお願いします」系の30〜60文字）
 - badge: バッジテキスト（opening/endingのみ。例: 速報、注目、朗報、衝撃）
 - catchphrases: insight用。論点の箇条書き配列（3〜5個、各20文字以内）
 - siBinding: stats/history用。英語名（選手名 or チーム名）。画像検索キー
@@ -296,11 +296,11 @@ async function generateModsForPieces(selectedViewpoints, facts) {
   const compressed = compressFacts(facts);
 
   const SLIDE_TYPE_SPEC = {
-    insight:    '- title, narration（60-120文字）, catchphrases（3-5個・各20文字以内）, comments（6-9個）',
-    matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（60-120文字）',
-    stats:      '- title, narration（60-120文字）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
-    comparison: '- title, narration（60-120文字）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（6-9個）',
-    history:    '- title, narration（60-120文字）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
+    insight:    '- title, narration（100-200文字）, catchphrases（3-5個・各20文字以内）, comments（6-9個）',
+    matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（100-200文字）',
+    stats:      '- title, narration（100-200文字）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
+    comparison: '- title, narration（100-200文字）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（6-9個）',
+    history:    '- title, narration（100-200文字）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）, comments（6-9個）',
   };
 
   const piecesText = selectedViewpoints.map((vp, i) => {
@@ -312,12 +312,12 @@ async function generateModsForPieces(selectedViewpoints, facts) {
 選ばれた企画ピース（${count}個）をもとに、${pattern.slides.length}枚のスライドデータをJSON形式で生成してください。
 
 【スライド構成】
-- slides[0]: opening — 動画の掴み。title（10文字以内・インパクト重視）+ badge="速報"固定 + narration 20-40文字
+- slides[0]: opening — 動画の掴み。title（10文字以内・インパクト重視）+ badge="速報"固定 + narration 30-60文字
 ${selectedViewpoints.map((vp, i) => {
   const t = contentTypes[i];
   return `- slides[${i + 1}]: ${t} — 企画ピース${i + 1}「${vp.angle}」\n  必須フィールド: ${SLIDE_TYPE_SPEC[t] || SLIDE_TYPE_SPEC.insight}`;
 }).join('\n')}
-- slides[${count + 1}]: ending — チャンネル登録訴求。title（「チャンネル登録」等）+ narration 20-40文字
+- slides[${count + 1}]: ending — チャンネル登録訴求。title（「チャンネル登録」等）+ narration 30-60文字
 
 【共通注意】
 - 素材の実データを優先。事実の捏造禁止

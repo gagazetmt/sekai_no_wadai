@@ -34,14 +34,17 @@ function saveToDisk(topics) {
 }
 
 function loadTopicData() {
-  try { return JSON.parse(fs.readFileSync(TOPIC_DATA_FILE, 'utf8')); }
-  catch (_) { return {}; }
+  try {
+    const raw = JSON.parse(fs.readFileSync(TOPIC_DATA_FILE, 'utf8'));
+    const { _activeTopic, _phase, ...topicData } = raw;
+    return topicData;
+  } catch (_) { return {}; }
 }
 
 function saveTopicData() {
   const dir = path.dirname(TOPIC_DATA_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const slim = {};
+  const slim = { _activeTopic: session.activeTopic, _phase: session.phase };
   for (const [k, v] of Object.entries(session.topicData)) {
     slim[k] = {
       summary: v.summary,
@@ -52,6 +55,14 @@ function saveTopicData() {
     };
   }
   fs.writeFileSync(TOPIC_DATA_FILE, JSON.stringify(slim, null, 2));
+}
+
+function loadTopicDataWithMeta() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(TOPIC_DATA_FILE, 'utf8'));
+    const { _activeTopic, _phase, ...topicData } = raw;
+    return { topicData, activeTopic: _activeTopic || null, phase: _phase || 'idle' };
+  } catch (_) { return { topicData: {}, activeTopic: null, phase: 'idle' }; }
 }
 
 // ── HTTP サーバー ────────────────────────────────────
@@ -120,13 +131,14 @@ function broadcast(data) {
 
 // ── セッション状態 ───────────────────────────────────
 
+const _savedMeta = loadTopicDataWithMeta();
 let session = {
-  phase: 'idle',
+  phase: _savedMeta.phase === 'done' ? 'done' : 'idle',
   topics: null,
   savedTopics: loadSaved(),
-  topicData: loadTopicData(),
+  topicData: _savedMeta.topicData,
   factsCache: {},
-  activeTopic: null,
+  activeTopic: _savedMeta.activeTopic,
   facts: null,
   viewpoints: null,
   renderResult: null,
