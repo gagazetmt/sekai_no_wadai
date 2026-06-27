@@ -103,6 +103,34 @@ async function callGemini(systemPrompt, userPrompt) {
 
 // ── facts 圧縮 ───────────────────────────────────────
 
+// matchData から重い data URI（選手写真・チームロゴ）を剥がしたコピーを返す。
+// AIへ渡すと無駄なトークン消費＆AIが写真を再生成できないため。実データは別途再注入する。
+function _stripMatchMedia(md) {
+  if (!md || typeof md !== 'object') return md;
+  const clone = JSON.parse(JSON.stringify(md));
+  delete clone.homeLogo; delete clone.awayLogo;
+  ['home', 'away'].forEach(side => {
+    const arr = clone.lineup?.[side];
+    if (Array.isArray(arr)) arr.forEach(p => { delete p.photo; });
+  });
+  return clone;
+}
+
+// AI生成後の matchcard mod に、実 facts.matchData（選手写真・フォメ・ロゴ・正確なラインアップ）を再注入する。
+// AIが作り直した matchData は写真等を欠落させるため、構造データは実データで上書きする（narration等のAI文は維持）。
+function injectRealMatchData(mods, pattern, facts) {
+  if (!facts?.matchData?.ok) return;
+  pattern.slides.forEach((slot, i) => {
+    if (slot.type !== 'matchcard' || !mods[i]) return;
+    const md = facts.matchData;
+    // 既存の matchData（AI生成）に実データをマージ。実データのある構造フィールドを優先。
+    mods[i].matchData = { ...(mods[i].matchData || {}), ...md };
+    // フラット化済みの上位フィールドも実データで補正
+    const FIELDS = ['homeTeam', 'awayTeam', 'homeScore', 'awayScore', 'goals', 'cards', 'subs', 'stats', 'lineup', 'formations', 'tournament', 'matchDate', 'venue'];
+    FIELDS.forEach(f => { if (md[f] !== undefined && md[f] !== null) mods[i][f] = md[f]; });
+  });
+}
+
 function compressFacts(facts) {
   if (typeof facts === 'string') return facts.slice(0, 6000);
 
@@ -117,8 +145,9 @@ function compressFacts(facts) {
     }));
   }
 
-  // 試合データはそのまま（元々コンパクト）
-  if (facts.matchData) out.matchData = facts.matchData;
+  // 試合データ: AIに渡す用は重い画像データURI（選手写真・ロゴ）を剥がして軽量化
+  //   実データ（写真付き）は generateMods 側で生成後に matchcard へ再注入する
+  if (facts.matchData) out.matchData = _stripMatchMedia(facts.matchData);
 
   // 選手データ: 必要フィールドのみ
   if (facts.playerData) {
@@ -200,7 +229,7 @@ async function generateMods(patternKey, topic, facts) {
 与えられたトピック・素材・スライド仕様に基づいて、各スライドのmodデータをJSON形式で生成してください。
 
 【ナレーション仕様】
-- opening narration: タイトルコールのみ。「〇〇が〇〇した件について見ていきましょう」程度の短い導入（30文字以内）
+- opening narration: title と完全に同じテキストをそのまま設定（TTS がタイトルを読み上げるだけ）
 - コンテンツスライド narration: 話題の概要を口語体で200文字程度にまとめる。事実ベースで視聴者が「へぇ」となる内容
 - ending narration: オチの一言のみ。「やっぱ〇〇はすごいな」「これはエモい」程度の締め（30文字以内）
 
@@ -216,7 +245,7 @@ async function generateMods(patternKey, topic, facts) {
 - title: スライド見出し（日本語・短く印象的に）
 - badge: バッジテキスト（opening/endingのみ。例: 速報、注目、朗報、衝撃）
 - catchphrases: insight用。論点の箇条書き配列（3〜5個、各20文字以内）
-- siBinding: stats/history用。英語名（選手名 or チーム名）。画像検索キー
+- siBinding: 英語名（選手名 or チーム名）。画像検索キー。insight/stats/history スライド全てに設定する（例: "Kaoru Mitoma", "Liverpool FC"）
 - siBindingLeft / siBindingRight: comparison用。左右対象の英語名
 - dataSlots: データ配列
   - stats用: [{label:"項目名", value:"値"}, ...] 最大6個
@@ -279,6 +308,9 @@ ${modSpec}
     mods[i].rightImage = null;
   });
 
+  // matchcard に実試合データ（選手写真・フォメ・ロゴ）を再注入
+  injectRealMatchData(mods, pattern, facts);
+
   const validation = validateMods(patternKey, mods);
   if (!validation.valid) {
     console.warn('  [script_gen] Validation warnings:', validation.errors);
@@ -303,7 +335,7 @@ async function generateModsForPieces(selectedViewpoints, facts) {
   const compressed = compressFacts(facts);
 
   const SLIDE_TYPE_SPEC = {
-    insight:    '- title, narration（200文字程度の概要）, catchphrases（3-5個・各20文字以内）, comments（7-9個・各40-120文字）',
+    insight:    '- title, narration（200文字程度の概要）, catchphrases（3-5個・各20文字以内）, siBinding（英語名・主要選手orチーム名）, comments（7-9個・各40-120文字）',
     matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（200文字程度の概要）',
     stats:      '- title, narration（200文字程度の概要）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（7-9個・各40-120文字）',
     comparison: '- title, narration（200文字程度の概要）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（7-9個・各40-120文字）',
@@ -319,7 +351,7 @@ async function generateModsForPieces(selectedViewpoints, facts) {
 選ばれた企画ピース（${count}個）をもとに、${pattern.slides.length}枚のスライドデータをJSON形式で生成してください。
 
 【ナレーション仕様】
-- opening narration: タイトルコールのみ。「〇〇について見ていきましょう」程度の短い導入（30文字以内）
+- opening narration: title と完全に同じテキストをそのまま設定（TTS がタイトルを読み上げるだけ）
 - コンテンツスライド narration: 話題の概要を口語体で200文字程度にまとめる。事実ベースで視聴者が「へぇ」となる内容
 - ending narration: オチの一言のみ。「やっぱ〇〇はすごいな」「これはエモい」程度の締め（30文字以内）
 
@@ -332,7 +364,7 @@ async function generateModsForPieces(selectedViewpoints, facts) {
 - 必ず7個以上生成すること
 
 【スライド構成】
-- slides[0]: opening — title（10文字以内・インパクト重視）+ badge="速報"固定 + narration（上記仕様）
+- slides[0]: opening — title（20〜35文字・YouTubeサムネイルと同レベルのキャッチーな見出し。例: "ロナウドがまさかの落選！ポルトガルに激震走る"）+ badge（推論）+ narration = title と同じテキスト
 ${selectedViewpoints.map((vp, i) => {
   const t = contentTypes[i];
   return `- slides[${i + 1}]: ${t} — 企画ピース${i + 1}「${vp.angle}」\n  必須フィールド: ${SLIDE_TYPE_SPEC[t] || SLIDE_TYPE_SPEC.insight}`;
@@ -372,6 +404,9 @@ ${selectedViewpoints.map((vp, i) => {
       if (mod[field] === undefined || mod[field] === null) errors.push(`slides[${i}] (${slot.type}): "${field}" 未設定`);
     }
   });
+  // matchcard に実試合データ（選手写真・フォメ・ロゴ）を再注入
+  injectRealMatchData(mods, pattern, facts);
+
   const validation = { valid: errors.length === 0, errors };
   if (!validation.valid) console.warn('  [script_gen] Validation warnings:', validation.errors);
 

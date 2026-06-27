@@ -699,6 +699,99 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .s4-gallery-thumb.active { border-color: var(--green); }
 .s4-gallery-empty { font-size: 12px; color: var(--faint); padding: 12px; }
 
+/* ════ Step2 取得元ラベル別 画像一覧 ════ */
+.s2-img-group { margin-bottom: 12px; }
+.s2-img-group-hdr {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  font-size: 12px; font-weight: 700; color: var(--text-sub);
+}
+.s2-img-group-hdr .grp-count { font-size: 11px; color: var(--faint); font-weight: 400; }
+.s2-img-group-hdr .grp-toggle {
+  font-size: 11px; color: var(--accent); cursor: pointer; margin-left: auto;
+  background: none; border: none; padding: 0;
+}
+.s2-img-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.s2-img-cell {
+  position: relative; aspect-ratio: 16/9; border-radius: 5px; overflow: hidden;
+  background-size: cover; background-position: center; background-color: var(--card2);
+  cursor: pointer; border: 2px solid transparent; transition: border-color .15s, opacity .15s;
+  opacity: 0.4;
+}
+.s2-img-cell.checked { border-color: var(--green); opacity: 1; }
+.s2-img-cell .s2-check {
+  position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 4px;
+  background: rgba(0,0,0,0.55); color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; line-height: 1; border: 1.5px solid rgba(255,255,255,0.7);
+}
+.s2-img-cell.checked .s2-check { background: var(--green); border-color: var(--green); }
+
+/* ════ Step2 ラベルカード（V3式 ラベル紐づけ取得）════ */
+.s2-label-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; margin-bottom: 10px;
+}
+.s2-label-card-hdr { display: flex; align-items: center; gap: 8px; }
+.s2-label-card-hdr .lc-name { font-size: 14px; font-weight: 700; }
+.s2-label-card-hdr .lc-sub { font-size: 11px; color: var(--faint); }
+.s2-label-card-hdr .lc-badge { font-size: 10px; padding: 1px 6px; border-radius: 5px; border: 1px solid; }
+.s2-label-card-hdr .lc-rm { margin-left: auto; border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.6; }
+.s2-label-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.s2-label-status { font-size: 11px; color: var(--muted); }
+.s2-label-data { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.s2-label-data .ld-line {
+  font-size: 12px; padding: 5px 8px; border-radius: 6px; background: var(--card2);
+  border-left: 3px solid var(--green);
+}
+.s2-label-data .ld-line.err { border-left-color: var(--red, #ef4444); color: var(--muted); }
+.s2-label-imgs { margin-top: 8px; }
+.s2-label-imgs .s2-img-grid { grid-template-columns: repeat(5, 1fr); }
+
+/* ── Step4 画像アコーディオン（見出し横並び）── */
+.img-acc { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.img-acc-tabs { display: flex; gap: 0; }
+.img-acc-tab {
+  flex: 1; padding: 8px 6px; font-size: 12px; font-weight: 600;
+  background: var(--card2); border: none; border-right: 1px solid var(--border);
+  color: var(--text-sub); cursor: pointer;
+}
+.img-acc-tab:last-child { border-right: none; }
+.img-acc-tab.has { color: var(--green); }
+.img-acc-tab.active { background: var(--accent); color: #1a1206; }
+.img-acc-panel:not(:empty) { padding: 10px; border-top: 1px solid var(--border); }
+
+/* ── Step4 セクションアコーディオン（データスロット/コメント）── */
+.sf-acc { border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; overflow: hidden; }
+.sf-acc > summary {
+  list-style: none; cursor: pointer; padding: 9px 12px; font-size: 13px; font-weight: 700;
+  color: var(--text-sub); background: var(--card2); user-select: none;
+}
+.sf-acc > summary::-webkit-details-marker { display: none; }
+.sf-acc > summary::before { content: '▸ '; color: var(--accent); }
+.sf-acc[open] > summary::before { content: '▾ '; }
+.sf-acc-body { padding: 10px 12px; }
+
+/* ── コンパクトなラベルチップ + アイコン取得ボタン ── */
+.s2-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 8px; border-radius: 8px; border: 1px solid; width: fit-content;
+}
+.s2-chip .ch-name { font-size: 13px; font-weight: 700; }
+.s2-chip .ch-sub { font-size: 10px; opacity: 0.7; }
+.s2-chip .ch-badge { font-size: 10px; padding: 1px 5px; border-radius: 4px; border: 1px solid; }
+.s2-chip .ch-ic {
+  width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--card2); cursor: pointer; font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.s2-chip .ch-ic:hover { border-color: var(--accent); }
+.s2-chip .ch-ic:disabled { opacity: 0.45; cursor: default; }
+.s2-chip .ch-ic.done { border-color: var(--green); background: rgba(16,185,129,0.15); }
+.s2-chip .ch-rm { border: none; background: none; cursor: pointer; font-size: 14px; opacity: 0.55; padding: 0 0 0 2px; }
+/* 取得結果ブロック */
+.s2-result-group { margin-bottom: 10px; }
+.s2-result-hdr { font-size: 12px; font-weight: 700; margin-bottom: 5px; color: var(--text-sub); }
+.s2-result-hdr .rh-count { font-size: 11px; font-weight: 400; color: var(--faint); margin-left: 6px; }
+
 /* ════ Data Slots Editor ════ */
 .ds-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .ds-item { display: flex; gap: 6px; align-items: center; }
@@ -829,8 +922,15 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 
       <!-- 3. ラベル（AI提案＋手動追加） -->
       <div class="research-block" id="labelsBlock" style="display:none">
-        <h3 class="block-title">ラベル</h3>
-        <div id="labelChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+        <h3 class="block-title">ラベル <span style="font-size:11px;font-weight:400;color:var(--faint)">— 📊/🖼 アイコンで取得</span></h3>
+        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          <button class="btn btn-sm btn-accent" id="fetchAllDataBtn" onclick="fetchAllLabelData()" style="font-size:12px">📊 データ全取得</button>
+          <span id="allDataStatus" style="font-size:11px;color:var(--muted);display:none">取得中…</span>
+        </div>
+        <div id="labelChips" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+        <!-- 取得結果（データ＋画像）-->
+        <div id="labelDataResults" style="margin-bottom:10px"></div>
+        <div id="labelImageResults" style="margin-bottom:10px"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <select id="labelTypeAdd" style="font-size:12px;padding:4px 6px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--text)">
             <option value="team">team</option>
@@ -842,24 +942,25 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         </div>
       </div>
 
-      <!-- 4. データ（手動取得） -->
-      <div class="research-block" id="dataBlock">
-        <h3 class="block-title">データ</h3>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <button class="btn btn-sm btn-accent" id="fetchDataBtn" onclick="doFetchData()" style="font-size:12px">📊 データ取得</button>
-          <span id="dataFetchStatus" style="font-size:12px;color:var(--muted);display:none">取得中...</span>
-        </div>
+      <!-- 4. データ（旧・グローバル取得 — 非表示。per-labelに移行）-->
+      <div class="research-block" id="dataBlock" style="display:none">
+        <button id="fetchDataBtn" onclick="doFetchData()" style="display:none"></button>
+        <span id="dataFetchStatus" style="display:none"></span>
         <div id="dataContent"></div>
       </div>
 
-      <!-- 5. 画像（手動取得） -->
+      <!-- 5. 画像選択サマリー（per-labelで取得 → ここで選択枚数を表示）-->
       <div class="research-block" id="imagesBlock">
-        <h3 class="block-title">画像</h3>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button class="btn btn-sm btn-accent" id="fetchXImagesBtn" onclick="doFetchXImages()" style="font-size:12px">🖼 画像取得</button>
-          <span id="xFetchStatus" style="font-size:12px;color:var(--muted);display:none">取得中...</span>
-          <span id="xImagesChip" style="font-size:12px;color:var(--green);font-weight:600;display:none"></span>
+        <h3 class="block-title">画像の選択状況</h3>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted)">各ラベルの「🖼 画像取得」で集めて、チェックした画像がStep4ギャラリーに入るよ</span>
+          <span id="imgCheckCount" style="font-size:12px;color:var(--accent);font-weight:600;display:none;margin-left:auto"></span>
         </div>
+        <!-- 旧グローバルUI（非表示・後方互換用）-->
+        <button id="fetchXImagesBtn" onclick="doFetchXImages()" style="display:none"></button>
+        <span id="xFetchStatus" style="display:none"></span>
+        <span id="xImagesChip" style="display:none"></span>
+        <div id="step2ImageGroups" style="display:none"></div>
       </div>
 
       <div class="flow-footer">
@@ -927,20 +1028,11 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
       </div>
       <!-- スライドタブ行 -->
       <div class="s4-tabs-row" id="s4TabsRow" style="display:none"></div>
-      <!-- 2カラム: エディタ + プレビュー/ギャラリー -->
+      <!-- 2カラム: エディタ + ギャラリー -->
       <div class="s4-main-grid">
         <div id="s4EditorPanel"></div>
-        <!-- 右カラム: プレビュー + ギャラリー -->
+        <!-- 右カラム: 画像ギャラリー -->
         <div class="s4-right-col">
-          <!-- プレビュー -->
-          <div class="s4-preview-wrap">
-            <div class="s4-panel-hdr">
-              <span>🖼️ プレビュー</span>
-              <button class="btn btn-sm btn-ghost" onclick="s4RefreshPreview()" style="padding:3px 8px">↻</button>
-            </div>
-            <div class="s4-preview-box" id="s4PreviewBox"></div>
-          </div>
-          <!-- 画像ギャラリー -->
           <div class="s4-gallery-wrap">
             <div class="s4-panel-hdr">
               <span>📁 画像ギャラリー <span id="galleryTargetHdr" style="font-size:11px;color:var(--accent);margin-left:4px"></span></span>
@@ -953,6 +1045,14 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
             </div>
           </div>
         </div>
+      </div>
+      <!-- プレビュー（最下部・全幅）-->
+      <div class="s4-preview-wrap" style="margin-top:14px">
+        <div class="s4-panel-hdr">
+          <span>🖼️ プレビュー</span>
+          <button class="btn btn-sm btn-ghost" onclick="s4RefreshPreview()" style="padding:3px 8px">↻</button>
+        </div>
+        <div class="s4-preview-box" id="s4PreviewBox"></div>
       </div>
     </div>
   </div>
@@ -1095,6 +1195,16 @@ var currentLabels = [];  // [{type, name, ...}]
 var commentWarehouse = [];  // [{text, source}]
 // ギャラリーターゲット（どのスライドのどのフィールドに適用するか）
 var galleryTarget = { idx: null, key: 'bgImage' };
+// 取得した全画像（{url,label,group}）と、チェック解除した画像URL（デフォルト全チェック）
+var allGalleryImages = [];
+var uncheckedImageUrls = new Set();
+// V3式 ラベル紐づけ取得の状態（key = labelKeyOf(label)）
+var labelImages = {};   // key -> [{url,label,group}]
+var labelData   = {};   // key -> {matchData,playerData,teamData,error}
+var labelBusy   = {};   // key -> {data:bool, images:bool}
+function labelKeyOf(lb) {
+  return lb.type + ':' + (lb.type === 'match' ? ((lb.homeTeam||'') + '-' + (lb.awayTeam||'')) : (lb.name||''));
+}
 
 const SCOUT_MSGS = [
   'Yahoo + Reddit をスキャン中...',
@@ -1105,8 +1215,9 @@ let scoutMsgTimer = null;
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}`);
-  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
-  ws.onopen = () => setStatus('待機中', false);
+  ws.onmessage = (e) => { try { handleMessage(JSON.parse(e.data)); } catch(err) { console.error('[WS] parse/handle error:', err); } };
+  ws.onopen  = () => setStatus('待機中', false);
+  ws.onerror = () => setStatus('接続エラー', false);
   ws.onclose = () => { setStatus('再接続中...', false); setTimeout(connect, 2000); };
 }
 function send(obj) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj)); }
@@ -1213,9 +1324,16 @@ function handleMessage(msg) {
       renderDataContent(msg.matchData, msg.playerData, msg.teamData);
       break;
     case 'gallery_images':
-      s4RenderGallery(msg.images);
-      document.getElementById('xFetchStatus').style.display = 'none';
-      document.getElementById('fetchXImagesBtn').disabled = false;
+      onGalleryImages(msg.images);
+      break;
+    case 'slide_preview':
+      s4ShowPreview(msg.html, msg.reqId);
+      break;
+    case 'label_data_ready':
+      onLabelDataReady(msg);
+      break;
+    case 'label_images_ready':
+      onLabelImagesReady(msg);
       break;
     case 'x_images_ready':
       var chip = document.getElementById('xImagesChip');
@@ -1529,29 +1647,215 @@ var LABEL_META = {
   team:   { color: '#93c5fd', bg: 'rgba(147,197,253,0.18)', border: 'rgba(147,197,253,0.6)', icon: '🏳️', label: 'チーム' },
   player: { color: '#10b981', bg: 'rgba(16,185,129,0.18)',  border: 'rgba(16,185,129,0.6)',  icon: '👤', label: '選手'   },
 };
+// V3式: 各ラベルをコンパクトなチップ + 📊/🖼 アイコンで取得。結果は下のエリアに表示
 function renderLabelChips() {
   var el = document.getElementById('labelChips');
   if (!el) return;
   if (!currentLabels.length) {
     el.innerHTML = '<span style="font-size:12px;color:var(--faint)">ラベルなし（AI解析失敗 or まだ収集前）</span>';
+    renderLabelDataResults();
+    renderLabelImageResults();
     return;
   }
   el.innerHTML = currentLabels.map(function(lb, i) {
     var m = LABEL_META[lb.type] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.18)', border: 'rgba(148,163,184,0.6)', icon: '🏷️', label: lb.type };
+    var key = labelKeyOf(lb);
+    var busy = labelBusy[key] || {};
+    var d = labelData[key];
+    var imgs = labelImages[key] || [];
     var display = lb.type === 'match'
       ? (lb.homeTeam || '?') + ' vs ' + (lb.awayTeam || '?')
       : (lb.name || '');
     var sub = lb.type === 'match' && lb.competition ? lb.competition : (lb.type === 'player' && lb.team ? lb.team : '');
-    return '<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px 5px 8px;border-radius:8px;border:1px solid ' + m.border + ';background:' + m.bg + ';cursor:default">' +
+
+    var canData = (lb.type === 'match' && lb.homeTeam && lb.awayTeam) || (lb.type === 'player' && lb.name) || (lb.type === 'team' && lb.name);
+    var dataDone = d && !d.error && (d.matchData || d.playerData || d.teamData);
+    var dataIc = canData
+      ? '<button class="ch-ic' + (dataDone ? ' done' : '') + '" ' + (busy.data ? 'disabled' : '') + ' title="データ取得" onclick="fetchLabelData(' + i + ')">' + (busy.data ? '⏳' : '📊') + '</button>'
+      : '';
+    var imgIc = '<button class="ch-ic' + (imgs.length ? ' done' : '') + '" ' + (busy.images ? 'disabled' : '') + ' title="画像取得" onclick="fetchLabelImages(' + i + ')">' + (busy.images ? '⏳' : '🖼') + '</button>';
+
+    return '<div class="s2-chip" style="border-color:' + m.border + ';background:' + m.bg + '">' +
+      dataIc + imgIc +
       '<span style="font-size:14px">' + m.icon + '</span>' +
-      '<div style="display:flex;flex-direction:column;line-height:1.2">' +
-        '<span style="font-size:13px;font-weight:700;color:' + m.color + '">' + esc(display) + '</span>' +
-        (sub ? '<span style="font-size:10px;color:' + m.color + ';opacity:0.7">' + esc(sub) + '</span>' : '') +
-      '</div>' +
-      '<span style="font-size:10px;color:' + m.color + ';opacity:0.55;padding:1px 4px;border:1px solid ' + m.border + ';border-radius:4px;margin-left:2px">' + m.label + '</span>' +
-      '<button onclick="removeLabel(' + i + ')" style="border:none;background:none;color:' + m.color + ';cursor:pointer;padding:0 0 0 4px;font-size:14px;line-height:1;opacity:0.7" title="削除">✕</button>' +
+      '<span class="ch-name" style="color:' + m.color + '">' + esc(display) + '</span>' +
+      (sub ? '<span class="ch-sub" style="color:' + m.color + '">' + esc(sub) + '</span>' : '') +
+      '<span class="ch-badge" style="color:' + m.color + ';border-color:' + m.border + '">' + m.label + '</span>' +
+      '<button class="ch-rm" style="color:' + m.color + '" onclick="removeLabel(' + i + ')" title="削除">✕</button>' +
     '</div>';
   }).join('');
+  renderLabelDataResults();
+  renderLabelImageResults();
+}
+
+// 取得済みデータをラベルごとにまとめて表示
+function renderLabelDataResults() {
+  var host = document.getElementById('labelDataResults');
+  if (!host) return;
+  var html = currentLabels.map(function(lb) {
+    var key = labelKeyOf(lb);
+    var d = labelData[key];
+    if (!d) return '';
+    var lines = renderLabelDataLines(d);
+    if (!lines) return '';
+    var name = lb.type === 'match' ? ((lb.homeTeam||'?') + ' vs ' + (lb.awayTeam||'?')) : (lb.name||'');
+    return '<div class="s2-result-group"><div class="s2-result-hdr">📊 ' + esc(name) + '</div><div class="s2-label-data">' + lines + '</div></div>';
+  }).join('');
+  host.innerHTML = html;
+}
+
+// 取得済み画像をラベルごとにチェック式で表示
+function renderLabelImageResults() {
+  var host = document.getElementById('labelImageResults');
+  if (!host) return;
+  var html = currentLabels.map(function(lb) {
+    var key = labelKeyOf(lb);
+    var imgs = labelImages[key] || [];
+    if (!imgs.length) return '';
+    var onCount = imgs.filter(function(im){ return isImgChecked(im.url); }).length;
+    var name = lb.type === 'match' ? ((lb.homeTeam||'?') + ' vs ' + (lb.awayTeam||'?')) : (lb.name||'');
+    return '<div class="s2-result-group">' +
+      '<div class="s2-result-hdr">🖼 ' + esc(name) + '<span class="rh-count">' + onCount + '/' + imgs.length + ' 選択</span></div>' +
+      renderLabelImageCells(key) +
+    '</div>';
+  }).join('');
+  host.innerHTML = html;
+}
+
+// 全ラベルのデータを一括取得
+function fetchAllLabelData() {
+  var targets = currentLabels.filter(function(lb){
+    return (lb.type === 'match' && lb.homeTeam && lb.awayTeam) || (lb.type === 'player' && lb.name) || (lb.type === 'team' && lb.name);
+  });
+  if (!targets.length) { alert('データ取得できるラベルがありません'); return; }
+  var st = document.getElementById('allDataStatus');
+  if (st) { st.textContent = targets.length + '件 取得中…'; st.style.display = ''; }
+  currentLabels.forEach(function(lb, i) {
+    var canData = (lb.type === 'match' && lb.homeTeam && lb.awayTeam) || (lb.type === 'player' && lb.name) || (lb.type === 'team' && lb.name);
+    if (canData) fetchLabelData(i);
+  });
+}
+
+// 単一ラベルのデータ結果 → サマリー行
+function renderLabelDataLines(d) {
+  if (!d) return '';
+  var lines = [];
+  function push(text, ok) { lines.push({ text: text, ok: ok !== false }); }
+  if (d.error) push('取得失敗: ' + d.error, false);
+  var md = d.matchData;
+  if (md) {
+    if (md.ok) { push('🏟️ ' + (md.scoreline || (md.homeTeam + ' vs ' + md.awayTeam))); if (md.tournament) push('🏆 ' + md.tournament); }
+    else push('🏟️ 試合データ取得失敗: ' + (md.error || ''), false);
+  }
+  var pd = d.playerData;
+  if (pd) {
+    if (pd.ok) {
+      var pLine = '👤 ' + (pd.name || '');
+      if (pd.position) pLine += ' ／ ' + pd.position;
+      if (pd.age) pLine += ' ／ ' + pd.age + '歳';
+      if (pd.team) pLine += ' ／ ' + pd.team;
+      if (pd.marketValue) pLine += ' ／ ' + pd.marketValue;
+      push(pLine);
+      var ss = pd.seasonStats;
+      if (ss) {
+        var it = [];
+        if (ss.goals != null) it.push('G ' + ss.goals);
+        if (ss.assists != null) it.push('A ' + ss.assists);
+        if (ss.appearances != null) it.push(ss.appearances + '試合');
+        if (ss.rating != null) it.push('評価 ' + ss.rating);
+        if (it.length) push('📊 今季' + (pd.leagueName ? '(' + pd.leagueName + ')' : '') + ': ' + it.join(' ／ '));
+      }
+      var nt = pd.nationalTeam;
+      if (nt && nt.total) {
+        var ni = [];
+        if (nt.total.appearances) ni.push(nt.total.appearances + 'caps');
+        if (nt.total.goals) ni.push('G ' + nt.total.goals);
+        if (ni.length) push('🌍 ' + (nt.teamName || '代表') + ': ' + ni.join(' ／ '));
+      }
+    } else push('👤 選手データ取得失敗: ' + (pd.error || ''), false);
+  }
+  var td = d.teamData;
+  if (td) {
+    if (td.ok) {
+      var tl = '🏳️ ' + (td.name || '');
+      if (td.manager) tl += ' ／ 監督: ' + td.manager;
+      if (td.standing) tl += ' ／ ' + td.standing.position + '位 ' + td.standing.points + 'pts';
+      if (td.recentForm) tl += ' ／ 直近: ' + td.recentForm;
+      push(tl);
+    } else push('🏳️ ' + (td.name || '') + ' 取得失敗: ' + (td.error || ''), false);
+  }
+  return lines.map(function(l) {
+    return '<div class="ld-line' + (l.ok ? '' : ' err') + '">' + esc(l.text) + '</div>';
+  }).join('');
+}
+
+// 単一ラベルの画像セル（チェック式・allGalleryImagesのindex参照）
+function renderLabelImageCells(key) {
+  var imgs = labelImages[key] || [];
+  if (!imgs.length) return '';
+  return '<div class="s2-img-grid">' + imgs.map(function(img) {
+    var gi = allGalleryImages.findIndex(function(x){ return x.url === img.url; });
+    var on = isImgChecked(img.url);
+    return '<div class="s2-img-cell' + (on ? ' checked' : '') + '" ' +
+      'style="background-image:url(\'' + esc(img.url) + '\')" title="' + esc(img.label || '') + '" ' +
+      'onclick="toggleImageCheckByIdx(' + gi + ')">' +
+      '<span class="s2-check">' + (on ? '✓' : '') + '</span></div>';
+  }).join('') + '</div>';
+}
+
+// allGalleryImages へ重複なくマージ
+function mergeGalleryImages(imgs) {
+  var seen = new Set(allGalleryImages.map(function(i){ return i.url; }));
+  (imgs || []).forEach(function(img) {
+    if (img && img.url && !seen.has(img.url)) { allGalleryImages.push(img); seen.add(img.url); }
+  });
+}
+
+function fetchLabelData(i) {
+  var lb = currentLabels[i]; if (!lb) return;
+  var key = labelKeyOf(lb);
+  labelBusy[key] = labelBusy[key] || {}; labelBusy[key].data = true;
+  renderLabelChips();
+  send({ action: 'fetch_label_data', label: lb, labelKey: key });
+}
+function fetchLabelImages(i) {
+  var lb = currentLabels[i]; if (!lb) return;
+  var key = labelKeyOf(lb);
+  labelBusy[key] = labelBusy[key] || {}; labelBusy[key].images = true;
+  renderLabelChips();
+  send({ action: 'fetch_label_images', label: lb, labelKey: key });
+}
+
+function onLabelDataReady(msg) {
+  var key = msg.labelKey;
+  if (key) { labelBusy[key] = labelBusy[key] || {}; labelBusy[key].data = false; }
+  labelData[key] = { matchData: msg.matchData, playerData: msg.playerData, teamData: msg.teamData, error: msg.error };
+  if (msg.images && msg.images.length) {
+    labelImages[key] = mergeLabelImgs(labelImages[key], msg.images);
+    mergeGalleryImages(msg.images);
+  }
+  // 全取得ステータス: 進行中のデータ取得が無くなったら隠す
+  var anyBusy = Object.keys(labelBusy).some(function(k){ return labelBusy[k] && labelBusy[k].data; });
+  var st = document.getElementById('allDataStatus');
+  if (st && !anyBusy) st.style.display = 'none';
+  renderLabelChips();
+  refreshStep4Gallery();
+  updateImgCheckCount();
+}
+function onLabelImagesReady(msg) {
+  var key = msg.labelKey;
+  if (key) { labelBusy[key] = labelBusy[key] || {}; labelBusy[key].images = false; }
+  labelImages[key] = mergeLabelImgs(labelImages[key], msg.images || []);
+  mergeGalleryImages(msg.images || []);
+  renderLabelChips();
+  refreshStep4Gallery();
+  updateImgCheckCount();
+}
+function mergeLabelImgs(existing, add) {
+  existing = existing || [];
+  var seen = new Set(existing.map(function(i){ return i.url; }));
+  (add || []).forEach(function(img){ if (img && img.url && !seen.has(img.url)) { existing.push(img); seen.add(img.url); } });
+  return existing;
 }
 function addLabelManual() {
   var type = document.getElementById('labelTypeAdd').value;
@@ -1823,17 +2127,30 @@ function s4SchedulePreview() {
   s4PreviewTimer = setTimeout(s4RefreshPreview, 420);
 }
 
+// プレビュー: サーバの実ビルダーで本番と同一HTMLを生成してもらい iframe 表示
+var s4PreviewReqId = 0;
 function s4RefreshPreview() {
   var box = document.getElementById('s4PreviewBox');
   if (!box) return;
   if (!currentMods || !currentMods.length) { box.innerHTML = ''; box.style.height = ''; return; }
   var mod = currentMods[Math.max(0, Math.min(s4ActiveIdx, currentMods.length - 1))];
   if (!mod) return;
+  s4PreviewReqId++;
+  send({ action: 'preview_slide', mod: mod, reqId: s4PreviewReqId });
+}
+
+function s4ShowPreview(html, reqId) {
+  // 古いリクエストの応答は捨てる
+  if (reqId != null && reqId !== s4PreviewReqId) return;
+  var box = document.getElementById('s4PreviewBox');
+  if (!box) return;
   var w = box.offsetWidth;
-  if (w < 10) { setTimeout(s4RefreshPreview, 100); return; }
+  if (w < 10) { setTimeout(function(){ s4ShowPreview(html, reqId); }, 100); return; }
   var scale = w / 1920;
   box.style.height = Math.round(1080 * scale) + 'px';
-  box.innerHTML = '<div class="spv-inner" style="transform:scale(' + scale + ')">' + s4BuildSlideContent(mod) + '</div>';
+  box.innerHTML = '<iframe class="spv-frame" sandbox="allow-scripts allow-same-origin" style="width:1920px;height:1080px;border:0;transform:scale(' + scale + ');transform-origin:top left"></iframe>';
+  var f = box.querySelector('iframe');
+  if (f) f.srcdoc = html;
 }
 
 function s4BuildSlideContent(mod) {
@@ -1909,7 +2226,11 @@ function s4BuildSlideContent(mod) {
     var tLen  = ttl.length;
     var tSize = tLen <= 6 ? 110 : tLen <= 10 ? 96 : tLen <= 14 ? 80 : 64;
 
-    html += '<div style="position:absolute;inset:0;background:' + BG + ';animation:bgZoom 8s ease-out forwards"></div>';
+    if (mod.bgImage) {
+      html += '<div style="position:absolute;inset:0;background-image:url(\'' + esc(mod.bgImage) + '\');background-size:cover;background-position:center;filter:brightness(0.62);animation:bgZoom 8s ease-out forwards"></div>';
+    } else {
+      html += '<div style="position:absolute;inset:0;background:' + BG + ';animation:bgZoom 8s ease-out forwards"></div>';
+    }
     html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 50%,rgba(245,158,11,0.12) 0%,transparent 70%),linear-gradient(135deg,rgba(6,14,28,0.35) 0%,rgba(6,14,28,0.52) 100%)"></div>';
     // sweep-line: 横スキャン
     html += '<div style="position:absolute;top:0;bottom:0;width:4px;background:linear-gradient(to bottom,transparent,rgba(245,158,11,0.85),transparent);animation:sweepMove 5s ease-in-out 0.3s forwards"></div>';
@@ -1921,8 +2242,16 @@ function s4BuildSlideContent(mod) {
   // ──── insight ────
   } else if (type === 'insight') {
     var cps = (mod.catchphrases || []).slice(0, 5);
-    html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
-    html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 20% 50%,rgba(245,158,11,0.08) 0%,transparent 70%)"></div>';
+    if (mod.bgImage) {
+      var izoom = mod.bgImageZoom != null ? mod.bgImageZoom : 100;
+      var ibx = mod.bgImageX != null ? mod.bgImageX : 50;
+      var iby = mod.bgImageY != null ? mod.bgImageY : 50;
+      html += '<div style="position:absolute;inset:0;background-image:url(\'' + esc(mod.bgImage) + '\');background-size:' + izoom + '%;background-position:' + ibx + '% ' + iby + '%;background-repeat:no-repeat;animation:bgZoomSlow 14s ease-out forwards"></div>';
+      html += '<div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(6,14,28,0.92) 0%,rgba(6,14,28,0.78) 50%,rgba(6,14,28,0.60) 100%)"></div>';
+    } else {
+      html += '<div style="position:absolute;inset:0;background:' + BG + '"></div>';
+      html += '<div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 50% at 20% 50%,rgba(245,158,11,0.08) 0%,transparent 70%)"></div>';
+    }
     html += '<div style="position:absolute;top:70px;left:80px;font-size:52px;font-weight:900;color:' + ACCENT + ';letter-spacing:1px;animation:fadeIn 0.5s ease-out 0.2s backwards">' + esc(mod.title||'') + '</div>';
     html += '<div style="position:absolute;top:190px;left:80px;right:80px;bottom:180px;display:flex;flex-direction:column;justify-content:space-evenly">';
     cps.forEach(function(cp, i) {
@@ -2172,6 +2501,87 @@ function s4BuildSlideContent(mod) {
 // ════ 画像ギャラリー ════
 var s4GalleryImages = [];
 
+// Step4「取得」(get_gallery_images) 等で全画像を受信 → プールへマージ（既存選択は維持）
+function onGalleryImages(images) {
+  mergeGalleryImages(images || []);
+  refreshStep4Gallery();
+  updateImgCheckCount();
+}
+
+function isImgChecked(url) { return !uncheckedImageUrls.has(url); }
+function getCheckedImages() { return allGalleryImages.filter(function(i){ return isImgChecked(i.url); }); }
+
+function updateImgCheckCount() {
+  var el = document.getElementById('imgCheckCount');
+  if (!el) return;
+  if (!allGalleryImages.length) { el.style.display = 'none'; return; }
+  el.textContent = '✓ ' + getCheckedImages().length + ' / ' + allGalleryImages.length + ' 枚をギャラリーへ';
+  el.style.display = '';
+}
+
+function toggleImageCheck(url) {
+  if (uncheckedImageUrls.has(url)) uncheckedImageUrls.delete(url);
+  else uncheckedImageUrls.add(url);
+  renderLabelChips();
+  refreshStep4Gallery();
+  updateImgCheckCount();
+}
+function toggleImageCheckByIdx(idx) {
+  var img = allGalleryImages[idx];
+  if (img) toggleImageCheck(img.url);
+}
+
+function toggleGroupCheckEl(el) { toggleGroupCheck(el.getAttribute('data-group')); }
+function toggleGroupCheck(group) {
+  var imgs = allGalleryImages.filter(function(i){ return (i.group || 'その他') === group; });
+  var allOn = imgs.every(function(i){ return isImgChecked(i.url); });
+  imgs.forEach(function(i){ if (allOn) uncheckedImageUrls.add(i.url); else uncheckedImageUrls.delete(i.url); });
+  renderStep2ImageGroups();
+  refreshStep4Gallery();
+  updateImgCheckCount();
+}
+
+function renderStep2ImageGroups() {
+  var host = document.getElementById('step2ImageGroups');
+  if (!host) return;
+  if (!allGalleryImages.length) { host.innerHTML = ''; return; }
+  // group ごとに分類（取得元ラベル）
+  var groups = {};
+  allGalleryImages.forEach(function(img){
+    var g = img.group || 'その他';
+    (groups[g] = groups[g] || []).push(img);
+  });
+  // 元配列のインデックスを保持（onclick で安全に参照）
+  var indexed = allGalleryImages.map(function(img, idx){ return { img: img, idx: idx }; });
+  var groupNames = [];
+  indexed.forEach(function(e){ var g = e.img.group || 'その他'; if (groupNames.indexOf(g) < 0) groupNames.push(g); });
+  host.innerHTML = groupNames.map(function(g){
+    var entries = indexed.filter(function(e){ return (e.img.group || 'その他') === g; });
+    var onCount = entries.filter(function(e){ return isImgChecked(e.img.url); }).length;
+    var allOn = onCount === entries.length;
+    var cells = entries.map(function(e){
+      var on = isImgChecked(e.img.url);
+      return '<div class="s2-img-cell' + (on ? ' checked' : '') + '" ' +
+        'style="background-image:url(\'' + esc(e.img.url) + '\')" ' +
+        'title="' + esc(e.img.label || '') + '" ' +
+        'onclick="toggleImageCheckByIdx(' + e.idx + ')">' +
+        '<span class="s2-check">' + (on ? '✓' : '') + '</span></div>';
+    }).join('');
+    return '<div class="s2-img-group">' +
+      '<div class="s2-img-group-hdr">' +
+        '<span>' + esc(g) + '</span>' +
+        '<span class="grp-count">' + onCount + '/' + entries.length + '</span>' +
+        '<button class="grp-toggle" data-group="' + esc(g) + '" onclick="toggleGroupCheckEl(this)">' +
+          (allOn ? '全て外す' : '全て選択') + '</button>' +
+      '</div>' +
+      '<div class="s2-img-grid">' + cells + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// Step4 ギャラリーはチェック済み画像のみ表示
+function refreshStep4Gallery() { s4RenderGallery(getCheckedImages()); }
+
 function s4LoadGallery() {
   document.getElementById('s4GalleryGrid').innerHTML = '<p class="s4-gallery-empty">読み込み中...</p>';
   send({ action: 'get_gallery_images' });
@@ -2260,33 +2670,21 @@ function buildSlideCard(mod, i) {
     return '<option value="' + t + '"' + (mod.type === t ? ' selected' : '') + '>' + (SLIDE_TYPE_LABELS[t] || t) + '</option>';
   }).join('');
 
-  function imgBlock(key, label) {
-    var url = mod[key] || '';
-    var zoom = mod[key + 'Zoom'] != null ? mod[key + 'Zoom'] : 100;
-    var ix   = mod[key + 'X']    != null ? mod[key + 'X']    : 50;
-    var iy   = mod[key + 'Y']    != null ? mod[key + 'Y']    : 50;
-    var pvStyle = url ? 'background-image:url("' + esc(url) + '");background-size:' + zoom + '%;background-position:' + ix + '% ' + iy + '%' : '';
-    return '<div class="sf"><label>' + label + '</label>' +
-      '<div class="img-row">' +
-        '<input type="url" id="imgurl-' + i + '-' + key + '" value="' + esc(url) + '" placeholder="https://..." oninput="updateModImg(' + i + ',\'' + key + '\',this)">' +
-        '<button class="img-upload-btn" onclick="s4FocusGallery(' + i + ',\'' + key + '\')" title="ギャラリーから選ぶ">🖼</button>' +
-        '<label class="img-upload-btn">📁<input class="img-file-input" type="file" accept="image/*" onchange="uploadModImg(' + i + ',\'' + key + '\',this)"></label>' +
-      '</div>' +
-      '<div class="img-controls">' +
-        '<div class="img-preview-pane' + (url ? ' has-img' : '') + '" id="imgpv-' + i + '-' + key + '">' +
-          '<div class="img-preview-inner" style="' + pvStyle + '"></div>' +
-        '</div>' +
-        '<div class="ic-row"><span class="ic-label">ズーム</span>' +
-          '<input type="range" min="50" max="400" value="' + zoom + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'Zoom\',this.value)">' +
-          '<span class="ic-val" id="icv-' + i + '-' + key + '-Zoom">' + zoom + '%</span></div>' +
-        '<div class="ic-row"><span class="ic-label">X 位置</span>' +
-          '<input type="range" min="0" max="100" value="' + ix + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'X\',this.value)">' +
-          '<span class="ic-val" id="icv-' + i + '-' + key + '-X">' + ix + '%</span></div>' +
-        '<div class="ic-row"><span class="ic-label">Y 位置</span>' +
-          '<input type="range" min="0" max="100" value="' + iy + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'Y\',this.value)">' +
-          '<span class="ic-val" id="icv-' + i + '-' + key + '-Y">' + iy + '%</span></div>' +
-      '</div>' +
-    '</div>';
+  function imgBlock(key, label) { return buildImgBlockHTML(mod, i, key, label); }
+
+  // 画像調整アコーディオン: 見出し（左画像/背景画像/右画像）を横並び、押すと該当画像のURL+ズーム位置調整を展開
+  function imgAccordion() {
+    var keys = hasImg2
+      ? [['leftImage','左画像'], ['bgImage','背景画像'], ['rightImage','右画像']]
+      : [['bgImage','背景画像']];
+    var tabs = keys.map(function(k) {
+      var hasUrl = !!mod[k[0]];
+      return '<button class="img-acc-tab' + (hasUrl ? ' has' : '') + '" id="imgtab-' + i + '-' + k[0] + '" onclick="toggleImgPanel(' + i + ',\'' + k[0] + '\',\'' + k[1] + '\')">' +
+        (hasUrl ? '🟢 ' : '') + k[1] + '</button>';
+    }).join('');
+    return '<div class="sf"><label>画像</label>' +
+      '<div class="img-acc"><div class="img-acc-tabs">' + tabs + '</div>' +
+      '<div class="img-acc-panel" id="imgpanel-' + i + '" data-open=""></div></div></div>';
   }
 
   var cpSection = '';
@@ -2316,7 +2714,7 @@ function buildSlideCard(mod, i) {
   var hasImg2 = mod.type === 'comparison' || mod.type === 'stats';
 
   // ── データスロット ──
-  var dataSection = '';
+  var dataSectionInner = '';
   if (mod.type === 'stats' || mod.type === 'history' || mod.type === 'comparison') {
     var slots = mod.dataSlots || [];
     var isComp = mod.type === 'comparison';
@@ -2338,13 +2736,13 @@ function buildSlideCard(mod, i) {
     var dsHeader = isComp
       ? '<div style="display:flex;gap:6px;font-size:11px;color:var(--faint);padding:0 0 4px 0"><span style="flex:1.2">項目</span><span style="flex:0.8">左</span><span style="flex:0.8">右</span><span style="width:34px"></span></div>'
       : '<div style="display:flex;gap:6px;font-size:11px;color:var(--faint);padding:0 0 4px 0"><span style="flex:1.2">ラベル</span><span style="flex:0.8">値</span><span style="width:34px"></span></div>';
-    dataSection = '<div class="sf"><label>データスロット</label>' + dsHeader +
+    dataSectionInner = dsHeader +
       '<div class="ds-list">' + slotRows + '</div>' +
-      '<button class="cp-add" onclick="addDataSlot(' + i + ')">＋ スロット追加</button></div>';
+      '<button class="cp-add" onclick="addDataSlot(' + i + ')">＋ スロット追加</button>';
   }
 
   // ── コメント（ファン反応） + 倉庫 ──
-  var cmtSection = '';
+  var cmtSectionInner = '';
   if (mod.type !== 'opening' && mod.type !== 'ending') {
     var cmts = mod.comments || [];
     var usedTexts = new Set(cmts.map(function(c){ return c.text; }));
@@ -2370,30 +2768,85 @@ function buildSlideCard(mod, i) {
         }).join('')
       : '<div style="font-size:11px;color:var(--faint);padding:4px 0">倉庫は空（記事を収集するとコメントが溜まるよ）</div>';
 
-    cmtSection = '<div class="sf"><label>コメント（ファン反応）</label>' +
-      '<div class="cmt-list">' + cmtRows + '</div>' +
+    cmtSectionInner = '<div class="cmt-list">' + cmtRows + '</div>' +
       '<button class="cp-add" onclick="addComment(' + i + ')">＋ 空欄追加</button>' +
       '<details class="wh-details"><summary>コメント倉庫 (' + warehouseItems.length + '件)</summary>' +
       '<div class="wh-list">' + warehouseRows + '</div>' +
-      '</details></div>';
+      '</details>';
+  }
+
+  // データスロット・コメントをアコーディオン（折りたたみ）化
+  function accordion(title, inner) {
+    if (!inner) return '';
+    return '<details class="sf-acc"><summary>' + title + '</summary><div class="sf-acc-body">' + inner + '</div></details>';
   }
 
   return '<div class="slide-card">' +
     '<div class="slide-card-header">' +
       '<span class="slide-num">Slide ' + (i + 1) + '</span>' +
       '<select class="slide-type-sel" onchange="updateModField(' + i + ',\'type\',this.value);s4RenderEditor()">' + typeOpts + '</select>' +
-      '<button class="preview-toggle" onclick="togglePreview(' + i + ')">▶ プレビュー</button>' +
     '</div>' +
     '<div class="slide-body">' +
       '<div class="sf"><label>タイトル</label><input type="text" value="' + esc(mod.title || '') + '" oninput="updateModField(' + i + ',\'title\',this.value)"></div>' +
       (mod.badge !== undefined ? '<div class="sf"><label>バッジ</label><input type="text" value="' + esc(mod.badge || '') + '" oninput="updateModField(' + i + ',\'badge\',this.value)"></div>' : '') +
-      '<div class="sf"><label>ナレーション</label><textarea oninput="updateModField(' + i + ',\'narration\',this.value)">' + esc(mod.narration || '') + '</textarea></div>' +
-      imgBlock('bgImage', '背景画像') +
-      (hasImg2 ? imgBlock('leftImage', '左画像') + imgBlock('rightImage', '右画像') : '') +
-      scoreSection + cpSection + dataSection + cmtSection +
+      '<div class="sf"><label>ナレーション</label><textarea rows="6" style="min-height:9.5em;resize:vertical" oninput="updateModField(' + i + ',\'narration\',this.value)">' + esc(mod.narration || '') + '</textarea></div>' +
+      imgAccordion() +
+      scoreSection + cpSection +
+      accordion('データスロット', dataSectionInner) +
+      accordion('コメント（ファン反応）', cmtSectionInner) +
     '</div>' +
-    '<div class="slide-preview-box" id="pvbox-' + i + '"></div>' +
   '</div>';
+}
+
+// 画像ブロック本体（URL入力 + ギャラリー + ズーム/位置調整）。アコーディオンのパネルに展開される
+function buildImgBlockHTML(mod, i, key, label) {
+  var url = mod[key] || '';
+  var zoom = mod[key + 'Zoom'] != null ? mod[key + 'Zoom'] : 100;
+  var ix   = mod[key + 'X']    != null ? mod[key + 'X']    : 50;
+  var iy   = mod[key + 'Y']    != null ? mod[key + 'Y']    : 50;
+  var pvStyle = url ? 'background-image:url("' + esc(url) + '");background-size:' + zoom + '%;background-position:' + ix + '% ' + iy + '%' : '';
+  return '<div class="sf" style="margin:0">' +
+    '<div class="img-row">' +
+      '<input type="url" id="imgurl-' + i + '-' + key + '" value="' + esc(url) + '" placeholder="https://..." oninput="updateModImg(' + i + ',\'' + key + '\',this)">' +
+      '<button class="img-upload-btn" onclick="s4FocusGallery(' + i + ',\'' + key + '\')" title="ギャラリーから選ぶ">🖼</button>' +
+      '<label class="img-upload-btn">📁<input class="img-file-input" type="file" accept="image/*" onchange="uploadModImg(' + i + ',\'' + key + '\',this)"></label>' +
+    '</div>' +
+    '<div class="img-controls">' +
+      '<div class="img-preview-pane' + (url ? ' has-img' : '') + '" id="imgpv-' + i + '-' + key + '">' +
+        '<div class="img-preview-inner" style="' + pvStyle + '"></div>' +
+      '</div>' +
+      '<div class="ic-row"><span class="ic-label">ズーム</span>' +
+        '<input type="range" min="50" max="400" value="' + zoom + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'Zoom\',this.value)">' +
+        '<span class="ic-val" id="icv-' + i + '-' + key + '-Zoom">' + zoom + '%</span></div>' +
+      '<div class="ic-row"><span class="ic-label">X 位置</span>' +
+        '<input type="range" min="0" max="100" value="' + ix + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'X\',this.value)">' +
+        '<span class="ic-val" id="icv-' + i + '-' + key + '-X">' + ix + '%</span></div>' +
+      '<div class="ic-row"><span class="ic-label">Y 位置</span>' +
+        '<input type="range" min="0" max="100" value="' + iy + '" class="ic-slider" oninput="updateImgProp(' + i + ',\'' + key + '\',\'Y\',this.value)">' +
+        '<span class="ic-val" id="icv-' + i + '-' + key + '-Y">' + iy + '%</span></div>' +
+    '</div>' +
+  '</div>';
+}
+
+// 画像アコーディオンのタブ開閉
+function toggleImgPanel(i, key, label) {
+  var panel = document.getElementById('imgpanel-' + i);
+  if (!panel) return;
+  var open = panel.getAttribute('data-open');
+  // タブ強調をリセット
+  document.querySelectorAll('#imgpanel-' + i).forEach(function(){});
+  if (open === key) {
+    panel.innerHTML = ''; panel.setAttribute('data-open', '');
+    var t0 = document.getElementById('imgtab-' + i + '-' + key); if (t0) t0.classList.remove('active');
+    return;
+  }
+  panel.innerHTML = buildImgBlockHTML(currentMods[i], i, key, label);
+  panel.setAttribute('data-open', key);
+  ['bgImage','leftImage','rightImage'].forEach(function(k){
+    var t = document.getElementById('imgtab-' + i + '-' + k); if (t) t.classList.toggle('active', k === key);
+  });
+  // ギャラリーのターゲットも合わせる（右の画像ギャラリーから選ぶとここへ入る）
+  s4FocusGallery(i, key);
 }
 
 function updateImgProp(i, key, prop, val) {
@@ -2767,6 +3220,11 @@ function hideAllLoaders() {
 // トピック切替時: Step3/4 の表示を初期化（Step1/2 は触らない）
 function clearDerivedData() {
   currentMods = null; s4ActiveIdx = 0; selectedVpIndex = null;
+  // 画像ギャラリー＋ラベル取得状態をクリア（案件切替時）
+  allGalleryImages = []; uncheckedImageUrls = new Set(); s4GalleryImages = [];
+  labelImages = {}; labelData = {}; labelBusy = {};
+  var s2g = document.getElementById('step2ImageGroups'); if (s2g) s2g.innerHTML = '';
+  var icc = document.getElementById('imgCheckCount'); if (icc) icc.style.display = 'none';
   // Step3 (企画ピース) → 空状態へ
   document.getElementById('planEmpty').style.display = '';
   document.getElementById('planLoading').style.display = 'none';

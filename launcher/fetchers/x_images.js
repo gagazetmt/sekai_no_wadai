@@ -162,10 +162,11 @@ async function fetchImagesForLabels(labels, opts = {}) {
       const handle = resolveHandle(label.name);
       if (!handle) { console.log(`  [x_images] no handle for team: ${label.name}`); continue; }
 
-      const top    = await fetchImagesFromHandle(handle, { sortBy: 'engagement', limit: PER_LABEL });
-      const latest = await fetchImagesFromHandle(handle, { sortBy: 'recency',    limit: PER_LABEL_NEW });
-      addImages(top,    `@${handle} (team/top)`);
+      // 最新15件を優先取得、エンゲージメント上位5件をボーナスで追加
+      const latest = await fetchImagesFromHandle(handle, { sortBy: 'recency',    limit: 15 });
+      const top    = await fetchImagesFromHandle(handle, { sortBy: 'engagement', limit: 5  });
       addImages(latest, `@${handle} (team/latest)`);
+      addImages(top,    `@${handle} (team/top)`);
 
     } else if (label.type === 'player') {
       // 所属クラブの公式アカウントから選手名を含む投稿
