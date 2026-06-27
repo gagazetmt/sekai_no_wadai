@@ -135,14 +135,22 @@ function compressFacts(facts) {
 
   // コメント: 各ソース上位を多めに渡す（6-9個×複数スライド分の素材確保）
   if (facts.comments) {
-    const pick = (arr, n) => (arr || []).slice(0, n).map(c =>
-      `[${c.source || '?'}] ${typeof c === 'string' ? c : c.text || ''}`
-    );
-    out._comments = [
-      ...pick(facts.comments.reddit, 10),
-      ...pick(facts.comments.yahoo,  8),
-      ...pick(facts.comments.x,      7),
-    ].filter(Boolean);
+    const c = facts.comments;
+    // factsForClient 形式（.all が {text,source}[] ）と full facts 形式（.reddit[] 等）を両対応
+    if (Array.isArray(c.all) && c.all.length) {
+      out._comments = c.all.slice(0, 25).map(x =>
+        `[${x.source || '?'}] ${x.text || ''}`
+      ).filter(Boolean);
+    } else {
+      const pick = (arr, n) => Array.isArray(arr) ? arr.slice(0, n).map(x =>
+        `[${x.source || '?'}] ${typeof x === 'string' ? x : x.text || ''}`
+      ) : [];
+      out._comments = [
+        ...pick(c.reddit, 10),
+        ...pick(c.yahoo,  8),
+        ...pick(c.x,      7),
+      ].filter(Boolean);
+    }
   }
 
   return JSON.stringify(out, null, 2).slice(0, 8000);
@@ -303,12 +311,12 @@ async function generateModsForPieces(selectedViewpoints, facts) {
 選ばれた企画ピース（${count}個）をもとに、${pattern.slides.length}枚のスライドデータをJSON形式で生成してください。
 
 【スライド構成】
-- slides[0]: opening — 動画の掴み。badge="速報"。narration 20-40文字
+- slides[0]: opening — 動画の掴み。title（10文字以内・インパクト重視）+ badge="速報"固定 + narration 20-40文字
 ${selectedViewpoints.map((vp, i) => {
   const t = contentTypes[i];
   return `- slides[${i + 1}]: ${t} — 企画ピース${i + 1}「${vp.angle}」\n  必須フィールド: ${SLIDE_TYPE_SPEC[t] || SLIDE_TYPE_SPEC.insight}`;
 }).join('\n')}
-- slides[${count + 1}]: ending — チャンネル登録訴求。narration 20-40文字
+- slides[${count + 1}]: ending — チャンネル登録訴求。title（「チャンネル登録」等）+ narration 20-40文字
 
 【共通注意】
 - 素材の実データを優先。事実の捏造禁止
