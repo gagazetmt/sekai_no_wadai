@@ -1031,6 +1031,15 @@ function handleMessage(msg) {
       if (msg.activeViewpoints) renderViewpoints({ viewpoints: msg.activeViewpoints, patterns: allPatterns });
       if (msg.activeRenderResult) showRenderDone(msg.activeRenderResult);
       if (msg.activeMods) loadScriptEditor(msg.activeMods, msg.activeTopic);
+      // レンダリング中に再接続した場合：進行中UIを復元
+      if (msg.phase === 'rendering' && msg.renderingTopic) {
+        setStatus('レンダリング中', true); setTab(5);
+        document.getElementById('render5Ready').style.display = 'none';
+        document.getElementById('render5Empty').style.display = 'none';
+        document.getElementById('renderProgress').style.display = '';
+        document.getElementById('renderDone').style.display = 'none';
+        initRenderProgress(msg.renderingTopic, msg.renderingPatternKey);
+      }
       break;
     case 'phase':
       if (msg.phase === 'scouting') { showScoutLoading(true); setStatus('案件取得中', true); }

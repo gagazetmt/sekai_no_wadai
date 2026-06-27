@@ -360,12 +360,15 @@ async function runRender(viewpointIndex, edits, prebuiltMods = null) {
   interceptConsole();
 
   const vp = { ...session.viewpoints[viewpointIndex || 0] };
+
   if (edits) {
     if (edits.title) vp.title = edits.title;
     if (edits.suggestedPattern) vp.suggestedPattern = edits.suggestedPattern;
   }
   const videoTopic = vp.title || session.activeTopic;
   const patternKey = vp.suggestedPattern || 'match_result';
+  session.renderingTopic = videoTopic;
+  session.renderingPatternKey = patternKey;
 
   broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic, patternKey });
 
@@ -404,6 +407,8 @@ async function runRenderWithMods(patternKey, videoTopic, prebuiltMods) {
     return;
   }
   session.phase = 'rendering';
+  session.renderingTopic = videoTopic;
+  session.renderingPatternKey = patternKey;
   interceptConsole();
   broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic, patternKey });
   try {
@@ -448,6 +453,8 @@ wss.on('connection', (ws) => {
     activeViewpoints: activeData && activeData.viewpoints ? activeData.viewpoints : null,
     activeRenderResult: activeData && activeData.renderResult ? activeData.renderResult : null,
     activeMods: activeData && activeData.mods ? activeData.mods : null,
+    renderingTopic: session.phase === 'rendering' ? session.renderingTopic : null,
+    renderingPatternKey: session.phase === 'rendering' ? session.renderingPatternKey : null,
     patterns: listPatterns(),
     steps: STEPS,
     renderSubSteps: RENDER_SUB_STEPS,
