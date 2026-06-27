@@ -195,7 +195,7 @@ async function minimaxTTS(text, outputPath, voiceId = MINIMAX_MAIN_VOICE) {
       'Authorization': `Bearer ${key}`,
     },
     body: JSON.stringify({
-      model: 'speech-01-hd',
+      model: 'speech-2.6-hd',
       text,
       stream: false,
       language_boost: 'Japanese',
