@@ -1029,16 +1029,24 @@ function handleMessage(msg) {
         renderResearch({ topic: msg.activeTopic, summary: msg.activeSummary, facts: msg.activeFacts });
       }
       if (msg.activeViewpoints) renderViewpoints({ viewpoints: msg.activeViewpoints, patterns: allPatterns });
-      if (msg.activeRenderResult) showRenderDone(msg.activeRenderResult);
-      if (msg.activeMods) loadScriptEditor(msg.activeMods, msg.activeTopic);
-      // レンダリング中に再接続した場合：進行中UIを復元
       if (msg.phase === 'rendering' && msg.renderingTopic) {
+        // レンダリング進行中 → Step5進行画面に復元（modsロードより優先）
+        if (msg.activeMods) { currentMods = JSON.parse(JSON.stringify(msg.activeMods)); }
         setStatus('レンダリング中', true); setTab(5);
         document.getElementById('render5Ready').style.display = 'none';
         document.getElementById('render5Empty').style.display = 'none';
         document.getElementById('renderProgress').style.display = '';
         document.getElementById('renderDone').style.display = 'none';
         initRenderProgress(msg.renderingTopic, msg.renderingPatternKey);
+      } else if (msg.phase === 'done' && msg.activeRenderResult) {
+        // レンダリング完了 → Step5完了画面に復元
+        if (msg.activeMods) { currentMods = JSON.parse(JSON.stringify(msg.activeMods)); }
+        showRenderDone(msg.activeRenderResult);
+        setStatus('完了', false); setTab(5);
+      } else {
+        // 通常復元
+        if (msg.activeRenderResult) showRenderDone(msg.activeRenderResult);
+        if (msg.activeMods) loadScriptEditor(msg.activeMods, msg.activeTopic);
       }
       break;
     case 'phase':
