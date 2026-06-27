@@ -75,8 +75,30 @@ const server = http.createServer((req, res) => {
     if (fs.existsSync(filePath)) {
       const ext = path.extname(filePath);
       const types = { '.mp4': 'video/mp4', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png' };
-      res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream' });
-      fs.createReadStream(filePath).pipe(res);
+      const contentType = types[ext] || 'application/octet-stream';
+      const stat = fs.statSync(filePath);
+      const total = stat.size;
+      const range = req.headers.range;
+      if (range && ext === '.mp4') {
+        const [startStr, endStr] = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(startStr, 10);
+        const end = endStr ? parseInt(endStr, 10) : total - 1;
+        const chunkSize = end - start + 1;
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${total}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize,
+          'Content-Type': contentType,
+        });
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+      } else {
+        res.writeHead(200, {
+          'Content-Type': contentType,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': total,
+        });
+        fs.createReadStream(filePath).pipe(res);
+      }
       return;
     }
   }
