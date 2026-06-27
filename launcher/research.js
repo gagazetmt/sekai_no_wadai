@@ -126,6 +126,33 @@ async function fetchPlayer(playerName) {
   return { ok: false, error: `Player "${playerName}" not found` };
 }
 
+// ── チームデータ取得（SofaScore） ─────────────────────────
+
+async function fetchTeam(teamName) {
+  console.log(`  [team] FotMob: ${teamName}`);
+  try {
+    const { fetchFotMobTeam } = require('./fetchers/fotmob_team');
+    const td = await fetchFotMobTeam(teamName);
+    if (!td.ok) {
+      console.warn(`  [team] FotMob failed: ${td.error}`);
+      return { ok: false, name: teamName, error: td.error };
+    }
+    console.log(`  [team] OK: ${td.name} / 監督: ${td.manager || '—'}`);
+    return {
+      ok: true,
+      name: td.name,
+      manager: td.manager || null,
+      leagueName: td.leagueName || null,
+      standing: td.standing || null,
+      recentForm: td.recentForm || null,
+      last5: td.last5 || [],
+    };
+  } catch (err) {
+    console.warn(`  [team] error: ${err.message}`);
+    return { ok: false, name: teamName, error: err.message };
+  }
+}
+
 // ── DeepSeek: 記事からラベル抽出（ラベル方式） ──────────
 
 async function deepseekExtractInfo(topic, articles) {
@@ -239,4 +266,4 @@ async function research(topic, options = {}) {
   return facts;
 }
 
-module.exports = { research, fetchMatch, fetchPlayer, scrapeUrl, braveDeepSearch };
+module.exports = { research, fetchMatch, fetchPlayer, fetchTeam, scrapeUrl, braveDeepSearch };

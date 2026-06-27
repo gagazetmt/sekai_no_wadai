@@ -1095,7 +1095,7 @@ function handleMessage(msg) {
     case 'data_ready':
       document.getElementById('fetchDataBtn').disabled = false;
       document.getElementById('dataFetchStatus').style.display = 'none';
-      renderDataContent(msg.matchData, msg.playerData);
+      renderDataContent(msg.matchData, msg.playerData, msg.teamData);
       break;
     case 'gallery_images':
       s4RenderGallery(msg.images);
@@ -1287,7 +1287,7 @@ function renderResearch(msg) {
   document.getElementById('xFetchStatus').style.display = 'none';
 }
 
-function renderDataContent(matchData, playerData) {
+function renderDataContent(matchData, playerData, teamData) {
   var parts = [];
   if (matchData) {
     if (matchData.ok) {
@@ -1304,6 +1304,18 @@ function renderDataContent(matchData, playerData) {
       parts.push({ text: '👤 選手データ取得失敗: ' + (playerData.error || ''), ok: false });
     }
   }
+  (teamData || []).forEach(function(td) {
+    if (td.ok) {
+      var line = '🏳️ ' + (td.name || '');
+      if (td.manager) line += ' ／ 監督: ' + td.manager;
+      if (td.leagueName) line += ' ／ ' + td.leagueName;
+      if (td.standing) line += ' ' + td.standing.position + '位 ' + td.standing.points + 'pts';
+      if (td.recentForm) line += ' ／ 直近: ' + td.recentForm;
+      parts.push({ text: line, ok: true });
+    } else {
+      parts.push({ text: '🏳️ ' + (td.name || '') + ' 取得失敗: ' + (td.error || ''), ok: false });
+    }
+  });
   if (!parts.length) parts.push({ text: 'データなし（ラベルにチーム/選手を追加してください）', ok: false });
   document.getElementById('dataContent').innerHTML = parts.map(function(p) {
     return '<div class="article-card" style="border-left:3px solid ' + (p.ok ? 'var(--green)' : 'var(--red)') + '">' +

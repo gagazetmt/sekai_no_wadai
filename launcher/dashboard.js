@@ -602,14 +602,16 @@ wss.on('connection', (ws) => {
       const awayTeam  = matchLabel?.awayTeam || null;
       const playerName = playerLabel?.name || null;
 
-      if (!homeTeam && !awayTeam && !playerName) {
-        ws.send(JSON.stringify({ type: 'data_ready', matchData: null, playerData: null, error: 'ラベルにチーム名・選手名がありません' }));
+      const teamLabels = labels.filter(l => l.type === 'team');
+
+      if (!homeTeam && !awayTeam && !playerName && !teamLabels.length) {
+        ws.send(JSON.stringify({ type: 'data_ready', matchData: null, playerData: null, teamData: [], error: 'ラベルにチーム名・選手名がありません' }));
         return;
       }
 
       broadcast({ type: 'phase', phase: 'fetching_data' });
-      const { fetchMatch, fetchPlayer } = require('./research');
-      const result = { matchData: null, playerData: null };
+      const { fetchMatch, fetchPlayer, fetchTeam } = require('./research');
+      const result = { matchData: null, playerData: null, teamData: [] };
 
       if (homeTeam && awayTeam) {
         try {
@@ -641,11 +643,25 @@ wss.on('connection', (ws) => {
         }
       }
 
+      if (teamLabels.length) {
+        const teamResults = await Promise.all(teamLabels.map(async (tl) => {
+          try {
+            return await fetchTeam(tl.name);
+          } catch (err) {
+            return { ok: false, name: tl.name, error: err.message };
+          }
+        }));
+        result.teamData = teamResults;
+        if (!session.facts) session.facts = {};
+        session.facts.teamData = teamResults;
+      }
+
       // factsForClient を更新して topicData に保存
       if (session.activeTopic && session.topicData[session.activeTopic]) {
         const fc = session.topicData[session.activeTopic].factsForClient;
         if (result.matchData)  fc.matchData  = result.matchData;
         if (result.playerData) fc.playerData = result.playerData;
+        if (result.teamData.length) fc.teamData = result.teamData;
         saveTopicData();
       }
 
