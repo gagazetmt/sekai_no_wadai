@@ -31,6 +31,7 @@ function concatVideos(videoPaths, outputPath) {
   execSync(`ffmpeg -y -f concat -safe 0 -i "${listPath}" \
     -c:v copy -c:a copy \
     -avoid_negative_ts make_zero \
+    -movflags +faststart \
     "${outputPath}"`, { stdio: 'pipe' });
 
   // cleanup
