@@ -1343,6 +1343,30 @@ function handleMessage(msg) {
     case 'label_images_ready':
       onLabelImagesReady(msg);
       break;
+    case 'match_data_for_slide': {
+      var _fmIdx = msg.slideIdx;
+      var _fmSt = document.getElementById('fotmob-status-' + _fmIdx);
+      if (msg.error) {
+        if (_fmSt) { _fmSt.style.display = 'block'; _fmSt.style.color = 'var(--red,#ef4444)'; _fmSt.textContent = '❌ ' + msg.error; }
+        break;
+      }
+      if (msg.matchData && currentMods && currentMods[_fmIdx]) {
+        currentMods[_fmIdx].matchData = msg.matchData;
+        if (msg.matchData.homeScore != null) currentMods[_fmIdx].homeScore = msg.matchData.homeScore;
+        if (msg.matchData.awayScore != null) currentMods[_fmIdx].awayScore = msg.matchData.awayScore;
+        if (msg.matchData.homeTeam)          currentMods[_fmIdx].homeTeam  = msg.matchData.homeTeam;
+        if (msg.matchData.awayTeam)          currentMods[_fmIdx].awayTeam  = msg.matchData.awayTeam;
+        if (msg.matchData.goals)             currentMods[_fmIdx].goals     = msg.matchData.goals;
+      }
+      loadScriptEditor(currentMods, currentTopic);
+      var _fmSt2 = document.getElementById('fotmob-status-' + _fmIdx);
+      if (_fmSt2) {
+        _fmSt2.style.display = 'block';
+        _fmSt2.style.color = 'var(--ok,#22c55e)';
+        _fmSt2.textContent = '✅ ' + (msg.matchData && msg.matchData.scoreline ? msg.matchData.scoreline : '取得完了');
+      }
+      break;
+    }
     case 'x_images_ready':
       var chip = document.getElementById('xImagesChip');
       if (chip) { chip.textContent = msg.count + '枚取得済み'; chip.style.display = ''; }
@@ -2732,6 +2756,10 @@ function buildSlideCard(mod, i) {
         '</div>' +
         '<input type="text" class="team-input" value="' + esc(mod.awayTeam || '') + '" placeholder="アウェイ" oninput="updateModField(' + i + ',\'awayTeam\',this.value)">' +
       '</div></div>' +
+      '<div class="sf" style="margin-top:4px">' +
+        '<button class="cp-add" style="width:100%;background:#c05000;border:none;color:#fff;font-size:13px;padding:7px 0;border-radius:5px;cursor:pointer" onclick="fetchMatchForSlide(' + i + ')">🔍 FotMobから試合データ取得</button>' +
+        '<div id="fotmob-status-' + i + '" style="font-size:12px;margin-top:4px;display:none"></div>' +
+      '</div>' +
       accordion('ゴール・イベント',
         '<div id="goals-edit-' + i + '">' + (goalsHtml || '<div style="color:var(--text-sub);font-size:13px;padding:4px 0">イベントなし</div>') + '</div>' +
         '<button class="cp-add" style="margin-top:6px" onclick="addGoalEvt(' + i + ')">⚽ ゴール追加</button>');
@@ -3331,6 +3359,16 @@ function _getMdGoals(idx) {
 }
 function _syncGoals(idx) {
   currentMods[idx].goals = currentMods[idx].matchData.goals;
+}
+function fetchMatchForSlide(idx) {
+  var mod = currentMods && currentMods[idx];
+  if (!mod) return;
+  var home = (mod.homeTeam || '').trim();
+  var away = (mod.awayTeam || '').trim();
+  if (!home || !away) { alert('ホームとアウェイのチーム名を入力してください'); return; }
+  var st = document.getElementById('fotmob-status-' + idx);
+  if (st) { st.style.display = 'block'; st.style.color = 'var(--text-sub,#9ca3af)'; st.textContent = '⏳ FotMob検索中...'; }
+  send({ action: 'fetch_match_for_slide', slideIdx: idx, homeTeam: home, awayTeam: away });
 }
 function addGoalEvt(idx) {
   _getMdGoals(idx).push({ player: '', time: 90, timeStr: "90'", isHome: true });

@@ -895,6 +895,37 @@ wss.on('connection', (ws) => {
       }
     }
 
+    // Step4 matchcard: チーム名手入力 → FotMob から試合データ取得
+    if (msg.action === 'fetch_match_for_slide') {
+      const { slideIdx, homeTeam, awayTeam } = msg;
+      if (!homeTeam || !awayTeam) {
+        ws.send(JSON.stringify({ type: 'match_data_for_slide', slideIdx, error: 'ホームとアウェイ両方入力してください' }));
+        return;
+      }
+      broadcast({ type: 'phase', phase: 'fetching_data' });
+      try {
+        const { fetchMatch } = require('./research');
+        const result = await fetchMatch(homeTeam, awayTeam);
+        if (session.mods && session.mods[slideIdx] != null) {
+          session.mods[slideIdx].matchData = result;
+          if (result.homeScore != null) session.mods[slideIdx].homeScore = result.homeScore;
+          if (result.awayScore != null) session.mods[slideIdx].awayScore = result.awayScore;
+          if (result.homeTeam)          session.mods[slideIdx].homeTeam  = result.homeTeam;
+          if (result.awayTeam)          session.mods[slideIdx].awayTeam  = result.awayTeam;
+          saveTopicData();
+        }
+        if (result.ok) {
+          broadcast({ type: 'match_data_for_slide', slideIdx, matchData: result });
+        } else {
+          broadcast({ type: 'match_data_for_slide', slideIdx, error: result.error || '試合データが見つかりませんでした', matchData: result });
+        }
+      } catch (err) {
+        console.warn('[fetch_match_for_slide]', err.message);
+        ws.send(JSON.stringify({ type: 'match_data_for_slide', slideIdx, error: err.message }));
+      }
+      broadcast({ type: 'phase', phase: 'idle' });
+    }
+
     // ラベルに基づいて試合/選手データを取得（Step2 データ取得ボタンから呼ばれる）
     if (msg.action === 'fetch_data') {
       const labels = msg.labels || [];
