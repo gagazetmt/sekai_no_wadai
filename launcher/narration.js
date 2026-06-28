@@ -183,10 +183,15 @@ async function voicevoxTTS(text, outputPath, speaker = MAIN_SPEAKER) {
 
 // ── MiniMax TTS ──────────────────────────────────────
 
+const { sanitizeForTts } = require('./tts_preprocess');
+
 async function minimaxTTS(text, outputPath, voiceId = MINIMAX_MAIN_VOICE) {
   const key     = process.env.MINIMAX_API_KEY;
   const groupId = process.env.MINIMAX_GROUP_ID;
   if (!key || !groupId) throw new Error('No MINIMAX_API_KEY or MINIMAX_GROUP_ID');
+
+  const safeText = await sanitizeForTts(text);
+  if (!safeText) throw new Error('sanitizeForTts returned empty');
 
   const res = await fetch(`https://api.minimax.io/v1/t2a_v2?GroupId=${groupId}`, {
     method: 'POST',
@@ -196,7 +201,7 @@ async function minimaxTTS(text, outputPath, voiceId = MINIMAX_MAIN_VOICE) {
     },
     body: JSON.stringify({
       model: 'speech-2.6-hd',
-      text,
+      text: safeText,
       stream: false,
       language_boost: 'Japanese',
       voice_setting: {
