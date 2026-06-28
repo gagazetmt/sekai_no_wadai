@@ -139,16 +139,32 @@ const server = http.createServer((req, res) => {
     res.end(fs.readFileSync(path.join(__dirname, 'web', 'index.html')));
     return;
   }
-  // /preview — iframe が直接 GET して HTML を受け取る（srcdoc を使わない）
-  if (req.url.startsWith('/preview')) {
-    try {
-      const html = lastPreviewMod ? buildPreviewHTML(lastPreviewMod) : '<body style="background:#060e1c;color:#fff;padding:40px;font-size:32px">プレビューなし</body>';
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(html);
-    } catch (e) {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`<body style="background:#1a0000;color:#f88;padding:40px;font-size:28px">エラー: ${e.message}</body>`);
-    }
+  // /preview_img — puppeteer でスクリーンショットを撮って JPEG を返す（モバイル対応）
+  if (req.url.startsWith('/preview_img')) {
+    (async () => {
+      try {
+        const html = lastPreviewMod ? buildPreviewHTML(lastPreviewMod) : '<body style="background:#060e1c"></body>';
+        const puppeteer = require('puppeteer');
+        const browser = await puppeteer.launch({
+          headless: true,
+          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+        });
+        try {
+          const page = await browser.newPage();
+          await page.setViewport({ width: 1920, height: 1080 });
+          await page.setContent(html, { waitUntil: 'networkidle2', timeout: 12000 });
+          const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
+          await page.close();
+          res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
+          res.end(buf);
+        } finally {
+          await browser.close();
+        }
+      } catch (e) {
+        console.warn('[preview_img]', e.message);
+        res.writeHead(500); res.end();
+      }
+    })();
     return;
   }
   if (req.url === '/mia.jpg') {

@@ -2148,16 +2148,18 @@ function s4RefreshPreview() {
 }
 
 function s4ShowPreview(reqId) {
-  // 古いリクエストの応答は捨てる
   if (reqId != null && reqId !== s4PreviewReqId) return;
   var box = document.getElementById('s4PreviewBox');
   if (!box) return;
   var w = box.offsetWidth;
   if (w < 10) { setTimeout(function(){ s4ShowPreview(reqId); }, 100); return; }
-  var scale = w / 1920;
-  box.style.height = Math.round(1080 * scale) + 'px';
-  // srcdoc ではなく src= で読み込む（モバイルでの大量HTML srcdoc クラッシュ回避）
-  box.innerHTML = '<iframe style="width:1920px;height:1080px;border:0;transform:scale(' + scale + ');transform-origin:top left" src="/preview?t=' + Date.now() + '"></iframe>';
+  box.style.height = Math.round(w * (1080 / 1920)) + 'px';
+  // puppeteer サーバーサイドスクリーンショット → img タグで表示（iframe クラッシュ回避）
+  var img = new Image();
+  img.style.cssText = 'width:100%;height:100%;display:block;border-radius:6px;background:#060e1c';
+  img.src = '/preview_img?t=' + Date.now();
+  box.innerHTML = '';
+  box.appendChild(img);
 }
 
 function s4BuildSlideContent(mod) {
@@ -2707,15 +2709,32 @@ function buildSlideCard(mod, i) {
 
   var scoreSection = '';
   if (mod.type === 'matchcard') {
-    scoreSection = '<div class="sf"><label>スコア</label><div class="score-row">' +
-      '<input type="text" class="team-input" value="' + esc(mod.homeTeam || '') + '" placeholder="ホーム" oninput="updateModField(' + i + ',\'homeTeam\',this.value)">' +
-      '<div class="score-row-nums">' +
-        '<input type="text" value="' + esc(mod.homeScore != null ? mod.homeScore : '') + '" oninput="updateModField(' + i + ',\'homeScore\',this.value)" style="width:50px;text-align:center">' +
-        '<span class="score-sep">–</span>' +
-        '<input type="text" value="' + esc(mod.awayScore != null ? mod.awayScore : '') + '" oninput="updateModField(' + i + ',\'awayScore\',this.value)" style="width:50px;text-align:center">' +
-      '</div>' +
-      '<input type="text" class="team-input" value="' + esc(mod.awayTeam || '') + '" placeholder="アウェイ" oninput="updateModField(' + i + ',\'awayTeam\',this.value)">' +
-      '</div></div>';
+    var _mdGoals = ((mod.matchData || {}).goals || mod.goals || []);
+    var goalsHtml = _mdGoals.map(function(g, j) {
+      return '<div style="display:flex;gap:5px;margin-bottom:5px;align-items:center">' +
+        '<select style="width:88px;flex-shrink:0;font-size:12px" onchange="updateGoalEvt(' + i + ',' + j + ',\'isHome\',this.value)">' +
+          '<option value="true"' + (g.isHome !== false ? ' selected' : '') + '>🏠 ホーム</option>' +
+          '<option value="false"' + (g.isHome === false ? ' selected' : '') + '>✈ アウェイ</option>' +
+        '</select>' +
+        '<input type="text" placeholder="選手名" value="' + esc(g.player || '') + '" style="flex:1;min-width:0" oninput="updateGoalEvt(' + i + ',' + j + ',\'player\',this.value)">' +
+        '<input type="text" placeholder="分" value="' + esc(g.time != null ? String(g.time) : '') + '" style="width:44px;text-align:center;flex-shrink:0" oninput="updateGoalEvt(' + i + ',' + j + ',\'time\',this.value)">' +
+        '<button class="ds-del" onclick="removeGoalEvt(' + i + ',' + j + ')">✕</button>' +
+      '</div>';
+    }).join('');
+
+    scoreSection =
+      '<div class="sf"><label>スコア</label><div class="score-row">' +
+        '<input type="text" class="team-input" value="' + esc(mod.homeTeam || '') + '" placeholder="ホーム" oninput="updateModField(' + i + ',\'homeTeam\',this.value)">' +
+        '<div class="score-row-nums">' +
+          '<input type="text" value="' + esc(mod.homeScore != null ? mod.homeScore : '') + '" oninput="updateModField(' + i + ',\'homeScore\',this.value)" style="width:50px;text-align:center">' +
+          '<span class="score-sep">–</span>' +
+          '<input type="text" value="' + esc(mod.awayScore != null ? mod.awayScore : '') + '" oninput="updateModField(' + i + ',\'awayScore\',this.value)" style="width:50px;text-align:center">' +
+        '</div>' +
+        '<input type="text" class="team-input" value="' + esc(mod.awayTeam || '') + '" placeholder="アウェイ" oninput="updateModField(' + i + ',\'awayTeam\',this.value)">' +
+      '</div></div>' +
+      accordion('ゴール・イベント',
+        '<div id="goals-edit-' + i + '">' + (goalsHtml || '<div style="color:var(--text-sub);font-size:13px;padding:4px 0">イベントなし</div>') + '</div>' +
+        '<button class="cp-add" style="margin-top:6px" onclick="addGoalEvt(' + i + ')">⚽ ゴール追加</button>');
   }
 
   var hasImg2 = mod.type === 'comparison' || mod.type === 'stats';
@@ -3302,6 +3321,34 @@ window.addEventListener('resize', function() {
   clearTimeout(s4PreviewTimer);
   s4PreviewTimer = setTimeout(s4RefreshPreview, 200);
 });
+
+// ════ Match Event Helpers ════
+function _getMdGoals(idx) {
+  var mod = currentMods[idx];
+  if (!mod.matchData) mod.matchData = {};
+  if (!Array.isArray(mod.matchData.goals)) mod.matchData.goals = [];
+  return mod.matchData.goals;
+}
+function _syncGoals(idx) {
+  currentMods[idx].goals = currentMods[idx].matchData.goals;
+}
+function addGoalEvt(idx) {
+  _getMdGoals(idx).push({ player: '', time: 90, timeStr: "90'", isHome: true });
+  _syncGoals(idx); s4RenderEditor(); s4SchedulePreview();
+}
+function removeGoalEvt(idx, j) {
+  _getMdGoals(idx).splice(j, 1);
+  _syncGoals(idx); s4RenderEditor(); s4SchedulePreview();
+}
+function updateGoalEvt(idx, j, field, val) {
+  var goals = _getMdGoals(idx);
+  var g = goals[j] || {};
+  if (field === 'isHome') { g.isHome = (val === 'true'); }
+  else if (field === 'time') { var t = parseInt(val) || 0; g.time = t; g.timeStr = t + "'"; }
+  else { g[field] = val; }
+  goals[j] = g;
+  _syncGoals(idx); s4SchedulePreview();
+}
 
 // ════ Label Autocomplete ════
 (function() {
