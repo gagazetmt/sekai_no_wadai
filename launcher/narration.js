@@ -141,7 +141,7 @@ async function generateNarrationTexts(patternKey, mods) {
 - 口語体。「〜だよな」「〜じゃん」「〜でしょ」「マジで」「えぐい」「草」「ガチで？」等OK
 - 各スライド10〜25秒で読める長さ（60〜130文字）
 - コンテンツスライドは「実はこれがやばくて〜」「で、ここがポイントなんだけど〜」みたいな引き込み方
-- ending は「まあ、それはそれとして〜」「チャンネル登録忘れずに！」系の軽いオチ
+- ending は話題に即したオチの一言（30文字以内）。「やっぱ〇〇はやべぇわ」「これはエモすぎる」みたいな締め。チャンネル登録促しは不要
 - 数値やデータはスライドに出るのでナレーションでは要点だけ
 
 JSON形式（生成対象スライドのインデックスをキーにする）:
@@ -201,7 +201,7 @@ async function minimaxTTS(text, outputPath, voiceId = MINIMAX_MAIN_VOICE) {
       language_boost: 'Japanese',
       voice_setting: {
         voice_id: voiceId,
-        speed: 1.1,
+        speed: 1.18,
         vol: getMinimaxVol(voiceId),
         pitch: 0,
       },
