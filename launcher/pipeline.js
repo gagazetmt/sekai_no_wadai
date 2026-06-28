@@ -148,15 +148,15 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
   // Sub 4: Whisper
   _emit(emitter, 'sub_step', { step: 'whisper', status: 'running' });
   console.log('  [4-4] Whisper...');
-  const leadPad = parseFloat(process.env.LEAD_PAD_SEC) || 0.5;
-  const tailPad = parseFloat(process.env.TAIL_PAD_SEC) || 0.3;
+  const leadPad = 0.0;   // audio は t=0 スタート（V5）。adelay は opening のみ concat.js で付与
+  const tailPad = 0.5;   // narration 終了後の余白
 
   let whisperResults;
   try {
     whisperResults = await whisperAll(audioFiles, leadPad);
   } catch (err) {
     console.warn(`  Whisper failed: ${err.message}`);
-    whisperResults = audioFiles.map(() => ({ chunks: [], narrationEndSec: leadPad, words: [] }));
+    whisperResults = audioFiles.map(() => ({ chunks: [], narrationEndSec: 0, words: [] }));
   }
   mods.forEach((mod, i) => {
     const wr = whisperResults[i] || {};
@@ -164,7 +164,7 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
     mod.subtitleWords     = wr.words || [];
     mod.subtitleSegments  = wr.segments || [];     // segment タイムスタンプ（より正確な字幕同期用）
     mod.narrationDurOnly  = durations[i];          // ナレーションのみの長さ（コメント字幕除外用）
-    mod.narrationEndSec   = wr.narrationEndSec || (leadPad + durations[i]);
+    mod.narrationEndSec   = durations[i];  // combined audio の Whisper 最終語は comments 含む → narration-only 実測値で上書き
   });
   const totalChunks = whisperResults.reduce((a, r) => a + (r.chunks?.length || 0), 0);
   _emit(emitter, 'sub_step', { step: 'whisper', status: 'done', detail: `${totalChunks}チャンク` });
@@ -181,7 +181,8 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
     const isBookend = slotType === 'opening' || slotType === 'ending';
     const cmtPad = commentDurations?.[i] || 0;
     const dur = d + leadPad + tailPad + (isBookend ? 0 : cmtPad);
-    return slotType === 'opening' ? Math.max(4.0, dur) : dur;
+    // opening: narration(d) + adelay(0.5) + tailPad が収まる長さ、最低6秒
+    return slotType === 'opening' ? Math.max(6.0, dur + 0.5) : dur;
   });
   const videoFiles = await renderAll(patternKey, mods, renderDurations, outputDir);
   _emit(emitter, 'sub_step', { step: 'render', status: 'done', detail: `${videoFiles.length}スライド` });

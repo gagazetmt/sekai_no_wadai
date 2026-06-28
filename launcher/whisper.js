@@ -80,7 +80,7 @@ function buildSubtitleChunks(words, charsPerChunk = CHARS_PER_CHUNK) {
 
 // ── 全ナレーション一括処理 ────────────────────────────
 
-async function whisperAll(audioFiles, leadPad = 0.5) {
+async function whisperAll(audioFiles, leadPad = 0) {
   console.log('\n=== Whisper: Transcribing narrations ===\n');
 
   const results = [];
@@ -90,7 +90,7 @@ async function whisperAll(audioFiles, leadPad = 0.5) {
 
     if (!audioPath || !fs.existsSync(audioPath)) {
       console.log(`  [${i}] スキップ（音声なし）`);
-      results.push({ chunks: [], narrationEndSec: leadPad, words: [] });
+      results.push({ chunks: [], narrationEndSec: 0, words: [] });
       continue;
     }
 
@@ -100,7 +100,7 @@ async function whisperAll(audioFiles, leadPad = 0.5) {
       const words = data.words || [];
 
       const lastEnd = words.length ? words[words.length - 1].end : 0;
-      const narrationEndSec = leadPad + lastEnd;
+      const narrationEndSec = lastEnd;  // audio は t=0 スタート。leadPad offset 不要
 
       const chunks = buildSubtitleChunks(words);
 
@@ -115,7 +115,7 @@ async function whisperAll(audioFiles, leadPad = 0.5) {
       results.push({ chunks, narrationEndSec, words, segments });
     } catch (err) {
       console.warn(`  [${i}] Whisper失敗: ${err.message}`);
-      results.push({ chunks: [], narrationEndSec: leadPad, words: [] });
+      results.push({ chunks: [], narrationEndSec: 0, words: [] });
     }
   }
 
