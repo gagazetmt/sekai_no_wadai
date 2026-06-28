@@ -1,9 +1,9 @@
 // launcher/slides/subtitles.js
-// V3方式字幕バー：原文ナレーションを句読点で自然分割 → Whisper word timestamp で同期
-//   - 表示テキストは「原文ナレーション」（ASR誤認識を画面に出さない）
-//   - 「、。！？」で文節/文末区切り → 2行に収まる文字数でグループ化（自然な位置で区切る）
-//   - 各グループを word timestamp で時間配分（二段=2行構成）
-//   - 字幕はナレーション区間のみ（コメント読み上げ中は出さない）
+// V3方式字幕バー：完全 Whisper 同期
+//   - 表示テキストは原文ナレーション（ASR誤認識を画面に出さない）
+//   - 原文 & Whisper words を同じ文字数ルールで並列グループ化
+//   - テキストグループ i → 対応 word グループの word[0].start を字幕開始時刻に使用
+//   - opening / ending は render.js 側でスキップ（字幕なし）
 
 const SUB_FONT_PX     = 50;
 const SUB_LINE_HEIGHT = 1.2;
@@ -83,26 +83,25 @@ function _groupNarration(text, groupChars) {
   return groups;
 }
 
-// narration words から「文字位置 → 時刻」関数を構築
-function _buildCharToTime(words, fullTextLen) {
-  const charStart = [];
-  let cumLen = 0;
+// Whisper words を同じ文字数ルールでグループ化 → 各グループの先頭 word.start を使う
+function _groupWords(words, groupChars) {
+  const groups = [];
+  let cur = { words: [], chars: 0 };
   for (const w of words) {
-    const wt = String(w.word || w.text || '');
-    const start = typeof w.start === 'number' ? w.start : 0;
-    for (let j = 0; j < wt.length; j++) charStart.push(start);
-    cumLen += wt.length;
+    const wt = String(w.word || w.text || '').replace(/\s/g, '');
+    if (cur.chars > 0 && cur.chars + wt.length > groupChars) {
+      groups.push(cur);
+      cur = { words: [], chars: 0 };
+    }
+    cur.words.push(w);
+    cur.chars += wt.length;
   }
-  const wordsChars = cumLen || 1;
-  return (charPos) => {
-    const wp = Math.round((charPos / (fullTextLen || 1)) * wordsChars);
-    return charStart[Math.min(Math.max(wp, 0), charStart.length - 1)] ?? 0;
-  };
+  if (cur.words.length) groups.push(cur);
+  return groups;
 }
 
 // narrationText(原文) + words(Whisper word timestamps) → 字幕バーHTML/CSS
-//   opts: { leadPad, narrationDurSec, maxLineLen, segments }
-//   segments があれば segment タイムスタンプ優先（speech-2.6-hd でより正確）
+//   原文を句読点分割 → Whisper words を同ルールでグループ化 → 実 word.start を使って完全同期
 function buildSubtitleHTML(narrationText, words, totalDurationSec, opts = {}) {
   const text = String(narrationText || '').trim();
   if (!text) return { html: '', css: '' };
@@ -111,30 +110,36 @@ function buildSubtitleHTML(narrationText, words, totalDurationSec, opts = {}) {
   const maxLineLen = opts.maxLineLen || 20;
   const groupChars = maxLineLen * 2;
   const narrationDurSec = opts.narrationDurSec != null ? opts.narrationDurSec : null;
-  const rawSegments = Array.isArray(opts.segments) ? opts.segments : [];
 
-  // ナレーション区間の segment のみ（コメント区間のセグメントは除外）
-  const narSegs = rawSegments.filter(s => typeof s.start === 'number'
-    && (narrationDurSec == null || s.start < narrationDurSec + 0.4));
-
-  const groups = _groupNarration(text, groupChars);
+  const textGroups = _groupNarration(text, groupChars);
   let segs;
 
-  if (narSegs.length > 0) {
-    // ── Segment ベース（正確なタイムスタンプを使用） ──────────────
-    // 原文グループをセグメント数に比例マッピング
-    let cumChars = 0;
-    segs = groups.map((g, i) => {
-      const startFrac = cumChars / (text.length || 1);
-      cumChars += g.length;
+  // ナレーション区間の word のみ（コメント読み上げ中は除外）
+  let nWords = Array.isArray(words) ? words.filter(w => typeof w.start === 'number') : [];
+  if (narrationDurSec != null) {
+    nWords = nWords.filter(w => w.start < narrationDurSec + 0.4);
+  }
 
-      const segIdx = Math.min(Math.floor(startFrac * narSegs.length), narSegs.length - 1);
-      const nextSegIdx = Math.min(segIdx + 1, narSegs.length - 1);
-      const startLocal = narSegs[segIdx].start;
-      const isLast = i === groups.length - 1;
-      const endLocal = isLast
-        ? (narrationDurSec != null ? narrationDurSec : narSegs[segIdx].end)
-        : narSegs[nextSegIdx].start;
+  if (nWords.length > 1) {
+    // ── Word グループベース: 完全 Whisper 同期 ──────────────────
+    const wordGroups = _groupWords(nWords, groupChars);
+    const wgLen = wordGroups.length;
+    const tgLen = textGroups.length;
+
+    segs = textGroups.map((g, i) => {
+      // text group i → word group idx（グループ数が異なる場合は比例マッピング）
+      const wgIdx = Math.min(Math.round(i * wgLen / tgLen), wgLen - 1);
+      const wg = wordGroups[wgIdx];
+      const startLocal = wg.words[0].start;
+
+      const isLast = i === tgLen - 1;
+      let endLocal;
+      if (isLast) {
+        endLocal = narrationDurSec ?? wg.words[wg.words.length - 1].end;
+      } else {
+        const nextWgIdx = Math.min(Math.round((i + 1) * wgLen / tgLen), wgLen - 1);
+        endLocal = wordGroups[nextWgIdx].words[0].start;
+      }
 
       const { lines } = splitSubtitle(g, maxLineLen);
       return {
@@ -146,25 +151,14 @@ function buildSubtitleHTML(narrationText, words, totalDurationSec, opts = {}) {
       };
     });
   } else {
-    // ── フォールバック: word 比例マッピング ──────────────────────
-    let nWords = Array.isArray(words) ? words.slice() : [];
-    if (narrationDurSec != null) {
-      nWords = nWords.filter(w => (typeof w.start === 'number' ? w.start : 0) < narrationDurSec + 0.4);
-    }
-    const hasWords = nWords.length > 1;
-    const charToTime = hasWords
-      ? _buildCharToTime(nWords, text.length || 1)
-      : (cp) => (narrationDurSec || totalDurationSec || 1) * (cp / (text.length || 1));
-
-    let charPos = 0;
-    segs = groups.map((g, i) => {
-      const startLocal = charToTime(charPos);
-      charPos += g.length;
-      const isLast = i === groups.length - 1;
-      let endLocal = isLast
-        ? (narrationDurSec != null ? narrationDurSec : charToTime(charPos))
-        : charToTime(charPos);
-      if (endLocal <= startLocal) endLocal = startLocal + 0.5;
+    // ── フォールバック: duration 比例（words なし） ───────────────
+    const dur = narrationDurSec || totalDurationSec || 1;
+    let cumChars = 0;
+    segs = textGroups.map((g, i) => {
+      const startLocal = dur * (cumChars / (text.length || 1));
+      cumChars += g.length;
+      const isLast = i === textGroups.length - 1;
+      const endLocal = isLast ? dur : dur * (cumChars / (text.length || 1));
       const { lines } = splitSubtitle(g, maxLineLen);
       return {
         idx: i,

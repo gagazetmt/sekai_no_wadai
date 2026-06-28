@@ -132,18 +132,17 @@ async function renderAll(patternKey, mods, durations, outputDir) {
 
     let html = builder(mod);
 
-    // 字幕バー注入（segment タイムスタンプ優先、fallback は word 比例マッピング）
-    if (mod.narration && (mod.subtitleSegments?.length || mod.subtitleWords?.length)) {
+    // コメントオーバーレイ注入
+    const isBookend = slot.type === 'opening' || slot.type === 'ending';
+
+    // 字幕バー注入（opening / ending はなし）
+    if (!isBookend && mod.narration && (mod.subtitleWords?.length || mod.subtitleSegments?.length)) {
       const LEAD = parseFloat(process.env.LEAD_PAD_SEC) || 0;
       html = injectSubtitles(html, mod.narration, mod.subtitleWords, dur, {
         leadPad: LEAD,
         narrationDurSec: mod.narrationDurOnly,
-        segments: mod.subtitleSegments || [],
       });
     }
-
-    // コメントオーバーレイ注入
-    const isBookend = slot.type === 'opening' || slot.type === 'ending';
     if (!isBookend && mod.comments?.length) {
       html = injectCommentOverlay(html, mod.comments, mod.narrationEndSec, mod.commentTiming, dur);
     }
