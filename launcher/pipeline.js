@@ -180,7 +180,8 @@ async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = nul
     const slotType = (pattern.slides[i] || {}).type || mods[i].type || 'insight';
     const isBookend = slotType === 'opening' || slotType === 'ending';
     const cmtPad = commentDurations?.[i] || 0;
-    return d + leadPad + tailPad + (isBookend ? 0 : cmtPad);
+    const dur = d + leadPad + tailPad + (isBookend ? 0 : cmtPad);
+    return slotType === 'opening' ? Math.max(4.0, dur) : dur;
   });
   const videoFiles = await renderAll(patternKey, mods, renderDurations, outputDir);
   _emit(emitter, 'sub_step', { step: 'render', status: 'done', detail: `${videoFiles.length}スライド` });

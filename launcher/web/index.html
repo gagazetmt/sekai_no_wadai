@@ -801,6 +801,12 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .ds-del { padding: 6px 9px; background: rgba(248,113,113,.1); border: 1px solid rgba(248,113,113,.2); border-radius: 7px; color: var(--red); cursor: pointer; font-size: 13px; flex-shrink: 0; transition: all .15s; }
 .ds-del:hover { background: rgba(248,113,113,.2); }
 
+/* ════ Label Autocomplete Dropdown ════ */
+#labelDropdown { position: fixed; z-index: 9999; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.5); max-height: 220px; overflow-y: auto; min-width: 180px; }
+.lbl-suggest-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--text); transition: background .1s; white-space: nowrap; }
+.lbl-suggest-item:hover, .lbl-suggest-item.active { background: var(--bg3); }
+.lbl-suggest-type { font-size: 11px; color: var(--text-sub); margin-left: auto; padding-left: 8px; }
+
 /* ════ Comments Editor ════ */
 .cmt-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .cmt-item { display: flex; gap: 6px; align-items: center; }
@@ -1249,9 +1255,11 @@ function handleMessage(msg) {
         showRenderDone(msg.activeRenderResult);
         setStatus('完了', false); setTab(5);
       } else {
-        // 通常復元
-        if (msg.activeRenderResult) showRenderDone(msg.activeRenderResult);
-        if (msg.activeMods) loadScriptEditor(msg.activeMods, msg.activeTopic);
+        // 通常復元：データがある一番進んだステップにジャンプ
+        if (msg.activeRenderResult) { showRenderDone(msg.activeRenderResult); setTab(5); }
+        else if (msg.activeMods) { loadScriptEditor(msg.activeMods, msg.activeTopic); setTab(4); }
+        else if (msg.activeViewpoints) setTab(3);
+        else if (msg.activeFacts) setTab(2);
       }
       break;
     case 'phase':
@@ -1313,7 +1321,7 @@ function handleMessage(msg) {
       break;
     case 'script_ready':
       loadScriptEditor(msg.mods, msg.topic);
-      setStatus('脚本生成完了', false);
+      setStatus('脚本生成完了', false); setTab(4);
       break;
     case 'mods_saved':
       showSavedToast();
@@ -3294,6 +3302,121 @@ window.addEventListener('resize', function() {
   clearTimeout(s4PreviewTimer);
   s4PreviewTimer = setTimeout(s4RefreshPreview, 200);
 });
+
+// ════ Label Autocomplete ════
+(function() {
+  var dropdown = document.createElement('div');
+  dropdown.id = 'labelDropdown';
+  dropdown.style.display = 'none';
+  document.body.appendChild(dropdown);
+
+  var _target = null;
+  var _activeIdx = -1;
+
+  function getCandidates(q) {
+    var q2 = (q || '').trim().toLowerCase();
+    var seen = {};
+    var out = [];
+    (currentLabels || []).forEach(function(l) {
+      if (!l.name) return;
+      if (seen[l.name]) return;
+      if (!q2 || l.name.toLowerCase().includes(q2)) {
+        seen[l.name] = true;
+        out.push(l);
+      }
+    });
+    return out.slice(0, 10);
+  }
+
+  function renderDropdown(cands) {
+    if (!cands.length) { hideDropdown(); return; }
+    var icons = { player: '👤', team: '🏟', match: '⚔' };
+    dropdown.innerHTML = cands.map(function(l, i) {
+      return '<div class="lbl-suggest-item" data-idx="' + i + '" data-name="' + l.name.replace(/"/g,'&quot;') + '">'
+        + (icons[l.type] || '🏷') + ' ' + esc(l.name)
+        + '<span class="lbl-suggest-type">' + esc(l.type || '') + '</span>'
+        + '</div>';
+    }).join('');
+    dropdown.style.display = '';
+    _activeIdx = -1;
+  }
+
+  function positionDropdown(input) {
+    var r = input.getBoundingClientRect();
+    dropdown.style.top = (r.bottom + 4) + 'px';
+    dropdown.style.left = r.left + 'px';
+    dropdown.style.width = Math.max(r.width, 200) + 'px';
+  }
+
+  function hideDropdown() {
+    dropdown.style.display = 'none';
+    _target = null;
+    _activeIdx = -1;
+  }
+
+  function selectItem(name) {
+    if (_target) {
+      _target.value = name;
+      _target.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    hideDropdown();
+  }
+
+  function setActiveIdx(idx) {
+    var items = dropdown.querySelectorAll('.lbl-suggest-item');
+    items.forEach(function(el, i) { el.classList.toggle('active', i === idx); });
+    _activeIdx = idx;
+    if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
+  }
+
+  // クリック選択
+  dropdown.addEventListener('mousedown', function(e) {
+    var item = e.target.closest('.lbl-suggest-item');
+    if (item) { e.preventDefault(); selectItem(item.dataset.name); }
+  });
+
+  // フォーカス・入力イベント
+  document.addEventListener('focusin', function(e) {
+    if (e.target.classList.contains('ds-label')) {
+      _target = e.target;
+      var cands = getCandidates(e.target.value);
+      renderDropdown(cands);
+      positionDropdown(e.target);
+    }
+  });
+
+  document.addEventListener('input', function(e) {
+    if (e.target === _target) {
+      var cands = getCandidates(e.target.value);
+      renderDropdown(cands);
+      positionDropdown(e.target);
+    }
+  });
+
+  document.addEventListener('focusout', function(e) {
+    if (e.target === _target) {
+      setTimeout(hideDropdown, 150);
+    }
+  });
+
+  // キーボードナビゲーション
+  document.addEventListener('keydown', function(e) {
+    if (dropdown.style.display === 'none' || !_target) return;
+    var items = dropdown.querySelectorAll('.lbl-suggest-item');
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(Math.min(_activeIdx + 1, items.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(Math.max(_activeIdx - 1, 0)); }
+    else if (e.key === 'Enter' && _activeIdx >= 0) {
+      e.preventDefault();
+      if (items[_activeIdx]) selectItem(items[_activeIdx].dataset.name);
+    }
+    else if (e.key === 'Escape') hideDropdown();
+  });
+
+  // スクロール・リサイズ時に位置再計算
+  document.addEventListener('scroll', function() {
+    if (_target && dropdown.style.display !== 'none') positionDropdown(_target);
+  }, true);
+})();
 </script>
 </body>
 </html>

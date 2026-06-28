@@ -9,12 +9,16 @@ const BGM_PATH = path.join(__dirname, 'assets', 'bgm.mp3');
 
 // ── スライド動画に音声をミックス ──────────────────────
 
-function muxAudio(videoPath, audioPath, outputPath) {
+function muxAudio(videoPath, audioPath, outputPath, audioDelayMs = 0) {
   // apad: 音声が映像より短い場合に無音パディング。-shortest: 映像長に合わせて切る
+  // audioDelayMs > 0 の場合: adelay でナレーション開始を遅延（オープニング用）
+  const afFilter = audioDelayMs > 0
+    ? `adelay=${audioDelayMs}|${audioDelayMs},apad`
+    : `apad`;
   execSync(`ffmpeg -y -i "${videoPath}" -i "${audioPath}" \
     -c:v copy -c:a aac -b:a 128k \
     -map 0:v:0 -map 1:a:0 \
-    -af apad -shortest \
+    -af "${afFilter}" -shortest \
     "${outputPath}"`, { stdio: 'pipe' });
   return outputPath;
 }
@@ -63,10 +67,10 @@ function buildFinalVideo(videoFiles, audioFiles, outputDir, finalName = 'final.m
     }
 
     if (audio && fs.existsSync(audio)) {
-      // 音声ありスライド: mux
+      // 音声ありスライド: mux（opening = index 0 は 500ms 遅延）
       const muxed = path.join(outputDir, `muxed_${i}.mp4`);
       try {
-        muxAudio(video, audio, muxed);
+        muxAudio(video, audio, muxed, i === 0 ? 500 : 0);
         muxedFiles.push(muxed);
         console.log(`  [${i}] muxed: video + audio`);
       } catch (err) {
