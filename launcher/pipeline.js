@@ -329,7 +329,12 @@ async function runPipeline(options = {}) {
   if (!viewpoints.length) { console.error('No viewpoints.'); return null; }
   const vp = viewpoints[0];
   const videoTopic = vp.title || topic;
-  const patternKey = vp.suggestedPattern || 'match_result';
+  const { getPattern } = require('./slide_patterns');
+  let patternKey = vp.suggestedPattern || 'match_result';
+  try { getPattern(patternKey); } catch (_) {
+    console.warn(`  [plan] 未知パターン "${patternKey}" → match_result にフォールバック`);
+    patternKey = 'match_result';
+  }
   _emit(em, 'step', { step: 'plan', status: 'done', detail: vp.angle });
 
   // Phase 4: Render

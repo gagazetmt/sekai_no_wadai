@@ -206,8 +206,55 @@ ${catalog}
 JSON形式で回答: {"patternKey": "パターン名", "reason": "選定理由（1文）"}`;
 
   const result = await callAI(systemPrompt, `トピック: ${topic}\n\n素材:\n${compressFacts(facts)}`);
-  getPattern(result.patternKey); // 存在確認
+  try {
+    getPattern(result.patternKey); // 存在確認
+  } catch (_) {
+    console.warn(`  [pattern] 未知パターン "${result.patternKey}" → match_result にフォールバック`);
+    result.patternKey = 'match_result';
+  }
   return result;
+}
+
+// ── 実コメント注入（AI生成ではなく facts.comments.all から直接選ぶ） ────
+
+async function injectRealComments(mods, pattern, facts) {
+  const all = facts?.comments?.all || [];
+  if (!all.length) return;
+
+  // 長さフィルタ（短すぎ・長すぎを除く）
+  const pool = all.filter(c => c.text && c.text.trim().length >= 12 && c.text.trim().length <= 200);
+  if (!pool.length) return;
+
+  // 英語コメントを検出（ひらがな・カタカナ・漢字がほぼない）
+  const isEnglish = t => !/[぀-ヿ一-鿿]/.test(t.slice(0, 40));
+
+  // 英語コメントをまとめて翻訳（DeepSeek 1回呼び出し）
+  const engIdx = pool.map((c, i) => isEnglish(c.text) ? i : -1).filter(i => i >= 0);
+  if (engIdx.length) {
+    try {
+      const { callDeepSeek } = require('./scout');
+      const lines = engIdx.map(i => `${i}: ${pool[i].text}`).join('\n');
+      const res = await callDeepSeek(
+        '英語コメントを自然な日本語に翻訳してください。内容・意味・トーンを変えず直訳してください。返答は JSON {"translations":{"0":"訳","1":"訳",...}} のみ。',
+        lines
+      );
+      const tr = res.translations || {};
+      engIdx.forEach(i => {
+        if (tr[String(i)]) pool[i] = { ...pool[i], text: tr[String(i)] };
+      });
+    } catch (_) {}
+  }
+
+  // 各コンテンツスライドに最大8個ずつ注入（重複なし）
+  const used = new Set();
+  for (let i = 0; i < pattern.slides.length; i++) {
+    if (pattern.slides[i].type === 'opening' || pattern.slides[i].type === 'ending') continue;
+    const available = pool.filter((_, idx) => !used.has(idx));
+    const selected = available.slice(0, 8);
+    selected.forEach(c => used.add(pool.indexOf(c)));
+    mods[i].comments = selected.map(c => ({ text: c.text.trim(), source: c.source || 'x' }));
+    console.log(`  [comments] slide${i}: ${selected.length}件（実コメント注入）`);
+  }
 }
 
 // ── mod生成 ───────────────────────────────────────────
@@ -216,9 +263,7 @@ function buildModSpec(pattern) {
   return pattern.slides.map((slot, i) => {
     const fields = slot.required.join(', ');
     const badge = slot.badge ? ` (badge: "${slot.badge}")` : '';
-    const isBookend = slot.type === 'opening' || slot.type === 'ending';
-    const cmtNote = isBookend ? '' : ', comments（8個・必須）';
-    return `slides[${i}] type="${slot.type}"${badge}: 必須フィールド [${fields}${cmtNote}]`;
+    return `slides[${i}] type="${slot.type}"${badge}: 必須フィールド [${fields}]`;
   }).join('\n');
 }
 
@@ -240,30 +285,6 @@ async function generateMods(patternKey, topic, facts) {
   【絶対NG】「やっぱ〇〇はやべぇ」「エモい」「すごい」等の感情吐露だけで終わる文。
   【必須】意外な事実・皮肉な対比・逆説・ズレ感でオチをつける。話題のどんでん返し的一言が理想。
   例の型: 「なおこの試合、◯◯のシュート数は0本でした」「ちなみに翌日の現地紙見出しは"奇跡"ではなく"醜聞"でした」「余談ですがこの時◯◯監督のリリースは用意されていた模様です」
-
-【コメント仕様（opening/ending以外の全スライドに必須）】
-- 8個
-- 形式: [{text:"日本語", source:"x"|"reddit"|"yahoo"}, ...]
-- 素材の_commentsから面白いものを積極的に使う。英文は内容を踏まえた面白い日本語意訳（直訳NG）
-- 不足時は視聴者が書きそうなリアルな反応を生成（source:"x"）
-- 【必須】8個は全て違う感情・角度。同じネタ・同じ感情を2回使うな
-- 角度の例（8個で全部違う角度を使え）：
-  ①鋭いツッコミ「え、そこ？w」「そういうことかよww」
-  ②驚き系「ガチで？」「マジかよwww」「これは知らんかった」
-  ③エモ・感動「鳥肌」「泣いた」「14年ぶりとか胸熱すぎる」
-  ④分析・深掘り「でもこれって〇〇が原因なんよな」「この数字やばくね」
-  ⑤一言ボケ「草」「ワロタ」「は？」（短くていい）
-  ⑥共感「わかるわかるww」「俺もそう思ってた」
-  ⑦懐疑・辛口「それは盛り過ぎじゃね」「正直微妙」「信じていいの？」
-  ⑧熱狂・応援「神！！」「最高か」「優勝しろ」
-- 文字数: 最低40文字・最大120文字。必ず40字以上にすること（一言で終わらせず理由や文脈を1文足す）
-- 長さのバリエーション: 40字台・80字台・100字台を混ぜる
-- 【最優先】純粋な感情吐露（「やばい」「草」だけ）より、面白い視点・鋭い気づき・意外な角度を優先
-  良い例: 「これって要するに戦術じゃなくて人材不足の問題だよな、ビエルサじゃなくても同じ結果だったかも」
-  良い例: 「スアレスやフォルランがいた時代との比較で見るとウルグアイFW陣の落差がえぐすぎて笑えない」
-  良い例: 「インタビュアーにキレるのはやりすぎだけど、選手への要求水準考えるとビエルサ的には論理的なんよな」
-- 絶対禁止: 「すごいですね」「さすがです」「素晴らしい」「感動しました」「応援しています」
-- 禁止: 同じスライド内で同じチーム名・選手名を3回以上使う
 
 【その他フィールド仕様】
 - title: スライド見出し（日本語・短く印象的に）
@@ -335,6 +356,9 @@ ${modSpec}
   // matchcard に実試合データ（選手写真・フォメ・ロゴ）を再注入
   injectRealMatchData(mods, pattern, facts);
 
+  // 実コメントを注入（AIに生成させない）
+  await injectRealComments(mods, pattern, facts);
+
   const validation = validateMods(patternKey, mods);
   if (!validation.valid) {
     console.warn('  [script_gen] Validation warnings:', validation.errors);
@@ -359,11 +383,11 @@ async function generateModsForPieces(selectedViewpoints, facts) {
   const compressed = compressFacts(facts);
 
   const SLIDE_TYPE_SPEC = {
-    insight:    '- title, narration（200文字程度の概要）, catchphrases（3-5個・各20文字以内）, siBinding（英語名・主要選手orチーム名）, comments（7-9個・各40-120文字）',
+    insight:    '- title, narration（200文字程度の概要）, catchphrases（3-5個・各20文字以内）, siBinding（英語名・主要選手orチーム名）',
     matchcard:  '- homeTeam, awayTeam, homeScore, awayScore（必須）, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away}...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（200文字程度の概要）',
-    stats:      '- title, narration（200文字程度の概要）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）, comments（7-9個・各40-120文字）',
-    comparison: '- title, narration（200文字程度の概要）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）, comments（7-9個・各40-120文字）',
-    history:    '- title, narration（200文字程度の概要）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）, comments（7-9個・各40-120文字）',
+    stats:      '- title, narration（200文字程度の概要）, siBinding（英語名・画像キー）, dataSlots[{label,value}]（最大6個）',
+    comparison: '- title, narration（200文字程度の概要）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）',
+    history:    '- title, narration（200文字程度の概要）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）',
   };
 
   const piecesText = selectedViewpoints.map((vp, i) => {
@@ -384,30 +408,6 @@ async function generateModsForPieces(selectedViewpoints, facts) {
   【絶対NG】「やっぱ〇〇はやべぇ」「エモい」「すごい」等の感情吐露だけで終わる文。
   【必須】意外な事実・皮肉な対比・逆説・ズレ感でオチをつける。話題のどんでん返し的一言が理想。
   例の型: 「なおこの試合、◯◯のシュート数は0本でした」「ちなみに翌日の現地紙見出しは"奇跡"ではなく"醜聞"でした」「余談ですがこの時◯◯監督のリリースは用意されていた模様です」
-
-【コメント仕様（opening/ending以外のスライドに必須）】
-- 8個
-- 形式: [{text:"日本語", source:"x"|"reddit"|"yahoo"}, ...]
-- 素材の_commentsから面白いものを積極的に使う。英文は内容を踏まえた面白い日本語意訳（直訳NG）
-- 不足時は視聴者が書きそうなリアルな反応を生成（source:"x"）
-- 【必須】8個は全て違う感情・角度。同じネタ・同じ感情を2回使うな
-- 角度の例（8個で全部違う角度を使え）：
-  ①鋭いツッコミ「え、そこ？w」「そういうことかよww」
-  ②驚き系「ガチで？」「マジかよwww」「これは知らんかった」
-  ③エモ・感動「鳥肌」「泣いた」「14年ぶりとか胸熱すぎる」
-  ④分析・深掘り「でもこれって〇〇が原因なんよな」「この数字やばくね」
-  ⑤一言ボケ「草」「ワロタ」「は？」（短くていい）
-  ⑥共感「わかるわかるww」「俺もそう思ってた」
-  ⑦懐疑・辛口「それは盛り過ぎじゃね」「正直微妙」「信じていいの？」
-  ⑧熱狂・応援「神！！」「最高か」「優勝しろ」
-- 文字数: 最低40文字・最大120文字。必ず40字以上にすること（一言で終わらせず理由や文脈を1文足す）
-- 長さのバリエーション: 40字台・80字台・100字台を混ぜる
-- 【最優先】純粋な感情吐露（「やばい」「草」だけ）より、面白い視点・鋭い気づき・意外な角度を優先
-  良い例: 「これって要するに戦術じゃなくて人材不足の問題だよな、ビエルサじゃなくても同じ結果だったかも」
-  良い例: 「スアレスやフォルランがいた時代との比較で見るとウルグアイFW陣の落差がえぐすぎて笑えない」
-  良い例: 「インタビュアーにキレるのはやりすぎだけど、選手への要求水準考えるとビエルサ的には論理的なんよな」
-- 絶対禁止: 「すごいですね」「さすがです」「素晴らしい」「感動しました」「応援しています」
-- 禁止: 同じスライド内で同じチーム名・選手名を3回以上使う
 
 【スライド構成】
 - slides[0]: opening — title（20〜35文字・YouTubeサムネイルと同レベルのキャッチーな見出し。例: "ロナウドがまさかの落選！ポルトガルに激震走る"）+ badge（推論）+ narration = title と同じテキスト
@@ -452,6 +452,9 @@ ${selectedViewpoints.map((vp, i) => {
   });
   // matchcard に実試合データ（選手写真・フォメ・ロゴ）を再注入
   injectRealMatchData(mods, pattern, facts);
+
+  // 実コメントを注入（AIに生成させない）
+  await injectRealComments(mods, pattern, facts);
 
   const validation = { valid: errors.length === 0, errors };
   if (!validation.valid) console.warn('  [script_gen] Validation warnings:', validation.errors);
