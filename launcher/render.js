@@ -209,12 +209,16 @@ async function renderAll(patternKey, mods, durations, outputDir) {
     ? [
         '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
         `--window-size=${W},${H}`, '--window-position=0,0',
-        '--kiosk',                    // Chrome UI なし・フルスクリーン
+        '--kiosk',              // タブ・アドレスバーを完全除去・フルスクリーン
+        '--test-type',          // 「unsupported flag」警告バーを非表示
+        '--no-first-run',
         '--noerrdialogs',
         '--disable-infobars',
+        '--disable-notifications',
         '--disable-session-crashed-bubble',
         '--disable-restore-session-state',
         '--disable-features=TranslateUI',
+        '--disable-sync',
       ]
     : ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'];
 
@@ -223,11 +227,14 @@ async function renderAll(patternKey, mods, durations, outputDir) {
     protocolTimeout: 120_000,
     ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : {}),
     ...(IS_LINUX ? { env: { ...process.env, DISPLAY: XVFB_DISPLAY } } : {}),
+    // --enable-automation を除去 → 「自動テストで制御されています」バー非表示
+    ...(IS_LINUX ? { ignoreDefaultArgs: ['--enable-automation'] } : {}),
     args: browserArgs,
   });
 
-  // Linux は1ページ使い回し（kiosk で goto する）
-  const sharedPage = IS_LINUX ? await browser.newPage() : null;
+  // Linux は --app=about:blank で開いた最初のページを使い回す
+  // browser.newPage() すると余分な2枚目タブが生えるので使わない
+  const sharedPage = IS_LINUX ? (await browser.pages())[0] : null;
   if (sharedPage) {
     await sharedPage.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
   }

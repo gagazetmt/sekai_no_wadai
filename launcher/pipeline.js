@@ -13,7 +13,7 @@ const path = require('path');
 const fs   = require('fs');
 
 const { scoutWithAI }        = require('./scout');
-const { research }           = require('./research');
+const { research, fetchMatch, fetchPlayer } = require('./research');
 const { extractViewpoints }  = require('./viewpoints');
 const { generateScript, generateMods } = require('./script_gen');
 const { generateNarration }  = require('./narration');
@@ -82,13 +82,32 @@ async function phaseResearch(topic, options = {}) {
     playerName: options.playerName || null,
     searchQuery: options.searchQuery || null,
   });
+
+  // extracted の結果を使って match / player データを自動フェッチ
+  const ext = facts.extracted;
+  if (ext) {
+    const home = ext.homeTeam || options.homeTeam;
+    const away = ext.awayTeam || options.awayTeam;
+    const player = ext.playerName || options.playerName;
+
+    const matchPromise = (home && away && !facts.matchData)
+      ? fetchMatch(home, away).then(md => { if (md?.ok) facts.matchData = md; }).catch(() => {})
+      : Promise.resolve();
+
+    const playerPromise = (player && !facts.playerData)
+      ? fetchPlayer(player).then(pd => { if (pd?.ok) facts.playerData = pd; }).catch(() => {})
+      : Promise.resolve();
+
+    await Promise.all([matchPromise, playerPromise]);
+  }
+
   const summary = {
     articles: facts.articles?.length || 0,
     comments: facts.comments?.all?.length || 0,
     hasPlayerData: !!facts.playerData,
     hasMatchData: !!facts.matchData,
   };
-  console.log(`  Articles: ${summary.articles} / Comments: ${summary.comments}`);
+  console.log(`  Articles: ${summary.articles} / Comments: ${summary.comments} / match:${summary.hasMatchData} player:${summary.hasPlayerData}`);
   return { facts, summary };
 }
 
