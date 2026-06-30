@@ -1,9 +1,10 @@
 // launcher/render.js
 // 本番用レンダラー: mods + audio → スライド動画
-// render_test.js のCDP JPEG方式を本番用に改修
+// Linux VPS: Xvfb + ffmpeg x11grab（CDP スクリーンショット不要、実時間キャプチャ）
+// Windows:   従来の CDP JPEG → ffmpeg stdin 方式
 
-const puppeteer = require('puppeteer');
-const { spawn }  = require('child_process');
+const puppeteer  = require('puppeteer');
+const { spawn, execSync } = require('child_process');
 const path       = require('path');
 const fs         = require('fs');
 
@@ -30,6 +31,102 @@ const BUILDERS = {
 
 const FPS = 24;
 const W = 1280, H = 720;
+const IS_LINUX = process.platform === 'linux';
+const XVFB_DISPLAY = ':99';
+
+// ── Xvfb 起動（Linux のみ） ───────────────────────────
+
+function ensureXvfb() {
+  // X11 ソケットで起動確認（xdpyinfo 不要）
+  const dispNum = XVFB_DISPLAY.replace(':', '');
+  const xSocket = `/tmp/.X11-unix/X${dispNum}`;
+  if (fs.existsSync(xSocket)) {
+    console.log('  [xvfb] already running on', XVFB_DISPLAY);
+    return;
+  }
+  console.log('  [xvfb] starting on', XVFB_DISPLAY);
+  const proc = spawn('Xvfb', [
+    XVFB_DISPLAY, '-screen', '0', `${W}x${H}x24`, '-ac',
+  ], { detached: true, stdio: 'ignore' });
+  proc.unref();
+
+  // ソケットが現れるまで最大2秒待つ
+  let ready = false;
+  for (let i = 0; i < 20; i++) {
+    execSync('sleep 0.1', { stdio: 'ignore' });
+    if (fs.existsSync(xSocket)) { ready = true; break; }
+  }
+  if (!ready) throw new Error('[xvfb] failed to start');
+  console.log('  [xvfb] ready');
+}
+
+// ── Linux: Xvfb + x11grab 方式 ────────────────────────
+
+async function renderSlideXvfb(page, name, html, durationSec, outputPath) {
+  // kiosk モードで file:// は弾かれるため setContent で直接注入
+  // 外部リソースが解決しなくてもタイムアウトしないよう 'load' を使用
+  await page.setContent(html, { waitUntil: 'load', timeout: 60_000 });
+
+  await page.addStyleTag({ content: `
+    html, body { width: ${W}px !important; height: ${H}px !important; overflow: hidden; }
+    .slide { transform: scale(${W / 1920}); transform-origin: top left; }
+  `});
+
+  // アニメーション一時停止 & t=0 リセット
+  const animCount = await page.evaluate(() => {
+    const anims = document.getAnimations();
+    anims.forEach(a => { a.pause(); a.currentTime = 0; });
+    return anims.length;
+  });
+
+  // 2フレーム待って描画確定
+  await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+
+  // ffmpeg x11grab 開始（kiosk により Chrome UI なし → 0,0 から正確に 1280x720）
+  const ffmpeg = spawn('ffmpeg', [
+    '-y',
+    '-f', 'x11grab',
+    '-video_size', `${W}x${H}`,
+    '-framerate', String(FPS),
+    '-i', `${XVFB_DISPLAY}+0,0`,
+    '-t', String(durationSec),
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-color_range', 'tv',
+    '-preset', 'ultrafast',
+    '-crf', '23',
+    outputPath,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  let ffmpegErr = '';
+  ffmpeg.stderr.on('data', d => { ffmpegErr += d.toString(); });
+
+  // ffmpeg が x11grab を掴むまで少し待つ
+  await new Promise(r => setTimeout(r, 200));
+
+  // アニメーション再生（ffmpegキャプチャ開始後に解放）
+  if (animCount > 0) {
+    await page.evaluate(() => {
+      document.getAnimations().forEach(a => { a.currentTime = 0; a.play(); });
+    });
+  }
+
+  const t0 = Date.now();
+
+  await new Promise((resolve, reject) => {
+    ffmpeg.on('close', code => {
+      if (code !== 0) reject(new Error(`ffmpeg(x11grab) exit ${code}: ${ffmpegErr.slice(-400)}`));
+      else resolve();
+    });
+  });
+
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+  const size = fs.existsSync(outputPath) ? (fs.statSync(outputPath).size / 1024).toFixed(0) : '?';
+  console.log(`    [${name}] ${elapsed}s realtime / ${size}KB / ${durationSec.toFixed(1)}s dur / ${animCount} anims`);
+
+}
+
+// ── Windows: CDP JPEG → ffmpeg stdin 方式（従来） ─────
 
 async function renderSlide(browser, name, html, durationSec, outputPath) {
   const totalFrames = Math.ceil(FPS * durationSec);
@@ -98,19 +195,42 @@ async function renderSlide(browser, name, html, durationSec, outputPath) {
 // ── メインAPI ─────────────────────────────────────────
 
 async function renderAll(patternKey, mods, durations, outputDir) {
-  console.log('\n=== Render: Building slide videos ===\n');
+  console.log(`\n=== Render: Building slide videos [${IS_LINUX ? 'Xvfb/x11grab' : 'CDP/Win'}] ===\n`);
 
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-  // pieces_N は動的パターン: mod.type から再構築（静的テーブルに頼らない）
   const pattern = patternKey.startsWith('pieces_')
     ? buildPiecesPattern(mods.slice(1, -1).map(m => m.type || 'insight'))
     : getPattern(patternKey);
+
+  if (IS_LINUX) ensureXvfb();
+
+  const browserArgs = IS_LINUX
+    ? [
+        '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+        `--window-size=${W},${H}`, '--window-position=0,0',
+        '--kiosk',                    // Chrome UI なし・フルスクリーン
+        '--noerrdialogs',
+        '--disable-infobars',
+        '--disable-session-crashed-bubble',
+        '--disable-restore-session-state',
+        '--disable-features=TranslateUI',
+      ]
+    : ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'];
+
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: !IS_LINUX,             // Linux は headless:false で Xvfb に表示
     protocolTimeout: 120_000,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+    ...(process.env.PUPPETEER_EXECUTABLE_PATH ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH } : {}),
+    ...(IS_LINUX ? { env: { ...process.env, DISPLAY: XVFB_DISPLAY } } : {}),
+    args: browserArgs,
   });
+
+  // Linux は1ページ使い回し（kiosk で goto する）
+  const sharedPage = IS_LINUX ? await browser.newPage() : null;
+  if (sharedPage) {
+    await sharedPage.setViewport({ width: W, height: H, deviceScaleFactor: 1 });
+  }
 
   const videoFiles = [];
   const t0 = Date.now();
@@ -127,29 +247,30 @@ async function renderAll(patternKey, mods, durations, outputDir) {
       continue;
     }
 
-    // durationSec を mod に注入（アニメーション制御用）
     mod.durationSec = dur;
 
     let html = builder(mod);
 
-    // コメントオーバーレイ注入
     const isBookend = slot.type === 'opening' || slot.type === 'ending';
 
-    // 字幕バー注入（opening / ending はなし）
     if (!isBookend && mod.narration && (mod.subtitleWords?.length || mod.subtitleSegments?.length)) {
-      const LEAD = parseFloat(process.env.LEAD_PAD_SEC) || 0;
       html = injectSubtitles(html, mod.narration, mod.subtitleWords, dur, {
-        leadPad: LEAD,
+        leadPad: 0,
         narrationDurSec: mod.narrationDurOnly,
       });
     }
     if (!isBookend && mod.comments?.length) {
       html = injectCommentOverlay(html, mod.comments, mod.narrationEndSec, mod.commentTiming, dur);
     }
+
     const outPath = path.join(outputDir, `slide_${i}_${slot.type}.mp4`);
 
     try {
-      await renderSlide(browser, `${i}_${slot.type}`, html, dur, outPath);
+      if (IS_LINUX) {
+        await renderSlideXvfb(sharedPage, `${i}_${slot.type}`, html, dur, outPath);
+      } else {
+        await renderSlide(browser, `${i}_${slot.type}`, html, dur, outPath);
+      }
       videoFiles.push(outPath);
     } catch (err) {
       console.error(`    [${i}_${slot.type}] FAILED: ${err.message}`);
@@ -157,6 +278,7 @@ async function renderAll(patternKey, mods, durations, outputDir) {
     }
   }
 
+  if (sharedPage) await sharedPage.close();
   await browser.close();
 
   const totalElapsed = ((Date.now() - t0) / 1000).toFixed(1);
