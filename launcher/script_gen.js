@@ -221,8 +221,10 @@ async function injectRealComments(mods, pattern, facts) {
   const all = facts?.comments?.all || [];
   if (!all.length) return;
 
-  // 長さフィルタ（短すぎ・長すぎを除く）
-  const pool = all.filter(c => c.text && c.text.trim().length >= 12 && c.text.trim().length <= 200);
+  // 短すぎを除外し、120字で切り捨て（3行=120字が最大表示幅）
+  const pool = all
+    .filter(c => c.text && c.text.trim().length >= 12)
+    .map(c => ({ ...c, text: c.text.trim().slice(0, 120) }));
   if (!pool.length) return;
 
   // 英語コメントを検出（ひらがな・カタカナ・漢字がほぼない）
@@ -245,15 +247,15 @@ async function injectRealComments(mods, pattern, facts) {
     } catch (_) {}
   }
 
-  // 各コンテンツスライドに最大8個ずつ注入（重複なし）
+  // 各コンテンツスライドに最大20件渡す → _packComments が9行埋まるまで選択（重複なし）
   const used = new Set();
   for (let i = 0; i < pattern.slides.length; i++) {
     if (pattern.slides[i].type === 'opening' || pattern.slides[i].type === 'ending') continue;
     const available = pool.filter((_, idx) => !used.has(idx));
-    const selected = available.slice(0, 8);
+    const selected = available.slice(0, 20);
     selected.forEach(c => used.add(pool.indexOf(c)));
     mods[i].comments = selected.map(c => ({ text: c.text.trim(), source: c.source || 'x' }));
-    console.log(`  [comments] slide${i}: ${selected.length}件（実コメント注入）`);
+    console.log(`  [comments] slide${i}: ${selected.length}件渡し（9行まで表示）`);
   }
 }
 
