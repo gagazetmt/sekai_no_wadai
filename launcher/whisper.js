@@ -80,31 +80,40 @@ function buildSubtitleChunks(words, charsPerChunk = CHARS_PER_CHUNK) {
 
 // ── 全ナレーション一括処理 ────────────────────────────
 
+function makeWhisperSemaphore(n) {
+  let active = 0;
+  const queue = [];
+  return fn => new Promise((resolve, reject) => {
+    const run = () => {
+      active++;
+      Promise.resolve(fn()).then(resolve, reject).finally(() => {
+        active--;
+        if (queue.length) queue.shift()();
+      });
+    };
+    active < n ? run() : queue.push(run);
+  });
+}
+
 async function whisperAll(audioFiles, leadPad = 0) {
-  console.log('\n=== Whisper: Transcribing narrations ===\n');
+  console.log('\n=== Whisper: Transcribing narrations (parallel) ===\n');
 
-  const results = [];
+  const limit = makeWhisperSemaphore(4);
 
-  for (let i = 0; i < audioFiles.length; i++) {
-    const audioPath = audioFiles[i];
-
+  const indexed = await Promise.all(audioFiles.map((audioPath, i) => limit(async () => {
     if (!audioPath || !fs.existsSync(audioPath)) {
       console.log(`  [${i}] スキップ（音声なし）`);
-      results.push({ chunks: [], narrationEndSec: 0, words: [] });
-      continue;
+      return { i, result: { chunks: [], narrationEndSec: 0, words: [] } };
     }
 
     try {
       console.log(`  [${i}] Whisper...`);
       const data = await transcribeAudio(audioPath);
       const words = data.words || [];
-
       const lastEnd = words.length ? words[words.length - 1].end : 0;
-      const narrationEndSec = lastEnd;  // audio は t=0 スタート。leadPad offset 不要
+      const narrationEndSec = lastEnd;
 
       const chunks = buildSubtitleChunks(words);
-
-      // チャンクの時刻に leadPad を加算
       for (const c of chunks) {
         c.start += leadPad;
         c.end   += leadPad;
@@ -112,14 +121,15 @@ async function whisperAll(audioFiles, leadPad = 0) {
 
       const segments = data.segments || [];
       console.log(`  [${i}] → ${words.length}語 / ${segments.length}セグ / ${chunks.length}チャンク / 終了${narrationEndSec.toFixed(1)}s`);
-      results.push({ chunks, narrationEndSec, words, segments });
+      return { i, result: { chunks, narrationEndSec, words, segments } };
     } catch (err) {
       console.warn(`  [${i}] Whisper失敗: ${err.message}`);
-      results.push({ chunks: [], narrationEndSec: 0, words: [] });
+      return { i, result: { chunks: [], narrationEndSec: 0, words: [] } };
     }
-  }
+  })));
 
-  return results;
+  indexed.sort((a, b) => a.i - b.i);
+  return indexed.map(r => r.result);
 }
 
 module.exports = { transcribeAudio, buildSubtitleChunks, whisperAll };

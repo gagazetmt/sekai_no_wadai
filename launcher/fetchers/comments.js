@@ -191,8 +191,10 @@ async function fromYahoo(topic, options = {}) {
     let urls = (options.yahooUrls || []).filter(url => /news\.yahoo\.co\.jp/.test(url)).slice(0, 3);
 
     if (!urls.length) {
-      console.log(`  [comments/yahoo] 検索: "site:news.yahoo.co.jp ${topic}"`);
-      const results = await braveSearch(`site:news.yahoo.co.jp ${topic}`, 6);
+      const suffix = PHASE_YAHOO_SUFFIX[options.phase] || PHASE_YAHOO_SUFFIX.post;
+      const yahooQ = `site:news.yahoo.co.jp ${topic} ${suffix}`;
+      console.log(`  [comments/yahoo] 検索[${options.phase || 'post'}]: "${yahooQ}"`);
+      const results = await braveSearch(yahooQ, 6);
       urls = [...new Set(
         results.map(r => r.url).filter(url => /^https?:\/\/news\.yahoo\.co\.jp\//i.test(String(url || '')))
       )].slice(0, 3);
@@ -237,7 +239,7 @@ function _isXReaction(value) {
   return !newsSummary.test(text) || reactionSignal.test(text);
 }
 
-async function _xSearch(query, label) {
+async function _xSearchRaw(query, label) {
   const res = await fetch(
     'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
     new URLSearchParams({ query, queryType: 'Top' }),
@@ -245,7 +247,67 @@ async function _xSearch(query, label) {
   );
   if (!res.ok) { console.warn(`  [comments/x] ${label} ${res.status}`); return []; }
   const data = await res.json();
-  return (data?.data?.tweets || data?.tweets || []).map(t => t.text || t.full_text || '');
+  return data?.data?.tweets || data?.tweets || [];
+}
+
+async function _xSearch(query, label) {
+  const tweets = await _xSearchRaw(query, label);
+  return tweets.map(t => t.text || t.full_text || '');
+}
+
+// サッカーニュースアカウントのリプライ欄から反応コメントを収集
+const SOCCER_NEWS_ACCOUNTS = ['goal_jp', 'soccerdigestweb', 'gekisaka', 'jfa_samuraiblue', 'footballchannel'];
+
+async function fromXReplies(topic, { phase = 'post' } = {}) {
+  if (!X_API_KEY) { console.log('  [comments/xr] API key なし'); return []; }
+
+  try {
+    // Step1: サッカーニュースアカウントのツイートを検索
+    const accountFilter = SOCCER_NEWS_ACCOUNTS.map(a => `from:${a}`).join(' OR ');
+    const hint = PHASE_X_HINT[phase] || PHASE_X_HINT.post;
+    const q = `(${accountFilter}) ${topic.slice(0, 40)} (${hint}) lang:ja -is:retweet`;
+    console.log(`  [comments/xr] アカウント検索[${phase}]: "${q}"`);
+
+    const accountTweets = await _xSearchRaw(q, 'account_search');
+    if (!accountTweets.length) {
+      console.log('  [comments/xr] アカウントツイートなし');
+      return [];
+    }
+
+    // エンゲージメントスコアでトップ2を選択
+    const scored = accountTweets.map(t => ({
+      id: t.id || t.tweet_id || t.id_str,
+      text: t.text || t.full_text || '',
+      score: (t.replyCount || t.reply_count || 0) * 3 + (t.likeCount || t.like_count || t.favorite_count || 0),
+    })).filter(t => t.id);
+
+    scored.sort((a, b) => b.score - a.score);
+    const top2 = scored.slice(0, 2);
+    console.log(`  [comments/xr] 候補ツイート: ${scored.length}件 → トップ${top2.length}件 (score: ${top2.map(t => t.score).join(', ')})`);
+
+    // Step2: 各ツイートのリプライを並列取得
+    const replyArrays = await Promise.all(top2.map(async t => {
+      const repQ = `conversation_id:${t.id} lang:ja -is:retweet`;
+      console.log(`  [comments/xr] リプライ取得: conversation_id:${t.id}`);
+      const raw = await _xSearchRaw(repQ, `replies_${t.id}`).catch(() => []);
+      return raw.map(r => {
+        const text = (r.text || r.full_text || '')
+          .replace(/@\w+\s*/g, '')
+          .replace(/https?:\/\/\S+/g, '')
+          .trim();
+        return text;
+      }).filter(text => text.length >= 12);
+    }));
+
+    const allReplies = replyArrays.flat();
+    const filtered = allReplies.filter(_isXReaction);
+    const unique = _unique(filtered, 15);
+    console.log(`  [comments/xr] → ${unique.length} リプライコメント`);
+    return unique.map(text => ({ text, source: 'x_reply' }));
+  } catch (e) {
+    console.warn(`  [comments/xr] 失敗: ${e.message}`);
+    return [];
+  }
 }
 
 async function fromX(topic, enQuery = '') {
@@ -279,29 +341,78 @@ async function fromX(topic, enQuery = '') {
   }
 }
 
+// ── 試合フェーズ判定 ────────────────────────────────────
+
+/**
+ * matchData から試合フェーズを判定する
+ * @param {object|null} matchData - FotMob などから取得した試合データ
+ * @returns {'pre'|'live'|'post'}
+ */
+function detectMatchPhase(matchData) {
+  if (!matchData) return 'post';
+  const status = matchData?.match?.status || matchData?.status || {};
+
+  if (status.finished || status.result) return 'post';
+  if (status.started || status.ongoing) return 'live';
+
+  // utcTime から計算
+  const kickoffStr = status.utcTime || matchData?.match?.kickoffTime || matchData?.kickoffTime;
+  if (!kickoffStr) return 'post';
+
+  const kickoff = new Date(kickoffStr);
+  if (isNaN(kickoff)) return 'post';
+
+  const diffMin = (Date.now() - kickoff.getTime()) / 60000;
+  if (diffMin < -30) return 'pre';   // 30分以上前
+  if (diffMin < 130) return 'live';  // キックオフから130分以内
+  return 'post';
+}
+
+// フェーズ別クエリヒント
+const PHASE_YAHOO_SUFFIX = {
+  pre:  '展望 予想',
+  live: '速報 ライブ',
+  post: '結果 感想',
+};
+
+const PHASE_X_HINT = {
+  pre:  '展望 OR 予想 OR 注目',
+  live: '速報 OR ゴール OR 実況',
+  post: '感想 OR 試合終了 OR お疲れ',
+};
+
 // ── メインAPI: 3ソース並列取得 ──────────────────────────
 
 async function collectComments(topic, options = {}) {
   console.log(`\n  === Comments: Collecting reactions ===`);
-  console.log(`  Topic: ${topic}\n`);
 
-  const { enQuery = '', yahooUrls = [], redditUrls = [], xTweets = null } = options;
+  const { enQuery = '', yahooUrls = [], redditUrls = [], xTweets = null, matchData = null } = options;
 
-  // X tweets は research.js で取得済みなら再利用、なければここで取得（英語クエリも渡す）
-  const xPromise = xTweets !== null
+  const phase = detectMatchPhase(matchData);
+  console.log(`  Topic: ${topic}  Phase: ${phase}\n`);
+
+  // X: fromXReplies をプライマリ、取れなければ fromX にフォールバック
+  const xReplyPromise = fromXReplies(topic, { phase });
+  const xBroadPromise = xTweets !== null
     ? Promise.resolve(xTweets)
     : fromX(topic, enQuery);
 
-  const [reddit, yahoo, x] = await Promise.all([
+  const [reddit, yahoo, xReplies, xBroad] = await Promise.all([
     fromReddit(topic, enQuery, { redditUrls }),
-    fromYahoo(topic, { yahooUrls }),
-    xPromise,
+    fromYahoo(topic, { yahooUrls, phase }),
+    xReplyPromise,
+    xBroadPromise,
   ]);
 
-  const all = [...reddit, ...yahoo, ...x];
-  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x=${x.length} → ${all.length}`);
+  // リプライが取れていればそちら優先、なければ広域検索で補完
+  const x = xReplies.length >= 5
+    ? xReplies
+    : [...xReplies, ...xBroad].filter((c, i, arr) => arr.findIndex(a => a.text === c.text) === i);
 
-  return { reddit, yahoo, x, all };
+  const all = [...reddit, ...yahoo, ...x];
+  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x_reply=${xReplies.length} x_broad=${xBroad.length} → ${all.length}`);
+
+  return { reddit, yahoo, x, xReplies, xBroad, all, phase };
 }
 
-module.exports = { collectComments, fromReddit, fromYahoo, fromX };
+module.exports = { collectComments, fromReddit, fromYahoo, fromX, fromXReplies, detectMatchPhase };

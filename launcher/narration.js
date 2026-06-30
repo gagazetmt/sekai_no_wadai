@@ -19,12 +19,12 @@ function getCommentSpeaker(index) {
 }
 
 // ── MiniMax TTS ボイスID ──────────────────────────────
-// メイン: Japanese_GenerousIzakayaOwner
-// コメント男性(4): deep_voiced_storyteller / DependableWoman / refined_storyteller / LoyalKnight
+// メイン: Japanese_deep_voiced_storyteller_vv1
+// コメント男性(4): GenerousIzakayaOwner / DependableWoman / refined_storyteller / LoyalKnight
 // コメント女性(1): energetic_anime_girl
-const MINIMAX_MAIN_VOICE = 'Japanese_GenerousIzakayaOwner';
+const MINIMAX_MAIN_VOICE = 'Japanese_deep_voiced_storyteller_vv1';
 const MINIMAX_CMT_VOICES = [
-  'Japanese_deep_voiced_storyteller_vv1',  // 男1
+  'Japanese_GenerousIzakayaOwner',         // 男1（元メイン）
   'Japanese_DependableWoman',              // 男2
   'Japanese_refined_storyteller_vv1',      // 男3
   'Japanese_LoyalKnight',                  // 男4
@@ -190,8 +190,7 @@ async function minimaxTTS(text, outputPath, voiceId = MINIMAX_MAIN_VOICE) {
   const groupId = process.env.MINIMAX_GROUP_ID;
   if (!key || !groupId) throw new Error('No MINIMAX_API_KEY or MINIMAX_GROUP_ID');
 
-  const safeText = await sanitizeForTts(text);
-  if (!safeText) throw new Error('sanitizeForTts returned empty');
+  if (!text) throw new Error('text is empty');
 
   const res = await fetch(`https://api.minimax.io/v1/t2a_v2?GroupId=${groupId}`, {
     method: 'POST',
@@ -200,8 +199,8 @@ async function minimaxTTS(text, outputPath, voiceId = MINIMAX_MAIN_VOICE) {
       'Authorization': `Bearer ${key}`,
     },
     body: JSON.stringify({
-      model: 'speech-2.6-hd',
-      text: safeText,
+      model: 'speech-01-hd',
+      text,
       stream: false,
       language_boost: 'Japanese',
       voice_setting: {
@@ -280,25 +279,45 @@ async function geminiTTS(text, outputPath) {
 // ── TTS ディスパッチ（VoiceVox → MiniMax → Gemini） ──
 
 async function synthesize(text, outPath, speaker = MAIN_SPEAKER, minimaxVoice = MINIMAX_MAIN_VOICE) {
-  // 1. VoiceVox（ローカル起動中のみ）
-  try {
-    await voicevoxTTS(text, outPath, speaker);
-    return outPath;
-  } catch (_) {}
-
-  // 2. MiniMax（クラウド）
+  // 1. MiniMax（メイン）
   try {
     await minimaxTTS(text, outPath, minimaxVoice);
     console.log(`    → MiniMax (${minimaxVoice})`);
     return outPath;
   } catch (err) {
-    console.warn(`    MiniMax failed (${err.message}), trying Gemini...`);
+    console.warn(`    MiniMax failed (${err.message}), trying VoiceVox...`);
+  }
+
+  // 2. VoiceVox（MiniMax が落ちているときのフォールバック）
+  try {
+    await voicevoxTTS(text, outPath, speaker);
+    console.log(`    → VoiceVox (speaker=${speaker})`);
+    return outPath;
+  } catch (err) {
+    console.warn(`    VoiceVox failed (${err.message}), trying Gemini...`);
   }
 
   // 3. Gemini（最終フォールバック）
   await geminiTTS(text, outPath);
   console.log(`    → Gemini TTS`);
   return outPath;
+}
+
+// ── 同時実行数制限ヘルパー ────────────────────────────
+
+function makeSemaphore(n) {
+  let active = 0;
+  const queue = [];
+  return fn => new Promise((resolve, reject) => {
+    const run = () => {
+      active++;
+      Promise.resolve(fn()).then(resolve, reject).finally(() => {
+        active--;
+        if (queue.length) queue.shift()();
+      });
+    };
+    active < n ? run() : queue.push(run);
+  });
 }
 
 // ── コメント音声生成 ──────────────────────────────────
@@ -309,15 +328,12 @@ async function generateCommentAudio(comments, outputDir, slideIndex) {
   const validComments = comments.slice(0, 8).filter(c => c.text && c.text.length > 0);
   if (!validComments.length) return { audioFile: null, duration: 0 };
 
-  const parts = [];
-  const perComment = [];  // {index, durationSec} 読み上げ順の各コメント尺（ポップ同期用）
-
-  for (let i = 0; i < validComments.length; i++) {
-    const text = validComments[i].text;
-    const speaker = getCommentSpeaker(i);
+  // コメント TTS を並列実行（同時最大4）
+  const limit = makeSemaphore(4);
+  const rawResults = await Promise.all(validComments.map((c, i) => limit(async () => {
     const outPath = path.join(outputDir, `cmt_${slideIndex}_${i}.wav`);
     try {
-      await synthesize(text, outPath, speaker, getMinimaxCmtVoice(i));
+      await synthesize(c.text, outPath, getCommentSpeaker(i), getMinimaxCmtVoice(i));
       let dur = 1.5;
       try {
         const probe = execSync(
@@ -326,12 +342,18 @@ async function generateCommentAudio(comments, outputDir, slideIndex) {
         ).trim();
         dur = parseFloat(probe) || 1.5;
       } catch {}
-      parts.push(outPath);
-      perComment.push({ index: i, durationSec: dur });
+      return { index: i, path: outPath, durationSec: dur, ok: true };
     } catch (err) {
       console.warn(`    [comment TTS] slide${slideIndex}[${i}] failed: ${err.message}`);
+      return { index: i, ok: false };
     }
-  }
+  })));
+
+  const succeeded = rawResults.filter(r => r.ok);
+  if (!succeeded.length) return { audioFile: null, duration: 0, perComment: [] };
+
+  const parts = succeeded.map(r => r.path);
+  const perComment = succeeded.map(r => ({ index: r.index, durationSec: r.durationSec }));
 
   if (!parts.length) return { audioFile: null, duration: 0, perComment: [] };
 
@@ -379,28 +401,23 @@ async function generateNarration(patternKey, mods, outputDir) {
   // narration テキストを mod に保存（メタ生成等で参照）
   narrations.forEach((n, i) => { if (mods[i]) mods[i].narration = n; });
 
-  // Step 2: TTS
-  console.log('\n  Step 2: Synthesizing audio...');
-  const audioFiles = [];
-  const narrationDurations = [];
-  const commentDurations = [];
+  // Step 2: TTS（全スライド並列、同時最大4）
+  console.log('\n  Step 2: Synthesizing audio (parallel)...');
+  const slideLimit = makeSemaphore(4);
 
-  for (let i = 0; i < narrations.length; i++) {
-    const text = narrations[i];
+  const slideResults = await Promise.all(narrations.map((text, i) => slideLimit(async () => {
     const slotType = (pattern.slides[i] || {}).type || mods[i]?.type || 'insight';
     const isBookend = slotType === 'opening' || slotType === 'ending';
     const narPath = path.join(outputDir, `narration_${i}.wav`);
 
+    // ナレーション TTS
     try {
       if (!text) throw new Error('empty text');
       await synthesize(text, narPath, MAIN_SPEAKER);
       console.log(`    [${i}] narration → ${path.basename(narPath)}`);
     } catch (err) {
       console.error(`    [${i}] narration TTS failed: ${err.message}`);
-      audioFiles.push(null);
-      narrationDurations.push(10);
-      commentDurations.push(0);
-      continue;
+      return { i, audioFile: null, narDur: 10, cmtDur: 0 };
     }
 
     // 尺を計測
@@ -412,9 +429,8 @@ async function generateNarration(patternKey, mods, outputDir) {
       ).trim();
       narDur = parseFloat(probe) || 10;
     } catch {}
-    narrationDurations.push(narDur);
 
-    // コメントTTS（bookend以外）
+    // コメント TTS（bookend 以外）
     let combinedAudioPath = narPath;
     let cmtDur = 0;
 
@@ -422,8 +438,6 @@ async function generateNarration(patternKey, mods, outputDir) {
       const cmtResult = await generateCommentAudio(mods[i].comments, outputDir, i);
       cmtDur = cmtResult.duration;
 
-      // コメントのポップ同期情報を mod に保存（comments.js が読む）
-      //   narration(narDur) → 0.2s pause → cmt0 → 0.3s pad → cmt1 → 0.3s pad → ...
       mods[i].commentTiming = {
         narrationDurSec: narDur,
         narToCmtPauseSec: 0.2,
@@ -432,7 +446,6 @@ async function generateNarration(patternKey, mods, outputDir) {
       };
 
       if (cmtResult.audioFile) {
-        // narration + 0.2s pause + comment_audio を連結
         const pausePath = path.join(outputDir, `_nar_pad_${i}.wav`);
         execSync(`ffmpeg -y -f lavfi -i anullsrc=r=24000:cl=mono -t 0.2 "${pausePath}"`, { stdio: 'pipe' });
 
@@ -450,9 +463,14 @@ async function generateNarration(patternKey, mods, outputDir) {
       }
     }
 
-    commentDurations.push(cmtDur);
-    audioFiles.push(combinedAudioPath);
-  }
+    return { i, audioFile: combinedAudioPath, narDur, cmtDur };
+  })));
+
+  // インデックス順に整列
+  slideResults.sort((a, b) => a.i - b.i);
+  const audioFiles        = slideResults.map(r => r.audioFile);
+  const narrationDurations = slideResults.map(r => r.narDur);
+  const commentDurations  = slideResults.map(r => r.cmtDur);
 
   const durations = narrationDurations;
   console.log(`\n  Narration durations: ${durations.map(d => d.toFixed(1) + 's').join(', ')}`);

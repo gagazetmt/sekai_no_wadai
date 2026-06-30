@@ -328,7 +328,19 @@ async function research(topic, options = {}) {
     console.warn('  [extract] DeepSeek failed');
   }
 
-  // Step3: コメント収集（Yahoo/Reddit URLを渡して再検索を省略、X tweetsも再利用）
+  // Step3: 試合データ先行フェッチ（フェーズ判定に使う）
+  const ext = facts.extracted;
+  if (ext?.topicType === 'match' && ext.homeTeam && ext.awayTeam && !facts.matchData) {
+    try {
+      const md = await fetchMatch(ext.homeTeam, ext.awayTeam);
+      if (md?.ok) {
+        facts.matchData = md;
+        console.log('  [research] matchData 先行フェッチ完了');
+      }
+    } catch (_) {}
+  }
+
+  // Step4: コメント収集（Yahoo/Reddit URLを渡して再検索を省略、X tweetsも再利用）
   try {
     const yahooUrls   = facts.articles.filter(a => a.sourceType === 'yahoo').map(a => a.url);
     const redditUrls  = facts.articles.filter(a => a.sourceType === 'reddit').map(a => a.url);
@@ -337,9 +349,10 @@ async function research(topic, options = {}) {
       yahooUrls,
       redditUrls,
       xTweets,
+      matchData: facts.matchData,
     });
     facts.comments = commentResult;
-    console.log(`  [comments] ${commentResult.all.length} total`);
+    console.log(`  [comments] ${commentResult.all.length} total (phase: ${commentResult.phase})`);
   } catch (err) {
     console.warn(`  [comments] failed: ${err.message}`);
   }
