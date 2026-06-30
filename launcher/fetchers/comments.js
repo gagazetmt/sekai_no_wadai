@@ -84,31 +84,38 @@ function _isReaction(text) {
   return signal.test(text);
 }
 
-async function fromReddit(topic, enQuery = '') {
+async function fromReddit(topic, enQuery = '', options = {}) {
   const searchTerm = enQuery || _toEnglishQuery(topic) || topic;
   if (!searchTerm) return [];
 
   try {
-    console.log(`  [comments/reddit] 検索: "${searchTerm}"`);
-    const searchUrl = `https://www.reddit.com/r/soccer/search.json?q=${encodeURIComponent(searchTerm)}&sort=new&restrict_sr=1&limit=5&t=week`;
-    const res = await fetch(searchUrl, {
-      headers: { 'User-Agent': UA, ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}) },
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!res.ok) { console.warn(`  [comments/reddit] search ${res.status}`); return []; }
+    // 既知のReddit URLがあればそのpermalinkを直接使う
+    let permalinks = (options.redditUrls || []).map(url => {
+      try { return new URL(url).pathname.replace(/\/?$/, ''); } catch { return null; }
+    }).filter(Boolean);
 
-    const data = await res.json();
-    const posts = data?.data?.children || [];
-    const permalinks = posts.slice(0, 3).map(p => p.data?.permalink).filter(Boolean);
+    if (!permalinks.length) {
+      console.log(`  [comments/reddit] 検索: "${searchTerm}"`);
+      const searchUrl = `https://www.reddit.com/r/soccer/search.json?q=${encodeURIComponent(searchTerm)}&sort=new&restrict_sr=1&limit=5&t=week`;
+      const res = await fetch(searchUrl, {
+        headers: { 'User-Agent': UA, ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}) },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) { console.warn(`  [comments/reddit] search ${res.status}`); return []; }
+      const data = await res.json();
+      const posts = data?.data?.children || [];
+      permalinks = posts.slice(0, 3).map(p => p.data?.permalink).filter(Boolean);
+    } else {
+      console.log(`  [comments/reddit] URL直接使用: ${permalinks.length}件`);
+    }
 
     const threadResults = await Promise.all(permalinks.map(async (permalink) => {
       try {
-        const threadRes = await fetch(`https://www.reddit.com${permalink}.json?limit=30&sort=top`, {
-          headers: { 'User-Agent': UA, ...(REDDIT_COOKIE ? { Cookie: REDDIT_COOKIE } : {}) },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!threadRes.ok) return [];
-        const threadData = await threadRes.json();
+        const url = `https://www.reddit.com${permalink}.json?limit=30&sort=top`;
+        // curlGet（curl-cffi + Webshare proxy）で Cloudflare をバイパス
+        const r = await curlGet(url, { referer: 'https://www.reddit.com/', timeout: 15 });
+        if (!r.ok) { console.warn(`  [comments/reddit] ${r.status} ${permalink}`); return []; }
+        const threadData = JSON.parse(r.body);
         return (threadData?.[1]?.data?.children || [])
           .filter(c => c.kind === 't1' && c.data?.body && c.data.body !== '[deleted]')
           .map(c => String(c.data.body).replace(/\n+/g, ' ').trim())
@@ -178,14 +185,20 @@ function _extractYahooComments(html, limit = 12) {
   }).slice(0, limit);
 }
 
-async function fromYahoo(topic) {
+async function fromYahoo(topic, options = {}) {
   try {
     const { braveSearch } = require('../scout');
-    console.log(`  [comments/yahoo] 検索: "site:news.yahoo.co.jp ${topic}"`);
-    const results = await braveSearch(`site:news.yahoo.co.jp ${topic}`, 6);
-    const urls = [...new Set(
-      results.map(r => r.url).filter(url => /^https?:\/\/news\.yahoo\.co\.jp\//i.test(String(url || '')))
-    )].slice(0, 3);
+    let urls = (options.yahooUrls || []).filter(url => /news\.yahoo\.co\.jp/.test(url)).slice(0, 3);
+
+    if (!urls.length) {
+      console.log(`  [comments/yahoo] 検索: "site:news.yahoo.co.jp ${topic}"`);
+      const results = await braveSearch(`site:news.yahoo.co.jp ${topic}`, 6);
+      urls = [...new Set(
+        results.map(r => r.url).filter(url => /^https?:\/\/news\.yahoo\.co\.jp\//i.test(String(url || '')))
+      )].slice(0, 3);
+    } else {
+      console.log(`  [comments/yahoo] URL直接使用: ${urls.length}件`);
+    }
 
     if (!urls.length) { console.log('  [comments/yahoo] → 0 URLs'); return []; }
 
@@ -224,28 +237,42 @@ function _isXReaction(value) {
   return !newsSummary.test(text) || reactionSignal.test(text);
 }
 
-async function fromX(topic) {
+async function _xSearch(query, label) {
+  const res = await fetch(
+    'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
+    new URLSearchParams({ query, queryType: 'Top' }),
+    { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) }
+  );
+  if (!res.ok) { console.warn(`  [comments/x] ${label} ${res.status}`); return []; }
+  const data = await res.json();
+  return (data?.data?.tweets || data?.tweets || []).map(t => t.text || t.full_text || '');
+}
+
+async function fromX(topic, enQuery = '') {
   if (!X_API_KEY) { console.log('  [comments/x] API key なし'); return []; }
 
   try {
     const jaQ = topic.slice(0, 60) + ' lang:ja -is:retweet';
-    console.log(`  [comments/x] 検索: "${jaQ}"`);
-    const res = await fetch(
-      'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
-      new URLSearchParams({ query: jaQ, queryType: 'Top' }),
-      { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) }
-    );
-    if (!res.ok) { console.warn(`  [comments/x] ${res.status}`); return []; }
+    // 英語クエリ: enQuery があればそれ、なければ日本語トピックを英語化
+    const enTerm = (enQuery || _toEnglishQuery(topic)).slice(0, 80);
+    const enQ = enTerm ? enTerm + ' lang:en -is:retweet' : '';
 
-    const data = await res.json();
-    const tweets = data?.data?.tweets || data?.tweets || [];
-    const reactions = tweets
-      .map(t => t.text || t.full_text || '')
-      .filter(_isXReaction);
+    console.log(`  [comments/x] 日本語: "${jaQ}"`);
+    if (enQ) console.log(`  [comments/x] 英語:   "${enQ}"`);
 
-    const unique = _unique(reactions, 15);
-    console.log(`  [comments/x] → ${unique.length} comments`);
-    return unique.map(text => ({ text, source: 'x' }));
+    const [jaRaw, enRaw] = await Promise.all([
+      _xSearch(jaQ, 'ja').catch(() => []),
+      enQ ? _xSearch(enQ, 'en').catch(() => []) : Promise.resolve([]),
+    ]);
+
+    const jaReactions = _unique(jaRaw.filter(_isXReaction), 12);
+    const enReactions = _unique(enRaw.filter(_isXReaction), 8);
+
+    console.log(`  [comments/x] → ja:${jaReactions.length} en:${enReactions.length}`);
+    return [
+      ...jaReactions.map(text => ({ text, source: 'x' })),
+      ...enReactions.map(text => ({ text, source: 'x', lang: 'en' })),
+    ];
   } catch (e) {
     console.warn(`  [comments/x] 失敗: ${e.message}`);
     return [];
@@ -258,12 +285,17 @@ async function collectComments(topic, options = {}) {
   console.log(`\n  === Comments: Collecting reactions ===`);
   console.log(`  Topic: ${topic}\n`);
 
-  const enQuery = options.enQuery || '';
+  const { enQuery = '', yahooUrls = [], redditUrls = [], xTweets = null } = options;
+
+  // X tweets は research.js で取得済みなら再利用、なければここで取得（英語クエリも渡す）
+  const xPromise = xTweets !== null
+    ? Promise.resolve(xTweets)
+    : fromX(topic, enQuery);
 
   const [reddit, yahoo, x] = await Promise.all([
-    fromReddit(topic, enQuery),
-    fromYahoo(topic),
-    fromX(topic),
+    fromReddit(topic, enQuery, { redditUrls }),
+    fromYahoo(topic, { yahooUrls }),
+    xPromise,
   ]);
 
   const all = [...reddit, ...yahoo, ...x];

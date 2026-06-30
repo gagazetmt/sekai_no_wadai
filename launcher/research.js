@@ -6,7 +6,8 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const { fetchFotMobMatch }   = require('./fetchers/fotmob_match');
 const { fetchFotMobPlayer }  = require('./fetchers/fotmob_player');
-const { collectComments }    = require('./fetchers/comments');
+const { collectComments, fromX } = require('./fetchers/comments');
+const { enrichLabels, isDbLoaded, getSquadForTeam } = require('./player_db');
 
 // ── Webスクレイプ（curl-cffi経由） ────────────────────
 
@@ -40,32 +41,50 @@ async function scrapeUrl(url) {
   }
 }
 
-// ── Brave Search で記事収集 ───────────────────────────
+// ── Publisher 重複排除ヘルパー ────────────────────────────
+// NBC系列局など同一親メディアの記事が複数来るのを防ぐ
 
-async function braveDeepSearch(query, count = 5) {
+function _getPublisher(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    if (/^nbc/.test(host))  return 'nbc';
+    if (/^abc/.test(host))  return 'abc';
+    if (/^cbs/.test(host))  return 'cbs';
+    if (/^fox/.test(host))  return 'fox';
+    if (/^sky/.test(host))  return 'sky';
+    return host.split('.').slice(-2).join('.');
+  } catch (_) { return url; }
+}
+
+// ── Brave Search でスニペット収集（Yahoo/Reddit枠保証） ──
+// 3並列: 汎用web(publisher重複排除7枠) + Yahoo日本語(2枠) + Reddit(1枠)
+
+async function braveDeepSearch(query, topicJa = '') {
   const { braveSearch } = require('./scout');
-  const results = await braveSearch(query, count);
-  const texts = [];
-  const seenDomains = new Set();
 
-  for (const r of results) {
-    if (texts.length >= 3) break;
-    // 同一ドメインの記事を除外
-    try {
-      const domain = new URL(r.url).hostname.replace(/^www\./, '');
-      if (seenDomains.has(domain)) continue;
-      seenDomains.add(domain);
-    } catch (_) {}
+  const [webRaw, yahooRaw, redditRaw] = await Promise.all([
+    braveSearch(query, 20),
+    topicJa ? braveSearch(`site:news.yahoo.co.jp ${topicJa}`, 3) : Promise.resolve([]),
+    braveSearch(`site:reddit.com/r/soccer "Match Thread" OR "Post Match" ${query}`, 3),
+  ]);
 
-    try {
-      const text = await scrapeUrl(r.url);
-      texts.push({ url: r.url, title: r.title, text, thumbnail: r.thumbnail || null });
-    } catch (err) {
-      texts.push({ url: r.url, title: r.title, text: r.snippet || '', thumbnail: r.thumbnail || null });
-    }
+  // Web: yahoo/reddit/x を除外してpublisher単位で重複排除
+  const seenPub = new Set();
+  const webSlots = [];
+  for (const r of webRaw) {
+    if (/yahoo\.co\.jp|reddit\.com|twitter\.com|x\.com/.test(r.url)) continue;
+    const pub = _getPublisher(r.url);
+    if (seenPub.has(pub)) continue;
+    seenPub.add(pub);
+    webSlots.push({ url: r.url, title: r.title, text: r.snippet || '', thumbnail: r.thumbnail || null, sourceType: 'web' });
+    if (webSlots.length >= 7) break;
   }
 
-  return texts;
+  const yahooSlots  = yahooRaw.slice(0, 2).map(r => ({ url: r.url, title: r.title, text: r.snippet || '', thumbnail: r.thumbnail || null, sourceType: 'yahoo' }));
+  const redditSlots = redditRaw.slice(0, 1).map(r => ({ url: r.url, title: r.title, text: r.snippet || '', thumbnail: r.thumbnail || null, sourceType: 'reddit' }));
+
+  console.log(`  [articles] web:${webSlots.length} yahoo:${yahooSlots.length} reddit:${redditSlots.length}`);
+  return [...yahooSlots, ...redditSlots, ...webSlots].slice(0, 10);
 }
 
 // ── 試合データ取得（FotMob → SofaScore） ─────────────
@@ -163,6 +182,34 @@ async function deepseekExtractInfo(topic, articles) {
     ? articles.map((a, i) => `[${i + 1}] ${a.title}\n${(a.text || a.snippet || '').slice(0, 600)}`).join('\n\n')
     : '（記事なし）';
 
+  // player_db からスクワッド文脈を生成（チーム名をトピック・記事タイトルから推定）
+  let squadContext = '';
+  if (isDbLoaded()) {
+    const allText = topic + ' ' + articles.map(a => a.title || '').join(' ');
+    // 代表チーム名リスト（よく登場するもの優先）
+    const NT_LIST = [
+      'Japan','Brazil','Argentina','France','England','Spain','Germany','Portugal',
+      'Netherlands','Italy','Belgium','Croatia','USA','Mexico','Canada','Morocco',
+      'Senegal','Nigeria','South Korea','Australia','Uruguay','Colombia','Ecuador',
+      'Chile','Saudi Arabia','Iran','Qatar','Switzerland','Denmark','Serbia',
+      'Poland','Turkey','Austria','Sweden','Norway','Wales','Scotland',
+      'Ghana','Cameroon','Ivory Coast','Egypt','Algeria','Tunisia','DR Congo',
+      'Peru','Paraguay','Bolivia','Venezuela','Honduras','Costa Rica','Panama',
+      'Iraq','Uzbekistan','Jordan','Georgia','Slovakia',
+    ];
+    const found = NT_LIST.filter(n => new RegExp(n, 'i').test(allText)).slice(0, 3);
+    if (found.length) {
+      const lines = found.map(team => {
+        const { players, manager } = getSquadForTeam(team, 15);
+        const parts = [];
+        if (manager) parts.push(`監督:${manager}`);
+        if (players.length) parts.push(players.join(', '));
+        return `${team}: ${parts.join(' / ')}`;
+      });
+      squadContext = '\n\n【player_db スクワッド参照（ラベル選定の参考に）】\n' + lines.join('\n') + '\n※ 所属クラブはDBで後処理補正するため team フィールドは知識から記入してよい';
+    }
+  }
+
   const sys = `あなたはサッカーニュース分析AIです。
 記事を読んで、動画制作に必要な情報をJSONで返してください。
 
@@ -175,24 +222,31 @@ async function deepseekExtractInfo(topic, articles) {
   "playerName": "英語フルネーム or null",
   "competition": "大会名 or null",
   "labels": [
-    { "type": "match", "homeTeam": "Japan", "awayTeam": "Sweden", "matchDate": "2026-06-XX", "competition": "FIFA World Cup 2026" },
-    { "type": "team",   "name": "Japan" },
-    { "type": "team",   "name": "Sweden" },
-    { "type": "player", "name": "Kaoru Mitoma", "team": "Brighton", "nationalTeam": "Japan" }
+    { "type": "match",   "homeTeam": "Japan", "awayTeam": "Brazil", "matchDate": "2026-06-30", "competition": "FIFA World Cup 2026" },
+    { "type": "team",    "name": "Japan" },
+    { "type": "team",    "name": "Brazil" },
+    { "type": "player",  "name": "Kaoru Mitoma",    "team": "Brighton",    "nationalTeam": "Japan" },
+    { "type": "player",  "name": "Vinicius Junior",  "team": "Real Madrid", "nationalTeam": "Brazil" },
+    { "type": "manager", "name": "Hajime Moriyasu",  "nationalTeam": "Japan" },
+    { "type": "manager", "name": "Carlo Ancelotti",  "nationalTeam": "Brazil" }
   ]
 }
 
 【labelsルール】
-- 3〜5個。記事の核心にある「チーム」「選手」「試合」を抽出する
-- topicTypeが"match"なら必ず type:"match" のラベルを含める
-- type:"team" のname は英語チーム名（FotMob/X検索に使う）
-- type:"player" は選手名(英語)・所属クラブ(team,英語)・代表チーム(nationalTeam,英語 or null)
-- type:"match" は homeTeam/awayTeam 両方必須（片方不明でも null で含める）
+- 5〜10個を目安に抽出する
+- topicTypeが"match"なら必ず type:"match" ラベルを含める
+- type:"team" は英語チーム名（"Japan", "Brazil" 等）
+- type:"player" は記事に登場する選手。名前(英語)・所属クラブ(team,英語)・代表(nationalTeam,英語 or null)
+  - 記事に名前が出ていなくても、試合・移籍のトピックなら主力選手を知識から補完してよい
+- type:"manager" は監督。名前(英語)・代表チームまたはクラブ(nationalTeam,英語)
+  - 記事に監督名が出ていなくても、チームが特定できれば現監督を知識から補完してよい
+- type:"match" は homeTeam/awayTeam 両方必須
 
 【重要】
-- チーム名は必ず英語変換（「日本」→"Japan"、「スウェーデン」→"Sweden"）
+- 名前は必ず英語（「中村敬斗」→"Keito Nakamura"、「上田綺世」→"Ayase Ueda"、「森保一」→"Hajime Moriyasu"）
+- チーム名も英語（「日本」→"Japan"）
 - matchDate は記事に明記された日付のみ。推測しない
-- JSONのみ返す。説明文不要`;
+- JSONのみ返す。説明文不要` + squadContext;
 
   try {
     const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -225,8 +279,7 @@ async function research(topic, options = {}) {
 
   const facts = { topic, articles: [], matchData: null, playerData: null, comments: null, extracted: null, xImages: [] };
 
-  // Step1: 記事収集
-  // analyzeTopic が生成した英語クエリを優先。なければトピック名を短く切る
+  // Step1: 記事収集 + X tweets を並列取得
   const searchQuery = options.searchQuery || topic
     .replace(/（[^）]*）/g, '')
     .replace(/\s*[-－]\s*Yahoo.*$/i, '')
@@ -235,10 +288,27 @@ async function research(topic, options = {}) {
     .trim()
     .slice(0, 60);
   console.log(`  [articles] query: "${searchQuery}"`);
+
+  let xTweets = [];
   try {
-    const articles = await braveDeepSearch(searchQuery, 5);
-    facts.articles = articles;
-    console.log(`  [articles] ${articles.length} articles scraped`);
+    // BraveDeepSearch と X tweets を並列実行
+    const [braveArticles, xResults] = await Promise.all([
+      braveDeepSearch(searchQuery, topic),
+      fromX(topic, searchQuery).catch(() => []),
+    ]);
+    xTweets = xResults;
+
+    // X top tweet をスニペット枠に追加（最大1件）
+    const xSnippet = xTweets.slice(0, 1).map(t => ({
+      url: `https://x.com/search?q=${encodeURIComponent(topic)}`,
+      title: 'X: ' + t.text.slice(0, 60),
+      text: t.text,
+      thumbnail: null,
+      sourceType: 'x',
+    }));
+
+    facts.articles = [...braveArticles, ...xSnippet].slice(0, 10);
+    console.log(`  [articles] ${facts.articles.length} snippets (web/yahoo/reddit + x:${xSnippet.length})`);
   } catch (err) {
     console.warn(`  [articles] failed: ${err.message}`);
   }
@@ -247,15 +317,27 @@ async function research(topic, options = {}) {
   console.log('  [extract] Analyzing with DeepSeek...');
   const extracted = await deepseekExtractInfo(topic, facts.articles);
   if (extracted) {
+    // player_db.json でクラブ・代表情報を補正（DeepSeekのカットオフ誤情報対策）
+    if (isDbLoaded() && Array.isArray(extracted.labels)) {
+      extracted.labels = enrichLabels(extracted.labels);
+      console.log('  [extract] player_db 補正済み');
+    }
     facts.extracted = extracted;
     console.log(`  [extract] type:${extracted.topicType} home:${extracted.homeTeam} away:${extracted.awayTeam} date:${extracted.matchDate} player:${extracted.playerName}`);
   } else {
     console.warn('  [extract] DeepSeek failed');
   }
 
-  // Step3: コメント収集
+  // Step3: コメント収集（Yahoo/Reddit URLを渡して再検索を省略、X tweetsも再利用）
   try {
-    const commentResult = await collectComments(topic, { enQuery: options.searchQuery || '' });
+    const yahooUrls   = facts.articles.filter(a => a.sourceType === 'yahoo').map(a => a.url);
+    const redditUrls  = facts.articles.filter(a => a.sourceType === 'reddit').map(a => a.url);
+    const commentResult = await collectComments(topic, {
+      enQuery: searchQuery,
+      yahooUrls,
+      redditUrls,
+      xTweets,
+    });
     facts.comments = commentResult;
     console.log(`  [comments] ${commentResult.all.length} total`);
   } catch (err) {
