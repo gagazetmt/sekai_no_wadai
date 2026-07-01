@@ -13,14 +13,17 @@
 ```
 Step 1: 案件取得（Scout）
   ↓ 自動
-Step 2: 記事・データ・画像取得（Research）
+Step 2: 情報収集（Research）— 記事・コメント・データ・画像取得
+  ↓ ユーザーが「企画書へ」押す
+Step 3: 企画書 ← ★ ここで一時停止。DeepSeekが叩き台 → ユーザー編集
+  ↓ ユーザーが「この企画書で脚本生成」押す
+Step 4: 脚本・編集 — 脚本生成 → スライドエディタ → レンダリング
   ↓ 自動
-Step 3: 企画ピース生成 ← ★ ここで一時停止。編集可能
-  ↓ ユーザーが「レンダリング開始」を押す
-Step 4: 脚本生成 → レンダリング（6サブステップ）
-  ↓ 自動
-Step 5: サムネ＋投稿メタデータ（未実装・placeholder）
+Step 5: レンダリング完了 — サムネ＋投稿メタデータ
 ```
+
+> **廃止**: 旧 Step 3「企画ピース（viewpoints.js / phasePlan）」は 2026-07-02 に削除。  
+> `pipeline.js` の `phasePlan` import / `viewpoints.js` は未使用のまま残置（破壊的削除は見送り）。
 
 ---
 
@@ -83,11 +86,12 @@ launcher/
   1. `analyzeTopic()` — DeepSeek でトピック→**3〜4語の英語キーワード**（searchQuery）生成
   2. `braveDeepSearch()` — searchQuery で Brave 検索（**freshness:pw = 過去1週間**）、最大5件スクレイプ
   3. `deepseekExtractInfo()` — 記事からラベル抽出（**記事0件でもトピック名だけで実行**）
-  4. `collectComments()` — Reddit + Yahoo + X コメント収集（並列）
+  4. `collectComments()` — **X のみ**（JP+EN、`fromXReplies`）。Reddit/Yahoo は品質問題で無効化（2026-07-02 固定）
 - **手動（ユーザートリガー）**:
   - 「📊 データ取得」→ `fetch_data` → ラベルのmatch/playerからFotMob/SofaScore取得
   - 「🖼 画像取得」→ `fetch_x_images` → team_x_accounts.json でハンドル解決 → TwitterAPI.io（**25秒タイムアウト**）
-- **出力**: `facts` — `{articles[], comments{reddit,yahoo,x,all}, extracted, labels}`
+- **出力**: `facts` — `{articles[], comments{reddit:[], yahoo:[], x, all}, extracted, labels}`
+  - reddit/yahoo は常に空配列（無効化済み）。コメント実体は `comments.x` / `comments.all`
 - **matchData / playerData は「データ取得」ボタン後に付加される**
 
 #### Step 2 UI ブロック構成（上から順）
@@ -97,16 +101,32 @@ launcher/
 4. データ（取得ボタン → match scoreline / player name+team）
 5. 画像（取得ボタン → 枚数表示）
 
-### Step 3: Plan（企画ピース）
-- **入力**: `facts`
-- **処理**: AI（DeepSeek優先 → Anthropicフォールバック）で論点抽出
-- **出力**: `viewpoints[]` — `{angle, title, keyPoints[], suggestedPattern, priority}`
-- **ダッシュボード**: ここで一時停止。ユーザーが title / pattern を編集可能
+### Step 3: 企画書（Brief）
+
+- **入力**: `topic`, `facts`
+- **処理**: `generateBrief(topic, facts)` — DeepSeekが4スライド分の叩き台を生成
+- **出力**: `brief` オブジェクト
+
+```json
+{
+  "op_title":      "動画タイトル（20〜35文字）",
+  "slide_a_type":  "insight|stats|history|matchcard|comparison",
+  "slide_a_desc":  "スライドAの方向性・内容指示",
+  "slide_b_type":  "insight|stats|...",
+  "slide_b_desc":  "スライドBの方向性",
+  "ed_comment":    "EDオチの方向性",
+  "needs_search":  "追加でBraveSearchが必要なクエリ（不要ならnull）"
+}
+```
+
+- **ダッシュボード**: briefEditorフォームに展開。ユーザーが自由編集後「この企画書で脚本生成→」。
+- **再生成**: 「↻ 再生成」ボタンでDeepSeekに叩き台を再作成させられる。
+- **needs_search**: briefに設定があれば `generateModsAuto` 内でBraveSearchを追加実行してfacts.articlesに補充。
 
 ### Step 4: Render（6サブステップ）
-- **入力**: 選択した viewpoint + facts
+- **入力**: `brief`（企画書・省略可） + `facts`
 - **サブステップ**:
-  1. **脚本生成**: `generateMods(patternKey, topic, facts)` → `mods[]`
+  1. **脚本生成**: `generateModsAuto(topic, facts, brief?)` → `mods[4]`（ワンショット4スライド）
   2. **画像取得**: `resolveAllImages(mods, facts)` → X API で選手/チーム画像（insight スライドにも siBinding 設定）
   3. **ナレーション**: AI テキスト生成 → TTS → `.wav`（下記TTS仕様参照）
   4. **字幕生成**: Whisper API → word timestamps → `subtitleChunks[]`
@@ -118,6 +138,31 @@ launcher/
 - **サムネイル生成**: Puppeteer 1280x720 JPEG（badge + タイトル + bgImage）
 - **投稿メタ生成**: DeepSeek → title / description / tags
 - **ダッシュボード Sub タブ**: 動画プレビュー / 投稿メタ編集 / サムネ編集（再生成ボタンあり）
+
+---
+
+## script_gen.js — 主要関数
+
+| 関数 | 役割 |
+|------|------|
+| `generateBrief(topic, facts)` | Step3: DeepSeekで企画書叩き台を生成 |
+| `generateModsAuto(topic, facts, brief?)` | Step4: ワンショットで4スライドmods生成。briefがあれば遵守。needs_search時はBraveSearch追加。`max_tokens:8000` |
+| `generateMods(patternKey, topic, facts)` | 旧パターン指定型（企画ピース用。現在は未使用） |
+| `generateModsForPieces(viewpoints, facts)` | 旧企画ピース連携型（未使用） |
+| `_sonnetFactCheck(mods, facts)` | 脚本生成後: `claude-haiku-4-5-20251001` でナレーション内の選手名・数値・日付の誤りを検出＆修正。ANTHROPIC_API_KEYなしは自動スキップ |
+| `injectRealMatchData(mods, pattern, facts)` | matchcardに実trials.matchData（ロゴ・フォメ・選手写真）を再注入 |
+| `injectRealComments(mods, pattern, facts, topic)` | facts.comments.allから実コメントを注入。英語コメントはDeepSeekで一括翻訳 |
+
+### matchcard 選定ルール（プロンプト制約）
+記事に複数試合が出てきた場合、**トピックが直接言及している最重要試合（最新またはこれから）を選ぶ**。予選・関係のない試合は選ばない。例：「クロップ監督就任」ならW杯本番戦を選ぶ（予選のエクアドル戦ではない）。
+
+---
+
+## 画像ギャラリー（Step 4右カラム）
+
+- `collectGalleryImages(facts)` で X公式/選手/ロゴ/記事サムネを `{url, label, group}` で集約
+- Step4 右カラムの「取得」ボタン → `get_gallery_images` WSアクション → ギャラリー更新
+- **外部URL直接追加**: ギャラリー下部のURL入力欄から `add_external_image` WSアクション → `facts.xImages` にマージしてギャラリー即時更新（`manual:true` フラグ付き）
 
 ---
 
@@ -425,3 +470,49 @@ TAIL_PAD_SEC=0.3
 - ダッシュボード: **3456**（`node launcher/dashboard.js`）。MiniMaxテスター: **3457**（`node launcher/minimax_tester.js`）。両方 `0.0.0.0` listen → **Tailscale `http://100.115.224.x:ポート`** で別端末から可（このPCのTS IP = 100.115.192.114）。
 - index.html は `Cache-Control: no-cache` 付きで配信（スマホSafariの旧HTMLキャッシュ対策）→ index.html 変更は再起動不要。**dashboard.js 変更時のみ再起動**。
 - セッション独立で常駐させるには PowerShell `Start-Process node ... -WindowStyle Hidden`（Claudeのバックグラウンド実行はセッション終了で落ちるため）。
+- **VPS上の管理**: `pm2 restart v5-launcher`（PM2 id:8）。手動 `kill -9 <PID>` でもポートが空かないことがある → `pm2 restart` を使うこと。
+
+---
+
+## 改修ログ（2026-07-02：企画書工程新設 / Sonnet監修 / コメントX絞り / 外部画像URL）
+
+### Step 3 廃止 → 企画書に置換
+
+旧「企画ピース」（viewpoints.js / AI論点6件 → ユーザー選択1〜2件）を廃止。代わりに**企画書**（brief）フローを新設。
+
+- `generateBrief(topic, facts)`: DeepSeekが {op_title, slide_a/b_type, slide_a/b_desc, ed_comment, needs_search} を返す
+- dashboard `generate_brief` WS action → `brief_ready` broadcast → briefEditorフォームに展開
+- ユーザー編集後 `save_brief` → `generate_script` が brief を `generateModsAuto` に渡す
+- `needs_search` フィールドがある場合、`generateModsAuto` 内でBraveSearchを実行して articles を補充してから生成
+
+### Sonnet（Haiku）ハルシネーション監修
+
+- `_sonnetFactCheck(mods, facts)`: `claude-haiku-4-5-20251001` で各スライドのnarrationを検証
+- チェック対象: 選手名・スコア・数値・「なお〜」補足文・日付・記録
+- レスポンス: `{"corrections":[{"i":スライドIndex,"from":"元テキスト","to":"修正後","why":"理由"}]}`
+- ANTHROPIC_API_KEY なしは自動スキップ（エラーにならない）
+- `generateModsAuto` の最後に呼ばれる
+
+### コメント収集 — X のみに絞り込み（確定）
+
+`fetchers/comments.js` の `collectComments` を簡略化:
+```javascript
+const xReplies = await fromXReplies(topic, { phase, enQuery });
+return { reddit: [], yahoo: [], x: xReplies, all: xReplies, ... };
+```
+Yahoo の `li p` セレクターが記事関連リンクを広く拾っていた問題、Reddit が日本語コンテンツに合わない問題を解消。Xリプライのみで品質が向上（2026-07-02 確認済み・固定方針）。
+
+### 外部画像URL追加（gallery）
+
+Step4 右カラムの画像ギャラリー下部にURL入力欄を追加。
+- WS `add_external_image` → `facts.xImages` に `{url, source:'外部追加', manual:true}` でマージ
+- `collectGalleryImages` が即時ピックアップ → gallery_images broadcast
+
+### script_gen — max_tokens 4000→8000
+
+4スライド分のmods JSON生成がDeepSeekの4000トークン上限に当たって途中で切れる問題（`mods 不足: 0枚` エラー）を修正。DeepSeek/OpenAI両方で 8000 に引き上げ。
+
+### matchcard選定プロンプト制約追加
+
+記事に複数試合が出ても予選・旧試合を拾わないよう `generateMods` system promptに制約を追記:
+「トピックが直接言及している・最も最近（またはこれから）の試合を選ぶ。過去の予選・関係のない試合を拾うな」
