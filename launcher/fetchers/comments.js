@@ -258,16 +258,48 @@ async function _xSearch(query, label) {
 // サッカーニュースアカウントのリプライ欄から反応コメントを収集
 const SOCCER_NEWS_ACCOUNTS = ['goal_jp', 'soccerdigestweb', 'gekisaka', 'jfa_samuraiblue', 'footballchannel'];
 
-async function fromXReplies(topic, { phase = 'post' } = {}) {
+// GPT-4o-mini でツイートがトピックに関連するか一括判定
+async function _filterByAI(candidates, topic) {
+  const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
+  if (!OPENAI_KEY || !candidates.length) return candidates;
+
+  const list = candidates.map((t, i) => `[${i}] ${t.text.slice(0, 120)}`).join('\n');
+  const prompt = `以下のツイートのうち、「${topic}」に関する内容のツイートの番号を配列で返してください。JSON配列のみ返答。例: [0,2]\n\n${list}`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${OPENAI_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 50,
+        temperature: 0,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return candidates;
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || '[]';
+    const indices = JSON.parse(text);
+    if (!Array.isArray(indices) || !indices.length) return [];
+    return indices.map(i => candidates[i]).filter(Boolean);
+  } catch {
+    return candidates;
+  }
+}
+
+async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
   if (!X_API_KEY) { console.log('  [comments/xr] API key なし'); return []; }
 
   try {
-    // Step1: サッカーニュースアカウントのツイートを検索
+    // Step1: JP + EN キーワードでアカウントツイートを検索
     const accountFilter = SOCCER_NEWS_ACCOUNTS.map(a => `from:${a}`).join(' OR ');
-    // フルタイトルではなくカタカナ固有名詞だけをAPIに渡す（APIはフルタイトルをAND解釈しない）
-    const kwsForQuery = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
-    const kwQuery = kwsForQuery.length ? kwsForQuery.join(' ') : topic.slice(0, 20);
-    const q = `(${accountFilter}) ${kwQuery} lang:ja -is:retweet`;
+    const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
+    const enKws = enQuery ? enQuery.split(/\s+/).filter(w => /^[A-Za-z]/.test(w)).slice(0, 2) : [];
+    const allKws = [...jpKws, ...enKws];
+    const kwQuery = allKws.length ? allKws.join(' OR ') : topic.slice(0, 20);
+    const q = `(${accountFilter}) (${kwQuery}) -is:retweet`;
     console.log(`  [comments/xr] アカウント検索: "${q}"`);
 
     const accountTweets = await _xSearchRaw(q, 'account_search');
@@ -276,24 +308,21 @@ async function fromXReplies(topic, { phase = 'post' } = {}) {
       return [];
     }
 
-    // エンゲージメントスコアでソート
-    const topicKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])];
+    // エンゲージメントスコアでソート → AI判定 → top2
     const scored = accountTweets.map(t => ({
       id: t.id || t.tweet_id || t.id_str,
       text: t.text || t.full_text || '',
       score: (t.replyCount || t.reply_count || 0) * 3 + (t.likeCount || t.like_count || t.favorite_count || 0),
     })).filter(t => t.id);
-
     scored.sort((a, b) => b.score - a.score);
 
-    // ソースツイートの本文がトピックキーワードを含むものだけ選択
-    const matched = topicKws.length
-      ? scored.filter(t => topicKws.some(kw => t.text.includes(kw)))
-      : scored;
-    const pool = matched.length ? matched : scored;
+    // AI判定（上位10件に絞ってコスト抑制）
+    const candidates = scored.slice(0, 10);
+    console.log(`  [comments/xr] AI判定中... 候補${candidates.length}件`);
+    const aiMatched = await _filterByAI(candidates, topic);
+    const pool = aiMatched.length ? aiMatched : scored;
     const top2 = pool.slice(0, 2);
-    console.log(`  [comments/xr] 候補: ${scored.length}件 / kw一致: ${matched.length}件 / kws: [${topicKws.join(', ')}]`);
-    console.log(`  [comments/xr] top2 tweets:\n${top2.map(t => `    - ${t.text.slice(0, 60)}... (score:${t.score})`).join('\n')}`);
+    console.log(`  [comments/xr] AI一致: ${aiMatched.length}件 → top2:\n${top2.map(t => `    - ${t.text.slice(0, 60)}... (score:${t.score})`).join('\n')}`);
 
     // Step2: 各ツイートのリプライを並列取得
     const replyArrays = await Promise.all(top2.map(async t => {
@@ -404,7 +433,7 @@ async function collectComments(topic, options = {}) {
   const [reddit, yahoo, xReplies] = await Promise.all([
     fromReddit(topic, enQuery, { redditUrls }),
     fromYahoo(topic, { yahooUrls, phase }),
-    fromXReplies(topic, { phase }),
+    fromXReplies(topic, { phase, enQuery }),
   ]);
 
   const all = [...reddit, ...yahoo, ...xReplies];
