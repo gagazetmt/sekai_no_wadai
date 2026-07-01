@@ -239,10 +239,10 @@ function _isXReaction(value) {
   return !newsSummary.test(text) || reactionSignal.test(text);
 }
 
-async function _xSearchRaw(query, label) {
+async function _xSearchRaw(query, label, queryType = 'Top') {
   const res = await fetch(
     'https://api.twitterapi.io/twitter/tweet/advanced_search?' +
-    new URLSearchParams({ query, queryType: 'Top' }),
+    new URLSearchParams({ query, queryType }),
     { headers: { 'X-API-Key': X_API_KEY }, signal: AbortSignal.timeout(12000) }
   );
   if (!res.ok) { console.warn(`  [comments/x] ${label} ${res.status}`); return []; }
@@ -304,7 +304,18 @@ async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
     const q = `(${kwQuery}) -is:retweet lang:ja`;
     console.log(`  [comments/xr] 検索: "${q}"`);
 
-    const rawTweets = await _xSearchRaw(q, 'topic_search');
+    // Top + Latest 両方取得してマージ（カバー範囲拡大）
+    const [topTweets, latestTweets] = await Promise.all([
+      _xSearchRaw(q, 'topic_top', 'Top'),
+      _xSearchRaw(q, 'topic_latest', 'Latest'),
+    ]);
+    const seenIds = new Set();
+    const rawTweets = [...topTweets, ...latestTweets].filter(t => {
+      const id = t.id || t.tweet_id || t.id_str;
+      if (!id || seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
     if (!rawTweets.length) {
       console.log('  [comments/xr] ツイートなし');
       return [];
@@ -324,13 +335,17 @@ async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
       .filter(t => t.id)
       .sort((a, b) => b.replyCount - a.replyCount);
 
-    console.log(`  [comments/xr] 全件:${rawTweets.length} / 信頼済み:${trusted.length}件`);
+    console.log(`  [comments/xr] 全件:${rawTweets.length}(top+latest) / 信頼済み:${trusted.length}件`);
 
     // AI判定（上位10件に絞ってコスト抑制）
+    // AI一致0件でも trusted にフォールバックしない（無関係スレッド混入防止）
     const candidates = trusted.slice(0, 10);
     const aiMatched = await _filterByAI(candidates, topic);
-    const pool = aiMatched.length ? aiMatched : trusted;
-    const top2 = pool.slice(0, 2);
+    if (!aiMatched.length) {
+      console.log('  [comments/xr] AI一致なし → x_reply スキップ');
+      return [];
+    }
+    const top2 = aiMatched.slice(0, 2);
     console.log(`  [comments/xr] AI一致:${aiMatched.length}件 → top2:\n${top2.map(t => `    - [@${t.author} ${t.followers.toLocaleString()}F] ${t.text.slice(0, 50)}... (replies:${t.replyCount})`).join('\n')}`);
 
     // Step2: 各ツイートのリプライを並列取得
