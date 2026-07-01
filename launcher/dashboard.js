@@ -10,11 +10,11 @@ const { EventEmitter } = require('events');
 const WebSocket = require('ws');
 const {
   STEPS, RENDER_SUB_STEPS,
-  phaseScout, phaseResearch, phasePlan, phaseRender, phaseMeta,
+  phaseScout, phaseResearch, phaseRender, phaseMeta,
 } = require('./pipeline');
 const { listPatterns } = require('./slide_patterns');
 const { scoutWithAI, callDeepSeek } = require('./scout');
-const { generateMods, generateModsForPieces } = require('./script_gen');
+const { generateModsAuto, generateBrief } = require('./script_gen');
 const { generateThumbnail } = require('./thumbnail');
 
 // プレビュー用: 実レンダリングと同じスライドビルダー
@@ -78,7 +78,7 @@ function saveTopicData() {
     slim[k] = {
       summary: v.summary,
       factsForClient: v.factsForClient,
-      viewpoints: v.viewpoints || null,
+      brief: v.brief || null,
       mods: v.mods || null,
       renderResult: v.renderResult || null,
     };
@@ -147,7 +147,7 @@ const server = http.createServer((req, res) => {
         const puppeteer = require('puppeteer-core');
         const browser = await puppeteer.launch({
           headless: true,
-          executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
           args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
         });
         try {
@@ -235,7 +235,7 @@ let session = {
   factsCache: {},
   activeTopic: _savedMeta.activeTopic,
   facts: null,
-  viewpoints: null,
+  brief: null,
   renderResult: null,
 };
 
@@ -245,7 +245,7 @@ function resetSession() {
     savedTopics: session.savedTopics,
     topicData: session.topicData,
     factsCache: session.factsCache,
-    activeTopic: null, facts: null, viewpoints: null, renderResult: null,
+    activeTopic: null, facts: null, brief: null, renderResult: null,
   };
 }
 
@@ -281,7 +281,10 @@ async function runScout() {
   broadcast({ type: 'phase', phase: 'scouting' });
 
   try {
-    const topics = await scoutWithAI();
+    const timeout = new Promise((_, rej) =>
+      setTimeout(() => rej(new Error('Scout timeout (90s)')), 90000)
+    );
+    const topics = await Promise.race([scoutWithAI(), timeout]);
     session.topics = topics;
     session.phase = 'topics_ready';
     broadcast({ type: 'topics_ready', topics });
@@ -305,7 +308,7 @@ JSON形式:
   "homeTeam": "Japan" or null,
   "awayTeam": "Sweden" or null,
   "playerName": "Lionel Messi" or null,
-  "searchQuery": "3〜4語の検索キーワード（英語。例: Vinicius VAR Brazil protest）",
+  "searchQuery": "英語3〜5語。固有名詞（選手名・チーム名）＋イベントワード1語で構成。冠詞・前置詞を省く。例: Mbappe France World Cup final / Vinicius VAR Brazil protest / Mitoma Japan penalty",
   "labels": [
     {"type": "player", "name": "Vinícius Júnior", "team": "Real Madrid", "nationalTeam": "Brazil"},
     {"type": "team", "name": "Brazil"},
@@ -390,7 +393,6 @@ function buildLabels(facts, fallbackLabels = []) {
 async function runResearch(topicTitle) {
   session.activeTopic = topicTitle;
   session.facts = null;
-  session.viewpoints = null;
   session.phase = 'researching';
   interceptConsole();
   broadcast({ type: 'phase', phase: 'researching', topic: topicTitle });
@@ -418,7 +420,7 @@ async function runResearch(topicTitle) {
     const translatedTexts = await translateComments(rawWithSrc.map(c => c.text));
     // 翻訳テキストと元のソースを再合成
     const allComments = rawWithSrc.map((c, i) => ({
-      text: (translatedTexts[i] || c.text).slice(0, 50),
+      text: (translatedTexts[i] || c.text).slice(0, 120),
       source: c.source,
     }));
     const processed = allComments.map(c => c.text);  // 後方互換
@@ -455,115 +457,46 @@ async function runResearch(topicTitle) {
   }
 }
 
-// ── Step 3: Plan ─────────────────────────────────────
+// ── Step 3: Render ───────────────────────────────────
 
-async function runPlan() {
-  if (!session.facts) return;
-  session.phase = 'planning';
-  interceptConsole();
-  broadcast({ type: 'phase', phase: 'planning' });
-
-  try {
-    const viewpoints = await phasePlan(session.facts);
-    session.viewpoints = viewpoints;
-    session.phase = 'plan_ready';
-
-    if (session.activeTopic && session.topicData[session.activeTopic]) {
-      session.topicData[session.activeTopic].viewpoints = viewpoints;
-      saveTopicData();
-    }
-
-    broadcast({ type: 'plan_ready', viewpoints, patterns: listPatterns() });
-  } catch (err) {
-    broadcast({ type: 'error', detail: err.message });
-    session.phase = 'facts_ready';
-  } finally {
-    restoreConsole();
-  }
-}
-
-// ── Step 4: Render ───────────────────────────────────
-
-async function runRender(viewpointIndex, edits, prebuiltMods = null) {
-  if (!session.viewpoints) return;
+async function runRender(prebuiltMods = null) {
   session.phase = 'rendering';
   interceptConsole();
 
-  const vp = { ...session.viewpoints[viewpointIndex || 0] };
-
-  if (edits) {
-    if (edits.title) vp.title = edits.title;
-    if (edits.suggestedPattern) vp.suggestedPattern = edits.suggestedPattern;
-  }
-  const videoTopic = vp.title || session.activeTopic;
-  const patternKey = vp.suggestedPattern || 'match_result';
+  const videoTopic = session.activeTopic;
   session.renderingTopic = videoTopic;
-  session.renderingPatternKey = patternKey;
 
-  broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic, patternKey });
+  broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic });
 
   try {
     if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
-
-    const emitter = new EventEmitter();
-    emitter.on('pipeline', (evt) => broadcast(evt));
-
-    const result = await phaseRender(videoTopic, patternKey, session.facts, emitter, prebuiltMods);
-    session.renderResult = result;
-    const meta = await phaseMeta(result);
-
-    session.phase = 'done';
-    const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
-    const thumbnailUrl = result.thumbnailPath ? `/output/${path.basename(result.outputDir)}/thumbnail.jpg` : null;
-
-    if (session.activeTopic && session.topicData[session.activeTopic]) {
-      session.topicData[session.activeTopic].renderResult = { videoUrl, thumbnailUrl, outputDir: result.outputDir, totalDuration: result.totalDuration, patternKey, topic: videoTopic, meta };
-      session.topicData[session.activeTopic].mods = result.mods;
-      saveTopicData();
-    }
-
-    broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, thumbnailUrl, meta, mods: result.mods });
-  } catch (err) {
-    broadcast({ type: 'error', detail: err.message });
-    session.phase = 'plan_ready';
-  } finally {
-    restoreConsole();
-  }
-}
-
-// pieces_N 用レンダー（prebuiltMods 必須）
-async function runRenderWithMods(patternKey, videoTopic, prebuiltMods) {
-  if (!prebuiltMods || !prebuiltMods.length) {
-    broadcast({ type: 'error', detail: 'mods がありません。先に脚本を生成してください。' });
-    return;
-  }
-  session.phase = 'rendering';
-  session.renderingTopic = videoTopic;
-  session.renderingPatternKey = patternKey;
-  interceptConsole();
-  broadcast({ type: 'phase', phase: 'rendering', topic: videoTopic, patternKey });
-  try {
     if (!session.facts) {
       const td = session.topicData[session.activeTopic];
-      session.facts = session.factsCache[session.activeTopic] || td?.factsForClient || null;
+      if (td?.factsForClient) session.facts = td.factsForClient;
     }
+
     const emitter = new EventEmitter();
     emitter.on('pipeline', (evt) => broadcast(evt));
-    const result = await phaseRender(videoTopic, patternKey, session.facts, emitter, prebuiltMods);
+
+    const result = await phaseRender(videoTopic, session.facts, emitter, prebuiltMods);
     session.renderResult = result;
     const meta = await phaseMeta(result);
+
     session.phase = 'done';
+    const patternKey = result.patternKey || 'pieces_2';
     const videoUrl = `/output/${path.basename(result.outputDir)}/final.mp4`;
     const thumbnailUrl = result.thumbnailPath ? `/output/${path.basename(result.outputDir)}/thumbnail.jpg` : null;
+
     if (session.activeTopic && session.topicData[session.activeTopic]) {
       session.topicData[session.activeTopic].renderResult = { videoUrl, thumbnailUrl, outputDir: result.outputDir, totalDuration: result.totalDuration, patternKey, topic: videoTopic, meta };
       session.topicData[session.activeTopic].mods = result.mods;
       saveTopicData();
     }
+
     broadcast({ type: 'done', topic: videoTopic, patternKey, totalDuration: result.totalDuration, videoUrl, thumbnailUrl, meta, mods: result.mods });
   } catch (err) {
     broadcast({ type: 'error', detail: err.message });
-    session.phase = 'plan_ready';
+    session.phase = 'facts_ready';
   } finally {
     restoreConsole();
   }
@@ -582,11 +515,10 @@ wss.on('connection', (ws) => {
     activeTopic: session.activeTopic,
     activeFacts: activeData ? activeData.factsForClient : null,
     activeSummary: activeData ? activeData.summary : null,
-    activeViewpoints: activeData && activeData.viewpoints ? activeData.viewpoints : null,
+    activeBrief: activeData ? (activeData.brief || null) : null,
     activeRenderResult: activeData && activeData.renderResult ? activeData.renderResult : null,
     activeMods: activeData && activeData.mods ? activeData.mods : null,
     renderingTopic: session.phase === 'rendering' ? session.renderingTopic : null,
-    renderingPatternKey: session.phase === 'rendering' ? session.renderingPatternKey : null,
     patterns: listPatterns(),
     steps: STEPS,
     renderSubSteps: RENDER_SUB_STEPS,
@@ -597,7 +529,7 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw); } catch (_) { return; }
 
     if (msg.action === 'scout') {
-      const scoutOk = ['idle','done','topics_ready','facts_ready','plan_ready','script_ready'];
+      const scoutOk = ['idle','done','topics_ready','facts_ready','script_ready'];
       if (!scoutOk.includes(session.phase)) {
         ws.send(JSON.stringify({ type: 'error', detail: '処理中です' }));
         return;
@@ -635,15 +567,14 @@ wss.on('connection', (ws) => {
       if (cached) {
         session.activeTopic = topic.title;
         session.facts = session.factsCache[topic.title] || null;
-        session.viewpoints = cached.viewpoints || null;
-        session.phase = cached.viewpoints ? 'plan_ready' : 'facts_ready';
+        session.brief = cached.brief || null;
+        session.phase = cached.mods ? 'script_ready' : 'facts_ready';
         // 旧キャッシュに labels がない場合は再構築して保存
         if (!cached.factsForClient.labels) {
           cached.factsForClient.labels = buildLabels(cached.factsForClient);
           saveTopicData();
         }
         broadcast({ type: 'facts_ready', summary: cached.summary, facts: cached.factsForClient, topic: topic.title });
-        if (cached.viewpoints) broadcast({ type: 'plan_ready', viewpoints: cached.viewpoints, patterns: listPatterns() });
         if (cached.renderResult) broadcast({ type: 'done', ...cached.renderResult, mods: cached.mods || null });
         else if (cached.mods) broadcast({ type: 'script_ready', mods: cached.mods, topic: topic.title });
       } else {
@@ -651,44 +582,12 @@ wss.on('connection', (ws) => {
       }
     }
 
-    if (msg.action === 'plan') {
-      if (!session.activeTopic) return;
-      if (!msg.force) {
-        const cached = session.topicData[session.activeTopic];
-        if (cached && cached.viewpoints) {
-          session.viewpoints = cached.viewpoints;
-          session.phase = 'plan_ready';
-          broadcast({ type: 'plan_ready', viewpoints: cached.viewpoints, patterns: listPatterns() });
-          return;
-        }
-      }
-      if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
-      // サーバー再起動後は factsCache が空 → topicData の factsForClient で代替
-      if (!session.facts) {
-        const td = session.topicData[session.activeTopic];
-        if (td?.factsForClient) session.facts = td.factsForClient;
-      }
-      if (!session.facts) {
-        broadcast({ type: 'error', detail: '情報収集データがありません。先に情報収集を実行してください。' });
-        return;
-      }
-      runPlan();
-    }
-
     if (msg.action === 'render') {
       const cachedMods = session.topicData[session.activeTopic]?.mods;
-      const isPieces = msg.patternKey?.startsWith('pieces_') || cachedMods?.some(m => m.type);
-      if (isPieces) {
-        const prebuiltMods = msg.mods || cachedMods;
-        const patternKey   = msg.patternKey || `pieces_${(prebuiltMods?.length || 3) - 2}`;
-        const videoTopic   = msg.topic || session.activeTopic;
-        runRenderWithMods(patternKey, videoTopic, prebuiltMods);
+      if (msg.mods || cachedMods) {
+        runRender(msg.mods || cachedMods);
       } else {
-        if (!session.viewpoints || !session.viewpoints.length) {
-          broadcast({ type: 'error', detail: '企画ピースがありません。先にStep 3を実行してください。' });
-          return;
-        }
-        runRender(msg.viewpointIndex, msg.edits);
+        runRender();
       }
     }
 
@@ -703,39 +602,16 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
         return;
       }
-      // viewpoints も topicData から復元
-      if (!session.viewpoints && session.activeTopic && session.topicData[session.activeTopic]) {
-        session.viewpoints = session.topicData[session.activeTopic].viewpoints || null;
-      }
-      if (!session.viewpoints || !session.viewpoints.length) {
-        ws.send(JSON.stringify({ type: 'error', detail: '企画ピースがありません。先に Step 3 を実行してください。' }));
-        return;
-      }
       interceptConsole();
       broadcast({ type: 'phase', phase: 'generating_script' });
       try {
-        let patternKey, mods, videoTopic;
-
-        if (msg.selectedViewpoints && msg.selectedViewpoints.length) {
-          // 企画ピース選択モード（pieces_1 or pieces_2）
-          const result = await generateModsForPieces(msg.selectedViewpoints, session.facts);
-          patternKey = result.patternKey;
-          mods       = result.mods;
-          videoTopic = msg.selectedViewpoints[0].title || session.activeTopic;
-        } else {
-          // 従来モード（viewpointIndex 指定）
-          const vp = session.viewpoints[msg.viewpointIndex != null ? msg.viewpointIndex : 0];
-          if (!vp) return;
-          videoTopic = (msg.edits && msg.edits.title) || vp.title || session.activeTopic;
-          patternKey = (msg.edits && msg.edits.suggestedPattern) || vp.suggestedPattern || 'match_result';
-          mods = await generateMods(patternKey, videoTopic, session.facts);
-        }
-
+        const result = await generateModsAuto(session.activeTopic, session.facts, session.brief || null);
+        const { mods, patternKey } = result;
         if (session.topicData[session.activeTopic]) {
           session.topicData[session.activeTopic].mods = mods;
           saveTopicData();
         }
-        broadcast({ type: 'script_ready', mods, topic: videoTopic, patternKey });
+        broadcast({ type: 'script_ready', mods, topic: session.activeTopic, patternKey });
       } catch (err) {
         broadcast({ type: 'error', detail: err.message });
       } finally {
@@ -757,18 +633,7 @@ wss.on('connection', (ws) => {
         session.topicData[session.activeTopic].mods = mods;
         saveTopicData();
       }
-      // mods に type が入っていれば pieces フロー
-      if (mods && mods.some(m => m.type)) {
-        const patternKey = `pieces_${(mods.length || 3) - 2}`;
-        const videoTopic = msg.topic || session.activeTopic;
-        runRenderWithMods(patternKey, videoTopic, mods);
-      } else {
-        if (!session.viewpoints || !session.viewpoints.length) {
-          broadcast({ type: 'error', detail: '企画データがありません。Step 3 を先に実行してください。' });
-          return;
-        }
-        runRender(msg.viewpointIndex || 0, msg.edits, mods);
-      }
+      runRender(mods || null);
     }
 
     // ラベルを使ってX公式画像を再取得（Step2から呼ばれる）
@@ -1081,7 +946,16 @@ wss.on('connection', (ws) => {
       }
     }
 
-    // 投稿メタデータ生成
+    if (msg.action === 'search_players') {
+      try {
+        const { searchPlayers } = require('./player_db');
+        const results = searchPlayers(msg.q || '', 12);
+        ws.send(JSON.stringify({ type: 'player_search_results', results }));
+      } catch (_) {
+        ws.send(JSON.stringify({ type: 'player_search_results', results: [] }));
+      }
+    }
+
     if (msg.action === 'generate_meta') {
       const rr = session.renderResult
         || (session.activeTopic && session.topicData[session.activeTopic]?.renderResult)
@@ -1099,11 +973,73 @@ wss.on('connection', (ws) => {
         broadcast({ type: 'meta_error', detail: e.message });
       }
     }
+
+    // ── 企画書生成 ──────────────────────────────────────
+    if (msg.action === 'generate_brief') {
+      if (!session.activeTopic) return;
+      if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
+      if (!session.facts) {
+        const td = session.topicData[session.activeTopic];
+        if (td?.factsForClient) session.facts = td.factsForClient;
+      }
+      if (!session.facts) {
+        ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
+        return;
+      }
+      interceptConsole();
+      broadcast({ type: 'phase', phase: 'generating_brief' });
+      try {
+        const brief = await generateBrief(session.activeTopic, session.facts);
+        session.brief = brief;
+        if (session.topicData[session.activeTopic]) {
+          session.topicData[session.activeTopic].brief = brief;
+          saveTopicData();
+        }
+        broadcast({ type: 'brief_ready', brief, topic: session.activeTopic });
+      } catch (err) {
+        broadcast({ type: 'error', detail: err.message });
+      } finally {
+        restoreConsole();
+      }
+    }
+
+    // ── 企画書保存（ユーザー編集後）──────────────────────
+    if (msg.action === 'save_brief') {
+      if (!session.activeTopic || !msg.brief) return;
+      session.brief = msg.brief;
+      if (session.topicData[session.activeTopic]) {
+        session.topicData[session.activeTopic].brief = msg.brief;
+        saveTopicData();
+      }
+      ws.send(JSON.stringify({ type: 'brief_saved' }));
+    }
+
+    // ── 外部画像URLをギャラリーに追加 ──────────────────
+    if (msg.action === 'add_external_image') {
+      const url = (msg.url || '').trim();
+      if (!url.startsWith('http')) {
+        ws.send(JSON.stringify({ type: 'error', detail: '有効なURLを入力してください (http...)' }));
+        return;
+      }
+      if (!session.facts) session.facts = {};
+      if (!session.facts.xImages) session.facts.xImages = [];
+      const alreadyExists = session.facts.xImages.some(xi => xi.url === url);
+      if (!alreadyExists) {
+        session.facts.xImages.push({ url, source: msg.label || '外部追加', manual: true });
+        if (session.activeTopic && session.topicData[session.activeTopic]) {
+          session.topicData[session.activeTopic].factsForClient.xImagesCount = session.facts.xImages.length;
+          saveTopicData();
+        }
+      }
+      ws.send(JSON.stringify({ type: 'gallery_images', images: collectGalleryImages(session.facts) }));
+    }
   });
 });
 
 // ── 起動 ─────────────────────────────────────────────
 
-server.listen(PORT, () => {
-  console.log(`\n  ⚽ Dashboard: http://localhost:${PORT}\n`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n  ⚽ Dashboard:`);
+  console.log(`    ローカル  : http://localhost:${PORT}`);
+  console.log(`    Tailscale : http://100.115.192.114:${PORT}\n`);
 });

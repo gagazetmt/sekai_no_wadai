@@ -10,6 +10,131 @@ const { PATTERNS, getPattern, validateMods, buildPiecesPattern, CONTENT_SLIDE_RE
 
 const TIMEOUT_MS = 55000;
 
+// ── Sonnet 事実確認 ──────────────────────────────────
+
+async function _sonnetFactCheck(mods, facts) {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) { console.log('  [sonnet] ANTHROPIC_API_KEY なし → スキップ'); return mods; }
+  console.log('  [sonnet] ハルシネーション監修開始...');
+
+  const narrations = mods.map((m, i) =>
+    `[${i}](${m.type}): ${m.narration || ''}`
+  ).join('\n');
+  const factsSnippet = compressFacts(facts).slice(0, 3000);
+
+  const prompt = `以下のサッカーYouTube動画脚本のナレーションを事実確認してください。
+
+【実データ(facts)】
+${factsSnippet}
+
+【確認対象ナレーション】
+${narrations}
+
+チェック項目（優先順）:
+1. 選手名・チーム名の正確性
+2. スコア・得点数・試合数等の数値（factsに根拠があるか）
+3. 「なお〜」「ちなみに〜」の補足文（捏造が最多）
+4. 日付・記録（factsに根拠があるか）
+
+ルール:
+- factsに根拠のない具体的数値は「詳細は不明」等に差し替え
+- 選手名等の固有名詞はfactsの表記に統一
+- 問題なければ空配列
+
+JSON形式のみ返答:
+{"corrections":[{"i":数字,"from":"元の文（部分）","to":"修正後の文（部分）","why":"理由"}]}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!res.ok) { console.warn(`  [sonnet] ${res.status}`); return mods; }
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || '';
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return mods;
+    const { corrections } = JSON.parse(m[0]);
+    if (!corrections?.length) { console.log('  [sonnet] 修正なし'); return mods; }
+    console.log(`  [sonnet] ${corrections.length}件修正`);
+    const fixed = mods.map(mod => ({ ...mod }));
+    for (const c of corrections) {
+      if (c.i >= 0 && c.i < fixed.length && fixed[c.i].narration && c.from && c.to) {
+        fixed[c.i].narration = fixed[c.i].narration.replace(c.from, c.to);
+        console.log(`  [sonnet] slide[${c.i}]: ${c.why}`);
+      }
+    }
+    return fixed;
+  } catch (err) {
+    console.warn(`  [sonnet] 失敗: ${err.message}`);
+    return mods;
+  }
+}
+
+// ── 企画書生成 ────────────────────────────────────────
+
+const CONTENT_TYPES_LIST = ['insight', 'stats', 'history', 'matchcard', 'comparison'];
+
+async function generateBrief(topic, facts) {
+  console.log('\n=== 企画書生成 ===');
+  const compressed = compressFacts(facts);
+
+  const systemPrompt = `あなたはサッカーYouTube動画の企画書を作るディレクターです。
+与えられたトピックと素材から、4スライド動画の企画書を生成してください。
+
+【スライド構成】
+- OP: 動画タイトル（20〜35文字・YouTube向けキャッチーな見出し）
+- スライドA: コンテンツ1枚目（タイプ + 方向性の指示）
+- スライドB: コンテンツ2枚目（タイプ + 方向性の指示）
+- ED: エンディングのオチコメント（意外な事実・逆説・皮肉）
+
+【コンテンツタイプ選択肢】
+- insight: テキスト考察・話題まとめ
+- stats: 選手スタッツ比較
+- history: キャリア・時系列記録
+- matchcard: 試合スコア・データ（スコアデータがある場合のみ）
+- comparison: 2人/2チームの対比
+
+【desc の書き方】
+- 具体的に何を見せるか・何の角度から切るかを30〜60文字で
+- 素材に不足があれば「〜を調べる必要あり」と明記する
+
+JSON形式で返答:
+{
+  "op_title": "タイトル（20〜35文字）",
+  "slide_a_type": "タイプ名",
+  "slide_a_desc": "スライドAの方向性指示（30〜60文字）",
+  "slide_b_type": "タイプ名",
+  "slide_b_desc": "スライドBの方向性指示（30〜60文字）",
+  "ed_comment": "EDのオチコメント（15文字以内）",
+  "needs_search": "追加で調べたい内容（不要なら空文字）"
+}`;
+
+  const result = await callAI(systemPrompt, `トピック: ${topic}\n\n素材:\n${compressed}`);
+
+  // バリデーション
+  if (!result.op_title) result.op_title = topic;
+  if (!CONTENT_TYPES_LIST.includes(result.slide_a_type)) result.slide_a_type = 'insight';
+  if (!CONTENT_TYPES_LIST.includes(result.slide_b_type)) result.slide_b_type = 'stats';
+  if (!result.slide_a_desc) result.slide_a_desc = '';
+  if (!result.slide_b_desc) result.slide_b_desc = '';
+  if (!result.ed_comment) result.ed_comment = '';
+
+  console.log(`  企画書: "${result.op_title}" [${result.slide_a_type}+${result.slide_b_type}]`);
+  if (result.needs_search) console.log(`  追加検索: ${result.needs_search}`);
+  return result;
+}
+
 // ── AI呼び出し ──────────────────────────────────────
 
 async function callAI(systemPrompt, userPrompt) {
@@ -485,8 +610,24 @@ ${selectedViewpoints.map((vp, i) => {
 // タイプ選択 + mod生成を1回のAIコールで完結
 // 返り値: { patternKey, pattern, mods, validation }
 
-async function generateModsAuto(topic, facts) {
+async function generateModsAuto(topic, facts, brief = null) {
   console.log('\n=== Script Gen: 4スライド自動生成 ===');
+
+  // 企画書から追加検索が必要な場合は BraveSearch を走らせる
+  if (brief?.needs_search) {
+    try {
+      const { braveSearch } = require('./scout');
+      console.log(`  [brief] 追加検索: "${brief.needs_search}"`);
+      const extra = await braveSearch(brief.needs_search, 3);
+      if (!facts.articles) facts.articles = [];
+      extra.forEach(r => {
+        if (!facts.articles.some(a => a.url === r.url)) {
+          facts.articles.push({ title: r.title, snippet: r.snippet || r.description || '', url: r.url });
+        }
+      });
+    } catch (err) { console.warn(`  [brief] 追加検索失敗: ${err.message}`); }
+  }
+
   const compressed = compressFacts(facts);
 
   const SLIDE_TYPE_SPEC = {
@@ -527,11 +668,25 @@ ${Object.entries(SLIDE_TYPE_SPEC).map(([t, spec]) => `- ${t}: ${spec}`).join('\n
 
 JSON: {"contentTypes": ["typeA", "typeB"], "mods": [slide0, slide1, slide2, slide3]}`;
 
-  const result = await callAI(systemPrompt, `トピック: ${topic}\n\n素材:\n${compressed}`);
+  // 企画書がある場合はプロンプトに追記して遵守させる
+  const briefSection = brief ? `
+【企画書（必ず遵守）】
+- OP タイトル: 「${brief.op_title}」（このタイトルをそのまま slides[0].title に使用）
+- スライドA (slides[1]): タイプ=${brief.slide_a_type} / 方向性: ${brief.slide_a_desc}
+- スライドB (slides[2]): タイプ=${brief.slide_b_type} / 方向性: ${brief.slide_b_desc}
+- ED オチ (slides[3]): 「${brief.ed_comment}」をベースにnarrationを作成
+contentTypes は必ず ["${brief.slide_a_type}", "${brief.slide_b_type}"] とすること。` : '';
+
+  const result = await callAI(
+    systemPrompt + briefSection,
+    `トピック: ${topic}\n\n素材:\n${compressed}`
+  );
 
   const validTypes = Object.keys(CONTENT_SLIDE_REQUIRED);
-  const contentTypes = (result.contentTypes || [])
-    .filter(t => validTypes.includes(t)).slice(0, 2);
+  // 企画書がある場合はタイプを強制（AIが無視することがあるため）
+  const contentTypes = brief
+    ? [brief.slide_a_type, brief.slide_b_type].filter(t => validTypes.includes(t))
+    : (result.contentTypes || []).filter(t => validTypes.includes(t)).slice(0, 2);
   while (contentTypes.length < 2) contentTypes.push('insight');
 
   console.log(`  コンテンツタイプ: ${contentTypes.join(' + ')}`);
@@ -558,6 +713,10 @@ JSON: {"contentTypes": ["typeA", "typeB"], "mods": [slide0, slide1, slide2, slid
   injectRealMatchData(mods, pattern, facts);
   await injectRealComments(mods, pattern, facts, topic);
 
+  // Sonnet によるハルシネーション監修
+  const checkedMods = await _sonnetFactCheck(mods, facts);
+  const finalMods = checkedMods;
+
   const errors = [];
   pattern.slides.forEach((slot, i) => {
     const mod = mods[i];
@@ -570,7 +729,7 @@ JSON: {"contentTypes": ["typeA", "typeB"], "mods": [slide0, slide1, slide2, slid
   const validation = { valid: errors.length === 0, errors };
   if (!validation.valid) console.warn('  [script_gen] Validation warnings:', validation.errors);
 
-  return { patternKey: 'pieces_2', pattern, mods, validation };
+  return { patternKey: 'pieces_2', pattern, mods: finalMods, validation };
 }
 
-module.exports = { generateModsAuto, generateMods, generateModsForPieces };
+module.exports = { generateModsAuto, generateMods, generateModsForPieces, generateBrief };
