@@ -14,8 +14,7 @@ const fs   = require('fs');
 
 const { scoutWithAI }        = require('./scout');
 const { research, fetchMatch, fetchPlayer } = require('./research');
-const { extractViewpoints }  = require('./viewpoints');
-const { generateScript, generateMods } = require('./script_gen');
+const { generateModsAuto }   = require('./script_gen');
 const { generateNarration }  = require('./narration');
 const { renderAll }          = require('./render');
 const { buildFinalVideo }    = require('./concat');
@@ -27,9 +26,8 @@ const { generateThumbnail }  = require('./thumbnail');
 const STEPS = [
   { id: 'scout',    label: '案件取得',              num: 1 },
   { id: 'research', label: '記事・データ・画像取得', num: 2 },
-  { id: 'plan',     label: '企画ピース生成',         num: 3 },
-  { id: 'render',   label: '脚本生成→レンダリング',  num: 4 },
-  { id: 'meta',     label: 'サムネ＋投稿メタ',       num: 5 },
+  { id: 'render',   label: '脚本生成→レンダリング',  num: 3 },
+  { id: 'meta',     label: 'サムネ＋投稿メタ',       num: 4 },
 ];
 
 const RENDER_SUB_STEPS = [
@@ -111,29 +109,34 @@ async function phaseResearch(topic, options = {}) {
   return { facts, summary };
 }
 
-async function phasePlan(facts) {
-  console.log('── Phase 3: Plan ──');
-  const viewpoints = await extractViewpoints(facts);
-  return viewpoints;
-}
-
-async function phaseRender(topic, patternKey, facts, emitter, prebuiltMods = null) {
-  console.log('── Phase 4: Render ──');
+async function phaseRender(topic, facts, emitter, prebuiltMods = null) {
+  console.log('── Phase 3: Render ──');
   const outputDir = makeOutputDir(topic);
 
   // Sub 1: Script (mods)
-  let mods;
+  let mods, patternKey;
   if (prebuiltMods) {
     mods = prebuiltMods;
-    console.log(`  [4-1] Using prebuilt mods (${mods.length} slides)`);
+    patternKey = 'pieces_2';
+    console.log(`  [3-1] Using prebuilt mods (${mods.length} slides)`);
     _emit(emitter, 'sub_step', { step: 'script', status: 'done', detail: `${mods.length}スライド（編集済み）` });
   } else {
     _emit(emitter, 'sub_step', { step: 'script', status: 'running' });
-    console.log('  [4-1] Script generation...');
-    mods = await generateMods(patternKey, topic, facts);
-    console.log(`  [4-1] → ${mods.length} mods (${patternKey})`);
+    console.log('  [3-1] Script generation...');
+    const scriptResult = await generateModsAuto(topic, facts);
+    mods = scriptResult.mods;
+    patternKey = scriptResult.patternKey;
+    console.log(`  [3-1] → ${mods.length} mods (${mods.slice(1,-1).map(m=>m.type).join('+')})`);
     _emit(emitter, 'sub_step', { step: 'script', status: 'done', detail: `${mods.length}スライド` });
   }
+  // 生コメント全件を保存（デバッグ用）
+  if (facts.comments?.all?.length) {
+    fs.writeFileSync(
+      path.join(outputDir, 'comments_raw.json'),
+      JSON.stringify(facts.comments.all, null, 2)
+    );
+  }
+
   fs.writeFileSync(
     path.join(outputDir, 'script.json'),
     JSON.stringify({ topic, patternKey, mods }, null, 2)
@@ -323,26 +326,12 @@ async function runPipeline(options = {}) {
   const { facts, summary } = await phaseResearch(topic, options);
   _emit(em, 'step', { step: 'research', status: 'done', detail: `記事${summary.articles}件` });
 
-  // Phase 3: Plan
-  _emit(em, 'step', { step: 'plan', status: 'running' });
-  const viewpoints = await phasePlan(facts);
-  if (!viewpoints.length) { console.error('No viewpoints.'); return null; }
-  const vp = viewpoints[0];
-  const videoTopic = vp.title || topic;
-  const { getPattern } = require('./slide_patterns');
-  let patternKey = vp.suggestedPattern || 'match_result';
-  try { getPattern(patternKey); } catch (_) {
-    console.warn(`  [plan] 未知パターン "${patternKey}" → match_result にフォールバック`);
-    patternKey = 'match_result';
-  }
-  _emit(em, 'step', { step: 'plan', status: 'done', detail: vp.angle });
-
-  // Phase 4: Render
+  // Phase 3: Render（脚本生成内包）
   _emit(em, 'step', { step: 'render', status: 'running' });
-  const result = await phaseRender(videoTopic, patternKey, facts, em);
+  const result = await phaseRender(topic, facts, em);
   _emit(em, 'step', { step: 'render', status: 'done', detail: `${result.totalDuration}s` });
 
-  // Phase 5: Meta
+  // Phase 4: Meta
   _emit(em, 'step', { step: 'meta', status: 'running' });
   const meta = await phaseMeta(result);
   _emit(em, 'step', { step: 'meta', status: 'done', detail: 'placeholder' });
@@ -350,7 +339,7 @@ async function runPipeline(options = {}) {
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n  Pipeline Complete: ${totalTime}s / ${result.finalVideo}`);
 
-  const fullResult = { ...result, viewpoints, meta, totalTime: parseFloat(totalTime) };
+  const fullResult = { ...result, meta, totalTime: parseFloat(totalTime) };
   _emit(em, 'done', fullResult);
   return fullResult;
 }
@@ -375,6 +364,6 @@ if (require.main === module) {
 
 module.exports = {
   runPipeline, STEPS, RENDER_SUB_STEPS,
-  phaseScout, phaseResearch, phasePlan, phaseRender, phaseMeta,
+  phaseScout, phaseResearch, phaseRender, phaseMeta,
   makeOutputDir, listPatterns,
 };

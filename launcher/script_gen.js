@@ -6,7 +6,7 @@
 // facts圧縮: 必要フィールドのみ送信
 
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
-const { PATTERNS, getPattern, validateMods, buildPiecesPattern } = require('./slide_patterns');
+const { PATTERNS, getPattern, validateMods, buildPiecesPattern, CONTENT_SLIDE_REQUIRED } = require('./slide_patterns');
 
 const TIMEOUT_MS = 55000;
 
@@ -481,30 +481,96 @@ ${selectedViewpoints.map((vp, i) => {
   return { patternKey, pattern, mods, validation };
 }
 
-// ── メインAPI ─────────────────────────────────────────
+// ── 4スライド自動生成（企画ピース工程なし） ────────────
+// タイプ選択 + mod生成を1回のAIコールで完結
+// 返り値: { patternKey, pattern, mods, validation }
 
-async function generateScript(topic, facts) {
-  console.log(`\n=== Script Generation ===`);
-  console.log(`  Topic: ${topic}\n`);
+async function generateModsAuto(topic, facts) {
+  console.log('\n=== Script Gen: 4スライド自動生成 ===');
+  const compressed = compressFacts(facts);
 
-  console.log('  Step 1: Selecting pattern...');
-  const { patternKey, reason } = await selectPattern(topic, facts);
-  console.log(`  → ${patternKey} (${PATTERNS[patternKey].label})`);
-  console.log(`  → Reason: ${reason}\n`);
+  const SLIDE_TYPE_SPEC = {
+    insight:    'title, narration（200文字）, catchphrases（3-5個・各20文字以内）',
+    matchcard:  'homeTeam, awayTeam, homeScore, awayScore, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away},...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（200文字）',
+    stats:      'title, narration（200文字）, siBinding（英語名）, dataSlots[{label,value}]（最大6個）',
+    comparison: 'title, narration（200文字）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）',
+    history:    'title, narration（200文字）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）',
+  };
 
-  console.log('  Step 2: Generating mods...');
-  const mods = await generateMods(patternKey, topic, facts);
-  console.log(`  → ${mods.length} mods generated\n`);
+  const systemPrompt = `あなたはサッカーYouTube動画のデータ構成AIです。
+案件・素材から4スライド動画データをワンショットで生成してください。
 
-  const validation = validateMods(patternKey, mods);
-  if (validation.valid) {
-    console.log('  ✓ All required fields present');
-  } else {
-    console.log('  ✗ Missing fields:');
-    validation.errors.forEach(e => console.log(`    - ${e}`));
+【スライド構成（固定）】
+slides[0]: opening — title（20〜35文字・キャッチーな見出し）+ narration = title と同じ + badge（推論）
+slides[1]: コンテンツA（下記タイプから素材に合うものを選択）
+slides[2]: コンテンツB（下記タイプから素材に合うものを選択）
+slides[3]: ending — title（15文字以内のオチ一言）+ narration（意外な事実・逆説・ズレ感のオチ・25〜40文字）
+
+【コンテンツタイプ選択ルール】
+- matchcard: 試合スコア・得点者・選手データが揃っている場合（スコアデータ必須）
+- stats: 選手の個人スタッツが中心の場合
+- history: キャリア歴史・時系列記録がある場合
+- comparison: 2選手/チームを並べて比較する場合
+- insight: テキスト考察・話題まとめ（上記が合わない場合のデフォルト）
+
+【各タイプの必須フィールド】
+${Object.entries(SLIDE_TYPE_SPEC).map(([t, spec]) => `- ${t}: ${spec}`).join('\n')}
+
+【ナレーション仕様（コンテンツスライド）】
+5ch速報まとめサイト風・丁寧語150〜200文字。
+①フック1文（「〜の記録がこちら」「〜が話題になっています」）→ ②事実2〜3文 → ③「なお〜の模様です」で意外な補足1文
+
+【注意】
+- 素材の実データのみ使用。数値・事実の捏造禁止
+- 素材に記載がない第三者の具体的な数値（得点数・試合数等）は絶対に生成しない
+- 全4枚を必ず生成
+
+JSON: {"contentTypes": ["typeA", "typeB"], "mods": [slide0, slide1, slide2, slide3]}`;
+
+  const result = await callAI(systemPrompt, `トピック: ${topic}\n\n素材:\n${compressed}`);
+
+  const validTypes = Object.keys(CONTENT_SLIDE_REQUIRED);
+  const contentTypes = (result.contentTypes || [])
+    .filter(t => validTypes.includes(t)).slice(0, 2);
+  while (contentTypes.length < 2) contentTypes.push('insight');
+
+  console.log(`  コンテンツタイプ: ${contentTypes.join(' + ')}`);
+
+  const pattern = buildPiecesPattern(contentTypes);
+
+  if (!result.mods || !Array.isArray(result.mods) || result.mods.length < 4) {
+    throw new Error(`mods 不足: ${result.mods?.length ?? 0}枚`);
   }
+  const mods = result.mods.slice(0, 4);
 
-  return { patternKey, mods, validation };
+  // スライドタイプ注入 + matchcard フラット化 + 後工程フィールド初期化
+  pattern.slides.forEach((slot, i) => {
+    mods[i].type = slot.type;
+    if (slot.type === 'matchcard' && mods[i]?.matchData) {
+      const md = mods[i].matchData;
+      for (const field of slot.required) {
+        if (mods[i][field] === undefined && md[field] !== undefined) mods[i][field] = md[field];
+      }
+    }
+    mods[i].bgImage = null; mods[i].leftImage = null; mods[i].rightImage = null;
+  });
+
+  injectRealMatchData(mods, pattern, facts);
+  await injectRealComments(mods, pattern, facts, topic);
+
+  const errors = [];
+  pattern.slides.forEach((slot, i) => {
+    const mod = mods[i];
+    if (!mod) { errors.push(`slides[${i}]: mod なし`); return; }
+    for (const field of slot.required) {
+      if (mod[field] === undefined || mod[field] === null)
+        errors.push(`slides[${i}] (${slot.type}): "${field}" 未設定`);
+    }
+  });
+  const validation = { valid: errors.length === 0, errors };
+  if (!validation.valid) console.warn('  [script_gen] Validation warnings:', validation.errors);
+
+  return { patternKey: 'pieces_2', pattern, mods, validation };
 }
 
-module.exports = { generateScript, selectPattern, generateMods, generateModsForPieces };
+module.exports = { generateModsAuto, generateMods, generateModsForPieces };
