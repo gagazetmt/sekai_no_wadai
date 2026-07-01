@@ -264,7 +264,7 @@ async function _filterByAI(candidates, topic) {
   if (!OPENAI_KEY || !candidates.length) return candidates;
 
   const list = candidates.map((t, i) => `[${i}] ${t.text.slice(0, 120)}`).join('\n');
-  const prompt = `以下のツイートのうち、「${topic}」に関する内容のツイートの番号を配列で返してください。JSON配列のみ返答。例: [0,2]\n\n${list}`;
+  const prompt = `次のトピック「${topic}」について、このトピックを直接扱っているツイートの番号のみをJSON配列で返してください。\n関係が薄いもの（別の試合・別の選手・一般的なW杯報告など）は除外してください。\nJSON配列のみ返答。例: [0,2]\n\n${list}`;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -296,7 +296,11 @@ async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
     // Step1: JP + EN キーワードでアカウントツイートを検索
     const accountFilter = SOCCER_NEWS_ACCOUNTS.map(a => `from:${a}`).join(' OR ');
     const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
-    const enKws = enQuery ? enQuery.split(/\s+/).filter(w => /^[A-Za-z]/.test(w)).slice(0, 2) : [];
+    // 汎用サッカー語（goal/record/cup等）はヒット汚染になるので除外し、固有名詞のみ抽出
+    const GENERIC_EN = new Set(['goal','goals','record','records','cup','world','soccer','football','match','game','win','score']);
+    const enKws = enQuery
+      ? enQuery.split(/\s+/).filter(w => /^[A-Z]/.test(w) && !GENERIC_EN.has(w.toLowerCase())).slice(0, 2)
+      : [];
     const allKws = [...jpKws, ...enKws];
     const kwQuery = allKws.length ? allKws.join(' OR ') : topic.slice(0, 20);
     const q = `(${accountFilter}) (${kwQuery}) -is:retweet`;
