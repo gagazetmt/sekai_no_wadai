@@ -293,40 +293,45 @@ async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
   if (!X_API_KEY) { console.log('  [comments/xr] API key なし'); return []; }
 
   try {
-    // Step1: JP + EN キーワードでアカウントツイートを検索
-    const accountFilter = SOCCER_NEWS_ACCOUNTS.map(a => `from:${a}`).join(' OR ');
+    // Step1: JP + EN キーワードで広く検索（アカウント縛りなし）
     const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
-    // 汎用サッカー語（goal/record/cup等）はヒット汚染になるので除外し、固有名詞のみ抽出
     const GENERIC_EN = new Set(['goal','goals','record','records','cup','world','soccer','football','match','game','win','score']);
     const enKws = enQuery
       ? enQuery.split(/\s+/).filter(w => /^[A-Z]/.test(w) && !GENERIC_EN.has(w.toLowerCase())).slice(0, 2)
       : [];
     const allKws = [...jpKws, ...enKws];
     const kwQuery = allKws.length ? allKws.join(' OR ') : topic.slice(0, 20);
-    const q = `(${accountFilter}) (${kwQuery}) -is:retweet`;
-    console.log(`  [comments/xr] アカウント検索: "${q}"`);
+    const q = `(${kwQuery}) -is:retweet lang:ja`;
+    console.log(`  [comments/xr] 検索: "${q}"`);
 
-    const accountTweets = await _xSearchRaw(q, 'account_search');
-    if (!accountTweets.length) {
-      console.log('  [comments/xr] アカウントツイートなし');
+    const rawTweets = await _xSearchRaw(q, 'topic_search');
+    if (!rawTweets.length) {
+      console.log('  [comments/xr] ツイートなし');
       return [];
     }
 
-    // エンゲージメントスコアでソート → AI判定 → top2
-    const scored = accountTweets.map(t => ({
-      id: t.id || t.tweet_id || t.id_str,
-      text: t.text || t.full_text || '',
-      score: (t.replyCount || t.reply_count || 0) * 3 + (t.likeCount || t.like_count || t.favorite_count || 0),
-    })).filter(t => t.id);
-    scored.sort((a, b) => b.score - a.score);
+    // ブルーバッジ＋フォロワー10万以上のメディアに絞り、リプライ数でソート
+    const FOLLOWER_MIN = 100_000;
+    const trusted = rawTweets
+      .filter(t => t.author?.isBlueVerified && (t.author?.followers || 0) >= FOLLOWER_MIN)
+      .map(t => ({
+        id: t.id || t.tweet_id || t.id_str,
+        text: t.text || t.full_text || '',
+        author: t.author?.name || t.author?.userName || '',
+        followers: t.author?.followers || 0,
+        replyCount: t.replyCount || t.reply_count || 0,
+      }))
+      .filter(t => t.id)
+      .sort((a, b) => b.replyCount - a.replyCount);
+
+    console.log(`  [comments/xr] 全件:${rawTweets.length} / 信頼済み:${trusted.length}件`);
 
     // AI判定（上位10件に絞ってコスト抑制）
-    const candidates = scored.slice(0, 10);
-    console.log(`  [comments/xr] AI判定中... 候補${candidates.length}件`);
+    const candidates = trusted.slice(0, 10);
     const aiMatched = await _filterByAI(candidates, topic);
-    const pool = aiMatched.length ? aiMatched : scored;
+    const pool = aiMatched.length ? aiMatched : trusted;
     const top2 = pool.slice(0, 2);
-    console.log(`  [comments/xr] AI一致: ${aiMatched.length}件 → top2:\n${top2.map(t => `    - ${t.text.slice(0, 60)}... (score:${t.score})`).join('\n')}`);
+    console.log(`  [comments/xr] AI一致:${aiMatched.length}件 → top2:\n${top2.map(t => `    - [@${t.author} ${t.followers.toLocaleString()}F] ${t.text.slice(0, 50)}... (replies:${t.replyCount})`).join('\n')}`);
 
     // Step2: 各ツイートのリプライを並列取得
     const replyArrays = await Promise.all(top2.map(async t => {
