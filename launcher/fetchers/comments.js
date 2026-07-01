@@ -250,21 +250,39 @@ async function _xSearchRaw(query, label, queryType = 'Top') {
   return data?.data?.tweets || data?.tweets || [];
 }
 
-async function _xSearch(query, label) {
-  const tweets = await _xSearchRaw(query, label);
-  return tweets.map(t => t.text || t.full_text || '');
-}
+// ── ニュースアカウント定義 ────────────────────────────────
 
-// サッカーニュースアカウントのリプライ欄から反応コメントを収集
-const SOCCER_NEWS_ACCOUNTS = ['goal_jp', 'soccerdigestweb', 'gekisaka', 'jfa_samuraiblue', 'footballchannel'];
+// 日本語サッカーニュースアカウント
+const JP_NEWS_ACCOUNTS = [
+  'goal_jp', 'soccerdigestweb', 'gekisaka', 'footballchannel',
+  'livedoornews', 'nhk_sport', 'sportsnavi', 'sponicchi',
+  'nikkan_sports', 'football_tribe', 'soccer_king_jp',
+];
 
-// GPT-4o-mini でツイートがトピックに関連するか一括判定
-async function _filterByAI(candidates, topic) {
+// 英語サッカーニュースアカウント
+const EN_NEWS_ACCOUNTS = [
+  'goal', 'optajoe', 'bbcsport', 'espnfc', 'guardianfootball',
+  'FabrizioRomano', 'SkySportsNews', 'talksport', 'btsportfootball',
+  'footballdotcom', 'transfermarkt',
+];
+
+// ── AI: 案件ツイートを1件厳格特定 ──────────────────────────
+
+async function _findMatchingTweet(candidates, topic) {
   const OPENAI_KEY = process.env.OPENAI_API_KEY || '';
-  if (!OPENAI_KEY || !candidates.length) return candidates;
+  if (!OPENAI_KEY || !candidates.length) return null;
 
-  const list = candidates.map((t, i) => `[${i}] ${t.text.slice(0, 120)}`).join('\n');
-  const prompt = `次のトピック「${topic}」について、このトピックを直接扱っているツイートの番号のみをJSON配列で返してください。\n関係が薄いもの（別の試合・別の選手・一般的なW杯報告など）は除外してください。\nJSON配列のみ返答。例: [0,2]\n\n${list}`;
+  const list = candidates.map((t, i) => `[${i}] @${t.author}: ${t.text.slice(0, 120)}`).join('\n');
+  const prompt = `トピック「${topic}」を直接報じているツイートを1件だけ選んでください。
+判定条件（全て満たすこと）：
+1. トピックの主役（選手名・チーム名）が明示されている
+2. トピックの出来事（記録・移籍・試合結果等）が明示されている
+3. 別の選手・別の試合・一般的なW杯情報だけのツイートは不可
+
+どれも条件を満たさない場合は null を返してください。
+JSON形式のみ: {"index": 数字} または {"index": null}
+
+${list}`;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -273,135 +291,110 @@ async function _filterByAI(candidates, topic) {
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 50,
+        max_tokens: 20,
         temperature: 0,
       }),
       signal: AbortSignal.timeout(10000),
     });
-    if (!res.ok) return candidates;
+    if (!res.ok) return null;
     const data = await res.json();
-    const text = data.choices?.[0]?.message?.content?.trim() || '[]';
-    const indices = JSON.parse(text);
-    if (!Array.isArray(indices) || !indices.length) return [];
-    return indices.map(i => candidates[i]).filter(Boolean);
+    const text = data.choices?.[0]?.message?.content?.trim() || '{"index":null}';
+    const parsed = JSON.parse(text);
+    if (parsed.index === null || parsed.index === undefined) return null;
+    return candidates[parsed.index] || null;
   } catch {
-    return candidates;
+    return null;
+  }
+}
+
+// ── ニュースアカウントリプライ取得（JP / EN 共通） ──────────
+
+async function _fromNewsAccountReplies(topic, { lang = 'ja', accounts, label } = {}) {
+  if (!X_API_KEY || !accounts?.length) return [];
+
+  try {
+    // キーワード抽出（カタカナ3文字以上 or 英字固有名詞）
+    const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
+    const enKws = [...new Set(topic.match(/[A-Z][a-z]{2,}/g) || [])].slice(0, 2);
+    const kws = lang === 'ja' ? jpKws : (enKws.length ? enKws : jpKws);
+    const kwPart = kws.length ? kws.join(' OR ') : topic.slice(0, 20);
+
+    const fromPart = accounts.slice(0, 8).map(a => `from:${a}`).join(' OR ');
+    const q = `(${fromPart}) (${kwPart}) -is:retweet`;
+    console.log(`  [comments/${label}] 検索: "${q}"`);
+
+    const [topTweets, latestTweets] = await Promise.all([
+      _xSearchRaw(q, `${label}_top`, 'Top'),
+      _xSearchRaw(q, `${label}_latest`, 'Latest'),
+    ]);
+
+    const seenIds = new Set();
+    const raw = [...topTweets, ...latestTweets].filter(t => {
+      const id = t.id || t.tweet_id || t.id_str;
+      if (!id || seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
+
+    if (!raw.length) {
+      console.log(`  [comments/${label}] ツイートなし`);
+      return [];
+    }
+
+    // リプライ数でソートして上位10件をAI判定に渡す
+    const candidates = raw
+      .map(t => ({
+        id: t.id || t.tweet_id || t.id_str,
+        text: t.text || t.full_text || '',
+        author: t.author?.userName || t.author?.name || '',
+        replyCount: t.replyCount || t.reply_count || 0,
+      }))
+      .filter(t => t.id && t.text)
+      .sort((a, b) => b.replyCount - a.replyCount)
+      .slice(0, 10);
+
+    // AI が案件ツイートを1件厳格特定（ノーマッチならスキップ）
+    const matched = await _findMatchingTweet(candidates, topic);
+    if (!matched) {
+      console.log(`  [comments/${label}] AI一致なし → スキップ`);
+      return [];
+    }
+    console.log(`  [comments/${label}] 特定: @${matched.author} "${matched.text.slice(0, 60)}..." (replies:${matched.replyCount})`);
+
+    // リプライ取得
+    const repQ = `conversation_id:${matched.id} lang:${lang} -is:retweet`;
+    const replies = await _xSearchRaw(repQ, `replies_${matched.id}`).catch(() => []);
+    const texts = replies.map(r => {
+      return (r.text || r.full_text || '')
+        .replace(/@\w+\s*/g, '')
+        .replace(/https?:\/\/\S+/g, '')
+        .trim();
+    }).filter(t => t.length >= 12);
+
+    const unique = _unique(texts.filter(_isXReaction), 12);
+    console.log(`  [comments/${label}] → ${unique.length} リプライ`);
+    return unique.map(text => ({ text, source: 'x', lang }));
+  } catch (e) {
+    console.warn(`  [comments/${label}] 失敗: ${e.message}`);
+    return [];
   }
 }
 
 async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
   if (!X_API_KEY) { console.log('  [comments/xr] API key なし'); return []; }
 
-  try {
-    // Step1: JP + EN キーワードで広く検索（アカウント縛りなし）
-    const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
-    const GENERIC_EN = new Set(['goal','goals','record','records','cup','world','soccer','football','match','game','win','score']);
-    const enKws = enQuery
-      ? enQuery.split(/\s+/).filter(w => /^[A-Z]/.test(w) && !GENERIC_EN.has(w.toLowerCase())).slice(0, 2)
-      : [];
-    const allKws = [...jpKws, ...enKws];
-    const kwQuery = allKws.length ? allKws.join(' OR ') : topic.slice(0, 20);
-    const q = `(${kwQuery}) -is:retweet lang:ja`;
-    console.log(`  [comments/xr] 検索: "${q}"`);
+  const [jpReplies, enReplies] = await Promise.all([
+    _fromNewsAccountReplies(topic, { lang: 'ja', accounts: JP_NEWS_ACCOUNTS, label: 'xr_jp' }),
+    _fromNewsAccountReplies(topic, { lang: 'en', accounts: EN_NEWS_ACCOUNTS, label: 'xr_en' }),
+  ]);
 
-    // Top + Latest 両方取得してマージ（カバー範囲拡大）
-    const [topTweets, latestTweets] = await Promise.all([
-      _xSearchRaw(q, 'topic_top', 'Top'),
-      _xSearchRaw(q, 'topic_latest', 'Latest'),
-    ]);
-    const seenIds = new Set();
-    const rawTweets = [...topTweets, ...latestTweets].filter(t => {
-      const id = t.id || t.tweet_id || t.id_str;
-      if (!id || seenIds.has(id)) return false;
-      seenIds.add(id);
-      return true;
-    });
-    if (!rawTweets.length) {
-      console.log('  [comments/xr] ツイートなし');
-      return [];
-    }
-
-    // ブルーバッジ＋フォロワー10万以上のメディアに絞り、リプライ数でソート
-    const FOLLOWER_MIN = 100_000;
-    const trusted = rawTweets
-      .filter(t => t.author?.isBlueVerified && (t.author?.followers || 0) >= FOLLOWER_MIN)
-      .map(t => ({
-        id: t.id || t.tweet_id || t.id_str,
-        text: t.text || t.full_text || '',
-        author: t.author?.name || t.author?.userName || '',
-        followers: t.author?.followers || 0,
-        replyCount: t.replyCount || t.reply_count || 0,
-      }))
-      .filter(t => t.id)
-      .sort((a, b) => b.replyCount - a.replyCount);
-
-    console.log(`  [comments/xr] 全件:${rawTweets.length}(top+latest) / 信頼済み:${trusted.length}件`);
-
-    // AI判定（上位10件に絞ってコスト抑制）
-    // AI一致0件でも trusted にフォールバックしない（無関係スレッド混入防止）
-    const candidates = trusted.slice(0, 10);
-    const aiMatched = await _filterByAI(candidates, topic);
-    if (!aiMatched.length) {
-      console.log('  [comments/xr] AI一致なし → x_reply スキップ');
-      return [];
-    }
-    const top2 = aiMatched.slice(0, 2);
-    console.log(`  [comments/xr] AI一致:${aiMatched.length}件 → top2:\n${top2.map(t => `    - [@${t.author} ${t.followers.toLocaleString()}F] ${t.text.slice(0, 50)}... (replies:${t.replyCount})`).join('\n')}`);
-
-    // Step2: 各ツイートのリプライを並列取得
-    const replyArrays = await Promise.all(top2.map(async t => {
-      const repQ = `conversation_id:${t.id} lang:ja -is:retweet`;
-      console.log(`  [comments/xr] リプライ取得: conversation_id:${t.id}`);
-      const raw = await _xSearchRaw(repQ, `replies_${t.id}`).catch(() => []);
-      return raw.map(r => {
-        const text = (r.text || r.full_text || '')
-          .replace(/@\w+\s*/g, '')
-          .replace(/https?:\/\/\S+/g, '')
-          .trim();
-        return text;
-      }).filter(text => text.length >= 12);
-    }));
-
-    const allReplies = replyArrays.flat();
-    const filtered = allReplies.filter(_isXReaction);
-    const unique = _unique(filtered, 15);
-    console.log(`  [comments/xr] → ${unique.length} リプライコメント`);
-    return unique.map(text => ({ text, source: 'x_reply' }));
-  } catch (e) {
-    console.warn(`  [comments/xr] 失敗: ${e.message}`);
-    return [];
-  }
+  const all = [...jpReplies, ...enReplies];
+  console.log(`  [comments/xr] JP:${jpReplies.length} EN:${enReplies.length} → ${all.length}件`);
+  return all;
 }
 
 async function fromX(topic, enQuery = '') {
-  if (!X_API_KEY) { console.log('  [comments/x] API key なし'); return []; }
-
-  try {
-    const jaQ = topic.slice(0, 60) + ' lang:ja -is:retweet';
-    // 英語クエリ: enQuery があればそれ、なければ日本語トピックを英語化
-    const enTerm = (enQuery || _toEnglishQuery(topic)).slice(0, 80);
-    const enQ = enTerm ? enTerm + ' lang:en -is:retweet' : '';
-
-    console.log(`  [comments/x] 日本語: "${jaQ}"`);
-    if (enQ) console.log(`  [comments/x] 英語:   "${enQ}"`);
-
-    const [jaRaw, enRaw] = await Promise.all([
-      _xSearch(jaQ, 'ja').catch(() => []),
-      enQ ? _xSearch(enQ, 'en').catch(() => []) : Promise.resolve([]),
-    ]);
-
-    const jaReactions = _unique(jaRaw.filter(_isXReaction), 12);
-    const enReactions = _unique(enRaw.filter(_isXReaction), 8);
-
-    console.log(`  [comments/x] → ja:${jaReactions.length} en:${enReactions.length}`);
-    return [
-      ...jaReactions.map(text => ({ text, source: 'x' })),
-      ...enReactions.map(text => ({ text, source: 'x', lang: 'en' })),
-    ];
-  } catch (e) {
-    console.warn(`  [comments/x] 失敗: ${e.message}`);
-    return [];
-  }
+  return []; // 廃止: fromXReplies（ニュースアカウント限定）に統合
 }
 
 // ── 試合フェーズ判定 ────────────────────────────────────

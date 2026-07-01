@@ -34,9 +34,10 @@ function concatVideos(videoPaths, outputPath) {
 
   fs.writeFileSync(listPath, listContent);
 
+  // -c:v libx264: x11grabのH264をそのままcopyするとDTSが単調増加しないため再エンコード
   execSync(`ffmpeg -y -f concat -safe 0 -i "${listPath}" \
-    -c:v copy -c:a copy \
-    -avoid_negative_ts make_zero \
+    -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p \
+    -c:a copy \
     -movflags +faststart \
     "${outputPath}"`, { stdio: 'pipe' });
 

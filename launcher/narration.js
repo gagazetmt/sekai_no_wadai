@@ -6,6 +6,7 @@ const fs   = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 const { getPattern } = require('./slide_patterns');
+const { packComments } = require('./slides/comments');
 
 // ── VoiceVox スピーカーID ─────────────────────────────
 // 青山流星(13), 玄野武宏(11), 白上虎太郎(12): 男性
@@ -279,13 +280,23 @@ async function geminiTTS(text, outputPath) {
 // ── TTS ディスパッチ（VoiceVox → MiniMax → Gemini） ──
 
 async function synthesize(text, outPath, speaker = MAIN_SPEAKER, minimaxVoice = MINIMAX_MAIN_VOICE) {
-  // 1. MiniMax（メイン）
-  try {
-    await minimaxTTS(text, outPath, minimaxVoice);
-    console.log(`    → MiniMax (${minimaxVoice})`);
-    return outPath;
-  } catch (err) {
-    console.warn(`    MiniMax failed (${err.message}), trying VoiceVox...`);
+  // 1. MiniMax（RPM エラー時は最大2回リトライ、それでもダメなら VoiceVox へ）
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await minimaxTTS(text, outPath, minimaxVoice);
+      console.log(`    → MiniMax (${minimaxVoice})`);
+      return outPath;
+    } catch (err) {
+      const isRpm = /rate limit/i.test(err.message);
+      if (isRpm && attempt < 2) {
+        const wait = (attempt + 1) * 3000;
+        console.warn(`    MiniMax RPM, ${wait / 1000}s 待ってリトライ (${attempt + 1}/2)...`);
+        await new Promise(r => setTimeout(r, wait));
+      } else {
+        console.warn(`    MiniMax failed (${err.message}), trying VoiceVox...`);
+        break;
+      }
+    }
   }
 
   // 2. VoiceVox（MiniMax が落ちているときのフォールバック）
@@ -325,11 +336,13 @@ function makeSemaphore(n) {
 async function generateCommentAudio(comments, outputDir, slideIndex) {
   if (!comments || !comments.length) return { audioFile: null, duration: 0 };
 
-  const validComments = comments.slice(0, 8).filter(c => c.text && c.text.length > 0);
+  // 画面に映る9行分のコメントだけに絞る（slides/comments.js の _packComments と同じロジック）
+  const packed = packComments(comments.filter(c => c.text && c.text.length > 0));
+  const validComments = packed;
   if (!validComments.length) return { audioFile: null, duration: 0 };
 
-  // コメント TTS を並列実行（同時最大4）
-  const limit = makeSemaphore(4);
+  // コメント TTS を並列実行（同時最大2）
+  const limit = makeSemaphore(2);
   const rawResults = await Promise.all(validComments.map((c, i) => limit(async () => {
     const outPath = path.join(outputDir, `cmt_${slideIndex}_${i}.wav`);
     try {
@@ -357,9 +370,9 @@ async function generateCommentAudio(comments, outputDir, slideIndex) {
 
   if (!parts.length) return { audioFile: null, duration: 0, perComment: [] };
 
-  // 0.3秒無音パッドを生成
+  // 0.3秒無音パッドを生成（32kHz統一）
   const padPath = path.join(outputDir, `_cmt_pad_${slideIndex}.wav`);
-  execSync(`ffmpeg -y -f lavfi -i anullsrc=r=24000:cl=mono -t 0.3 "${padPath}"`, { stdio: 'pipe' });
+  execSync(`ffmpeg -y -f lavfi -i anullsrc=r=32000:cl=mono -t 0.3 "${padPath}"`, { stdio: 'pipe' });
 
   // concat リスト作成
   const listPath = path.join(outputDir, `_cmt_list_${slideIndex}.txt`);
@@ -371,7 +384,8 @@ async function generateCommentAudio(comments, outputDir, slideIndex) {
   fs.writeFileSync(listPath, entries.join('\n'));
 
   const combinedPath = path.join(outputDir, `cmt_combined_${slideIndex}.wav`);
-  execSync(`ffmpeg -y -f concat -safe 0 -i "${listPath}" "${combinedPath}"`, { stdio: 'pipe' });
+  // -ar 32000: VoiceVox(24kHz)/MiniMax(32kHz)混在を32kHzに統一
+  execSync(`ffmpeg -y -f concat -safe 0 -i "${listPath}" -ar 32000 -ac 1 "${combinedPath}"`, { stdio: 'pipe' });
 
   const probe = execSync(
     `ffprobe -v error -show_entries format=duration -of csv=p=0 "${combinedPath}"`,
@@ -401,9 +415,9 @@ async function generateNarration(patternKey, mods, outputDir) {
   // narration テキストを mod に保存（メタ生成等で参照）
   narrations.forEach((n, i) => { if (mods[i]) mods[i].narration = n; });
 
-  // Step 2: TTS（全スライド並列、同時最大4）
+  // Step 2: TTS（全スライド並列、同時最大2でRPM抑制）
   console.log('\n  Step 2: Synthesizing audio (parallel)...');
-  const slideLimit = makeSemaphore(4);
+  const slideLimit = makeSemaphore(2);
 
   const slideResults = await Promise.all(narrations.map((text, i) => slideLimit(async () => {
     const slotType = (pattern.slides[i] || {}).type || mods[i]?.type || 'insight';
@@ -447,7 +461,7 @@ async function generateNarration(patternKey, mods, outputDir) {
 
       if (cmtResult.audioFile) {
         const pausePath = path.join(outputDir, `_nar_pad_${i}.wav`);
-        execSync(`ffmpeg -y -f lavfi -i anullsrc=r=24000:cl=mono -t 0.2 "${pausePath}"`, { stdio: 'pipe' });
+        execSync(`ffmpeg -y -f lavfi -i anullsrc=r=32000:cl=mono -t 0.2 "${pausePath}"`, { stdio: 'pipe' });
 
         const mergeList = path.join(outputDir, `_merge_list_${i}.txt`);
         fs.writeFileSync(mergeList, [
@@ -457,7 +471,8 @@ async function generateNarration(patternKey, mods, outputDir) {
         ].join('\n'));
 
         const mergedPath = path.join(outputDir, `audio_${i}.wav`);
-        execSync(`ffmpeg -y -f concat -safe 0 -i "${mergeList}" "${mergedPath}"`, { stdio: 'pipe' });
+        // -ar 32000: VoiceVox(24kHz)/MiniMax(32kHz)混在を32kHzに統一
+        execSync(`ffmpeg -y -f concat -safe 0 -i "${mergeList}" -ar 32000 -ac 1 "${mergedPath}"`, { stdio: 'pipe' });
         combinedAudioPath = mergedPath;
         console.log(`    [${i}] combined (nar ${narDur.toFixed(1)}s + cmt ${cmtDur.toFixed(1)}s)`);
       }
