@@ -1,0 +1,427 @@
+# V5 Launcher Architecture
+
+## 概要
+
+サッカーYouTube動画の自動生成パイプライン。
+話題のスカウトから動画レンダリングまでを5ステップで実行する。
+ダッシュボード（Web UI）から操作でき、Step 3で人間が企画を編集できる。
+
+---
+
+## 5ステップ構成
+
+```
+Step 1: 案件取得（Scout）
+  ↓ 自動
+Step 2: 記事・データ・画像取得（Research）
+  ↓ 自動
+Step 3: 企画ピース生成 ← ★ ここで一時停止。編集可能
+  ↓ ユーザーが「レンダリング開始」を押す
+Step 4: 脚本生成 → レンダリング（6サブステップ）
+  ↓ 自動
+Step 5: サムネ＋投稿メタデータ（未実装・placeholder）
+```
+
+---
+
+## ファイル構成
+
+```
+launcher/
+├── pipeline.js          # オーケストレーター（フェーズ関数 + CLI全自動モード）
+├── dashboard.js         # Web UI サーバー（HTTP + WebSocket / port 3456）
+├── web/
+│   └── index.html       # 5ステップ対話式ダッシュボード
+│
+├── scout.js             # Step 1: Brave Search + X でトピック収集
+├── research.js          # Step 2: FotMob + SofaScore + Brave + コメント収集
+├── viewpoints.js        # Step 3: AI で論点抽出（4-6件）
+├── script_gen.js        # Step 4-1: パターン選択 + mod 生成（AI）
+├── narration.js         # Step 4-3: ナレーション文生成 + TTS
+├── whisper.js           # Step 4-4: Whisper API → 字幕チャンク
+├── render.js            # Step 4-5: Puppeteer CDP + FFmpeg でスライド→動画
+├── concat.js            # Step 4-6: FFmpeg で全スライド結合
+├── slide_patterns.js    # パターン定義（20+種: match_result, player_performance 等）
+│
+├── slides/              # スライドHTMLテンプレート
+│   ├── opening.js       # オープニング（badge付きタイトル）
+│   ├── insight.js       # 論点カード（catchphrases箇条書き）
+│   ├── stats.js         # データスロット（6項目 + 選手画像）
+│   ├── history.js       # 年表・経歴（historyHero + dataSlots）
+│   ├── matchcard.js     # 試合結果カード（スコア・スタッツ・ラインナップ）
+│   ├── comparison.js    # 2者比較（左右画像 + dataSlots）
+│   ├── ending.js        # エンディング
+│   ├── comments.js      # コメントオーバーレイ（パステルカード, X/Reddit/Yahoo アイコン）
+│   └── subtitles.js     # 字幕バー（V4ビジュアル: ダークグラデ + アンバーボーダー）
+│
+└── fetchers/            # 外部データ取得
+    ├── _curl_cffi_caller.js   # curl-cffi 経由の HTTP クライアント
+    ├── fotmob_match.js        # FotMob 試合データ
+    ├── fotmob_player.js       # FotMob 選手データ
+    ├── fotmob_career.js       # FotMob 選手検索（チーム特定用）
+    ├── sofascore_match.js     # SofaScore 試合（フォールバック）
+    ├── sofascore_player.js    # SofaScore 選手
+    ├── sofascore_team.js      # SofaScore チーム
+    ├── _sofa_common.js        # SofaScore 共通
+    ├── _sofa_via_curlcffi.js  # SofaScore curl-cffi 経由
+    ├── comments.js            # Reddit + Yahoo + X コメント収集
+    └── images.js              # 選手/チーム画像（X API → data URI）
+```
+
+---
+
+## データフロー
+
+### Step 1: Scout
+- **入力**: なし（or ユーザー指定トピック）
+- **処理**: Brave Search（W杯/移籍/日本代表クエリ）+ X トレンド
+- **出力**: `topics[]` — `{title, source, url}`
+
+### Step 2: Research
+- **入力**: `topic` (string)
+- **自動処理**:
+  1. `analyzeTopic()` — DeepSeek でトピック→**3〜4語の英語キーワード**（searchQuery）生成
+  2. `braveDeepSearch()` — searchQuery で Brave 検索（**freshness:pw = 過去1週間**）、最大5件スクレイプ
+  3. `deepseekExtractInfo()` — 記事からラベル抽出（**記事0件でもトピック名だけで実行**）
+  4. `collectComments()` — Reddit + Yahoo + X コメント収集（並列）
+- **手動（ユーザートリガー）**:
+  - 「📊 データ取得」→ `fetch_data` → ラベルのmatch/playerからFotMob/SofaScore取得
+  - 「🖼 画像取得」→ `fetch_x_images` → team_x_accounts.json でハンドル解決 → TwitterAPI.io（**25秒タイムアウト**）
+- **出力**: `facts` — `{articles[], comments{reddit,yahoo,x,all}, extracted, labels}`
+- **matchData / playerData は「データ取得」ボタン後に付加される**
+
+#### Step 2 UI ブロック構成（上から順）
+1. 記事（タイトル + URL + 文字数）
+2. コメント（ソース別件数のみ：Reddit / Yahoo / X）
+3. ラベル（AIチップ + 手動追加）
+4. データ（取得ボタン → match scoreline / player name+team）
+5. 画像（取得ボタン → 枚数表示）
+
+### Step 3: Plan（企画ピース）
+- **入力**: `facts`
+- **処理**: AI（DeepSeek優先 → Anthropicフォールバック）で論点抽出
+- **出力**: `viewpoints[]` — `{angle, title, keyPoints[], suggestedPattern, priority}`
+- **ダッシュボード**: ここで一時停止。ユーザーが title / pattern を編集可能
+
+### Step 4: Render（6サブステップ）
+- **入力**: 選択した viewpoint + facts
+- **サブステップ**:
+  1. **脚本生成**: `generateMods(patternKey, topic, facts)` → `mods[]`
+  2. **画像取得**: `resolveAllImages(mods, facts)` → X API で選手/チーム画像（insight スライドにも siBinding 設定）
+  3. **ナレーション**: AI テキスト生成 → TTS → `.wav`（下記TTS仕様参照）
+  4. **字幕生成**: Whisper API → word timestamps → `subtitleChunks[]`
+  5. **レンダリング**: Puppeteer CDP JPEG → FFmpeg image2pipe → `.mp4`（1280x720, 24fps）
+  6. **動画結合**: FFmpeg concat + BGM amix → `final.mp4`
+- **出力**: `{finalVideo, outputDir, mods, totalDuration}`
+
+### Step 5: Meta
+- **サムネイル生成**: Puppeteer 1280x720 JPEG（badge + タイトル + bgImage）
+- **投稿メタ生成**: DeepSeek → title / description / tags
+- **ダッシュボード Sub タブ**: 動画プレビュー / 投稿メタ編集 / サムネ編集（再生成ボタンあり）
+
+---
+
+## レンダリング仕様
+
+| 項目 | 値 |
+|------|-----|
+| 解像度 | 1280x720（スライドHTML は 1920px で作成 → scale(0.667)） |
+| FPS | 24 |
+| エンコード | libx264 / yuv420p / crf 23 / ultrafast |
+| アニメーション | CSS animation → `document.getAnimations()` でフレーム単位制御 |
+| キャプチャ | CDP `Page.captureScreenshot`（JPEG quality 95） |
+
+### タイミング構成（1スライドあたり）
+```
+|← LEAD_PAD(0.5s) →|← ナレーション →|← TAIL_PAD(0.3s) →|← コメント音声 →|
+                     ↑ 字幕表示        ↑ 字幕消失          ↑ コメントオーバーレイ
+```
+- opening / ending はコメント音声なし
+- コメント音声の尺は実測値を使用（固定 COMMENT_PAD 廃止）。`commentDurations[]` として pipeline.js に返す
+
+---
+
+## 字幕バー（V4ビジュアル）
+
+- 背景: `linear-gradient(180deg, rgba(5,8,14,0.88), rgba(0,0,0,0.96))`
+- ボーダー: `border-top: 3px solid rgba(245,158,11,0.5)`（アンバー）
+- フォント: 50px / weight 800 / 自動スケーリング（32px下限）
+- アニメーション: `translateY(12px→0→-8px)` + `blur(2px→0→1px)`
+- 日本語2行分割: `splitSubtitle()` — 句読点・動詞末尾で自然分割
+- **重要**: 表示テキストはナレーション原文。Whisper ASR出力は使わない（誤認識あり）
+
+---
+
+## コメントオーバーレイ
+
+- ナレーション終了後（`narrationEndSec`）にフェードイン
+- パステルカード風（source別アイコン: X / Reddit / Yahoo）
+- 4-6個、ランダム配置、staggered animation
+
+---
+
+## TTS 仕様
+
+### メインナレーション
+- **ボイス**: MiniMax `Japanese_GenerousIzakayaOwner`（5ch系おっさんノリ）
+- **速度**: speedScale 1.1
+- **opening スライドはAI生成なし**: `mod.title` をそのまま読む
+
+### コメント音声
+- **男性4：女性1** のサイクルで各コメントに異なるボイスを割り当て
+- 男性: `male-qn-jingying` / `audiobook_male_1` / `audiobook_male_2`
+- 女性: `female-shaonv` / `audiobook_female_1`
+- ナレーション終了後に連結（0.3s pause 挟みながら各コメントを順再生）
+
+### TTS フォールバック順
+1. **VoiceVox** (`localhost:50021`) — ローカル起動中のみ
+2. **MiniMax** (`api.minimax.io` / `speech-01-hd`) — メイン
+3. **Gemini TTS** — 最終フォールバック
+
+### ナレーション文スタイル
+- **5ch実況ノリ**: 「マジか」「えぐい」「だよな」「草」等OK
+- 短文・畳みかけスタイル。各スライド60〜130文字
+
+---
+
+## BGM
+
+- `launcher/assets/bgm.mp3`（V4資産）
+- FFmpeg `amix`: volume=0.18 / stream_loop -1 / dropout_transition=2
+- concat 後に amix → `final.mp4`
+
+---
+
+## AI プロバイダー
+
+| 優先度 | プロバイダー | 用途 |
+|--------|-------------|------|
+| 1 | DeepSeek (`deepseek-chat`) | viewpoints / script_gen / narration テキスト / meta |
+| 2 | OpenAI (`gpt-4o-mini`) | フォールバック |
+
+---
+
+## ラベル設計
+
+`buildLabels(facts)` の優先順位（`dashboard.js`）:
+1. `facts.extracted.labels`（DeepSeek が返した配列）
+2. `extracted.homeTeam/awayTeam/playerName` からフォールバック
+3. `facts.matchData`（データ取得済みなら補完）
+4. 最終フォールバック：トピック文字列から vs パターン or 選手名
+
+ラベル型:
+- `{ type:'match', homeTeam, awayTeam, matchDate, competition }`
+- `{ type:'team', name }`
+- `{ type:'player', name, team, nationalTeam }`
+
+---
+
+## チーム名・選手名の正規化
+
+- `fotmob_match.js` — `TEAM_NAME_MAP` で20+エントリ正規化（"America"→"United States", "Bosnia"→"Bosnia and Herzegovina" など）
+- `fotmob_career.js` — `stripDiacritics()` でアクセント除去（Džeko→Dzeko, Vinícius→Vinicius）
+- X画像のチームハンドル解決 — `team_x_accounts.json`（Inter Miami, Argentina など収録）
+
+---
+
+## 外部API
+
+| API | 用途 | 課金 |
+|-----|------|------|
+| Brave Search | トピック/記事検索 | 無料枠 |
+| TwitterAPI.io | X コメント/画像検索 | API key |
+| FotMob | 試合/選手データ | 無料（curl-cffi経由） |
+| SofaScore | フォールバック | 無料（curl-cffi経由） |
+| OpenAI Whisper | 音声→字幕タイムスタンプ | $0.006/min |
+| DeepSeek | テキスト生成 | 従量 |
+| Anthropic | テキスト生成（フォールバック） | 従量 |
+| MiniMax T2A (`speech-01-hd`) | 音声合成メイン | $60/M chars |
+| VoiceVox | 音声合成（ローカル優先） | 無料 |
+| Gemini TTS | 音声合成フォールバック | 従量 |
+
+---
+
+## ダッシュボード
+
+- **URL**: `http://localhost:3456`
+- **技術**: Node.js HTTP + WebSocket（ws ライブラリ）
+- **状態遷移**: `idle → running → plan_ready（一時停止）→ rendering → done`
+
+### WebSocket プロトコル
+
+**Client → Server:**
+```json
+{"action": "start", "topic": "optional topic"}
+{"action": "render", "viewpointIndex": 0, "edits": {"title": "...", "suggestedPattern": "..."}}
+{"action": "reset"}
+```
+
+**Server → Client:**
+```json
+{"type": "hello", "steps": [...], "phase": "idle"}
+{"type": "step", "step": "scout", "status": "running|done|error", "detail": "..."}
+{"type": "sub_step", "step": "script", "status": "running|done", "detail": "..."}
+{"type": "plan_ready", "viewpoints": [...], "patterns": [...]}
+{"type": "done", "topic": "...", "videoUrl": "/output/.../final.mp4"}
+{"type": "log", "level": "info|warn|error", "text": "..."}
+```
+
+---
+
+## CLI 実行（全自動モード）
+
+```bash
+# 自動トピック選択
+node launcher/pipeline.js
+
+# トピック指定
+node launcher/pipeline.js --topic "日本vsスペイン W杯2026"
+
+# オプション
+node launcher/pipeline.js --topic "..." --home "Japan" --away "Spain" --player "Kubo"
+```
+
+---
+
+## 環境変数（.env）
+
+```
+DEEPSEEK_API_KEY=
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=          # Whisper用
+BRAVE_API_KEY=
+TWITTER_API_IO_KEY=
+MINIMAX_API_KEY=
+MINIMAX_GROUP_ID=
+GEMINI_API_KEY=
+LEAD_PAD_SEC=0.5
+TAIL_PAD_SEC=0.3
+```
+
+---
+
+## 改修ログ（2026-06-27：表示系4点修正）
+
+1. **背景画像が出ないバグ修正** — `slides/insight.js` の `imgDataUri()` が `http(s)` URL を `fs.existsSync` に通して null を返していた。`http(s)` はそのまま渡すよう修正（puppeteer が networkidle0 で読込）。ギャラリーで選んだリモート画像が背景に反映されるように。
+2. **Step2 ラベル別画像一覧 + チェック選択** — `dashboard.js` に `collectGalleryImages(facts)` を新設（X公式/選手/ロゴ/記事を `{url,label,group}` で集約）。`fetch_x_images`/`get_gallery_images` 両方がこれを使う。`web/index.html` に取得元(`group`)別のチェック式サムネ一覧を追加。チェックした画像のみ Step4 ギャラリーへ（`uncheckedImageUrls` Set で管理・デフォルト全チェック）。
+3. **マッチカードの選手顔/名前/フォメ/ロゴ** — AIが `matchData` を作り直す過程で sofascore の選手写真(`p.photo`)・フォメ・ロゴが欠落していた。`script_gen.js` に `injectRealMatchData(mods, pattern, facts)` を追加し生成後に実 `facts.matchData` を再注入。`compressFacts` は AI へ渡す前に `_stripMatchMedia` で重いdataURIを除去（トークン節約）。
+4. **コメントの読み上げ同期ポップ** — `narration.js` の `generateCommentAudio` が per-comment 尺を返し `mods[i].commentTiming`（narrationDurSec/pause/gap/perComment）に保存。`slides/comments.js` を全面改稿：各コメントが読まれる瞬間に上から1個ずつ slideDown ポップ＋読了中 active 強調、画面いっぱいに縦積み（スカスカ解消）。`render.js` が `injectCommentOverlay(html, comments, narrationEndSec, commentTiming, dur)` を呼ぶ。
+
+※ 反映には `node dashboard.js` の再起動が必要。
+
+## 改修ログ（2026-06-27 その2：プレビュー/TTS/字幕）
+
+1. **プレビュー＝本番一致** — `dashboard.js` に `buildPreviewHTML(mod)` と WS `preview_slide` を追加。実スライドビルダー（slides/*.js）でHTMLを生成して返す。クライアントは `s4ShowPreview` で iframe(srcdoc) にスケール表示。手書き再現の `s4BuildSlideContent` は廃止（実ビルダーと差異が出ていたため）。
+2. **MiniMax TTSテスター** — `launcher/minimax_tester.js`（別ポート3457・スタンドアロン）。テキスト+ボイス選択→合成→ブラウザ試聴、★採用メモ(localStorage)。起動: `node launcher/minimax_tester.js`。
+3. **字幕はコメントに出さない + V3二段字幕** — `slides/subtitles.js` を全面改稿。ASR認識結果ではなく**原文ナレーション**を「、。！？」で自然分割→2行化し、Whisper word timestamp で同期。`narrationDurSec` でナレーション区間の word のみ使用（コメント読み上げ区間は字幕なし）。`render.js` は `injectSubtitles(html, mod.narration, mod.subtitleWords, dur, {leadPad, narrationDurSec})` を呼ぶ。`pipeline.js` が `mod.subtitleWords`/`mod.narrationDurOnly` を保存。
+
+## 改修ログ（2026-07-01：コメント収集刷新 / TTS並列化 / VPSレンダリング）
+
+### コメント収集（fetchers/comments.js）
+
+#### fromXReplies — 設計思想
+- `fromX`（キーワード広域検索）は廃止。`fromXReplies` + Yahoo + Reddit の3本柱に統一
+- **なぜ `fromX` を廃止したか**: W杯期間中は「日本vsブラジル」などがトレンドを占拠し、エムバペ記録のトピックでも無関係コメントが混入。`fromXReplies` はソースツイートを起点にするため構造的に絞り込める
+
+#### fromXReplies — 実装フロー
+```
+1. JP + EN キーワードで広くXを検索（アカウント縛りなし）
+   クエリ例: (エムバペ OR クローゼ OR Mbappe OR Klose) -is:retweet lang:ja
+   ※ queryType: 'Top' + 'Latest' 両方取得してマージ（候補数拡大）
+
+2. ブルーバッジ(isBlueVerified) + フォロワー10万以上 でフィルター
+   → 信頼性の高いメディアアカウントのツイートに絞る
+
+3. GPT-4o-mini でトピック一致判定（上位10件 → JSON配列で合否）
+   ※ AI一致0件の場合はフォールバックせず空を返す（無関係スレッド防止）
+
+4. top2 を選択してリプライを並列取得（conversation_id: 検索）
+```
+
+#### キーワード設計ルール
+- JP: `topic.match(/[ァ-ヶー]{3,}/g)` — カタカナ3文字以上の固有名詞
+- EN: `enQuery` から大文字始まりの語のみ（goal/record/cup等の汎用語は除外）
+- EN汎用除外リスト: `goal goals record records cup world soccer football match game win score`
+
+#### 試合フェーズ判定（detectMatchPhase）
+- `matchData.status.finished/started/utcTime` から `'pre'|'live'|'post'` を返す
+- Yahoo検索のsuffixとXのhintをフェーズ別に切替
+  - pre: `展望 予想` / `展望 OR 予想 OR 注目`
+  - live: `速報 ライブ` / `速報 OR ゴール OR 実況`
+  - post: `結果 感想` / `感想 OR 試合終了 OR お疲れ`
+- **フェーズヒントはXアカウント検索クエリには入れない**（汎用語がW杯全体にマッチしてしまうため）
+
+#### enQuery の流れ
+- `collectComments(topic, { enQuery })` → `fromXReplies(topic, { phase, enQuery })` に伝播
+- research.js が `analyzeTopic()` で生成した英語キーワードを `enQuery` として渡す
+
+### TTS並列化（narration.js）
+- `makeSemaphore(2)` でスライドレベル・コメントレベル両方を並列化
+- MiniMax RPM rate limit 対策: エラー時に3s/6sウェイトでリトライ（最大3回）→失敗時のみVoiceVoxフォールバック
+- コメントTTSは `packComments(comments)` で9行スロットに収まる件数のみ読み上げ（画面外コメントはTTSしない）
+
+### Whisper並列化（whisper.js）
+- `makeWhisperSemaphore(4)` で並列化。5ファイルで約5秒（従来は逐次で～40秒）
+
+### コメントオーバーレイ 9行スロット設計（slides/comments.js）
+- 1920x1080 overlay: top=130px, bottom=120px → 高さ830px / 9スロット
+- 短コメ(≤40字)=1行、中(≤80字)=2行、長(≤120字)=3行
+- `_packComments()` で貪欲選択（9スロット埋まるまで）
+- export: `packComments: _packComments`（narration.js から import して TTS対象を限定）
+
+### VPSレンダリング（render.js）
+- **Linux: Xvfb + ffmpeg x11grab（1.0〜1.2倍速）**
+  - Chrome args: `--use-gl=swiftshader`（GPU無しVPSでCSSアニメ正常描画）
+  - `-draw_mouse 0`（カーソル非表示）
+  - warmup 800ms（冒頭0.5sズレ対策）
+  - `--disable-backgrounding-occluded-windows` 等スロットリング防止フラグ
+- **Windows: CDP JPEG → ffmpeg stdin（従来方式）**
+- CDP方式はVPSで6.4倍速（GPU無しでスクリーンショット1枚267ms）→ x11grabに回帰
+
+### VPS 設定
+- `/root/side_biz/launcher/ecosystem.config.js`（git管理外）
+  - `DISPLAY: ':99'`、`PUPPETEER_EXECUTABLE_PATH: '/usr/bin/chromium-browser'` を env に設定
+  - pm2 起動: `pm2 start ecosystem.config.js --name v5-launcher`
+- ダッシュボードURL: `http://37.60.224.54:3456`
+- 動画確認用HTTP: `python3 -m http.server 8081`（output/ をサーブ）
+
+## 改修ログ（2026-07-01 その2：ベンチ結果）
+
+| ステップ | 時間 | 備考 |
+|---|---|---|
+| ①案件取得 | 16.2s | articles:10 comments:34 |
+| ②③ラベル・データ取得 | ①に含む | player:エムバペ |
+| ④⑤企画ピース | 5.2s | 5視点 |
+| ⑥脚本生成 | 7.0s | 5スライド |
+| ④画像取得 | 3.2s | 2/5枚 |
+| ⑦TTS | 33.4s | 並列化後（従来比 ～40%短縮） |
+| ⑧Whisper | 5.3s | 並列化後（従来比 ～87%短縮） |
+| ⑨レンダリング | 144.7s | x11grab 1.1倍速 |
+| concat+BGM | 39.8s | |
+| **合計** | **約255s** | 122.9秒動画 / 15.9MB |
+
+## 改修ログ（2026-07-01 その3：Step2 V3式取得 / Step4 UI / TTSモデル）
+
+### Step2 — V3式「ラベル紐づけ取得」（その1#2 のグループ式チェックUIを置換）
+- ラベルは**コンパクトなチップ**に。各チップの**左側に 📊/🖼 アイコンボタン**（押すとそのラベル単体で取得）。
+- チップ群の**上に「📊 データ全取得」ボタン**（全ラベル一括データ取得 = `fetchAllLabelData`）。
+- 取得結果はチップ下に表示：データ → ラベルごとサマリー（`renderLabelDataResults`）、画像 → ラベルごとにチェック式サムネ（`renderLabelImageResults`）。チェックした画像のみ Step4 ギャラリーへ（`uncheckedImageUrls` で管理・デフォルト全チェック）。
+- サーバ: `dashboard.js` に **WS `fetch_label_data`**（単一ラベル→`fetchMatch`/`fetchPlayer`/`fetchTeam`、選手写真/ロゴも `images` で返す）と **WS `fetch_label_images`**（`fetchImagesForLabels([label])` → `facts.xImages` にマージ）を追加。
+- クライアント状態: `labelImages`/`labelData`/`labelBusy`（key = `labelKeyOf(lb)`）、`allGalleryImages` は全ラベル画像のマージプール。
+
+### Step4 — エディタUI刷新
+- スライド型選択下の「▶プレビュー」ボタン削除（`togglePreview` は未使用化）。
+- **画像調整をアコーディオン化**: 見出し「左画像/背景画像/右画像」を横並びタブ（`imgAccordion` / `toggleImgPanel` / `buildImgBlockHTML`）。タブを開くとそのキーが**ギャラリーターゲット**にもなる。
+- **ナレーション窓を6行**に（`rows="6"`）。
+- **データスロット・コメントを `<details>` で折りたたみ**（`accordion()` ＋ `dataSectionInner`/`cmtSectionInner`）。
+- **プレビューを最下部・全幅へ移動**。右カラムは画像ギャラリーのみ。`insight` プレビューに背景画像描画を追加（本番一致）。
+- プレビュー本体は WS `preview_slide`（実ビルダー）→ iframe srcdoc（`s4RefreshPreview`/`s4ShowPreview`、`s4PreviewReqId` で古い応答破棄）。
+
+### MiniMax TTS モデル
+- 旧設定は `speech-01-hd`（**抑揚弱い原因**）。有効モデル（2026-06時点・公式/pipecat確認）= `speech-2.6-hd`(最新HD・ナレ本命)/`speech-2.6-turbo`/`speech-2.5-hd`/`speech-2.5-turbo`/`speech-02-hd`/`speech-02-turbo`/`speech-01-hd`。`speech-2.8-hd` は**存在しない**。
+- `minimax_tester.js` に**モデル選択UI**追加（既定 `speech-2.6-hd`、自作ID入力可）。本番採用モデルは試聴後に `narration.js` の `model:` を差し替える（未確定なら据え置き）。
+
+### 運用メモ（ポート / 起動）
+- ダッシュボード: **3456**（`node launcher/dashboard.js`）。MiniMaxテスター: **3457**（`node launcher/minimax_tester.js`）。両方 `0.0.0.0` listen → **Tailscale `http://100.115.224.x:ポート`** で別端末から可（このPCのTS IP = 100.115.192.114）。
+- index.html は `Cache-Control: no-cache` 付きで配信（スマホSafariの旧HTMLキャッシュ対策）→ index.html 変更は再起動不要。**dashboard.js 変更時のみ再起動**。
+- セッション独立で常駐させるには PowerShell `Start-Process node ... -WindowStyle Hidden`（Claudeのバックグラウンド実行はセッション終了で落ちるため）。
