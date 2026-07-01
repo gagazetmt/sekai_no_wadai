@@ -309,15 +309,23 @@ ${list}`;
 
 // ── ニュースアカウントリプライ取得（JP / EN 共通） ──────────
 
-async function _fromNewsAccountReplies(topic, { lang = 'ja', accounts, label } = {}) {
+async function _fromNewsAccountReplies(topic, { lang = 'ja', accounts, label, enQuery = '' } = {}) {
   if (!X_API_KEY || !accounts?.length) return [];
 
   try {
-    // キーワード抽出（カタカナ3文字以上 or 英字固有名詞）
-    const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
-    const enKws = [...new Set(topic.match(/[A-Z][a-z]{2,}/g) || [])].slice(0, 2);
-    const kws = lang === 'ja' ? jpKws : (enKws.length ? enKws : jpKws);
-    const kwPart = kws.length ? kws.join(' OR ') : topic.slice(0, 20);
+    // キーワード抽出
+    let kwPart;
+    if (lang === 'en') {
+      // 英語クエリ: enQuery優先 → _toEnglishQuery変換 → カタカナfallback
+      const enQ = enQuery || _toEnglishQuery(topic);
+      const enKws = [...new Set(topic.match(/[A-Z][a-z]{2,}/g) || [])].slice(0, 2);
+      kwPart = enKws.length ? enKws.join(' OR ')
+             : enQ ? enQ.split(/\s+/).slice(0, 3).join(' ')
+             : topic.slice(0, 20);
+    } else {
+      const jpKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])].slice(0, 2);
+      kwPart = jpKws.length ? jpKws.join(' OR ') : topic.slice(0, 20);
+    }
 
     const fromPart = accounts.slice(0, 8).map(a => `from:${a}`).join(' OR ');
     const q = `(${fromPart}) (${kwPart}) -is:retweet`;
@@ -385,7 +393,7 @@ async function fromXReplies(topic, { phase = 'post', enQuery = '' } = {}) {
 
   const [jpReplies, enReplies] = await Promise.all([
     _fromNewsAccountReplies(topic, { lang: 'ja', accounts: JP_NEWS_ACCOUNTS, label: 'xr_jp' }),
-    _fromNewsAccountReplies(topic, { lang: 'en', accounts: EN_NEWS_ACCOUNTS, label: 'xr_en' }),
+    _fromNewsAccountReplies(topic, { lang: 'en', accounts: EN_NEWS_ACCOUNTS, label: 'xr_en', enQuery }),
   ]);
 
   const all = [...jpReplies, ...enReplies];
@@ -447,16 +455,13 @@ async function collectComments(topic, options = {}) {
   const phase = detectMatchPhase(matchData);
   console.log(`  Topic: ${topic}  Phase: ${phase}\n`);
 
-  const [reddit, yahoo, xReplies] = await Promise.all([
-    fromReddit(topic, enQuery, { redditUrls }),
-    fromYahoo(topic, { yahooUrls, phase }),
-    fromXReplies(topic, { phase, enQuery }),
-  ]);
+  // Yahoo・Reddit 一時無効化 → X ja/en のみ
+  const xReplies = await fromXReplies(topic, { phase, enQuery });
 
-  const all = [...reddit, ...yahoo, ...xReplies];
-  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x_reply=${xReplies.length} → ${all.length}`);
+  const all = [...xReplies];
+  console.log(`\n  Comments total: x_reply=${xReplies.length} → ${all.length}`);
 
-  return { reddit, yahoo, x: xReplies, xReplies, xBroad: [], all, phase };
+  return { reddit: [], yahoo: [], x: xReplies, xReplies, xBroad: [], all, phase };
 }
 
 module.exports = { collectComments, fromReddit, fromYahoo, fromX, fromXReplies, detectMatchPhase };
