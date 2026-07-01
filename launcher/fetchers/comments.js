@@ -274,7 +274,10 @@ async function fromXReplies(topic, { phase = 'post' } = {}) {
       return [];
     }
 
-    // エンゲージメントスコアでトップ2を選択
+    // トピックから固有名詞キーワードを抽出（カタカナ3文字以上）
+    const topicKws = [...new Set(topic.match(/[ァ-ヶー]{3,}/g) || [])];
+
+    // エンゲージメントスコアでソート → トピック一致ツイートを優先選択
     const scored = accountTweets.map(t => ({
       id: t.id || t.tweet_id || t.id_str,
       text: t.text || t.full_text || '',
@@ -282,8 +285,14 @@ async function fromXReplies(topic, { phase = 'post' } = {}) {
     })).filter(t => t.id);
 
     scored.sort((a, b) => b.score - a.score);
-    const top2 = scored.slice(0, 2);
-    console.log(`  [comments/xr] 候補ツイート: ${scored.length}件 → トップ${top2.length}件 (score: ${top2.map(t => t.score).join(', ')})`);
+
+    // キーワードが取れている場合はソースツイートの本文一致でフィルター
+    const matched = topicKws.length
+      ? scored.filter(t => topicKws.some(kw => t.text.includes(kw)))
+      : scored;
+    const pool = matched.length ? matched : scored; // 一致なしなら全件にフォールバック
+    const top2 = pool.slice(0, 2);
+    console.log(`  [comments/xr] 候補ツイート: ${scored.length}件 (kw一致: ${matched.length}件) → トップ${top2.length}件 (score: ${top2.map(t => t.score).join(', ')})\n  kws: [${topicKws.join(', ')}]`);
 
     // Step2: 各ツイートのリプライを並列取得
     const replyArrays = await Promise.all(top2.map(async t => {
