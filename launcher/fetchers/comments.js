@@ -381,6 +381,25 @@ const PHASE_X_HINT = {
   post: '感想 OR 試合終了 OR お疲れ',
 };
 
+// ── トピック関連性フィルター ────────────────────────────
+
+// トピックタイトルからカタカナ固有名詞・数字などのキーワードを抽出
+function _topicKeywords(topic) {
+  const katakana = topic.match(/[ァ-ヶー]{3,}/g) || [];
+  const numbers  = topic.match(/\d+/g) || [];
+  return [...new Set([...katakana, ...numbers])].filter(k => k.length >= 2);
+}
+
+// コメントがトピックに関連しているか判定
+// - トピックキーワードを1つでも含む → OK
+// - 短い純感情コメント（20字未満 + 感嘆符系）→ OK（どのトピックへの反応でも成立）
+function _isRelevantComment(text, topicKws) {
+  if (!topicKws.length) return true;
+  if (topicKws.some(k => text.includes(k))) return true;
+  const isShortEmotion = text.length < 25 && /すごい|やばい|最高|神|草|笑|凄い|[！!]{2}/.test(text);
+  return isShortEmotion;
+}
+
 // ── メインAPI: 3ソース並列取得 ──────────────────────────
 
 async function collectComments(topic, options = {}) {
@@ -410,9 +429,17 @@ async function collectComments(topic, options = {}) {
     : [...xReplies, ...xBroad].filter((c, i, arr) => arr.findIndex(a => a.text === c.text) === i);
 
   const all = [...reddit, ...yahoo, ...x];
-  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x_reply=${xReplies.length} x_broad=${xBroad.length} → ${all.length}`);
 
-  return { reddit, yahoo, x, xReplies, xBroad, all, phase };
+  // トピック関連性フィルター（別試合コメント混入防止）
+  const topicKws = _topicKeywords(topic);
+  const relevant = topicKws.length
+    ? all.filter(c => _isRelevantComment(c.text || '', topicKws))
+    : all;
+  const filtered = all.length - relevant.length;
+
+  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x_reply=${xReplies.length} x_broad=${xBroad.length} → ${all.length} (relevance filter: -${filtered})`);
+
+  return { reddit, yahoo, x, xReplies, xBroad, all: relevant, phase };
 }
 
 module.exports = { collectComments, fromReddit, fromYahoo, fromX, fromXReplies, detectMatchPhase };
