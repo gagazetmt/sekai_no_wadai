@@ -448,6 +448,7 @@ async function generateMods(patternKey, topic, facts) {
   - stats: {"Ball possession": {home:55, away:45}, ...}
   - lineup: {home:[{name,pos},...], away:[{name,pos},...]}
   - formations: {home:"4-3-3", away:"4-2-3-1"}
+  ※matchcard選定: 記事に複数の試合が出てくる場合は、トピックが直接言及している・最も最近（またはこれから）の試合を選ぶ。過去の予選・関係のない試合を拾うな。例：「クロップ監督就任」ならドイツの次戦(W杯本番)を選ぶ。「エクアドル戦」は予選の話であり、トピックの核心でない場合は使わない。
 - bgImage: null（後工程で設定）
 - leftImage / rightImage: null（comparison用、後工程）
 
