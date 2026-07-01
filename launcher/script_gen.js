@@ -169,7 +169,7 @@ async function callDeepSeek(systemPrompt, userPrompt) {
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.4,
-      max_tokens: 4000,
+      max_tokens: 8000,
       response_format: { type: 'json_object' },
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -177,6 +177,7 @@ async function callDeepSeek(systemPrompt, userPrompt) {
   if (!res.ok) throw new Error(`DeepSeek ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error('DeepSeek: empty response content');
   return JSON.parse(text);
 }
 
@@ -194,7 +195,7 @@ async function callOpenAI(systemPrompt, userPrompt) {
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.4,
-      max_tokens: 4000,
+      max_tokens: 8000,
       response_format: { type: 'json_object' },
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
