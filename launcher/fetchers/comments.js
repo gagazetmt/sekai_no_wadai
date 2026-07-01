@@ -410,36 +410,16 @@ async function collectComments(topic, options = {}) {
   const phase = detectMatchPhase(matchData);
   console.log(`  Topic: ${topic}  Phase: ${phase}\n`);
 
-  // X: fromXReplies をプライマリ、取れなければ fromX にフォールバック
-  const xReplyPromise = fromXReplies(topic, { phase });
-  const xBroadPromise = xTweets !== null
-    ? Promise.resolve(xTweets)
-    : fromX(topic, enQuery);
-
-  const [reddit, yahoo, xReplies, xBroad] = await Promise.all([
+  const [reddit, yahoo, xReplies] = await Promise.all([
     fromReddit(topic, enQuery, { redditUrls }),
     fromYahoo(topic, { yahooUrls, phase }),
-    xReplyPromise,
-    xBroadPromise,
+    fromXReplies(topic, { phase }),
   ]);
 
-  // リプライが取れていればそちら優先、なければ広域検索で補完
-  const x = xReplies.length >= 5
-    ? xReplies
-    : [...xReplies, ...xBroad].filter((c, i, arr) => arr.findIndex(a => a.text === c.text) === i);
+  const all = [...reddit, ...yahoo, ...xReplies];
+  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x_reply=${xReplies.length} → ${all.length}`);
 
-  const all = [...reddit, ...yahoo, ...x];
-
-  // トピック関連性フィルター（別試合コメント混入防止）
-  const topicKws = _topicKeywords(topic);
-  const relevant = topicKws.length
-    ? all.filter(c => _isRelevantComment(c.text || '', topicKws))
-    : all;
-  const filtered = all.length - relevant.length;
-
-  console.log(`\n  Comments total: reddit=${reddit.length} yahoo=${yahoo.length} x_reply=${xReplies.length} x_broad=${xBroad.length} → ${all.length} (relevance filter: -${filtered})`);
-
-  return { reddit, yahoo, x, xReplies, xBroad, all: relevant, phase };
+  return { reddit, yahoo, x: xReplies, xReplies, xBroad: [], all, phase };
 }
 
 module.exports = { collectComments, fromReddit, fromYahoo, fromX, fromXReplies, detectMatchPhase };
