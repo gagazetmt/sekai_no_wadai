@@ -78,6 +78,9 @@ function saveTopicData() {
     slim[k] = {
       summary: v.summary,
       factsForClient: v.factsForClient,
+      // 脚本生成用の完全版facts（記事本文・matchData全体等）。ダッシュボード再起動後も
+      // factsForClient（表示用の軽量版・記事本文なし）にフォールバックしないための保存
+      facts: v.facts || null,
       brief: v.brief || null,
       mods: v.mods || null,
       renderResult: v.renderResult || null,
@@ -443,7 +446,7 @@ async function runResearch(topicTitle) {
       },
     };
 
-    session.topicData[topicTitle] = { summary, factsForClient };
+    session.topicData[topicTitle] = { summary, factsForClient, facts };
     saveTopicData();
 
     session.phase = 'facts_ready';
@@ -484,7 +487,8 @@ async function runRender(prebuiltMods = null) {
     if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
     if (!session.facts) {
       const td = session.topicData[session.activeTopic];
-      if (td?.factsForClient) session.facts = td.factsForClient;
+      if (td?.facts) session.facts = td.facts;
+      else if (td?.factsForClient) session.facts = td.factsForClient;
     }
     if (factsTopicMismatch()) throw new Error(factsMismatchDetail());
     // ギャラリーでチェック解除された画像は自動プリセット対象外にする
@@ -612,7 +616,8 @@ wss.on('connection', (ws) => {
       if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
       if (!session.facts) {
         const td = session.topicData[session.activeTopic];
-        if (td?.factsForClient) session.facts = td.factsForClient;
+        if (td?.facts) session.facts = td.facts;
+        else if (td?.factsForClient) session.facts = td.factsForClient;
       }
       if (!session.facts) {
         ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
@@ -1020,7 +1025,8 @@ wss.on('connection', (ws) => {
       if (!session.facts) session.facts = session.factsCache[session.activeTopic] || null;
       if (!session.facts) {
         const td = session.topicData[session.activeTopic];
-        if (td?.factsForClient) session.facts = td.factsForClient;
+        if (td?.facts) session.facts = td.facts;
+        else if (td?.factsForClient) session.facts = td.factsForClient;
       }
       if (!session.facts) {
         ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
