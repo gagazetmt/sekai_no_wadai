@@ -720,20 +720,35 @@ ${imgEntities.join(' / ')}` : '';
 
 ` : '';
 
-  const result = await callAI(
+  // AIが指示に反して "mods" の代わりに別キー（slides等）で返すことがあるため、
+  // "narration" or "title" を持つオブジェクト4つ以上の配列ならキー名を問わず救済する
+  function extractModsArray(result) {
+    if (Array.isArray(result?.mods) && result.mods.length >= 4) return result.mods;
+    for (const [key, val] of Object.entries(result || {})) {
+      if (key === 'mods' || !Array.isArray(val) || val.length < 4) continue;
+      const looksLikeSlides = val.every(v => v && typeof v === 'object' && ('narration' in v || 'title' in v));
+      if (looksLikeSlides) {
+        console.warn(`  ⚠ [script_gen] AIが "mods" ではなく "${key}" キーで返答 → 救済`);
+        return val;
+      }
+    }
+    return null;
+  }
+
+  let result = await callAI(
     systemPrompt + inventorySection,
     `${briefSection}トピック: ${topic}\n\n素材:\n${compressed}`
   );
+  let resultMods = extractModsArray(result);
 
-  // AIが指示に反して "mods" の代わりに "slides" 等別名で返すことがあるため救済（プロンプトの
-  // 「1枚目/2枚目」表記を "slides[]" キーと混同するケースを確認済み）
-  let resultMods = result.mods;
-  if (!Array.isArray(resultMods) || resultMods.length < 4) {
-    const altKey = ['slides', 'slide', 'contents'].find(k => Array.isArray(result[k]) && result[k].length >= 4);
-    if (altKey) {
-      console.warn(`  ⚠ [script_gen] AIが "mods" ではなく "${altKey}" キーで返答 → 救済`);
-      resultMods = result[altKey];
-    }
+  // 1回だけリトライ: キー名不一致で救済もできなかった場合、矯正指示を追記して再生成
+  if (!resultMods) {
+    console.warn(`  ⚠ [script_gen] mods 抽出失敗（返答キー: ${Object.keys(result || {}).join(',')}）→ 矯正リトライ`);
+    result = await callAI(
+      systemPrompt + inventorySection,
+      `${briefSection}トピック: ${topic}\n\n素材:\n${compressed}\n\n【重要】前回の出力形式が誤っていました。必ずトップレベルキー "mods"（4要素の配列）で返してください。"slides" 等の別名は禁止です。`
+    );
+    resultMods = extractModsArray(result);
   }
 
   const validTypes = Object.keys(CONTENT_SLIDE_REQUIRED);
