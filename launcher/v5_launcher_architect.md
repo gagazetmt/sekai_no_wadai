@@ -547,3 +547,18 @@ Step4 右カラムの画像ギャラリー下部にURL入力欄を追加。
 - **Sonnet監修の不発可視化**（_sonnetFactCheck）: `from` が原文不一致で replace 不発だった修正を警告ログ（「指摘N件中M件適用」）
 
 ※ 反映には `node dashboard.js` の再起動が必要。
+
+---
+
+## 改修ログ（2026-07-02 その3：「mods 不足: 0枚」再発の別原因を修正）
+
+max_tokens 8000化（その1）で直ったはずの `mods 不足: 0枚` が、フルlineup(22選手)+コメント47件級の重い facts で再発。
+
+**原因**: `generateModsAuto` の system prompt が構成説明に「slides[0]: opening」「slides[1]: コンテンツA」という表記を使っており、AIが要求キー `mods` の代わりに構造説明の見出しをそのまま `{"slides": [...]}` として出力してしまうケースを確認（finish_reason は "stop"、トークン上限には未到達 — 純粋なキー名の取り違え）。
+
+**対処**（script_gen.js）:
+1. プロンプト表記を「1枚目(OP)」「2枚目」等に変更しJSON予約語との視覚的衝突を回避
+2. 出力形式の指示に「トップレベルキーは "contentTypes" と "mods" のみ。"slides" は使わない」を明記
+3. 保険として `result.mods` が無い場合 `slides`/`slide`/`contents` キーを救済読み取り（発生時は `⚠ [script_gen] AIが "mods" ではなく "○○" キーで返答 → 救済` を警告ログ出力。これが出たら再発の兆候として注視）
+
+重いfacts（lineup22人+コメント47件、brief有無両方）で3回再現テストし解消を確認。
