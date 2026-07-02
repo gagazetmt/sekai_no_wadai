@@ -1107,6 +1107,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
         <div class="dual-spinner" style="width:32px;height:32px;flex-shrink:0"></div>
         <span>脚本を生成中...</span>
       </div>
+      <!-- 脚本バリデーション警告 -->
+      <div id="s4ValidationWarn" style="display:none;margin:8px 0;padding:10px 12px;border:1px solid rgba(245,158,11,0.5);border-radius:8px;background:rgba(245,158,11,0.08);color:#fbbf24;font-size:12px;line-height:1.6"></div>
       <!-- スライドタブ行 -->
       <div class="s4-tabs-row" id="s4TabsRow" style="display:none"></div>
       <!-- 2カラム: エディタ + ギャラリー -->
@@ -1411,7 +1413,7 @@ function handleMessage(msg) {
       if (msg.mods) currentMods = JSON.parse(JSON.stringify(msg.mods));
       break;
     case 'script_ready':
-      loadScriptEditor(msg.mods, msg.topic);
+      loadScriptEditor(msg.mods, msg.topic, msg.validation);
       setStatus('脚本生成完了', false); setTab(4);
       break;
     case 'mods_saved':
@@ -2254,10 +2256,20 @@ function doGenerateScript() {
   switchTab(4);
 }
 
-function loadScriptEditor(mods, topic) {
+function loadScriptEditor(mods, topic, validation) {
   currentMods = JSON.parse(JSON.stringify(mods));
   s4ActiveIdx = 0;
   document.getElementById('reGenLoading').style.display = 'none';
+  var vw = document.getElementById('s4ValidationWarn');
+  if (vw) {
+    if (validation && !validation.valid && validation.errors && validation.errors.length) {
+      vw.innerHTML = '⚠ <b>脚本に未設定フィールドがあります。</b>そのままレンダリングすると表示が欠けます:<br>' +
+        validation.errors.map(function(e){ return '・' + esc(e); }).join('<br>');
+      vw.style.display = '';
+    } else {
+      vw.style.display = 'none';
+    }
+  }
   if (topic) document.getElementById('s4TopicLabel').textContent = topic;
   document.getElementById('renderEmpty').style.display = 'none';
   document.getElementById('renderEditor').style.display = '';
@@ -3196,7 +3208,7 @@ function goToRender() {
 
 function startRender() {
   if (!currentMods || !currentMods.length) return;
-  send({ action: 're_render', mods: currentMods });
+  send({ action: 're_render', mods: currentMods, uncheckedImages: Array.from(uncheckedImageUrls) });
   setStatus('レンダリング中', true);
   document.getElementById('render5Ready').style.display = 'none';
   document.getElementById('renderProgress').style.display = '';

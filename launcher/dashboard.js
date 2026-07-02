@@ -457,6 +457,18 @@ async function runResearch(topicTitle) {
   }
 }
 
+// ── facts 取り違えガード ─────────────────────────────
+// facts は session.facts / factsCache / topicData.factsForClient の3箇所にあり、
+// 案件切替時に別トピックの facts で生成が走る事故を検知する
+function factsTopicMismatch() {
+  const ft = session.facts?.topic;
+  return !!(ft && session.activeTopic && ft !== session.activeTopic);
+}
+
+function factsMismatchDetail() {
+  return `facts の取り違えを検知しました: facts="${session.facts?.topic}" / 選択中="${session.activeTopic}"。案件を開き直してください`;
+}
+
 // ── Step 3: Render ───────────────────────────────────
 
 async function runRender(prebuiltMods = null) {
@@ -474,6 +486,9 @@ async function runRender(prebuiltMods = null) {
       const td = session.topicData[session.activeTopic];
       if (td?.factsForClient) session.facts = td.factsForClient;
     }
+    if (factsTopicMismatch()) throw new Error(factsMismatchDetail());
+    // ギャラリーでチェック解除された画像は自動プリセット対象外にする
+    if (session.facts) session.facts._uncheckedImageUrls = session.uncheckedImageUrls || [];
 
     const emitter = new EventEmitter();
     emitter.on('pipeline', (evt) => broadcast(evt));
@@ -583,6 +598,7 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.action === 'render') {
+      if (Array.isArray(msg.uncheckedImages)) session.uncheckedImageUrls = msg.uncheckedImages;
       const cachedMods = session.topicData[session.activeTopic]?.mods;
       if (msg.mods || cachedMods) {
         runRender(msg.mods || cachedMods);
@@ -602,6 +618,10 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
         return;
       }
+      if (factsTopicMismatch()) {
+        ws.send(JSON.stringify({ type: 'error', detail: factsMismatchDetail() }));
+        return;
+      }
       interceptConsole();
       broadcast({ type: 'phase', phase: 'generating_script' });
       try {
@@ -611,7 +631,7 @@ wss.on('connection', (ws) => {
           session.topicData[session.activeTopic].mods = mods;
           saveTopicData();
         }
-        broadcast({ type: 'script_ready', mods, topic: session.activeTopic, patternKey });
+        broadcast({ type: 'script_ready', mods, topic: session.activeTopic, patternKey, validation: result.validation || null });
       } catch (err) {
         broadcast({ type: 'error', detail: err.message });
       } finally {
@@ -628,6 +648,7 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.action === 're_render') {
+      if (Array.isArray(msg.uncheckedImages)) session.uncheckedImageUrls = msg.uncheckedImages;
       const mods = msg.mods;
       if (session.activeTopic && session.topicData[session.activeTopic] && mods) {
         session.topicData[session.activeTopic].mods = mods;
@@ -984,6 +1005,10 @@ wss.on('connection', (ws) => {
       }
       if (!session.facts) {
         ws.send(JSON.stringify({ type: 'error', detail: '情報収集データがありません。先に Step 2 を実行してください。' }));
+        return;
+      }
+      if (factsTopicMismatch()) {
+        ws.send(JSON.stringify({ type: 'error', detail: factsMismatchDetail() }));
         return;
       }
       interceptConsole();
