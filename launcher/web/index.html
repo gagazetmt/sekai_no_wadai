@@ -672,6 +672,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 
 /* ════ Step4 2カラムグリッド ════ */
 .s4-main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; align-items: flex-start; }
+.s4-main-grid > * { min-width: 0; }
 @media (max-width: 900px) { .s4-main-grid { grid-template-columns: 1fr; } }
 .s4-right-col { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 72px; }
 .s4-panel-hdr { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 700; color: var(--muted); }
@@ -760,7 +761,7 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .img-acc-panel:not(:empty) { padding: 10px; border-top: 1px solid var(--border); }
 
 /* ── Step4 セクションアコーディオン（データスロット/コメント）── */
-.sf-acc { border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; overflow: hidden; }
+.sf-acc { border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; overflow: hidden; min-width: 0; }
 .sf-acc > summary {
   list-style: none; cursor: pointer; padding: 9px 12px; font-size: 13px; font-weight: 700;
   color: var(--text-sub); background: var(--card2); user-select: none;
@@ -809,8 +810,8 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 
 /* ════ Comments Editor ════ */
 .cmt-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.cmt-item { display: flex; gap: 6px; align-items: center; }
-.cmt-text { flex: 1; min-width: 0; }
+.cmt-item { display: flex; gap: 6px; align-items: flex-start; }
+.cmt-text { flex: 1; min-width: 0; resize: vertical; font-family: inherit; }
 .cmt-src { width: 80px; flex-shrink: 0; font-size: 12px; }
 
 /* ════ Comment Warehouse ════ */
@@ -2976,7 +2977,7 @@ function buildSlideCard(mod, i) {
         return '<option value="' + s + '"' + (c.source === s ? ' selected' : '') + '>' + s + '</option>';
       }).join('');
       return '<div class="cmt-item">' +
-        '<input type="text" class="cmt-text" placeholder="コメント本文" value="' + esc(c.text||'') + '" oninput="updateComment(' + i + ',' + j + ',\'text\',this.value)">' +
+        '<textarea class="cmt-text" rows="3" placeholder="コメント本文" oninput="updateComment(' + i + ',' + j + ',\'text\',this.value)">' + esc(c.text||'') + '</textarea>' +
         '<select class="cmt-src" onchange="updateComment(' + i + ',' + j + ',\'source\',this.value)">' + srcOpts + '</select>' +
         '<button class="ds-del" onclick="removeComment(' + i + ',' + j + ')">✕</button>' +
       '</div>';
