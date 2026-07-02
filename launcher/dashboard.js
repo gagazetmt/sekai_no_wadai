@@ -172,6 +172,12 @@ const server = http.createServer((req, res) => {
         try {
           await page.setViewport({ width: 1920, height: 1080 });
           await page.setContent(html, { waitUntil: 'networkidle2', timeout: 12000 });
+          // 各スライドの登場アニメーション(名前タグ・VSバッジ等は0.5〜0.7s遅延)が
+          // 終わりきる前にスクリーンショットしていたため、比較スライドの右パネル名前などが
+          // 写っていないことがあった。全アニメーションを終端まで進めてから撮る。
+          await page.evaluate(() => {
+            document.getAnimations().forEach(a => { a.pause(); a.currentTime = 999999; });
+          });
           const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
           res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
           res.end(buf);
