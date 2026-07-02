@@ -74,13 +74,71 @@ function _groupNarration(text, groupChars) {
   if (parts.length === 0) parts = [String(text)];
   const groups = [];
   let cur = '';
+  let curLen = 0;
   for (const p of parts) {
-    // 1パートが長すぎる場合はそのまま1グループ（splitSubtitleが2行化）
-    if (cur.length + p.length > groupChars && cur) { groups.push(cur); cur = ''; }
+    const pLen = p.replace(/\s/g, '').length;  // _groupWords と揃えてスペース除外
+    if (curLen > 0 && curLen + pLen > groupChars) { groups.push(cur); cur = ''; curLen = 0; }
     cur += p;
+    curLen += pLen;
   }
   if (cur) groups.push(cur);
   return groups;
+}
+
+// 原文の各文字 → Whisper由来の推定タイムスタンプ を編集距離アラインメントで求める。
+// Whisperは同音異義語("得点"→"特典")や固有名詞("エムバペ"→"m","バ","ペ")を誤認識しやすく、
+// 単純な文字数累積比率でマッピングすると誤認識区間の文字数差がそのままズレとして蓄積し、
+// 後半になるほど字幕タイミングが音声からズレていく。編集距離アラインメントなら
+// 誤認識区間だけを「不一致」としてスキップし、正しく認識できた文字で再同期できる。
+function _alignTextToWhisperTime(textChars, words) {
+  // words を文字単位に展開: 各wordの [start,end] をその文字数で均等按分
+  const timeline = [];
+  for (const w of words) {
+    const wt = String(w.word || w.text || '').replace(/\s/g, '');
+    if (!wt.length) continue;
+    const s = w.start, e = Math.max(w.end, w.start);
+    const span = e - s;
+    for (let k = 0; k < wt.length; k++) {
+      timeline.push({ ch: wt[k], t: span > 0 ? s + span * (k / wt.length) : s });
+    }
+  }
+  const n = textChars.length;
+  if (!timeline.length || !n) return textChars.map(() => null);
+
+  const m = timeline.length;
+  // 編集距離DP（置換/挿入/削除いずれもコスト1）
+  const dp = Array.from({ length: n + 1 }, () => new Int32Array(m + 1));
+  for (let i = 0; i <= n; i++) dp[i][0] = i;
+  for (let j = 0; j <= m; j++) dp[0][j] = j;
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const cost = textChars[i - 1] === timeline[j - 1].ch ? 0 : 1;
+      const del = dp[i - 1][j] + 1;
+      const ins = dp[i][j - 1] + 1;
+      const sub = dp[i - 1][j - 1] + cost;
+      dp[i][j] = Math.min(del, ins, sub);
+    }
+  }
+  // バックトレースで textIndex → timeline時刻 の対応を作る（一致/置換のペアのみ採用）
+  const mapping = new Array(n).fill(null);
+  let i = n, j = m;
+  while (i > 0 && j > 0) {
+    const cost = textChars[i - 1] === timeline[j - 1].ch ? 0 : 1;
+    if (dp[i][j] === dp[i - 1][j - 1] + cost) {
+      mapping[i - 1] = timeline[j - 1].t;
+      i--; j--;
+    } else if (dp[i][j] === dp[i - 1][j] + 1) {
+      i--; // 原文側の文字がWhisper側に対応なし(誤認識で消えた) → 後で前後から補間
+    } else {
+      j--; // Whisper側の余分な文字(誤認識で増えた) → 読み飛ばす
+    }
+  }
+  // 未割当(誤認識区間)は前後の確定値から補間して埋める
+  let lastT = timeline[0].t;
+  for (let k = 0; k < n; k++) { if (mapping[k] == null) mapping[k] = lastT; else lastT = mapping[k]; }
+  let nextT = timeline[timeline.length - 1].t;
+  for (let k = n - 1; k >= 0; k--) { if (mapping[k] == null) mapping[k] = nextT; else nextT = mapping[k]; }
+  return mapping;
 }
 
 // Whisper words を同じ文字数ルールでグループ化 → 各グループの先頭 word.start を使う
@@ -121,24 +179,29 @@ function buildSubtitleHTML(narrationText, words, totalDurationSec, opts = {}) {
   }
 
   if (nWords.length > 1) {
-    // ── Word グループベース: 完全 Whisper 同期 ──────────────────
-    const wordGroups = _groupWords(nWords, groupChars);
-    const wgLen = wordGroups.length;
-    const tgLen = textGroups.length;
+    // ── 編集距離アラインメントで原文の各文字にWhisper時刻を割り当てる ──────
+    // 文字数累積比率だと、Whisperの誤認識(同音異義語・固有名詞の分解等)で
+    // 生じた文字数差がそのままズレとして蓄積するため、アラインメントで
+    // 誤認識区間を読み飛ばしつつ対応する時刻を求める
+    const textNoSp = text.replace(/\s/g, '');
+    const textChars = Array.from(textNoSp);
+    const charTimeMap = _alignTextToWhisperTime(textChars, nWords);
+
+    let cumTextChars = 0;
 
     segs = textGroups.map((g, i) => {
-      // text group i → word group idx（グループ数が異なる場合は比例マッピング）
-      const wgIdx = Math.min(Math.round(i * wgLen / tgLen), wgLen - 1);
-      const wg = wordGroups[wgIdx];
-      const startLocal = wg.words[0].start;
+      const startIdx = Math.min(cumTextChars, charTimeMap.length - 1);
+      const startLocal = charTimeMap[startIdx] ?? nWords[0].start;
 
-      const isLast = i === tgLen - 1;
+      cumTextChars += g.replace(/\s/g, '').length;
+
+      const isLast = i === textGroups.length - 1;
       let endLocal;
       if (isLast) {
-        endLocal = narrationDurSec ?? wg.words[wg.words.length - 1].end;
+        endLocal = narrationDurSec ?? nWords[nWords.length - 1].end;
       } else {
-        const nextWgIdx = Math.min(Math.round((i + 1) * wgLen / tgLen), wgLen - 1);
-        endLocal = wordGroups[nextWgIdx].words[0].start;
+        const endIdx = Math.min(cumTextChars, charTimeMap.length - 1);
+        endLocal = charTimeMap[endIdx] ?? startLocal + 1;
       }
 
       const { lines } = splitSubtitle(g, maxLineLen);
