@@ -109,7 +109,7 @@ function buildCommentOverlayHTML(comments, narrationEndSec, timing, totalSec) {
     return `
 @keyframes cmtActive_${i} {
   0%, ${a.toFixed(2)}%            { transform: rotate(var(--rot,0deg)) scale(1);    box-shadow: 5px 5px 0 rgba(0,0,0,0.5); }
-  ${b.toFixed(2)}%, ${c.toFixed(2)}% { transform: rotate(var(--rot,0deg)) scale(1.04); box-shadow: 7px 7px 0 rgba(0,0,0,0.7), 0 0 40px rgba(252,211,77,0.55); }
+  ${b.toFixed(2)}%, ${c.toFixed(2)}% { transform: rotate(var(--rot,0deg)) scale(1.02); box-shadow: 7px 7px 0 rgba(0,0,0,0.7), 0 0 40px rgba(252,211,77,0.55); }
   ${d.toFixed(2)}%, 100%          { transform: rotate(var(--rot,0deg)) scale(1);    box-shadow: 5px 5px 0 rgba(0,0,0,0.5); }
 }
 .cmt-card.cmt-active-${i} { animation: cmtActive_${i} ${T.toFixed(2)}s linear forwards; }`;
@@ -127,13 +127,18 @@ function buildCommentOverlayHTML(comments, narrationEndSec, timing, totalSec) {
 @keyframes cmtScrim { from { opacity: 0; } to { opacity: 1; } }
 
 /* 9スロット × ${ROW_PX}px / slot = ${TOTAL_ROWS * ROW_PX}px total */
+/* overflow:hidden にしない: カードの回転(rotate)は端を軸にしていても、
+   カード全体としては縦方向にも数十px程度はみ出しうる（特に一番上のスロットは
+   天井との余白が無いため、overflow:hidden だとそこで見切れてしまう）。
+   キャンバス自体(1920x1080)の外まではみ出す量ではないため、切り取らず全体表示する。 */
 .cmt-overlay {
   position: absolute;
-  top: 130px; bottom: 120px; left: 70px; right: 70px;
+  /* top に余白多め: 傾き(rotate)+読み上げ中の拡大(scale)が重なると、1番上のカードが
+     キャンバス上端(y=0)を超えてしまう場合があるため、逃げ代を確保する */
+  top: 175px; bottom: 120px; left: 70px; right: 70px;
   display: flex; flex-direction: column;
   justify-content: flex-start; gap: 0;
   z-index: 20; pointer-events: none;
-  overflow: hidden;
 }
 /* slot: 行数 × ROW_PX px の高さ。幅は 88% = 40字 × 36px = 1440px + カード余白 */
 .cmt-slot {
