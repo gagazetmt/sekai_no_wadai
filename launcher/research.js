@@ -361,4 +361,38 @@ async function research(topic, options = {}) {
   return facts;
 }
 
-module.exports = { research, fetchMatch, fetchPlayer, fetchTeam, scrapeUrl, braveDeepSearch };
+// ── 試合データから選手を名前で引く（グローバル選手検索が失敗した場合の代替） ──
+// fetchMatch() の結果には出場した全選手の攻守スタッツ(playerStats)が既に含まれているため、
+// FotMobの人物検索が特定の選手名(表記ゆれ・マイナー選手等)でヒットしない場合でも、
+// 既に取得済みの試合データ内から名前一致で探せば追加APIコールなしで拾える。
+function findPlayerInMatchData(matchData, playerName) {
+  if (!matchData?.ok || !playerName) return null;
+  const norm = s => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+  const target = norm(playerName);
+  if (!target) return null;
+  const targetLast = target.split(/\s+/).pop();
+
+  const psEntries = Object.entries(matchData.playerStats || {});
+  let hit = psEntries.find(([, p]) => norm(p.name) === target);
+  if (!hit) hit = psEntries.find(([, p]) => norm(p.name).includes(target) || target.includes(norm(p.name)));
+  if (!hit) hit = psEntries.find(([, p]) => norm(p.name).split(/\s+/).pop() === targetLast);
+  if (!hit) return null;
+
+  const [pid, p] = hit;
+  const allLineup = [...(matchData.lineup?.home || []), ...(matchData.lineup?.away || [])];
+  const lu = allLineup.find(l => String(l.id) === String(pid));
+
+  console.log(`  [player] matchDataから発見: ${p.name} (${p.teamName || '?'})`);
+  return {
+    ok: true,
+    playerId: pid,
+    name: p.name,
+    team: p.teamName || null,
+    position: lu?.pos || (p.isGoalkeeper ? 'goalkeeper' : null),
+    photo: lu?.photo || null,
+    matchStats: p.stats,
+    fromMatchData: true,
+  };
+}
+
+module.exports = { research, fetchMatch, fetchPlayer, fetchTeam, scrapeUrl, braveDeepSearch, findPlayerInMatchData };

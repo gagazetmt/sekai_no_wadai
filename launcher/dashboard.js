@@ -701,7 +701,7 @@ wss.on('connection', (ws) => {
       const labelKey = msg.labelKey;
       if (!label) { ws.send(JSON.stringify({ type: 'label_data_ready', labelKey, error: 'no label' })); return; }
       broadcast({ type: 'phase', phase: 'fetching_data' });
-      const { fetchMatch, fetchPlayer, fetchTeam } = require('./research');
+      const { fetchMatch, fetchPlayer, fetchTeam, findPlayerInMatchData } = require('./research');
       const out = { type: 'label_data_ready', labelKey, matchData: null, playerData: null, teamData: null, images: [] };
       try {
         if (!session.facts) session.facts = {};
@@ -732,18 +732,24 @@ wss.on('connection', (ws) => {
               } catch (err) { console.warn(`  [fetch_label_data] 試合データ先読み失敗: ${err.message}`); }
             }
           }
-          const pd = await fetchPlayer(label.name);
+          let pd = await fetchPlayer(label.name);
+          if (!pd.ok) {
+            // グローバル選手検索が失敗(表記ゆれ・マイナー選手等)しても、
+            // 試合データに出場記録があれば追加APIコールなしでそこから拾える
+            const fromMatch = findPlayerInMatchData(session.facts.matchData, label.name);
+            if (fromMatch) pd = fromMatch;
+          }
           if (pd.ok) {
             session.facts.playerData = pd;
-            let matchStats = null;
+            let matchStats = pd.matchStats || null;
             const mdFull = session.facts.matchData;
-            if (mdFull?.playerStats && pd.playerId) { const ps = mdFull.playerStats[String(pd.playerId)]; if (ps) matchStats = ps.stats; }
+            if (!matchStats && mdFull?.playerStats && pd.playerId) { const ps = mdFull.playerStats[String(pd.playerId)]; if (ps) matchStats = ps.stats; }
             if (mdFull?.ok && !matchStats) console.warn(`  [fetch_label_data] ${pd.name}: 試合データはあるが本人のplayerStatsが見つからず（出場なし or ID不一致）`);
             out.playerData = {
               ok: true, playerId: pd.playerId, name: pd.name, position: pd.position, age: pd.age,
               nationality: pd.nationality, team: pd.team, leagueName: pd.leagueName, marketValue: pd.marketValue,
               marketValueHistory: pd.marketValueHistory || [], seasonStats: pd.seasonStats, nationalTeam: pd.nationalTeam,
-              recentAvgRating: pd.recentAvgRating, matchStats,
+              recentAvgRating: pd.recentAvgRating, matchStats, fromMatchData: pd.fromMatchData || false,
             };
             if (pd.photo) out.images.push({ url: pd.photo, label: pd.name || '選手', group: '選手' });
           } else out.playerData = { ok: false, error: pd.error };
@@ -854,7 +860,7 @@ wss.on('connection', (ws) => {
       }
 
       broadcast({ type: 'phase', phase: 'fetching_data' });
-      const { fetchMatch, fetchPlayer, fetchTeam } = require('./research');
+      const { fetchMatch, fetchPlayer, fetchTeam, findPlayerInMatchData } = require('./research');
       const result = { matchData: null, playerData: null, teamData: [] };
 
       if (homeTeam && awayTeam) {
@@ -874,14 +880,19 @@ wss.on('connection', (ws) => {
 
       if (playerName) {
         try {
-          const pd = await fetchPlayer(playerName);
+          let pd = await fetchPlayer(playerName);
+          if (!pd.ok) {
+            // グローバル選手検索が失敗しても、試合データに出場記録があればそこから拾える
+            const fromMatch = findPlayerInMatchData(session.facts?.matchData, playerName);
+            if (fromMatch) pd = fromMatch;
+          }
           if (pd.ok) {
             if (!session.facts) session.facts = {};
             session.facts.playerData = pd;
             // 今試合スタッツを matchData.playerStats から紐付け
-            let matchStats = null;
+            let matchStats = pd.matchStats || null;
             const mdFull = session.facts.matchData;
-            if (mdFull?.playerStats && pd.playerId) {
+            if (!matchStats && mdFull?.playerStats && pd.playerId) {
               const key = String(pd.playerId);
               const ps = mdFull.playerStats[key];
               if (ps) matchStats = ps.stats;
@@ -906,6 +917,7 @@ wss.on('connection', (ws) => {
               playerCareer: pd.playerCareer,
               photo: pd.photo,
               matchStats,
+              fromMatchData: pd.fromMatchData || false,
             };
           } else {
             result.playerData = { ok: false, error: pd.error };

@@ -1695,6 +1695,7 @@ function renderDataContent(matchData, playerData, teamData) {
       if (playerData.nationality) pLine += ' ／ ' + playerData.nationality;
       if (playerData.team) pLine += ' ／ ' + playerData.team;
       if (playerData.marketValue) pLine += ' ／ 評価額: ' + playerData.marketValue;
+      if (playerData.fromMatchData) pLine += ' （試合データより）';
       parts.push({ text: pLine, ok: true });
       // ① 今季スタッツ
       var ss = playerData.seasonStats;

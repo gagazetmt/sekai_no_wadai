@@ -291,6 +291,9 @@ function compressFacts(facts) {
   if (facts.matchData) out.matchData = _stripMatchMedia(facts.matchData);
 
   // 選手データ: 必要フィールドのみ
+  // matchStats: グローバル選手検索が名前不一致等で失敗した場合、facts.matchData.playerStats
+  // (試合に出た全選手の攻守データ)から名前引きした結果（dashboard.js findPlayerInMatchData）。
+  // 通常の season stats(pd.stats)が無くてもこちらだけは載っていることがあるため両方渡す。
   if (facts.playerData) {
     const pd = facts.playerData;
     out.playerData = {
@@ -300,6 +303,7 @@ function compressFacts(facts) {
       assists: pd.assists,
       rating: pd.rating,
       stats:  pd.stats ? Object.fromEntries(Object.entries(pd.stats).slice(0, 8)) : undefined,
+      matchStats: pd.matchStats ? Object.fromEntries(Object.entries(pd.matchStats).slice(0, 10)) : undefined,
     };
   }
 
