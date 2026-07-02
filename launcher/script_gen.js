@@ -674,11 +674,11 @@ async function generateModsAuto(topic, facts, brief = null) {
   const systemPrompt = `あなたはサッカーYouTube動画のデータ構成AIです。
 案件・素材から4スライド動画データをワンショットで生成してください。
 
-【スライド構成（固定）】
-slides[0]: opening — title（20〜35文字・キャッチーな見出し）+ narration = title と同じ + badge（推論）
-slides[1]: コンテンツA（下記タイプから素材に合うものを選択）
-slides[2]: コンテンツB（下記タイプから素材に合うものを選択）
-slides[3]: ending — title（15文字以内のオチ一言）+ narration（意外な事実・逆説・ズレ感のオチ・25〜40文字）
+【4枚構成（固定・出力キーは必ず "mods"）】
+1枚目(OP): opening — title（20〜35文字・キャッチーな見出し）+ narration = title と同じ + badge（推論）
+2枚目(コンテンツA): 下記タイプから素材に合うものを選択
+3枚目(コンテンツB): 下記タイプから素材に合うものを選択
+4枚目(ED): ending — title（15文字以内のオチ一言）+ narration（意外な事実・逆説・ズレ感のオチ・25〜40文字）
 
 【コンテンツタイプ選択ルール】
 - matchcard: 試合スコア・得点者・選手データが揃っている場合（スコアデータ必須）
@@ -699,7 +699,9 @@ ${Object.entries(SLIDE_TYPE_SPEC).map(([t, spec]) => `- ${t}: ${spec}`).join('\n
 - 素材に記載がない第三者の具体的な数値（得点数・試合数等）は絶対に生成しない
 - 全4枚を必ず生成
 
-JSON: {"contentTypes": ["typeA", "typeB"], "mods": [slide0, slide1, slide2, slide3]}`;
+【出力形式（厳守）】
+トップレベルのキーは必ず "contentTypes" と "mods" の2つのみ。"slides" というキー名は使わないこと。
+JSON: {"contentTypes": ["typeA", "typeB"], "mods": [1枚目, 2枚目, 3枚目, 4枚目]}`;
 
   // 手持ち画像インベントリ: siBinding を画像がある対象に寄せさせる（背景真っ黒スライド防止）
   const imgEntities = [...new Set((facts?.xImages || []).map(x => x.entity).filter(Boolean))];
@@ -710,10 +712,10 @@ ${imgEntities.join(' / ')}` : '';
 
   // 企画書がある場合は「最優先指示」としてユーザープロンプト冒頭に置く（末尾追記より遵守率が高い）
   const briefSection = brief ? `【企画書 = 最優先指示。以下の指示に沿って各スライドを作ること】
-- slides[0] (OP): title は必ずこの通り →「${brief.op_title}」
-- slides[1] (スライドA): タイプ=${brief.slide_a_type}。内容指示:「${brief.slide_a_desc}」← このスライドの主題はこの指示。素材から指示に合う情報だけを選んで構成する
-- slides[2] (スライドB): タイプ=${brief.slide_b_type}。内容指示:「${brief.slide_b_desc}」← 同上。スライドAと内容を重複させない
-- slides[3] (ED): オチの方向性:「${brief.ed_comment}」← この方向性でnarrationを25〜40文字に肉付けする
+- 1枚目(OP): title は必ずこの通り →「${brief.op_title}」
+- 2枚目(スライドA): タイプ=${brief.slide_a_type}。内容指示:「${brief.slide_a_desc}」← このスライドの主題はこの指示。素材から指示に合う情報だけを選んで構成する
+- 3枚目(スライドB): タイプ=${brief.slide_b_type}。内容指示:「${brief.slide_b_desc}」← 同上。スライドAと内容を重複させない
+- 4枚目(ED): オチの方向性:「${brief.ed_comment}」← この方向性でnarrationを25〜40文字に肉付けする
 - contentTypes は必ず ["${brief.slide_a_type}", "${brief.slide_b_type}"]
 
 ` : '';
@@ -723,21 +725,32 @@ ${imgEntities.join(' / ')}` : '';
     `${briefSection}トピック: ${topic}\n\n素材:\n${compressed}`
   );
 
+  // AIが指示に反して "mods" の代わりに "slides" 等別名で返すことがあるため救済（プロンプトの
+  // 「1枚目/2枚目」表記を "slides[]" キーと混同するケースを確認済み）
+  let resultMods = result.mods;
+  if (!Array.isArray(resultMods) || resultMods.length < 4) {
+    const altKey = ['slides', 'slide', 'contents'].find(k => Array.isArray(result[k]) && result[k].length >= 4);
+    if (altKey) {
+      console.warn(`  ⚠ [script_gen] AIが "mods" ではなく "${altKey}" キーで返答 → 救済`);
+      resultMods = result[altKey];
+    }
+  }
+
   const validTypes = Object.keys(CONTENT_SLIDE_REQUIRED);
   // 企画書がある場合はタイプを強制（AIが無視することがあるため）
   const contentTypes = brief
     ? [brief.slide_a_type, brief.slide_b_type].filter(t => validTypes.includes(t))
-    : (result.contentTypes || []).filter(t => validTypes.includes(t)).slice(0, 2);
+    : (result.contentTypes || (resultMods || []).map(m => m.type)).filter(t => validTypes.includes(t)).slice(0, 2);
   while (contentTypes.length < 2) contentTypes.push('insight');
 
   console.log(`  コンテンツタイプ: ${contentTypes.join(' + ')}`);
 
   const pattern = buildPiecesPattern(contentTypes);
 
-  if (!result.mods || !Array.isArray(result.mods) || result.mods.length < 4) {
-    throw new Error(`mods 不足: ${result.mods?.length ?? 0}枚`);
+  if (!resultMods || !Array.isArray(resultMods) || resultMods.length < 4) {
+    throw new Error(`mods 不足: ${resultMods?.length ?? 0}枚`);
   }
-  const mods = result.mods.slice(0, 4);
+  const mods = resultMods.slice(0, 4);
 
   // 企画書のOPタイトルはコード側で強制（AIが微妙に書き換えるのを防ぐ。opening narration = title）
   if (brief?.op_title) {
