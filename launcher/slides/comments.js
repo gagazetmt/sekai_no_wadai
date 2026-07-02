@@ -35,6 +35,14 @@ function _lineCount(text) {
   return 3;
 }
 
+// 割り当てた行数に収まるよう文字数を切り詰める（呼び出し元の切り詰め長(最大120字)が
+// 3行分(CHARS_PER_ROW*3=102字)を超えてカードからテキストがはみ出す事故を防ぐ）
+function _truncateForLines(text, lines) {
+  const maxChars = lines * CHARS_PER_ROW;
+  const t = text || '';
+  return t.length > maxChars ? t.slice(0, maxChars - 1) + '…' : t;
+}
+
 // 9スロットを埋めるようコメントを貪欲選択（3行コメントは1枚まで）
 function _packComments(comments) {
   const result = [];
@@ -44,7 +52,7 @@ function _packComments(comments) {
     const lines = _lineCount(c.text || '');
     if (lines === 3 && tripleCount >= 1) continue; // 3行は1個まで
     if (used + lines > TOTAL_ROWS) continue;
-    result.push({ ...c, lines });
+    result.push({ ...c, text: _truncateForLines(c.text, lines), lines });
     used += lines;
     if (lines === 3) tripleCount++;
     if (used >= TOTAL_ROWS) break;
@@ -144,6 +152,7 @@ function buildCommentOverlayHTML(comments, narrationEndSec, timing, totalSec) {
   padding: 0 12px 0 8px;
   box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
   transform: rotate(var(--rot, 0deg));
+  transform-origin: var(--rot-origin, center center);
   width: 100%; box-sizing: border-box;
 }
 .cmt-icon {
@@ -170,13 +179,16 @@ ${activeStyles}
     const icon  = SOURCE_ICONS[srcKey] || SOURCE_ICONS.x;
     const text  = _esc(c.text || '');
     const side  = i % 2 === 0 ? 'flex-start' : 'flex-end';
+    // 傾き(--rot)は左右どちらかの端を軸に回転させ、逆側(余白がある側)へだけ振れるようにする。
+    // これで overflow:hidden の親コンテナからはみ出して見切れるのを防ぐ（回転自体は残す）。
+    const rotOrigin = side === 'flex-start' ? 'left center' : 'right center';
     const bgC   = CMT_BG[i % CMT_BG.length];
     const rot   = (((i * 1.7) % 5) - 2).toFixed(1);
     const slotH = c.lines * ROW_PX;
     const activeClass = t.hasActive ? ` cmt-active-${i}` : '';
 
     return `<div class="cmt-slot" style="align-self:${side};animation-delay:${delay.toFixed(2)}s;height:${slotH}px">
-  <div class="cmt-card${activeClass}" style="background:${bgC};--rot:${rot}deg;height:100%">
+  <div class="cmt-card${activeClass}" style="background:${bgC};--rot:${rot}deg;--rot-origin:${rotOrigin};height:100%">
     <div class="cmt-icon" style="background:${icon.bg};color:${icon.color}">${icon.letter}</div>
     <div class="cmt-text">${text}</div>
   </div>
