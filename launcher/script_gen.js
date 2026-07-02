@@ -664,11 +664,11 @@ async function generateModsAuto(topic, facts, brief = null) {
   const compressed = compressFacts(facts);
 
   const SLIDE_TYPE_SPEC = {
-    insight:    'title, narration（200文字）, catchphrases（3-5個・各20文字以内）',
+    insight:    'title, narration（200文字）, catchphrases（3-5個・各20文字以内）, siBinding（英語名・画像検索キー）',
     matchcard:  'homeTeam, awayTeam, homeScore, awayScore, goals[{player,timeStr,isHome}], stats{"Ball possession":{home,away},...}, lineup{home:[{name,pos}],away:[{name,pos}]}, formations{home,away}, tournament, matchDate, venue, narration（200文字）',
     stats:      'title, narration（200文字）, siBinding（英語名）, dataSlots[{label,value}]（最大6個）',
     comparison: 'title, narration（200文字）, siBindingLeft, siBindingRight（英語名）, dataSlots[{label,leftValue,rightValue}]（最大7個）',
-    history:    'title, narration（200文字）, historyHero（漢字2-3文字）, dataSlots[{label,value}]（最大6個）',
+    history:    'title, narration（200文字）, historyHero（漢字2-3文字）, siBinding（英語名・画像検索キー）, dataSlots[{label,value}]（最大6個）',
   };
 
   const systemPrompt = `あなたはサッカーYouTube動画のデータ構成AIです。
@@ -757,6 +757,19 @@ ${imgEntities.join(' / ')}` : '';
     }
     mods[i].bgImage = null; mods[i].leftImage = null; mods[i].rightImage = null;
   });
+
+  // siBinding フォールバック: AIが未設定の insight/stats/history に画像キーを補完
+  // （siBinding がないと画像プリセットもX API検索も走らず背景なしスライドになる）
+  const fallbackBinding = facts?.playerData?.name || facts?.extracted?.playerName
+    || (facts?.xImages || []).map(x => x.entity).find(Boolean) || null;
+  if (fallbackBinding) {
+    mods.forEach((m, i) => {
+      if (['insight', 'stats', 'history'].includes(m.type) && !m.siBinding) {
+        m.siBinding = fallbackBinding;
+        console.log(`  [script_gen] slide${i} siBinding 未設定 → "${fallbackBinding}" で補完`);
+      }
+    });
+  }
 
   injectRealMatchData(mods, pattern, facts);
   await injectRealComments(mods, pattern, facts, topic);
