@@ -111,37 +111,44 @@ async function fetchImagesFromHandle(handle, opts = {}) {
 }
 
 // ── ラベル配列 → 画像URL一覧 ─────────────────────────────
-// label: { type: 'match'|'team'|'player', name?, homeTeam?, awayTeam?, matchDate?, team? }
-// 戻り値: [{ url, source, label }]
+// label: { type: 'match'|'team'|'player'|'manager', ... }
+// 戻り値: [{ url, source, entity }]  entity = 由来の選手名/チーム名（英語）。スライド自動プリセットのマッチングキー
 async function fetchImagesForLabels(labels, opts = {}) {
   if (!API_KEY || !labels?.length) return [];
 
-  const PER_LABEL      = opts.perLabel      || 8;   // 関連度上位 件数
-  const PER_LABEL_NEW  = opts.perLabelNew   || 7;   // 最新 件数
-  const results        = [];
-  const seenUrls       = new Set();
+  const PER_LABEL     = opts.perLabel    || 8;
+  const PER_LABEL_NEW = opts.perLabelNew || 7;
+  const results   = [];
+  const seenUrls  = new Set();
 
-  function addImages(urls, source) {
+  function addImages(urls, source, entity) {
     for (const url of urls) {
       if (seenUrls.has(url)) continue;
       seenUrls.add(url);
-      results.push({ url, source });
+      results.push({ url, source, entity: entity || null });
     }
   }
 
+  // 国代表同士のmatchがあれば代表コンテキスト、なければクラブコンテキスト
+  const isNationalContext = labels.some(l => {
+    if (l.type !== 'match') return false;
+    const homeLeague = TEAMS[l.homeTeam]?.league;
+    const awayLeague = TEAMS[l.awayTeam]?.league;
+    return homeLeague === 'National Team' || awayLeague === 'National Team';
+  });
+  console.log(`  [x_images] context: ${isNationalContext ? '代表優先' : 'クラブ優先'}`);
+
   for (const label of labels) {
     if (label.type === 'match') {
-      // home + away それぞれの公式アカウントから試合前後の画像
       const teams = [
-        { name: label.homeTeam, prefix: 'home' },
-        { name: label.awayTeam, prefix: 'away' },
+        { name: label.homeTeam },
+        { name: label.awayTeam },
       ].filter(t => t.name);
 
       for (const t of teams) {
         const handle = resolveHandle(t.name);
         if (!handle) { console.log(`  [x_images] no handle for: ${t.name}`); continue; }
 
-        // 試合日前後の窓
         let since, until;
         if (label.matchDate) {
           const ko = new Date(label.matchDate);
@@ -149,60 +156,44 @@ async function fetchImagesForLabels(labels, opts = {}) {
           until = new Date(ko.getTime() + 2 * 86400000).toISOString().slice(0, 10);
         }
 
-        // 関連度上位
-        const top = await fetchImagesFromHandle(handle, { since, until, sortBy: 'engagement', limit: PER_LABEL });
-        addImages(top, `@${handle} (match/top)`);
-
-        // 最新
-        const latest = await fetchImagesFromHandle(handle, { since, until, sortBy: 'recency', limit: PER_LABEL_NEW });
-        addImages(latest, `@${handle} (match/latest)`);
+        const top    = await fetchImagesFromHandle(handle, { since, until, sortBy: 'engagement', limit: PER_LABEL });
+        const latest = await fetchImagesFromHandle(handle, { since, until, sortBy: 'recency',    limit: PER_LABEL_NEW });
+        addImages(top,    `@${handle} (match/top)`,    t.name);
+        addImages(latest, `@${handle} (match/latest)`, t.name);
       }
 
     } else if (label.type === 'team') {
       const handle = resolveHandle(label.name);
       if (!handle) { console.log(`  [x_images] no handle for team: ${label.name}`); continue; }
 
-      // 最新15件を優先取得、エンゲージメント上位5件をボーナスで追加
       const latest = await fetchImagesFromHandle(handle, { sortBy: 'recency',    limit: 15 });
       const top    = await fetchImagesFromHandle(handle, { sortBy: 'engagement', limit: 5  });
-      addImages(latest, `@${handle} (team/latest)`);
-      addImages(top,    `@${handle} (team/top)`);
+      addImages(latest, `@${handle} (team/latest)`, label.name);
+      addImages(top,    `@${handle} (team/top)`,    label.name);
 
     } else if (label.type === 'player') {
-      // 所属クラブの公式アカウントから選手名を含む投稿
-      const handle = resolveHandle(label.team);
-      if (handle && label.name) {
-        const top    = await fetchImagesFromHandle(handle, { keyword: label.name, sortBy: 'engagement', limit: PER_LABEL });
-        const latest = await fetchImagesFromHandle(handle, { keyword: label.name, sortBy: 'recency',    limit: PER_LABEL_NEW });
-        addImages(top,    `@${handle} (player=${label.name}/top)`);
-        addImages(latest, `@${handle} (player=${label.name}/latest)`);
+      const clubHandle = resolveHandle(label.team);
+      const ntHandle   = resolveHandle(label.nationalTeam);
+
+      // 代表コンテキストなら 代表→クラブ、クラブコンテキストなら クラブ→代表
+      const primary   = isNationalContext ? ntHandle   : clubHandle;
+      const secondary = isNationalContext ? clubHandle : ntHandle;
+      const primaryTag   = isNationalContext ? label.nationalTeam : label.team;
+      const secondaryTag = isNationalContext ? label.team          : label.nationalTeam;
+
+      if (primary && label.name) {
+        const top    = await fetchImagesFromHandle(primary, { keyword: label.name, sortBy: 'engagement', limit: PER_LABEL });
+        const latest = await fetchImagesFromHandle(primary, { keyword: label.name, sortBy: 'recency',    limit: PER_LABEL_NEW });
+        addImages(top,    `@${primary} [${primaryTag}] (player=${label.name}/top)`,    label.name);
+        addImages(latest, `@${primary} [${primaryTag}] (player=${label.name}/latest)`, label.name);
       }
-      // 代表チームからも取得
-      if (label.nationalTeam) {
-        const ntHandle = resolveHandle(label.nationalTeam);
-        if (ntHandle) {
-          const ntTop = await fetchImagesFromHandle(ntHandle, { keyword: label.name, sortBy: 'engagement', limit: 5 });
-          addImages(ntTop, `@${ntHandle} (player=${label.name}/nt)`);
-        }
+      if (secondary && label.name) {
+        const secTop = await fetchImagesFromHandle(secondary, { keyword: label.name, sortBy: 'engagement', limit: 5 });
+        addImages(secTop, `@${secondary} [${secondaryTag}] (player=${label.name}/secondary)`, label.name);
       }
-      // クラブが不明 or 取得0件の場合: 選手名で直接検索 → 最新15件
-      if (label.name) {
-        const beforeCount = results.length;
-        const direct = await searchTweets(`"${label.name}" filter:images -filter:retweets`, 'Latest');
-        direct.sort((a, b) => new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0));
-        const directUrls = [];
-        const directSeen = new Set();
-        for (const tw of direct) {
-          if (directUrls.length >= 15) break;
-          for (const url of extractMediaUrls(tw)) {
-            if (directUrls.length >= 15) break;
-            if (!directSeen.has(url)) { directSeen.add(url); directUrls.push(url); }
-          }
-        }
-        addImages(directUrls, `X検索:${label.name}`);
-        console.log(`  [x_images] player direct search "${label.name}": ${results.length - beforeCount}件追加`);
-      }
+      // ③ 著作権リスクのある直接X検索は実施しない
     }
+    // manager ラベルは画像取得対象外（チーム・選手ラベルで十分カバー）
   }
 
   console.log(`  [x_images] total: ${results.length} images from ${labels.length} labels`);
