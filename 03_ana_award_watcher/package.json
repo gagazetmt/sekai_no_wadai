@@ -1,0 +1,17 @@
+{
+  "name": "03_ana_award_watcher",
+  "version": "1.0.0",
+  "description": "ANA国内線特典航空券 空席監視・LINE通知システム",
+  "main": "src/scheduler.js",
+  "scripts": {
+    "start": "node src/scheduler.js",
+    "check-once": "node src/scheduler.js --once",
+    "capture": "node src/scheduler.js --once --capture"
+  },
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "puppeteer": "^24.38.0"
+  }
+}

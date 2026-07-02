@@ -1,0 +1,12 @@
+{
+  "_readme": "ANAサイトの実際のDOM構造に合わせて値を埋めてから config/selectors.json として保存してください。埋めるまでは capture モードでの動作確認のみになります。詳細はREADME参照。",
+  "searchPageUrl": "https://www.ana.co.jp/ja/jp/guide/reservation/domestic/",
+  "awardToggleSelector": "",
+  "departureSelectSelector": "",
+  "arrivalSelectSelector": "",
+  "dateInputSelector": "",
+  "submitSelector": "",
+  "resultContainerSelector": "",
+  "availableCellSelector": "",
+  "soldOutCellSelector": ""
+}

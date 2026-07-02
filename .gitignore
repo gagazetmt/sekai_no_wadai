@@ -26,3 +26,9 @@ node_modules/
 # OS・エディタ
 .DS_Store
 Thumbs.db
+
+# ANA特典航空券ウォッチャー（セッションCookie・監視状態・ログイン情報は非公開）
+03_ana_award_watcher/data/
+03_ana_award_watcher/logs/
+03_ana_award_watcher/config/watch_targets.json
+03_ana_award_watcher/config/selectors.json

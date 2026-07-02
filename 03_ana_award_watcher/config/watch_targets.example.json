@@ -1,0 +1,10 @@
+[
+  {
+    "id": "hnd-oka-0815",
+    "label": "羽田→那覇 8/15",
+    "departureAirport": "HND",
+    "arrivalAirport": "OKA",
+    "date": "2026-08-15",
+    "boardingClass": "economy"
+  }
+]
