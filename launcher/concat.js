@@ -26,23 +26,25 @@ function muxAudio(videoPath, audioPath, outputPath, audioDelayMs = 0) {
 // ── 全スライドを結合 ──────────────────────────────────
 
 function concatVideos(videoPaths, outputPath) {
-  const listPath = outputPath.replace(/\.\w+$/, '_list.txt');
-  const listContent = videoPaths
-    .filter(p => p && fs.existsSync(p))
-    .map(p => `file '${p.replace(/\\/g, '/')}'`)
-    .join('\n');
+  const validPaths = videoPaths.filter(p => p && fs.existsSync(p));
+  if (!validPaths.length) throw new Error('No valid video files to concat');
 
-  fs.writeFileSync(listPath, listContent);
+  // concat デマルチプレクサ(-f concat, ストリームコピー相当)は使わない。
+  // 各スライドを個別にAACエンコードした音声をバイトストリームとして単純連結すると、
+  // セグメント境界でチャンネル設定(PCE)の不整合が起き、単体では正常再生できるのに
+  // 連結後だけ後段のBGMミックス(要デコード)で "Error submitting packet to decoder" が
+  // 発生し末尾の音声が欠落する不具合を確認（個々の muxed_*.mp4 は単体デコードでは無害）。
+  // concat フィルタ（全セグメントを一度デコードしてPCM/生フレームで結合）に切り替えて回避する。
+  const inputArgs = validPaths.map(p => `-i "${p}"`).join(' ');
+  const streamRefs = validPaths.map((_, i) => `[${i}:v:0][${i}:a:0]`).join('');
+  const filter = `${streamRefs}concat=n=${validPaths.length}:v=1:a=1[v][a]`;
 
-  // -c:v libx264: x11grabのH264をそのままcopyするとDTSが単調増加しないため再エンコード
-  execSync(`ffmpeg -y -f concat -safe 0 -i "${listPath}" \
+  execSync(`ffmpeg -y ${inputArgs} \
+    -filter_complex "${filter}" -map "[v]" -map "[a]" \
     -c:v libx264 -preset ultrafast -crf 23 -pix_fmt yuv420p \
-    -c:a copy \
+    -c:a aac -b:a 128k -ar 32000 -ac 1 \
     -movflags +faststart \
     "${outputPath}"`, { stdio: 'pipe' });
-
-  // cleanup
-  fs.unlinkSync(listPath);
 
   const size = (fs.statSync(outputPath).size / (1024 * 1024)).toFixed(1);
   console.log(`  Final: ${outputPath} (${size}MB)`);
