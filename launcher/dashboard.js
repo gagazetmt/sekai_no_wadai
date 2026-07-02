@@ -130,6 +130,23 @@ function collectGalleryImages(facts) {
 // プレビュー用: 最後にリクエストされた mod をここに保持
 let lastPreviewMod = null;
 
+// プレビュー用 Chrome は使い回す（毎回起動/終了すると重く、レンダリング中に重なると
+// CPU競合で不安定になりやすいため）。初回アクセス時に1つだけ起動し、以後はページのみ生成。
+let _previewBrowser = null;
+let _previewBrowserLaunching = null;
+async function getPreviewBrowser() {
+  if (_previewBrowser && _previewBrowser.connected) return _previewBrowser;
+  if (_previewBrowserLaunching) return _previewBrowserLaunching;
+  const puppeteer = require('puppeteer-core');
+  _previewBrowserLaunching = puppeteer.launch({
+    headless: true,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+  }).then(b => { _previewBrowser = b; _previewBrowserLaunching = null; return b; });
+  return _previewBrowserLaunching;
+}
+process.on('exit', () => { if (_previewBrowser) _previewBrowser.close().catch(() => {}); });
+
 const server = http.createServer((req, res) => {
   if (req.url === '/' || req.url === '/index.html') {
     // no-cache: スマホSafari等が古いHTMLを掴み続けるのを防ぐ
@@ -143,26 +160,23 @@ const server = http.createServer((req, res) => {
     return;
   }
   // /preview_img — puppeteer でスクリーンショットを撮って JPEG を返す（モバイル対応）
+  // 編集の度に(デバウンス420ms毎)呼ばれるため、以前は毎回 Chrome プロセスを新規起動/終了
+  // していて重かった（レンダリング中に重なるとCPU競合で全体が不安定に見える一因だった）。
+  // ブラウザは使い回し、ページだけ都度作る方式に変更。
   if (req.url.startsWith('/preview_img')) {
     (async () => {
       try {
         const html = lastPreviewMod ? buildPreviewHTML(lastPreviewMod) : '<body style="background:#060e1c"></body>';
-        const puppeteer = require('puppeteer-core');
-        const browser = await puppeteer.launch({
-          headless: true,
-          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-          args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
-        });
+        const browser = await getPreviewBrowser();
+        const page = await browser.newPage();
         try {
-          const page = await browser.newPage();
           await page.setViewport({ width: 1920, height: 1080 });
           await page.setContent(html, { waitUntil: 'networkidle2', timeout: 12000 });
           const buf = await page.screenshot({ type: 'jpeg', quality: 82 });
-          await page.close();
           res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' });
           res.end(buf);
         } finally {
-          await browser.close();
+          await page.close();
         }
       } catch (e) {
         console.warn('[preview_img]', e.message);
