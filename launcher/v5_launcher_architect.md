@@ -516,3 +516,34 @@ Step4 右カラムの画像ギャラリー下部にURL入力欄を追加。
 
 記事に複数試合が出ても予選・旧試合を拾わないよう `generateMods` system promptに制約を追記:
 「トピックが直接言及している・最も最近（またはこれから）の試合を選ぶ。過去の予選・関係のない試合を拾うな」
+
+---
+
+## 改修ログ（2026-07-02 その2：画像自動プリセット / 企画書遵守強化 / 取り違えガード）
+
+### 画像自動プリセット（fetchers/x_images.js + fetchers/images.js）
+
+- `fetchImagesForLabels` の戻り値に **`entity`**（由来の選手/チーム英語名）を追加 → `facts.xImages` に保存される
+- `presetImagesFromGallery(mods, facts)` 新設（images.js からexport）:
+  - `resolveAllImages` の冒頭で実行。mod の `siBinding` / `siBindingLeft` / `siBindingRight` と `xImages[].entity` を正規化マッチ（小文字化・NFDアクセント除去・FC/CF除去・部分一致）して bgImage 等を先埋め
+  - `facts._uncheckedImageUrls`（ギャラリーでチェック解除された画像）は対象外
+  - 同一画像は1枠のみ（used Set）。埋まらなかった枠だけ従来の X API 検索が走る（API節約）
+- クライアント: `re_render` / `render` 送信時に `uncheckedImages` を同送 → `session.uncheckedImageUrls` → runRender で `facts._uncheckedImageUrls` にセット
+- 脚本生成プロンプトに **手持ち画像インベントリ**（entity一覧）を追記 → AIが siBinding を画像のある対象に寄せる（背景なしスライド防止）
+
+### 企画書遵守強化（script_gen.js generateModsAuto）
+
+- 企画書セクションを system prompt 末尾追記 → **ユーザープロンプト冒頭の「最優先指示」**に移動（遵守率向上）
+- 各スライドの指示に「このスライドの主題はこの指示」「A/Bで内容重複させない」等の拘束文を追加
+- `brief.op_title` は生成後に**コード側で強制上書き**（mods[0].title / narration。AIの微妙な書き換え対策）
+- contentTypes 強制は従来通り（コード側）
+
+### データ取り違え・エラー防止
+
+- **facts取り違えガード**（dashboard.js）: `factsTopicMismatch()` — `session.facts.topic !== session.activeTopic` を `generate_brief` / `generate_script` / `runRender` で検知して中断（factsは session.facts / factsCache / topicData の3箇所管理のため構造的リスクあり）
+- **compressFacts**（script_gen.js）: 8000字での文字数ぶった切りを廃止。予算超過時はフィールド単位で削減（コメント25→8→4件 / 記事5→3件 / snippet 300→120字 / lineup・stats削除 ※実データは生成後に再注入されるため安全）→ 壊れたJSONがAIに渡らない
+- **matchcard取り違え検知**（script_gen.js injectRealMatchData）: AI脚本のチーム名と facts.matchData のチーム名が不一致なら警告ログ（実データ上書きは従来通り実行。ナレーションとの矛盾をユーザーがStep4で確認）
+- **脚本バリデーション警告のUI表示**: `script_ready` に `validation` を同梱 → Step4 上部に `#s4ValidationWarn` バナー（未設定フィールド一覧）
+- **Sonnet監修の不発可視化**（_sonnetFactCheck）: `from` が原文不一致で replace 不発だった修正を警告ログ（「指摘N件中M件適用」）
+
+※ 反映には `node dashboard.js` の再起動が必要。
