@@ -291,18 +291,23 @@ function compressFacts(facts) {
   if (facts.matchData) out.matchData = _stripMatchMedia(facts.matchData);
 
   // 選手データ: 必要フィールドのみ
+  // 注意: fetchPlayer() の実際の戻り値は pd.goals/pd.assists/pd.rating/pd.stats ではなく
+  // pd.seasonStats.{goals,assists,rating,...} にネストされている（以前ここが pd.goals 等
+  // 存在しないフラットなキーを見ておりAIに今季スタッツが一切渡っていなかったバグを修正）。
   // matchStats: グローバル選手検索が名前不一致等で失敗した場合、facts.matchData.playerStats
   // (試合に出た全選手の攻守データ)から名前引きした結果（dashboard.js findPlayerInMatchData）。
-  // 通常の season stats(pd.stats)が無くてもこちらだけは載っていることがあるため両方渡す。
   if (facts.playerData) {
     const pd = facts.playerData;
+    const ss = pd.seasonStats || {};
     out.playerData = {
       name:   pd.name,
       team:   pd.team,
-      goals:  pd.goals,
-      assists: pd.assists,
-      rating: pd.rating,
-      stats:  pd.stats ? Object.fromEntries(Object.entries(pd.stats).slice(0, 8)) : undefined,
+      leagueName: pd.leagueName,
+      goals:  ss.goals,
+      assists: ss.assists,
+      rating: ss.rating,
+      appearances: ss.appearances,
+      stats:  pd.seasonStats ? Object.fromEntries(Object.entries(ss).filter(([, v]) => v != null).slice(0, 12)) : undefined,
       matchStats: pd.matchStats ? Object.fromEntries(Object.entries(pd.matchStats).slice(0, 10)) : undefined,
     };
   }
