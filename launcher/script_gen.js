@@ -66,14 +66,20 @@ JSON形式のみ返答:
     if (!m) return mods;
     const { corrections } = JSON.parse(m[0]);
     if (!corrections?.length) { console.log('  [sonnet] 修正なし'); return mods; }
-    console.log(`  [sonnet] ${corrections.length}件修正`);
     const fixed = mods.map(mod => ({ ...mod }));
+    let applied = 0;
     for (const c of corrections) {
-      if (c.i >= 0 && c.i < fixed.length && fixed[c.i].narration && c.from && c.to) {
+      if (c.i >= 0 && c.i < fixed.length && fixed[c.i].narration && c.from && c.to
+          && fixed[c.i].narration.includes(c.from)) {
         fixed[c.i].narration = fixed[c.i].narration.replace(c.from, c.to);
-        console.log(`  [sonnet] slide[${c.i}]: ${c.why}`);
+        applied++;
+        console.log(`  [sonnet] slide[${c.i}] 修正適用: ${c.why}`);
+      } else {
+        // from がナレーションに部分一致しないと replace は何もしない → 不発を可視化
+        console.warn(`  ⚠ [sonnet] slide[${c.i ?? '?'}] 修正を適用できず（原文不一致）: ${c.why || ''} — 指摘箇所を手動確認してください: "${(c.from || '').slice(0, 60)}"`);
       }
     }
+    console.log(`  [sonnet] 指摘${corrections.length}件中 ${applied}件適用`);
     return fixed;
   } catch (err) {
     console.warn(`  [sonnet] 失敗: ${err.message}`);
@@ -249,6 +255,15 @@ function injectRealMatchData(mods, pattern, facts) {
   pattern.slides.forEach((slot, i) => {
     if (slot.type !== 'matchcard' || !mods[i]) return;
     const md = facts.matchData;
+    // 取り違え検知: AIが選んだ試合と Step2 で取得した matchData のチームが食い違っていないか
+    const _n = s => String(s || '').toLowerCase().trim();
+    const aiTeams = [mods[i].homeTeam, mods[i].awayTeam, mods[i].matchData?.homeTeam, mods[i].matchData?.awayTeam]
+      .filter(Boolean).map(_n);
+    const realTeams = [md.homeTeam, md.awayTeam].filter(Boolean).map(_n);
+    if (aiTeams.length && realTeams.length &&
+        !realTeams.some(rt => aiTeams.some(at => at.includes(rt) || rt.includes(at)))) {
+      console.warn(`  ⚠ [matchcard] 試合取り違えの可能性: 脚本は「${mods[i].homeTeam || '?'} vs ${mods[i].awayTeam || '?'}」/ 取得データは「${md.homeTeam} vs ${md.awayTeam}」→ カードは取得データで上書きされます。ナレーションと矛盾していないか Step4 で確認してください`);
+    }
     // 既存の matchData（AI生成）に実データをマージ。実データのある構造フィールドを優先。
     mods[i].matchData = { ...(mods[i].matchData || {}), ...md };
     // フラット化済みの上位フィールドも実データで補正
@@ -308,7 +323,23 @@ function compressFacts(facts) {
     }
   }
 
-  return JSON.stringify(out, null, 2).slice(0, 8000);
+  // 予算超過時はフィールド単位で削る（文字数で切るとJSONが壊れてAIに渡るため）
+  const BUDGET = 8000;
+  let json = JSON.stringify(out, null, 2);
+  const trims = [
+    () => { if (out._comments && out._comments.length > 8) { out._comments = out._comments.slice(0, 8); return true; } return false; },
+    () => { if (out.articles && out.articles.length > 3) { out.articles = out.articles.slice(0, 3); return true; } return false; },
+    () => { if (out.articles?.some(a => (a.snippet || '').length > 120)) { out.articles.forEach(a => { a.snippet = (a.snippet || '').slice(0, 120); }); return true; } return false; },
+    () => { if (out.matchData?.lineup) { delete out.matchData.lineup; return true; } return false; },  // 実lineupは生成後に再注入される
+    () => { if (out.matchData?.stats)  { delete out.matchData.stats;  return true; } return false; },
+    () => { if (out._comments && out._comments.length > 4) { out._comments = out._comments.slice(0, 4); return true; } return false; },
+  ];
+  for (const trim of trims) {
+    if (json.length <= BUDGET) break;
+    if (trim()) json = JSON.stringify(out, null, 2);
+  }
+  if (json.length > BUDGET) json = JSON.stringify(out); // インデント除去で最後の圧縮
+  return json;
 }
 
 // ── パターン判定 ─────────────────────────────────────
@@ -670,18 +701,26 @@ ${Object.entries(SLIDE_TYPE_SPEC).map(([t, spec]) => `- ${t}: ${spec}`).join('\n
 
 JSON: {"contentTypes": ["typeA", "typeB"], "mods": [slide0, slide1, slide2, slide3]}`;
 
-  // 企画書がある場合はプロンプトに追記して遵守させる
-  const briefSection = brief ? `
-【企画書（必ず遵守）】
-- OP タイトル: 「${brief.op_title}」（このタイトルをそのまま slides[0].title に使用）
-- スライドA (slides[1]): タイプ=${brief.slide_a_type} / 方向性: ${brief.slide_a_desc}
-- スライドB (slides[2]): タイプ=${brief.slide_b_type} / 方向性: ${brief.slide_b_desc}
-- ED オチ (slides[3]): 「${brief.ed_comment}」をベースにnarrationを作成
-contentTypes は必ず ["${brief.slide_a_type}", "${brief.slide_b_type}"] とすること。` : '';
+  // 手持ち画像インベントリ: siBinding を画像がある対象に寄せさせる（背景真っ黒スライド防止）
+  const imgEntities = [...new Set((facts?.xImages || []).map(x => x.entity).filter(Boolean))];
+  const inventorySection = imgEntities.length ? `
+
+【手持ち画像あり（siBinding はなるべくこの中から選ぶ。画像がない対象を選ぶと背景なしスライドになる）】
+${imgEntities.join(' / ')}` : '';
+
+  // 企画書がある場合は「最優先指示」としてユーザープロンプト冒頭に置く（末尾追記より遵守率が高い）
+  const briefSection = brief ? `【企画書 = 最優先指示。以下の指示に沿って各スライドを作ること】
+- slides[0] (OP): title は必ずこの通り →「${brief.op_title}」
+- slides[1] (スライドA): タイプ=${brief.slide_a_type}。内容指示:「${brief.slide_a_desc}」← このスライドの主題はこの指示。素材から指示に合う情報だけを選んで構成する
+- slides[2] (スライドB): タイプ=${brief.slide_b_type}。内容指示:「${brief.slide_b_desc}」← 同上。スライドAと内容を重複させない
+- slides[3] (ED): オチの方向性:「${brief.ed_comment}」← この方向性でnarrationを25〜40文字に肉付けする
+- contentTypes は必ず ["${brief.slide_a_type}", "${brief.slide_b_type}"]
+
+` : '';
 
   const result = await callAI(
-    systemPrompt + briefSection,
-    `トピック: ${topic}\n\n素材:\n${compressed}`
+    systemPrompt + inventorySection,
+    `${briefSection}トピック: ${topic}\n\n素材:\n${compressed}`
   );
 
   const validTypes = Object.keys(CONTENT_SLIDE_REQUIRED);
@@ -699,6 +738,13 @@ contentTypes は必ず ["${brief.slide_a_type}", "${brief.slide_b_type}"] とす
     throw new Error(`mods 不足: ${result.mods?.length ?? 0}枚`);
   }
   const mods = result.mods.slice(0, 4);
+
+  // 企画書のOPタイトルはコード側で強制（AIが微妙に書き換えるのを防ぐ。opening narration = title）
+  if (brief?.op_title) {
+    if (mods[0].title !== brief.op_title) console.log(`  [brief] OPタイトルを企画書通りに強制: "${brief.op_title}"`);
+    mods[0].title = brief.op_title;
+    mods[0].narration = brief.op_title;
+  }
 
   // スライドタイプ注入 + matchcard フラット化 + 後工程フィールド初期化
   pattern.slides.forEach((slot, i) => {
