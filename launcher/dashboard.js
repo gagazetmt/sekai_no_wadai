@@ -709,12 +709,31 @@ wss.on('connection', (ws) => {
             if (md.awayLogo) out.images.push({ url: md.awayLogo, label: md.awayTeam || 'Away', group: 'ロゴ' });
           } else out.matchData = { ok: false, error: md.error };
         } else if (label.type === 'player' && label.name) {
+          // 試合の話題なら、選手データ取得前に試合データを確保しておく（今試合のスタッツを拾うため）
+          // クリック順（先に選手→後で試合）でも matchStats が取れるように、未取得ならここで先読みする
+          if (!session.facts.matchData?.ok) {
+            const allLabels = (session.activeTopic && session.topicData[session.activeTopic]?.factsForClient?.labels) || [];
+            const matchLabel = allLabels.find(l => l.type === 'match' && l.homeTeam && l.awayTeam);
+            if (matchLabel) {
+              try {
+                const md = await fetchMatch(matchLabel.homeTeam, matchLabel.awayTeam);
+                if (md.ok) {
+                  session.facts.matchData = md;
+                  out.matchData = { ok: true, scoreline: md.scoreline, homeTeam: md.homeTeam, awayTeam: md.awayTeam, tournament: md.tournament };
+                  if (md.homeLogo) out.images.push({ url: md.homeLogo, label: md.homeTeam || 'Home', group: 'ロゴ' });
+                  if (md.awayLogo) out.images.push({ url: md.awayLogo, label: md.awayTeam || 'Away', group: 'ロゴ' });
+                  if (session.topicData[session.activeTopic]) session.topicData[session.activeTopic].factsForClient.matchData = out.matchData;
+                }
+              } catch (err) { console.warn(`  [fetch_label_data] 試合データ先読み失敗: ${err.message}`); }
+            }
+          }
           const pd = await fetchPlayer(label.name);
           if (pd.ok) {
             session.facts.playerData = pd;
             let matchStats = null;
             const mdFull = session.facts.matchData;
             if (mdFull?.playerStats && pd.playerId) { const ps = mdFull.playerStats[String(pd.playerId)]; if (ps) matchStats = ps.stats; }
+            if (mdFull?.ok && !matchStats) console.warn(`  [fetch_label_data] ${pd.name}: 試合データはあるが本人のplayerStatsが見つからず（出場なし or ID不一致）`);
             out.playerData = {
               ok: true, playerId: pd.playerId, name: pd.name, position: pd.position, age: pd.age,
               nationality: pd.nationality, team: pd.team, leagueName: pd.leagueName, marketValue: pd.marketValue,
